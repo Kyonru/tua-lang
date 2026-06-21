@@ -15,6 +15,7 @@ mod semantic;
 pub mod semantic_token;
 mod source_text;
 pub mod types;
+pub mod workspace_symbol;
 
 pub use check::{check_parsed_source, check_tlua_source};
 pub use completion::{complete_parsed_source, complete_tlua_source, Completion, CompletionKind};
@@ -55,6 +56,9 @@ pub use semantic_token::{
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
     Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,
+};
+pub use workspace_symbol::{
+    workspace_symbols_from_dir, workspace_symbols_from_files, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

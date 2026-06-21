@@ -1,15 +1,17 @@
 use std::collections::HashMap;
+use std::env;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 use tlua_core::{
     check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
     hover_tlua_source, inlay_hints_tlua_source, prepare_rename_tlua_source, project_description,
-    references_tlua_source, rename_tlua_source, semantic_tokens_tlua_source, Completion,
-    CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind,
-    Hover, InlayHint, InlayHintKind, Reference, RenameEdit, RenameTarget, SemanticToken,
-    SemanticTokenKind, SemanticTokenModifier, SourcePosition, SourceSpan, TextEdit,
+    references_tlua_source, rename_tlua_source, semantic_tokens_tlua_source,
+    workspace_symbols_from_dir, Completion, CompletionKind, Definition, Diagnostic,
+    DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover, InlayHint, InlayHintKind,
+    Reference, RenameEdit, RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier,
+    SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 pub fn server_name() -> &'static str {
@@ -50,6 +52,7 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
 #[derive(Default)]
 struct LspServer {
     documents: HashMap<String, String>,
+    root_dir: Option<PathBuf>,
     shutdown_requested: bool,
     should_exit: bool,
 }
@@ -69,38 +72,43 @@ impl LspServer {
         let id = message.get("id").cloned().unwrap_or(Value::Null);
 
         match method {
-            "initialize" => response(
-                id,
-                json!({
-                    "capabilities": {
-                        "textDocumentSync": 1,
-                        "hoverProvider": true,
-                        "completionProvider": {
-                            "triggerCharacters": [":", "."]
-                        },
-                        "definitionProvider": true,
-                        "documentSymbolProvider": true,
-                        "referencesProvider": true,
-                        "renameProvider": {
-                            "prepareProvider": true
-                        },
-                        "inlayHintProvider": {
-                            "resolveProvider": false
-                        },
-                        "semanticTokensProvider": {
-                            "legend": {
-                                "tokenTypes": SEMANTIC_TOKEN_TYPES,
-                                "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
+            "initialize" => {
+                self.root_dir = initialize_root_dir(&message);
+
+                response(
+                    id,
+                    json!({
+                        "capabilities": {
+                            "textDocumentSync": 1,
+                            "hoverProvider": true,
+                            "completionProvider": {
+                                "triggerCharacters": [":", "."]
                             },
-                            "full": true
+                            "definitionProvider": true,
+                            "documentSymbolProvider": true,
+                            "referencesProvider": true,
+                            "workspaceSymbolProvider": true,
+                            "renameProvider": {
+                                "prepareProvider": true
+                            },
+                            "inlayHintProvider": {
+                                "resolveProvider": false
+                            },
+                            "semanticTokensProvider": {
+                                "legend": {
+                                    "tokenTypes": SEMANTIC_TOKEN_TYPES,
+                                    "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
+                                },
+                                "full": true
+                            }
+                        },
+                        "serverInfo": {
+                            "name": server_name(),
+                            "version": tlua_core::VERSION
                         }
-                    },
-                    "serverInfo": {
-                        "name": server_name(),
-                        "version": tlua_core::VERSION
-                    }
-                }),
-            ),
+                    }),
+                )
+            }
             "shutdown" => {
                 self.shutdown_requested = true;
 
@@ -128,6 +136,7 @@ impl LspServer {
             "textDocument/semanticTokens/full" => {
                 response(id, self.semantic_tokens_response(&message))
             }
+            "workspace/symbol" => response(id, self.workspace_symbol_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -438,6 +447,26 @@ impl LspServer {
 
         lsp_semantic_tokens_from_core(tokens)
     }
+
+    fn workspace_symbol_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!([]);
+        };
+        let query = params.get("query").and_then(Value::as_str).unwrap_or("");
+        let root_dir = self
+            .root_dir
+            .clone()
+            .or_else(|| env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let symbols = workspace_symbols_from_dir(root_dir, query).unwrap_or_default();
+
+        Value::Array(
+            symbols
+                .into_iter()
+                .map(lsp_workspace_symbol_from_core)
+                .collect(),
+        )
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -564,6 +593,31 @@ fn lsp_text_edit(edit: TextEdit) -> Value {
         "range": lsp_range(edit.span),
         "newText": edit.new_text
     })
+}
+
+fn lsp_workspace_symbol_from_core(symbol: WorkspaceSymbol) -> Value {
+    let mut item = json!({
+        "name": symbol.name,
+        "kind": lsp_workspace_symbol_kind(symbol.kind),
+        "location": {
+            "uri": uri_from_path(&symbol.path),
+            "range": lsp_range(symbol.selection_range)
+        }
+    });
+
+    if let Some(container_name) = symbol.container_name {
+        item["containerName"] = json!(container_name);
+    }
+
+    item
+}
+
+fn lsp_workspace_symbol_kind(kind: WorkspaceSymbolKind) -> u8 {
+    match kind {
+        WorkspaceSymbolKind::Module => 2,
+        WorkspaceSymbolKind::Function => 12,
+        WorkspaceSymbolKind::TypeAlias => 23,
+    }
 }
 
 const SEMANTIC_TOKEN_TYPES: [&str; 7] = [
@@ -754,6 +808,34 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
 }
 
+fn initialize_root_dir(message: &Value) -> Option<PathBuf> {
+    let params = message.get("params")?;
+
+    params
+        .get("rootUri")
+        .and_then(Value::as_str)
+        .map(path_from_uri)
+        .or_else(|| {
+            params
+                .get("workspaceFolders")
+                .and_then(Value::as_array)
+                .and_then(|folders| folders.first())
+                .and_then(|folder| folder.get("uri"))
+                .and_then(Value::as_str)
+                .map(path_from_uri)
+        })
+        .or_else(|| {
+            params
+                .get("rootPath")
+                .and_then(Value::as_str)
+                .map(PathBuf::from)
+        })
+}
+
+fn uri_from_path(path: &Path) -> String {
+    format!("file://{}", percent_encode_path(path))
+}
+
 fn path_from_uri(uri: &str) -> PathBuf {
     let Some(raw_path) = uri.strip_prefix("file://") else {
         return PathBuf::from(uri);
@@ -761,6 +843,21 @@ fn path_from_uri(uri: &str) -> PathBuf {
     let raw_path = raw_path.strip_prefix("localhost").unwrap_or(raw_path);
 
     PathBuf::from(percent_decode(raw_path))
+}
+
+fn percent_encode_path(path: &Path) -> String {
+    let mut encoded = String::new();
+
+    for byte in path.to_string_lossy().bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                encoded.push(byte as char)
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+
+    encoded
 }
 
 fn percent_decode(input: &str) -> String {

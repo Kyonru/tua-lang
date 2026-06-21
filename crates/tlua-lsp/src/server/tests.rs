@@ -1,6 +1,10 @@
 use super::*;
 use serde_json::Value;
+use std::fs;
 use std::io::Cursor;
+use std::path::{Path, PathBuf};
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn exposes_server_name() {
@@ -43,6 +47,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["workspaceSymbolProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["renameProvider"]["prepareProvider"],
         true
     );
@@ -70,6 +78,79 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
         true
     );
+}
+
+#[test]
+fn workspace_symbol_returns_project_modules_aliases_and_functions() {
+    let temp = TempProject::new("workspace-symbols");
+
+    temp.write("tlua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/player.tlua",
+        r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+"#,
+    );
+    temp.write(
+        "src/systems/combat.tlua",
+        r#"type CombatEvent = { amount: number }
+
+local function damage(player: Player, amount: number): Player
+  return player
+end
+"#,
+    );
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        workspace_symbol_request(2, "plr"),
+        workspace_symbol_request(3, "syscmb"),
+    ]);
+    let player_symbols = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("workspace symbols should be an array");
+    let combat_symbols = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("workspace symbols should be an array");
+
+    assert_eq!(
+        workspace_symbol_names(player_symbols),
+        vec!["player", "Player", "makePlayer"]
+    );
+    assert_eq!(player_symbols[0]["kind"], 2);
+    assert_eq!(player_symbols[1]["kind"], 23);
+    assert_eq!(player_symbols[2]["kind"], 12);
+    assert_eq!(player_symbols[1]["containerName"], "player");
+    assert_eq!(player_symbols[2]["containerName"], "player");
+    assert_eq!(
+        player_symbols[1]["location"]["uri"],
+        temp.uri_for("src/player.tlua")
+    );
+
+    assert_eq!(
+        workspace_symbol_names(combat_symbols),
+        vec!["systems.combat", "CombatEvent", "damage"]
+    );
+    assert_eq!(combat_symbols[0]["kind"], 2);
+    assert_eq!(combat_symbols[1]["kind"], 23);
+    assert_eq!(combat_symbols[2]["kind"], 12);
+    assert_eq!(combat_symbols[1]["containerName"], "systems.combat");
+    assert_eq!(combat_symbols[2]["containerName"], "systems.combat");
+}
+
+#[test]
+fn workspace_symbol_empty_or_unavailable_workspace_returns_empty_array() {
+    let temp = TempProject::new("empty-workspace-symbols");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        workspace_symbol_request(2, "missing"),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!([]));
 }
 
 #[test]
@@ -736,6 +817,17 @@ fn did_open(uri: &str, source: &str) -> Value {
     })
 }
 
+fn initialize_with_root(id: u64, root_uri: String) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "rootUri": root_uri
+        }
+    })
+}
+
 fn hover_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -890,6 +982,17 @@ fn semantic_tokens_request(id: u64, uri: &str) -> Value {
             "textDocument": {
                 "uri": uri
             }
+        }
+    })
+}
+
+fn workspace_symbol_request(id: u64, query: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "workspace/symbol",
+        "params": {
+            "query": query
         }
     })
 }
@@ -1175,9 +1278,66 @@ fn symbol_names(symbols: &[Value]) -> Vec<&str> {
         .collect()
 }
 
+fn workspace_symbol_names(symbols: &[Value]) -> Vec<&str> {
+    symbols
+        .iter()
+        .map(|symbol| {
+            symbol["name"]
+                .as_str()
+                .expect("workspace symbol name should be a string")
+        })
+        .collect()
+}
+
 fn response_with_id(output: &[Value], id: u64) -> &Value {
     output
         .iter()
         .find(|message| message["id"] == id)
         .expect("response should exist")
+}
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tlua-lsp-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("temp project should be created");
+
+        Self { path }
+    }
+
+    fn uri(&self) -> String {
+        path_uri(&self.path)
+    }
+
+    fn uri_for(&self, relative: &str) -> String {
+        path_uri(&self.path.join(relative))
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
+        let path = self.path.join(relative);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+
+        fs::write(path, contents).expect("fixture should be written");
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+fn path_uri(path: &Path) -> String {
+    format!("file://{}", path.display())
 }
