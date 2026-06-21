@@ -1,5 +1,6 @@
-use std::env;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::{env, fs};
 
 use serde_json::{json, Value};
 use tua_core::{
@@ -111,7 +112,9 @@ impl LspServer {
             "textDocument/didChange" => self.did_change_notification(message),
             "textDocument/didSave" => self.did_save_notification(message),
             "textDocument/didClose" => self.did_close_notification(message),
-            "workspace/didChangeWatchedFiles" => self.did_change_watched_files_notification(),
+            "workspace/didChangeWatchedFiles" => {
+                self.did_change_watched_files_notification(message)
+            }
             "workspace/didChangeWorkspaceFolders" => {
                 self.did_change_workspace_folders_notification(message)
             }
@@ -170,12 +173,51 @@ impl LspServer {
         Some(vec![publish_diagnostics(&uri, Vec::new())])
     }
 
-    fn did_change_watched_files_notification(&self) -> Option<Vec<Value>> {
-        let publications = self
-            .documents
-            .keys()
-            .map(|uri| publish_diagnostics(uri, self.diagnostics_for(uri)))
-            .collect::<Vec<_>>();
+    fn did_change_watched_files_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        let changes = watched_file_changes(message);
+        let mut publications = Vec::new();
+        let mut published = BTreeSet::new();
+
+        for change in changes {
+            match change.kind {
+                FileChangeKind::Created | FileChangeKind::Changed => {
+                    let diagnostics = if self.documents.contains_key(&change.uri) {
+                        Some(self.diagnostics_for(&change.uri))
+                    } else if is_tua_uri(&change.uri) {
+                        Some(self.diagnostics_for_disk_file(&change.uri))
+                    } else {
+                        None
+                    };
+
+                    if let Some(diagnostics) = diagnostics {
+                        push_diagnostics_publication(
+                            &mut publications,
+                            &mut published,
+                            &change.uri,
+                            diagnostics,
+                        );
+                    }
+                }
+                FileChangeKind::Deleted => {
+                    self.documents.remove(&change.uri);
+                    push_diagnostics_publication(
+                        &mut publications,
+                        &mut published,
+                        &change.uri,
+                        Vec::new(),
+                    );
+                }
+            }
+        }
+
+        for uri in self.documents.keys() {
+            push_diagnostics_publication(
+                &mut publications,
+                &mut published,
+                uri,
+                self.diagnostics_for(uri),
+            );
+        }
 
         (!publications.is_empty()).then_some(publications)
     }
@@ -201,6 +243,21 @@ impl LspServer {
         let path = path_from_uri(uri);
 
         match check_tua_source(&path, text.clone()) {
+            Ok(()) => Vec::new(),
+            Err(diagnostics) => diagnostics
+                .into_iter()
+                .map(lsp_diagnostic_from_core)
+                .collect(),
+        }
+    }
+
+    fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {
+        let path = path_from_uri(uri);
+        let Ok(source) = fs::read_to_string(&path) else {
+            return Vec::new();
+        };
+
+        match check_tua_source(&path, source) {
             Ok(()) => Vec::new(),
             Err(diagnostics) => diagnostics
                 .into_iter()
@@ -423,6 +480,65 @@ fn document_uri(params: &Value) -> Option<&str> {
         .get("textDocument")
         .and_then(|document| document.get("uri"))
         .and_then(Value::as_str)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct WatchedFileChange {
+    uri: String,
+    kind: FileChangeKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileChangeKind {
+    Created,
+    Changed,
+    Deleted,
+}
+
+fn watched_file_changes(message: &Value) -> Vec<WatchedFileChange> {
+    message
+        .get("params")
+        .and_then(|params| params.get("changes"))
+        .and_then(Value::as_array)
+        .map(|changes| {
+            changes
+                .iter()
+                .filter_map(|change| {
+                    Some(WatchedFileChange {
+                        uri: change.get("uri")?.as_str()?.to_owned(),
+                        kind: file_change_kind(change.get("type")?.as_u64()?)?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn file_change_kind(value: u64) -> Option<FileChangeKind> {
+    match value {
+        1 => Some(FileChangeKind::Created),
+        2 => Some(FileChangeKind::Changed),
+        3 => Some(FileChangeKind::Deleted),
+        _ => None,
+    }
+}
+
+fn push_diagnostics_publication(
+    publications: &mut Vec<Value>,
+    published: &mut BTreeSet<String>,
+    uri: &str,
+    diagnostics: Vec<Value>,
+) {
+    if published.insert(uri.to_owned()) {
+        publications.push(publish_diagnostics(uri, diagnostics));
+    }
+}
+
+fn is_tua_uri(uri: &str) -> bool {
+    path_from_uri(uri)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension == "tua")
 }
 
 fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {

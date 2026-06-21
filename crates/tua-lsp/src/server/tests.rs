@@ -530,6 +530,49 @@ fn watched_file_changes_republish_open_document_diagnostics() {
 }
 
 #[test]
+fn watched_file_changes_publish_closed_tua_file_diagnostics() {
+    let temp = TempProject::new("watched-closed-file");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/new_module.tua", "local hp: number = \"full\"\n");
+
+    let uri = temp.uri_for("src/new_module.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        watched_files_changed([(&uri, 1)]),
+    ]);
+    let publications = diagnostics_publications(&output, &uri);
+
+    assert_eq!(publications.len(), 1);
+    assert_eq!(
+        publications[0]["params"]["diagnostics"][0]["code"],
+        "TL1003"
+    );
+}
+
+#[test]
+fn watched_file_delete_clears_diagnostics_and_removes_open_document() {
+    let uri = "file:///tmp/deleted-watched.tua";
+    let source = "local hp: number = \"full\"\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        watched_files_changed([(uri, 3)]),
+        hover_request(2, uri, source, "hp"),
+    ]);
+    let publications = diagnostics_publications(&output, uri);
+
+    assert_eq!(publications.len(), 2);
+    assert_eq!(
+        publications[1]["params"]["diagnostics"]
+            .as_array()
+            .expect("delete diagnostics should be an array")
+            .len(),
+        0
+    );
+    assert!(response_with_id(&output, 2)["result"].is_null());
+}
+
+#[test]
 fn hover_returns_known_alias_local_function_and_table_field_types() {
     let uri = "file:///tmp/hover.tua";
     let source = r#"type Vec2 = { x: number, y: number }
@@ -1522,6 +1565,24 @@ fn workspace_folders_changed<const A: usize, const R: usize>(
                 "added": workspace_folder_items(added),
                 "removed": workspace_folder_items(removed)
             }
+        }
+    })
+}
+
+fn watched_files_changed<const N: usize>(changes: [(&str, u8); N]) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "workspace/didChangeWatchedFiles",
+        "params": {
+            "changes": changes
+                .into_iter()
+                .map(|(uri, kind)| {
+                    json!({
+                        "uri": uri,
+                        "type": kind
+                    })
+                })
+                .collect::<Vec<_>>()
         }
     })
 }
