@@ -1,5 +1,9 @@
 use super::*;
 use crate::source_text::{byte_for_column, line_at, position_at};
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SOURCE: &str = r#"type Vec2 = { x: number, y: number }
 type Player = { pos: Vec2, hp: number, alive?: boolean }
@@ -138,6 +142,100 @@ fn unknown_symbols_and_any_fields_have_no_definition() {
     assert_no_definition("payload.value", "payload.".len());
 }
 
+#[test]
+fn resolves_require_string_to_module_file() {
+    let temp = TempProject::new("require-module-definition");
+    let source = r#"local Player = require("player")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/player.tua",
+        "local function makePlayer() end\nreturn { makePlayer = makePlayer }\n",
+    );
+
+    let mut position = position_at(source, "player\")");
+    let definition = definition_tua_source(temp.path.join("src/main.tua"), source, position)
+        .expect("source should parse")
+        .expect("module definition should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::Module);
+    assert_eq!(definition.path, temp.path.join("src/player.tua"));
+    assert_eq!(
+        source_text_owned(
+            &fs::read_to_string(&definition.path).unwrap(),
+            definition.span
+        ),
+        "makePlayer"
+    );
+
+    position.column += 1;
+    assert!(
+        definition_tua_source(temp.path.join("src/main.tua"), source, position)
+            .expect("source should parse")
+            .is_some()
+    );
+}
+
+#[test]
+fn resolves_required_tua_module_export_function() {
+    let temp = TempProject::new("required-tua-export-definition");
+    let source = r#"local Player = require("player")
+local player = Player.makePlayer()
+"#;
+    let module = r#"local function makePlayer()
+  return { hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", module);
+
+    let mut position = position_at(source, "Player.makePlayer");
+    position.column += "Player.".len();
+    let definition = definition_tua_source(temp.path.join("src/main.tua"), source, position)
+        .expect("source should parse")
+        .expect("module export definition should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::Function);
+    assert_eq!(definition.path, temp.path.join("src/player.tua"));
+    assert_eq!(source_text_owned(module, definition.span), "makePlayer");
+}
+
+#[test]
+fn resolves_required_lua_module_export_key() {
+    let temp = TempProject::new("required-lua-export-definition");
+    let source = r#"local Legacy = require("legacy")
+local value = Legacy.clamp(10, 0, 20)
+"#;
+    let module = r#"return {
+  clamp = function(value, min, max)
+    return value
+  end,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/legacy.lua", module);
+
+    let mut position = position_at(source, "Legacy.clamp");
+    position.column += "Legacy.".len();
+    let definition = definition_tua_source(temp.path.join("src/main.tua"), source, position)
+        .expect("source should parse")
+        .expect("Lua module export definition should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::TableField);
+    assert_eq!(definition.path, temp.path.join("src/legacy.lua"));
+    assert_eq!(source_text_owned(module, definition.span), "clamp");
+}
+
 fn assert_definition(needle: &str, offset: usize, kind: DefinitionKind, expected_text: &str) {
     let definition = definition_at(needle, offset).expect("definition should resolve");
 
@@ -167,4 +265,46 @@ fn source_text_from(source: &'static str, span: SourceSpan) -> &'static str {
     let end = byte_for_column(line, span.end.column);
 
     &line[start..end]
+}
+
+fn source_text_owned(source: &str, span: SourceSpan) -> String {
+    let line = line_at(source, span.start.line).expect("definition line should exist");
+    let start = byte_for_column(line, span.start.column);
+    let end = byte_for_column(line, span.end.column);
+
+    line[start..end].to_owned()
+}
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tua-core-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("temp project should be created");
+
+        Self { path }
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
+        let path = self.path.join(relative);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+
+        fs::write(path, contents).expect("fixture should be written");
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }

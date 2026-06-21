@@ -118,6 +118,7 @@ fn semantic_token_for_identifier(
 
 fn semantic_kind_for_definition(kind: DefinitionKind) -> SemanticTokenKind {
     match kind {
+        DefinitionKind::Module => SemanticTokenKind::Variable,
         DefinitionKind::TypeAlias => SemanticTokenKind::TypeAlias,
         DefinitionKind::Local => SemanticTokenKind::Variable,
         DefinitionKind::Function => SemanticTokenKind::Function,

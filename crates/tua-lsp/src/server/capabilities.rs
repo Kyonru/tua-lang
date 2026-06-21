@@ -28,6 +28,9 @@ pub(super) fn initialize_result() -> Value {
                 "triggerCharacters": [":", ".", "\"", "'"]
             },
             "definitionProvider": true,
+            "documentLinkProvider": {
+                "resolveProvider": false
+            },
             "documentSymbolProvider": true,
             "referencesProvider": true,
             "workspaceSymbolProvider": true,

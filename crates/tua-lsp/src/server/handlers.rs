@@ -4,15 +4,16 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tua_core::{
     check_tua_source, complete_tua_source, definition_tua_source, document_symbols_tua_source,
-    hover_tua_source, inlay_hints_tua_source, prepare_rename_tua_source, references_tua_source,
-    rename_tua_source, semantic_tokens_tua_source, workspace_symbols_from_dir, SourcePosition,
+    hover_tua_source, inlay_hints_tua_source, module_links_tua_source, prepare_rename_tua_source,
+    references_tua_source, rename_tua_source, semantic_tokens_tua_source,
+    workspace_symbols_from_dir, SourcePosition,
 };
 
 use super::protocol::{
     error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
-    lsp_document_symbol_from_core, lsp_hover_from_core, lsp_inlay_hint_from_core,
-    lsp_location_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
-    lsp_semantic_tokens_from_core, lsp_source_range, lsp_workspace_edit,
+    lsp_document_link_from_core, lsp_document_symbol_from_core, lsp_hover_from_core,
+    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
+    lsp_reference_location, lsp_semantic_tokens_from_core, lsp_source_range, lsp_workspace_edit,
     lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, root_dir_from_initialize};
@@ -66,6 +67,7 @@ impl LspServer {
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
+            "textDocument/documentLink" => response(id, self.document_link_response(&message)),
             "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
             "textDocument/references" => response(id, self.references_response(&message)),
             "textDocument/prepareRename" => response(
@@ -171,7 +173,16 @@ impl LspServer {
             .ok()
             .flatten()?;
 
-        Some(lsp_location_from_core(request.uri, definition))
+        Some(lsp_location_from_core(definition))
+    }
+
+    fn document_link_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let links = module_links_tua_source(request.path, request.text.to_owned());
+
+        Value::Array(links.into_iter().map(lsp_document_link_from_core).collect())
     }
 
     fn document_symbol_response(&self, message: &Value) -> Value {

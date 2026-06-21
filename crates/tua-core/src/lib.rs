@@ -9,6 +9,7 @@ pub mod hover;
 pub mod inlay_hint;
 mod lua;
 pub mod module_index;
+pub mod module_link;
 pub mod parser;
 mod project;
 pub mod references;
@@ -39,6 +40,7 @@ pub use module_index::{
     infer_module_exports, required_module_exports_for_receiver, resolve_required_module,
     ModuleExports,
 };
+pub use module_link::{module_links_tua_source, ModuleLink};
 pub use parser::{
     parse_lua_source, parse_tua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
     LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,

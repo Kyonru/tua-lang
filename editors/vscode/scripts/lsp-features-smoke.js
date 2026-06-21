@@ -39,6 +39,15 @@ const inference = sources.find((source) => source.file === "inference.tua");
 if (!inference) {
   fail("examples/features/src/inference.tua is missing");
 }
+const modules = sources.find((source) => source.file === "modules.tua");
+if (!modules) {
+  fail("examples/features/src/modules.tua is missing");
+}
+const legacy = {
+  path: path.join(src, "legacy.lua"),
+  uri: pathToFileURL(path.join(src, "legacy.lua")).href,
+  text: fs.readFileSync(path.join(src, "legacy.lua"), "utf8"),
+};
 
 const timeout = setTimeout(() => {
   child.kill();
@@ -173,6 +182,56 @@ request("initialize", {
     }),
   );
 
+  expected.push(
+    request("textDocument/documentLink", { textDocument: { uri: modules.uri } }, (message) => {
+      const links = message.result || [];
+      const legacyLink = links.find((link) => sourceTextFromRange(modules.text, link.range) === "legacy");
+
+      if (!legacyLink) {
+        fail(`document links did not include require("legacy"): ${JSON.stringify(links)}`);
+      }
+
+      if (legacyLink.target !== legacy.uri) {
+        fail(`document link expected ${legacy.uri}, got ${legacyLink.target}`);
+      }
+    }),
+  );
+
+  expected.push(
+    request(
+      "textDocument/definition",
+      {
+        textDocument: { uri: modules.uri },
+        position: positionAt(modules.text, "legacy\")"),
+      },
+      (message) => {
+        if (message.result?.uri !== legacy.uri) {
+          fail(`require definition expected ${legacy.uri}, got ${message.result?.uri}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
+    request(
+      "textDocument/definition",
+      {
+        textDocument: { uri: inference.uri },
+        position: positionAfter(inference.text, "Legacy."),
+      },
+      (message) => {
+        if (message.result?.uri !== legacy.uri) {
+          fail(`definition expected ${legacy.uri}, got ${message.result?.uri}`);
+        }
+
+        const target = sourceTextFromRange(legacy.text, message.result?.range);
+        if (target !== "describe") {
+          fail(`definition expected legacy export "describe", got ${JSON.stringify(target)}`);
+        }
+      },
+    ),
+  );
+
   Promise.all(expected).then(() => {
     request("shutdown", null, () => {
       completed = true;
@@ -265,6 +324,16 @@ function positionAfter(source, needle) {
   position.character += needle.length;
 
   return position;
+}
+
+function sourceTextFromRange(source, range) {
+  if (!range) {
+    return undefined;
+  }
+
+  const line = source.split("\n")[range.start.line];
+
+  return line.slice(range.start.character, range.end.character);
 }
 
 function send(message) {

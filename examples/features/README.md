@@ -25,8 +25,8 @@ make build-features
 - `src/inference.tua` covers local type inlay hints, inferred function return
   hovers, parameter-name hints, field-chain inference from annotated locals, and
   the permissive `any` boundary.
-- `src/modules.tua` covers normal Lua `require(...)` usage and plain Lua module
-  interop.
+- `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
+  interop, and cross-file go to definition for required module exports.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/main.tua` ties the feature modules together while keeping `require`

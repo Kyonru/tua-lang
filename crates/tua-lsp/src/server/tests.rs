@@ -39,6 +39,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["documentLinkProvider"]["resolveProvider"],
+        false
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["documentSymbolProvider"],
         true
     );
@@ -481,6 +485,82 @@ test(false)
     ]);
 
     assert_definition_text(&output, 2, uri, source, "test");
+}
+
+#[test]
+fn definition_returns_cross_file_module_and_export_locations() {
+    let temp = TempProject::new("cross-file-definition");
+    let main = r#"local Player = require("player")
+local Legacy = require("legacy")
+
+local player = Player.makePlayer()
+local clamped = Legacy.clamp(10, 0, 20)
+"#;
+    let player = r#"local function makePlayer()
+  return { hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let legacy = r#"return {
+  clamp = function(value, min, max)
+    return value
+  end,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", player);
+    temp.write("src/legacy.lua", legacy);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let legacy_uri = temp.uri_for("src/legacy.lua");
+    let output = run_messages(vec![
+        did_open(&main_uri, main),
+        definition_request(2, &main_uri, main, "player\")", 0),
+        definition_request(3, &main_uri, main, "Player.makePlayer", "Player.".len()),
+        definition_request(4, &main_uri, main, "Legacy.clamp", "Legacy.".len()),
+    ]);
+
+    assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
+    assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
+    assert_definition_text(&output, 4, &legacy_uri, legacy, "clamp");
+}
+
+#[test]
+fn document_link_returns_resolved_require_targets() {
+    let temp = TempProject::new("document-links");
+    let main = r#"local Player = require("player")
+local Legacy = require("legacy")
+local Missing = require("missing")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", "return {}\n");
+    temp.write("src/legacy.lua", "return {}\n");
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let legacy_uri = temp.uri_for("src/legacy.lua");
+    let output = run_messages(vec![
+        did_open(&main_uri, main),
+        document_link_request(2, &main_uri),
+    ]);
+    let response = response_with_id(&output, 2);
+    let links = response["result"]
+        .as_array()
+        .expect("document links should be an array");
+
+    assert_eq!(links.len(), 2);
+    assert_eq!(links[0]["target"], player_uri);
+    assert_eq!(range_text(main, &links[0]["range"]), "player");
+    assert_eq!(links[1]["target"], legacy_uri);
+    assert_eq!(range_text(main, &links[1]["range"]), "legacy");
 }
 
 #[test]
@@ -1018,6 +1098,19 @@ fn document_symbol_request(id: u64, uri: &str) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "textDocument/documentSymbol",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
+        }
+    })
+}
+
+fn document_link_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/documentLink",
         "params": {
             "textDocument": {
                 "uri": uri

@@ -17,6 +17,7 @@ pub struct Reference {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReferenceKind {
+    Module,
     TypeAlias,
     Local,
     Function,
@@ -108,6 +109,7 @@ fn same_definition(left: &Definition, right: &Definition) -> bool {
 
 fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
     match kind {
+        DefinitionKind::Module => ReferenceKind::Module,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,

@@ -107,6 +107,7 @@ pub fn rename_parsed_source(
 
 fn rename_kind(kind: DefinitionKind) -> Option<RenameKind> {
     match kind {
+        DefinitionKind::Module => None,
         DefinitionKind::TypeAlias => Some(RenameKind::TypeAlias),
         DefinitionKind::Local => Some(RenameKind::Local),
         DefinitionKind::Function => Some(RenameKind::Function),
