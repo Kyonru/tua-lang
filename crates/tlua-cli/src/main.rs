@@ -1,7 +1,7 @@
 use std::env;
 use std::process::ExitCode;
 
-use tlua_cli::{parse_args, placeholder_text, version_text, CliAction, HELP};
+use tlua_cli::{parse_args, run_command, version_text, CliAction, HELP};
 
 fn main() -> ExitCode {
     match parse_args(env::args().skip(1)) {
@@ -16,10 +16,22 @@ fn main() -> ExitCode {
         Ok(CliAction::Command {
             name,
             emit_on_error,
-        }) => {
-            println!("{}", placeholder_text(name, emit_on_error));
-            ExitCode::SUCCESS
-        }
+        }) => match env::current_dir() {
+            Ok(cwd) => match run_command(name, emit_on_error, cwd) {
+                Ok(message) => {
+                    println!("{message}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("error: {}", error.message);
+                    ExitCode::FAILURE
+                }
+            },
+            Err(error) => {
+                eprintln!("error: failed to read current directory: {error}");
+                ExitCode::FAILURE
+            }
+        },
         Err(error) => {
             eprintln!("error: {}", error.message);
             eprintln!();

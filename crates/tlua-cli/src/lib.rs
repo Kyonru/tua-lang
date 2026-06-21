@@ -1,3 +1,5 @@
+use std::path::Path;
+
 pub const HELP: &str = "\
 tlua - typed Lua tooling for LuaJIT/LÖVE projects
 
@@ -106,9 +108,9 @@ pub fn version_text() -> String {
     format!("tlua {}", tlua_core::VERSION)
 }
 
-pub fn placeholder_text(command: CommandName, emit_on_error: bool) -> String {
+fn placeholder_text(command: CommandName, emit_on_error: bool) -> String {
     match command {
-        CommandName::Init => "tlua init is not implemented yet".to_owned(),
+        CommandName::Init => unreachable!("tlua init is handled before placeholder_text"),
         CommandName::Check => "tlua check is not implemented yet".to_owned(),
         CommandName::Build if emit_on_error => {
             "tlua build --emit-on-error is not implemented yet".to_owned()
@@ -117,6 +119,39 @@ pub fn placeholder_text(command: CommandName, emit_on_error: bool) -> String {
         CommandName::Watch => "tlua watch is not implemented yet".to_owned(),
         CommandName::Lsp => format!("{} is not implemented yet", tlua_lsp::server_name()),
     }
+}
+
+pub fn run_command(
+    command: CommandName,
+    emit_on_error: bool,
+    cwd: impl AsRef<Path>,
+) -> Result<String, CliError> {
+    match command {
+        CommandName::Init => tlua_core::init_project(cwd)
+            .map(format_init_result)
+            .map_err(|error| CliError {
+                message: error.to_string(),
+            }),
+        _ => Ok(placeholder_text(command, emit_on_error)),
+    }
+}
+
+fn format_init_result(result: tlua_core::InitResult) -> String {
+    let mut lines = vec!["initialized tlua project".to_owned()];
+
+    if result.config_created {
+        lines.push("created tlua.toml".to_owned());
+    } else {
+        lines.push("tlua.toml already exists; left unchanged".to_owned());
+    }
+
+    if result.source_created {
+        lines.push("created src/".to_owned());
+    } else {
+        lines.push("src/ already exists".to_owned());
+    }
+
+    lines.join("\n")
 }
 
 #[cfg(test)]
@@ -197,7 +232,6 @@ mod tests {
     #[test]
     fn command_placeholders_are_explicitly_unimplemented() {
         let commands = [
-            (CommandName::Init, false),
             (CommandName::Check, false),
             (CommandName::Build, false),
             (CommandName::Build, true),

@@ -1,7 +1,41 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use tlua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT};
 
 fn tlua() -> Command {
     Command::new(env!("CARGO_BIN_EXE_tlua"))
+}
+
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tlua-cli-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("failed to create temp dir");
+
+        Self { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
 
 #[test]
@@ -50,4 +84,53 @@ fn invalid_flag_exits_with_useful_error() {
 
     assert!(stderr.contains("only valid with `tlua build`"));
     assert!(stderr.contains("tlua --help"));
+}
+
+#[test]
+fn init_creates_default_project_files() {
+    let temp = TempDir::new("init");
+    let output = tlua()
+        .arg("init")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua init");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("initialized tlua project"));
+    assert!(stdout.contains("created tlua.toml"));
+    assert!(stdout.contains("created src/"));
+    assert_eq!(
+        fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
+        DEFAULT_CONFIG_TEXT
+    );
+    assert!(temp.path().join("src").is_dir());
+}
+
+#[test]
+fn init_does_not_overwrite_existing_config() {
+    let temp = TempDir::new("init-existing");
+    let config_path = temp.path().join(CONFIG_FILE);
+    let existing = "source = \"custom\"\n";
+
+    fs::write(&config_path, existing).expect("failed to write existing config");
+
+    let output = tlua()
+        .arg("init")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua init");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("left unchanged"));
+    assert_eq!(
+        fs::read_to_string(config_path).expect("failed to read config"),
+        existing
+    );
+    assert!(temp.path().join("src").is_dir());
 }
