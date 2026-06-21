@@ -4,6 +4,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::{Diagnostic, DiagnosticCode};
+
 pub const CONFIG_FILE: &str = "tlua.toml";
 
 pub const DEFAULT_CONFIG_TEXT: &str = "\
@@ -53,6 +55,7 @@ pub struct InitResult {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConfigParseError {
     pub line: usize,
+    pub column: usize,
     pub message: String,
 }
 
@@ -60,6 +63,7 @@ impl ConfigParseError {
     fn new(line: usize, message: impl Into<String>) -> Self {
         Self {
             line,
+            column: 1,
             message: message.into(),
         }
     }
@@ -103,6 +107,19 @@ impl Error for ConfigError {
         match self {
             Self::Io { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
+        }
+    }
+}
+
+impl ConfigError {
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        match self {
+            Self::Io { path, source } => Diagnostic::error(path, 1, 1, source.to_string())
+                .with_code(DiagnosticCode::CONFIG_IO),
+            Self::Parse { path, source } => {
+                Diagnostic::error(path, source.line, source.column, source.message.clone())
+                    .with_code(DiagnosticCode::CONFIG_PARSE)
+            }
         }
     }
 }
@@ -426,6 +443,19 @@ emit_maps = false
 
         assert_eq!(error.line, 1);
         assert!(error.message.contains("expected boolean"));
+    }
+
+    #[test]
+    fn config_parse_errors_convert_to_diagnostics() {
+        let path = PathBuf::from("tlua.toml");
+        let source = parse_config("emit_maps = yes\n").unwrap_err();
+        let error = ConfigError::Parse { path, source };
+        let diagnostic = error.to_diagnostic();
+
+        assert_eq!(
+            diagnostic.format_cli(),
+            "tlua.toml:1:1 error TL3001: expected boolean value"
+        );
     }
 
     #[test]

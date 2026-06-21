@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use tlua_core::{format_diagnostics_for_cli, ConfigError, Diagnostic};
+
 pub const HELP: &str = "\
 tlua - typed Lua tooling for LuaJIT/LÖVE projects
 
@@ -43,6 +45,31 @@ pub enum CommandName {
 #[derive(Debug, Eq, PartialEq)]
 pub struct CliError {
     pub message: String,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl CliError {
+    fn usage(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn from_config_error(error: ConfigError) -> Self {
+        Self {
+            message: "project configuration error".to_owned(),
+            diagnostics: vec![error.to_diagnostic()],
+        }
+    }
+
+    pub fn format_stderr(&self) -> String {
+        if self.diagnostics.is_empty() {
+            format!("error: {}", self.message)
+        } else {
+            format_diagnostics_for_cli(&self.diagnostics)
+        }
+    }
 }
 
 pub fn parse_args<I, S>(args: I) -> Result<CliAction, CliError>
@@ -74,9 +101,7 @@ where
         "watch" => CommandName::Watch,
         "lsp" => CommandName::Lsp,
         other => {
-            return Err(CliError {
-                message: format!("unknown command `{other}`"),
-            });
+            return Err(CliError::usage(format!("unknown command `{other}`")));
         }
     };
 
@@ -86,14 +111,12 @@ where
         match arg.as_str() {
             "--emit-on-error" if command == CommandName::Build => emit_on_error = true,
             "--emit-on-error" => {
-                return Err(CliError {
-                    message: "`--emit-on-error` is only valid with `tlua build`".to_owned(),
-                });
+                return Err(CliError::usage(
+                    "`--emit-on-error` is only valid with `tlua build`",
+                ));
             }
             other => {
-                return Err(CliError {
-                    message: format!("unknown option `{other}`"),
-                });
+                return Err(CliError::usage(format!("unknown option `{other}`")));
             }
         }
     }
@@ -129,9 +152,12 @@ pub fn run_command(
     match command {
         CommandName::Init => tlua_core::init_project(cwd)
             .map(format_init_result)
-            .map_err(|error| CliError {
-                message: error.to_string(),
-            }),
+            .map_err(CliError::from_config_error),
+        CommandName::Check | CommandName::Build | CommandName::Watch => {
+            tlua_core::load_config_from_dir(cwd).map_err(CliError::from_config_error)?;
+
+            Ok(placeholder_text(command, emit_on_error))
+        }
         _ => Ok(placeholder_text(command, emit_on_error)),
     }
 }
@@ -242,5 +268,20 @@ mod tests {
         for (command, emit_on_error) in commands {
             assert!(placeholder_text(command, emit_on_error).contains("not implemented yet"));
         }
+    }
+
+    #[test]
+    fn cli_errors_can_format_diagnostics() {
+        let diagnostic = Diagnostic::error("tlua.toml", 1, 1, "unknown config key `mode`")
+            .with_code(tlua_core::DiagnosticCode::CONFIG_PARSE);
+        let error = CliError {
+            message: "project configuration error".to_owned(),
+            diagnostics: vec![diagnostic],
+        };
+
+        assert_eq!(
+            error.format_stderr(),
+            "tlua.toml:1:1 error TL3001: unknown config key `mode`"
+        );
     }
 }

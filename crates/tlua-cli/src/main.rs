@@ -23,7 +23,7 @@ fn main() -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 Err(error) => {
-                    eprintln!("error: {}", error.message);
+                    eprintln!("{}", error.format_stderr());
                     ExitCode::FAILURE
                 }
             },
@@ -33,7 +33,7 @@ fn main() -> ExitCode {
             }
         },
         Err(error) => {
-            eprintln!("error: {}", error.message);
+            eprintln!("{}", error.format_stderr());
             eprintln!();
             eprintln!("Run `tlua --help` for usage.");
             ExitCode::FAILURE

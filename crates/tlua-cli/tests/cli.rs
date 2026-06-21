@@ -134,3 +134,24 @@ fn init_does_not_overwrite_existing_config() {
     );
     assert!(temp.path().join("src").is_dir());
 }
+
+#[test]
+fn check_prints_config_diagnostics() {
+    let temp = TempDir::new("check-invalid-config");
+
+    fs::write(temp.path().join(CONFIG_FILE), "emit_maps = yes\n")
+        .expect("failed to write invalid config");
+
+    let output = tlua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua check");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("tlua.toml:1:1 error TL3001: expected boolean value"));
+    assert!(!stderr.contains("panicked"));
+}

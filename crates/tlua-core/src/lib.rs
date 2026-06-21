@@ -1,8 +1,12 @@
 pub mod config;
+pub mod diagnostic;
 
 pub use config::{
     init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
     LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+};
+pub use diagnostic::{
+    format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
