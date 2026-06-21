@@ -1,8 +1,9 @@
 use std::path::Path;
 
+use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_source_files, read_source_file};
-use tlua_core::{check_tlua_source, Diagnostic, LoadedConfig};
+use tlua_core::{check_tlua_source, LoadedConfig};
 
 pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
@@ -36,15 +37,4 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
             sorted_diagnostics(diagnostics),
         ))
     }
-}
-
-fn sorted_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
-    diagnostics.sort_by(|left, right| {
-        left.file
-            .cmp(&right.file)
-            .then(left.line.cmp(&right.line))
-            .then(left.column.cmp(&right.column))
-            .then(left.message.cmp(&right.message))
-    });
-    diagnostics
 }

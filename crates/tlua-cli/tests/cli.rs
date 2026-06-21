@@ -250,7 +250,7 @@ fn build_compiles_nested_source_tree_to_matching_output_tree() {
         temp.path().join("src/main.tlua"),
         r#"
 local Player = require("systems.player.core")
-local current: Player | nil = nil
+local current: any = nil
 
 return Player
 "#,
@@ -338,4 +338,70 @@ return Menu
     assert!(output.status.success());
     assert!(temp.path().join("dist/lua/client/ui/menu.lua").is_file());
     assert!(!temp.path().join("dist/lua/client/ui/menu.tlua").exists());
+}
+
+#[test]
+fn build_blocks_type_errors_by_default() {
+    let temp = TempDir::new("build-blocks-type-errors");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local hp: number = "full"
+return hp
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tlua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua build");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tlua:2:20 error TL1003"));
+    assert!(stderr.contains("type mismatch: expected number, found string"));
+    assert!(!temp.path().join("build/main.lua").exists());
+}
+
+#[test]
+fn build_emit_on_error_writes_parseable_files_and_exits_nonzero() {
+    let temp = TempDir::new("build-emit-on-error");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local hp: number = "full"
+hp += 1
+return hp
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tlua()
+        .args(["build", "--emit-on-error"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua build --emit-on-error");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tlua:2:20 error TL1003"));
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(emitted.contains(r#"local hp = "full""#));
+    assert!(emitted.contains("hp = hp + 1"));
+    assert!(!emitted.contains(": number"));
 }

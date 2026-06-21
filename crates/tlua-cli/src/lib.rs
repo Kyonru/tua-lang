@@ -2,6 +2,7 @@ mod args;
 mod build;
 mod check;
 mod command;
+mod diagnostics;
 mod error;
 mod source;
 
