@@ -46,6 +46,7 @@ pub struct ParsedSource {
     pub type_aliases: Vec<TypeAlias>,
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
+    pub compound_assignments: Vec<CompoundAssignment>,
 }
 
 impl ParsedSource {
@@ -102,6 +103,45 @@ pub struct TableFieldType {
     pub span: Option<SourceSpan>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompoundAssignment {
+    pub lhs: Vec<String>,
+    pub operator: CompoundOperator,
+    pub rhs: String,
+    pub span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CompoundOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+}
+
+impl CompoundOperator {
+    pub fn as_sugar(self) -> &'static str {
+        match self {
+            Self::Add => "+=",
+            Self::Subtract => "-=",
+            Self::Multiply => "*=",
+            Self::Divide => "/=",
+            Self::Modulo => "%=",
+        }
+    }
+
+    pub fn as_binary(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Subtract => "-",
+            Self::Multiply => "*",
+            Self::Divide => "/",
+            Self::Modulo => "%",
+        }
+    }
+}
+
 pub fn parse_lua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
@@ -136,20 +176,25 @@ fn parse_source_with_version(
             let span = ast
                 .range()
                 .map(|(start, end)| SourceSpan::from_range(start, end));
-            let type_syntax = if collect_types {
-                collect_type_syntax(&ast)
+            let syntax = if collect_types {
+                collect_tlua_syntax(&path, &ast)
             } else {
-                TypeSyntax::default()
+                TluaSyntax::default()
             };
+
+            if !syntax.diagnostics.is_empty() {
+                return Err(syntax.diagnostics);
+            }
 
             Ok(ParsedSource {
                 path,
                 source,
                 ast,
                 span,
-                type_aliases: type_syntax.type_aliases,
-                local_annotations: type_syntax.local_annotations,
-                function_annotations: type_syntax.function_annotations,
+                type_aliases: syntax.type_aliases,
+                local_annotations: syntax.local_annotations,
+                function_annotations: syntax.function_annotations,
+                compound_assignments: syntax.compound_assignments,
             })
         }
         Err(errors) => Err(errors
@@ -160,27 +205,29 @@ fn parse_source_with_version(
 }
 
 #[derive(Default)]
-struct TypeSyntax {
+struct TluaSyntax {
     type_aliases: Vec<TypeAlias>,
     local_annotations: Vec<LocalAnnotation>,
     function_annotations: Vec<FunctionAnnotation>,
+    compound_assignments: Vec<CompoundAssignment>,
+    diagnostics: Vec<Diagnostic>,
 }
 
-fn collect_type_syntax(ast: &ast::Ast) -> TypeSyntax {
-    let mut syntax = TypeSyntax::default();
+fn collect_tlua_syntax(path: &Path, ast: &ast::Ast) -> TluaSyntax {
+    let mut syntax = TluaSyntax::default();
 
-    collect_block_type_syntax(ast.nodes(), &mut syntax);
+    collect_block_tlua_syntax(path, ast.nodes(), &mut syntax);
 
     syntax
 }
 
-fn collect_block_type_syntax(block: &ast::Block, syntax: &mut TypeSyntax) {
+fn collect_block_tlua_syntax(path: &Path, block: &ast::Block, syntax: &mut TluaSyntax) {
     for stmt in block.stmts() {
-        collect_stmt_type_syntax(stmt, syntax);
+        collect_stmt_tlua_syntax(path, stmt, syntax);
     }
 }
 
-fn collect_stmt_type_syntax(stmt: &ast::Stmt, syntax: &mut TypeSyntax) {
+fn collect_stmt_tlua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TluaSyntax) {
     match stmt {
         ast::Stmt::TypeDeclaration(declaration) => {
             syntax
@@ -205,31 +252,43 @@ fn collect_stmt_type_syntax(stmt: &ast::Stmt, syntax: &mut TypeSyntax) {
                 Some(token_text(function.name())),
                 function.body(),
             ));
-            collect_block_type_syntax(function.body().block(), syntax);
+            collect_block_tlua_syntax(path, function.body().block(), syntax);
         }
         ast::Stmt::FunctionDeclaration(function) => {
             syntax.function_annotations.push(function_annotation(
                 Some(function.name().to_string()),
                 function.body(),
             ));
-            collect_block_type_syntax(function.body().block(), syntax);
+            collect_block_tlua_syntax(path, function.body().block(), syntax);
         }
-        ast::Stmt::Do(block) => collect_block_type_syntax(block.block(), syntax),
+        ast::Stmt::CompoundAssignment(assignment) => {
+            match compound_assignment_from_ast(path, assignment) {
+                Ok(assignment) => syntax.compound_assignments.push(assignment),
+                Err(diagnostic) => syntax.diagnostics.push(diagnostic),
+            }
+        }
+        ast::Stmt::Do(block) => collect_block_tlua_syntax(path, block.block(), syntax),
         ast::Stmt::If(if_stmt) => {
-            collect_block_type_syntax(if_stmt.block(), syntax);
+            collect_block_tlua_syntax(path, if_stmt.block(), syntax);
             if let Some(else_ifs) = if_stmt.else_if() {
                 for else_if in else_ifs {
-                    collect_block_type_syntax(else_if.block(), syntax);
+                    collect_block_tlua_syntax(path, else_if.block(), syntax);
                 }
             }
             if let Some(else_block) = if_stmt.else_block() {
-                collect_block_type_syntax(else_block, syntax);
+                collect_block_tlua_syntax(path, else_block, syntax);
             }
         }
-        ast::Stmt::GenericFor(for_stmt) => collect_block_type_syntax(for_stmt.block(), syntax),
-        ast::Stmt::NumericFor(for_stmt) => collect_block_type_syntax(for_stmt.block(), syntax),
-        ast::Stmt::Repeat(repeat) => collect_block_type_syntax(repeat.block(), syntax),
-        ast::Stmt::While(while_stmt) => collect_block_type_syntax(while_stmt.block(), syntax),
+        ast::Stmt::GenericFor(for_stmt) => {
+            collect_block_tlua_syntax(path, for_stmt.block(), syntax);
+        }
+        ast::Stmt::NumericFor(for_stmt) => {
+            collect_block_tlua_syntax(path, for_stmt.block(), syntax);
+        }
+        ast::Stmt::Repeat(repeat) => collect_block_tlua_syntax(path, repeat.block(), syntax),
+        ast::Stmt::While(while_stmt) => {
+            collect_block_tlua_syntax(path, while_stmt.block(), syntax);
+        }
         _ => {}
     }
 }
@@ -269,6 +328,75 @@ fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> Functi
             .map(|specifier| tlua_type_from_type_info(specifier.type_info())),
         span: node_span(body),
     }
+}
+
+fn compound_assignment_from_ast(
+    path: &Path,
+    assignment: &ast::CompoundAssignment,
+) -> Result<CompoundAssignment, Diagnostic> {
+    let operator = compound_operator_from_ast(assignment.compound_operator()).ok_or_else(|| {
+        diagnostic_for_node(
+            path,
+            assignment.compound_operator(),
+            "unsupported compound assignment operator: expected one of +=, -=, *=, /=, %=",
+        )
+    })?;
+
+    let lhs = plain_field_chain_from_var(assignment.lhs()).ok_or_else(|| {
+        diagnostic_for_node(
+            path,
+            assignment.lhs(),
+            "invalid compound assignment left-hand side: expected a name or plain field chain",
+        )
+    })?;
+
+    Ok(CompoundAssignment {
+        lhs,
+        operator,
+        rhs: assignment.rhs().to_string().trim().to_owned(),
+        span: node_span(assignment),
+    })
+}
+
+fn compound_operator_from_ast(operator: &ast::CompoundOp) -> Option<CompoundOperator> {
+    match operator {
+        ast::CompoundOp::PlusEqual(_) => Some(CompoundOperator::Add),
+        ast::CompoundOp::MinusEqual(_) => Some(CompoundOperator::Subtract),
+        ast::CompoundOp::StarEqual(_) => Some(CompoundOperator::Multiply),
+        ast::CompoundOp::SlashEqual(_) => Some(CompoundOperator::Divide),
+        ast::CompoundOp::PercentEqual(_) => Some(CompoundOperator::Modulo),
+        _ => None,
+    }
+}
+
+fn plain_field_chain_from_var(var: &ast::Var) -> Option<Vec<String>> {
+    match var {
+        ast::Var::Name(name) => Some(vec![token_text(name)]),
+        ast::Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
+        _ => None,
+    }
+}
+
+fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
+    let ast::Prefix::Name(name) = expression.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in expression.suffixes() {
+        let ast::Suffix::Index(index) = suffix else {
+            return None;
+        };
+
+        let ast::Index::Dot { name, .. } = index else {
+            return None;
+        };
+
+        parts.push(token_text(name));
+    }
+
+    Some(parts)
 }
 
 fn tlua_type_from_type_info(type_info: &TypeInfo) -> TluaType {
@@ -511,6 +639,16 @@ fn parser_error_to_diagnostic(path: &Path, error: full_moon::Error) -> Diagnosti
         error.error_message().into_owned(),
     )
     .with_code(DiagnosticCode::SYNTAX_PARSE)
+}
+
+fn diagnostic_for_node(path: &Path, node: &impl Node, message: impl Into<String>) -> Diagnostic {
+    let position = node
+        .range()
+        .map(|(start, _)| SourcePosition::from_full_moon(start))
+        .unwrap_or(SourcePosition { line: 1, column: 1 });
+
+    Diagnostic::error(path, position.line, position.column, message)
+        .with_code(DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT)
 }
 
 #[cfg(test)]
@@ -757,6 +895,82 @@ end
     }
 
     #[test]
+    fn parses_valid_compound_assignments() {
+        let parsed = parse_tlua_source(
+            "src/compound.tlua",
+            r#"
+local x = 1
+x += 2
+player.hp -= amount
+world.player.hp *= scale
+x /= 2
+player.hp %= 4
+
+function tick()
+  score += 1
+end
+"#,
+        )
+        .expect("compound assignments should parse");
+
+        let assignments = &parsed.compound_assignments;
+
+        assert_eq!(assignments.len(), 6);
+        assert_eq!(assignments[0].lhs, parts(&["x"]));
+        assert_eq!(assignments[0].operator, CompoundOperator::Add);
+        assert_eq!(assignments[0].operator.as_sugar(), "+=");
+        assert_eq!(assignments[0].operator.as_binary(), "+");
+        assert_eq!(assignments[0].rhs, "2");
+
+        assert_eq!(assignments[1].lhs, parts(&["player", "hp"]));
+        assert_eq!(assignments[1].operator, CompoundOperator::Subtract);
+        assert_eq!(assignments[1].rhs, "amount");
+
+        assert_eq!(assignments[2].lhs, parts(&["world", "player", "hp"]));
+        assert_eq!(assignments[2].operator, CompoundOperator::Multiply);
+        assert_eq!(assignments[2].rhs, "scale");
+
+        assert_eq!(assignments[3].lhs, parts(&["x"]));
+        assert_eq!(assignments[3].operator, CompoundOperator::Divide);
+        assert_eq!(assignments[3].rhs, "2");
+
+        assert_eq!(assignments[4].lhs, parts(&["player", "hp"]));
+        assert_eq!(assignments[4].operator, CompoundOperator::Modulo);
+        assert_eq!(assignments[4].rhs, "4");
+
+        assert_eq!(assignments[5].lhs, parts(&["score"]));
+        assert_eq!(assignments[5].operator, CompoundOperator::Add);
+        assert_eq!(assignments[5].rhs, "1");
+    }
+
+    #[test]
+    fn rejects_computed_index_compound_assignment_lhs() {
+        assert_compound_lhs_error("player[\"hp\"] += 1\n");
+    }
+
+    #[test]
+    fn rejects_call_compound_assignment_lhs() {
+        assert_compound_lhs_error("get_player().hp += 1\n");
+    }
+
+    #[test]
+    fn rejects_expression_compound_assignment_lhs() {
+        assert_compound_lhs_error("(player).hp += 1\n");
+    }
+
+    #[test]
+    fn rejects_unsupported_luau_compound_assignment_operators() {
+        let diagnostics = parse_tlua_source("src/compound.tlua", "x ^= 1\n")
+            .expect_err("operators outside tlua v1 should produce diagnostics");
+
+        assert_eq!(
+            diagnostics[0].code,
+            Some(DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT)
+        );
+        assert!(diagnostics[0].message.contains("unsupported"));
+    }
+
+    #[test]
     fn keeps_type_syntax_out_of_lua_compatible_parser() {
         let diagnostics = parse_lua_source("src/typed.tlua", "local score: number = 0\n")
             .expect_err("plain Lua parser should reject erased type syntax");
@@ -779,5 +993,22 @@ end
         assert!(first.line >= 1);
         assert!(first.column >= 1);
         assert!(first.format_cli().contains("error TL0001"));
+    }
+
+    fn parts(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|part| (*part).to_owned()).collect()
+    }
+
+    fn assert_compound_lhs_error(source: &str) {
+        let diagnostics = parse_tlua_source("src/compound.tlua", source)
+            .expect_err("complex compound assignment targets should produce diagnostics");
+
+        assert_eq!(
+            diagnostics[0].code,
+            Some(DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT)
+        );
+        assert!(diagnostics[0].message.contains("left-hand side"));
+        assert!(diagnostics[0].line >= 1);
+        assert!(diagnostics[0].column >= 1);
     }
 }
