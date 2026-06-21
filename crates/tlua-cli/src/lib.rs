@@ -142,13 +142,23 @@ mod tests {
 
     #[test]
     fn parses_known_commands() {
-        assert_eq!(
-            parse_args(["build"]),
-            Ok(CliAction::Command {
-                name: CommandName::Build,
-                emit_on_error: false,
-            })
-        );
+        let cases = [
+            ("init", CommandName::Init),
+            ("check", CommandName::Check),
+            ("build", CommandName::Build),
+            ("watch", CommandName::Watch),
+            ("lsp", CommandName::Lsp),
+        ];
+
+        for (raw, expected) in cases {
+            assert_eq!(
+                parse_args([raw]),
+                Ok(CliAction::Command {
+                    name: expected,
+                    emit_on_error: false,
+                })
+            );
+        }
     }
 
     #[test]
@@ -174,5 +184,29 @@ mod tests {
         let error = parse_args(["compile"]).unwrap_err();
 
         assert!(error.message.contains("unknown command"));
+    }
+
+    #[test]
+    fn rejects_unknown_options() {
+        let error = parse_args(["build", "--fast"]).unwrap_err();
+
+        assert!(error.message.contains("unknown option"));
+        assert!(error.message.contains("--fast"));
+    }
+
+    #[test]
+    fn command_placeholders_are_explicitly_unimplemented() {
+        let commands = [
+            (CommandName::Init, false),
+            (CommandName::Check, false),
+            (CommandName::Build, false),
+            (CommandName::Build, true),
+            (CommandName::Watch, false),
+            (CommandName::Lsp, false),
+        ];
+
+        for (command, emit_on_error) in commands {
+            assert!(placeholder_text(command, emit_on_error).contains("not implemented yet"));
+        }
     }
 }
