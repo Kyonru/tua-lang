@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tlua_core::{
     check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
-    hover_tlua_source, project_description, Completion, CompletionKind, Definition, Diagnostic,
-    DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover, SourcePosition, SourceSpan,
+    hover_tlua_source, project_description, references_tlua_source, Completion, CompletionKind,
+    Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover,
+    Reference, SourcePosition, SourceSpan,
 };
 
 pub fn server_name() -> &'static str {
@@ -76,7 +77,8 @@ impl LspServer {
                             "triggerCharacters": [":", "."]
                         },
                         "definitionProvider": true,
-                        "documentSymbolProvider": true
+                        "documentSymbolProvider": true,
+                        "referencesProvider": true
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -98,6 +100,7 @@ impl LspServer {
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
             "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
+            "textDocument/references" => response(id, self.references_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -263,6 +266,54 @@ impl LspServer {
                 .collect(),
         )
     }
+
+    fn references_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!([]);
+        };
+        let Some(uri) = params
+            .get("textDocument")
+            .and_then(|document| document.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return json!([]);
+        };
+        let Some(position) = params.get("position") else {
+            return json!([]);
+        };
+        let Some(line) = position.get("line").and_then(Value::as_u64) else {
+            return json!([]);
+        };
+        let Some(character) = position.get("character").and_then(Value::as_u64) else {
+            return json!([]);
+        };
+        let Some(text) = self.documents.get(uri) else {
+            return json!([]);
+        };
+        let include_declaration = params
+            .get("context")
+            .and_then(|context| context.get("includeDeclaration"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let path = path_from_uri(uri);
+        let references = references_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line as usize + 1,
+                column: character as usize + 1,
+            },
+            include_declaration,
+        )
+        .unwrap_or_default();
+
+        Value::Array(
+            references
+                .into_iter()
+                .map(|reference| lsp_reference_location(uri, reference))
+                .collect(),
+        )
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -362,9 +413,17 @@ fn lsp_completion_kind(kind: CompletionKind) -> u8 {
 }
 
 fn lsp_location_from_core(uri: &str, definition: Definition) -> Value {
+    lsp_location(uri, definition.span)
+}
+
+fn lsp_reference_location(uri: &str, reference: Reference) -> Value {
+    lsp_location(uri, reference.span)
+}
+
+fn lsp_location(uri: &str, span: SourceSpan) -> Value {
     json!({
         "uri": uri,
-        "range": lsp_range(definition.span)
+        "range": lsp_range(span)
     })
 }
 

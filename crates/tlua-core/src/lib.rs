@@ -8,6 +8,7 @@ pub mod emit;
 pub mod hover;
 pub mod parser;
 mod project;
+pub mod references;
 mod semantic;
 mod source_text;
 pub mod types;
@@ -36,6 +37,7 @@ pub use parser::{
     TluaType, TypeAlias,
 };
 pub use project::project_description;
+pub use references::{references_parsed_source, references_tlua_source, Reference, ReferenceKind};
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
     Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,

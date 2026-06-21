@@ -38,6 +38,10 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["documentSymbolProvider"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["referencesProvider"],
+        true
+    );
 }
 
 #[test]
@@ -349,6 +353,82 @@ fn document_symbol_unknown_document_returns_empty_array() {
     assert_eq!(response["result"], json!([]));
 }
 
+#[test]
+fn references_returns_alias_function_local_and_table_field_locations() {
+    let uri = "file:///tmp/references.tlua";
+    let source = r#"type Vec2 = { x: number, y: number }
+type Player = { pos: Vec2, hp: number, alive?: boolean }
+
+local player: Player = {
+  pos = { x = 0, y = 0 },
+  hp = 10,
+}
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+damage(player, 2)
+player.hp = player.hp - 1
+
+local payload: any = {}
+local dynamic = payload.value
+local unresolved = missing
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        references_request(2, uri, source, "player: Player", "player: ".len(), true),
+        references_request(3, uri, source, "damage(player", 0, true),
+        references_request(4, uri, source, "damage(player", "damage(".len(), true),
+        references_request(5, uri, source, "target.hp", "target.".len(), true),
+    ]);
+
+    assert_reference_texts(&output, 2, source, ["Player", "Player", "Player", "Player"]);
+    assert_reference_texts(&output, 3, source, ["damage", "damage"]);
+    assert_reference_texts(&output, 4, source, ["player", "player", "player", "player"]);
+    assert_reference_texts(&output, 5, source, ["hp", "hp", "hp", "hp"]);
+}
+
+#[test]
+fn references_can_exclude_declarations_and_returns_empty_for_unknowns() {
+    let uri = "file:///tmp/quiet-references.tlua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.hp = player.hp - 1
+
+local payload: any = {}
+local dynamic = payload.value
+local unresolved = missing
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        references_request(2, uri, source, "player: Player", "player: ".len(), false),
+        references_request(3, uri, source, "payload.value", "payload.".len(), true),
+        references_request(4, uri, source, "missing", 0, true),
+    ]);
+
+    assert_reference_texts(&output, 2, source, ["Player"]);
+    assert_reference_texts(&output, 3, source, []);
+    assert_reference_texts(&output, 4, source, []);
+}
+
+#[test]
+fn references_unknown_document_returns_empty_array() {
+    let uri = "file:///tmp/missing-references.tlua";
+    let output = run_messages(vec![references_request(
+        2,
+        uri,
+        "local value = missing\n",
+        "missing",
+        0,
+        true,
+    )]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!([]));
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -431,6 +511,30 @@ fn document_symbol_request(id: u64, uri: &str) -> Value {
         "params": {
             "textDocument": {
                 "uri": uri
+            }
+        }
+    })
+}
+
+fn references_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    offset: usize,
+    include_declaration: bool,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/references",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset),
+            "context": {
+                "includeDeclaration": include_declaration
             }
         }
     })
@@ -566,6 +670,41 @@ fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, ex
         .expect("definition line should exist");
 
     assert_eq!(&text[start..end], expected);
+}
+
+fn assert_reference_texts<const N: usize>(
+    output: &[Value],
+    id: u64,
+    source: &str,
+    expected: [&str; N],
+) {
+    let response = response_with_id(output, id);
+    let texts = response["result"]
+        .as_array()
+        .expect("references result should be an array")
+        .iter()
+        .map(|location| range_text(source, &location["range"]))
+        .collect::<Vec<_>>();
+
+    assert_eq!(texts, expected);
+}
+
+fn range_text<'a>(source: &'a str, range: &Value) -> &'a str {
+    let line = range["start"]["line"]
+        .as_u64()
+        .expect("range start line should be numeric") as usize;
+    let start = range["start"]["character"]
+        .as_u64()
+        .expect("range start character should be numeric") as usize;
+    let end = range["end"]["character"]
+        .as_u64()
+        .expect("range end character should be numeric") as usize;
+    let text = source
+        .split('\n')
+        .nth(line)
+        .expect("reference line should exist");
+
+    &text[start..end]
 }
 
 fn symbol_names(symbols: &[Value]) -> Vec<&str> {
