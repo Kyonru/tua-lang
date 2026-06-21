@@ -380,6 +380,7 @@ The extension should provide:
 - document highlights for known symbol usages.
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
+- workspace folder initialization and workspace folder change notifications.
 
 The extension may assume `tua` is available on `PATH`, with a setting for an
 explicit server binary path.

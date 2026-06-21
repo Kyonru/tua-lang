@@ -2,8 +2,15 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-pub(super) fn root_dir_from_initialize(message: &Value) -> Option<PathBuf> {
-    let params = message.get("params")?;
+pub(super) fn workspace_folders_from_initialize(message: &Value) -> Vec<PathBuf> {
+    let Some(params) = message.get("params") else {
+        return Vec::new();
+    };
+    let folders = workspace_folders(params);
+
+    if !folders.is_empty() {
+        return folders;
+    }
 
     params
         .get("rootUri")
@@ -11,19 +18,38 @@ pub(super) fn root_dir_from_initialize(message: &Value) -> Option<PathBuf> {
         .map(path_from_uri)
         .or_else(|| {
             params
-                .get("workspaceFolders")
-                .and_then(Value::as_array)
-                .and_then(|folders| folders.first())
-                .and_then(|folder| folder.get("uri"))
-                .and_then(Value::as_str)
-                .map(path_from_uri)
-        })
-        .or_else(|| {
-            params
                 .get("rootPath")
                 .and_then(Value::as_str)
                 .map(PathBuf::from)
         })
+        .into_iter()
+        .collect()
+}
+
+pub(super) fn workspace_folders_from_change(message: &Value, key: &str) -> Vec<PathBuf> {
+    message
+        .get("params")
+        .and_then(|params| params.get("event"))
+        .and_then(|event| event.get(key))
+        .and_then(workspace_folders_from_value)
+        .unwrap_or_default()
+}
+
+fn workspace_folders(params: &Value) -> Vec<PathBuf> {
+    params
+        .get("workspaceFolders")
+        .and_then(workspace_folders_from_value)
+        .unwrap_or_default()
+}
+
+fn workspace_folders_from_value(value: &Value) -> Option<Vec<PathBuf>> {
+    Some(
+        value
+            .as_array()?
+            .iter()
+            .filter_map(|folder| folder.get("uri").and_then(Value::as_str).map(path_from_uri))
+            .collect(),
+    )
 }
 
 pub(super) fn uri_from_path(path: &Path) -> String {

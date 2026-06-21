@@ -101,6 +101,14 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["workspace"]["workspaceFolders"]["supported"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["workspace"]["workspaceFolders"]["changeNotifications"],
+        true
+    );
 }
 
 #[test]
@@ -200,6 +208,81 @@ end
     assert_eq!(combat_symbols[2]["kind"], 12);
     assert_eq!(combat_symbols[1]["containerName"], "systems.combat");
     assert_eq!(combat_symbols[2]["containerName"], "systems.combat");
+}
+
+#[test]
+fn workspace_symbol_searches_all_workspace_folders() {
+    let game = TempProject::new("workspace-folder-game");
+    let tools = TempProject::new("workspace-folder-tools");
+
+    game.write("tua.toml", "source = \"src\"\n");
+    game.write(
+        "src/player.tua",
+        r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+"#,
+    );
+    tools.write("tua.toml", "source = \"src\"\n");
+    tools.write(
+        "src/enemy.tua",
+        r#"type Enemy = { hp: number }
+
+local function makeEnemy(): Enemy
+  return { hp = 5 }
+end
+"#,
+    );
+
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [game.uri(), tools.uri()]),
+        workspace_symbol_request(2, "Player"),
+        workspace_symbol_request(3, "Enemy"),
+    ]);
+    let player_symbols = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("player symbols should be an array");
+    let enemy_symbols = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("enemy symbols should be an array");
+
+    assert!(workspace_symbol_names(player_symbols).contains(&"Player"));
+    assert!(workspace_symbol_names(enemy_symbols).contains(&"Enemy"));
+    assert_eq!(
+        enemy_symbols[0]["location"]["uri"],
+        tools.uri_for("src/enemy.tua")
+    );
+}
+
+#[test]
+fn workspace_folder_changes_update_workspace_symbol_roots() {
+    let game = TempProject::new("workspace-folder-change-game");
+    let tools = TempProject::new("workspace-folder-change-tools");
+
+    game.write("tua.toml", "source = \"src\"\n");
+    game.write("src/player.tua", "type Player = { hp: number }\n");
+    tools.write("tua.toml", "source = \"src\"\n");
+    tools.write("src/enemy.tua", "type Enemy = { hp: number }\n");
+
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [game.uri()]),
+        workspace_symbol_request(2, "Enemy"),
+        workspace_folders_changed([tools.uri()], []),
+        workspace_symbol_request(3, "Enemy"),
+        workspace_folders_changed([], [tools.uri()]),
+        workspace_symbol_request(4, "Enemy"),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"], json!([]));
+    assert!(workspace_symbol_names(
+        response_with_id(&output, 3)["result"]
+            .as_array()
+            .expect("added folder symbols should be an array")
+    )
+    .contains(&"Enemy"));
+    assert_eq!(response_with_id(&output, 4)["result"], json!([]));
 }
 
 #[test]
@@ -1403,6 +1486,57 @@ fn initialize_with_root(id: u64, root_uri: String) -> Value {
             "rootUri": root_uri
         }
     })
+}
+
+fn initialize_with_workspace_folders<const N: usize>(id: u64, roots: [String; N]) -> Value {
+    let folders = roots
+        .into_iter()
+        .enumerate()
+        .map(|(index, uri)| {
+            json!({
+                "uri": uri,
+                "name": format!("workspace-{index}")
+            })
+        })
+        .collect::<Vec<_>>();
+
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "workspaceFolders": folders
+        }
+    })
+}
+
+fn workspace_folders_changed<const A: usize, const R: usize>(
+    added: [String; A],
+    removed: [String; R],
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "workspace/didChangeWorkspaceFolders",
+        "params": {
+            "event": {
+                "added": workspace_folder_items(added),
+                "removed": workspace_folder_items(removed)
+            }
+        }
+    })
+}
+
+fn workspace_folder_items<const N: usize>(roots: [String; N]) -> Vec<Value> {
+    roots
+        .into_iter()
+        .enumerate()
+        .map(|(index, uri)| {
+            json!({
+                "uri": uri,
+                "name": format!("workspace-{index}")
+            })
+        })
+        .collect()
 }
 
 fn hover_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {

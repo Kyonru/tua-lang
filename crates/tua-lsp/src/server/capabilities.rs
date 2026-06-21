@@ -56,6 +56,12 @@ pub(super) fn initialize_result() -> Value {
                     "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
                 },
                 "full": true
+            },
+            "workspace": {
+                "workspaceFolders": {
+                    "supported": true,
+                    "changeNotifications": true
+                }
             }
         },
         "serverInfo": {

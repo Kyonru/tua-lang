@@ -48,7 +48,7 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
 #[derive(Default)]
 struct LspServer {
     documents: HashMap<String, String>,
-    root_dir: Option<PathBuf>,
+    workspace_folders: Vec<PathBuf>,
     client_watched_files_dynamic_registration: bool,
     next_server_request_id: u64,
     shutdown_requested: bool,

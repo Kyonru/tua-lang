@@ -18,7 +18,7 @@ use super::protocol::{
     lsp_signature_help_from_core, lsp_source_range, lsp_workspace_edit,
     lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
 };
-use super::uri::{path_from_uri, root_dir_from_initialize};
+use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer};
 
 struct DocumentRequest<'a> {
@@ -52,7 +52,7 @@ impl LspServer {
 
         match method {
             "initialize" => {
-                self.root_dir = root_dir_from_initialize(&message);
+                self.workspace_folders = workspace_folders_from_initialize(&message);
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
 
@@ -112,6 +112,9 @@ impl LspServer {
             "textDocument/didSave" => self.did_save_notification(message),
             "textDocument/didClose" => self.did_close_notification(message),
             "workspace/didChangeWatchedFiles" => self.did_change_watched_files_notification(),
+            "workspace/didChangeWorkspaceFolders" => {
+                self.did_change_workspace_folders_notification(message)
+            }
             _ => None,
         }
     }
@@ -175,6 +178,20 @@ impl LspServer {
             .collect::<Vec<_>>();
 
         (!publications.is_empty()).then_some(publications)
+    }
+
+    fn did_change_workspace_folders_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        for removed in workspace_folders_from_change(message, "removed") {
+            self.workspace_folders.retain(|folder| folder != &removed);
+        }
+
+        for added in workspace_folders_from_change(message, "added") {
+            if !self.workspace_folders.iter().any(|folder| folder == &added) {
+                self.workspace_folders.push(added);
+            }
+        }
+
+        None
     }
 
     fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
@@ -369,12 +386,15 @@ impl LspServer {
             return json!([]);
         };
         let query = params.get("query").and_then(Value::as_str).unwrap_or("");
-        let root_dir = self
-            .root_dir
-            .clone()
-            .or_else(|| env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."));
-        let symbols = workspace_symbols_from_dir(root_dir, query).unwrap_or_default();
+        let roots = if self.workspace_folders.is_empty() {
+            vec![env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
+        } else {
+            self.workspace_folders.clone()
+        };
+        let symbols = roots
+            .into_iter()
+            .flat_map(|root| workspace_symbols_from_dir(root, query).unwrap_or_default())
+            .collect::<Vec<_>>();
 
         Value::Array(
             symbols
