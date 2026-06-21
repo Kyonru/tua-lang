@@ -4,6 +4,7 @@ use crate::args::CommandName;
 use crate::build::run_build;
 use crate::check::run_check;
 use crate::error::CliError;
+use crate::watch::run_watch;
 
 pub fn run_command(
     command: CommandName,
@@ -27,12 +28,18 @@ pub fn run_command(
             run_check(cwd, loaded)
         }
         CommandName::Watch => {
-            tlua_core::load_config_from_dir(cwd).map_err(CliError::from_config_error)?;
+            run_watch_command(cwd)?;
 
-            Ok(placeholder_text(command))
+            Ok("watch stopped".to_owned())
         }
         _ => Ok(placeholder_text(command)),
     }
+}
+
+pub fn run_watch_command(cwd: impl AsRef<Path>) -> Result<(), CliError> {
+    let loaded = tlua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+    run_watch(cwd, loaded)
 }
 
 fn placeholder_text(command: CommandName) -> String {
@@ -40,7 +47,7 @@ fn placeholder_text(command: CommandName) -> String {
         CommandName::Init => unreachable!("tlua init is handled before placeholder_text"),
         CommandName::Check => unreachable!("tlua check is handled before placeholder_text"),
         CommandName::Build => unreachable!("tlua build is handled before placeholder_text"),
-        CommandName::Watch => "tlua watch is not implemented yet".to_owned(),
+        CommandName::Watch => unreachable!("tlua watch is handled before placeholder_text"),
         CommandName::Lsp => format!("{} is not implemented yet", tlua_lsp::server_name()),
     }
 }

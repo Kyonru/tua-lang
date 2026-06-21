@@ -2,7 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::Output;
+use std::process::Stdio;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tlua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT};
 
@@ -404,4 +407,107 @@ return hp
     assert!(emitted.contains(r#"local hp = "full""#));
     assert!(emitted.contains("hp = hp + 1"));
     assert!(!emitted.contains(": number"));
+}
+
+#[test]
+fn watch_rebuilds_after_debounced_source_change() {
+    let temp = TempDir::new("watch-rebuild");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local hp: number = 1
+return hp
+"#,
+    )
+    .expect("failed to write initial source");
+
+    let child = tlua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TLUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TLUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TLUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tlua watch");
+
+    wait_until(
+        || temp.path().join("build/main.lua").is_file(),
+        Duration::from_secs(3),
+        "watch did not run the initial build",
+    );
+
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local hp: number = 2
+hp += 3
+return hp
+"#,
+    )
+    .expect("failed to write changed source");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.is_empty(), "unexpected watch stderr:\n{stderr}");
+    assert!(stdout.contains("watching src/**/*.tlua"));
+    assert!(stdout.contains("initial build: built 1 file(s)"));
+    assert_eq!(stdout.matches("changed 1 file(s)").count(), 1);
+    assert_eq!(stdout.matches("rebuild: rebuilt 1 file(s)").count(), 1);
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(emitted.contains("local hp = 2"));
+    assert!(emitted.contains("hp = hp + 3"));
+    assert!(!emitted.contains(": number"));
+}
+
+fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration, failure_message: &str) {
+    let deadline = Instant::now() + timeout;
+
+    while Instant::now() < deadline {
+        if predicate() {
+            return;
+        }
+
+        thread::sleep(Duration::from_millis(20));
+    }
+
+    panic!("{failure_message}");
+}
+
+fn wait_for_child_output(mut child: process::Child, timeout: Duration) -> Output {
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child.wait_with_output().expect("failed to read output");
+            }
+            Ok(None) if Instant::now() < deadline => {
+                thread::sleep(Duration::from_millis(20));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let output = child
+                    .wait_with_output()
+                    .expect("failed to read timed out output");
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                panic!("watch did not exit before timeout\nstdout:\n{stdout}\nstderr:\n{stderr}");
+            }
+            Err(error) => panic!("failed to wait for child process: {error}"),
+        }
+    }
 }
