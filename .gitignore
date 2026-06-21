@@ -5,3 +5,5 @@
 /examples/love-full/game/obstacles.lua
 /examples/love-full/game/player.lua
 /examples/love-full/game/score.lua
+/editors/vscode/node_modules/
+/editors/vscode/*.vsix

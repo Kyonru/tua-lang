@@ -5,13 +5,34 @@
   "version": "0.0.1",
   "publisher": "tua-lang",
   "license": "MIT",
+  "main": "./src/extension.js",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "activationEvents": [
+    "onLanguage:tua",
+    "workspaceContains:**/*.tua"
+  ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "scripts": {
+    "check": "node --check src/extension.js"
+  },
   "contributes": {
+    "configuration": {
+      "title": "tua",
+      "properties": {
+        "tua.server.path": {
+          "type": "string",
+          "default": "tua",
+          "description": "Path to the tua executable used to launch the language server."
+        }
+      }
+    },
     "languages": [
       {
         "id": "tua",
