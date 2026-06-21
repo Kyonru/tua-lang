@@ -116,7 +116,9 @@ fn lsp_initializes_and_publishes_open_and_change_diagnostics() {
     let messages = read_output_messages(&output.stdout);
 
     assert!(messages.iter().any(|message| {
-        message["id"] == 1 && message["result"]["capabilities"]["textDocumentSync"] == 1
+        message["id"] == 1
+            && message["result"]["capabilities"]["textDocumentSync"]["openClose"] == true
+            && message["result"]["capabilities"]["textDocumentSync"]["change"] == 2
     }));
     assert!(messages
         .iter()

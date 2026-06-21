@@ -22,7 +22,13 @@ pub(super) fn server_description() -> String {
 pub(super) fn initialize_result() -> Value {
     json!({
         "capabilities": {
-            "textDocumentSync": 1,
+            "textDocumentSync": {
+                "openClose": true,
+                "change": 2,
+                "save": {
+                    "includeText": true
+                }
+            },
             "hoverProvider": true,
             "completionProvider": {
                 "triggerCharacters": [":", ".", "\"", "'"]

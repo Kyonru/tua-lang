@@ -28,7 +28,18 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(output.len(), 1);
     assert_eq!(output[0]["id"], 1);
     assert_eq!(output[0]["result"]["serverInfo"]["name"], "tua-lsp");
-    assert_eq!(output[0]["result"]["capabilities"]["textDocumentSync"], 1);
+    assert_eq!(
+        output[0]["result"]["capabilities"]["textDocumentSync"]["openClose"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["textDocumentSync"]["change"],
+        2
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["textDocumentSync"]["save"]["includeText"],
+        true
+    );
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
     assert_eq!(
         output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
@@ -89,6 +100,44 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
         true
+    );
+}
+
+#[test]
+fn initialized_registers_watched_files_when_client_supports_dynamic_registration() {
+    let output = run_messages(vec![
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "capabilities": {
+                    "workspace": {
+                        "didChangeWatchedFiles": {
+                            "dynamicRegistration": true
+                        }
+                    }
+                }
+            }
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    ]);
+    let registration = output
+        .iter()
+        .find(|message| message["method"] == "client/registerCapability")
+        .expect("server should dynamically register watched files");
+
+    assert_eq!(
+        registration["params"]["registrations"][0]["method"],
+        "workspace/didChangeWatchedFiles"
+    );
+    assert_eq!(
+        registration["params"]["registrations"][0]["registerOptions"]["watchers"][0]["globPattern"],
+        "**/*.tua"
     );
 }
 
@@ -269,6 +318,131 @@ fn did_change_republishes_empty_diagnostics_for_clean_document() {
             .expect("diagnostics should be an array")
             .len(),
         0
+    );
+}
+
+#[test]
+fn did_change_applies_incremental_edits_and_republishes_diagnostics() {
+    let uri = "file:///tmp/incremental-change.tua";
+    let source = "local hp: number = 10\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "version": 2
+                },
+                "contentChanges": [
+                    {
+                        "range": {
+                            "start": {
+                                "line": 0,
+                                "character": "local hp: number = ".len()
+                            },
+                            "end": {
+                                "line": 0,
+                                "character": "local hp: number = 10".len()
+                            }
+                        },
+                        "rangeLength": 2,
+                        "text": "\"full\""
+                    }
+                ]
+            }
+        }),
+    ]);
+    let publications = diagnostics_publications(&output, uri);
+    let change_diagnostics = publications[1]["params"]["diagnostics"]
+        .as_array()
+        .expect("change diagnostics should be an array");
+
+    assert_eq!(publications.len(), 2);
+    assert_eq!(change_diagnostics.len(), 1);
+    assert_eq!(change_diagnostics[0]["code"], "TL1003");
+}
+
+#[test]
+fn did_save_accepts_text_and_republishes_diagnostics() {
+    let uri = "file:///tmp/save.tua";
+    let output = run_messages(vec![
+        did_open(uri, "local hp: number = 10\n"),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didSave",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                },
+                "text": "local hp: number = \"full\"\n"
+            }
+        }),
+    ]);
+    let publications = diagnostics_publications(&output, uri);
+    let save_diagnostics = publications[1]["params"]["diagnostics"]
+        .as_array()
+        .expect("save diagnostics should be an array");
+
+    assert_eq!(publications.len(), 2);
+    assert_eq!(save_diagnostics.len(), 1);
+    assert_eq!(save_diagnostics[0]["code"], "TL1003");
+}
+
+#[test]
+fn did_close_removes_document_and_clears_diagnostics() {
+    let uri = "file:///tmp/close.tua";
+    let output = run_messages(vec![
+        did_open(uri, "local hp: number = \"full\"\n"),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                }
+            }
+        }),
+        hover_request(2, uri, "local hp: number = \"full\"\n", "hp"),
+    ]);
+    let publications = diagnostics_publications(&output, uri);
+
+    assert_eq!(publications.len(), 2);
+    assert_eq!(
+        publications[1]["params"]["diagnostics"]
+            .as_array()
+            .expect("close diagnostics should be an array")
+            .len(),
+        0
+    );
+    assert!(response_with_id(&output, 2)["result"].is_null());
+}
+
+#[test]
+fn watched_file_changes_republish_open_document_diagnostics() {
+    let uri = "file:///tmp/watched.tua";
+    let output = run_messages(vec![
+        did_open(uri, "local hp: number = \"full\"\n"),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeWatchedFiles",
+            "params": {
+                "changes": [
+                    {
+                        "uri": uri,
+                        "type": 2
+                    }
+                ]
+            }
+        }),
+    ]);
+    let publications = diagnostics_publications(&output, uri);
+
+    assert_eq!(publications.len(), 2);
+    assert_eq!(
+        publications[1]["params"]["diagnostics"][0]["code"],
+        "TL1003"
     );
 }
 
@@ -1526,6 +1700,16 @@ fn published_diagnostics(output: &[Value], uri: &str) -> Vec<Value> {
         .and_then(|message| message["params"]["diagnostics"].as_array())
         .cloned()
         .expect("diagnostics publication should exist")
+}
+
+fn diagnostics_publications<'a>(output: &'a [Value], uri: &str) -> Vec<&'a Value> {
+    output
+        .iter()
+        .filter(|message| {
+            message["method"] == "textDocument/publishDiagnostics"
+                && message["params"]["uri"] == uri
+        })
+        .collect()
 }
 
 fn assert_hover_contains(output: &[Value], id: u64, expected: &str) {

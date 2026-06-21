@@ -53,6 +53,8 @@ impl LspServer {
         match method {
             "initialize" => {
                 self.root_dir = root_dir_from_initialize(&message);
+                self.client_watched_files_dynamic_registration =
+                    client_supports_watched_files_dynamic_registration(&message);
 
                 response(id, capabilities::initialize_result())
             }
@@ -99,38 +101,80 @@ impl LspServer {
 
     fn handle_notification(&mut self, message: &Value, method: &str) -> Option<Vec<Value>> {
         match method {
-            "initialized" => None,
+            "initialized" => self.initialized_notifications(),
             "exit" => {
                 self.should_exit = true;
 
                 None
             }
-            "textDocument/didOpen" => {
-                let text_document = message.get("params")?.get("textDocument")?;
-                let uri = text_document.get("uri")?.as_str()?.to_owned();
-                let text = text_document.get("text")?.as_str()?.to_owned();
-
-                self.documents.insert(uri.clone(), text);
-
-                Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
-            }
-            "textDocument/didChange" => {
-                let params = message.get("params")?;
-                let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_owned();
-                let text = params
-                    .get("contentChanges")?
-                    .as_array()?
-                    .last()?
-                    .get("text")?
-                    .as_str()?
-                    .to_owned();
-
-                self.documents.insert(uri.clone(), text);
-
-                Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
-            }
+            "textDocument/didOpen" => self.did_open_notification(message),
+            "textDocument/didChange" => self.did_change_notification(message),
+            "textDocument/didSave" => self.did_save_notification(message),
+            "textDocument/didClose" => self.did_close_notification(message),
+            "workspace/didChangeWatchedFiles" => self.did_change_watched_files_notification(),
             _ => None,
         }
+    }
+
+    fn initialized_notifications(&mut self) -> Option<Vec<Value>> {
+        if !self.client_watched_files_dynamic_registration {
+            return None;
+        }
+
+        Some(vec![register_watched_files_request(self.next_request_id())])
+    }
+
+    fn did_open_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        let text_document = message.get("params")?.get("textDocument")?;
+        let uri = text_document.get("uri")?.as_str()?.to_owned();
+        let text = text_document.get("text")?.as_str()?.to_owned();
+
+        self.documents.insert(uri.clone(), text);
+
+        Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+    }
+
+    fn did_change_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        let params = message.get("params")?;
+        let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_owned();
+        let current = self.documents.get(&uri)?;
+        let text = apply_content_changes(current, params.get("contentChanges")?.as_array()?)?;
+
+        self.documents.insert(uri.clone(), text);
+
+        Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+    }
+
+    fn did_save_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        let params = message.get("params")?;
+        let uri = document_uri(params)?.to_owned();
+
+        if let Some(text) = params.get("text").and_then(Value::as_str) {
+            self.documents.insert(uri.clone(), text.to_owned());
+        }
+
+        self.documents
+            .contains_key(&uri)
+            .then(|| vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+    }
+
+    fn did_close_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        let params = message.get("params")?;
+        let uri = document_uri(params)?.to_owned();
+
+        self.documents.remove(&uri);
+
+        Some(vec![publish_diagnostics(&uri, Vec::new())])
+    }
+
+    fn did_change_watched_files_notification(&self) -> Option<Vec<Value>> {
+        let publications = self
+            .documents
+            .keys()
+            .map(|uri| publish_diagnostics(uri, self.diagnostics_for(uri)))
+            .collect::<Vec<_>>();
+
+        (!publications.is_empty()).then_some(publications)
     }
 
     fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
@@ -359,4 +403,115 @@ fn document_uri(params: &Value) -> Option<&str> {
         .get("textDocument")
         .and_then(|document| document.get("uri"))
         .and_then(Value::as_str)
+}
+
+fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("capabilities"))
+        .and_then(|capabilities| capabilities.get("workspace"))
+        .and_then(|workspace| workspace.get("didChangeWatchedFiles"))
+        .and_then(|watched| watched.get("dynamicRegistration"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn register_watched_files_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "client/registerCapability",
+        "params": {
+            "registrations": [
+                {
+                    "id": "tua-workspace-file-watchers",
+                    "method": "workspace/didChangeWatchedFiles",
+                    "registerOptions": {
+                        "watchers": [
+                            { "globPattern": "**/*.tua" },
+                            { "globPattern": "**/*.lua" },
+                            { "globPattern": "**/tua.toml" }
+                        ]
+                    }
+                }
+            ]
+        }
+    })
+}
+
+fn apply_content_changes(current: &str, changes: &[Value]) -> Option<String> {
+    let mut text = current.to_owned();
+
+    for change in changes {
+        let replacement = change.get("text")?.as_str()?;
+
+        if change.get("range").is_none_or(Value::is_null) {
+            text = replacement.to_owned();
+            continue;
+        }
+
+        apply_incremental_change(&mut text, change.get("range")?, replacement)?;
+    }
+
+    Some(text)
+}
+
+fn apply_incremental_change(text: &mut String, range: &Value, replacement: &str) -> Option<()> {
+    let start = byte_offset_from_lsp_position(text, range.get("start")?)?;
+    let end = byte_offset_from_lsp_position(text, range.get("end")?)?;
+
+    if start > end || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+        return None;
+    }
+
+    text.replace_range(start..end, replacement);
+
+    Some(())
+}
+
+fn byte_offset_from_lsp_position(source: &str, position: &Value) -> Option<usize> {
+    let target_line = position.get("line")?.as_u64()? as usize;
+    let target_character = position.get("character")?.as_u64()? as usize;
+    let mut offset = 0;
+
+    if source.is_empty() {
+        return (target_line == 0).then_some(0);
+    }
+
+    for (line, segment) in source.split_inclusive('\n').enumerate() {
+        let text = line_without_ending(segment);
+
+        if line == target_line {
+            return Some(offset + byte_for_lsp_character(text, target_character));
+        }
+
+        offset += segment.len();
+    }
+
+    (target_line == source.lines().count()).then_some(source.len())
+}
+
+fn line_without_ending(line: &str) -> &str {
+    line.strip_suffix('\n')
+        .unwrap_or(line)
+        .strip_suffix('\r')
+        .unwrap_or_else(|| line.strip_suffix('\n').unwrap_or(line))
+}
+
+fn byte_for_lsp_character(line: &str, target_character: usize) -> usize {
+    let mut character = 0;
+
+    for (index, value) in line.char_indices() {
+        if character >= target_character {
+            return index;
+        }
+
+        character += value.len_utf16();
+
+        if character > target_character {
+            return index;
+        }
+    }
+
+    line.len()
 }

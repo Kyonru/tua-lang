@@ -49,8 +49,23 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
 struct LspServer {
     documents: HashMap<String, String>,
     root_dir: Option<PathBuf>,
+    client_watched_files_dynamic_registration: bool,
+    next_server_request_id: u64,
     shutdown_requested: bool,
     should_exit: bool,
+}
+
+impl LspServer {
+    fn next_request_id(&mut self) -> u64 {
+        if self.next_server_request_id == 0 {
+            self.next_server_request_id = 1;
+        }
+
+        let id = self.next_server_request_id;
+
+        self.next_server_request_id += 1;
+        id
+    }
 }
 
 #[cfg(test)]

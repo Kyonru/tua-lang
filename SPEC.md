@@ -378,6 +378,8 @@ The extension should provide:
 - basic completion for known type aliases and table fields.
 - signature help for known function calls.
 - document highlights for known symbol usages.
+- incremental document sync with open, change, save, close, and watched-file
+  update handling.
 
 The extension may assume `tua` is available on `PATH`, with a setting for an
 explicit server binary path.
