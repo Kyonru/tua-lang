@@ -3,7 +3,10 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 
 use serde_json::{json, Value};
-use tlua_core::{check_tlua_source, project_description, Diagnostic, DiagnosticSeverity};
+use tlua_core::{
+    check_tlua_source, hover_tlua_source, project_description, Diagnostic, DiagnosticSeverity,
+    Hover, SourcePosition, SourceSpan,
+};
 
 pub fn server_name() -> &'static str {
     "tlua-lsp"
@@ -66,7 +69,8 @@ impl LspServer {
                 id,
                 json!({
                     "capabilities": {
-                        "textDocumentSync": 1
+                        "textDocumentSync": 1,
+                        "hoverProvider": true
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -78,6 +82,9 @@ impl LspServer {
                 self.shutdown_requested = true;
 
                 response(id, Value::Null)
+            }
+            "textDocument/hover" => {
+                response(id, self.hover_response(&message).unwrap_or(Value::Null))
             }
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
@@ -132,6 +139,28 @@ impl LspServer {
                 .map(lsp_diagnostic_from_core)
                 .collect(),
         }
+    }
+
+    fn hover_response(&self, message: &Value) -> Option<Value> {
+        let params = message.get("params")?;
+        let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+        let position = params.get("position")?;
+        let line = position.get("line")?.as_u64()? as usize;
+        let character = position.get("character")?.as_u64()? as usize;
+        let text = self.documents.get(uri)?;
+        let path = path_from_uri(uri);
+        let hover = hover_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line + 1,
+                column: character + 1,
+            },
+        )
+        .ok()
+        .flatten()?;
+
+        Some(lsp_hover_from_core(hover))
     }
 }
 
@@ -194,6 +223,34 @@ fn lsp_severity(severity: DiagnosticSeverity) -> u8 {
         DiagnosticSeverity::Info => 3,
         DiagnosticSeverity::Hint => 4,
     }
+}
+
+fn lsp_hover_from_core(hover: Hover) -> Value {
+    let mut result = json!({
+        "contents": {
+            "kind": "markdown",
+            "value": format!("```tlua\n{}\n```", hover.contents)
+        }
+    });
+
+    if let Some(span) = hover.span {
+        result["range"] = lsp_range(span);
+    }
+
+    result
+}
+
+fn lsp_range(span: SourceSpan) -> Value {
+    json!({
+        "start": {
+            "line": span.start.line.saturating_sub(1),
+            "character": span.start.column.saturating_sub(1)
+        },
+        "end": {
+            "line": span.end.line.saturating_sub(1),
+            "character": span.end.column.saturating_sub(1)
+        }
+    })
 }
 
 fn path_from_uri(uri: &str) -> PathBuf {

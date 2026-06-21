@@ -1,4 +1,3 @@
-use std::fmt;
 use std::path::Path;
 
 use full_moon::ast::{
@@ -452,60 +451,6 @@ fn node_position(node: &impl Node) -> SourcePosition {
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.to_string().trim().to_owned()
-}
-
-impl fmt::Display for Type {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::Primitive(primitive) => write!(formatter, "{primitive}"),
-            Type::Any => write!(formatter, "any"),
-            Type::Alias(name) => write!(formatter, "{name}"),
-            Type::Union(types) => {
-                for (index, ty) in types.iter().enumerate() {
-                    if index > 0 {
-                        write!(formatter, " | ")?;
-                    }
-                    write!(formatter, "{ty}")?;
-                }
-                Ok(())
-            }
-            Type::Function(function) => {
-                write!(formatter, "function(")?;
-                for (index, parameter) in function.parameters.iter().enumerate() {
-                    if index > 0 {
-                        write!(formatter, ", ")?;
-                    }
-                    write!(formatter, "{parameter}")?;
-                }
-                write!(formatter, "): {}", function.return_type)
-            }
-            Type::Table(table) => {
-                write!(formatter, "{{ ")?;
-                for (index, (name, field)) in table.fields().enumerate() {
-                    if index > 0 {
-                        write!(formatter, ", ")?;
-                    }
-                    if field.optional {
-                        write!(formatter, "{name}?: {}", field.ty)?;
-                    } else {
-                        write!(formatter, "{name}: {}", field.ty)?;
-                    }
-                }
-                write!(formatter, " }}")
-            }
-        }
-    }
-}
-
-impl fmt::Display for crate::PrimitiveType {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Number => write!(formatter, "number"),
-            Self::String => write!(formatter, "string"),
-            Self::Boolean => write!(formatter, "boolean"),
-            Self::Nil => write!(formatter, "nil"),
-        }
-    }
 }
 
 #[cfg(test)]

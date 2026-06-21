@@ -68,6 +68,23 @@ fn lsp_initializes_and_publishes_open_and_change_diagnostics() {
             stdin,
             &json!({
                 "jsonrpc": "2.0",
+                "id": 3,
+                "method": "textDocument/hover",
+                "params": {
+                    "textDocument": {
+                        "uri": uri
+                    },
+                    "position": {
+                        "line": 0,
+                        "character": 6
+                    }
+                }
+            }),
+        );
+        write_message(
+            stdin,
+            &json!({
+                "jsonrpc": "2.0",
                 "id": 2,
                 "method": "shutdown",
                 "params": null
@@ -104,6 +121,12 @@ fn lsp_initializes_and_publishes_open_and_change_diagnostics() {
     assert!(messages
         .iter()
         .any(|message| message["id"] == 2 && message["result"].is_null()));
+    assert!(messages.iter().any(|message| {
+        message["id"] == 3
+            && message["result"]["contents"]["value"]
+                .as_str()
+                .is_some_and(|contents| contents.contains("local hp: number"))
+    }));
 
     let publications = messages
         .iter()

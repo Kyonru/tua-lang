@@ -2,6 +2,7 @@ pub mod check;
 pub mod config;
 pub mod diagnostic;
 pub mod emit;
+pub mod hover;
 pub mod parser;
 mod project;
 pub mod types;
@@ -15,6 +16,7 @@ pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
 pub use emit::{emit_lua, emit_tlua_source};
+pub use hover::{hover_parsed_source, hover_tlua_source, Hover};
 pub use parser::{
     parse_lua_source, parse_tlua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
     LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,
