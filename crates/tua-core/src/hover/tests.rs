@@ -149,6 +149,64 @@ return {
 }
 
 #[test]
+fn hovers_union_return_type_from_conditional_returns() {
+    let source = r#"local function recursive(a: string)
+  if a == 1 then
+    return 1
+  end
+
+  if a == 2 then
+    return "value"
+  end
+end
+
+recursive("1")
+"#;
+    let hover = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "recursive(\"1\")"),
+    )
+    .expect("hover should succeed")
+    .expect("recursive function should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function recursive(a: string): number | string | nil"
+    );
+}
+
+#[test]
+fn hovers_union_return_type_from_recursive_conditional_returns() {
+    let source = r#"local function recursive(a: string)
+  if a == 1 then
+    return 1
+  end
+
+  if a == 2 then
+    return "value"
+  end
+
+  return recursive(a + 1)
+end
+
+recursive("1")
+"#;
+    let hover = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "recursive(\"1\")"),
+    )
+    .expect("hover should succeed")
+    .expect("recursive function should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function recursive(a: string): number | string"
+    );
+}
+
+#[test]
 fn hovers_known_table_field() {
     let hover = hover_at("hp = player").expect("table field should hover");
 

@@ -38,6 +38,7 @@ impl DiagnosticCode {
     pub const TYPE_DUPLICATE_ALIAS: Self = Self(1002);
     pub const TYPE_MISMATCH: Self = Self(1003);
     pub const TYPE_ARGUMENT_COUNT: Self = Self(1004);
+    pub const TYPE_IMPOSSIBLE_COMPARISON: Self = Self(1005);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const CONFIG_PARSE: Self = Self(3001);

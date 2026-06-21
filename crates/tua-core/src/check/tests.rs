@@ -205,6 +205,53 @@ local hp: number = dynamic_call("one", false, {})
     .expect("calls through any should remain permissive");
 }
 
+#[test]
+fn warns_for_impossible_equality_comparisons() {
+    let diagnostics = check_tua_source(
+        "src/combat.tua",
+        r#"
+local function recursive(a: string)
+  if a == 1 then
+    return 1
+  end
+
+  if a ~= 2 then
+    return "value"
+  end
+end
+"#,
+    )
+    .expect_err("impossible comparisons should warn");
+
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON)
+            && diagnostic.severity == crate::DiagnosticSeverity::Warning
+    }));
+    assert!(diagnostics[0]
+        .message
+        .contains("comparison is always false: string and number do not overlap"));
+    assert!(diagnostics[1]
+        .message
+        .contains("comparison is always true: string and number do not overlap"));
+    assert!(diagnostics[0].format_cli().contains("warning TL1005"));
+}
+
+#[test]
+fn dynamic_equality_comparisons_remain_permissive() {
+    check_tua_source(
+        "src/dynamic.tua",
+        r#"
+local value: any = get_value()
+
+if value == 1 then
+  print(value)
+end
+"#,
+    )
+    .expect("comparisons through any should stay permissive");
+}
+
 fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));

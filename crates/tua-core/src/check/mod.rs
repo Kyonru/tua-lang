@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use full_moon::ast::{
@@ -11,7 +12,7 @@ use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
     TypedFunction,
 };
-use crate::{Diagnostic, DiagnosticCode};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 
@@ -41,6 +42,7 @@ struct Checker<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
     context: TypeContext,
+    scoped_locals: Vec<BTreeMap<String, Type>>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -50,6 +52,7 @@ impl<'a> Checker<'a> {
             parsed,
             environment,
             context: environment.to_type_context(),
+            scoped_locals: Vec::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -73,9 +76,11 @@ impl<'a> Checker<'a> {
             ast::Stmt::LocalAssignment(local) => self.check_local_assignment(local),
             ast::Stmt::Do(block) => self.check_block(block.block(), current_return),
             ast::Stmt::If(if_stmt) => {
+                self.check_condition_expression(if_stmt.condition());
                 self.check_block(if_stmt.block(), current_return);
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
+                        self.check_condition_expression(else_if.condition());
                         self.check_block(else_if.block(), current_return);
                     }
                 }
@@ -85,20 +90,87 @@ impl<'a> Checker<'a> {
             }
             ast::Stmt::GenericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
             ast::Stmt::LocalFunction(function) => {
-                let return_type = self.function_return_type(&token_text(function.name()));
+                let name = token_text(function.name());
+                let return_type = self.function_return_type(&name);
+                let scoped_locals = self.function_parameter_locals(&name);
 
+                self.scoped_locals.push(scoped_locals);
                 self.check_block(function.body().block(), return_type.as_ref());
+                self.scoped_locals.pop();
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                let return_type = self.function_return_type(&function.name().to_string());
+                let name = function.name().to_string();
+                let return_type = self.function_return_type(&name);
+                let scoped_locals = self.function_parameter_locals(&name);
 
+                self.scoped_locals.push(scoped_locals);
                 self.check_block(function.body().block(), return_type.as_ref());
+                self.scoped_locals.pop();
             }
             ast::Stmt::NumericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
-            ast::Stmt::Repeat(repeat) => self.check_block(repeat.block(), current_return),
-            ast::Stmt::While(while_stmt) => self.check_block(while_stmt.block(), current_return),
+            ast::Stmt::Repeat(repeat) => {
+                self.check_condition_expression(repeat.until());
+                self.check_block(repeat.block(), current_return);
+            }
+            ast::Stmt::While(while_stmt) => {
+                self.check_condition_expression(while_stmt.condition());
+                self.check_block(while_stmt.block(), current_return);
+            }
             _ => {}
         }
+    }
+
+    fn check_condition_expression(&mut self, expression: &Expression) {
+        match expression {
+            Expression::BinaryOperator { lhs, binop, rhs } => {
+                if is_equality_operator(binop) {
+                    self.check_equality_comparison(lhs, binop, rhs);
+                }
+
+                self.check_condition_expression(lhs);
+                self.check_condition_expression(rhs);
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => {
+                self.check_condition_expression(expression);
+            }
+            Expression::FunctionCall(function_call) => {
+                self.check_function_call(function_call);
+            }
+            Expression::TableConstructor(table) => {
+                for field in table.fields() {
+                    if let Field::NameKey { value, .. } = field {
+                        self.check_condition_expression(value);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn check_equality_comparison(
+        &mut self,
+        lhs: &Expression,
+        binop: &ast::BinOp,
+        rhs: &Expression,
+    ) {
+        let Some(left) = self.infer_expression(lhs) else {
+            return;
+        };
+        let Some(right) = self.infer_expression(rhs) else {
+            return;
+        };
+
+        if self.types_can_overlap(&left, &right) {
+            return;
+        }
+
+        self.diagnostics.push(impossible_comparison_diagnostic(
+            &self.parsed.path,
+            binop,
+            &left,
+            &right,
+        ));
     }
 
     fn check_local_assignment(&mut self, local: &ast::LocalAssignment) {
@@ -202,11 +274,16 @@ impl<'a> Checker<'a> {
     }
 
     fn infer_named_value(&self, name: &str) -> Option<Type> {
-        self.environment.local(name).cloned().or_else(|| {
-            self.environment
-                .function(name)
-                .and_then(TypedFunction::as_type)
-        })
+        self.scoped_locals
+            .iter()
+            .rev()
+            .find_map(|locals| locals.get(name).cloned())
+            .or_else(|| self.environment.local(name).cloned())
+            .or_else(|| {
+                self.environment
+                    .function(name)
+                    .and_then(TypedFunction::as_type)
+            })
     }
 
     fn check_function_call(&mut self, function_call: &FunctionCall) -> Option<Type> {
@@ -307,6 +384,26 @@ impl<'a> Checker<'a> {
             _ => None,
         }
     }
+
+    fn function_parameter_locals(&self, name: &str) -> BTreeMap<String, Type> {
+        self.environment
+            .function(name.trim())
+            .map(|function| {
+                function
+                    .parameters
+                    .iter()
+                    .map(|parameter| (parameter.name.clone(), parameter.ty.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn types_can_overlap(&self, left: &Type, right: &Type) -> bool {
+        types_can_overlap(
+            &resolve_aliases(left, self.environment, 0),
+            &resolve_aliases(right, self.environment, 0),
+        )
+    }
 }
 
 enum Callable {
@@ -335,6 +432,27 @@ fn infer_symbol_type(symbol: &str) -> Option<Type> {
         "true" | "false" => Some(Type::boolean()),
         "nil" => Some(Type::nil()),
         _ => None,
+    }
+}
+
+fn is_equality_operator(binop: &ast::BinOp) -> bool {
+    matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_))
+}
+
+fn types_can_overlap(left: &Type, right: &Type) -> bool {
+    match (left, right) {
+        (Type::Any, _) | (_, Type::Any) => true,
+        (Type::Primitive(left), Type::Primitive(right)) => left == right,
+        (Type::Union(types), other) | (other, Type::Union(types)) => {
+            types.iter().any(|ty| types_can_overlap(ty, other))
+        }
+        (Type::Function(_), Type::Function(_)) => true,
+        (Type::Table(_), Type::Table(_)) => true,
+        (Type::Alias(_), _) | (_, Type::Alias(_)) => true,
+        (
+            Type::Primitive(_) | Type::Function(_) | Type::Table(_),
+            Type::Primitive(_) | Type::Function(_) | Type::Table(_),
+        ) => false,
     }
 }
 
@@ -441,6 +559,33 @@ fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &T
         format!("type mismatch: expected {expected}, found {found}"),
     )
     .with_code(DiagnosticCode::TYPE_MISMATCH)
+}
+
+fn impossible_comparison_diagnostic(
+    path: &Path,
+    binop: &ast::BinOp,
+    left: &Type,
+    right: &Type,
+) -> Diagnostic {
+    let position = binop
+        .token()
+        .start_position()
+        .map(SourcePosition::from_full_moon)
+        .unwrap_or(SourcePosition { line: 1, column: 1 });
+    let result = match binop {
+        ast::BinOp::TwoEqual(_) => "false",
+        ast::BinOp::TildeEqual(_) => "true",
+        _ => unreachable!("only equality operators produce comparison diagnostics"),
+    };
+
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("comparison is always {result}: {left} and {right} do not overlap"),
+    )
+    .with_code(DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON)
 }
 
 fn node_position(node: &impl Node) -> SourcePosition {

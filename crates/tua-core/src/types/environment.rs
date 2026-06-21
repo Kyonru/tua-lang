@@ -295,6 +295,7 @@ fn collect_function_return_types(
                     aliases,
                     &function_locals,
                     function_types,
+                    &name,
                 ) {
                     returns.insert(name, return_type);
                 }
@@ -318,6 +319,7 @@ fn collect_function_return_types(
                     aliases,
                     &function_locals,
                     function_types,
+                    &name,
                 ) {
                     returns.insert(name, return_type);
                 }
@@ -450,14 +452,190 @@ fn infer_block_return_type(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
+    current_function: &str,
 ) -> Option<Type> {
-    let Some(LastStmt::Return(return_stmt)) = block.last_stmt() else {
+    let mut returns = Vec::new();
+
+    collect_return_types_in_block(
+        block,
+        parsed,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+        &mut returns,
+    );
+
+    if returns.is_empty() {
         return None;
-    };
+    }
 
-    let expression = return_stmt.returns().iter().next()?;
+    if block_may_fall_through(block) {
+        push_unique_type(&mut returns, Type::nil());
+    }
 
-    infer_expression_type(parsed, expression, aliases, locals, function_types)
+    type_from_return_types(returns)
+}
+
+fn collect_return_types_in_block(
+    block: &ast::Block,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    returns: &mut Vec<Type>,
+) {
+    for stmt in block.stmts() {
+        match stmt {
+            ast::Stmt::Do(block) => collect_return_types_in_block(
+                block.block(),
+                parsed,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                returns,
+            ),
+            ast::Stmt::GenericFor(for_stmt) => collect_return_types_in_block(
+                for_stmt.block(),
+                parsed,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                returns,
+            ),
+            ast::Stmt::If(if_stmt) => {
+                collect_return_types_in_block(
+                    if_stmt.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    current_function,
+                    returns,
+                );
+
+                if let Some(else_ifs) = if_stmt.else_if() {
+                    for else_if in else_ifs {
+                        collect_return_types_in_block(
+                            else_if.block(),
+                            parsed,
+                            aliases,
+                            locals,
+                            function_types,
+                            current_function,
+                            returns,
+                        );
+                    }
+                }
+
+                if let Some(else_block) = if_stmt.else_block() {
+                    collect_return_types_in_block(
+                        else_block,
+                        parsed,
+                        aliases,
+                        locals,
+                        function_types,
+                        current_function,
+                        returns,
+                    );
+                }
+            }
+            ast::Stmt::NumericFor(for_stmt) => collect_return_types_in_block(
+                for_stmt.block(),
+                parsed,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                returns,
+            ),
+            ast::Stmt::Repeat(repeat) => collect_return_types_in_block(
+                repeat.block(),
+                parsed,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                returns,
+            ),
+            ast::Stmt::While(while_stmt) => collect_return_types_in_block(
+                while_stmt.block(),
+                parsed,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                returns,
+            ),
+            ast::Stmt::LocalFunction(_) | ast::Stmt::FunctionDeclaration(_) => {}
+            _ => {}
+        }
+    }
+
+    if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
+        let return_type = match return_stmt.returns().iter().next() {
+            Some(expression) => infer_expression_type(
+                parsed,
+                expression,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+            ),
+            None => Some(Type::nil()),
+        };
+
+        if let Some(return_type) = return_type {
+            push_unique_type(returns, return_type);
+        }
+    }
+}
+
+fn block_may_fall_through(block: &ast::Block) -> bool {
+    if matches!(block.last_stmt(), Some(LastStmt::Return(_))) {
+        return false;
+    }
+
+    match block.stmts().last() {
+        Some(ast::Stmt::If(if_stmt)) => !if_guarantees_return(if_stmt),
+        _ => true,
+    }
+}
+
+fn if_guarantees_return(if_stmt: &ast::If) -> bool {
+    if block_may_fall_through(if_stmt.block()) {
+        return false;
+    }
+
+    if let Some(else_ifs) = if_stmt.else_if() {
+        if else_ifs
+            .iter()
+            .any(|else_if| block_may_fall_through(else_if.block()))
+        {
+            return false;
+        }
+    }
+
+    if_stmt
+        .else_block()
+        .is_some_and(|else_block| !block_may_fall_through(else_block))
+}
+
+fn type_from_return_types(types: Vec<Type>) -> Option<Type> {
+    match types.len() {
+        0 => None,
+        1 => types.into_iter().next(),
+        _ => Some(Type::union(types)),
+    }
+}
+
+fn push_unique_type(types: &mut Vec<Type>, ty: Type) {
+    if !types.contains(&ty) {
+        types.push(ty);
+    }
 }
 
 fn infer_expression_type(
@@ -466,6 +644,7 @@ fn infer_expression_type(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
+    current_function: &str,
 ) -> Option<Type> {
     match expression {
         Expression::Number(_) => Some(Type::number()),
@@ -480,22 +659,44 @@ fn infer_expression_type(
                 let Field::NameKey { key, value, .. } = field else {
                     return None;
                 };
-                let ty = infer_expression_type(parsed, value, aliases, locals, function_types)
-                    .unwrap_or(Type::Any);
+                let ty = infer_expression_type(
+                    parsed,
+                    value,
+                    aliases,
+                    locals,
+                    function_types,
+                    current_function,
+                )
+                .unwrap_or(Type::Any);
 
                 Some((token_text(key), TableField::required(ty)))
             })))
         }
-        Expression::Parentheses { expression, .. } => {
-            infer_expression_type(parsed, expression, aliases, locals, function_types)
-        }
-        Expression::TypeAssertion { expression, .. } => {
-            infer_expression_type(parsed, expression, aliases, locals, function_types)
-        }
+        Expression::Parentheses { expression, .. } => infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
+        Expression::TypeAssertion { expression, .. } => infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
         Expression::Function(function) => Some(function_type_from_body(function.body())),
-        Expression::FunctionCall(function_call) => {
-            infer_function_call_return_type(parsed, function_call, aliases, locals, function_types)
-        }
+        Expression::FunctionCall(function_call) => infer_function_call_return_type(
+            parsed,
+            function_call,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
         Expression::Var(var) => infer_var_type(parsed, var, aliases, locals, function_types),
         _ => None,
     }
@@ -530,8 +731,14 @@ fn infer_function_call_return_type(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
+    current_function: &str,
 ) -> Option<Type> {
     let parts = field_chain_before_first_call(function_call)?;
+
+    if parts.len() == 1 && parts.first().is_some_and(|name| name == current_function) {
+        return None;
+    }
+
     let function_type = if parts.len() == 1 {
         let name = parts.first()?;
 

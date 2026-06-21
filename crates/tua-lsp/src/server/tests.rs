@@ -196,6 +196,27 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_impossible_comparison_warnings() {
+    let uri = "file:///tmp/comparison.tua";
+    let source = r#"local function recursive(a: string)
+  if a == 1 then
+    return 1
+  end
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert_eq!(diagnostics[0]["code"], "TL1005");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("comparison is always false: string and number do not overlap"));
+}
+
+#[test]
 fn did_change_republishes_empty_diagnostics_for_clean_document() {
     let uri = "file:///tmp/player.tua";
     let output = run_messages(vec![
