@@ -24,7 +24,7 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub(super) fn from_range(start: Position, end: Position) -> Self {
+    pub(crate) fn from_range(start: Position, end: Position) -> Self {
         Self {
             start: SourcePosition::from_full_moon(start),
             end: SourcePosition::from_full_moon(end),

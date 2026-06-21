@@ -3,6 +3,7 @@ pub mod completion;
 pub mod config;
 pub mod definition;
 pub mod diagnostic;
+pub mod document_symbol;
 pub mod emit;
 pub mod hover;
 pub mod parser;
@@ -22,6 +23,10 @@ pub use definition::{
 };
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+};
+pub use document_symbol::{
+    document_symbols_parsed_source, document_symbols_tlua_source, DocumentSymbol,
+    DocumentSymbolKind,
 };
 pub use emit::{emit_lua, emit_tlua_source};
 pub use hover::{hover_parsed_source, hover_tlua_source, Hover};

@@ -34,6 +34,10 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["definitionProvider"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["documentSymbolProvider"],
+        true
+    );
 }
 
 #[test]
@@ -263,6 +267,88 @@ fn definition_unknown_symbol_returns_null_result() {
     assert!(response.get("error").is_none());
 }
 
+#[test]
+fn document_symbol_returns_file_outline_tree() {
+    let uri = "file:///tmp/document-symbol.tlua";
+    let source = r#"type Vec2 = { x: number, y: number }
+type Player = { pos: Vec2, hp: number, alive?: boolean }
+
+local player: Player = nil
+
+local function damage(target: Player, amount: number): Player
+  return target
+end
+
+return {
+  damage = damage,
+  player = player,
+  ["ignored"] = player,
+  [player] = player,
+  player,
+}
+"#;
+    let output = run_messages(vec![did_open(uri, source), document_symbol_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let symbols = response["result"]
+        .as_array()
+        .expect("document symbols should be an array");
+
+    assert_eq!(
+        symbol_names(symbols),
+        vec!["Vec2", "Player", "player", "damage", "exports"]
+    );
+    assert_eq!(symbols[1]["kind"], 23);
+    assert_eq!(
+        symbols[1]["detail"],
+        "type { pos: Vec2, hp: number, alive?: boolean }"
+    );
+    assert_eq!(
+        symbol_names(
+            symbols[1]["children"]
+                .as_array()
+                .expect("fields should exist")
+        ),
+        vec!["pos", "hp", "alive"]
+    );
+    assert_eq!(symbols[1]["children"][0]["kind"], 8);
+
+    assert_eq!(symbols[2]["kind"], 13);
+    assert_eq!(symbols[2]["detail"], "Player");
+
+    assert_eq!(symbols[3]["kind"], 12);
+    assert_eq!(symbols[3]["detail"], "returns Player");
+    assert_eq!(
+        symbol_names(
+            symbols[3]["children"]
+                .as_array()
+                .expect("parameters should exist")
+        ),
+        vec!["target", "amount"]
+    );
+    assert_eq!(symbols[3]["children"][0]["kind"], 13);
+
+    assert_eq!(symbols[4]["kind"], 19);
+    assert_eq!(
+        symbol_names(
+            symbols[4]["children"]
+                .as_array()
+                .expect("exports should exist")
+        ),
+        vec!["damage", "player"]
+    );
+    assert!(symbols[0]["range"]["start"]["line"].is_number());
+    assert!(symbols[0]["selectionRange"]["start"]["character"].is_number());
+}
+
+#[test]
+fn document_symbol_unknown_document_returns_empty_array() {
+    let uri = "file:///tmp/missing-document-symbol.tlua";
+    let output = run_messages(vec![document_symbol_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!([]));
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -333,6 +419,19 @@ fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: us
                 "uri": uri
             },
             "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
+fn document_symbol_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/documentSymbol",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
         }
     })
 }
@@ -467,6 +566,17 @@ fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, ex
         .expect("definition line should exist");
 
     assert_eq!(&text[start..end], expected);
+}
+
+fn symbol_names(symbols: &[Value]) -> Vec<&str> {
+    symbols
+        .iter()
+        .map(|symbol| {
+            symbol["name"]
+                .as_str()
+                .expect("symbol name should be a string")
+        })
+        .collect()
 }
 
 fn response_with_id(output: &[Value], id: u64) -> &Value {

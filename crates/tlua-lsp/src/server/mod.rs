@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tlua_core::{
-    check_tlua_source, complete_tlua_source, definition_tlua_source, hover_tlua_source,
-    project_description, Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity,
-    Hover, SourcePosition, SourceSpan,
+    check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
+    hover_tlua_source, project_description, Completion, CompletionKind, Definition, Diagnostic,
+    DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover, SourcePosition, SourceSpan,
 };
 
 pub fn server_name() -> &'static str {
@@ -75,7 +75,8 @@ impl LspServer {
                         "completionProvider": {
                             "triggerCharacters": [":", "."]
                         },
-                        "definitionProvider": true
+                        "definitionProvider": true,
+                        "documentSymbolProvider": true
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -96,6 +97,7 @@ impl LspServer {
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
+            "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -236,6 +238,31 @@ impl LspServer {
 
         Some(lsp_location_from_core(uri, definition))
     }
+
+    fn document_symbol_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!([]);
+        };
+        let Some(uri) = params
+            .get("textDocument")
+            .and_then(|document| document.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return json!([]);
+        };
+        let Some(text) = self.documents.get(uri) else {
+            return json!([]);
+        };
+        let path = path_from_uri(uri);
+        let symbols = document_symbols_tlua_source(path, text.clone()).unwrap_or_default();
+
+        Value::Array(
+            symbols
+                .into_iter()
+                .map(lsp_document_symbol_from_core)
+                .collect(),
+        )
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -339,6 +366,40 @@ fn lsp_location_from_core(uri: &str, definition: Definition) -> Value {
         "uri": uri,
         "range": lsp_range(definition.span)
     })
+}
+
+fn lsp_document_symbol_from_core(symbol: DocumentSymbol) -> Value {
+    let children = symbol
+        .children
+        .into_iter()
+        .map(lsp_document_symbol_from_core)
+        .collect::<Vec<_>>();
+    let mut item = json!({
+        "name": symbol.name,
+        "kind": lsp_symbol_kind(symbol.kind),
+        "range": lsp_range(symbol.range),
+        "selectionRange": lsp_range(symbol.selection_range),
+    });
+
+    if let Some(detail) = symbol.detail {
+        item["detail"] = json!(detail);
+    }
+
+    if !children.is_empty() {
+        item["children"] = Value::Array(children);
+    }
+
+    item
+}
+
+fn lsp_symbol_kind(kind: DocumentSymbolKind) -> u8 {
+    match kind {
+        DocumentSymbolKind::Field => 8,
+        DocumentSymbolKind::Function => 12,
+        DocumentSymbolKind::Local | DocumentSymbolKind::Parameter => 13,
+        DocumentSymbolKind::ModuleExports => 19,
+        DocumentSymbolKind::TypeAlias => 23,
+    }
 }
 
 fn lsp_range(span: SourceSpan) -> Value {
