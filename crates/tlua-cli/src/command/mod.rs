@@ -32,7 +32,11 @@ pub fn run_command(
 
             Ok("watch stopped".to_owned())
         }
-        _ => Ok(placeholder_text(command)),
+        CommandName::Lsp => {
+            run_lsp_command()?;
+
+            Ok("lsp stopped".to_owned())
+        }
     }
 }
 
@@ -42,14 +46,9 @@ pub fn run_watch_command(cwd: impl AsRef<Path>) -> Result<(), CliError> {
     run_watch(cwd, loaded)
 }
 
-fn placeholder_text(command: CommandName) -> String {
-    match command {
-        CommandName::Init => unreachable!("tlua init is handled before placeholder_text"),
-        CommandName::Check => unreachable!("tlua check is handled before placeholder_text"),
-        CommandName::Build => unreachable!("tlua build is handled before placeholder_text"),
-        CommandName::Watch => unreachable!("tlua watch is handled before placeholder_text"),
-        CommandName::Lsp => format!("{} is not implemented yet", tlua_lsp::server_name()),
-    }
+pub fn run_lsp_command() -> Result<(), CliError> {
+    tlua_lsp::run_stdio()
+        .map_err(|source| CliError::usage(format!("failed to run tlua lsp: {source}")))
 }
 
 fn format_init_result(result: tlua_core::InitResult) -> String {

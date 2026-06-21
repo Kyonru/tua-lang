@@ -2,7 +2,8 @@ use std::env;
 use std::process::ExitCode;
 
 use tlua_cli::{
-    parse_args, run_command, run_watch_command, version_text, CliAction, CommandName, HELP,
+    parse_args, run_command, run_lsp_command, run_watch_command, version_text, CliAction,
+    CommandName, HELP,
 };
 
 fn main() -> ExitCode {
@@ -28,6 +29,16 @@ fn main() -> ExitCode {
             },
             Err(error) => {
                 eprintln!("error: failed to read current directory: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        Ok(CliAction::Command {
+            name: CommandName::Lsp,
+            ..
+        }) => match run_lsp_command() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{}", error.format_stderr());
                 ExitCode::FAILURE
             }
         },
