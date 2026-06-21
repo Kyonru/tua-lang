@@ -1,4 +1,5 @@
 use super::*;
+use crate::{parse_tlua_source, DiagnosticCode};
 
 #[test]
 fn primitive_assignability_requires_matching_primitives() {
@@ -115,4 +116,184 @@ fn function_types_are_contravariant_in_parameters_and_covariant_in_return() {
     assert!(is_assignable(&any_to_number, &number_to_number));
     assert!(!is_assignable(&string_to_number, &number_to_number));
     assert!(!is_assignable(&any_to_string, &number_to_number));
+}
+
+#[test]
+fn builds_per_file_type_environment_from_aliases_and_annotations() {
+    let parsed = parse_tlua_source(
+        "src/player.tlua",
+        r#"
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  pos: Vec2,
+  name?: string,
+}
+
+local player: Player = nil
+
+local function move(player: Player, delta: Vec2): Player
+  return player
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should collect annotations");
+
+    assert_eq!(environment.path(), parsed.path.as_path());
+    assert_eq!(environment.alias("Vec2"), Some(&vec2_type()));
+    assert_eq!(environment.local("player"), Some(&Type::alias("Player")));
+
+    let functions = environment.functions();
+    assert_eq!(functions.len(), 1);
+    assert_eq!(functions[0].name.as_deref(), Some("move"));
+    assert_eq!(functions[0].parameters[0].name, "player");
+    assert_eq!(functions[0].parameters[0].ty, Type::alias("Player"));
+    assert_eq!(functions[0].parameters[1].name, "delta");
+    assert_eq!(functions[0].parameters[1].ty, Type::alias("Vec2"));
+    assert_eq!(functions[0].return_type, Some(Type::alias("Player")));
+}
+
+#[test]
+fn aliases_resolve_within_the_file_type_context() {
+    let parsed = parse_tlua_source(
+        "src/aliases.tlua",
+        r#"
+type HitPoints = number
+type Health = HitPoints
+
+local hp: Health = 10
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("aliases should resolve through context");
+    let context = environment.to_type_context();
+
+    assert!(context.is_assignable(&Type::number(), environment.local("hp").unwrap()));
+    assert!(context.is_assignable(&Type::alias("Health"), &Type::alias("HitPoints")));
+}
+
+#[test]
+fn aliases_can_refer_to_later_aliases_in_the_same_file() {
+    let parsed = parse_tlua_source(
+        "src/forward.tlua",
+        r#"
+type Player = {
+  pos: Vec2,
+}
+
+type Vec2 = {
+  x: number,
+  y: number,
+}
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("forward aliases should be known per file");
+
+    let Type::Table(player) = environment
+        .alias("Player")
+        .expect("Player alias should exist")
+    else {
+        panic!("Player should be a table shape");
+    };
+
+    assert_eq!(player.field("pos").unwrap().ty, Type::alias("Vec2"));
+}
+
+#[test]
+fn unknown_type_names_produce_type_diagnostics() {
+    let parsed = parse_tlua_source(
+        "src/player.tlua",
+        r#"
+local player: Player = nil
+"#,
+    )
+    .expect("typed source should parse");
+    let diagnostics =
+        build_type_environment(&parsed).expect_err("unknown types should produce diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_UNKNOWN_NAME));
+    assert_eq!(
+        diagnostics[0].code.unwrap().category(),
+        crate::DiagnosticCategory::Type
+    );
+    assert!(diagnostics[0].message.contains("unknown type `Player`"));
+    assert!(diagnostics[0].format_cli().contains("error TL1001"));
+}
+
+#[test]
+fn unknown_type_names_inside_table_shapes_produce_type_diagnostics() {
+    let parsed = parse_tlua_source(
+        "src/player.tlua",
+        r#"
+type Player = {
+  pos: Vec2,
+}
+"#,
+    )
+    .expect("typed source should parse");
+    let diagnostics =
+        build_type_environment(&parsed).expect_err("unknown field types should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_UNKNOWN_NAME));
+    assert!(diagnostics[0].message.contains("unknown type `Vec2`"));
+}
+
+#[test]
+fn duplicate_type_aliases_produce_deterministic_diagnostics() {
+    let parsed = parse_tlua_source(
+        "src/types.tlua",
+        r#"
+type Vec2 = {
+  x: number,
+}
+
+type Player = {
+  name: string,
+}
+
+type Vec2 = {
+  y: number,
+}
+
+type Player = {
+  hp: number,
+}
+"#,
+    )
+    .expect("typed source should parse");
+    let diagnostics =
+        build_type_environment(&parsed).expect_err("duplicate aliases should be rejected");
+
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "duplicate type alias `Vec2`",
+            "duplicate type alias `Player`"
+        ]
+    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_DUPLICATE_ALIAS)));
+    assert!(diagnostics[0].format_cli().contains("error TL1002"));
+}
+
+fn vec2_type() -> Type {
+    Type::table([
+        ("x", TableField::required(Type::number())),
+        ("y", TableField::required(Type::number())),
+    ])
 }

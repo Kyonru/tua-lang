@@ -20,7 +20,8 @@ pub use parser::{
 };
 pub use project::project_description;
 pub use types::{
-    is_assignable, FunctionType, PrimitiveType, TableField, TableShape, Type, TypeContext,
+    build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
+    Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
