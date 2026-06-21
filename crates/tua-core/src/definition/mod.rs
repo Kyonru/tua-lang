@@ -28,7 +28,9 @@ pub fn definition_tua_source(
     source: impl Into<String>,
     position: SourcePosition,
 ) -> Result<Option<Definition>, Vec<Diagnostic>> {
-    let parsed = parse_tua_source(path, source)?;
+    let path = path.as_ref().to_path_buf();
+    let source = source.into();
+    let parsed = parse_definition_source(&path, &source, position)?;
 
     definition_parsed_source(&parsed, position)
 }
@@ -262,6 +264,84 @@ fn starts_before_or_at(span: SourceSpan, position: SourcePosition) -> bool {
 
 fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
+}
+
+fn parse_definition_source(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    match parse_tua_source(path, source.to_owned()) {
+        Ok(parsed) => Ok(parsed),
+        Err(original_diagnostics) => {
+            if let Ok(parsed) = parse_tua_source_with_original_source(
+                path,
+                source,
+                source_with_line_blank(source, position.line),
+            ) {
+                return Ok(parsed);
+            }
+
+            for line in 1..=source.lines().count().max(1) {
+                if line == position.line {
+                    continue;
+                }
+
+                if let Ok(parsed) = parse_tua_source_with_original_source(
+                    path,
+                    source,
+                    source_with_line_blank(source, line),
+                ) {
+                    return Ok(parsed);
+                }
+            }
+
+            Err(original_diagnostics)
+        }
+    }
+}
+
+fn parse_tua_source_with_original_source(
+    path: &Path,
+    original_source: &str,
+    parser_source: String,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    let mut parsed = parse_tua_source(path, parser_source)?;
+
+    parsed.source = original_source.to_owned();
+
+    Ok(parsed)
+}
+
+fn source_with_line_blank(source: &str, line_to_blank: usize) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut current_line = 1;
+    let mut line_start = 0;
+
+    for (index, character) in source.char_indices() {
+        if character != '\n' {
+            continue;
+        }
+
+        if current_line == line_to_blank {
+            output.push('\n');
+        } else {
+            output.push_str(&source[line_start..=index]);
+        }
+
+        current_line += 1;
+        line_start = index + 1;
+    }
+
+    if line_start < source.len() {
+        if current_line == line_to_blank {
+            output.push('\n');
+        } else {
+            output.push_str(&source[line_start..]);
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]

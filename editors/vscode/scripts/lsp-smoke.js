@@ -11,6 +11,7 @@ const child = childProcess.spawn(command, ["lsp"], {
 let buffer = Buffer.alloc(0);
 let initialized = false;
 let completed = false;
+let defined = false;
 let shutdown = false;
 let sawInitialize = false;
 let stderr = "";
@@ -24,6 +25,12 @@ const sampleSource = [
   "",
   "local player: Player = { hp = 10, alive = true }",
   "player.",
+  "",
+  "function test(a: boolean)",
+  '  return ""',
+  "end",
+  "",
+  "test(false)",
 ].join("\n");
 
 const timeout = setTimeout(() => {
@@ -130,16 +137,46 @@ function handleMessage(message) {
 
     completed = true;
     console.log(`completion smoke labels: ${labels.join(", ")}`);
-    send({ jsonrpc: "2.0", id: 3, method: "shutdown", params: null });
+    send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "textDocument/definition",
+      params: {
+        textDocument: { uri: sampleUri },
+        position: { line: 12, character: 0 },
+      },
+    });
     return;
   }
 
   if (message.id === 3) {
+    const target = sourceTextFromRange(sampleSource, message.result?.range);
+    if (target !== "test") {
+      fail(`definition smoke expected target "test", got ${JSON.stringify(target)}`);
+    }
+
+    defined = true;
+    console.log(`definition smoke target: ${target}`);
+    send({ jsonrpc: "2.0", id: 4, method: "shutdown", params: null });
+    return;
+  }
+
+  if (message.id === 4) {
     initialized = sawInitialize;
     shutdown = true;
     console.log("shutdown tua LSP cleanly");
     send({ jsonrpc: "2.0", method: "exit", params: null });
   }
+}
+
+function sourceTextFromRange(source, range) {
+  if (!range) {
+    return undefined;
+  }
+
+  const line = source.split("\n")[range.start.line];
+
+  return line.slice(range.start.character, range.end.character);
 }
 
 function send(message) {
@@ -155,5 +192,5 @@ function fail(message) {
   }
 
   console.error(message);
-  process.exit(initialized && completed ? 2 : 1);
+  process.exit(initialized && completed && defined ? 2 : 1);
 }

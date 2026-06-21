@@ -55,6 +55,44 @@ fn resolves_function_call() {
 }
 
 #[test]
+fn resolves_global_function_call() {
+    let source = r#"function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let position = position_at(source, "test(false");
+    let definition = definition_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("global function call should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::Function);
+    assert_eq!(source_text_from(source, definition.span), "test");
+}
+
+#[test]
+fn resolves_definition_when_an_unrelated_line_is_incomplete() {
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.
+
+function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let position = position_at(source, "test(false");
+    let definition = definition_tua_source("src/main.tua", source, position)
+        .expect("definition should recover from one incomplete line")
+        .expect("global function call should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::Function);
+    assert_eq!(source_text_from(source, definition.span), "test");
+}
+
+#[test]
 fn resolves_local_usage() {
     assert_definition(
         "damage(player",

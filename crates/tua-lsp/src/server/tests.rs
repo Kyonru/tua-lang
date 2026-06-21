@@ -446,6 +446,44 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn definition_returns_global_function_location() {
+    let uri = "file:///tmp/global-definition.tua";
+    let source = r#"function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "test(false", 0),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "test");
+}
+
+#[test]
+fn definition_recovers_when_an_unrelated_line_is_incomplete() {
+    let uri = "file:///tmp/recovered-definition.tua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.
+
+function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "test(false", 0),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "test");
+}
+
+#[test]
 fn definition_unknown_symbol_returns_null_result() {
     let uri = "file:///tmp/unknown-definition.tua";
     let source = "local result = missing\n";

@@ -61,3 +61,15 @@ end
 function love.keypressed(key: string)
   inspect.keypressed(key)
 end
+
+function erica(age: number)
+  return age
+end
+
+erica(25)
+
+function match(name: string)
+  return name
+end
+
+match("coller")
