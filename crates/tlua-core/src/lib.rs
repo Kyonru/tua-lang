@@ -3,6 +3,7 @@ pub mod diagnostic;
 pub mod emit;
 pub mod parser;
 mod project;
+pub mod types;
 
 pub use config::{
     init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
@@ -18,5 +19,8 @@ pub use parser::{
     TluaType, TypeAlias,
 };
 pub use project::project_description;
+pub use types::{
+    is_assignable, FunctionType, PrimitiveType, TableField, TableShape, Type, TypeContext,
+};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
