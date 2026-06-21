@@ -157,6 +157,89 @@ fn check_prints_config_diagnostics() {
 }
 
 #[test]
+fn check_exits_successfully_for_clean_project() {
+    let temp = TempDir::new("check-clean");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 10 }
+player.hp = 9
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tlua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua check");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("checked 1 file(s)"));
+}
+
+#[test]
+fn check_exits_nonzero_for_parse_errors() {
+    let temp = TempDir::new("check-parse-error");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.tlua"), "local hp = \n").expect("failed to write source");
+
+    let output = tlua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua check");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tlua:1:10 error TL0001"));
+    assert!(!stderr.contains("panicked"));
+}
+
+#[test]
+fn check_exits_nonzero_for_type_errors() {
+    let temp = TempDir::new("check-type-error");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local hp: number = "full"
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tlua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua check");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tlua:2:20 error TL1003"));
+    assert!(stderr.contains("type mismatch: expected number, found string"));
+    assert!(!stderr.contains("panicked"));
+}
+
+#[test]
 fn build_compiles_nested_source_tree_to_matching_output_tree() {
     let temp = TempDir::new("build-nested");
 

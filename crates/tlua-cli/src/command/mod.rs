@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::args::CommandName;
 use crate::build::run_build;
+use crate::check::run_check;
 use crate::error::CliError;
 
 pub fn run_command(
@@ -19,7 +20,13 @@ pub fn run_command(
 
             run_build(cwd, loaded, emit_on_error)
         }
-        CommandName::Check | CommandName::Watch => {
+        CommandName::Check => {
+            let loaded =
+                tlua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+            run_check(cwd, loaded)
+        }
+        CommandName::Watch => {
             tlua_core::load_config_from_dir(cwd).map_err(CliError::from_config_error)?;
 
             Ok(placeholder_text(command))
@@ -31,7 +38,7 @@ pub fn run_command(
 fn placeholder_text(command: CommandName) -> String {
     match command {
         CommandName::Init => unreachable!("tlua init is handled before placeholder_text"),
-        CommandName::Check => "tlua check is not implemented yet".to_owned(),
+        CommandName::Check => unreachable!("tlua check is handled before placeholder_text"),
         CommandName::Build => unreachable!("tlua build is handled before placeholder_text"),
         CommandName::Watch => "tlua watch is not implemented yet".to_owned(),
         CommandName::Lsp => format!("{} is not implemented yet", tlua_lsp::server_name()),
