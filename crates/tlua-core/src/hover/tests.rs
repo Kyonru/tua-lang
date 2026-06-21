@@ -1,4 +1,5 @@
 use super::*;
+use crate::source_text::position_at;
 
 const SOURCE: &str = r#"type Vec2 = { x: number, y: number }
 type Player = { pos: Vec2, hp: number }
@@ -51,7 +52,7 @@ fn hovers_known_table_field() {
 #[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
-    let position = position_of(source, "missing");
+    let position = position_at(source, "missing");
     let hover = hover_tlua_source("src/main.tlua", source, position)
         .expect("hover should not fail for unknown values");
 
@@ -59,20 +60,7 @@ fn unknown_symbols_do_not_hover() {
 }
 
 fn hover_at(needle: &str) -> Option<Hover> {
-    let position = position_of(SOURCE, needle);
+    let position = position_at(SOURCE, needle);
 
     hover_tlua_source("src/main.tlua", SOURCE, position).expect("source should parse and type")
-}
-
-fn position_of(source: &str, needle: &str) -> SourcePosition {
-    let index = source.find(needle).expect("needle should exist in source");
-    let before = &source[..index];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = before
-        .rsplit_once('\n')
-        .map(|(_, line)| line.len())
-        .unwrap_or(before.len())
-        + 1;
-
-    SourcePosition { line, column }
 }

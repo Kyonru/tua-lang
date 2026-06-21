@@ -1,13 +1,17 @@
 pub mod check;
+pub mod completion;
 pub mod config;
 pub mod diagnostic;
 pub mod emit;
 pub mod hover;
 pub mod parser;
 mod project;
+mod semantic;
+mod source_text;
 pub mod types;
 
 pub use check::{check_parsed_source, check_tlua_source};
+pub use completion::{complete_parsed_source, complete_tlua_source, Completion, CompletionKind};
 pub use config::{
     init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
     LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,

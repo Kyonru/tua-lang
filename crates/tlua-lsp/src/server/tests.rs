@@ -26,6 +26,10 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(output[0]["result"]["serverInfo"]["name"], "tlua-lsp");
     assert_eq!(output[0]["result"]["capabilities"]["textDocumentSync"], 1);
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
+    assert_eq!(
+        output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
+        json!([":", "."])
+    );
 }
 
 #[test]
@@ -166,6 +170,47 @@ fn hover_unknown_symbol_returns_null_result() {
     assert!(response.get("error").is_none());
 }
 
+#[test]
+fn completion_returns_type_aliases_and_table_fields() {
+    let uri = "file:///tmp/completion.tlua";
+    let source = r#"type Vec2 = { x: number, y: number }
+type Player = { pos: Vec2, hp: number, alive?: boolean }
+
+local player: Player = {
+  pos = { x = 0, y = 0 },
+  hp = 10,
+}
+
+local typed: Pl = nil
+local field = player.hp
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "typed: Pl"),
+        completion_request(3, uri, source, "player."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["Player"]);
+    assert_completion_labels(&output, 3, ["alive", "hp", "pos"]);
+}
+
+#[test]
+fn completion_is_quiet_for_any_and_unknown_field_receivers() {
+    let uri = "file:///tmp/quiet-completion.tlua";
+    let source = r#"local payload: any = {}
+local any_field = payload.value
+local unknown_field = missing.value
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "payload."),
+        completion_request(3, uri, source, "missing."),
+    ]);
+
+    assert_completion_labels(&output, 2, []);
+    assert_completion_labels(&output, 3, []);
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -212,6 +257,20 @@ fn hover_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
     })
 }
 
+fn completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/completion",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle)
+        }
+    })
+}
+
 fn lsp_position_of(source: &str, needle: &str) -> Value {
     let index = source.find(needle).expect("needle should exist in source");
     let before = &source[..index];
@@ -225,6 +284,18 @@ fn lsp_position_of(source: &str, needle: &str) -> Value {
         "line": line,
         "character": character
     })
+}
+
+fn lsp_position_after(source: &str, needle: &str) -> Value {
+    let mut position = lsp_position_of(source, needle);
+    position["character"] = json!(
+        position["character"]
+            .as_u64()
+            .expect("character should be numeric")
+            + needle.chars().count() as u64
+    );
+
+    position
 }
 
 fn read_output_messages(mut output: &[u8]) -> Vec<Value> {
@@ -279,6 +350,22 @@ fn assert_hover_contains(output: &[Value], id: u64, expected: &str) {
         contents.contains(expected),
         "expected hover contents to contain {expected:?}, got {contents:?}"
     );
+}
+
+fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected: [&str; N]) {
+    let response = response_with_id(output, id);
+    let labels = response["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .expect("completion label should be a string")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(labels, expected);
 }
 
 fn response_with_id(output: &[Value], id: u64) -> &Value {

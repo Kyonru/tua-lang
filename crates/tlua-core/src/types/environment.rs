@@ -97,6 +97,18 @@ pub struct TypedParameter {
 }
 
 pub fn build_type_environment(parsed: &ParsedSource) -> Result<TypeEnvironment, Vec<Diagnostic>> {
+    let (environment, diagnostics) = build_type_environment_with_diagnostics(parsed);
+
+    if diagnostics.is_empty() {
+        Ok(environment)
+    } else {
+        Err(diagnostics)
+    }
+}
+
+pub(crate) fn build_type_environment_with_diagnostics(
+    parsed: &ParsedSource,
+) -> (TypeEnvironment, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
     let alias_names = collect_alias_names(parsed, &mut diagnostics);
     let mut aliases = BTreeMap::new();
@@ -138,16 +150,15 @@ pub fn build_type_environment(parsed: &ParsedSource) -> Result<TypeEnvironment, 
         ));
     }
 
-    if diagnostics.is_empty() {
-        Ok(TypeEnvironment {
+    (
+        TypeEnvironment {
             path: parsed.path.clone(),
             aliases,
             locals,
             functions,
-        })
-    } else {
-        Err(diagnostics)
-    }
+        },
+        diagnostics,
+    )
 }
 
 fn collect_alias_names(

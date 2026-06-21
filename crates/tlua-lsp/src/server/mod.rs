@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tlua_core::{
-    check_tlua_source, hover_tlua_source, project_description, Diagnostic, DiagnosticSeverity,
-    Hover, SourcePosition, SourceSpan,
+    check_tlua_source, complete_tlua_source, hover_tlua_source, project_description, Completion,
+    CompletionKind, Diagnostic, DiagnosticSeverity, Hover, SourcePosition, SourceSpan,
 };
 
 pub fn server_name() -> &'static str {
@@ -70,7 +70,10 @@ impl LspServer {
                 json!({
                     "capabilities": {
                         "textDocumentSync": 1,
-                        "hoverProvider": true
+                        "hoverProvider": true,
+                        "completionProvider": {
+                            "triggerCharacters": [":", "."]
+                        }
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -86,6 +89,7 @@ impl LspServer {
             "textDocument/hover" => {
                 response(id, self.hover_response(&message).unwrap_or(Value::Null))
             }
+            "textDocument/completion" => response(id, self.completion_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -161,6 +165,48 @@ impl LspServer {
         .flatten()?;
 
         Some(lsp_hover_from_core(hover))
+    }
+
+    fn completion_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!([]);
+        };
+        let Some(uri) = params
+            .get("textDocument")
+            .and_then(|document| document.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return json!([]);
+        };
+        let Some(position) = params.get("position") else {
+            return json!([]);
+        };
+        let Some(line) = position.get("line").and_then(Value::as_u64) else {
+            return json!([]);
+        };
+        let Some(character) = position.get("character").and_then(Value::as_u64) else {
+            return json!([]);
+        };
+        let Some(text) = self.documents.get(uri) else {
+            return json!([]);
+        };
+        let path = path_from_uri(uri);
+        let completions = complete_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line as usize + 1,
+                column: character as usize + 1,
+            },
+        )
+        .unwrap_or_default();
+
+        Value::Array(
+            completions
+                .into_iter()
+                .map(lsp_completion_from_core)
+                .collect(),
+        )
     }
 }
 
@@ -238,6 +284,26 @@ fn lsp_hover_from_core(hover: Hover) -> Value {
     }
 
     result
+}
+
+fn lsp_completion_from_core(completion: Completion) -> Value {
+    let mut item = json!({
+        "label": completion.label,
+        "kind": lsp_completion_kind(completion.kind)
+    });
+
+    if let Some(detail) = completion.detail {
+        item["detail"] = json!(detail);
+    }
+
+    item
+}
+
+fn lsp_completion_kind(kind: CompletionKind) -> u8 {
+    match kind {
+        CompletionKind::TypeAlias => 25,
+        CompletionKind::Field => 5,
+    }
 }
 
 fn lsp_range(span: SourceSpan) -> Value {
