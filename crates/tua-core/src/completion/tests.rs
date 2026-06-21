@@ -166,6 +166,116 @@ fn completes_require_paths_from_current_directory() {
 }
 
 #[test]
+fn completes_fields_from_required_tua_and_lua_modules() {
+    let root = temp_project_dir("required_module_fields");
+    let src = root.join("src");
+    let game = root.join("game");
+
+    fs::create_dir_all(&src).expect("src dir should be created");
+    fs::create_dir_all(&game).expect("game dir should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\nout = \"game\"\n")
+        .expect("config should be written");
+    fs::write(
+        src.join("player.tua"),
+        r#"
+type Player = {
+  hp?: number,
+  pos?: { x: number },
+}
+
+local player: Player = {}
+
+function player.damage(amount: number)
+end
+
+return player
+"#,
+    )
+    .expect("Tua module should be written");
+    fs::write(
+        game.join("utils.lua"),
+        r#"
+local utils = {}
+
+function utils.clamp(value, min, max)
+end
+
+utils.version = "1"
+
+return utils
+"#,
+    )
+    .expect("Lua module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"
+local player: any = require("player")
+local hp = player.hp
+
+local utils = require("utils")
+local value = utils.clamp
+"#;
+
+    let player_completions =
+        complete_tua_source(&main_path, source, position_after(source, "player."))
+            .expect("required Tua module completion should succeed");
+    let utils_completions =
+        complete_tua_source(&main_path, source, position_after(source, "utils."))
+            .expect("required Lua module completion should succeed");
+
+    assert_eq!(
+        labels(&player_completions),
+        vec!["damage".to_owned(), "hp".to_owned(), "pos".to_owned()]
+    );
+    assert_eq!(
+        labels(&utils_completions),
+        vec!["clamp".to_owned(), "version".to_owned()]
+    );
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
+fn completes_nested_fields_from_required_modules() {
+    let root = temp_project_dir("nested_required_module_fields");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("src dir should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("settings.lua"),
+        r#"
+return {
+  audio = {
+    volume = 1,
+    muted = false,
+  },
+}
+"#,
+    )
+    .expect("Lua module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"
+local settings = require("settings")
+local volume = settings.audio.volume
+"#;
+    let completions = complete_tua_source(
+        &main_path,
+        source,
+        position_after(source, "settings.audio."),
+    )
+    .expect("nested required module completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec!["muted".to_owned(), "volume".to_owned()]
+    );
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completion_remains_quiet_for_any_values() {
     let source = format!("{SOURCE}local dynamic = payload.\n");
     let position = position_after(&source, "payload.");

@@ -5,6 +5,7 @@ use self::context::{completion_context, CompletionContext};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
+use crate::module_index::{required_module_exports_for_receiver, ModuleExports};
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
@@ -75,7 +76,18 @@ fn complete_parsed_source_with_context(
             let environment = build_completion_environment(parsed);
             let fields = complete_fields(&environment, &receiver_parts, prefix.as_str());
 
-            if !fields.is_empty() || environment.local(&receiver_parts[0]).is_some() {
+            if !fields.is_empty() {
+                return fields;
+            }
+
+            let module_fields =
+                complete_required_module_fields(parsed, &receiver_parts, prefix.as_str());
+
+            if !module_fields.is_empty() {
+                return module_fields;
+            }
+
+            if environment.local(&receiver_parts[0]).is_some() {
                 return fields;
             }
 
@@ -269,6 +281,99 @@ fn complete_lua_fields(receiver_parts: &[String], prefix: &str) -> Vec<Completio
         .into_iter()
         .map(completion_from_lua_item)
         .collect()
+}
+
+fn complete_required_module_fields(
+    parsed: &ParsedSource,
+    receiver_parts: &[String],
+    prefix: &str,
+) -> Vec<Completion> {
+    let Some((receiver, fields)) = receiver_parts.split_first() else {
+        return Vec::new();
+    };
+    let Some(exports) = required_module_exports_for_receiver(parsed, receiver) else {
+        return Vec::new();
+    };
+    let ty = exported_type_for_receiver(&exports, fields);
+    let mut fields = BTreeMap::new();
+
+    collect_export_fields(&ty, &mut fields);
+
+    fields
+        .into_iter()
+        .filter(|(name, _)| name.starts_with(prefix))
+        .map(|(name, ty)| Completion {
+            kind: completion_kind_for_type(&ty),
+            detail: Some(format!("field: {ty}")),
+            label: name,
+        })
+        .collect()
+}
+
+fn exported_type_for_receiver(exports: &ModuleExports, fields: &[String]) -> Type {
+    let mut current = Type::table(
+        exports
+            .fields
+            .iter()
+            .map(|(name, ty)| (name.clone(), crate::TableField::required(ty.clone()))),
+    );
+
+    for field in fields {
+        let Some(next) = export_field_type(&current, field) else {
+            return Type::Any;
+        };
+
+        current = next;
+    }
+
+    current
+}
+
+fn export_field_type(ty: &Type, field: &str) -> Option<Type> {
+    match ty {
+        Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+        Type::Union(types) => {
+            let mut resolved = Vec::new();
+
+            for ty in types {
+                if let Some(field_ty) = export_field_type(ty, field) {
+                    resolved.push(field_ty);
+                }
+            }
+
+            match resolved.len() {
+                0 => None,
+                1 => resolved.into_iter().next(),
+                _ => Some(Type::union(resolved)),
+            }
+        }
+        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => None,
+    }
+}
+
+fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
+    match ty {
+        Type::Table(table) => {
+            fields.extend(
+                table
+                    .fields()
+                    .map(|(name, field)| (name.to_owned(), field.ty.clone())),
+            );
+        }
+        Type::Union(types) => {
+            for ty in types {
+                collect_export_fields(ty, fields);
+            }
+        }
+        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+    }
+}
+
+fn completion_kind_for_type(ty: &Type) -> CompletionKind {
+    match ty {
+        Type::Function(_) => CompletionKind::Function,
+        _ => CompletionKind::Field,
+    }
 }
 
 fn completion_from_lua_item(item: LuaItem) -> Completion {

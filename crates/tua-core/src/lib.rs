@@ -8,6 +8,7 @@ pub mod emit;
 pub mod hover;
 pub mod inlay_hint;
 mod lua;
+pub mod module_index;
 pub mod parser;
 mod project;
 pub mod references;
@@ -34,6 +35,10 @@ pub use document_symbol::{
 pub use emit::{emit_lua, emit_tua_source};
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
+pub use module_index::{
+    infer_module_exports, required_module_exports_for_receiver, resolve_required_module,
+    ModuleExports,
+};
 pub use parser::{
     parse_lua_source, parse_tua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
     LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,

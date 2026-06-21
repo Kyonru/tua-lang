@@ -349,6 +349,35 @@ local draw = love.graphics.pr
 }
 
 #[test]
+fn completion_returns_fields_from_required_modules() {
+    let temp = TempProject::new("required-module-completion");
+    let source = r#"
+local audio: any = require("audio")
+local value = audio.play
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/audio.lua",
+        r#"
+return {
+  play = function(source) end,
+  volume = 1,
+}
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "audio."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["play", "volume"]);
+}
+
+#[test]
 fn hover_returns_lua_and_love_items() {
     let uri = "file:///tmp/lua-hover.tua";
     let source = r#"local value = math.sin(1)
