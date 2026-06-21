@@ -1,0 +1,13 @@
+{
+  "iconDefinitions": {
+    "_tua": {
+      "iconPath": "../assets/logo.svg"
+    }
+  },
+  "fileExtensions": {
+    "tua": "_tua"
+  },
+  "languageIds": {
+    "tua": "_tua"
+  }
+}

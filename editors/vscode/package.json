@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "publisher": "tua-lang",
   "license": "MIT",
+  "icon": "assets/logo.svg",
   "main": "./src/extension.js",
   "engines": {
     "vscode": "^1.85.0"
@@ -43,7 +44,11 @@
         "extensions": [
           ".tua"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./assets/logo.svg",
+          "dark": "./assets/logo.svg"
+        }
       }
     ],
     "grammars": [
@@ -51,6 +56,13 @@
         "language": "tua",
         "scopeName": "source.tua",
         "path": "./syntaxes/tua.tmLanguage.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "tua-icons",
+        "label": "tua Icons",
+        "path": "./icons/tua-icon-theme.json"
       }
     ]
   }
