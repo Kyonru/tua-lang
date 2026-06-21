@@ -235,6 +235,27 @@ fn hovers_lua_standard_library_items() {
 }
 
 #[test]
+fn hovers_extended_lua_globals() {
+    let source = "_ENV.raw = rawlen({})\nwarn(\"careful\")\n";
+    let environment = hover_tua_source("src/main.tua", source, position_at(source, "_ENV"))
+        .expect("hover should not fail")
+        .expect("_ENV should hover");
+    let rawlen = hover_tua_source("src/main.tua", source, position_at(source, "rawlen"))
+        .expect("hover should not fail")
+        .expect("rawlen should hover");
+    let warn = hover_tua_source("src/main.tua", source, position_at(source, "warn"))
+        .expect("hover should not fail")
+        .expect("warn should hover");
+
+    assert_eq!(environment.contents, "global environment table");
+    assert_eq!(
+        rawlen.contents,
+        "function rawlen(v: string | table): number"
+    );
+    assert_eq!(warn.contents, "function warn(message: string, ...)");
+}
+
+#[test]
 fn hovers_love_items() {
     let source = "love.graphics.print(\"hi\", 0, 0)\n";
     let position = position_at(source, "print");

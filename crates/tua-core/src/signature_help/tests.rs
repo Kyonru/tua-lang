@@ -61,6 +61,10 @@ damage(
 fn returns_lua_and_love_builtin_signatures() {
     let lua =
         signature_at("local value = math.sin(\n", "math.sin(").expect("math.sin should have help");
+    let rawlen =
+        signature_at("local value = rawlen(\n", "rawlen(").expect("rawlen should have help");
+    let warn =
+        signature_at("warn(\"message\", \n", "warn(\"message\", ").expect("warn should have help");
     let love = signature_at(
         "love.graphics.print(\"hi\", \n",
         "love.graphics.print(\"hi\", ",
@@ -72,6 +76,21 @@ fn returns_lua_and_love_builtin_signatures() {
         "function math.sin(x: number): number"
     );
     assert_eq!(parameter_labels(&lua), vec!["x: number"]);
+    assert_eq!(
+        rawlen.signatures[0].label,
+        "function rawlen(v: string | table): number"
+    );
+    assert_eq!(parameter_labels(&rawlen), vec!["v: string | table"]);
+    assert_eq!(
+        warn.signatures[0].label,
+        "function warn(message: string, ...)"
+    );
+    assert_eq!(warn.active_parameter, 1);
+    assert!(warn.signatures[0]
+        .documentation
+        .as_deref()
+        .expect("warn should have documentation")
+        .contains("pdf-warn"));
     assert_eq!(
         love.signatures[0].label,
         "function love.graphics.print(text, x?, y?)"

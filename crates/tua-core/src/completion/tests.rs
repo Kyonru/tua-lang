@@ -65,6 +65,40 @@ fn completes_lua_keywords_and_globals_in_expression_positions() {
 }
 
 #[test]
+fn completes_extended_lua_global_items() {
+    let underscore_source = "local value = _\n";
+    let underscore = complete_tua_source(
+        "src/main.tua",
+        underscore_source,
+        position_after(underscore_source, "_"),
+    )
+    .expect("underscore globals should complete");
+    let raw_source = "local value = raw\n";
+    let raw = complete_tua_source(
+        "src/main.tua",
+        raw_source,
+        position_after(raw_source, "raw"),
+    )
+    .expect("raw globals should complete");
+    let warn_source = "local value = wa\n";
+    let warn = complete_tua_source(
+        "src/main.tua",
+        warn_source,
+        position_after(warn_source, "wa"),
+    )
+    .expect("warn should complete");
+    let arg_source = "local value = ar\n";
+    let arg = complete_tua_source("src/main.tua", arg_source, position_after(arg_source, "ar"))
+        .expect("arg should complete");
+
+    assert!(labels(&underscore).contains(&"_ENV".to_owned()));
+    assert!(labels(&underscore).contains(&"_G".to_owned()));
+    assert!(labels(&raw).contains(&"rawlen".to_owned()));
+    assert!(labels(&warn).contains(&"warn".to_owned()));
+    assert!(labels(&arg).contains(&"arg".to_owned()));
+}
+
+#[test]
 fn type_aliases_do_not_complete_as_runtime_values() {
     let source = "type Player = { hp: number }\nlocal value = Pl\n";
     let position = position_after(source, "Pl");

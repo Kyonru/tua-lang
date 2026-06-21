@@ -196,10 +196,16 @@ const KEYWORDS: &[LuaItem] = &[
 
 const TOP_LEVEL: &[LuaItem] = &[
     item(
+        "_ENV",
+        LuaItemKind::Value,
+        "global environment table",
+        "The current global environment table for a chunk or function.",
+    ),
+    item(
         "_G",
         LuaItemKind::Value,
         "global environment table",
-        "Lua's global environment table.",
+        "A global variable that holds the global environment. Lua itself does not use this variable; changing it does not change any environment.",
     ),
     item(
         "_VERSION",
@@ -208,16 +214,22 @@ const TOP_LEVEL: &[LuaItem] = &[
         "The Lua runtime version string.",
     ),
     item(
+        "arg",
+        LuaItemKind::Value,
+        "table",
+        "Command-line argument table provided by standalone Lua hosts.",
+    ),
+    item(
         "assert",
         LuaItemKind::Function,
-        "function assert(value, message?): value",
-        "Raises an error when the value is false or nil.",
+        "function assert(v: any, message?: string): any",
+        "Raises an error if v is false or nil; otherwise returns its arguments.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-assert",
     ),
     item(
         "collectgarbage",
         LuaItemKind::Function,
-        "function collectgarbage(option?, arg?)",
-        "Controls Lua's garbage collector.",
+        "function collectgarbage(opt?, arg?: number): any",
+        "Generic interface to Lua's garbage collector. Common options include \"collect\", \"stop\", \"restart\", \"count\", \"step\", \"setpause\", \"setstepmul\", \"incremental\", \"generational\", and \"isrunning\".\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-collectgarbage",
     ),
     item(
         "coroutine",
@@ -234,26 +246,26 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "dofile",
         LuaItemKind::Function,
-        "function dofile(filename?)",
-        "Executes a Lua file.",
+        "function dofile(filename?: string): any",
+        "Opens the named file and executes its contents as a Lua chunk. Without a filename, executes standard input.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-dofile",
     ),
     item(
         "error",
         LuaItemKind::Function,
-        "function error(message, level?)",
-        "Raises a Lua error.",
+        "function error(message: string, level?: number)",
+        "Terminates the last protected function called and returns message as the error object.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-error",
     ),
     item(
         "getfenv",
         LuaItemKind::Function,
-        "function getfenv(target?)",
+        "function getfenv(f?): table",
         "Gets a function environment in Lua 5.1.",
     ),
     item(
         "getmetatable",
         LuaItemKind::Function,
-        "function getmetatable(value)",
-        "Gets a value's metatable.",
+        "function getmetatable(object: any): table?",
+        "Returns an object's metatable, nil when it has none, or the protected __metatable value.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-getmetatable",
     ),
     item(
         "io",
@@ -264,25 +276,25 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "ipairs",
         LuaItemKind::Function,
-        "function ipairs(table)",
-        "Iterates array-like table entries.",
+        "function ipairs(t: table)",
+        "Returns an iterator over array-like table entries from index 1 up to the first absent index.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-ipairs",
     ),
     item(
         "load",
         LuaItemKind::Function,
-        "function load(chunk, chunkname?, mode?, env?)",
-        "Loads Lua code as a function.",
+        "function load(chunk, chunkname?: string, mode?, env?): function?",
+        "Loads a chunk from a string or reader function. Returns the compiled chunk, or nil plus an error message.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-load",
     ),
     item(
         "loadfile",
         LuaItemKind::Function,
-        "function loadfile(filename?)",
-        "Loads a Lua file as a function.",
+        "function loadfile(filename?: string, mode?, env?): function?",
+        "Loads a chunk from a file or standard input without running it.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-loadfile",
     ),
     item(
         "loadstring",
         LuaItemKind::Function,
-        "function loadstring(source, chunkname?)",
+        "function loadstring(text: string, chunkname?: string): function",
         "Loads Lua source as a function in Lua 5.1/LuaJIT.",
     ),
     item(
@@ -306,8 +318,8 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "next",
         LuaItemKind::Function,
-        "function next(table, index?)",
-        "Returns the next key and value in a table.",
+        "function next(table: table, index?: any): any",
+        "Returns the next key and value in a table. Use next(t) to check whether a table is empty.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-next",
     ),
     item(
         "os",
@@ -324,50 +336,56 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "pairs",
         LuaItemKind::Function,
-        "function pairs(table)",
-        "Iterates table key/value pairs.",
+        "function pairs(t: table)",
+        "Returns an iterator over all key/value pairs in a table.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-pairs",
     ),
     item(
         "pcall",
         LuaItemKind::Function,
-        "function pcall(fn, ...)",
-        "Calls a function and captures errors.",
+        "function pcall(f: function, ...): boolean",
+        "Calls a function in protected mode and returns whether it succeeded, followed by return values or an error object.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-pcall",
     ),
     item(
         "print",
         LuaItemKind::Function,
         "function print(...)",
-        "Writes values to standard output.",
+        "Receives any number of arguments and prints their string representations to stdout.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-print",
     ),
     item(
         "rawequal",
         LuaItemKind::Function,
-        "function rawequal(a, b): boolean",
-        "Compares two values without metamethods.",
+        "function rawequal(v1: any, v2: any): boolean",
+        "Checks whether two values are equal without invoking the __eq metamethod.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-rawequal",
     ),
     item(
         "rawget",
         LuaItemKind::Function,
-        "function rawget(table, key)",
-        "Reads a table field without metamethods.",
+        "function rawget(table: table, index: any): any",
+        "Gets the real value of table[index] without invoking the __index metamethod.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-rawget",
+    ),
+    item(
+        "rawlen",
+        LuaItemKind::Function,
+        "function rawlen(v: string | table): number",
+        "Returns the length of a table or string without invoking metamethods.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-rawlen",
     ),
     item(
         "rawset",
         LuaItemKind::Function,
-        "function rawset(table, key, value)",
-        "Writes a table field without metamethods.",
+        "function rawset(table: table, index: any, value: any): table",
+        "Sets table[index] to value without invoking the __newindex metamethod.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-rawset",
     ),
     item(
         "require",
         LuaItemKind::Function,
-        "function require(module): any",
-        "Loads a Lua module by name.",
+        "function require(modname: string): any",
+        "Loads a Lua module by name, using package.loaded, package.preload, package.path, and package.cpath.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-require",
     ),
     item(
         "select",
         LuaItemKind::Function,
-        "function select(index, ...)",
-        "Selects values from varargs.",
+        "function select(index: number | string, ...): any",
+        "Returns selected values from varargs, or the count when index is \"#\".\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-select",
     ),
     item(
         "setfenv",
@@ -378,8 +396,8 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "setmetatable",
         LuaItemKind::Function,
-        "function setmetatable(table, metatable)",
-        "Sets a table metatable.",
+        "function setmetatable(table: table, metatable?: table): table",
+        "Sets or clears a table metatable, respecting protected __metatable fields.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-setmetatable",
     ),
     item(
         "string",
@@ -396,20 +414,20 @@ const TOP_LEVEL: &[LuaItem] = &[
     item(
         "tonumber",
         LuaItemKind::Function,
-        "function tonumber(value, base?)",
-        "Converts a value to a number when possible.",
+        "function tonumber(e: string | number, base?: number): number?",
+        "Converts a value to a number when possible. With a base, interprets a string as an integer numeral in that base.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-tonumber",
     ),
     item(
         "tostring",
         LuaItemKind::Function,
-        "function tostring(value): string",
-        "Converts a value to a string.",
+        "function tostring(v: any): string",
+        "Converts a value to a human-readable string, using __tostring when present.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-tostring",
     ),
     item(
         "type",
         LuaItemKind::Function,
-        "function type(value): string",
-        "Returns the Lua runtime type name.",
+        "function type(v: any): string",
+        "Returns the runtime type name: nil, number, string, boolean, table, function, thread, or userdata.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-type",
     ),
     item(
         "unpack",
@@ -418,10 +436,16 @@ const TOP_LEVEL: &[LuaItem] = &[
         "Returns array entries as multiple values.",
     ),
     item(
+        "warn",
+        LuaItemKind::Function,
+        "function warn(message: string, ...)",
+        "Emits a warning composed from its string arguments. Lua 5.4 recognizes @off and @on control messages.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-warn",
+    ),
+    item(
         "xpcall",
         LuaItemKind::Function,
-        "function xpcall(fn, handler, ...)",
-        "Calls a function with an error handler.",
+        "function xpcall(f: function, msgh: function, ...): any",
+        "Calls a function in protected mode with a message handler.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-xpcall",
     ),
 ];
 
