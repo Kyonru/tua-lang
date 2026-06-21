@@ -8,6 +8,7 @@ pub mod document_symbol;
 pub mod emit;
 pub mod hover;
 pub mod inlay_hint;
+mod lint;
 mod lua;
 pub mod module_index;
 pub mod module_link;
@@ -22,11 +23,14 @@ mod source_text;
 pub mod types;
 pub mod workspace_symbol;
 
-pub use check::{check_parsed_source, check_tua_source};
+pub use check::{
+    check_parsed_source, check_parsed_source_with_diagnostics_config, check_tua_source,
+    check_tua_source_with_diagnostics_config,
+};
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{
-    init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
-    LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+    init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError,
+    DiagnosticsConfig, InitResult, LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
 };
 pub use definition::{definition_parsed_source, definition_tua_source, Definition, DefinitionKind};
 pub use diagnostic::{

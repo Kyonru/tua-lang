@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_source_files, read_source_file};
-use tua_core::{check_tua_source, LoadedConfig};
+use tua_core::{check_tua_source_with_diagnostics_config, LoadedConfig};
 
 pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
@@ -12,6 +12,7 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
         discover_source_files(&source_dir, &loaded.config.extension).map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?;
+    let diagnostics_config = loaded.config.diagnostics;
     let checked = source_files.len();
     let mut diagnostics = Vec::new();
 
@@ -24,7 +25,9 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
             }
         };
 
-        if let Err(mut source_diagnostics) = check_tua_source(&source_path, source) {
+        if let Err(mut source_diagnostics) =
+            check_tua_source_with_diagnostics_config(&source_path, source, &diagnostics_config)
+        {
             diagnostics.append(&mut source_diagnostics);
         }
     }

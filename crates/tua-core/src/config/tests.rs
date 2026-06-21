@@ -42,6 +42,7 @@ fn default_config_matches_spec() {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            diagnostics: DiagnosticsConfig::default(),
         }
     );
 }
@@ -55,6 +56,11 @@ out = "dist"
 target = "love11-luajit"
 extension = "tl"
 emit_maps = false
+
+[diagnostics]
+duplicate_keys = true
+missing_requires = true
+self_assignments = true
 "#,
     )
     .expect("config should parse");
@@ -67,6 +73,11 @@ emit_maps = false
             target: "love11-luajit".to_owned(),
             extension: "tl".to_owned(),
             emit_maps: false,
+            diagnostics: DiagnosticsConfig {
+                duplicate_keys: true,
+                missing_requires: true,
+                self_assignments: true,
+            },
         }
     );
 }
@@ -86,6 +97,22 @@ emit_maps = false
     assert_eq!(config.target, "love11-luajit");
     assert_eq!(config.extension, "tua");
     assert!(!config.emit_maps);
+    assert_eq!(config.diagnostics, DiagnosticsConfig::default());
+}
+
+#[test]
+fn parses_diagnostics_section_with_partial_defaults() {
+    let config = parse_config(
+        r#"
+[diagnostics]
+duplicate_keys = true
+"#,
+    )
+    .expect("config should parse");
+
+    assert!(config.diagnostics.duplicate_keys);
+    assert!(!config.diagnostics.missing_requires);
+    assert!(!config.diagnostics.self_assignments);
 }
 
 #[test]
@@ -125,6 +152,22 @@ fn rejects_invalid_boolean_values() {
 
     assert_eq!(error.line, 1);
     assert!(error.message.contains("expected boolean"));
+}
+
+#[test]
+fn rejects_unknown_diagnostics_keys() {
+    let error = parse_config("[diagnostics]\nunused_locals = true\n").unwrap_err();
+
+    assert_eq!(error.line, 2);
+    assert!(error.message.contains("unknown diagnostics config key"));
+}
+
+#[test]
+fn rejects_unknown_config_sections() {
+    let error = parse_config("[lint]\nduplicate_keys = true\n").unwrap_err();
+
+    assert_eq!(error.line, 1);
+    assert!(error.message.contains("unknown config section"));
 }
 
 #[test]

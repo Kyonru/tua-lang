@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_source_files, io_diagnostic, read_source_file};
-use tua_core::{check_tua_source, emit_tua_source, Diagnostic, DiagnosticCategory, LoadedConfig};
+use tua_core::{
+    check_tua_source_with_diagnostics_config, emit_tua_source, Diagnostic, DiagnosticCategory,
+    LoadedConfig,
+};
 
 #[derive(Debug, Default)]
 pub(crate) struct BuildOutcome {
@@ -64,6 +67,7 @@ pub(crate) fn build_changed_files(
     let cwd = cwd.as_ref();
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
+    let diagnostics_config = loaded.config.diagnostics;
     let mut outcome = BuildOutcome::default();
 
     for source_path in source_files {
@@ -76,7 +80,11 @@ pub(crate) fn build_changed_files(
             }
         };
 
-        if let Err(mut source_diagnostics) = check_tua_source(&source_path, source.clone()) {
+        if let Err(mut source_diagnostics) = check_tua_source_with_diagnostics_config(
+            &source_path,
+            source.clone(),
+            &diagnostics_config,
+        ) {
             outcome.diagnostics.append(&mut source_diagnostics);
             continue;
         }
@@ -106,6 +114,7 @@ fn build_project_files(
 ) -> BuildOutcome {
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
+    let diagnostics_config = loaded.config.diagnostics;
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
 
@@ -128,9 +137,11 @@ fn build_project_files(
     }
 
     for unit in &mut units {
-        if let Err(mut source_diagnostics) =
-            check_tua_source(&unit.source_path, unit.source.clone())
-        {
+        if let Err(mut source_diagnostics) = check_tua_source_with_diagnostics_config(
+            &unit.source_path,
+            unit.source.clone(),
+            &diagnostics_config,
+        ) {
             if source_diagnostics
                 .iter()
                 .any(|diagnostic| !can_emit_after_diagnostic(diagnostic))

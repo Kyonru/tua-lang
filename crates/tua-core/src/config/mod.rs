@@ -14,6 +14,11 @@ out = \"build\"
 target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
+
+[diagnostics]
+duplicate_keys = false
+missing_requires = false
+self_assignments = false
 ";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,6 +28,7 @@ pub struct ProjectConfig {
     pub target: String,
     pub extension: String,
     pub emit_maps: bool,
+    pub diagnostics: DiagnosticsConfig,
 }
 
 impl Default for ProjectConfig {
@@ -33,8 +39,16 @@ impl Default for ProjectConfig {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            diagnostics: DiagnosticsConfig::default(),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DiagnosticsConfig {
+    pub duplicate_keys: bool,
+    pub missing_requires: bool,
+    pub self_assignments: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -196,6 +210,7 @@ fn write_default_config_without_overwrite(path: &Path) -> Result<bool, ConfigErr
 
 pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
     let mut config = ProjectConfig::default();
+    let mut section = ConfigSection::Root;
 
     for (index, raw_line) in input.lines().enumerate() {
         let line_number = index + 1;
@@ -207,6 +222,11 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
             continue;
         }
 
+        if let Some(next_section) = parse_section_header(line_number, line)? {
+            section = next_section;
+            continue;
+        }
+
         let Some((raw_key, raw_value)) = line.split_once('=') else {
             return Err(ConfigParseError::new(line_number, "expected `key = value`"));
         };
@@ -214,25 +234,81 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
         let key = raw_key.trim();
         let value = raw_value.trim();
 
-        match key {
-            "source" => config.source = PathBuf::from(parse_string(line_number, value)?),
-            "out" => config.out = PathBuf::from(parse_string(line_number, value)?),
-            "target" => config.target = parse_string(line_number, value)?,
-            "extension" => config.extension = parse_string(line_number, value)?,
-            "emit_maps" => config.emit_maps = parse_bool(line_number, value)?,
-            "" => {
-                return Err(ConfigParseError::new(line_number, "missing config key"));
-            }
-            other => {
-                return Err(ConfigParseError::new(
-                    line_number,
-                    format!("unknown config key `{other}`"),
-                ));
-            }
+        match section {
+            ConfigSection::Root => match key {
+                "source" => config.source = PathBuf::from(parse_string(line_number, value)?),
+                "out" => config.out = PathBuf::from(parse_string(line_number, value)?),
+                "target" => config.target = parse_string(line_number, value)?,
+                "extension" => config.extension = parse_string(line_number, value)?,
+                "emit_maps" => config.emit_maps = parse_bool(line_number, value)?,
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown config key `{other}`"),
+                    ));
+                }
+            },
+            ConfigSection::Diagnostics => match key {
+                "duplicate_keys" => {
+                    config.diagnostics.duplicate_keys = parse_bool(line_number, value)?
+                }
+                "missing_requires" => {
+                    config.diagnostics.missing_requires = parse_bool(line_number, value)?
+                }
+                "self_assignments" => {
+                    config.diagnostics.self_assignments = parse_bool(line_number, value)?
+                }
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown diagnostics config key `{other}`"),
+                    ));
+                }
+            },
         }
     }
 
     Ok(config)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConfigSection {
+    Root,
+    Diagnostics,
+}
+
+fn parse_section_header(
+    line_number: usize,
+    line: &str,
+) -> Result<Option<ConfigSection>, ConfigParseError> {
+    if !line.starts_with('[') {
+        return Ok(None);
+    }
+
+    let Some(section) = line
+        .strip_prefix('[')
+        .and_then(|line| line.strip_suffix(']'))
+    else {
+        return Err(ConfigParseError::new(
+            line_number,
+            "expected section header `[name]`",
+        ));
+    };
+
+    match section.trim() {
+        "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),
+        "" => Err(ConfigParseError::new(line_number, "missing section name")),
+        other => Err(ConfigParseError::new(
+            line_number,
+            format!("unknown config section `{other}`"),
+        )),
+    }
 }
 
 fn parse_string(line: usize, value: &str) -> Result<String, ConfigParseError> {

@@ -357,6 +357,36 @@ end
 }
 
 #[test]
+fn did_open_uses_project_diagnostics_config() {
+    let temp = TempProject::new("diagnostics-config");
+
+    temp.write(
+        "tua.toml",
+        r#"
+source = "src"
+
+[diagnostics]
+duplicate_keys = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, "local config = { hp = 10, hp = 20 }\n"),
+    ]);
+    let diagnostics = published_diagnostics(&output, &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert_eq!(diagnostics[0]["code"], "TL4001");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("duplicate table key `hp`"));
+}
+
+#[test]
 fn did_change_republishes_empty_diagnostics_for_clean_document() {
     let uri = "file:///tmp/player.tua";
     let output = run_messages(vec![

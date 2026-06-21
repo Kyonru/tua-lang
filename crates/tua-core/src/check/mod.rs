@@ -7,6 +7,8 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::config::DiagnosticsConfig;
+use crate::lint::lint_parsed_source;
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
@@ -25,11 +27,31 @@ pub fn check_tua_source(
     check_parsed_source(&parsed)
 }
 
+pub fn check_tua_source_with_diagnostics_config(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    diagnostics_config: &DiagnosticsConfig,
+) -> Result<(), Vec<Diagnostic>> {
+    let parsed = parse_tua_source(path, source)?;
+
+    check_parsed_source_with_diagnostics_config(&parsed, diagnostics_config)
+}
+
 pub fn check_parsed_source(parsed: &ParsedSource) -> Result<(), Vec<Diagnostic>> {
+    check_parsed_source_with_diagnostics_config(parsed, &DiagnosticsConfig::default())
+}
+
+pub fn check_parsed_source_with_diagnostics_config(
+    parsed: &ParsedSource,
+    diagnostics_config: &DiagnosticsConfig,
+) -> Result<(), Vec<Diagnostic>> {
     let environment = build_type_environment(parsed)?;
     let mut checker = Checker::new(parsed, &environment);
 
     checker.check_block(parsed.ast.nodes(), None);
+    checker
+        .diagnostics
+        .extend(lint_parsed_source(parsed, diagnostics_config));
 
     if checker.diagnostics.is_empty() {
         Ok(())

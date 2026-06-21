@@ -1,14 +1,15 @@
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use serde_json::{json, Value};
 use tua_core::{
-    check_tua_source, complete_tua_source, definition_tua_source, document_highlights_tua_source,
-    document_symbols_tua_source, hover_tua_source, inlay_hints_tua_source, module_links_tua_source,
+    check_tua_source_with_diagnostics_config, complete_tua_source, definition_tua_source,
+    document_highlights_tua_source, document_symbols_tua_source, hover_tua_source,
+    inlay_hints_tua_source, load_config_from_dir, module_links_tua_source,
     prepare_rename_tua_source, references_tua_source, rename_tua_source,
     semantic_tokens_tua_source, signature_help_tua_source, workspace_symbols_from_dir,
-    SourcePosition,
+    DiagnosticsConfig, SourcePosition,
 };
 
 use super::protocol::{
@@ -241,8 +242,9 @@ impl LspServer {
             return Vec::new();
         };
         let path = path_from_uri(uri);
+        let diagnostics_config = self.diagnostics_config_for_path(&path);
 
-        match check_tua_source(&path, text.clone()) {
+        match check_tua_source_with_diagnostics_config(&path, text.clone(), &diagnostics_config) {
             Ok(()) => Vec::new(),
             Err(diagnostics) => diagnostics
                 .into_iter()
@@ -256,14 +258,45 @@ impl LspServer {
         let Ok(source) = fs::read_to_string(&path) else {
             return Vec::new();
         };
+        let diagnostics_config = self.diagnostics_config_for_path(&path);
 
-        match check_tua_source(&path, source) {
+        match check_tua_source_with_diagnostics_config(&path, source, &diagnostics_config) {
             Ok(()) => Vec::new(),
             Err(diagnostics) => diagnostics
                 .into_iter()
                 .map(lsp_diagnostic_from_core)
                 .collect(),
         }
+    }
+
+    fn diagnostics_config_for_path(&self, path: &Path) -> DiagnosticsConfig {
+        let mut roots = self
+            .workspace_folders
+            .iter()
+            .filter(|root| path.starts_with(root))
+            .collect::<Vec<_>>();
+
+        if !roots.is_empty() {
+            roots.sort_by_key(|root| root.components().count());
+
+            return roots
+                .into_iter()
+                .rev()
+                .find_map(|root| load_config_from_dir(root).ok())
+                .map(|loaded| loaded.config.diagnostics)
+                .unwrap_or_default();
+        }
+
+        if let Some(parent) = path.parent() {
+            for ancestor in parent.ancestors() {
+                match load_config_from_dir(ancestor) {
+                    Ok(loaded) if loaded.found => return loaded.config.diagnostics,
+                    Ok(_) | Err(_) => {}
+                }
+            }
+        }
+
+        DiagnosticsConfig::default()
     }
 
     fn hover_response(&self, message: &Value) -> Option<Value> {

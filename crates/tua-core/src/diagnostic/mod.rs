@@ -26,6 +26,7 @@ pub enum DiagnosticCategory {
     Type,
     LoweringEmission,
     ProjectConfig,
+    Lint,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,9 +44,12 @@ impl DiagnosticCode {
     pub const EMIT_IO: Self = Self(2002);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
+    pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
+    pub const LINT_MISSING_REQUIRE: Self = Self(4002);
+    pub const LINT_SELF_ASSIGNMENT: Self = Self(4003);
 
     pub fn new(number: u16) -> Option<Self> {
-        if (1..=3999).contains(&number) {
+        if (1..=4999).contains(&number) {
             Some(Self(number))
         } else {
             None
@@ -62,6 +66,7 @@ impl DiagnosticCode {
             1000..=1999 => DiagnosticCategory::Type,
             2000..=2999 => DiagnosticCategory::LoweringEmission,
             3000..=3999 => DiagnosticCategory::ProjectConfig,
+            4000..=4999 => DiagnosticCategory::Lint,
             _ => unreachable!("diagnostic codes are validated at construction"),
         }
     }

@@ -11,6 +11,8 @@ fn reserves_spec_code_ranges() {
         (2999, DiagnosticCategory::LoweringEmission),
         (3000, DiagnosticCategory::ProjectConfig),
         (3999, DiagnosticCategory::ProjectConfig),
+        (4000, DiagnosticCategory::Lint),
+        (4999, DiagnosticCategory::Lint),
     ];
 
     for (number, category) in cases {
@@ -21,7 +23,7 @@ fn reserves_spec_code_ranges() {
     }
 
     assert_eq!(DiagnosticCode::new(0), None);
-    assert_eq!(DiagnosticCode::new(4000), None);
+    assert_eq!(DiagnosticCode::new(5000), None);
 }
 
 #[test]
