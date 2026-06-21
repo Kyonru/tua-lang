@@ -1,0 +1,16 @@
+[package]
+name = "tlua-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tlua-core = { path = "../tlua-core" }
+tlua-lsp = { path = "../tlua-lsp" }
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tlua"
+path = "src/main.rs"
