@@ -1,11 +1,17 @@
 use std::fmt;
 use std::path::Path;
 
-use full_moon::ast::{self, Expression, Field, Index, Prefix, Suffix, TableConstructor, Var};
+use full_moon::ast::{
+    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Return,
+    Suffix, TableConstructor, Var,
+};
 use full_moon::node::Node;
 
 use crate::parser::{parse_tlua_source, ParsedSource, SourcePosition};
-use crate::types::{build_type_environment, TableField, Type, TypeContext, TypeEnvironment};
+use crate::types::{
+    build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
+    TypedFunction,
+};
 use crate::{Diagnostic, DiagnosticCode};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -23,7 +29,7 @@ pub fn check_parsed_source(parsed: &ParsedSource) -> Result<(), Vec<Diagnostic>>
     let environment = build_type_environment(parsed)?;
     let mut checker = Checker::new(parsed, &environment);
 
-    checker.check_block(parsed.ast.nodes());
+    checker.check_block(parsed.ast.nodes(), None);
 
     if checker.diagnostics.is_empty() {
         Ok(())
@@ -49,34 +55,49 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_block(&mut self, block: &ast::Block) {
+    fn check_block(&mut self, block: &ast::Block, current_return: Option<&Type>) {
         for stmt in block.stmts() {
-            self.check_stmt(stmt);
+            self.check_stmt(stmt, current_return);
+        }
+
+        if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
+            self.check_return(return_stmt, current_return);
         }
     }
 
-    fn check_stmt(&mut self, stmt: &ast::Stmt) {
+    fn check_stmt(&mut self, stmt: &ast::Stmt, current_return: Option<&Type>) {
         match stmt {
             ast::Stmt::Assignment(assignment) => self.check_assignment(assignment),
+            ast::Stmt::FunctionCall(function_call) => {
+                self.check_function_call(function_call);
+            }
             ast::Stmt::LocalAssignment(local) => self.check_local_assignment(local),
-            ast::Stmt::Do(block) => self.check_block(block.block()),
+            ast::Stmt::Do(block) => self.check_block(block.block(), current_return),
             ast::Stmt::If(if_stmt) => {
-                self.check_block(if_stmt.block());
+                self.check_block(if_stmt.block(), current_return);
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
-                        self.check_block(else_if.block());
+                        self.check_block(else_if.block(), current_return);
                     }
                 }
                 if let Some(else_block) = if_stmt.else_block() {
-                    self.check_block(else_block);
+                    self.check_block(else_block, current_return);
                 }
             }
-            ast::Stmt::GenericFor(for_stmt) => self.check_block(for_stmt.block()),
-            ast::Stmt::LocalFunction(function) => self.check_block(function.body().block()),
-            ast::Stmt::FunctionDeclaration(function) => self.check_block(function.body().block()),
-            ast::Stmt::NumericFor(for_stmt) => self.check_block(for_stmt.block()),
-            ast::Stmt::Repeat(repeat) => self.check_block(repeat.block()),
-            ast::Stmt::While(while_stmt) => self.check_block(while_stmt.block()),
+            ast::Stmt::GenericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
+            ast::Stmt::LocalFunction(function) => {
+                let return_type = self.function_return_type(&token_text(function.name()));
+
+                self.check_block(function.body().block(), return_type.as_ref());
+            }
+            ast::Stmt::FunctionDeclaration(function) => {
+                let return_type = self.function_return_type(&function.name().to_string());
+
+                self.check_block(function.body().block(), return_type.as_ref());
+            }
+            ast::Stmt::NumericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
+            ast::Stmt::Repeat(repeat) => self.check_block(repeat.block(), current_return),
+            ast::Stmt::While(while_stmt) => self.check_block(while_stmt.block(), current_return),
             _ => {}
         }
     }
@@ -126,7 +147,27 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn infer_expression(&self, expression: &Expression) -> Option<Type> {
+    fn check_return(&mut self, return_stmt: &Return, target: Option<&Type>) {
+        let Some(target) = target else {
+            return;
+        };
+
+        let Some(expression) = return_stmt.returns().iter().next() else {
+            if !self.context.is_assignable(&Type::nil(), target) {
+                self.diagnostics.push(mismatch_diagnostic(
+                    &self.parsed.path,
+                    return_stmt,
+                    target,
+                    &Type::nil(),
+                ));
+            }
+            return;
+        };
+
+        self.check_expression_assignable(expression, target);
+    }
+
+    fn infer_expression(&mut self, expression: &Expression) -> Option<Type> {
         match expression {
             Expression::Number(_) => Some(Type::number()),
             Expression::String(_) => Some(Type::string()),
@@ -134,12 +175,13 @@ impl<'a> Checker<'a> {
             Expression::TableConstructor(table) => Some(self.infer_table_constructor(table)),
             Expression::Parentheses { expression, .. } => self.infer_expression(expression),
             Expression::TypeAssertion { expression, .. } => self.infer_expression(expression),
+            Expression::FunctionCall(function_call) => self.check_function_call(function_call),
             Expression::Var(var) => self.infer_var_value(var),
             _ => None,
         }
     }
 
-    fn infer_table_constructor(&self, table: &TableConstructor) -> Type {
+    fn infer_table_constructor(&mut self, table: &TableConstructor) -> Type {
         Type::table(table.fields().iter().filter_map(|field| match field {
             Field::NameKey { key, value, .. } => {
                 let ty = self.infer_expression(value).unwrap_or(Type::Any);
@@ -150,14 +192,78 @@ impl<'a> Checker<'a> {
         }))
     }
 
-    fn infer_var_value(&self, var: &Var) -> Option<Type> {
+    fn infer_var_value(&mut self, var: &Var) -> Option<Type> {
         match var {
-            Var::Name(name) => self.environment.local(&token_text(name)).cloned(),
+            Var::Name(name) => self.infer_named_value(&token_text(name)),
             Var::Expression(expression) => {
                 self.resolve_field_chain_type(&plain_field_chain_from_var_expression(expression)?)
             }
             _ => None,
         }
+    }
+
+    fn infer_named_value(&self, name: &str) -> Option<Type> {
+        self.environment.local(name).cloned().or_else(|| {
+            self.environment
+                .function(name)
+                .and_then(TypedFunction::as_type)
+        })
+    }
+
+    fn check_function_call(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let callee = self.infer_call_target(function_call)?;
+
+        match callee {
+            Callable::Any => Some(Type::Any),
+            Callable::Function(function) => {
+                self.check_call_arguments(function_call, &function);
+
+                Some(*function.return_type)
+            }
+        }
+    }
+
+    fn infer_call_target(&self, function_call: &FunctionCall) -> Option<Callable> {
+        let parts = field_chain_before_first_call(function_call)?;
+        let (root, fields) = parts.split_first()?;
+
+        if fields.is_empty() {
+            if let Some(local) = self.environment.local(root) {
+                return callable_from_type(local, self.environment);
+            }
+
+            if let Some(function) = self.environment.function(root) {
+                return Some(Callable::from_typed_function(function));
+            }
+        }
+
+        let callee_type = self.resolve_field_chain_type(&parts)?;
+
+        callable_from_type(&callee_type, self.environment)
+    }
+
+    fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
+        let arguments = parenthesized_arguments(function_call).unwrap_or_default();
+
+        if arguments.len() != function.parameters.len() {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                function.parameters.len(),
+                arguments.len(),
+            ));
+            return;
+        }
+
+        for (argument, parameter) in arguments.into_iter().zip(&function.parameters) {
+            self.check_expression_assignable(argument, parameter);
+        }
+    }
+
+    fn function_return_type(&self, name: &str) -> Option<Type> {
+        self.environment
+            .function(name.trim())
+            .and_then(|function| function.return_type.clone())
     }
 
     fn infer_var_assignment_target(&self, var: &Var) -> Option<Type> {
@@ -204,6 +310,27 @@ impl<'a> Checker<'a> {
     }
 }
 
+enum Callable {
+    Any,
+    Function(FunctionType),
+}
+
+impl Callable {
+    fn from_typed_function(function: &TypedFunction) -> Self {
+        if function.has_fully_annotated_parameters() {
+            Self::Function(FunctionType::new(
+                function
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.ty.clone()),
+                function.return_type_or_any(),
+            ))
+        } else {
+            Self::Any
+        }
+    }
+}
+
 fn infer_symbol_type(symbol: &str) -> Option<Type> {
     match symbol {
         "true" | "false" => Some(Type::boolean()),
@@ -234,6 +361,46 @@ fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Opt
     Some(parts)
 }
 
+fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(_) => return Some(parts),
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expression>> {
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+
+    match call {
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            Some(arguments.iter().collect())
+        }
+        _ => None,
+    }
+}
+
+fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
+    match resolve_aliases(ty, environment, 0) {
+        Type::Any => Some(Callable::Any),
+        Type::Function(function) => Some(Callable::Function(function)),
+        _ => None,
+    }
+}
+
 fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Type {
     if depth >= MAX_TYPE_RESOLUTION_DEPTH {
         return ty.clone();
@@ -246,6 +413,23 @@ fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Ty
             .unwrap_or_else(|| ty.clone()),
         _ => ty.clone(),
     }
+}
+
+fn argument_count_diagnostic(
+    path: &Path,
+    node: &impl Node,
+    expected: usize,
+    found: usize,
+) -> Diagnostic {
+    let position = node_position(node);
+
+    Diagnostic::error(
+        path,
+        position.line,
+        position.column,
+        format!("argument count mismatch: expected {expected}, found {found}"),
+    )
+    .with_code(DiagnosticCode::TYPE_ARGUMENT_COUNT)
 }
 
 fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &Type) -> Diagnostic {

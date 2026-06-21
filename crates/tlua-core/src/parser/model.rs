@@ -72,6 +72,8 @@ pub struct LocalAnnotation {
 pub struct FunctionAnnotation {
     pub name: Option<String>,
     pub parameters: Vec<ParameterAnnotation>,
+    pub parameter_count: usize,
+    pub has_varargs: bool,
     pub return_type: Option<TluaType>,
     pub span: Option<SourceSpan>,
 }

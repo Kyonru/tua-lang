@@ -151,6 +151,9 @@ end
     let functions = environment.functions();
     assert_eq!(functions.len(), 1);
     assert_eq!(functions[0].name.as_deref(), Some("move"));
+    assert_eq!(functions[0].parameter_count, 2);
+    assert!(!functions[0].has_varargs);
+    assert!(functions[0].has_fully_annotated_parameters());
     assert_eq!(functions[0].parameters[0].name, "player");
     assert_eq!(functions[0].parameters[0].ty, Type::alias("Player"));
     assert_eq!(functions[0].parameters[1].name, "delta");

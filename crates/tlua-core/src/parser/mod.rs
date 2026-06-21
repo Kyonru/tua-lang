@@ -174,6 +174,15 @@ fn type_alias_from_declaration(declaration: &TypeDeclaration) -> TypeAlias {
 }
 
 fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> FunctionAnnotation {
+    let parameter_count = body
+        .parameters()
+        .iter()
+        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
+        .count();
+    let has_varargs = body
+        .parameters()
+        .iter()
+        .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
     let parameters = body
         .parameters()
         .iter()
@@ -195,6 +204,8 @@ fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> Functi
     FunctionAnnotation {
         name,
         parameters,
+        parameter_count,
+        has_varargs,
         return_type: body
             .return_type()
             .map(|specifier| tlua_type_from_type_info(specifier.type_info())),

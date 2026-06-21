@@ -47,6 +47,12 @@ impl TypeEnvironment {
         &self.functions
     }
 
+    pub fn function(&self, name: &str) -> Option<&TypedFunction> {
+        self.functions
+            .iter()
+            .find(|function| function.name.as_deref() == Some(name))
+    }
+
     pub fn to_type_context(&self) -> TypeContext {
         self.aliases
             .iter()
@@ -60,7 +66,28 @@ impl TypeEnvironment {
 pub struct TypedFunction {
     pub name: Option<String>,
     pub parameters: Vec<TypedParameter>,
+    pub parameter_count: usize,
+    pub has_varargs: bool,
     pub return_type: Option<Type>,
+}
+
+impl TypedFunction {
+    pub fn has_fully_annotated_parameters(&self) -> bool {
+        !self.has_varargs && self.parameters.len() == self.parameter_count
+    }
+
+    pub fn return_type_or_any(&self) -> Type {
+        self.return_type.clone().unwrap_or(Type::Any)
+    }
+
+    pub fn as_type(&self) -> Option<Type> {
+        self.has_fully_annotated_parameters().then(|| {
+            Type::function(
+                self.parameters.iter().map(|parameter| parameter.ty.clone()),
+                self.return_type_or_any(),
+            )
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -171,6 +198,8 @@ fn resolve_function_annotation(
     TypedFunction {
         name: function.name.clone(),
         parameters,
+        parameter_count: function.parameter_count,
+        has_varargs: function.has_varargs,
         return_type,
     }
 }
