@@ -89,9 +89,12 @@ function configuredServerPath(context) {
 
 function bundledServerPath(context) {
   const executable = process.platform === "win32" ? "tua.exe" : "tua";
-  const candidate = path.join(context.extensionPath, "bin", executable);
+  const candidates = [
+    path.join(context.extensionPath, "bin", executable),
+    path.resolve(context.extensionPath, "..", "..", "target", "debug", executable),
+  ];
 
-  return fs.existsSync(candidate) ? candidate : undefined;
+  return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
 function workspaceCwd() {

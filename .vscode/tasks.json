@@ -17,6 +17,19 @@
       "problemMatcher": []
     },
     {
+      "label": "Stage Extension Server",
+      "group": "build",
+      "type": "shell",
+      "command": "make extension-server",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Clean Extension Server",
+      "type": "shell",
+      "command": "make extension-clean-server",
+      "problemMatcher": []
+    },
+    {
       "label": "Build Server",
       "group": "build",
       "type": "shell",
@@ -70,6 +83,14 @@
       "label": "Build Server (Release) and Check Extension",
       "dependsOn": [
         "Build Server (Release)",
+        "Check Extension"
+      ],
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Stage Extension Server and Check Extension",
+      "dependsOn": [
+        "Stage Extension Server",
         "Check Extension"
       ],
       "problemMatcher": "$rustc"

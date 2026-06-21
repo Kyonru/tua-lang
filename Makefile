@@ -48,8 +48,13 @@ cli-version: ## Print tua CLI version.
 	$(TUA) --version
 
 .PHONY: lsp
-lsp: ## Run the tua language server over stdio.
+lsp: ## Run the raw stdio LSP server; it waits silently for an editor/client.
 	$(TUA) lsp
+
+.PHONY: lsp-smoke
+lsp-smoke: ## Initialize and shutdown the LSP server to prove it responds.
+	$(CARGO) build --package tua-cli
+	node editors/vscode/scripts/lsp-smoke.js target/debug/tua
 
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.
@@ -126,8 +131,8 @@ extension-uninstall: ## Uninstall the VS Code extension with the code CLI.
 	$(CODE) --uninstall-extension tua-lang.tua
 
 .PHONY: extension-open-example
-extension-open-example: ## Open the minimal example in VS Code for manual extension smoke testing.
-	$(CODE) examples/love-minimal/src/main.tua
+extension-open-example: ## Open the full LOVE example in VS Code for extension smoke testing.
+	$(CODE) examples/love-full
 
 .PHONY: extension-smoke
 extension-smoke: extension-install extension-open-example ## Install the extension and open a .tua file.
