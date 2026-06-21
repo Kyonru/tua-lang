@@ -67,6 +67,11 @@ async function deactivate() {
 }
 
 function configuredServerPath() {
+  const envOverride = process.env.TUA_SERVER_PATH;
+  if (typeof envOverride === "string" && envOverride.trim()) {
+    return envOverride.trim();
+  }
+
   const configured = vscode.workspace.getConfiguration("tua").get("server.path");
 
   return typeof configured === "string" && configured.trim() ? configured.trim() : "tua";
@@ -118,7 +123,7 @@ function showServerStartupWarning(command, error) {
   const detail = formatError(error);
   const message =
     `Could not start the tua language server with \`${command}\`. ` +
-    "Install the tua CLI or set `tua.server.path` to the executable path.";
+    "Install the tua CLI, set `tua.server.path`, or launch with `TUA_SERVER_PATH`.";
 
   vscode.window
     .showWarningMessage(`${message}${detail ? ` ${detail}` : ""}`, "Open Settings")

@@ -1,0 +1,78 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Check Extension",
+      "group": "build",
+      "type": "npm",
+      "script": "check",
+      "path": "editors/vscode/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Package Extension",
+      "group": "build",
+      "type": "shell",
+      "command": "make extension-package",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Server",
+      "group": "build",
+      "type": "shell",
+      "command": "cargo build --package tua-cli",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Build Server (Release)",
+      "group": "build",
+      "type": "shell",
+      "command": "cargo build --release --package tua-cli",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Run Tests",
+      "group": "test",
+      "type": "shell",
+      "command": "cargo test --workspace",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Run Clippy",
+      "group": "test",
+      "type": "shell",
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Build Examples",
+      "group": "build",
+      "type": "shell",
+      "command": "make build-examples",
+      "problemMatcher": []
+    },
+    {
+      "label": "Verify Workspace",
+      "group": "test",
+      "type": "shell",
+      "command": "make verify",
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Build Server and Check Extension",
+      "dependsOn": [
+        "Build Server",
+        "Check Extension"
+      ],
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "Build Server (Release) and Check Extension",
+      "dependsOn": [
+        "Build Server (Release)",
+        "Check Extension"
+      ],
+      "problemMatcher": "$rustc"
+    }
+  ]
+}

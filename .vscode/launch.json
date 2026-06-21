@@ -1,0 +1,107 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension (Installed Server)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--log",
+        "tua-lang.tua:debug"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/editors/vscode/src/**/*.js"
+      ],
+      "preLaunchTask": "Check Extension",
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ]
+    },
+    {
+      "name": "Run Extension (Debug Server)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--log",
+        "tua-lang.tua:debug"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/editors/vscode/src/**/*.js"
+      ],
+      "preLaunchTask": "Build Server and Check Extension",
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "env": {
+        "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
+      }
+    },
+    {
+      "name": "Run Extension (Release Server)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--log",
+        "tua-lang.tua:debug"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/editors/vscode/src/**/*.js"
+      ],
+      "preLaunchTask": "Build Server (Release) and Check Extension",
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "env": {
+        "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
+      }
+    },
+    {
+      "name": "Run With Extensions (Release Server)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--disable-extension",
+        "tua-lang.tua",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--log",
+        "tua-lang.tua:debug"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/editors/vscode/src/**/*.js"
+      ],
+      "preLaunchTask": "Build Server (Release) and Check Extension",
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "env": {
+        "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
+      }
+    },
+    {
+      "name": "Attach To Server",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/target/debug/tua",
+      "pid": "${command:pickMyProcess}",
+      "sourceLanguages": [
+        "rust"
+      ]
+    },
+    {
+      "name": "Win Attach To Server",
+      "type": "cppvsdbg",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}

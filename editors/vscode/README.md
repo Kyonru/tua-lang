@@ -18,5 +18,7 @@ Minimal VS Code language support for tua source files.
 
 - `tua.server.path`: path to the `tua` executable. Defaults to `tua` on `PATH`.
 
+For extension-host development, `TUA_SERVER_PATH` overrides the setting.
+
 If the executable is missing, activation shows a warning and links directly to
 the setting.
