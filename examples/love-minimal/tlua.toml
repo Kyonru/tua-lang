@@ -1,0 +1,5 @@
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tlua"
+emit_maps = true

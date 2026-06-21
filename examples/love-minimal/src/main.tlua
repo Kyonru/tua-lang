@@ -1,0 +1,12 @@
+local Demo = require("demo")
+
+function love.load()
+  Demo.reset()
+  Demo.update(0.016)
+
+  if Demo.state.elapsed <= 0 then
+    error("demo state did not update")
+  end
+
+  love.event.quit(0)
+end
