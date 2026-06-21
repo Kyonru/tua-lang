@@ -1,0 +1,36 @@
+{
+  "name": "tua",
+  "displayName": "tua",
+  "description": "Language support for tua, a typed Lua superset for LuaJIT and LOVE projects.",
+  "version": "0.0.1",
+  "publisher": "tua-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "tua",
+        "aliases": [
+          "tua",
+          "Tua"
+        ],
+        "extensions": [
+          ".tua"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tua",
+        "scopeName": "source.tua",
+        "path": "./syntaxes/tua.tmLanguage.json"
+      }
+    ]
+  }
+}

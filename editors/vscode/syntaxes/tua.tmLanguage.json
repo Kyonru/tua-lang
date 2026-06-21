@@ -1,0 +1,206 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "tua",
+  "scopeName": "source.tua",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#type-aliases"
+    },
+    {
+      "include": "#function-declarations"
+    },
+    {
+      "include": "#annotations"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    }
+  ],
+  "repository": {
+    "annotations": {
+      "patterns": [
+        {
+          "name": "meta.annotation.type.tua",
+          "begin": "(\\?)?\\s*(:)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.optional.tua"
+            },
+            "2": {
+              "name": "punctuation.definition.type-annotation.tua"
+            }
+          },
+          "end": "(?=[,)=}\\n])",
+          "patterns": [
+            {
+              "include": "#types"
+            },
+            {
+              "name": "keyword.operator.union.tua",
+              "match": "\\|"
+            },
+            {
+              "name": "punctuation.definition.table.type.tua",
+              "match": "[{}]"
+            },
+            {
+              "name": "punctuation.separator.type.tua",
+              "match": "[,;]"
+            }
+          ]
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.tua",
+          "begin": "--\\[\\[",
+          "end": "\\]\\]"
+        },
+        {
+          "name": "comment.line.double-dash.tua",
+          "match": "--.*$"
+        }
+      ]
+    },
+    "function-declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.declaration.tua",
+          "match": "\\b(local\\s+)?(function)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.local.tua"
+            },
+            "2": {
+              "name": "keyword.control.function.tua"
+            },
+            "3": {
+              "name": "entity.name.function.tua"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.tua",
+          "match": "\\b(?:break|do|else|elseif|end|for|function|goto|if|in|repeat|return|then|until|while)\\b"
+        },
+        {
+          "name": "storage.modifier.local.tua",
+          "match": "\\blocal\\b"
+        },
+        {
+          "name": "keyword.operator.word.tua",
+          "match": "\\b(?:and|not|or)\\b"
+        },
+        {
+          "name": "constant.language.tua",
+          "match": "\\b(?:false|nil|true)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.tua",
+          "match": "\\b0[xX][0-9A-Fa-f]+(?:\\.[0-9A-Fa-f]+)?(?:[pP][+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.float.tua",
+          "match": "\\b(?:[0-9]+\\.[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.tua",
+          "match": "\\b[0-9]+(?:[eE][+-]?[0-9]+)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.compound.tua",
+          "match": "\\+=|-=|\\*=|/=|%="
+        },
+        {
+          "name": "keyword.operator.tua",
+          "match": "\\.\\.|==|~=|<=|>=|[+\\-*/%^#=<>]"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.tua",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.tua",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.tua",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.tua",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.long-bracket.tua",
+          "begin": "\\[\\[",
+          "end": "\\]\\]"
+        }
+      ]
+    },
+    "type-aliases": {
+      "patterns": [
+        {
+          "name": "meta.type.alias.tua",
+          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.type.tua"
+            },
+            "2": {
+              "name": "entity.name.type.alias.tua"
+            }
+          }
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.tua",
+          "match": "\\b(?:any|boolean|nil|number|string)\\b"
+        },
+        {
+          "name": "entity.name.type.tua",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}
