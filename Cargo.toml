@@ -1,8 +1,8 @@
 [workspace]
 members = [
-  "crates/tlua-core",
-  "crates/tlua-cli",
-  "crates/tlua-lsp",
+  "crates/tua-core",
+  "crates/tua-cli",
+  "crates/tua-lsp",
 ]
 resolver = "2"
 

@@ -1,9 +1,9 @@
 # love-minimal
 
-Minimal tlua project for validating emitted Lua under LOVE 11.x.
+Minimal tua project for validating emitted Lua under LOVE 11.x.
 
 ```sh
-cargo run -p tlua-cli -- build
+cargo run -p tua-cli -- build
 love build
 ```
 

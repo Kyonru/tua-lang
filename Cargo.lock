@@ -218,28 +218,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "tlua-cli"
+name = "tua-cli"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "tlua-core",
- "tlua-lsp",
+ "tua-core",
+ "tua-lsp",
 ]
 
 [[package]]
-name = "tlua-core"
+name = "tua-core"
 version = "0.1.0"
 dependencies = [
  "full_moon",
 ]
 
 [[package]]
-name = "tlua-lsp"
+name = "tua-lsp"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "tlua-core",
+ "tua-core",
 ]
 
 [[package]]

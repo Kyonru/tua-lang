@@ -7,7 +7,7 @@ if IS_DEBUG then
   end
 end
 
-local IS_SMOKE = os.getenv("TLUA_LOVE_FULL_SMOKE") == "1"
+local IS_SMOKE = os.getenv("TUA_LOVE_FULL_SMOKE") == "1"
 
 product_config = {}
 for line in love.filesystem.lines("product.env") do

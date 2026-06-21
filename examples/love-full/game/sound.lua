@@ -1,5 +1,5 @@
 local sound = {}
-local IS_SMOKE = os.getenv("TLUA_LOVE_FULL_SMOKE") == "1"
+local IS_SMOKE = os.getenv("TUA_LOVE_FULL_SMOKE") == "1"
 
 local function noop_source()
   return {

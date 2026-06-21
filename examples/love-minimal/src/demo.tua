@@ -1,0 +1,26 @@
+type DemoState = {
+  elapsed: number,
+  message: string,
+}
+
+local state: DemoState = {
+  elapsed = 0,
+  message = "tua love minimal",
+}
+
+local function reset(): DemoState
+  state.elapsed = 0
+  state.message = "tua love minimal"
+  return state
+end
+
+local function update(dt: number): DemoState
+  state.elapsed += dt
+  return state
+end
+
+return {
+  state = state,
+  reset = reset,
+  update = update,
+}

@@ -1,10 +1,10 @@
-# tlua v1 Commit Roadmap
+# tua v1 Commit Roadmap
 
 This roadmap breaks `SPEC.md` into small, committable implementation slices.
 Each commit should leave the repository buildable, tested for the behavior it
 adds, and free of unrelated refactors.
 
-The roadmap assumes the v1 target from `SPEC.md`: `.tlua` source files compile
+The roadmap assumes the v1 target from `SPEC.md`: `.tua` source files compile
 to readable Lua 5.1-compatible output for LuaJIT/LÖVE, with erased static types
 and no runtime support library.
 
@@ -19,7 +19,7 @@ and no runtime support library.
 
 ## Phase 0: Repository Foundation
 
-### 1. `docs: add tlua v1 specification`
+### 1. `docs: add tua v1 specification`
 
 Status: done.
 
@@ -30,7 +30,7 @@ Scope:
 Acceptance:
 
 - The spec defines language syntax, compiler behavior, CLI commands, editor
-  tooling, non-goals, and `.tlua` to `.lua` examples.
+  tooling, non-goals, and `.tua` to `.lua` examples.
 
 ### 2. `docs: add committable implementation roadmap`
 
@@ -53,22 +53,22 @@ Scope:
 
 - Add a Cargo workspace.
 - Create initial crates:
-  - `crates/tlua-core`
-  - `crates/tlua-cli`
-  - `crates/tlua-lsp`
+  - `crates/tua-core`
+  - `crates/tua-cli`
+  - `crates/tua-lsp`
 - Add a root `README.md` with a short project description and links to
   `SPEC.md` and `ROADMAP.md`.
 
 Acceptance:
 
 - `cargo test --workspace` passes.
-- `cargo run -p tlua-cli -- --help` prints command help.
+- `cargo run -p tua-cli -- --help` prints command help.
 
 ### 4. `feat(cli): add command structure`
 
 Scope:
 
-- Add `tlua` CLI commands:
+- Add `tua` CLI commands:
   - `init`
   - `check`
   - `build`
@@ -84,23 +84,23 @@ Acceptance:
 
 ## Phase 2: Project Config And Diagnostics
 
-### 5. `feat(config): load tlua project configuration`
+### 5. `feat(config): load tua project configuration`
 
 Scope:
 
-- Define `tlua.toml` config with defaults:
+- Define `tua.toml` config with defaults:
   - `source = "src"`
   - `out = "build"`
   - `target = "love11-luajit"`
-  - `extension = "tlua"`
+  - `extension = "tua"`
   - `emit_maps = true`
 - Implement config discovery from the current directory.
-- Implement `tlua init` to create default config and `src/`.
+- Implement `tua init` to create default config and `src/`.
 
 Acceptance:
 
 - Config loading is tested for present, missing, and partial configs.
-- `tlua init` does not overwrite existing config unless a future explicit flag
+- `tua init` does not overwrite existing config unless a future explicit flag
   is added.
 
 ### 6. `feat(diagnostics): add shared diagnostic model`
@@ -115,7 +115,7 @@ Scope:
   - `TL2000`-`TL2999`: lowering/emission
   - `TL3000`-`TL3999`: project config
 - Add CLI formatting like:
-  `src/player.tlua:12:15 error TL1002: type mismatch: expected number, found string`
+  `src/player.tua:12:15 error TL1002: type mismatch: expected number, found string`
 
 Acceptance:
 
@@ -124,12 +124,12 @@ Acceptance:
 
 ## Phase 3: Parsing And Source Model
 
-### 7. `feat(parser): parse lua-compatible tlua sources`
+### 7. `feat(parser): parse lua-compatible tua sources`
 
 Scope:
 
 - Integrate a Lua parser foundation.
-- Parse ordinary Lua-compatible `.tlua` files.
+- Parse ordinary Lua-compatible `.tua` files.
 - Preserve source spans for diagnostics and later emission.
 
 Acceptance:
@@ -175,7 +175,7 @@ Scope:
 
 Acceptance:
 
-- Snapshot tests compare `.tlua` input to emitted `.lua`.
+- Snapshot tests compare `.tua` input to emitted `.lua`.
 - Type aliases emit no runtime code.
 
 ### 11. `feat(emit): lower compound assignment`
@@ -195,7 +195,7 @@ Acceptance:
 
 Scope:
 
-- Discover `src/**/*.tlua`.
+- Discover `src/**/*.tua`.
 - Emit matching `build/**/*.lua`.
 - Preserve relative paths.
 - Preserve `require(...)` calls unchanged.
@@ -265,25 +265,25 @@ Acceptance:
 Scope:
 
 - Wire config loading, source discovery, parsing, and type checking into
-  `tlua check`.
+  `tua check`.
 
 Acceptance:
 
-- `tlua check` returns `0` for clean projects.
-- `tlua check` returns non-zero for parse or type errors.
+- `tua check` returns `0` for clean projects.
+- `tua check` returns non-zero for parse or type errors.
 - Diagnostics include file, line, column, severity, and message.
 
 ### 18. `feat(cli): implement build command`
 
 Scope:
 
-- Wire checking, lowering, erasure, and output writing into `tlua build`.
+- Wire checking, lowering, erasure, and output writing into `tua build`.
 - Block emission on errors by default.
 - Implement `--emit-on-error` for parseable/lowerable files.
 
 Acceptance:
 
-- `tlua build` writes mirrored Lua output for valid projects.
+- `tua build` writes mirrored Lua output for valid projects.
 - Type errors block normal builds.
 - `--emit-on-error` emits possible files and still exits non-zero.
 
@@ -309,7 +309,7 @@ Acceptance:
 Scope:
 
 - Add `examples/love-minimal`.
-- Include a tiny `.tlua` module and `main.tlua`.
+- Include a tiny `.tua` module and `main.tua`.
 - Build to Lua and run with LÖVE where available.
 
 Acceptance:
@@ -337,13 +337,13 @@ Acceptance:
 
 Scope:
 
-- Implement `tlua lsp` over stdio.
+- Implement `tua lsp` over stdio.
 - Publish diagnostics using the shared parser/checker.
 
 Acceptance:
 
 - LSP initialization succeeds.
-- Opening or changing a `.tlua` document returns matching CLI diagnostics.
+- Opening or changing a `.tua` document returns matching CLI diagnostics.
 
 ### 23. `feat(lsp): add hover support`
 
@@ -371,33 +371,33 @@ Acceptance:
 
 ## Phase 9: VS Code Extension
 
-### 25. `feat(vscode): add minimal tlua extension`
+### 25. `feat(vscode): add minimal tua extension`
 
 Scope:
 
 - Add `editors/vscode`.
-- Register language id `tlua`.
-- Associate `*.tlua`.
-- Add basic grammar coverage for Lua plus tlua type syntax.
+- Register language id `tua`.
+- Associate `*.tua`.
+- Add basic grammar coverage for Lua plus tua type syntax.
 
 Acceptance:
 
-- Opening `.tlua` files uses the tlua language mode.
+- Opening `.tua` files uses the tua language mode.
 - Syntax highlighting recognizes keywords, comments, strings, type aliases, and
   annotations.
 
-### 26. `feat(vscode): connect extension to tlua lsp`
+### 26. `feat(vscode): connect extension to tua lsp`
 
 Scope:
 
-- Launch `tlua lsp` from the extension.
+- Launch `tua lsp` from the extension.
 - Add a setting for an explicit server binary path.
 - Surface diagnostics, hover, and completion from the LSP.
 
 Acceptance:
 
 - Manual smoke test in VS Code shows diagnostics for a type mismatch.
-- Extension activation fails gracefully when `tlua` is not found.
+- Extension activation fails gracefully when `tua` is not found.
 
 ## Phase 10: V1 Polish And Release Readiness
 
@@ -411,7 +411,7 @@ Scope:
 
 Acceptance:
 
-- A new user can create a project, run `tlua build`, and run the output in
+- A new user can create a project, run `tua build`, and run the output in
   LÖVE by following the README.
 
 ### 28. `test: add v1 acceptance suite`

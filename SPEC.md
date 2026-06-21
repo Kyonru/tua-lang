@@ -1,20 +1,20 @@
-# tlua v1 Specification
+# tua v1 Specification
 
-tlua is a typed Lua superset that compiles to plain Lua 5.1-compatible source for
+tua is a typed Lua superset that compiles to plain Lua 5.1-compatible source for
 LuaJIT and LÖVE projects. The type system is erased at compile time: type
 annotations help catch mistakes before running the game, but they do not create a
 new runtime or change the emitted Lua data model.
 
 The v1 goal is a small, practical toolchain for game code:
 
-- write `.tlua` files with gradual static types;
-- emit readable `.lua` files that can run in LÖVE without a tlua runtime;
+- write `.tua` files with gradual static types;
+- emit readable `.lua` files that can run in LÖVE without a tua runtime;
 - preserve normal Lua `require` module patterns;
 - provide compiler diagnostics and editor feedback early;
 - avoid language features that require migrating away from LuaJIT.
 
-Luau is an important reference point for typed Lua design, but tlua's niche is
-different: tlua is source-to-source tooling for existing LuaJIT/LÖVE projects,
+Luau is an important reference point for typed Lua design, but tua's niche is
+different: tua is source-to-source tooling for existing LuaJIT/LÖVE projects,
 not a replacement VM.
 
 ## Runtime Target
@@ -22,7 +22,7 @@ not a replacement VM.
 Generated Lua must be compatible with Lua 5.1-style Lua as used by LuaJIT and
 LÖVE 11.x. The emitter must avoid Lua 5.2+ runtime syntax and semantics.
 
-tlua v1 does not require a runtime support library. If a `.tlua` program compiles
+tua v1 does not require a runtime support library. If a `.tua` program compiles
 successfully, the emitted `.lua` should be understandable as ordinary Lua.
 
 ## Source And Output Layout
@@ -32,29 +32,29 @@ The default project layout is:
 ```text
 .
 ├── src/
-│   └── main.tlua
+│   └── main.tua
 ├── build/
 │   └── main.lua
-└── tlua.toml
+└── tua.toml
 ```
 
-By default, `tlua build` mirrors `src/**/*.tlua` into `build/**/*.lua`.
-Non-`.tlua` files needed by a LÖVE project may be copied by future tooling, but
-v1 only specifies compilation of `.tlua` sources.
+By default, `tua build` mirrors `src/**/*.tua` into `build/**/*.lua`.
+Non-`.tua` files needed by a LÖVE project may be copied by future tooling, but
+v1 only specifies compilation of `.tua` sources.
 
-Default `tlua.toml`:
+Default `tua.toml`:
 
 ```toml
 source = "src"
 out = "build"
 target = "love11-luajit"
-extension = "tlua"
+extension = "tua"
 emit_maps = true
 ```
 
 ## Language Surface
 
-tlua starts from Lua syntax and adds erased type syntax plus a small amount of
+tua starts from Lua syntax and adds erased type syntax plus a small amount of
 LuaJIT-safe sugar.
 
 ### Primitive Types
@@ -74,7 +74,7 @@ from any other type without a type error.
 
 Type aliases define names for types and are erased from emitted Lua.
 
-```tlua
+```tua
 type Vec2 = {
   x: number,
   y: number,
@@ -92,7 +92,7 @@ No code is emitted for a type alias.
 
 Table shape types describe known fields.
 
-```tlua
+```tua
 type Player = {
   pos: Vec2,
   hp: number,
@@ -103,7 +103,7 @@ type Player = {
 An object-like table literal can be checked against a table shape when an
 annotation gives the compiler enough context.
 
-```tlua
+```tua
 local player: Player = {
   pos = { x = 10, y = 20 },
   hp = 100,
@@ -115,7 +115,7 @@ local player: Player = {
 
 A field followed by `?` is optional.
 
-```tlua
+```tua
 type SaveSlot = {
   name?: string,
   level: number,
@@ -129,7 +129,7 @@ declared field type. In v1, optional fields are treated as `T | nil` when read.
 
 Union types use `|`.
 
-```tlua
+```tua
 type MaybeNumber = number | nil
 ```
 
@@ -140,7 +140,7 @@ value is compatible with at least one member of the union.
 
 Function parameters and returns may be annotated.
 
-```tlua
+```tua
 local function damage(player: Player, amount: number): Player
   player.hp -= amount
 
@@ -173,7 +173,7 @@ compiler can determine the returned expression type.
 
 Local declarations may include type annotations.
 
-```tlua
+```tua
 local score: number = 0
 local title: string = "Arena"
 local current: Player | nil = nil
@@ -189,7 +189,7 @@ local current = nil
 
 ## Compound Assignment
 
-tlua v1 supports these compound assignment operators:
+tua v1 supports these compound assignment operators:
 
 - `+=`
 - `-=`
@@ -199,7 +199,7 @@ tlua v1 supports these compound assignment operators:
 
 Compound assignment is lowered to normal Lua assignment.
 
-```tlua
+```tua
 local x = 10
 x += 5
 player.hp -= amount
@@ -223,14 +223,14 @@ side effects more than once.
 
 Rejected examples:
 
-```tlua
+```tua
 getPlayer().hp -= amount
 players[i()].hp -= amount
 ```
 
 ## Type Checking Model
 
-tlua v1 is gradual and explicit-first.
+tua v1 is gradual and explicit-first.
 
 The checker must:
 
@@ -244,7 +244,7 @@ The checker must:
 
 The checker should produce diagnostics for obvious mismatches:
 
-```tlua
+```tua
 local hp: number = "full"
 ```
 
@@ -256,7 +256,7 @@ type mismatch: expected number, found string
 
 Unannotated code defaults to permissive checking:
 
-```tlua
+```tua
 local value = getSomethingDynamic()
 value.anything.deeply.dynamic = true
 ```
@@ -269,11 +269,11 @@ value.
 The compiler pipeline is:
 
 1. Read project config.
-2. Discover `.tlua` source files under the configured source directory.
+2. Discover `.tua` source files under the configured source directory.
 3. Parse each file.
 4. Build per-file and project-wide type information.
 5. Type-check annotated code.
-6. Lower tlua-only syntax to Lua syntax.
+6. Lower tua-only syntax to Lua syntax.
 7. Erase type aliases and type annotations.
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
 9. Optionally emit source maps or line maps when `emit_maps = true`.
@@ -283,18 +283,18 @@ more important than aggressive minification or optimization.
 
 ### Error Handling
 
-By default, `tlua build` must fail when type errors are present.
+By default, `tua build` must fail when type errors are present.
 
-`tlua build --emit-on-error` should still emit Lua for files that can be parsed
+`tua build --emit-on-error` should still emit Lua for files that can be parsed
 and lowered, while reporting diagnostics and returning a non-zero exit code.
 
 Parse errors always block emission for the affected file.
 
 ## Modules
 
-tlua v1 preserves Lua's existing `require` style.
+tua v1 preserves Lua's existing `require` style.
 
-```tlua
+```tua
 local Player = require("player")
 ```
 
@@ -310,13 +310,13 @@ runtime module semantics remain normal Lua.
 
 ## CLI
 
-The `tlua` binary provides the project workflow.
+The `tua` binary provides the project workflow.
 
-### `tlua init`
+### `tua init`
 
-Creates a default `tlua.toml` and starter `src/` directory if they do not exist.
+Creates a default `tua.toml` and starter `src/` directory if they do not exist.
 
-### `tlua check`
+### `tua check`
 
 Parses and type-checks the project without writing `.lua` output.
 
@@ -326,26 +326,26 @@ Expected behavior:
 - returns non-zero when parse or type errors are found;
 - prints diagnostics with file, line, column, severity, and message.
 
-### `tlua build`
+### `tua build`
 
 Checks and emits Lua output.
 
 Expected behavior:
 
-- mirrors `src/**/*.tlua` to `build/**/*.lua`;
+- mirrors `src/**/*.tua` to `build/**/*.lua`;
 - erases type-only syntax;
 - lowers supported sugar;
 - preserves `require`;
 - fails without emission when blocking errors are found.
 
-### `tlua build --emit-on-error`
+### `tua build --emit-on-error`
 
 Reports diagnostics but still emits Lua for files that can be parsed and lowered.
 The command should return a non-zero exit code if any error was reported.
 
-### `tlua watch`
+### `tua watch`
 
-Watches project sources and rebuilds when `.tlua` files change.
+Watches project sources and rebuilds when `.tua` files change.
 
 Expected behavior:
 
@@ -354,9 +354,9 @@ Expected behavior:
 - re-check and re-emit changed files;
 - keep running until interrupted.
 
-### `tlua lsp`
+### `tua lsp`
 
-Starts the tlua language server over standard input/output using the Language
+Starts the tua language server over standard input/output using the Language
 Server Protocol.
 
 The LSP server should reuse the same parser, checker, and diagnostic formatting
@@ -368,16 +368,16 @@ v1 includes a minimal VS Code extension.
 
 The extension should provide:
 
-- language id: `tlua`;
-- file association: `*.tlua`;
-- basic syntax highlighting for Lua plus tlua type syntax;
-- language server launch through `tlua lsp`;
+- language id: `tua`;
+- file association: `*.tua`;
+- basic syntax highlighting for Lua plus tua type syntax;
+- language server launch through `tua lsp`;
 - diagnostics from the language server;
 - hover for known type aliases, local variables, function signatures, and table
   fields;
 - basic completion for known type aliases and table fields.
 
-The extension may assume `tlua` is available on `PATH`, with a setting for an
+The extension may assume `tua` is available on `PATH`, with a setting for an
 explicit server binary path.
 
 ## Diagnostics
@@ -397,7 +397,7 @@ Each diagnostic should include:
 Example:
 
 ```text
-src/player.tlua:12:15 error TL1002: type mismatch: expected number, found string
+src/player.tua:12:15 error TL1002: type mismatch: expected number, found string
 ```
 
 Suggested diagnostic code ranges:
@@ -409,7 +409,7 @@ Suggested diagnostic code ranges:
 
 ## Non-Goals For v1
 
-tlua v1 does not include:
+tua v1 does not include:
 
 - runtime type checks;
 - a custom runtime library;
@@ -427,9 +427,9 @@ tlua v1 does not include:
 
 ## Reference Example
 
-Input `src/player.tlua`:
+Input `src/player.tua`:
 
-```tlua
+```tua
 type Vec2 = {
   x: number,
   y: number,
@@ -479,12 +479,12 @@ return {
 
 The v1 implementation is acceptable when:
 
-- `.tlua` source files compile to Lua 5.1-compatible `.lua` files;
-- emitted Lua can run in LÖVE without tlua being present at runtime;
+- `.tua` source files compile to Lua 5.1-compatible `.lua` files;
+- emitted Lua can run in LÖVE without tua being present at runtime;
 - annotated primitive, function, union, optional field, and table-shape examples
   are checked;
 - compound assignment examples lower correctly;
 - unsupported complex compound assignments produce diagnostics;
 - `require` calls are preserved;
-- `tlua check`, `tlua build`, `tlua watch`, and `tlua lsp` exist;
-- the VS Code extension can surface diagnostics from `tlua lsp`.
+- `tua check`, `tua build`, `tua watch`, and `tua lsp` exist;
+- the VS Code extension can surface diagnostics from `tua lsp`.

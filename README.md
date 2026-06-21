@@ -1,8 +1,8 @@
-# tlua
+# tua
 
-tlua is a typed Lua superset that compiles to plain Lua 5.1-compatible source
+tua is a typed Lua superset that compiles to plain Lua 5.1-compatible source
 for LuaJIT and LÖVE projects. Types are erased at compile time, so emitted Lua
-can run without a tlua runtime.
+can run without a tua runtime.
 
 This repository is currently in the v1 scaffold stage.
 
@@ -14,5 +14,5 @@ This repository is currently in the v1 scaffold stage.
 
 ```sh
 cargo test --workspace
-cargo run -p tlua-cli -- --help
+cargo run -p tua-cli -- --help
 ```

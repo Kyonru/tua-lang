@@ -4,19 +4,19 @@ Full LOVE example adapted from:
 
 https://github.com/Kyonru/creating-games-with-love-demo/tree/main/game
 
-This example intentionally mixes tlua and plain Lua:
+This example intentionally mixes tua and plain Lua:
 
-- `src/*.tlua` contains converted typed modules.
+- `src/*.tua` contains converted typed modules.
 - `game/*.lua` contains plain Lua modules kept as interop dependencies.
 - `game/assets/` contains the runtime assets used by both module kinds.
 
 Build the converted modules into the runnable LOVE root:
 
 ```sh
-cargo run -p tlua-cli -- build
+cargo run -p tua-cli -- build
 love game
 ```
 
 The generated files are emitted into `game/` and ignored by git. For automated
-runtime validation, set `TLUA_LOVE_FULL_SMOKE=1`; the game starts, uses stubbed
+runtime validation, set `TUA_LOVE_FULL_SMOKE=1`; the game starts, uses stubbed
 audio, loads core modules, runs one update tick, and exits.
