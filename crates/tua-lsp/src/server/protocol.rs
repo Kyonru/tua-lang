@@ -2,8 +2,9 @@ use serde_json::{json, Value};
 use tua_core::{
     Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol,
     DocumentSymbolKind, Hover, InlayHint, InlayHintKind, ModuleLink, Reference, RenameEdit,
-    RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier, SourcePosition,
-    SourceSpan, TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
+    RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier, SignatureHelp,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
+    WorkspaceSymbolKind,
 };
 
 use super::uri::uri_from_path;
@@ -92,6 +93,38 @@ pub(super) fn lsp_completion_from_core(completion: Completion) -> Value {
 
     if let Some(detail) = completion.detail {
         item["detail"] = json!(detail);
+    }
+
+    item
+}
+
+pub(super) fn lsp_signature_help_from_core(help: SignatureHelp) -> Value {
+    json!({
+        "signatures": help
+            .signatures
+            .into_iter()
+            .map(lsp_signature_information_from_core)
+            .collect::<Vec<_>>(),
+        "activeSignature": help.active_signature,
+        "activeParameter": help.active_parameter
+    })
+}
+
+fn lsp_signature_information_from_core(signature: SignatureInformation) -> Value {
+    let mut item = json!({
+        "label": signature.label,
+        "parameters": signature
+            .parameters
+            .into_iter()
+            .map(|parameter| json!({ "label": parameter.label }))
+            .collect::<Vec<_>>()
+    });
+
+    if let Some(documentation) = signature.documentation {
+        item["documentation"] = json!({
+            "kind": "markdown",
+            "value": documentation
+        });
     }
 
     item

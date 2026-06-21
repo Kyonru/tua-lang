@@ -35,6 +35,10 @@ fn initialize_returns_server_capabilities() {
         json!([":", ".", "\"", "'"])
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["signatureHelpProvider"]["triggerCharacters"],
+        json!(["(", ","])
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["definitionProvider"],
         true
     );
@@ -390,6 +394,75 @@ local draw = love.graphics.pr
 
     assert_completion_labels(&output, 2, ["sin"]);
     assert_completion_labels(&output, 3, ["print", "printf"]);
+}
+
+#[test]
+fn signature_help_returns_known_function_signature() {
+    let uri = "file:///tmp/signature-help.tua";
+    let source = r#"type Player = { hp: number }
+
+local player: Player = { hp = 10 }
+
+local function damage(target: Player, amount: number): Player
+  return target
+end
+
+damage(player, 
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "damage(player, "),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function damage(target: Player, amount: number): Player"
+    );
+    assert_eq!(response["result"]["activeSignature"], 0);
+    assert_eq!(response["result"]["activeParameter"], 1);
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][0]["label"],
+        "target: Player"
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][1]["label"],
+        "amount: number"
+    );
+}
+
+#[test]
+fn signature_help_returns_lua_and_required_module_signatures() {
+    let temp = TempProject::new("signature-help-modules");
+    let source = r#"local Player = require("player")
+
+local value = math.sin(1)
+local player = Player.makePlayer(
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", player);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        did_open(&uri, source),
+        signature_help_request(2, &uri, source, "math.sin("),
+        signature_help_request(3, &uri, source, "Player.makePlayer("),
+    ]);
+
+    assert_signature_label(&output, 2, "function math.sin(x: number): number");
+    assert_signature_label(&output, 3, "function Player.makePlayer(string): Player");
 }
 
 #[test]
@@ -1150,6 +1223,20 @@ fn completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
     })
 }
 
+fn signature_help_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/signatureHelp",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle)
+        }
+    })
+}
+
 fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: usize) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -1411,6 +1498,12 @@ fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected:
         .collect::<Vec<_>>();
 
     assert_eq!(labels, expected);
+}
+
+fn assert_signature_label(output: &[Value], id: u64, expected: &str) {
+    let response = response_with_id(output, id);
+
+    assert_eq!(response["result"]["signatures"][0]["label"], expected);
 }
 
 fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, expected: &str) {

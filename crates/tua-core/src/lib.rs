@@ -16,6 +16,7 @@ pub mod references;
 pub mod rename;
 mod semantic;
 pub mod semantic_token;
+pub mod signature_help;
 mod source_text;
 pub mod types;
 pub mod workspace_symbol;
@@ -56,6 +57,10 @@ pub use rename::{
 pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,
     SemanticTokenModifier,
+};
+pub use signature_help::{
+    signature_help_parsed_source, signature_help_tua_source, ParameterInformation, SignatureHelp,
+    SignatureInformation,
 };
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,

@@ -6,15 +6,16 @@ use tua_core::{
     check_tua_source, complete_tua_source, definition_tua_source, document_symbols_tua_source,
     hover_tua_source, inlay_hints_tua_source, module_links_tua_source, prepare_rename_tua_source,
     references_tua_source, rename_tua_source, semantic_tokens_tua_source,
-    workspace_symbols_from_dir, SourcePosition,
+    signature_help_tua_source, workspace_symbols_from_dir, SourcePosition,
 };
 
 use super::protocol::{
     error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
     lsp_document_link_from_core, lsp_document_symbol_from_core, lsp_hover_from_core,
     lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
-    lsp_reference_location, lsp_semantic_tokens_from_core, lsp_source_range, lsp_workspace_edit,
-    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    lsp_reference_location, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
+    lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
+    response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, root_dir_from_initialize};
 use super::{capabilities, LspServer};
@@ -63,6 +64,11 @@ impl LspServer {
                 response(id, self.hover_response(&message).unwrap_or(Value::Null))
             }
             "textDocument/completion" => response(id, self.completion_response(&message)),
+            "textDocument/signatureHelp" => response(
+                id,
+                self.signature_help_response(&message)
+                    .unwrap_or(Value::Null),
+            ),
             "textDocument/definition" => response(
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
@@ -164,6 +170,16 @@ impl LspServer {
                 .map(lsp_completion_from_core)
                 .collect(),
         )
+    }
+
+    fn signature_help_response(&self, message: &Value) -> Option<Value> {
+        let request = self.document_request(message)?;
+        let position = request.position()?;
+        let help = signature_help_tua_source(request.path, request.text.to_owned(), position)
+            .ok()
+            .flatten()?;
+
+        Some(lsp_signature_help_from_core(help))
     }
 
     fn definition_response(&self, message: &Value) -> Option<Value> {

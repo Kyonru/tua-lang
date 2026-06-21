@@ -174,6 +174,28 @@ request("initialize", {
   );
 
   expected.push(
+    request(
+      "textDocument/signatureHelp",
+      {
+        textDocument: { uri: inference.uri },
+        position: positionAfter(inference.text, "move(typedPlayer, "),
+      },
+      (message) => {
+        const signature = message.result?.signatures?.[0]?.label || "";
+        const activeParameter = message.result?.activeParameter;
+
+        if (!signature.includes("function move(player: Player, delta: Vec2): Player")) {
+          fail(`signature help missing move signature: ${signature}`);
+        }
+
+        if (activeParameter !== 1) {
+          fail(`signature help expected active parameter 1, got ${activeParameter}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
     request("workspace/symbol", { query: "inference" }, (message) => {
       const names = (message.result || []).map((item) => item.name);
       if (!names.includes("inference")) {

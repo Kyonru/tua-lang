@@ -19,11 +19,11 @@ local function make_function()
 end
 
 local function recursive(a: string)
-  if a == 1 then
+  if a == tostring(1) then
     return 1
   end
 
-  if a == 2 then
+  if a == tostring(2) then
     return "value"
   end
 

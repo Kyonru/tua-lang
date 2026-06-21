@@ -27,6 +27,9 @@ pub(super) fn initialize_result() -> Value {
             "completionProvider": {
                 "triggerCharacters": [":", ".", "\"", "'"]
             },
+            "signatureHelpProvider": {
+                "triggerCharacters": ["(", ","]
+            },
             "definitionProvider": true,
             "documentLinkProvider": {
                 "resolveProvider": false

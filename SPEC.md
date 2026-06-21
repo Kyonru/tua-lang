@@ -376,6 +376,7 @@ The extension should provide:
 - hover for known type aliases, local variables, function signatures, and table
   fields;
 - basic completion for known type aliases and table fields.
+- signature help for known function calls.
 
 The extension may assume `tua` is available on `PATH`, with a setting for an
 explicit server binary path.

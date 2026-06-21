@@ -1,0 +1,503 @@
+use std::path::Path;
+
+use crate::lua::{self, LuaItem, LuaItemKind};
+use crate::module_index::required_module_export_type_for_fields;
+use crate::semantic::{resolve_aliases, resolve_field_chain_type};
+use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
+use crate::types::{
+    build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
+};
+use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignatureHelp {
+    pub signatures: Vec<SignatureInformation>,
+    pub active_signature: usize,
+    pub active_parameter: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignatureInformation {
+    pub label: String,
+    pub parameters: Vec<ParameterInformation>,
+    pub documentation: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ParameterInformation {
+    pub label: String,
+}
+
+pub fn signature_help_tua_source(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    position: SourcePosition,
+) -> Result<Option<SignatureHelp>, Vec<Diagnostic>> {
+    let path = path.as_ref().to_path_buf();
+    let source = source.into();
+    let Some(context) = call_context(&source, position) else {
+        return Ok(None);
+    };
+
+    let parsed = match parse_signature_help_source(&path, &source, position) {
+        Ok(parsed) => parsed,
+        Err(diagnostics) => {
+            return lua_signature_help(&context).map(Some).ok_or(diagnostics);
+        }
+    };
+
+    Ok(signature_help_parsed_source_with_context(&parsed, context))
+}
+
+pub fn signature_help_parsed_source(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Result<Option<SignatureHelp>, Vec<Diagnostic>> {
+    let Some(context) = call_context(&parsed.source, position) else {
+        return Ok(None);
+    };
+
+    Ok(signature_help_parsed_source_with_context(parsed, context))
+}
+
+fn signature_help_parsed_source_with_context(
+    parsed: &ParsedSource,
+    context: CallContext,
+) -> Option<SignatureHelp> {
+    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+    let resolver = SignatureResolver {
+        parsed,
+        environment: &environment,
+    };
+    let signature = resolver.signature_for_parts(&context.callee_parts)?;
+    let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
+
+    Some(SignatureHelp {
+        signatures: vec![signature],
+        active_signature: 0,
+        active_parameter,
+    })
+}
+
+struct SignatureResolver<'a> {
+    parsed: &'a ParsedSource,
+    environment: &'a TypeEnvironment,
+}
+
+impl<'a> SignatureResolver<'a> {
+    fn signature_for_parts(&self, parts: &[String]) -> Option<SignatureInformation> {
+        let (root, fields) = parts.split_first()?;
+        let qualified_name = parts.join(".");
+
+        if let Some(function) = self.environment.function(&qualified_name) {
+            return Some(signature_from_typed_function(
+                function,
+                Some(&qualified_name),
+            ));
+        }
+
+        if fields.is_empty() {
+            if let Some(ty) = self.environment.local(root) {
+                return signature_from_type(root, ty, self.environment);
+            }
+
+            if let Some(function) = self.environment.function(root) {
+                return Some(signature_from_typed_function(function, Some(root)));
+            }
+        } else if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
+            if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment) {
+                return Some(signature);
+            }
+        }
+
+        if !fields.is_empty() {
+            if let Some(ty) = required_module_export_type_for_fields(self.parsed, root, fields) {
+                if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment)
+                {
+                    return Some(signature);
+                }
+            }
+
+            if self.environment.local(root).is_some() {
+                return None;
+            }
+        }
+
+        lua_signature_for_parts(parts)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CallContext {
+    callee_parts: Vec<String>,
+    active_parameter: usize,
+}
+
+fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
+    let cursor = byte_offset_for_position(source, position)?;
+    let open = active_call_open(source, cursor)?;
+    let callee_parts = callee_parts_before(source, open)?;
+    let active_parameter = active_parameter_index(source, open + 1, cursor);
+
+    Some(CallContext {
+        callee_parts,
+        active_parameter,
+    })
+}
+
+fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
+    let mut stack = Vec::new();
+    let mut scanner = Scanner::new(source, cursor);
+
+    while let Some((index, byte)) = scanner.next_code_byte() {
+        match byte {
+            b'(' => stack.push(index),
+            b')' => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+
+    stack
+        .into_iter()
+        .rev()
+        .find(|open| callee_parts_before(source, *open).is_some())
+}
+
+fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
+    let bytes = source.as_bytes();
+    let mut end = trim_ascii_whitespace_before(bytes, open);
+    let mut parts = Vec::new();
+
+    loop {
+        let start = reverse_identifier_start(bytes, end)?;
+
+        parts.push(source[start..end].to_owned());
+        end = trim_ascii_whitespace_before(bytes, start);
+
+        if end == 0 || !matches!(bytes[end - 1], b'.' | b':') {
+            break;
+        }
+
+        end = trim_ascii_whitespace_before(bytes, end - 1);
+    }
+
+    parts.reverse();
+    (!parts.is_empty()).then_some(parts)
+}
+
+fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
+    let mut active = 0;
+    let mut depth = 0usize;
+    let mut scanner = Scanner::new(
+        &source[start.min(source.len())..],
+        cursor.saturating_sub(start),
+    );
+
+    while let Some((_, byte)) = scanner.next_code_byte() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => active += 1,
+            _ => {}
+        }
+    }
+
+    active
+}
+
+struct Scanner<'a> {
+    source: &'a str,
+    cursor: usize,
+    index: usize,
+    quote: Option<u8>,
+    escaped: bool,
+    line_comment: bool,
+}
+
+impl<'a> Scanner<'a> {
+    fn new(source: &'a str, cursor: usize) -> Self {
+        Self {
+            source,
+            cursor: cursor.min(source.len()),
+            index: 0,
+            quote: None,
+            escaped: false,
+            line_comment: false,
+        }
+    }
+
+    fn next_code_byte(&mut self) -> Option<(usize, u8)> {
+        let bytes = self.source.as_bytes();
+
+        while self.index < self.cursor {
+            let index = self.index;
+            let byte = bytes[index];
+
+            self.index += 1;
+
+            if self.line_comment {
+                if byte == b'\n' {
+                    self.line_comment = false;
+                }
+                continue;
+            }
+
+            if let Some(quote) = self.quote {
+                if self.escaped {
+                    self.escaped = false;
+                } else if byte == b'\\' {
+                    self.escaped = true;
+                } else if byte == quote {
+                    self.quote = None;
+                }
+                continue;
+            }
+
+            if byte == b'-' && self.index < self.cursor && bytes[self.index] == b'-' {
+                self.index += 1;
+                self.line_comment = true;
+                continue;
+            }
+
+            if byte == b'"' || byte == b'\'' {
+                self.quote = Some(byte);
+                continue;
+            }
+
+            return Some((index, byte));
+        }
+
+        None
+    }
+}
+
+fn signature_from_typed_function(
+    function: &TypedFunction,
+    name: Option<&str>,
+) -> SignatureInformation {
+    let name = name.or(function.name.as_deref()).unwrap_or("<anonymous>");
+    let mut parameters = function
+        .parameters
+        .iter()
+        .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
+        .collect::<Vec<_>>();
+
+    if function.has_varargs {
+        parameters.push("...".to_owned());
+    }
+
+    signature_from_parts(
+        format!(
+            "function {name}({}): {}",
+            parameters.join(", "),
+            function.return_type_or_any()
+        ),
+        parameters,
+        None,
+    )
+}
+
+fn signature_from_type(
+    name: &str,
+    ty: &Type,
+    environment: &TypeEnvironment,
+) -> Option<SignatureInformation> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Function(function) => Some(signature_from_function_type(name, &function)),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| signature_from_type(name, ty, environment)),
+        Type::Any | Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
+fn signature_from_function_type(name: &str, function: &FunctionType) -> SignatureInformation {
+    let parameters = function
+        .parameters
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+
+    signature_from_parts(
+        format!(
+            "function {name}({}): {}",
+            parameters.join(", "),
+            function.return_type
+        ),
+        parameters,
+        None,
+    )
+}
+
+fn lua_signature_help(context: &CallContext) -> Option<SignatureHelp> {
+    let signature = lua_signature_for_parts(&context.callee_parts)?;
+    let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
+
+    Some(SignatureHelp {
+        signatures: vec![signature],
+        active_signature: 0,
+        active_parameter,
+    })
+}
+
+fn lua_signature_for_parts(parts: &[String]) -> Option<SignatureInformation> {
+    let item = lua::hover_item(parts)?;
+
+    if item.kind != LuaItemKind::Function {
+        return None;
+    }
+
+    signature_from_lua_item(item)
+}
+
+fn signature_from_lua_item(item: LuaItem) -> Option<SignatureInformation> {
+    let parameters = parameters_from_function_label(item.detail)?;
+
+    Some(signature_from_parts(
+        item.detail.to_owned(),
+        parameters,
+        Some(item.documentation.to_owned()),
+    ))
+}
+
+fn parameters_from_function_label(label: &str) -> Option<Vec<String>> {
+    let start = label.find('(')? + 1;
+    let end = label[start..].find(')')? + start;
+    let parameters = label[start..end].trim();
+
+    if parameters.is_empty() {
+        return Some(Vec::new());
+    }
+
+    Some(
+        parameters
+            .split(',')
+            .map(str::trim)
+            .filter(|parameter| !parameter.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+fn signature_from_parts(
+    label: String,
+    parameters: Vec<String>,
+    documentation: Option<String>,
+) -> SignatureInformation {
+    SignatureInformation {
+        label,
+        parameters: parameters
+            .into_iter()
+            .map(|label| ParameterInformation { label })
+            .collect(),
+        documentation,
+    }
+}
+
+fn active_parameter_for_signature(active: usize, signature: &SignatureInformation) -> usize {
+    signature
+        .parameters
+        .len()
+        .checked_sub(1)
+        .map(|last| active.min(last))
+        .unwrap_or(0)
+}
+
+fn parse_signature_help_source(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    parse_tua_source(path, source.to_owned())
+        .or_else(|_| parse_tua_source(path, source_with_line_removed(source, position.line)))
+}
+
+fn source_with_line_removed(source: &str, line_to_remove: usize) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut current_line = 1;
+    let mut line_start = 0;
+
+    for (index, character) in source.char_indices() {
+        if character != '\n' {
+            continue;
+        }
+
+        if current_line == line_to_remove {
+            output.push('\n');
+        } else {
+            output.push_str(&source[line_start..=index]);
+        }
+
+        current_line += 1;
+        line_start = index + 1;
+    }
+
+    if line_start < source.len() {
+        if current_line == line_to_remove {
+            output.push('\n');
+        } else {
+            output.push_str(&source[line_start..]);
+        }
+    }
+
+    output
+}
+
+fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0;
+
+    for (line_index, segment) in source.split_inclusive('\n').enumerate() {
+        let line_number = line_index + 1;
+        let line = segment
+            .strip_suffix('\n')
+            .unwrap_or(segment)
+            .strip_suffix('\r')
+            .unwrap_or_else(|| segment.strip_suffix('\n').unwrap_or(segment));
+
+        if line_number == position.line {
+            return Some(offset + byte_for_column(line, position.column).min(line.len()));
+        }
+
+        offset += segment.len();
+    }
+
+    if position.line == source.split('\n').count() {
+        let line = source
+            .rsplit_once('\n')
+            .map(|(_, line)| line)
+            .unwrap_or(source);
+
+        return Some(offset + byte_for_column(line, position.column).min(line.len()));
+    }
+
+    None
+}
+
+fn trim_ascii_whitespace_before(bytes: &[u8], mut end: usize) -> usize {
+    end = end.min(bytes.len());
+
+    while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+
+    end
+}
+
+fn reverse_identifier_start(bytes: &[u8], end: usize) -> Option<usize> {
+    if end == 0 || !is_identifier_continue(*bytes.get(end - 1)?) {
+        return None;
+    }
+
+    let mut start = end - 1;
+
+    while start > 0 && is_identifier_continue(bytes[start - 1]) {
+        start -= 1;
+    }
+
+    is_identifier_start(bytes[start]).then_some(start)
+}
+
+#[cfg(test)]
+mod tests;
