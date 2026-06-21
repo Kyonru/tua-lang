@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::{self, Expression, Field, Index, LastStmt, Prefix, Suffix, Var};
+use full_moon::ast::{self, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var};
 
+use crate::module_index::required_module_export_type_for_fields;
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
@@ -151,7 +152,7 @@ pub(crate) fn build_type_environment_with_diagnostics(
             &mut diagnostics,
         ));
     }
-    let inferred_returns = infer_function_return_types(parsed, &aliases, &locals);
+    let inferred_returns = infer_function_return_types(parsed, &aliases, &locals, &functions);
 
     for function in &mut functions {
         if function.return_type.is_some() {
@@ -234,75 +235,221 @@ fn infer_function_return_types(
     parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    functions: &[TypedFunction],
 ) -> BTreeMap<String, Type> {
     let mut returns = BTreeMap::new();
+    let parameters = function_parameters_by_name(functions);
+    let function_types = function_types_by_name(functions);
 
-    collect_function_return_types(parsed.ast.nodes(), aliases, locals, &mut returns);
+    collect_function_return_types(
+        parsed.ast.nodes(),
+        parsed,
+        aliases,
+        locals,
+        &function_types,
+        &parameters,
+        &mut returns,
+    );
 
     returns
 }
 
+fn function_parameters_by_name(
+    functions: &[TypedFunction],
+) -> BTreeMap<String, Vec<TypedParameter>> {
+    functions
+        .iter()
+        .filter_map(|function| {
+            let name = function.name.as_ref()?;
+
+            Some((name.clone(), function.parameters.clone()))
+        })
+        .collect()
+}
+
+fn function_types_by_name(functions: &[TypedFunction]) -> BTreeMap<String, Type> {
+    functions
+        .iter()
+        .filter_map(|function| Some((function.name.as_ref()?.clone(), function.as_type()?)))
+        .collect()
+}
+
 fn collect_function_return_types(
     block: &ast::Block,
+    parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    parameters: &BTreeMap<String, Vec<TypedParameter>>,
     returns: &mut BTreeMap<String, Type>,
 ) {
     for stmt in block.stmts() {
         match stmt {
             ast::Stmt::LocalFunction(function) => {
-                if let Some(return_type) =
-                    infer_block_return_type(function.body().block(), aliases, locals)
-                {
-                    returns.insert(token_text(function.name()), return_type);
+                let name = token_text(function.name());
+                let function_locals = locals_with_function_parameters(locals, parameters, &name);
+
+                if let Some(return_type) = infer_block_return_type(
+                    function.body().block(),
+                    parsed,
+                    aliases,
+                    &function_locals,
+                    function_types,
+                ) {
+                    returns.insert(name, return_type);
                 }
-                collect_function_return_types(function.body().block(), aliases, locals, returns);
+                collect_function_return_types(
+                    function.body().block(),
+                    parsed,
+                    aliases,
+                    &function_locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                if let Some(return_type) =
-                    infer_block_return_type(function.body().block(), aliases, locals)
-                {
-                    returns.insert(function.name().to_string(), return_type);
+                let name = function.name().to_string();
+                let function_locals = locals_with_function_parameters(locals, parameters, &name);
+
+                if let Some(return_type) = infer_block_return_type(
+                    function.body().block(),
+                    parsed,
+                    aliases,
+                    &function_locals,
+                    function_types,
+                ) {
+                    returns.insert(name, return_type);
                 }
-                collect_function_return_types(function.body().block(), aliases, locals, returns);
+                collect_function_return_types(
+                    function.body().block(),
+                    parsed,
+                    aliases,
+                    &function_locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::Do(block) => {
-                collect_function_return_types(block.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    block.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::GenericFor(for_stmt) => {
-                collect_function_return_types(for_stmt.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    for_stmt.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::If(if_stmt) => {
-                collect_function_return_types(if_stmt.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    if_stmt.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
-                        collect_function_return_types(else_if.block(), aliases, locals, returns);
+                        collect_function_return_types(
+                            else_if.block(),
+                            parsed,
+                            aliases,
+                            locals,
+                            function_types,
+                            parameters,
+                            returns,
+                        );
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
-                    collect_function_return_types(else_block, aliases, locals, returns);
+                    collect_function_return_types(
+                        else_block,
+                        parsed,
+                        aliases,
+                        locals,
+                        function_types,
+                        parameters,
+                        returns,
+                    );
                 }
             }
             ast::Stmt::NumericFor(for_stmt) => {
-                collect_function_return_types(for_stmt.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    for_stmt.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::Repeat(repeat) => {
-                collect_function_return_types(repeat.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    repeat.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             ast::Stmt::While(while_stmt) => {
-                collect_function_return_types(while_stmt.block(), aliases, locals, returns);
+                collect_function_return_types(
+                    while_stmt.block(),
+                    parsed,
+                    aliases,
+                    locals,
+                    function_types,
+                    parameters,
+                    returns,
+                );
             }
             _ => {}
         }
     }
 }
 
+fn locals_with_function_parameters(
+    locals: &BTreeMap<String, Type>,
+    parameters: &BTreeMap<String, Vec<TypedParameter>>,
+    function_name: &str,
+) -> BTreeMap<String, Type> {
+    let mut scoped = locals.clone();
+
+    if let Some(parameters) = parameters.get(function_name) {
+        for parameter in parameters {
+            scoped.insert(parameter.name.clone(), parameter.ty.clone());
+        }
+    }
+
+    scoped
+}
+
 fn infer_block_return_type(
     block: &ast::Block,
+    parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
 ) -> Option<Type> {
     let Some(LastStmt::Return(return_stmt)) = block.last_stmt() else {
         return None;
@@ -310,13 +457,15 @@ fn infer_block_return_type(
 
     let expression = return_stmt.returns().iter().next()?;
 
-    infer_expression_type(expression, aliases, locals)
+    infer_expression_type(parsed, expression, aliases, locals, function_types)
 }
 
 fn infer_expression_type(
+    parsed: &ParsedSource,
     expression: &Expression,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
 ) -> Option<Type> {
     match expression {
         Expression::Number(_) => Some(Type::number()),
@@ -331,37 +480,104 @@ fn infer_expression_type(
                 let Field::NameKey { key, value, .. } = field else {
                     return None;
                 };
-                let ty = infer_expression_type(value, aliases, locals).unwrap_or(Type::Any);
+                let ty = infer_expression_type(parsed, value, aliases, locals, function_types)
+                    .unwrap_or(Type::Any);
 
                 Some((token_text(key), TableField::required(ty)))
             })))
         }
         Expression::Parentheses { expression, .. } => {
-            infer_expression_type(expression, aliases, locals)
+            infer_expression_type(parsed, expression, aliases, locals, function_types)
         }
         Expression::TypeAssertion { expression, .. } => {
-            infer_expression_type(expression, aliases, locals)
+            infer_expression_type(parsed, expression, aliases, locals, function_types)
         }
         Expression::Function(function) => Some(function_type_from_body(function.body())),
-        Expression::Var(var) => infer_var_type(var, aliases, locals),
+        Expression::FunctionCall(function_call) => {
+            infer_function_call_return_type(parsed, function_call, aliases, locals, function_types)
+        }
+        Expression::Var(var) => infer_var_type(parsed, var, aliases, locals, function_types),
         _ => None,
     }
 }
 
 fn infer_var_type(
+    parsed: &ParsedSource,
     var: &Var,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
 ) -> Option<Type> {
     match var {
-        Var::Name(name) => locals
-            .get(&token_text(name))
-            .map(|ty| resolve_aliases_from_map(aliases, ty, 0)),
+        Var::Name(name) => {
+            let name = token_text(name);
+
+            locals
+                .get(&name)
+                .or_else(|| function_types.get(&name))
+                .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
+        }
         Var::Expression(expression) => {
-            resolve_field_chain_type_from_map(aliases, locals, &plain_field_chain(expression)?)
+            infer_field_chain_type(parsed, aliases, locals, &plain_field_chain(expression)?)
         }
         _ => None,
     }
+}
+
+fn infer_function_call_return_type(
+    parsed: &ParsedSource,
+    function_call: &FunctionCall,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+) -> Option<Type> {
+    let parts = field_chain_before_first_call(function_call)?;
+    let function_type = if parts.len() == 1 {
+        let name = parts.first()?;
+
+        function_types
+            .get(name)
+            .or_else(|| locals.get(name))
+            .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
+    } else {
+        infer_field_chain_type(parsed, aliases, locals, &parts)
+    }?;
+
+    function_return_type(&function_type)
+}
+
+fn function_return_type(ty: &Type) -> Option<Type> {
+    match ty {
+        Type::Function(function) => Some((*function.return_type).clone()),
+        Type::Any => Some(Type::Any),
+        Type::Union(types) => {
+            let returns = types
+                .iter()
+                .filter_map(function_return_type)
+                .collect::<Vec<_>>();
+
+            match returns.len() {
+                0 => None,
+                1 => returns.into_iter().next(),
+                _ => Some(Type::union(returns)),
+            }
+        }
+        Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
+fn infer_field_chain_type(
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    parts: &[String],
+) -> Option<Type> {
+    resolve_field_chain_type_from_map(aliases, locals, parts).or_else(|| {
+        let (root, fields) = parts.split_first()?;
+
+        required_module_export_type_for_fields(parsed, root, fields)
+            .map(|ty| resolve_aliases_from_map(aliases, &ty, 0))
+    })
 }
 
 fn resolve_field_chain_type_from_map(
@@ -438,6 +654,24 @@ fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {
     }
 
     Some(parts)
+}
+
+fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(_) => return Some(parts),
+            _ => return None,
+        }
+    }
+
+    None
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

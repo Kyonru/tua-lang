@@ -35,6 +35,10 @@ local function move(player: Player, delta: Vec2): Player
   return player
 end
 
+local function incomplete(value: string)
+  return value
+end
+
 local function startingHp()
   return 100
 end

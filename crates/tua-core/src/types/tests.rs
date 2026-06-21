@@ -162,6 +162,40 @@ end
 }
 
 #[test]
+fn infers_function_return_types_from_annotated_parameters() {
+    let parsed = parse_tua_source(
+        "src/functions.tua",
+        r#"
+type Player = { hp: number }
+
+local function identity(value: string)
+  return value
+end
+
+function getHp(player: Player)
+  return player.hp
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should infer returns");
+
+    assert_eq!(
+        environment
+            .function("identity")
+            .and_then(|function| function.return_type.clone()),
+        Some(Type::string())
+    );
+    assert_eq!(
+        environment
+            .function("getHp")
+            .and_then(|function| function.return_type.clone()),
+        Some(Type::number())
+    );
+}
+
+#[test]
 fn aliases_resolve_within_the_file_type_context() {
     let parsed = parse_tua_source(
         "src/aliases.tua",

@@ -10,6 +10,26 @@ local message = Legacy.describe("score", clamped)
 
 local built_in = tostring(1)
 
+local function macarrons()
+  return Functions.makePlayer("lua interop")
+end
+
+local function make_function()
+  return Functions.makePlayer
+end
+
+local function recursive(a: string)
+  if a == 1 then
+    return 1
+  end
+
+  if a == 2 then
+    return "value"
+  end
+
+  return recursive(a+1)
+end
+
 return {
   player = player,
   stats = Compound.stats,

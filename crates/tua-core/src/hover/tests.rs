@@ -66,6 +66,89 @@ test(false)
 }
 
 #[test]
+fn hovers_local_function_return_type_inferred_from_parameter() {
+    let source = r#"local function incomplete(value: string)
+  return value
+end
+
+incomplete("ok")
+"#;
+    let definition = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "incomplete(value"),
+    )
+    .expect("hover should succeed")
+    .expect("function definition should hover");
+    let call = hover_tua_source(
+        "src/main.tua",
+        source,
+        position_at(source, "incomplete(\"ok\")"),
+    )
+    .expect("hover should succeed")
+    .expect("function call should hover");
+
+    assert_eq!(
+        definition.contents,
+        "function incomplete(value: string): string"
+    );
+    assert_eq!(call.contents, "function incomplete(value: string): string");
+}
+
+#[test]
+fn hovers_local_function_return_types_inferred_from_required_module_exports() {
+    let temp = TempProject::new("required-module-return-hover");
+    let source = r#"local Functions = require("functions")
+
+local function macarrons()
+  return Functions.makePlayer("lua interop")
+end
+
+local function make_function()
+  return Functions.makePlayer
+end
+
+macarrons()
+make_function()
+"#;
+    let functions = r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/functions.tua", functions);
+
+    let main_path = temp.path.join("src/main.tua");
+    let macarrons = hover_tua_source(&main_path, source, position_at(source, "macarrons()"))
+        .expect("hover should succeed")
+        .expect("module call return should hover");
+    let make_function =
+        hover_tua_source(&main_path, source, position_at(source, "make_function()"))
+            .expect("hover should succeed")
+            .expect("module function value return should hover");
+
+    assert_eq!(macarrons.contents, "function macarrons(): Player");
+    assert_eq!(
+        make_function.contents,
+        "function make_function(): function(string): Player"
+    );
+}
+
+#[test]
 fn hovers_known_table_field() {
     let hover = hover_at("hp = player").expect("table field should hover");
 
