@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tlua_core::{
     check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
-    hover_tlua_source, project_description, references_tlua_source, Completion, CompletionKind,
-    Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover,
-    Reference, SourcePosition, SourceSpan,
+    hover_tlua_source, prepare_rename_tlua_source, project_description, references_tlua_source,
+    rename_tlua_source, Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity,
+    DocumentSymbol, DocumentSymbolKind, Hover, Reference, RenameEdit, RenameTarget, SourcePosition,
+    SourceSpan, TextEdit,
 };
 
 pub fn server_name() -> &'static str {
@@ -78,7 +79,10 @@ impl LspServer {
                         },
                         "definitionProvider": true,
                         "documentSymbolProvider": true,
-                        "referencesProvider": true
+                        "referencesProvider": true,
+                        "renameProvider": {
+                            "prepareProvider": true
+                        }
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -101,6 +105,14 @@ impl LspServer {
             ),
             "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
             "textDocument/references" => response(id, self.references_response(&message)),
+            "textDocument/prepareRename" => response(
+                id,
+                self.prepare_rename_response(&message)
+                    .unwrap_or(Value::Null),
+            ),
+            "textDocument/rename" => {
+                response(id, self.rename_response(&message).unwrap_or(Value::Null))
+            }
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -314,6 +326,52 @@ impl LspServer {
                 .collect(),
         )
     }
+
+    fn prepare_rename_response(&self, message: &Value) -> Option<Value> {
+        let params = message.get("params")?;
+        let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+        let position = params.get("position")?;
+        let line = position.get("line")?.as_u64()? as usize;
+        let character = position.get("character")?.as_u64()? as usize;
+        let text = self.documents.get(uri)?;
+        let path = path_from_uri(uri);
+        let target = prepare_rename_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line + 1,
+                column: character + 1,
+            },
+        )
+        .ok()
+        .flatten()?;
+
+        Some(lsp_prepare_rename_from_core(target))
+    }
+
+    fn rename_response(&self, message: &Value) -> Option<Value> {
+        let params = message.get("params")?;
+        let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+        let position = params.get("position")?;
+        let line = position.get("line")?.as_u64()? as usize;
+        let character = position.get("character")?.as_u64()? as usize;
+        let new_name = params.get("newName")?.as_str()?;
+        let text = self.documents.get(uri)?;
+        let path = path_from_uri(uri);
+        let edit = rename_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line + 1,
+                column: character + 1,
+            },
+            new_name,
+        )
+        .ok()
+        .flatten()?;
+
+        Some(lsp_workspace_edit(uri, edit))
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -418,6 +476,28 @@ fn lsp_location_from_core(uri: &str, definition: Definition) -> Value {
 
 fn lsp_reference_location(uri: &str, reference: Reference) -> Value {
     lsp_location(uri, reference.span)
+}
+
+fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {
+    json!({
+        "range": lsp_range(target.span),
+        "placeholder": target.placeholder
+    })
+}
+
+fn lsp_workspace_edit(uri: &str, edit: RenameEdit) -> Value {
+    json!({
+        "changes": {
+            uri: edit.edits.into_iter().map(lsp_text_edit).collect::<Vec<_>>()
+        }
+    })
+}
+
+fn lsp_text_edit(edit: TextEdit) -> Value {
+    json!({
+        "range": lsp_range(edit.span),
+        "newText": edit.new_text
+    })
 }
 
 fn lsp_location(uri: &str, span: SourceSpan) -> Value {

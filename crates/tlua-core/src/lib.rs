@@ -9,6 +9,7 @@ pub mod hover;
 pub mod parser;
 mod project;
 pub mod references;
+pub mod rename;
 mod semantic;
 mod source_text;
 pub mod types;
@@ -38,6 +39,10 @@ pub use parser::{
 };
 pub use project::project_description;
 pub use references::{references_parsed_source, references_tlua_source, Reference, ReferenceKind};
+pub use rename::{
+    prepare_rename_parsed_source, prepare_rename_tlua_source, rename_parsed_source,
+    rename_tlua_source, RenameEdit, RenameKind, RenameTarget, TextEdit,
+};
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
     Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,

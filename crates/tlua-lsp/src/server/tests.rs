@@ -42,6 +42,10 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["referencesProvider"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["renameProvider"]["prepareProvider"],
+        true
+    );
 }
 
 #[test]
@@ -429,6 +433,125 @@ fn references_unknown_document_returns_empty_array() {
     assert_eq!(response["result"], json!([]));
 }
 
+#[test]
+fn prepare_rename_returns_supported_symbol_range_and_placeholder() {
+    let uri = "file:///tmp/prepare-rename.tlua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.hp = player.hp - 1
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        prepare_rename_request(2, uri, source, "player: Player", "player: ".len()),
+        prepare_rename_request(3, uri, source, "player.hp", "player.".len()),
+    ]);
+    let supported = response_with_id(&output, 2);
+    let unsupported = response_with_id(&output, 3);
+
+    assert_eq!(supported["result"]["placeholder"], "Player");
+    assert_eq!(range_text(source, &supported["result"]["range"]), "Player");
+    assert!(unsupported["result"].is_null());
+}
+
+#[test]
+fn rename_returns_workspace_edits_for_alias_function_local_and_parameter() {
+    let uri = "file:///tmp/rename.tlua";
+    let source = r#"type Vec2 = { x: number, y: number }
+type Player = { pos: Vec2, hp: number, alive?: boolean }
+
+local player: Player = {
+  pos = { x = 0, y = 0 },
+  hp = 10,
+}
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+damage(player, 2)
+player.hp = player.hp - 1
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        rename_request(2, uri, source, "player: Player", "player: ".len(), "Actor"),
+        rename_request(3, uri, source, "damage(player", 0, "hurt"),
+        rename_request(4, uri, source, "damage(player", "damage(".len(), "hero"),
+        rename_request(5, uri, source, "return target", "return ".len(), "victim"),
+    ]);
+
+    assert_rename_edit_texts(
+        &output,
+        2,
+        uri,
+        source,
+        ["Player", "Player", "Player", "Player"],
+        "Actor",
+    );
+    assert_rename_edit_texts(&output, 3, uri, source, ["damage", "damage"], "hurt");
+    assert_rename_edit_texts(
+        &output,
+        4,
+        uri,
+        source,
+        ["player", "player", "player", "player"],
+        "hero",
+    );
+    assert_rename_edit_texts(
+        &output,
+        5,
+        uri,
+        source,
+        ["target", "target", "target"],
+        "victim",
+    );
+}
+
+#[test]
+fn rename_returns_null_for_unsupported_unknown_and_invalid_names() {
+    let uri = "file:///tmp/quiet-rename.tlua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.hp = player.hp - 1
+local unresolved = missing
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        rename_request(2, uri, source, "player.hp", "player.".len(), "health"),
+        rename_request(3, uri, source, "missing", 0, "known"),
+        rename_request(
+            4,
+            uri,
+            source,
+            "player: Player",
+            "player: ".len(),
+            "not-valid",
+        ),
+        rename_request(5, uri, source, "player: Player", "player: ".len(), "while"),
+    ]);
+
+    assert!(response_with_id(&output, 2)["result"].is_null());
+    assert!(response_with_id(&output, 3)["result"].is_null());
+    assert!(response_with_id(&output, 4)["result"].is_null());
+    assert!(response_with_id(&output, 5)["result"].is_null());
+}
+
+#[test]
+fn rename_unknown_document_returns_null() {
+    let uri = "file:///tmp/missing-rename.tlua";
+    let output = run_messages(vec![rename_request(
+        2,
+        uri,
+        "local value = missing\n",
+        "missing",
+        0,
+        "known",
+    )]);
+    let response = response_with_id(&output, 2);
+
+    assert!(response["result"].is_null());
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -536,6 +659,42 @@ fn references_request(
             "context": {
                 "includeDeclaration": include_declaration
             }
+        }
+    })
+}
+
+fn prepare_rename_request(id: u64, uri: &str, source: &str, needle: &str, offset: usize) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/prepareRename",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
+fn rename_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    offset: usize,
+    new_name: &str,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/rename",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset),
+            "newName": new_name
         }
     })
 }
@@ -687,6 +846,37 @@ fn assert_reference_texts<const N: usize>(
         .collect::<Vec<_>>();
 
     assert_eq!(texts, expected);
+}
+
+fn assert_rename_edit_texts<const N: usize>(
+    output: &[Value],
+    id: u64,
+    uri: &str,
+    source: &str,
+    expected_originals: [&str; N],
+    expected_new_text: &str,
+) {
+    let response = response_with_id(output, id);
+    let edits = response["result"]["changes"][uri]
+        .as_array()
+        .expect("rename edits should be an array");
+    let originals = edits
+        .iter()
+        .map(|edit| range_text(source, &edit["range"]))
+        .collect::<Vec<_>>();
+    let new_texts = edits
+        .iter()
+        .map(|edit| {
+            edit["newText"]
+                .as_str()
+                .expect("rename edit text should be a string")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(originals, expected_originals);
+    assert!(new_texts
+        .iter()
+        .all(|new_text| *new_text == expected_new_text));
 }
 
 fn range_text<'a>(source: &'a str, range: &Value) -> &'a str {
