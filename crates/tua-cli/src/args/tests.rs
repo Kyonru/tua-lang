@@ -50,6 +50,17 @@ fn build_accepts_emit_on_error() {
 }
 
 #[test]
+fn lsp_accepts_stdio_for_editor_client_compatibility() {
+    assert_eq!(
+        parse_args(["lsp", "--stdio"]),
+        Ok(CliAction::Command {
+            name: CommandName::Lsp,
+            emit_on_error: false,
+        })
+    );
+}
+
+#[test]
 fn other_commands_reject_emit_on_error() {
     let error = parse_args(["check", "--emit-on-error"]).unwrap_err();
 

@@ -451,6 +451,9 @@ return {
     );
     assert!(symbols[0]["range"]["start"]["line"].is_number());
     assert!(symbols[0]["selectionRange"]["start"]["character"].is_number());
+    for symbol in symbols {
+        assert_lsp_document_symbol_ranges_contain_selection(symbol);
+    }
 }
 
 #[test]
@@ -1127,6 +1130,36 @@ fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, ex
         .expect("definition line should exist");
 
     assert_eq!(&text[start..end], expected);
+}
+
+fn assert_lsp_document_symbol_ranges_contain_selection(symbol: &Value) {
+    assert!(
+        lsp_range_contains(&symbol["range"], &symbol["selectionRange"]),
+        "{} selectionRange {:?} should be contained in range {:?}",
+        symbol["name"],
+        symbol["selectionRange"],
+        symbol["range"]
+    );
+
+    if let Some(children) = symbol["children"].as_array() {
+        for child in children {
+            assert_lsp_document_symbol_ranges_contain_selection(child);
+        }
+    }
+}
+
+fn lsp_range_contains(outer: &Value, inner: &Value) -> bool {
+    lsp_position_key(&outer["start"]) <= lsp_position_key(&inner["start"])
+        && lsp_position_key(&inner["end"]) <= lsp_position_key(&outer["end"])
+}
+
+fn lsp_position_key(position: &Value) -> (u64, u64) {
+    (
+        position["line"].as_u64().expect("line should be numeric"),
+        position["character"]
+            .as_u64()
+            .expect("character should be numeric"),
+    )
 }
 
 fn assert_reference_texts<const N: usize>(

@@ -58,14 +58,14 @@ fn type_alias_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
             let range = alias.span?;
             let selection_range = alias.name_span.unwrap_or(range);
 
-            Some(DocumentSymbol {
+            Some(document_symbol(DocumentSymbol {
                 name: alias.name.clone(),
                 kind: DocumentSymbolKind::TypeAlias,
                 detail: Some(format!("type {}", format_tua_type(&alias.ty))),
                 range,
                 selection_range,
                 children: table_field_symbols(&alias.ty),
-            })
+            }))
         })
         .collect()
 }
@@ -82,7 +82,7 @@ fn table_field_symbols(ty: &TuaType) -> Vec<DocumentSymbol> {
             let selection_range = field.name_span.unwrap_or(range);
             let optional = field.optional.then_some("optional ");
 
-            Some(DocumentSymbol {
+            Some(document_symbol(DocumentSymbol {
                 name: field.name.clone(),
                 kind: DocumentSymbolKind::Field,
                 detail: Some(format!(
@@ -93,7 +93,7 @@ fn table_field_symbols(ty: &TuaType) -> Vec<DocumentSymbol> {
                 range,
                 selection_range,
                 children: Vec::new(),
-            })
+            }))
         })
         .collect()
 }
@@ -107,7 +107,7 @@ fn function_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
             let range = function.span?;
             let selection_range = function.name_span.unwrap_or(range);
 
-            Some(DocumentSymbol {
+            Some(document_symbol(DocumentSymbol {
                 name,
                 kind: DocumentSymbolKind::Function,
                 detail: function
@@ -123,17 +123,17 @@ fn function_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
                         let range = parameter.span?;
                         let selection_range = parameter.name_span.unwrap_or(range);
 
-                        Some(DocumentSymbol {
+                        Some(document_symbol(DocumentSymbol {
                             name: parameter.name.clone(),
                             kind: DocumentSymbolKind::Parameter,
                             detail: Some(format_tua_type(&parameter.ty)),
                             range,
                             selection_range,
                             children: Vec::new(),
-                        })
+                        }))
                     })
                     .collect(),
-            })
+            }))
         })
         .collect()
 }
@@ -146,14 +146,14 @@ fn local_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
             let selection_range = local.name_span?;
             let range = local.span.unwrap_or(selection_range);
 
-            Some(DocumentSymbol {
+            Some(document_symbol(DocumentSymbol {
                 name: local.name.clone(),
                 kind: DocumentSymbolKind::Local,
                 detail: Some(format_tua_type(&local.ty)),
                 range,
                 selection_range,
                 children: Vec::new(),
-            })
+            }))
         })
         .collect()
 }
@@ -168,13 +168,15 @@ fn module_exports_symbol(parsed: &ParsedSource) -> Option<DocumentSymbol> {
     let range = node_span(table)?;
     let children = export_field_symbols(table);
 
-    (!children.is_empty()).then(|| DocumentSymbol {
-        name: "exports".to_owned(),
-        kind: DocumentSymbolKind::ModuleExports,
-        detail: Some("module exports".to_owned()),
-        range,
-        selection_range: range,
-        children,
+    (!children.is_empty()).then(|| {
+        document_symbol(DocumentSymbol {
+            name: "exports".to_owned(),
+            kind: DocumentSymbolKind::ModuleExports,
+            detail: Some("module exports".to_owned()),
+            range,
+            selection_range: range,
+            children,
+        })
     })
 }
 
@@ -189,16 +191,44 @@ fn export_field_symbols(table: &TableConstructor) -> Vec<DocumentSymbol> {
             let range = node_span(field)?;
             let selection_range = node_span(key).unwrap_or(range);
 
-            Some(DocumentSymbol {
+            Some(document_symbol(DocumentSymbol {
                 name: token_text(key),
                 kind: DocumentSymbolKind::Field,
                 detail: Some("export".to_owned()),
                 range,
                 selection_range,
                 children: Vec::new(),
-            })
+            }))
         })
         .collect()
+}
+
+fn document_symbol(mut symbol: DocumentSymbol) -> DocumentSymbol {
+    symbol.range = enclosing_span(symbol.range, symbol.selection_range);
+    symbol
+}
+
+fn enclosing_span(range: SourceSpan, selection_range: SourceSpan) -> SourceSpan {
+    SourceSpan {
+        start: min_position(range.start, selection_range.start),
+        end: max_position(range.end, selection_range.end),
+    }
+}
+
+fn min_position(left: SourcePosition, right: SourcePosition) -> SourcePosition {
+    if position_key(left) <= position_key(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn max_position(left: SourcePosition, right: SourcePosition) -> SourcePosition {
+    if position_key(left) >= position_key(right) {
+        left
+    } else {
+        right
+    }
 }
 
 fn node_span(node: &impl Node) -> Option<SourceSpan> {

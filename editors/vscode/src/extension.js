@@ -32,10 +32,10 @@ async function activate(context) {
     return;
   }
 
-  const { LanguageClient, TransportKind } = languageClient;
+  const { LanguageClient } = languageClient;
   const serverOptions = {
-    run: serverExecutable(serverCommand, cwd, TransportKind),
-    debug: serverExecutable(serverCommand, cwd, TransportKind),
+    run: serverExecutable(serverCommand, cwd),
+    debug: serverExecutable(serverCommand, cwd),
   };
   const clientOptions = {
     documentSelector: [{ scheme: "file", language: "tua" }],
@@ -103,11 +103,10 @@ function workspaceCwd() {
   return workspaceFolder?.uri.scheme === "file" ? workspaceFolder.uri.fsPath : undefined;
 }
 
-function serverExecutable(command, cwd, TransportKind) {
+function serverExecutable(command, cwd) {
   return {
     command,
     args: ["lsp"],
-    transport: TransportKind.stdio,
     options: {
       cwd,
     },

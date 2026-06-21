@@ -16,6 +16,7 @@ Commands:
   lsp       Start the tua language server over stdio
 
 Options:
+  --stdio           With lsp, accepted for editor-client compatibility
   --emit-on-error   With build, emit parseable/lowerable files even if errors exist
   -h, --help        Print command help
   -V, --version     Print version
@@ -78,6 +79,7 @@ where
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "--emit-on-error" if command == CommandName::Build => emit_on_error = true,
+            "--stdio" if command == CommandName::Lsp => {}
             "--emit-on-error" => {
                 return Err(CliError::usage(
                     "`--emit-on-error` is only valid with `tua build`",

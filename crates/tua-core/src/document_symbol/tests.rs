@@ -85,6 +85,13 @@ fn simple_final_returned_table_creates_exports_symbol() {
 }
 
 #[test]
+fn selection_ranges_are_contained_in_full_ranges() {
+    for symbol in document_symbols() {
+        assert_ranges_contain_selection(&symbol);
+    }
+}
+
+#[test]
 fn symbols_are_returned_in_source_order() {
     let symbols = document_symbols();
 
@@ -116,4 +123,23 @@ fn assert_symbol_text(symbol: &DocumentSymbol, expected: &str) {
     let end = byte_for_column(line, symbol.selection_range.end.column);
 
     assert_eq!(&line[start..end], expected);
+}
+
+fn assert_ranges_contain_selection(symbol: &DocumentSymbol) {
+    assert!(
+        contains(symbol.range, symbol.selection_range),
+        "`{}` selection range {:?} should be contained in {:?}",
+        symbol.name,
+        symbol.selection_range,
+        symbol.range
+    );
+
+    for child in &symbol.children {
+        assert_ranges_contain_selection(child);
+    }
+}
+
+fn contains(outer: SourceSpan, inner: SourceSpan) -> bool {
+    position_key(outer.start) <= position_key(inner.start)
+        && position_key(inner.end) <= position_key(outer.end)
 }
