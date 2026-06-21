@@ -10,3 +10,7 @@
 - [ ] importing .lua files in .tlua and viceversa, how compiler show highlights
 - [ ] explore teal, luau and python ideas
 - [ ] take advantage of love2d + luajit focus
+- [ ] Auto imports https://rust-analyzer.github.io/book/features.html#auto-import
+- [ ] Check exisiting rust analyzer features
+- [ ] refactor lsp code
+- [ ] debugging and step by step improvement
