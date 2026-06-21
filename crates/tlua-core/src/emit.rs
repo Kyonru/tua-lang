@@ -4,39 +4,55 @@ use full_moon::ast;
 use full_moon::ast::span::ContainedSpan;
 use full_moon::tokenizer::TokenReference;
 
-use crate::{parse_tlua_source, Diagnostic, ParsedSource};
+use crate::{parse_tlua_source, Diagnostic, DiagnosticCode, ParsedSource};
 
 pub fn emit_tlua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<String, Vec<Diagnostic>> {
-    let parsed = parse_tlua_source(path, source)?;
+    let parsed =
+        parse_tlua_source(path, source).map_err(reclassify_compound_assignment_diagnostics)?;
 
-    Ok(emit_lua(&parsed))
+    emit_lua(&parsed)
 }
 
-pub fn emit_lua(parsed: &ParsedSource) -> String {
-    normalize_emitted_lua(erase_ast(parsed.ast.clone()).to_string())
+pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
+    let mut diagnostics = Vec::new();
+    let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
+
+    if diagnostics.is_empty() {
+        Ok(lower_compound_assignments_text(&normalize_emitted_lua(
+            ast.to_string(),
+        )))
+    } else {
+        Err(diagnostics)
+    }
 }
 
-fn erase_ast(ast: ast::Ast) -> ast::Ast {
-    let nodes = erase_block(ast.nodes().clone());
+fn erase_ast(path: &Path, ast: ast::Ast, diagnostics: &mut Vec<Diagnostic>) -> ast::Ast {
+    let nodes = erase_block(path, ast.nodes().clone(), diagnostics);
 
     ast.with_nodes(nodes)
 }
 
-fn erase_block(block: ast::Block) -> ast::Block {
+fn erase_block(path: &Path, block: ast::Block, diagnostics: &mut Vec<Diagnostic>) -> ast::Block {
     let stmts = block
         .stmts_with_semicolon()
         .cloned()
-        .filter_map(|(stmt, semicolon)| erase_stmt(stmt).map(|stmt| (stmt, semicolon)))
+        .filter_map(|(stmt, semicolon)| {
+            erase_stmt(path, stmt, diagnostics).map(|stmt| (stmt, semicolon))
+        })
         .collect();
     let last_stmt = block.last_stmt_with_semicolon().cloned();
 
     block.with_stmts(stmts).with_last_stmt(last_stmt)
 }
 
-fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
+fn erase_stmt(
+    path: &Path,
+    stmt: ast::Stmt,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<ast::Stmt> {
     match stmt {
         ast::Stmt::TypeDeclaration(_) => None,
         ast::Stmt::ExportedTypeDeclaration(_) => None,
@@ -55,26 +71,33 @@ fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
             ))
         }
         ast::Stmt::LocalFunction(function) => {
-            let body = erase_function_body(function.body().clone());
+            let body = erase_function_body(path, function.body().clone(), diagnostics);
 
             Some(ast::Stmt::LocalFunction(function.with_body(body)))
         }
         ast::Stmt::FunctionDeclaration(function) => {
-            let body = erase_function_body(function.body().clone());
+            let body = erase_function_body(path, function.body().clone(), diagnostics);
 
             Some(ast::Stmt::FunctionDeclaration(function.with_body(body)))
         }
         ast::Stmt::Do(block) => {
-            let erased = erase_block(block.block().clone());
+            let erased = erase_block(path, block.block().clone(), diagnostics);
 
             Some(ast::Stmt::Do(block.with_block(erased)))
         }
         ast::Stmt::If(if_stmt) => {
-            let block = erase_block(if_stmt.block().clone());
-            let else_if = if_stmt
-                .else_if()
-                .map(|items| items.iter().cloned().map(erase_else_if).collect());
-            let else_block = if_stmt.else_block().cloned().map(erase_block);
+            let block = erase_block(path, if_stmt.block().clone(), diagnostics);
+            let else_if = if_stmt.else_if().map(|items| {
+                items
+                    .iter()
+                    .cloned()
+                    .map(|else_if| erase_else_if(path, else_if, diagnostics))
+                    .collect()
+            });
+            let else_block = if_stmt
+                .else_block()
+                .cloned()
+                .map(|block| erase_block(path, block, diagnostics));
 
             Some(ast::Stmt::If(
                 if_stmt
@@ -84,7 +107,7 @@ fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
             ))
         }
         ast::Stmt::GenericFor(for_stmt) => {
-            let block = erase_block(for_stmt.block().clone());
+            let block = erase_block(path, for_stmt.block().clone(), diagnostics);
             let had_type_specifier = for_stmt
                 .type_specifiers()
                 .any(|specifier| specifier.is_some());
@@ -99,7 +122,7 @@ fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
             ))
         }
         ast::Stmt::NumericFor(for_stmt) => {
-            let block = erase_block(for_stmt.block().clone());
+            let block = erase_block(path, for_stmt.block().clone(), diagnostics);
             let had_type_specifier = for_stmt.type_specifier().is_some();
             let for_stmt = if had_type_specifier {
                 for_stmt.with_equal_token(spaced_symbol("="))
@@ -112,12 +135,12 @@ fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
             ))
         }
         ast::Stmt::Repeat(repeat) => {
-            let block = erase_block(repeat.block().clone());
+            let block = erase_block(path, repeat.block().clone(), diagnostics);
 
             Some(ast::Stmt::Repeat(repeat.with_block(block)))
         }
         ast::Stmt::While(while_stmt) => {
-            let block = erase_block(while_stmt.block().clone());
+            let block = erase_block(path, while_stmt.block().clone(), diagnostics);
 
             Some(ast::Stmt::While(while_stmt.with_block(block)))
         }
@@ -125,14 +148,22 @@ fn erase_stmt(stmt: ast::Stmt) -> Option<ast::Stmt> {
     }
 }
 
-fn erase_else_if(else_if: ast::ElseIf) -> ast::ElseIf {
-    let block = erase_block(else_if.block().clone());
+fn erase_else_if(
+    path: &Path,
+    else_if: ast::ElseIf,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> ast::ElseIf {
+    let block = erase_block(path, else_if.block().clone(), diagnostics);
 
     else_if.with_block(block)
 }
 
-fn erase_function_body(body: ast::FunctionBody) -> ast::FunctionBody {
-    let block = erase_block(body.block().clone());
+fn erase_function_body(
+    path: &Path,
+    body: ast::FunctionBody,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> ast::FunctionBody {
+    let block = erase_block(path, body.block().clone(), diagnostics);
     let parameters_parentheses = parameters_parentheses_without_return_type(&body);
 
     body.with_generics(None)
@@ -167,6 +198,108 @@ fn trailing_whitespace(text: &str) -> &str {
     let index = text.trim_end_matches(char::is_whitespace).len();
 
     &text[index..]
+}
+
+fn lower_compound_assignments_text(output: &str) -> String {
+    let mut lowered = output
+        .lines()
+        .map(lower_compound_assignment_line)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if output.ends_with('\n') {
+        lowered.push('\n');
+    }
+
+    lowered
+}
+
+fn lower_compound_assignment_line(line: &str) -> String {
+    let trimmed = line.trim_start_matches(char::is_whitespace);
+    let indent = &line[..line.len() - trimmed.len()];
+    let Some((lhs, rest)) = split_plain_field_chain_prefix(trimmed) else {
+        return line.to_owned();
+    };
+    let rest = rest.trim_start();
+    let Some((binary_operator, rhs)) = split_compound_operator(rest) else {
+        return line.to_owned();
+    };
+
+    format!(
+        "{indent}{lhs} = {lhs} {binary_operator} {}",
+        rhs.trim_start()
+    )
+}
+
+fn split_plain_field_chain_prefix(input: &str) -> Option<(&str, &str)> {
+    let mut end = consume_identifier(input)?;
+
+    loop {
+        let rest = &input[end..];
+
+        if !rest.starts_with('.') {
+            break;
+        }
+
+        let field_end = consume_identifier(&rest[1..])?;
+        end += 1 + field_end;
+    }
+
+    Some((&input[..end], &input[end..]))
+}
+
+fn consume_identifier(input: &str) -> Option<usize> {
+    let mut chars = input.char_indices();
+    let (_, first) = chars.next()?;
+
+    if !is_identifier_start(first) {
+        return None;
+    }
+
+    let mut end = first.len_utf8();
+
+    for (index, character) in chars {
+        if !is_identifier_part(character) {
+            return Some(index);
+        }
+
+        end = index + character.len_utf8();
+    }
+
+    Some(end)
+}
+
+fn is_identifier_start(character: char) -> bool {
+    character == '_' || character.is_ascii_alphabetic()
+}
+
+fn is_identifier_part(character: char) -> bool {
+    is_identifier_start(character) || character.is_ascii_digit()
+}
+
+fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
+    [
+        ("+=", "+"),
+        ("-=", "-"),
+        ("*=", "*"),
+        ("/=", "/"),
+        ("%=", "%"),
+    ]
+    .into_iter()
+    .find_map(|(sugar, binary)| input.strip_prefix(sugar).map(|rhs| (binary, rhs)))
+}
+
+fn reclassify_compound_assignment_diagnostics(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    diagnostics
+        .into_iter()
+        .map(|mut diagnostic| {
+            if diagnostic.code == Some(DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT) {
+                diagnostic.code = Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT);
+            }
+
+            diagnostic
+        })
+        .collect()
 }
 
 fn normalize_emitted_lua(output: String) -> String {
@@ -327,5 +460,63 @@ end
 end
 "#
         );
+    }
+
+    #[test]
+    fn snapshot_lowers_all_supported_compound_assignments() {
+        let emitted = emit_tlua_source(
+            "src/compound.tlua",
+            r#"
+local x = 10
+x += 5
+x -= 2
+x *= scale
+x /= 3
+x %= 4
+player.hp -= amount
+"#,
+        )
+        .expect("supported compound assignments should emit");
+
+        assert_eq!(
+            emitted,
+            r#"local x = 10
+x = x + 5
+x = x - 2
+x = x * scale
+x = x / 3
+x = x % 4
+player.hp = player.hp - amount
+"#
+        );
+    }
+
+    #[test]
+    fn unsupported_compound_assignment_lhs_emits_lowering_diagnostic() {
+        let diagnostics = emit_tlua_source("src/compound.tlua", "player[\"hp\"] += 1\n")
+            .expect_err("computed-index compound assignment should not lower");
+
+        assert_eq!(
+            diagnostics[0].code,
+            Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT)
+        );
+        assert_eq!(
+            diagnostics[0].code.unwrap().category(),
+            crate::DiagnosticCategory::LoweringEmission
+        );
+        assert!(diagnostics[0].format_cli().contains("error TL2001"));
+        assert!(diagnostics[0].message.contains("left-hand side"));
+    }
+
+    #[test]
+    fn call_compound_assignment_lhs_emits_lowering_diagnostic() {
+        let diagnostics = emit_tlua_source("src/compound.tlua", "get_player().hp += 1\n")
+            .expect_err("call-derived compound assignment should not lower");
+
+        assert_eq!(
+            diagnostics[0].code,
+            Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT)
+        );
+        assert!(diagnostics[0].message.contains("left-hand side"));
     }
 }
