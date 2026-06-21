@@ -25,7 +25,7 @@ pub(super) fn initialize_result() -> Value {
             "textDocumentSync": 1,
             "hoverProvider": true,
             "completionProvider": {
-                "triggerCharacters": [":", "."]
+                "triggerCharacters": [":", ".", "\"", "'"]
             },
             "definitionProvider": true,
             "documentSymbolProvider": true,

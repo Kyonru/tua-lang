@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::lua;
 use crate::semantic::resolve_field_chain_type;
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{build_type_environment, Type, TypeEnvironment, TypedFunction};
@@ -58,6 +59,15 @@ impl<'a> HoverResolver<'a> {
                     span: Some(current_part.span),
                 });
             }
+
+            if self.environment.local(&field_parts[0]).is_none() {
+                if let Some(item) = lua::hover_item(&field_parts) {
+                    return Some(Hover {
+                        contents: item.detail.to_owned(),
+                        span: Some(current_part.span),
+                    });
+                }
+            }
         }
 
         if let Some(ty) = self.environment.alias(&current_part.text) {
@@ -79,6 +89,12 @@ impl<'a> HoverResolver<'a> {
             .map(|function| Hover {
                 contents: format_function(function),
                 span: Some(current_part.span),
+            })
+            .or_else(|| {
+                lua::hover_item(std::slice::from_ref(&current_part.text)).map(|item| Hover {
+                    contents: item.detail.to_owned(),
+                    span: Some(current_part.span),
+                })
             })
     }
 

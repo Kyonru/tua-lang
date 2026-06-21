@@ -1,5 +1,7 @@
 use super::*;
 use crate::source_text::position_at;
+use std::fs;
+use std::path::PathBuf;
 
 const SOURCE: &str = r#"type Vec2 = { x: number, y: number }
 type Player = { pos: Vec2, hp: number, alive?: boolean }
@@ -53,6 +55,117 @@ fn completes_nested_table_fields_when_shape_is_known() {
 }
 
 #[test]
+fn completes_lua_keywords_and_globals_in_expression_positions() {
+    let source = "local value = ma\n";
+    let position = position_after(source, "ma");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("Lua baseline completion should succeed");
+
+    assert!(labels(&completions).contains(&"math".to_owned()));
+}
+
+#[test]
+fn type_aliases_do_not_complete_as_runtime_values() {
+    let source = "type Player = { hp: number }\nlocal value = Pl\n";
+    let position = position_after(source, "Pl");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("runtime completion should succeed");
+
+    assert!(!labels(&completions).contains(&"Player".to_owned()));
+}
+
+#[test]
+fn completes_lua_standard_library_fields() {
+    let source = "local value = math.si\n";
+    let position = position_after(source, "math.si");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("Lua field completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["sin".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Function);
+}
+
+#[test]
+fn completes_lua_fields_when_source_is_temporarily_invalid() {
+    let source = "local broken =\nlocal value = math.si\n";
+    let position = position_after(source, "math.si");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("lossy Lua completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["sin".to_owned()]);
+}
+
+#[test]
+fn completes_love_fields() {
+    let source = "love.graphics.pr\n";
+    let position = position_after(source, "love.graphics.pr");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("LÖVE field completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec!["print".to_owned(), "printf".to_owned()]
+    );
+}
+
+#[test]
+fn completes_local_lua_symbols() {
+    let source = r#"local score = 0
+local function spawn_player(x, y)
+  local player = {}
+  return sco
+end
+"#;
+    let position = position_after(source, "return sco");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("local symbol completion should succeed");
+
+    assert!(labels(&completions).contains(&"score".to_owned()));
+}
+
+#[test]
+fn local_symbols_shadow_lua_globals_for_field_completion() {
+    let source = "local math: any = {}\nlocal value = math.\n";
+    let position = position_after(source, "math.");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("shadowed Lua globals should stay dynamic");
+
+    assert!(completions.is_empty());
+}
+
+#[test]
+fn completes_require_paths_from_current_directory() {
+    let root = temp_project_dir("require_completion");
+    let src = root.join("src");
+    let systems = src.join("systems");
+
+    fs::create_dir_all(&systems).expect("test dirs should be created");
+    fs::write(src.join("main.tua"), "local player = require(\"pla\")\n")
+        .expect("main source should be written");
+    fs::write(src.join("player.tua"), "return {}\n").expect("player source should be written");
+    fs::write(systems.join("physics.lua"), "return {}\n").expect("Lua module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = fs::read_to_string(&main_path).expect("main source should be readable");
+    let completions = complete_tua_source(
+        &main_path,
+        &source,
+        position_after(&source, "require(\"pla"),
+    )
+    .expect("require path completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["player".to_owned()]);
+
+    let source = "local physics = require(\"systems.\")\n";
+    let completions = complete_tua_source(&main_path, source, position_after(source, "systems."))
+        .expect("nested require path completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["systems.physics".to_owned()]);
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completion_remains_quiet_for_any_values() {
     let source = format!("{SOURCE}local dynamic = payload.\n");
     let position = position_after(&source, "payload.");
@@ -90,4 +203,16 @@ fn position_after(source: &str, needle: &str) -> SourcePosition {
         line: start.line,
         column: start.column + needle.chars().count(),
     }
+}
+
+fn temp_project_dir(name: &str) -> PathBuf {
+    let mut path = std::env::temp_dir();
+
+    path.push(format!("tua_{name}_{}", std::process::id()));
+
+    if path.exists() {
+        fs::remove_dir_all(&path).expect("stale test dir should be removed");
+    }
+
+    path
 }

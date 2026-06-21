@@ -32,7 +32,7 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
     assert_eq!(
         output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
-        json!([":", "."])
+        json!([":", ".", "\"", "'"])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["definitionProvider"],
@@ -330,6 +330,38 @@ local unknown_field = missing.value
 
     assert_completion_labels(&output, 2, []);
     assert_completion_labels(&output, 3, []);
+}
+
+#[test]
+fn completion_returns_lua_and_love_items() {
+    let uri = "file:///tmp/lua-completion.tua";
+    let source = r#"local value = math.si
+local draw = love.graphics.pr
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "math.si"),
+        completion_request(3, uri, source, "love.graphics.pr"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["sin"]);
+    assert_completion_labels(&output, 3, ["print", "printf"]);
+}
+
+#[test]
+fn hover_returns_lua_and_love_items() {
+    let uri = "file:///tmp/lua-hover.tua";
+    let source = r#"local value = math.sin(1)
+love.graphics.print("hi", 0, 0)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "sin"),
+        hover_request(3, uri, source, "print"),
+    ]);
+
+    assert_hover_contains(&output, 2, "function math.sin(x: number): number");
+    assert_hover_contains(&output, 3, "function love.graphics.print(text, x?, y?)");
 }
 
 #[test]

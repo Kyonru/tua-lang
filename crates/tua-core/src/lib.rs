@@ -7,6 +7,7 @@ pub mod document_symbol;
 pub mod emit;
 pub mod hover;
 pub mod inlay_hint;
+mod lua;
 pub mod parser;
 mod project;
 pub mod references;

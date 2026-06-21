@@ -59,6 +59,38 @@ fn unknown_symbols_do_not_hover() {
     assert_eq!(hover, None);
 }
 
+#[test]
+fn hovers_lua_standard_library_items() {
+    let source = "local value = math.sin(1)\n";
+    let position = position_at(source, "sin");
+    let hover = hover_tua_source("src/main.tua", source, position)
+        .expect("hover should not fail")
+        .expect("math.sin should hover");
+
+    assert_eq!(hover.contents, "function math.sin(x: number): number");
+}
+
+#[test]
+fn hovers_love_items() {
+    let source = "love.graphics.print(\"hi\", 0, 0)\n";
+    let position = position_at(source, "print");
+    let hover = hover_tua_source("src/main.tua", source, position)
+        .expect("hover should not fail")
+        .expect("love.graphics.print should hover");
+
+    assert_eq!(hover.contents, "function love.graphics.print(text, x?, y?)");
+}
+
+#[test]
+fn local_symbols_shadow_lua_global_hover() {
+    let source = "local math: any = {}\nlocal value = math.sin\n";
+    let position = position_at(source, "sin");
+    let hover = hover_tua_source("src/main.tua", source, position)
+        .expect("hover should not fail for shadowed values");
+
+    assert_eq!(hover, None);
+}
+
 fn hover_at(needle: &str) -> Option<Hover> {
     let position = position_at(SOURCE, needle);
 

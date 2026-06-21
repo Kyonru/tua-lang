@@ -1,10 +1,17 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use self::context::{completion_context, CompletionContext};
+use self::require::complete_require_paths;
+use self::symbol::lua_symbols_before_position;
+use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
-use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start, line_at};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
+
+mod context;
+mod require;
+mod symbol;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Completion {
@@ -15,8 +22,13 @@ pub struct Completion {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompletionKind {
+    Function,
     TypeAlias,
     Field,
+    Keyword,
+    Module,
+    Variable,
+    Value,
 }
 
 pub fn complete_tua_source(
@@ -29,7 +41,10 @@ pub fn complete_tua_source(
     let Some(context) = completion_context(&source, position) else {
         return Ok(Vec::new());
     };
-    let parsed = parse_completion_source(&path, &source, position)?;
+    let parsed = match parse_completion_source(&path, &source, position) {
+        Ok(parsed) => parsed,
+        Err(_) => return Ok(complete_lossy_source(&path, &source, context)),
+    };
 
     Ok(complete_parsed_source_with_context(&parsed, context))
 }
@@ -51,17 +66,68 @@ fn complete_parsed_source_with_context(
 ) -> Vec<Completion> {
     match context {
         CompletionContext::TypeAnnotation { prefix } => {
-            complete_type_aliases(parsed, prefix.as_str())
+            complete_type_names(parsed, prefix.as_str())
         }
         CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
         } => {
             let environment = build_completion_environment(parsed);
+            let fields = complete_fields(&environment, &receiver_parts, prefix.as_str());
 
-            complete_fields(&environment, &receiver_parts, prefix.as_str())
+            if !fields.is_empty() || environment.local(&receiver_parts[0]).is_some() {
+                return fields;
+            }
+
+            complete_lua_fields(&receiver_parts, prefix.as_str())
+        }
+        CompletionContext::RequirePath { prefix } => {
+            complete_require_paths(&parsed.path, prefix.as_str())
+        }
+        CompletionContext::Identifier { prefix, position } => {
+            complete_identifier_items(parsed, prefix.as_str(), position)
         }
     }
+}
+
+fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) -> Vec<Completion> {
+    match context {
+        CompletionContext::TypeAnnotation { prefix } => complete_builtin_types(prefix.as_str()),
+        CompletionContext::FieldAccess {
+            receiver_parts,
+            prefix,
+        } => complete_lua_fields(&receiver_parts, prefix.as_str()),
+        CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
+        CompletionContext::Identifier { prefix, position } => {
+            complete_lossy_identifier_items(source, prefix.as_str(), position)
+        }
+    }
+}
+
+fn complete_type_names(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
+    let mut completions = BTreeMap::new();
+
+    for completion in complete_builtin_types(prefix) {
+        completions.insert(completion.label.clone(), completion);
+    }
+
+    for completion in complete_type_aliases(parsed, prefix) {
+        completions.insert(completion.label.clone(), completion);
+    }
+
+    completions.into_values().collect()
+}
+
+fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
+    ["any", "boolean", "nil", "number", "string"]
+        .into_iter()
+        .filter(|primitive| primitive.starts_with(prefix))
+        .map(|primitive| Completion {
+            label: primitive.to_owned(),
+            kind: CompletionKind::TypeAlias,
+            detail: Some("built-in type".to_owned()),
+        })
+        .collect()
 }
 
 fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
@@ -75,6 +141,80 @@ fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion>
             detail: Some("type alias".to_owned()),
         })
         .collect()
+}
+
+fn complete_identifier_items(
+    parsed: &ParsedSource,
+    prefix: &str,
+    position: SourcePosition,
+) -> Vec<Completion> {
+    let mut completions = BTreeMap::new();
+
+    insert_lossy_identifier_items(&mut completions, &parsed.source, prefix, position);
+
+    for local in &parsed.local_annotations {
+        if local.name.starts_with(prefix) {
+            completions.insert(
+                local.name.clone(),
+                Completion {
+                    label: local.name.clone(),
+                    kind: CompletionKind::Variable,
+                    detail: Some("local".to_owned()),
+                },
+            );
+        }
+    }
+
+    for function in &parsed.function_annotations {
+        let Some(name) = &function.name else {
+            continue;
+        };
+
+        if name.starts_with(prefix) {
+            completions.insert(
+                name.clone(),
+                Completion {
+                    label: name.clone(),
+                    kind: CompletionKind::Function,
+                    detail: Some("function".to_owned()),
+                },
+            );
+        }
+    }
+
+    completions.into_values().collect()
+}
+
+fn complete_lossy_identifier_items(
+    source: &str,
+    prefix: &str,
+    position: SourcePosition,
+) -> Vec<Completion> {
+    let mut completions = BTreeMap::new();
+
+    insert_lossy_identifier_items(&mut completions, source, prefix, position);
+
+    completions.into_values().collect()
+}
+
+fn insert_lossy_identifier_items(
+    completions: &mut BTreeMap<String, Completion>,
+    source: &str,
+    prefix: &str,
+    position: SourcePosition,
+) {
+    for item in lua::keyword_items(prefix)
+        .into_iter()
+        .chain(lua::top_level_items(prefix))
+    {
+        insert_lua_item(completions, item);
+    }
+
+    for symbol in lua_symbols_before_position(source, position) {
+        if symbol.name.starts_with(prefix) {
+            completions.insert(symbol.name.clone(), symbol.into_completion());
+        }
+    }
 }
 
 fn complete_fields(
@@ -124,6 +264,36 @@ fn collect_shape_fields(table: &TableShape, fields: &mut BTreeMap<String, String
     }
 }
 
+fn complete_lua_fields(receiver_parts: &[String], prefix: &str) -> Vec<Completion> {
+    lua::field_items(receiver_parts, prefix)
+        .into_iter()
+        .map(completion_from_lua_item)
+        .collect()
+}
+
+fn completion_from_lua_item(item: LuaItem) -> Completion {
+    Completion {
+        label: item.label.to_owned(),
+        kind: completion_kind_from_lua_item(item.kind),
+        detail: Some(item.detail.to_owned()),
+    }
+}
+
+fn insert_lua_item(completions: &mut BTreeMap<String, Completion>, item: LuaItem) {
+    completions
+        .entry(item.label.to_owned())
+        .or_insert_with(|| completion_from_lua_item(item));
+}
+
+fn completion_kind_from_lua_item(kind: LuaItemKind) -> CompletionKind {
+    match kind {
+        LuaItemKind::Function => CompletionKind::Function,
+        LuaItemKind::Keyword => CompletionKind::Keyword,
+        LuaItemKind::Module => CompletionKind::Module,
+        LuaItemKind::Value => CompletionKind::Value,
+    }
+}
+
 fn build_completion_environment(parsed: &ParsedSource) -> TypeEnvironment {
     let (environment, _) = build_type_environment_with_diagnostics(parsed);
 
@@ -168,125 +338,6 @@ fn source_with_line_removed(source: &str, line_to_remove: usize) -> String {
     }
 
     output
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum CompletionContext {
-    TypeAnnotation {
-        prefix: String,
-    },
-    FieldAccess {
-        receiver_parts: Vec<String>,
-        prefix: String,
-    },
-}
-
-fn completion_context(source: &str, position: SourcePosition) -> Option<CompletionContext> {
-    let line = line_at(source, position.line)?;
-    let cursor = byte_for_column(line, position.column);
-
-    field_access_context(line, cursor).or_else(|| type_annotation_context(line, cursor))
-}
-
-fn field_access_context(line: &str, cursor: usize) -> Option<CompletionContext> {
-    let cursor = cursor.min(line.len());
-    let prefix_start = reverse_identifier_start(line, cursor);
-
-    if prefix_start == 0 || line.as_bytes().get(prefix_start - 1) != Some(&b'.') {
-        return None;
-    }
-
-    let receiver_end = prefix_start - 1;
-    let receiver_start = reverse_field_chain_start(line, receiver_end)?;
-    let receiver = &line[receiver_start..receiver_end];
-    let receiver_parts = receiver.split('.').map(str::to_owned).collect::<Vec<_>>();
-
-    if receiver_parts.is_empty() || !receiver_parts.iter().all(|part| is_identifier(part)) {
-        return None;
-    }
-
-    Some(CompletionContext::FieldAccess {
-        receiver_parts,
-        prefix: line[prefix_start..cursor].to_owned(),
-    })
-}
-
-fn type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContext> {
-    let cursor = cursor.min(line.len());
-    let prefix = &line[..cursor];
-    let annotation_start = prefix.rfind([':', '|']).map(|index| index + 1)?;
-    let marker = prefix[..annotation_start].chars().last()?;
-
-    if marker == ':' && !looks_like_annotation_prefix(&prefix[..annotation_start - 1]) {
-        return None;
-    }
-
-    if marker == '|' && !prefix[..annotation_start - 1].contains(':') {
-        return None;
-    }
-
-    let typed_prefix = prefix[annotation_start..].trim_start();
-
-    if !typed_prefix
-        .chars()
-        .all(|character| character == '_' || character.is_ascii_alphanumeric())
-    {
-        return None;
-    }
-
-    Some(CompletionContext::TypeAnnotation {
-        prefix: typed_prefix.to_owned(),
-    })
-}
-
-fn looks_like_annotation_prefix(prefix: &str) -> bool {
-    let trimmed = prefix.trim_end();
-
-    trimmed.contains("local ")
-        || trimmed.contains("function ")
-        || trimmed.contains("type ")
-        || trimmed.ends_with(')')
-        || trimmed.ends_with(',')
-        || trimmed.ends_with('{')
-}
-
-fn reverse_identifier_start(line: &str, cursor: usize) -> usize {
-    let mut start = cursor.min(line.len());
-
-    while start > 0 && is_identifier_continue(line.as_bytes()[start - 1]) {
-        start -= 1;
-    }
-
-    start
-}
-
-fn reverse_field_chain_start(line: &str, end: usize) -> Option<usize> {
-    let mut start = end;
-
-    while start > 0 {
-        let byte = line.as_bytes()[start - 1];
-
-        if byte == b'.' || is_identifier_continue(byte) {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-
-    Some(start).filter(|start| *start < end)
-}
-
-fn is_identifier(value: &str) -> bool {
-    let Some(first) = value.as_bytes().first() else {
-        return false;
-    };
-
-    is_identifier_start(*first)
-        && value
-            .as_bytes()
-            .iter()
-            .skip(1)
-            .all(|byte| is_identifier_continue(*byte))
 }
 
 #[cfg(test)]

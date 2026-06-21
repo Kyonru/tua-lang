@@ -99,8 +99,13 @@ pub(super) fn lsp_completion_from_core(completion: Completion) -> Value {
 
 fn lsp_completion_kind(kind: CompletionKind) -> u8 {
     match kind {
+        CompletionKind::Function => 3,
         CompletionKind::TypeAlias => 25,
         CompletionKind::Field => 5,
+        CompletionKind::Keyword => 14,
+        CompletionKind::Module => 9,
+        CompletionKind::Variable => 6,
+        CompletionKind::Value => 12,
     }
 }
 
