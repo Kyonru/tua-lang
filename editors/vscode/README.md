@@ -6,7 +6,8 @@ Minimal VS Code language support for tua source files.
 
 - Registers the `tua` language id.
 - Associates `*.tua` files with the tua language mode.
-- Uses the tua logo for the extension and `.tua` file icons.
+- Uses the tua logo SVG for `.tua` file icons and a generated PNG copy for the
+  packaged extension icon.
 - Adds TextMate grammar coverage for Lua keywords, comments, strings, numbers,
   operators, type aliases, and type annotations.
 - Starts `tua lsp` over stdio and surfaces the language server's diagnostics,

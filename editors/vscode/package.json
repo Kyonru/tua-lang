@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "publisher": "tua-lang",
   "license": "MIT",
-  "icon": "assets/logo.svg",
+  "icon": "assets/logo.png",
   "main": "./src/extension.js",
   "engines": {
     "vscode": "^1.85.0"
