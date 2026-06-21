@@ -1,3 +1,19 @@
+use crate::{SourcePosition, SourceSpan};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DottedChain {
+    pub parts: Vec<IdentifierPart>,
+    pub cursor_index: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct IdentifierPart {
+    pub text: String,
+    pub span: SourceSpan,
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
 pub(crate) fn line_at(source: &str, line: usize) -> Option<&str> {
     source
         .split('\n')
@@ -30,8 +46,77 @@ pub(crate) fn lookup_identifier_byte(line: &str, column: usize) -> Option<usize>
         .filter(|previous| is_identifier_continue(bytes[*previous]))
 }
 
+pub(crate) fn dotted_chain_at_position(
+    source: &str,
+    position: SourcePosition,
+) -> Option<DottedChain> {
+    let line = line_at(source, position.line)?;
+    let lookup_byte = lookup_identifier_byte(line, position.column)?;
+    let mut index = 0;
+
+    while index < line.len() {
+        if !is_identifier_start(line.as_bytes()[index]) {
+            index += 1;
+            continue;
+        }
+
+        let mut parts = Vec::new();
+        let mut current = index;
+
+        loop {
+            let start = current;
+            let end = identifier_end(line, start);
+            let span = SourceSpan {
+                start: SourcePosition {
+                    line: position.line,
+                    column: column_for_byte(line, start),
+                },
+                end: SourcePosition {
+                    line: position.line,
+                    column: column_for_byte(line, end),
+                },
+            };
+
+            parts.push(IdentifierPart {
+                text: line[start..end].to_owned(),
+                span,
+                start_byte: start,
+                end_byte: end,
+            });
+
+            current = end;
+
+            if current >= line.len() || line.as_bytes()[current] != b'.' {
+                break;
+            }
+
+            let next = current + 1;
+
+            if next >= line.len() || !is_identifier_start(line.as_bytes()[next]) {
+                break;
+            }
+
+            current = next;
+        }
+
+        if let Some(cursor_index) = parts
+            .iter()
+            .position(|part| lookup_byte >= part.start_byte && lookup_byte < part.end_byte)
+        {
+            return Some(DottedChain {
+                parts,
+                cursor_index,
+            });
+        }
+
+        index = current.max(index + 1);
+    }
+
+    None
+}
+
 #[cfg(test)]
-pub(crate) fn position_at(source: &str, needle: &str) -> crate::SourcePosition {
+pub(crate) fn position_at(source: &str, needle: &str) -> SourcePosition {
     let index = source.find(needle).expect("needle should exist in source");
     let before = &source[..index];
     let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
@@ -41,7 +126,7 @@ pub(crate) fn position_at(source: &str, needle: &str) -> crate::SourcePosition {
         .unwrap_or(before.len())
         + 1;
 
-    crate::SourcePosition { line, column }
+    SourcePosition { line, column }
 }
 
 pub(crate) fn is_identifier_start(byte: u8) -> bool {
@@ -54,4 +139,15 @@ pub(crate) fn is_identifier_continue(byte: u8) -> bool {
 
 pub(crate) fn is_identifier_continue_char(character: char) -> bool {
     character == '_' || character.is_ascii_alphanumeric()
+}
+
+fn identifier_end(line: &str, start: usize) -> usize {
+    line[start..]
+        .char_indices()
+        .find_map(|(offset, character)| {
+            let index = start + offset;
+
+            (!is_identifier_continue_char(character)).then_some(index)
+        })
+        .unwrap_or(line.len())
 }

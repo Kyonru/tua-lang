@@ -115,6 +115,7 @@ fn collect_stmt_tlua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TluaSynt
                 syntax.local_annotations.push(LocalAnnotation {
                     name: token_text(name),
                     ty: tlua_type_from_type_info(specifier.type_info()),
+                    name_span: node_span(name),
                     span: node_span(specifier),
                 });
             }
@@ -122,6 +123,7 @@ fn collect_stmt_tlua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TluaSynt
         ast::Stmt::LocalFunction(function) => {
             syntax.function_annotations.push(function_annotation(
                 Some(token_text(function.name())),
+                node_span(function.name()),
                 function.body(),
             ));
             collect_block_tlua_syntax(path, function.body().block(), syntax);
@@ -129,6 +131,7 @@ fn collect_stmt_tlua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TluaSynt
         ast::Stmt::FunctionDeclaration(function) => {
             syntax.function_annotations.push(function_annotation(
                 Some(function.name().to_string()),
+                node_span(function.name()),
                 function.body(),
             ));
             collect_block_tlua_syntax(path, function.body().block(), syntax);
@@ -169,11 +172,16 @@ fn type_alias_from_declaration(declaration: &TypeDeclaration) -> TypeAlias {
     TypeAlias {
         name: token_text(declaration.type_name()),
         ty: tlua_type_from_type_info(declaration.type_definition()),
+        name_span: node_span(declaration.type_name()),
         span: node_span(declaration),
     }
 }
 
-fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> FunctionAnnotation {
+fn function_annotation(
+    name: Option<String>,
+    name_span: Option<SourceSpan>,
+    body: &ast::FunctionBody,
+) -> FunctionAnnotation {
     let parameter_count = body
         .parameters()
         .iter()
@@ -196,6 +204,7 @@ fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> Functi
             Some(ParameterAnnotation {
                 name: token_text(name),
                 ty: tlua_type_from_type_info(specifier.type_info()),
+                name_span: node_span(name),
                 span: node_span(specifier),
             })
         })
@@ -203,6 +212,7 @@ fn function_annotation(name: Option<String>, body: &ast::FunctionBody) -> Functi
 
     FunctionAnnotation {
         name,
+        name_span,
         parameters,
         parameter_count,
         has_varargs,
@@ -321,6 +331,7 @@ fn table_field_type_from_type_field(field: &TypeField) -> Option<TableFieldType>
         name,
         optional: key_optional || value_optional,
         ty,
+        name_span: node_span(key),
         span: node_span(field),
     })
 }

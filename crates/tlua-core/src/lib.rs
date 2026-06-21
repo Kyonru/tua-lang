@@ -1,6 +1,7 @@
 pub mod check;
 pub mod completion;
 pub mod config;
+pub mod definition;
 pub mod diagnostic;
 pub mod emit;
 pub mod hover;
@@ -15,6 +16,9 @@ pub use completion::{complete_parsed_source, complete_tlua_source, Completion, C
 pub use config::{
     init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
     LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+};
+pub use definition::{
+    definition_parsed_source, definition_tlua_source, Definition, DefinitionKind,
 };
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,

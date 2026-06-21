@@ -30,6 +30,10 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
         json!([":", "."])
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["definitionProvider"],
+        true
+    );
 }
 
 #[test]
@@ -211,6 +215,54 @@ local unknown_field = missing.value
     assert_completion_labels(&output, 3, []);
 }
 
+#[test]
+fn definition_returns_known_alias_function_local_and_table_field_locations() {
+    let uri = "file:///tmp/definition.tlua";
+    let source = r#"type Vec2 = { x: number, y: number }
+type Player = { pos: Vec2, hp: number, alive?: boolean }
+
+local player: Player = {
+  pos = { x = 0, y = 0 },
+  hp = 10,
+}
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+damage(player, 2)
+player.hp = player.hp - 1
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "player: Player", "player: ".len()),
+        definition_request(3, uri, source, "damage(player", 0),
+        definition_request(4, uri, source, "damage(player", "damage(".len()),
+        definition_request(5, uri, source, "player.hp =", "player.".len()),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "Player");
+    assert_definition_text(&output, 3, uri, source, "damage");
+    assert_definition_text(&output, 4, uri, source, "player");
+    assert_definition_text(&output, 5, uri, source, "hp");
+}
+
+#[test]
+fn definition_unknown_symbol_returns_null_result() {
+    let uri = "file:///tmp/unknown-definition.tlua";
+    let source = "local result = missing\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "missing", 0),
+    ]);
+
+    let response = response_with_id(&output, 2);
+
+    assert!(response["result"].is_null());
+    assert!(response.get("error").is_none());
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -271,6 +323,20 @@ fn completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
     })
 }
 
+fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: usize) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/definition",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
 fn lsp_position_of(source: &str, needle: &str) -> Value {
     let index = source.find(needle).expect("needle should exist in source");
     let before = &source[..index];
@@ -284,6 +350,18 @@ fn lsp_position_of(source: &str, needle: &str) -> Value {
         "line": line,
         "character": character
     })
+}
+
+fn lsp_position_with_offset(source: &str, needle: &str, offset: usize) -> Value {
+    let mut position = lsp_position_of(source, needle);
+    position["character"] = json!(
+        position["character"]
+            .as_u64()
+            .expect("character should be numeric")
+            + offset as u64
+    );
+
+    position
 }
 
 fn lsp_position_after(source: &str, needle: &str) -> Value {
@@ -366,6 +444,29 @@ fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected:
         .collect::<Vec<_>>();
 
     assert_eq!(labels, expected);
+}
+
+fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, expected: &str) {
+    let response = response_with_id(output, id);
+
+    assert_eq!(response["result"]["uri"], uri);
+
+    let range = &response["result"]["range"];
+    let line = range["start"]["line"]
+        .as_u64()
+        .expect("definition start line should be numeric") as usize;
+    let start = range["start"]["character"]
+        .as_u64()
+        .expect("definition start character should be numeric") as usize;
+    let end = range["end"]["character"]
+        .as_u64()
+        .expect("definition end character should be numeric") as usize;
+    let text = source
+        .split('\n')
+        .nth(line)
+        .expect("definition line should exist");
+
+    assert_eq!(&text[start..end], expected);
 }
 
 fn response_with_id(output: &[Value], id: u64) -> &Value {

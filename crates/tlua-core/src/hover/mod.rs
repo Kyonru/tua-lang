@@ -1,10 +1,7 @@
 use std::path::Path;
 
 use crate::semantic::resolve_field_chain_type;
-use crate::source_text::{
-    column_for_byte, is_identifier_continue_char, is_identifier_start, line_at,
-    lookup_identifier_byte,
-};
+use crate::source_text::dotted_chain_at_position;
 use crate::types::{build_type_environment, Type, TypeEnvironment, TypedFunction};
 use crate::{parse_tlua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
 
@@ -107,97 +104,6 @@ fn format_function(function: &TypedFunction) -> String {
         parameters.join(", "),
         function.return_type_or_any()
     )
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DottedChain {
-    parts: Vec<ChainPart>,
-    cursor_index: usize,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ChainPart {
-    text: String,
-    span: SourceSpan,
-    start_byte: usize,
-    end_byte: usize,
-}
-
-fn dotted_chain_at_position(source: &str, position: SourcePosition) -> Option<DottedChain> {
-    let line = line_at(source, position.line)?;
-    let lookup_byte = lookup_identifier_byte(line, position.column)?;
-    let mut index = 0;
-
-    while index < line.len() {
-        if !is_identifier_start(line.as_bytes()[index]) {
-            index += 1;
-            continue;
-        }
-
-        let mut parts = Vec::new();
-        let mut current = index;
-
-        loop {
-            let start = current;
-            let end = identifier_end(line, start);
-            let span = SourceSpan {
-                start: SourcePosition {
-                    line: position.line,
-                    column: column_for_byte(line, start),
-                },
-                end: SourcePosition {
-                    line: position.line,
-                    column: column_for_byte(line, end),
-                },
-            };
-
-            parts.push(ChainPart {
-                text: line[start..end].to_owned(),
-                span,
-                start_byte: start,
-                end_byte: end,
-            });
-
-            current = end;
-
-            if current >= line.len() || line.as_bytes()[current] != b'.' {
-                break;
-            }
-
-            let next = current + 1;
-
-            if next >= line.len() || !is_identifier_start(line.as_bytes()[next]) {
-                break;
-            }
-
-            current = next;
-        }
-
-        if let Some(cursor_index) = parts
-            .iter()
-            .position(|part| lookup_byte >= part.start_byte && lookup_byte < part.end_byte)
-        {
-            return Some(DottedChain {
-                parts,
-                cursor_index,
-            });
-        }
-
-        index = current.max(index + 1);
-    }
-
-    None
-}
-
-fn identifier_end(line: &str, start: usize) -> usize {
-    line[start..]
-        .char_indices()
-        .find_map(|(offset, character)| {
-            let index = start + offset;
-
-            (!is_identifier_continue_char(character)).then_some(index)
-        })
-        .unwrap_or(line.len())
 }
 
 #[cfg(test)]

@@ -58,6 +58,7 @@ impl ParsedSource {
 pub struct TypeAlias {
     pub name: String,
     pub ty: TluaType,
+    pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
 }
 
@@ -65,12 +66,14 @@ pub struct TypeAlias {
 pub struct LocalAnnotation {
     pub name: String,
     pub ty: TluaType,
+    pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FunctionAnnotation {
     pub name: Option<String>,
+    pub name_span: Option<SourceSpan>,
     pub parameters: Vec<ParameterAnnotation>,
     pub parameter_count: usize,
     pub has_varargs: bool,
@@ -82,6 +85,7 @@ pub struct FunctionAnnotation {
 pub struct ParameterAnnotation {
     pub name: String,
     pub ty: TluaType,
+    pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
 }
 
@@ -97,6 +101,7 @@ pub struct TableFieldType {
     pub name: String,
     pub optional: bool,
     pub ty: TluaType,
+    pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
 }
 

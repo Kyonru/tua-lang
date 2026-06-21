@@ -4,8 +4,9 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tlua_core::{
-    check_tlua_source, complete_tlua_source, hover_tlua_source, project_description, Completion,
-    CompletionKind, Diagnostic, DiagnosticSeverity, Hover, SourcePosition, SourceSpan,
+    check_tlua_source, complete_tlua_source, definition_tlua_source, hover_tlua_source,
+    project_description, Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity,
+    Hover, SourcePosition, SourceSpan,
 };
 
 pub fn server_name() -> &'static str {
@@ -73,7 +74,8 @@ impl LspServer {
                         "hoverProvider": true,
                         "completionProvider": {
                             "triggerCharacters": [":", "."]
-                        }
+                        },
+                        "definitionProvider": true
                     },
                     "serverInfo": {
                         "name": server_name(),
@@ -90,6 +92,10 @@ impl LspServer {
                 response(id, self.hover_response(&message).unwrap_or(Value::Null))
             }
             "textDocument/completion" => response(id, self.completion_response(&message)),
+            "textDocument/definition" => response(
+                id,
+                self.definition_response(&message).unwrap_or(Value::Null),
+            ),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -208,6 +214,28 @@ impl LspServer {
                 .collect(),
         )
     }
+
+    fn definition_response(&self, message: &Value) -> Option<Value> {
+        let params = message.get("params")?;
+        let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+        let position = params.get("position")?;
+        let line = position.get("line")?.as_u64()? as usize;
+        let character = position.get("character")?.as_u64()? as usize;
+        let text = self.documents.get(uri)?;
+        let path = path_from_uri(uri);
+        let definition = definition_tlua_source(
+            path,
+            text.clone(),
+            SourcePosition {
+                line: line + 1,
+                column: character + 1,
+            },
+        )
+        .ok()
+        .flatten()?;
+
+        Some(lsp_location_from_core(uri, definition))
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -304,6 +332,13 @@ fn lsp_completion_kind(kind: CompletionKind) -> u8 {
         CompletionKind::TypeAlias => 25,
         CompletionKind::Field => 5,
     }
+}
+
+fn lsp_location_from_core(uri: &str, definition: Definition) -> Value {
+    json!({
+        "uri": uri,
+        "range": lsp_range(definition.span)
+    })
 }
 
 fn lsp_range(span: SourceSpan) -> Value {
