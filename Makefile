@@ -11,6 +11,10 @@ TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
 VSIX := $(VSCODE_DIR)/tua-0.0.1.vsix
 EXAMPLE ?= examples/love-minimal
+UNAME_S := $(shell uname -s 2>/dev/null)
+EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
+RELEASE_TUA := target/release/tua$(EXE_SUFFIX)
+VSCODE_TUA := $(VSCODE_DIR)/bin/tua$(EXE_SUFFIX)
 
 .PHONY: help
 help: ## Show available targets.
@@ -90,6 +94,16 @@ run-love-full: build-love-full ## Build and run the full LOVE example in smoke m
 extension-deps: ## Install VS Code extension npm dependencies.
 	$(NPM) install --prefix $(VSCODE_DIR)
 
+.PHONY: extension-server
+extension-server: ## Build and stage the tua server binary for the VS Code extension.
+	$(CARGO) build --release --package tua-cli
+	mkdir -p $(VSCODE_DIR)/bin
+	cp $(RELEASE_TUA) $(VSCODE_TUA)
+
+.PHONY: extension-clean-server
+extension-clean-server: ## Remove the staged VS Code extension server binary.
+	rm -rf $(VSCODE_DIR)/bin
+
 .PHONY: extension-check
 extension-check: ## Syntax-check the VS Code extension activation script.
 	$(NPM) --prefix $(VSCODE_DIR) run check
@@ -99,8 +113,9 @@ json-check: ## Validate extension JSON metadata and grammars parse.
 	node -e "for (const file of ['$(VSCODE_DIR)/package.json','$(VSCODE_DIR)/package-lock.json','$(VSCODE_DIR)/language-configuration.json','$(VSCODE_DIR)/icons/tua-icon-theme.json','$(VSCODE_DIR)/syntaxes/tua.tmLanguage.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'));"
 
 .PHONY: extension-package
-extension-package: extension-deps json-check extension-check ## Build a VSIX for the VS Code extension.
+extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.
 	cd $(VSCODE_DIR) && $(VSCE) package --out tua-0.0.1.vsix
+	rm -rf $(VSCODE_DIR)/bin
 
 .PHONY: extension-install
 extension-install: extension-package ## Install the built VS Code extension with the code CLI.

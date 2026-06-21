@@ -18,6 +18,9 @@ Minimal VS Code language support for tua source files.
 
 - `tua.server.path`: path to the `tua` executable. Defaults to `tua` on `PATH`.
 
+VSIX packages built with `make extension-package` include the current platform's
+`tua` server binary and use it by default.
+
 For extension-host development, `TUA_SERVER_PATH` overrides the setting.
 
 If the executable is missing, activation shows a warning and links directly to

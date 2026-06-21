@@ -1,6 +1,8 @@
 "use strict";
 
 const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
 const vscode = require("vscode");
 
 let client;
@@ -9,7 +11,7 @@ async function activate(context) {
   const outputChannel = vscode.window.createOutputChannel("tua");
   context.subscriptions.push(outputChannel);
 
-  const serverCommand = configuredServerPath();
+  const serverCommand = configuredServerPath(context);
   const cwd = workspaceCwd();
   const preflight = await checkServerCommand(serverCommand, cwd);
 
@@ -66,15 +68,30 @@ async function deactivate() {
   return activeClient.stop();
 }
 
-function configuredServerPath() {
+function configuredServerPath(context) {
   const envOverride = process.env.TUA_SERVER_PATH;
   if (typeof envOverride === "string" && envOverride.trim()) {
     return envOverride.trim();
   }
 
   const configured = vscode.workspace.getConfiguration("tua").get("server.path");
+  if (typeof configured === "string" && configured.trim() && configured.trim() !== "tua") {
+    return configured.trim();
+  }
+
+  const bundled = bundledServerPath(context);
+  if (bundled) {
+    return bundled;
+  }
 
   return typeof configured === "string" && configured.trim() ? configured.trim() : "tua";
+}
+
+function bundledServerPath(context) {
+  const executable = process.platform === "win32" ? "tua.exe" : "tua";
+  const candidate = path.join(context.extensionPath, "bin", executable);
+
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 function workspaceCwd() {
@@ -123,7 +140,7 @@ function showServerStartupWarning(command, error) {
   const detail = formatError(error);
   const message =
     `Could not start the tua language server with \`${command}\`. ` +
-    "Install the tua CLI, set `tua.server.path`, or launch with `TUA_SERVER_PATH`.";
+    "Install a VSIX bundled with the tua server, set `tua.server.path`, or launch with `TUA_SERVER_PATH`.";
 
   vscode.window
     .showWarningMessage(`${message}${detail ? ` ${detail}` : ""}`, "Open Settings")
