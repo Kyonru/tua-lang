@@ -277,6 +277,25 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn hover_returns_inferred_function_return_type() {
+    let uri = "file:///tmp/inferred-return-hover.tua";
+    let source = r#"function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "test(a"),
+        hover_request(3, uri, source, "test(false"),
+    ]);
+
+    assert_hover_contains(&output, 2, "function test(a: boolean): string");
+    assert_hover_contains(&output, 3, "function test(a: boolean): string");
+}
+
+#[test]
 fn hover_unknown_symbol_returns_null_result() {
     let uri = "file:///tmp/unknown-hover.tua";
     let source = "local result = missing\n";

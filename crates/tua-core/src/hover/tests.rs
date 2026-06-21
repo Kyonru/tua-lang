@@ -43,6 +43,25 @@ fn hovers_known_function_signature() {
 }
 
 #[test]
+fn hovers_inferred_function_return_type_on_definition_and_call() {
+    let source = r#"function test(a: boolean)
+  return ""
+end
+
+test(false)
+"#;
+    let definition = hover_tua_source("src/main.tua", source, position_at(source, "test(a"))
+        .expect("hover should succeed")
+        .expect("function definition should hover");
+    let call = hover_tua_source("src/main.tua", source, position_at(source, "test(false"))
+        .expect("hover should succeed")
+        .expect("function call should hover");
+
+    assert_eq!(definition.contents, "function test(a: boolean): string");
+    assert_eq!(call.contents, "function test(a: boolean): string");
+}
+
+#[test]
 fn hovers_known_table_field() {
     let hover = hover_at("hp = player").expect("table field should hover");
 

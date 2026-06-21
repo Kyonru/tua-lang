@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::{self, Expression, Field, Index, LastStmt, Prefix, Suffix, Var};
+
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
@@ -149,6 +151,19 @@ pub(crate) fn build_type_environment_with_diagnostics(
             &mut diagnostics,
         ));
     }
+    let inferred_returns = infer_function_return_types(parsed, &aliases, &locals);
+
+    for function in &mut functions {
+        if function.return_type.is_some() {
+            continue;
+        }
+
+        let Some(name) = &function.name else {
+            continue;
+        };
+
+        function.return_type = inferred_returns.get(name).cloned();
+    }
 
     (
         TypeEnvironment {
@@ -213,6 +228,230 @@ fn resolve_function_annotation(
         has_varargs: function.has_varargs,
         return_type,
     }
+}
+
+fn infer_function_return_types(
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+) -> BTreeMap<String, Type> {
+    let mut returns = BTreeMap::new();
+
+    collect_function_return_types(parsed.ast.nodes(), aliases, locals, &mut returns);
+
+    returns
+}
+
+fn collect_function_return_types(
+    block: &ast::Block,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    returns: &mut BTreeMap<String, Type>,
+) {
+    for stmt in block.stmts() {
+        match stmt {
+            ast::Stmt::LocalFunction(function) => {
+                if let Some(return_type) =
+                    infer_block_return_type(function.body().block(), aliases, locals)
+                {
+                    returns.insert(token_text(function.name()), return_type);
+                }
+                collect_function_return_types(function.body().block(), aliases, locals, returns);
+            }
+            ast::Stmt::FunctionDeclaration(function) => {
+                if let Some(return_type) =
+                    infer_block_return_type(function.body().block(), aliases, locals)
+                {
+                    returns.insert(function.name().to_string(), return_type);
+                }
+                collect_function_return_types(function.body().block(), aliases, locals, returns);
+            }
+            ast::Stmt::Do(block) => {
+                collect_function_return_types(block.block(), aliases, locals, returns);
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                collect_function_return_types(for_stmt.block(), aliases, locals, returns);
+            }
+            ast::Stmt::If(if_stmt) => {
+                collect_function_return_types(if_stmt.block(), aliases, locals, returns);
+
+                if let Some(else_ifs) = if_stmt.else_if() {
+                    for else_if in else_ifs {
+                        collect_function_return_types(else_if.block(), aliases, locals, returns);
+                    }
+                }
+
+                if let Some(else_block) = if_stmt.else_block() {
+                    collect_function_return_types(else_block, aliases, locals, returns);
+                }
+            }
+            ast::Stmt::NumericFor(for_stmt) => {
+                collect_function_return_types(for_stmt.block(), aliases, locals, returns);
+            }
+            ast::Stmt::Repeat(repeat) => {
+                collect_function_return_types(repeat.block(), aliases, locals, returns);
+            }
+            ast::Stmt::While(while_stmt) => {
+                collect_function_return_types(while_stmt.block(), aliases, locals, returns);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn infer_block_return_type(
+    block: &ast::Block,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+) -> Option<Type> {
+    let Some(LastStmt::Return(return_stmt)) = block.last_stmt() else {
+        return None;
+    };
+
+    let expression = return_stmt.returns().iter().next()?;
+
+    infer_expression_type(expression, aliases, locals)
+}
+
+fn infer_expression_type(
+    expression: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+) -> Option<Type> {
+    match expression {
+        Expression::Number(_) => Some(Type::number()),
+        Expression::String(_) => Some(Type::string()),
+        Expression::Symbol(symbol) => match token_text(symbol).as_str() {
+            "true" | "false" => Some(Type::boolean()),
+            "nil" => Some(Type::nil()),
+            _ => None,
+        },
+        Expression::TableConstructor(table) => {
+            Some(Type::table(table.fields().iter().filter_map(|field| {
+                let Field::NameKey { key, value, .. } = field else {
+                    return None;
+                };
+                let ty = infer_expression_type(value, aliases, locals).unwrap_or(Type::Any);
+
+                Some((token_text(key), TableField::required(ty)))
+            })))
+        }
+        Expression::Parentheses { expression, .. } => {
+            infer_expression_type(expression, aliases, locals)
+        }
+        Expression::TypeAssertion { expression, .. } => {
+            infer_expression_type(expression, aliases, locals)
+        }
+        Expression::Function(function) => Some(function_type_from_body(function.body())),
+        Expression::Var(var) => infer_var_type(var, aliases, locals),
+        _ => None,
+    }
+}
+
+fn infer_var_type(
+    var: &Var,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+) -> Option<Type> {
+    match var {
+        Var::Name(name) => locals
+            .get(&token_text(name))
+            .map(|ty| resolve_aliases_from_map(aliases, ty, 0)),
+        Var::Expression(expression) => {
+            resolve_field_chain_type_from_map(aliases, locals, &plain_field_chain(expression)?)
+        }
+        _ => None,
+    }
+}
+
+fn resolve_field_chain_type_from_map(
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    parts: &[String],
+) -> Option<Type> {
+    let (root, fields) = parts.split_first()?;
+    let mut current = locals
+        .get(root)
+        .map(|ty| resolve_aliases_from_map(aliases, ty, 0))?;
+
+    for field in fields {
+        current = resolve_table_field_type_from_map(aliases, &current, field)?;
+    }
+
+    Some(current)
+}
+
+fn resolve_table_field_type_from_map(
+    aliases: &BTreeMap<String, Type>,
+    ty: &Type,
+    field: &str,
+) -> Option<Type> {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Table(table) => table
+            .field(field)
+            .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
+        Type::Union(types) => {
+            let mut resolved = Vec::new();
+
+            for ty in types {
+                if let Some(field_type) = resolve_table_field_type_from_map(aliases, &ty, field) {
+                    resolved.push(field_type);
+                }
+            }
+
+            match resolved.len() {
+                0 => None,
+                1 => resolved.into_iter().next(),
+                _ => Some(Type::union(resolved)),
+            }
+        }
+        _ => None,
+    }
+}
+
+fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: usize) -> Type {
+    if depth >= 64 {
+        return ty.clone();
+    }
+
+    match ty {
+        Type::Alias(name) => aliases
+            .get(name)
+            .map(|resolved| resolve_aliases_from_map(aliases, resolved, depth + 1))
+            .unwrap_or_else(|| ty.clone()),
+        _ => ty.clone(),
+    }
+}
+
+fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {
+    let Prefix::Name(name) = expression.prefix() else {
+        return None;
+    };
+    let mut parts = vec![token_text(name)];
+
+    for suffix in expression.suffixes() {
+        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
+            return None;
+        };
+
+        parts.push(token_text(name));
+    }
+
+    Some(parts)
+}
+
+fn function_type_from_body(body: &ast::FunctionBody) -> Type {
+    let parameter_count = body
+        .parameters()
+        .iter()
+        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
+        .count();
+
+    Type::function(vec![Type::Any; parameter_count], Type::Any)
+}
+
+fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
+    token.to_string().trim().to_owned()
 }
 
 fn resolve_tua_type(

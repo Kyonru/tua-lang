@@ -1,18 +1,18 @@
-local inspect: any = require("inspect")
-local player: any = require("player")
-local obstacles: any = require("obstacles")
-local background: any = require("background")
-local particles: any = require("particles")
-local score: any = require("score")
-local sound: any = require("sound")
-local friends: any = require("friends")
+local inspect = require("inspect")
+local player = require("player")
+local obstacles = require("obstacles")
+local background = require("background")
+local particles = require("particles")
+local score = require("score")
+local sound = require("sound")
+local friends = require("friends")
 
 local SMOKE: boolean = os.getenv("TUA_LOVE_FULL_SMOKE") == "1"
 
 _HEIGHT = love.graphics.getHeight()
 _WIDTH = love.graphics.getWidth()
 
-local clouds_front: any = love.graphics.newImage("assets/clouds/clouds_front.png")
+local clouds_front = love.graphics.newImage("assets/clouds/clouds_front.png")
 clouds_front:setFilter("linear", "nearest")
 local clouds_back = love.graphics.newImage("assets/clouds/clouds_back.png")
 clouds_front:setFilter("linear", "nearest")
