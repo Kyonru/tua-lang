@@ -8,10 +8,13 @@ Functions.damage(player, 7)
 local clamped = Legacy.clamp(Compound.stats.score, 0, 100)
 local message = Legacy.describe("score", clamped)
 
+local built_in = tostring(1)
+
 return {
   player = player,
   stats = Compound.stats,
   clamped = clamped,
   message = message,
+  built_in = built_in,
 }
 

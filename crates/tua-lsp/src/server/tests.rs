@@ -417,6 +417,56 @@ love.graphics.print("hi", 0, 0)
 }
 
 #[test]
+fn hover_returns_required_module_bindings_and_exports() {
+    let temp = TempProject::new("required-module-hover");
+    let source = r#"local Player = require("player")
+local Legacy = require("legacy")
+
+local player = Player.makePlayer("Ada")
+local hp = Player.defaultHp
+local label = Legacy.describe("hp", hp)
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+  defaultHp = 10,
+}
+"#;
+    let legacy = r#"return {
+  describe = function(label, value)
+    return label
+  end,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", player);
+    temp.write("src/legacy.lua", legacy);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "player\")"),
+        hover_request(3, &uri, source, "Player.makePlayer"),
+        hover_request(4, &uri, source, "makePlayer("),
+        hover_request(5, &uri, source, "defaultHp"),
+        hover_request(6, &uri, source, "describe("),
+    ]);
+
+    assert_hover_contains(&output, 2, "(module) player ->");
+    assert_hover_contains(&output, 3, "(module) Player = require(\"player\") ->");
+    assert_hover_contains(&output, 4, "function Player.makePlayer(string): Player");
+    assert_hover_contains(&output, 5, "(field) Player.defaultHp: number");
+    assert_hover_contains(&output, 6, "function Legacy.describe(any, any): any");
+}
+
+#[test]
 fn definition_returns_known_alias_function_local_and_table_field_locations() {
     let uri = "file:///tmp/definition.tua";
     let source = r#"type Vec2 = { x: number, y: number }

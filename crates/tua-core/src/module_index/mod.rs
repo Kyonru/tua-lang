@@ -17,22 +17,62 @@ pub struct ModuleExports {
     pub fields: BTreeMap<String, Type>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RequiredModule {
+    pub module: String,
+    pub path: PathBuf,
+}
+
 impl ModuleExports {
     pub fn field(&self, name: &str) -> Option<&Type> {
         self.fields.get(name)
     }
 }
 
+pub fn required_module_for_receiver(
+    parsed: &ParsedSource,
+    receiver: &str,
+) -> Option<RequiredModule> {
+    let module = require_bindings(parsed).remove(receiver)?;
+    let path = resolve_required_module(&parsed.path, &module)?;
+
+    Some(RequiredModule { module, path })
+}
+
 pub fn required_module_exports_for_receiver(
     parsed: &ParsedSource,
     receiver: &str,
 ) -> Option<ModuleExports> {
-    let module = require_bindings(parsed).remove(receiver)?;
-    let path = resolve_required_module(&parsed.path, &module)?;
-    let source = fs::read_to_string(&path).ok()?;
-    let parsed = parse_module_source(&path, source).ok()?;
+    let required = required_module_for_receiver(parsed, receiver)?;
+    let source = fs::read_to_string(&required.path).ok()?;
+    let parsed = parse_module_source(&required.path, source).ok()?;
 
     infer_module_exports(&parsed)
+}
+
+pub fn required_module_export_type_for_fields(
+    parsed: &ParsedSource,
+    receiver: &str,
+    fields: &[String],
+) -> Option<Type> {
+    let exports = required_module_exports_for_receiver(parsed, receiver)?;
+
+    exported_type_for_fields(&exports, fields)
+}
+
+pub fn exported_type_for_fields(exports: &ModuleExports, fields: &[String]) -> Option<Type> {
+    let mut current = Type::table(
+        exports
+            .fields
+            .iter()
+            .map(|(name, ty)| (name.clone(), TableField::required(ty.clone()))),
+    );
+
+    for field in fields {
+        current = export_field_type(&current, field)?;
+    }
+
+    Some(current)
 }
 
 pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<PathBuf> {
@@ -48,6 +88,28 @@ pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<Path
     }
 
     None
+}
+
+fn export_field_type(ty: &Type, field: &str) -> Option<Type> {
+    match ty {
+        Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+        Type::Union(types) => {
+            let mut resolved = Vec::new();
+
+            for ty in types {
+                if let Some(field_ty) = export_field_type(ty, field) {
+                    resolved.push(field_ty);
+                }
+            }
+
+            match resolved.len() {
+                0 => None,
+                1 => resolved.into_iter().next(),
+                _ => Some(Type::union(resolved)),
+            }
+        }
+        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => None,
+    }
 }
 
 pub fn infer_module_exports(parsed: &ParsedSource) -> Option<ModuleExports> {

@@ -1,5 +1,9 @@
 use super::*;
 use crate::source_text::position_at;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SOURCE: &str = r#"type Vec2 = { x: number, y: number }
 type Player = { pos: Vec2, hp: number }
@@ -110,8 +114,140 @@ fn local_symbols_shadow_lua_global_hover() {
     assert_eq!(hover, None);
 }
 
+#[test]
+fn hovers_required_module_literal_binding_and_tua_exports() {
+    let temp = TempProject::new("required-module-hover");
+    let source = r#"local Player = require("player")
+
+local player = Player.makePlayer("Ada")
+local hp = Player.defaultHp
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+  defaultHp = 10,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", player);
+
+    let main_path = temp.path.join("src/main.tua");
+    let literal = hover_tua_source(&main_path, source, position_at(source, "player\")"))
+        .expect("hover should not fail")
+        .expect("require literal should hover");
+    let binding = hover_tua_source(&main_path, source, position_at(source, "Player.makePlayer"))
+        .expect("hover should not fail")
+        .expect("module binding should hover");
+    let function = hover_tua_source(&main_path, source, position_at(source, "makePlayer("))
+        .expect("hover should not fail")
+        .expect("module function should hover");
+    let field = hover_tua_source(&main_path, source, position_at(source, "defaultHp"))
+        .expect("hover should not fail")
+        .expect("module field should hover");
+
+    assert!(literal.contents.contains("(module) player ->"));
+    assert!(literal.contents.contains("player.tua"));
+    assert!(binding
+        .contents
+        .contains("(module) Player = require(\"player\") ->"));
+    assert_eq!(
+        function.contents,
+        "function Player.makePlayer(string): Player"
+    );
+    assert_eq!(field.contents, "(field) Player.defaultHp: number");
+}
+
+#[test]
+fn hovers_required_lua_module_exports() {
+    let temp = TempProject::new("required-lua-module-hover");
+    let source = r#"local Legacy = require("legacy")
+
+local label = Legacy.describe("hp", 10)
+"#;
+    let legacy = r#"return {
+  describe = function(label, value)
+    return label
+  end,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/legacy.lua", legacy);
+
+    let main_path = temp.path.join("src/main.tua");
+    let hover = hover_tua_source(&main_path, source, position_at(source, "describe("))
+        .expect("hover should not fail")
+        .expect("Lua module function should hover");
+
+    assert_eq!(hover.contents, "function Legacy.describe(any, any): any");
+}
+
+#[test]
+fn unresolved_required_module_fields_do_not_hover() {
+    let temp = TempProject::new("missing-required-module-hover");
+    let source = r#"local Missing = require("missing")
+
+local value = Missing.nope
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+
+    let hover = hover_tua_source(
+        temp.path.join("src/main.tua"),
+        source,
+        position_at(source, "nope"),
+    )
+    .expect("hover should not fail");
+
+    assert_eq!(hover, None);
+}
+
 fn hover_at(needle: &str) -> Option<Hover> {
     let position = position_at(SOURCE, needle);
 
     hover_tua_source("src/main.tua", SOURCE, position).expect("source should parse and type")
+}
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("tua-core-hover-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("temp project should be created");
+
+        Self { path }
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
+        let path = self.path.join(relative);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+
+        fs::write(path, contents).expect("fixture should be written");
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
