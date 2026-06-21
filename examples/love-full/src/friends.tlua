@@ -1,0 +1,116 @@
+type Friend = {
+  asset: any,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  speed: number,
+  points: number,
+}
+
+type FriendsModule = {
+  list?: any,
+  spawn_timer?: number,
+  types?: any,
+}
+
+local utils: any = require("utils")
+local player: any = require("player")
+local sound: any = require("sound")
+local particles: any = require("particles")
+local score: any = require("score")
+
+local friends: FriendsModule = {}
+
+local fish_asset: any = love.graphics.newImage("assets/friends/fish.png")
+local fly_asset: any = love.graphics.newImage("assets/friends/fly.png")
+local frog_asset: any = love.graphics.newImage("assets/friends/frog.png")
+local ladybug_asset: any = love.graphics.newImage("assets/friends/ladybug.png")
+local mouse_asset: any = love.graphics.newImage("assets/friends/mouse.png")
+
+function friends.create(asset: any, speed: number, points: number): Friend
+  local friend: Friend = {
+    asset = asset,
+    width = 64,
+    height = 64,
+    x = 0,
+    y = 0,
+    speed = speed,
+    points = points,
+  }
+
+  return friend
+end
+
+function friends.load()
+  friends.list = {}
+  friends.spawn_timer = 2
+
+  friends.types = {
+    { asset = fly_asset, speed = 30, points = 1 },
+    { asset = mouse_asset, speed = 50, points = 5 },
+    { asset = frog_asset, speed = 70, points = 10 },
+    { asset = ladybug_asset, speed = 100, points = 15 },
+    { asset = fish_asset, speed = 120, points = 25 },
+  }
+end
+
+function friends.update(dt: number)
+  friends.spawn_timer -= dt
+  if friends.spawn_timer < 0 then
+    friends.spawn_timer = math.random(1, 2)
+
+    local friend_type_index: number = math.random(1, 5)
+
+    local friend_type: any = friends.types[friend_type_index]
+    local friend: Friend = friends.create(friend_type.asset, friend_type.speed, friend_type.points)
+    friend.y = _HEIGHT
+    friend.x = math.random(0, _WIDTH - friend.width)
+    table.insert(friends.list, friend)
+  end
+
+  for i, friend in ipairs(friends.list) do
+    friend.y -= friend.speed * dt
+
+    if friend.y < -friend.height then
+      table.remove(friends.list, i)
+    end
+
+    local is_colliding_player: boolean = utils.AABB_collision(
+      player.x,
+      player.y,
+      player.width,
+      player.height,
+      friend.x,
+      friend.y,
+      friend.width,
+      friend.height
+    )
+
+    if is_colliding_player then
+      score.add(friend.points)
+      particles.create_heart_explosion(friend.x + friend.width / 2, friend.y + friend.height / 2)
+
+      sound.play_catch()
+      table.remove(friends.list, i)
+    end
+  end
+end
+
+function friends.draw()
+  particles.draw_heart_explosion()
+
+  for i = 1, #friends.list do
+    local friend: Friend = friends.list[i]
+    love.graphics.draw(
+      friend.asset,
+      friend.x,
+      friend.y,
+      0,
+      friend.width / friend.asset:getWidth(),
+      friend.height / friend.asset:getHeight()
+    )
+  end
+end
+
+return friends

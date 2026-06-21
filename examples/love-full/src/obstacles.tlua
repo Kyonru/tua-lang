@@ -1,0 +1,83 @@
+type Obstacle = {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+}
+
+type ObstaclesModule = {
+  list?: any,
+  spawn_timer?: number,
+  spawn_interval?: number,
+  speed?: number,
+}
+
+local player: any = require("player")
+local utils: any = require("utils")
+local score: any = require("score")
+local sound: any = require("sound")
+local particles: any = require("particles")
+
+local obstacles: ObstaclesModule = {}
+local block: any = love.graphics.newImage("assets/block.png")
+
+function obstacles.load()
+  obstacles.list = {}
+  obstacles.spawn_timer = 0
+  obstacles.spawn_interval = 2
+  obstacles.speed = 1
+end
+
+function obstacles.update(dt: number)
+  obstacles.speed = math.max(1.5, score.get_time() / 10)
+  obstacles.spawn_timer += dt
+  if obstacles.spawn_timer > obstacles.spawn_interval then
+    obstacles.spawn_timer = 0
+    local obstacle_height: number = math.random(32, _HEIGHT / 4)
+    local obstacle_y: number = math.random(0, _HEIGHT - obstacle_height)
+    table.insert(obstacles.list, {
+      x = _WIDTH,
+      y = obstacle_y,
+      width = obstacle_height,
+      height = obstacle_height,
+    })
+  end
+
+  for i, wall in ipairs(obstacles.list) do
+    wall.x -= obstacles.speed * dt * 60
+    if wall.x + wall.width < 0 then
+      table.remove(obstacles.list, i)
+    end
+
+    local is_colliding_player: boolean =
+      utils.AABB_collision(player.x, player.y, player.width, player.height, wall.x, wall.y, wall.width, wall.height)
+
+    if is_colliding_player then
+      player.damage(1, function()
+        sound.play_disappear()
+        print("Game Over!")
+      end)
+      particles.create_block_explosion(wall.x + wall.width / 2, wall.y + wall.height / 2, wall.width / _HEIGHT)
+      sound.play_hurt()
+      table.remove(obstacles.list, i)
+    end
+  end
+end
+
+function obstacles.draw()
+  particles.draw_block_explosion()
+
+  for i = 1, #obstacles.list do
+    local obstacle: Obstacle = obstacles.list[i]
+    love.graphics.draw(
+      block,
+      obstacle.x,
+      obstacle.y,
+      0,
+      obstacle.width / block:getWidth(),
+      obstacle.height / block:getHeight()
+    )
+  end
+end
+
+return obstacles

@@ -1,2 +1,7 @@
 /target/
 /examples/*/build/
+/examples/love-full/game/friends.lua
+/examples/love-full/game/main.lua
+/examples/love-full/game/obstacles.lua
+/examples/love-full/game/player.lua
+/examples/love-full/game/score.lua

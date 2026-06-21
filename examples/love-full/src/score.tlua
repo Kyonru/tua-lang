@@ -1,0 +1,46 @@
+type ScoreModule = {
+  time?: number,
+  score?: number,
+  font?: any,
+  time_x?: number,
+  time_y?: number,
+  score_x?: number,
+  score_y?: number,
+}
+
+local score: ScoreModule = {}
+
+function score.load()
+  score.time = 0
+  score.score = 0
+  score.font = love.graphics.newFont("assets/sniglet.otf", 32)
+  score.time_x = _WIDTH - score.font:getWidth("0000")
+  score.time_y = 16
+
+  score.score_x = _WIDTH / 2 - score.font:getWidth("0000")
+  score.score_y = 16
+end
+
+function score.update(dt: number)
+  score.time += dt
+end
+
+function score.draw()
+  love.graphics.setFont(score.font)
+  love.graphics.print(math.floor(score.time), score.time_x, score.time_y)
+  love.graphics.print(math.floor(score.score), score.score_x, score.score_y)
+end
+
+function score.get(): number
+  return score.score
+end
+
+function score.get_time(): number
+  return score.time
+end
+
+function score.add(amount: number)
+  score.score += amount
+end
+
+return score
