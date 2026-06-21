@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tlua_core::{
     check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
-    hover_tlua_source, prepare_rename_tlua_source, project_description, references_tlua_source,
-    rename_tlua_source, Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity,
-    DocumentSymbol, DocumentSymbolKind, Hover, Reference, RenameEdit, RenameTarget, SourcePosition,
-    SourceSpan, TextEdit,
+    hover_tlua_source, inlay_hints_tlua_source, prepare_rename_tlua_source, project_description,
+    references_tlua_source, rename_tlua_source, Completion, CompletionKind, Definition, Diagnostic,
+    DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover, InlayHint, InlayHintKind,
+    Reference, RenameEdit, RenameTarget, SourcePosition, SourceSpan, TextEdit,
 };
 
 pub fn server_name() -> &'static str {
@@ -82,6 +82,9 @@ impl LspServer {
                         "referencesProvider": true,
                         "renameProvider": {
                             "prepareProvider": true
+                        },
+                        "inlayHintProvider": {
+                            "resolveProvider": false
                         }
                     },
                     "serverInfo": {
@@ -113,6 +116,7 @@ impl LspServer {
             "textDocument/rename" => {
                 response(id, self.rename_response(&message).unwrap_or(Value::Null))
             }
+            "textDocument/inlayHint" => response(id, self.inlay_hint_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -372,6 +376,37 @@ impl LspServer {
 
         Some(lsp_workspace_edit(uri, edit))
     }
+
+    fn inlay_hint_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!([]);
+        };
+        let Some(uri) = params
+            .get("textDocument")
+            .and_then(|document| document.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return json!([]);
+        };
+        let Some(text) = self.documents.get(uri) else {
+            return json!([]);
+        };
+        let range = params.get("range").and_then(lsp_source_range);
+        let path = path_from_uri(uri);
+        let hints = inlay_hints_tlua_source(path, text.clone()).unwrap_or_default();
+
+        Value::Array(
+            hints
+                .into_iter()
+                .filter(|hint| {
+                    range
+                        .map(|range| range.contains(hint.position))
+                        .unwrap_or(true)
+                })
+                .map(lsp_inlay_hint_from_core)
+                .collect(),
+        )
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -500,6 +535,27 @@ fn lsp_text_edit(edit: TextEdit) -> Value {
     })
 }
 
+fn lsp_inlay_hint_from_core(hint: InlayHint) -> Value {
+    let mut item = json!({
+        "position": lsp_position(hint.position),
+        "label": hint.label,
+        "kind": lsp_inlay_hint_kind(hint.kind)
+    });
+
+    if hint.kind == InlayHintKind::Parameter {
+        item["paddingRight"] = json!(true);
+    }
+
+    item
+}
+
+fn lsp_inlay_hint_kind(kind: InlayHintKind) -> u8 {
+    match kind {
+        InlayHintKind::Type => 1,
+        InlayHintKind::Parameter => 2,
+    }
+}
+
 fn lsp_location(uri: &str, span: SourceSpan) -> Value {
     json!({
         "uri": uri,
@@ -552,6 +608,44 @@ fn lsp_range(span: SourceSpan) -> Value {
             "character": span.end.column.saturating_sub(1)
         }
     })
+}
+
+fn lsp_position(position: SourcePosition) -> Value {
+    json!({
+        "line": position.line.saturating_sub(1),
+        "character": position.column.saturating_sub(1)
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SourceRange {
+    start: SourcePosition,
+    end: SourcePosition,
+}
+
+impl SourceRange {
+    fn contains(self, position: SourcePosition) -> bool {
+        position_key(self.start) <= position_key(position)
+            && position_key(position) <= position_key(self.end)
+    }
+}
+
+fn lsp_source_range(range: &Value) -> Option<SourceRange> {
+    Some(SourceRange {
+        start: source_position_from_lsp(range.get("start")?)?,
+        end: source_position_from_lsp(range.get("end")?)?,
+    })
+}
+
+fn source_position_from_lsp(position: &Value) -> Option<SourcePosition> {
+    Some(SourcePosition {
+        line: position.get("line")?.as_u64()? as usize + 1,
+        column: position.get("character")?.as_u64()? as usize + 1,
+    })
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn path_from_uri(uri: &str) -> PathBuf {

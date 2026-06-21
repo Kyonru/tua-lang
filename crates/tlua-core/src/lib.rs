@@ -6,6 +6,7 @@ pub mod diagnostic;
 pub mod document_symbol;
 pub mod emit;
 pub mod hover;
+pub mod inlay_hint;
 pub mod parser;
 mod project;
 pub mod references;
@@ -32,6 +33,9 @@ pub use document_symbol::{
 };
 pub use emit::{emit_lua, emit_tlua_source};
 pub use hover::{hover_parsed_source, hover_tlua_source, Hover};
+pub use inlay_hint::{
+    inlay_hints_parsed_source, inlay_hints_tlua_source, InlayHint, InlayHintKind,
+};
 pub use parser::{
     parse_lua_source, parse_tlua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
     LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,

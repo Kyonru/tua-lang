@@ -46,6 +46,10 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["renameProvider"]["prepareProvider"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["inlayHintProvider"]["resolveProvider"],
+        false
+    );
 }
 
 #[test]
@@ -552,6 +556,84 @@ fn rename_unknown_document_returns_null() {
     assert!(response["result"].is_null());
 }
 
+#[test]
+fn inlay_hint_returns_local_type_and_parameter_hints() {
+    let uri = "file:///tmp/inlay-hints.tlua";
+    let source = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+local player = makePlayer()
+local total = 10
+damage(player, 10)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        inlay_hint_request(2, uri, 0, 0, 20, 0),
+    ]);
+    let response = response_with_id(&output, 2);
+    let hints = response["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert_eq!(
+        inlay_hint_labels(hints),
+        vec![": Player", ": number", "target:", "amount:"]
+    );
+    assert_eq!(hints[0]["kind"], 1);
+    assert_eq!(hints[1]["kind"], 1);
+    assert_eq!(hints[2]["kind"], 2);
+    assert_eq!(hints[2]["paddingRight"], true);
+    assert_eq!(hints[0]["position"], json!({ "line": 11, "character": 12 }));
+    assert_eq!(hints[2]["position"], json!({ "line": 13, "character": 7 }));
+}
+
+#[test]
+fn inlay_hint_filters_to_requested_range() {
+    let uri = "file:///tmp/ranged-inlay-hints.tlua";
+    let source = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+local player = makePlayer()
+local total = 10
+damage(player, 10)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        inlay_hint_request(2, uri, 11, 0, 12, 20),
+    ]);
+    let response = response_with_id(&output, 2);
+    let hints = response["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert_eq!(inlay_hint_labels(hints), vec![": Player", ": number"]);
+}
+
+#[test]
+fn inlay_hint_unknown_document_returns_empty_array() {
+    let uri = "file:///tmp/missing-inlay-hints.tlua";
+    let output = run_messages(vec![inlay_hint_request(2, uri, 0, 0, 20, 0)]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!([]));
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -695,6 +777,36 @@ fn rename_request(
             },
             "position": lsp_position_with_offset(source, needle, offset),
             "newName": new_name
+        }
+    })
+}
+
+fn inlay_hint_request(
+    id: u64,
+    uri: &str,
+    start_line: usize,
+    start_character: usize,
+    end_line: usize,
+    end_character: usize,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/inlayHint",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "range": {
+                "start": {
+                    "line": start_line,
+                    "character": start_character
+                },
+                "end": {
+                    "line": end_line,
+                    "character": end_character
+                }
+            }
         }
     })
 }
@@ -877,6 +989,17 @@ fn assert_rename_edit_texts<const N: usize>(
     assert!(new_texts
         .iter()
         .all(|new_text| *new_text == expected_new_text));
+}
+
+fn inlay_hint_labels(hints: &[Value]) -> Vec<&str> {
+    hints
+        .iter()
+        .map(|hint| {
+            hint["label"]
+                .as_str()
+                .expect("inlay hint label should be a string")
+        })
+        .collect()
 }
 
 fn range_text<'a>(source: &'a str, range: &Value) -> &'a str {
