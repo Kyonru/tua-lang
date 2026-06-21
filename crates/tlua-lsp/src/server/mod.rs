@@ -6,9 +6,10 @@ use serde_json::{json, Value};
 use tlua_core::{
     check_tlua_source, complete_tlua_source, definition_tlua_source, document_symbols_tlua_source,
     hover_tlua_source, inlay_hints_tlua_source, prepare_rename_tlua_source, project_description,
-    references_tlua_source, rename_tlua_source, Completion, CompletionKind, Definition, Diagnostic,
-    DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind, Hover, InlayHint, InlayHintKind,
-    Reference, RenameEdit, RenameTarget, SourcePosition, SourceSpan, TextEdit,
+    references_tlua_source, rename_tlua_source, semantic_tokens_tlua_source, Completion,
+    CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol, DocumentSymbolKind,
+    Hover, InlayHint, InlayHintKind, Reference, RenameEdit, RenameTarget, SemanticToken,
+    SemanticTokenKind, SemanticTokenModifier, SourcePosition, SourceSpan, TextEdit,
 };
 
 pub fn server_name() -> &'static str {
@@ -85,6 +86,13 @@ impl LspServer {
                         },
                         "inlayHintProvider": {
                             "resolveProvider": false
+                        },
+                        "semanticTokensProvider": {
+                            "legend": {
+                                "tokenTypes": SEMANTIC_TOKEN_TYPES,
+                                "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
+                            },
+                            "full": true
                         }
                     },
                     "serverInfo": {
@@ -117,6 +125,9 @@ impl LspServer {
                 response(id, self.rename_response(&message).unwrap_or(Value::Null))
             }
             "textDocument/inlayHint" => response(id, self.inlay_hint_response(&message)),
+            "textDocument/semanticTokens/full" => {
+                response(id, self.semantic_tokens_response(&message))
+            }
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -407,6 +418,26 @@ impl LspServer {
                 .collect(),
         )
     }
+
+    fn semantic_tokens_response(&self, message: &Value) -> Value {
+        let Some(params) = message.get("params") else {
+            return json!({ "data": [] });
+        };
+        let Some(uri) = params
+            .get("textDocument")
+            .and_then(|document| document.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return json!({ "data": [] });
+        };
+        let Some(text) = self.documents.get(uri) else {
+            return json!({ "data": [] });
+        };
+        let path = path_from_uri(uri);
+        let tokens = semantic_tokens_tlua_source(path, text.clone()).unwrap_or_default();
+
+        lsp_semantic_tokens_from_core(tokens)
+    }
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -533,6 +564,81 @@ fn lsp_text_edit(edit: TextEdit) -> Value {
         "range": lsp_range(edit.span),
         "newText": edit.new_text
     })
+}
+
+const SEMANTIC_TOKEN_TYPES: [&str; 7] = [
+    "typeAlias",
+    "function",
+    "variable",
+    "parameter",
+    "property",
+    "builtinType",
+    "unresolvedReference",
+];
+
+const SEMANTIC_TOKEN_MODIFIERS: [&str; 1] = ["declaration"];
+
+fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>) -> Value {
+    let mut data = Vec::with_capacity(tokens.len() * 5);
+    let mut previous_line = 0usize;
+    let mut previous_start = 0usize;
+
+    for token in tokens {
+        if token.span.start.line != token.span.end.line {
+            continue;
+        }
+
+        let line = token.span.start.line.saturating_sub(1);
+        let start = token.span.start.column.saturating_sub(1);
+        let length = token
+            .span
+            .end
+            .column
+            .saturating_sub(token.span.start.column);
+        let delta_line = line.saturating_sub(previous_line);
+        let delta_start = if delta_line == 0 {
+            start.saturating_sub(previous_start)
+        } else {
+            start
+        };
+
+        data.extend([
+            delta_line,
+            delta_start,
+            length,
+            semantic_token_type_index(token.kind),
+            semantic_token_modifier_bits(&token.modifiers),
+        ]);
+
+        previous_line = line;
+        previous_start = start;
+    }
+
+    json!({ "data": data })
+}
+
+fn semantic_token_type_index(kind: SemanticTokenKind) -> usize {
+    match kind {
+        SemanticTokenKind::TypeAlias => 0,
+        SemanticTokenKind::Function => 1,
+        SemanticTokenKind::Variable => 2,
+        SemanticTokenKind::Parameter => 3,
+        SemanticTokenKind::Property => 4,
+        SemanticTokenKind::BuiltinType => 5,
+        SemanticTokenKind::UnresolvedReference => 6,
+    }
+}
+
+fn semantic_token_modifier_bits(modifiers: &[SemanticTokenModifier]) -> usize {
+    modifiers.iter().fold(0usize, |bits, modifier| {
+        bits | semantic_token_modifier_bit(*modifier)
+    })
+}
+
+fn semantic_token_modifier_bit(modifier: SemanticTokenModifier) -> usize {
+    match modifier {
+        SemanticTokenModifier::Declaration => 1 << 0,
+    }
 }
 
 fn lsp_inlay_hint_from_core(hint: InlayHint) -> Value {

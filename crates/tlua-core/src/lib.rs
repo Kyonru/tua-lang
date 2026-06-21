@@ -12,6 +12,7 @@ mod project;
 pub mod references;
 pub mod rename;
 mod semantic;
+pub mod semantic_token;
 mod source_text;
 pub mod types;
 
@@ -46,6 +47,10 @@ pub use references::{references_parsed_source, references_tlua_source, Reference
 pub use rename::{
     prepare_rename_parsed_source, prepare_rename_tlua_source, rename_parsed_source,
     rename_tlua_source, RenameEdit, RenameKind, RenameTarget, TextEdit,
+};
+pub use semantic_token::{
+    semantic_tokens_parsed_source, semantic_tokens_tlua_source, SemanticToken, SemanticTokenKind,
+    SemanticTokenModifier,
 };
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,

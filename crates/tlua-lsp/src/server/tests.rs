@@ -50,6 +50,26 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["inlayHintProvider"]["resolveProvider"],
         false
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"],
+        json!([
+            "typeAlias",
+            "function",
+            "variable",
+            "parameter",
+            "property",
+            "builtinType",
+            "unresolvedReference"
+        ])
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenModifiers"],
+        json!(["declaration"])
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
+        true
+    );
 }
 
 #[test]
@@ -634,6 +654,56 @@ fn inlay_hint_unknown_document_returns_empty_array() {
     assert_eq!(response["result"], json!([]));
 }
 
+#[test]
+fn semantic_tokens_return_encoded_token_classes() {
+    let uri = "file:///tmp/semantic-tokens.tlua";
+    let source = r#"type Player = {
+  hp: number,
+  name: string,
+}
+
+local function makePlayer(): Player
+  return { hp = 10, name = "Ada" }
+end
+
+local function damage(player: Player, amount: number): Player
+  player.hp -= amount
+  return player
+end
+
+local hero = makePlayer()
+damage(hero, 10)
+missing(hero)
+require("player")
+"#;
+    let output = run_messages(vec![did_open(uri, source), semantic_tokens_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let tokens = decoded_semantic_tokens(source, response);
+
+    assert_semantic_token(&tokens, "Player", 0, true);
+    assert_semantic_token(&tokens, "makePlayer", 1, true);
+    assert_semantic_token(&tokens, "hero", 2, true);
+    assert_semantic_token(&tokens, "player", 3, true);
+    assert_semantic_token(&tokens, "hp", 4, true);
+    assert_semantic_token(&tokens, "number", 5, false);
+    assert_semantic_token(&tokens, "missing", 6, false);
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "damage" && token.token_type == 1 && !token.declaration));
+    assert!(!tokens
+        .iter()
+        .any(|token| token.text == "require" && token.token_type == 6));
+}
+
+#[test]
+fn semantic_tokens_unknown_document_returns_empty_data() {
+    let uri = "file:///tmp/missing-semantic-tokens.tlua";
+    let output = run_messages(vec![semantic_tokens_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!({ "data": [] }));
+}
+
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut input = Vec::new();
 
@@ -806,6 +876,19 @@ fn inlay_hint_request(
                     "line": end_line,
                     "character": end_character
                 }
+            }
+        }
+    })
+}
+
+fn semantic_tokens_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": {
+                "uri": uri
             }
         }
     })
@@ -1000,6 +1083,67 @@ fn inlay_hint_labels(hints: &[Value]) -> Vec<&str> {
                 .expect("inlay hint label should be a string")
         })
         .collect()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DecodedSemanticToken<'a> {
+    text: &'a str,
+    token_type: usize,
+    declaration: bool,
+}
+
+fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<DecodedSemanticToken<'a>> {
+    let data = response["result"]["data"]
+        .as_array()
+        .expect("semantic token data should be an array");
+    let mut line = 0usize;
+    let mut character = 0usize;
+    let mut tokens = Vec::new();
+
+    for chunk in data.chunks(5) {
+        let delta_line = chunk[0].as_u64().expect("delta line should be numeric") as usize;
+        let delta_start = chunk[1].as_u64().expect("delta start should be numeric") as usize;
+        let length = chunk[2].as_u64().expect("length should be numeric") as usize;
+        let token_type = chunk[3].as_u64().expect("type should be numeric") as usize;
+        let modifiers = chunk[4].as_u64().expect("modifiers should be numeric") as usize;
+
+        if delta_line == 0 {
+            character += delta_start;
+        } else {
+            line += delta_line;
+            character = delta_start;
+        }
+
+        let text = source
+            .split('\n')
+            .nth(line)
+            .and_then(|line_text| line_text.get(character..character + length))
+            .expect("semantic token range should exist");
+
+        tokens.push(DecodedSemanticToken {
+            text,
+            token_type,
+            declaration: modifiers & 1 == 1,
+        });
+    }
+
+    tokens
+}
+
+fn assert_semantic_token(
+    tokens: &[DecodedSemanticToken<'_>],
+    text: &str,
+    token_type: usize,
+    declaration: bool,
+) {
+    assert!(
+        tokens.iter().any(|token| {
+            token.text == text
+                && token.token_type == token_type
+                && token.declaration == declaration
+        }),
+        "expected semantic token `{text}` type {token_type} declaration {declaration}, got {tokens:?}"
+    );
 }
 
 fn range_text<'a>(source: &'a str, range: &Value) -> &'a str {
