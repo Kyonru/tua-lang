@@ -8,4 +8,4 @@ license.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-full_moon = "2.2.0"
+full_moon = { version = "2.2.0", features = ["luau"] }

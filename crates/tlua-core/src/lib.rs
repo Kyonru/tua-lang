@@ -9,7 +9,10 @@ pub use config::{
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
-pub use parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan};
+pub use parser::{
+    parse_lua_source, parse_tlua_source, FunctionAnnotation, LocalAnnotation, ParameterAnnotation,
+    ParsedSource, SourcePosition, SourceSpan, TableFieldType, TluaType, TypeAlias,
+};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
