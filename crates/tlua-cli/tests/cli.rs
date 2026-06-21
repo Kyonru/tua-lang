@@ -155,3 +155,104 @@ fn check_prints_config_diagnostics() {
     assert!(stderr.contains("tlua.toml:1:1 error TL3001: expected boolean value"));
     assert!(!stderr.contains("panicked"));
 }
+
+#[test]
+fn build_compiles_nested_source_tree_to_matching_output_tree() {
+    let temp = TempDir::new("build-nested");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/systems/player")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create ignored source");
+    fs::write(
+        temp.path().join("src/main.tlua"),
+        r#"
+local Player = require("systems.player.core")
+local current: Player | nil = nil
+
+return Player
+"#,
+    )
+    .expect("failed to write main.tlua");
+    fs::write(
+        temp.path().join("src/systems/player/core.tlua"),
+        r#"
+type Player = {
+  hp: number,
+}
+
+local function damage(player: Player, amount: number): Player
+  player.hp -= amount
+  return player
+end
+
+return {
+  damage = damage,
+}
+"#,
+    )
+    .expect("failed to write nested source");
+    fs::write(
+        temp.path().join("src/assets/ignored.lua"),
+        "return { ignored = true }\n",
+    )
+    .expect("failed to write ignored lua");
+
+    let output = tlua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("built 2 file(s)"));
+
+    let main_output =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read main output");
+    let nested_output = fs::read_to_string(temp.path().join("build/systems/player/core.lua"))
+        .expect("failed to read nested output");
+
+    assert!(main_output.contains(r#"require("systems.player.core")"#));
+    assert!(!main_output.contains(": Player"));
+    assert!(nested_output.contains("player.hp = player.hp - amount"));
+    assert!(!nested_output.contains("type Player"));
+    assert!(!temp.path().join("build/assets/ignored.lua").exists());
+}
+
+#[test]
+fn build_preserves_custom_relative_paths_with_only_extension_changed() {
+    let temp = TempDir::new("build-custom-layout");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "game"
+out = "dist/lua"
+target = "love11-luajit"
+extension = "tlua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("game/client/ui")).expect("failed to create source");
+    fs::write(
+        temp.path().join("game/client/ui/menu.tlua"),
+        r#"
+local Menu = {}
+return Menu
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tlua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tlua build");
+
+    assert!(output.status.success());
+    assert!(temp.path().join("dist/lua/client/ui/menu.lua").is_file());
+    assert!(!temp.path().join("dist/lua/client/ui/menu.tlua").exists());
+}

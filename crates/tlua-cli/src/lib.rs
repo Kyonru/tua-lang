@@ -1,6 +1,11 @@
-use std::path::Path;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
-use tlua_core::{format_diagnostics_for_cli, ConfigError, Diagnostic};
+use tlua_core::{
+    emit_tlua_source, format_diagnostics_for_cli, ConfigError, Diagnostic, DiagnosticCode,
+    LoadedConfig,
+};
 
 pub const HELP: &str = "\
 tlua - typed Lua tooling for LuaJIT/LÖVE projects
@@ -60,6 +65,13 @@ impl CliError {
         Self {
             message: "project configuration error".to_owned(),
             diagnostics: vec![error.to_diagnostic()],
+        }
+    }
+
+    fn from_diagnostics(message: impl Into<String>, diagnostics: Vec<Diagnostic>) -> Self {
+        Self {
+            message: message.into(),
+            diagnostics,
         }
     }
 
@@ -131,14 +143,11 @@ pub fn version_text() -> String {
     format!("tlua {}", tlua_core::VERSION)
 }
 
-fn placeholder_text(command: CommandName, emit_on_error: bool) -> String {
+fn placeholder_text(command: CommandName) -> String {
     match command {
         CommandName::Init => unreachable!("tlua init is handled before placeholder_text"),
         CommandName::Check => "tlua check is not implemented yet".to_owned(),
-        CommandName::Build if emit_on_error => {
-            "tlua build --emit-on-error is not implemented yet".to_owned()
-        }
-        CommandName::Build => "tlua build is not implemented yet".to_owned(),
+        CommandName::Build => unreachable!("tlua build is handled before placeholder_text"),
         CommandName::Watch => "tlua watch is not implemented yet".to_owned(),
         CommandName::Lsp => format!("{} is not implemented yet", tlua_lsp::server_name()),
     }
@@ -153,13 +162,112 @@ pub fn run_command(
         CommandName::Init => tlua_core::init_project(cwd)
             .map(format_init_result)
             .map_err(CliError::from_config_error),
-        CommandName::Check | CommandName::Build | CommandName::Watch => {
+        CommandName::Build => {
+            let loaded =
+                tlua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+            run_build(cwd, loaded, emit_on_error)
+        }
+        CommandName::Check | CommandName::Watch => {
             tlua_core::load_config_from_dir(cwd).map_err(CliError::from_config_error)?;
 
-            Ok(placeholder_text(command, emit_on_error))
+            Ok(placeholder_text(command))
         }
-        _ => Ok(placeholder_text(command, emit_on_error)),
+        _ => Ok(placeholder_text(command)),
     }
+}
+
+fn run_build(
+    cwd: impl AsRef<Path>,
+    loaded: LoadedConfig,
+    _emit_on_error: bool,
+) -> Result<String, CliError> {
+    let cwd = cwd.as_ref();
+    let source_dir = cwd.join(&loaded.config.source);
+    let out_dir = cwd.join(&loaded.config.out);
+    let source_files =
+        discover_source_files(&source_dir, &loaded.config.extension).map_err(|error| {
+            CliError::from_diagnostics("failed to discover source files", vec![error])
+        })?;
+    let mut emitted = 0usize;
+
+    for source_path in source_files {
+        let relative_path = source_path
+            .strip_prefix(&source_dir)
+            .expect("discovered source file should be under source directory");
+        let output_path = out_dir.join(relative_path).with_extension("lua");
+        let source = fs::read_to_string(&source_path).map_err(|source| {
+            CliError::from_diagnostics(
+                "failed to read source file",
+                vec![io_diagnostic(&source_path, source)],
+            )
+        })?;
+        let output = emit_tlua_source(&source_path, source)
+            .map_err(|diagnostics| CliError::from_diagnostics("failed to emit Lua", diagnostics))?;
+
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent).map_err(|source| {
+                CliError::from_diagnostics(
+                    "failed to create output directory",
+                    vec![io_diagnostic(parent, source)],
+                )
+            })?;
+        }
+
+        fs::write(&output_path, output).map_err(|source| {
+            CliError::from_diagnostics(
+                "failed to write output file",
+                vec![io_diagnostic(&output_path, source)],
+            )
+        })?;
+
+        emitted += 1;
+    }
+
+    Ok(format!("built {emitted} file(s)"))
+}
+
+fn discover_source_files(source_dir: &Path, extension: &str) -> Result<Vec<PathBuf>, Diagnostic> {
+    let mut files = Vec::new();
+
+    discover_source_files_into(source_dir, extension, &mut files)?;
+    files.sort();
+
+    Ok(files)
+}
+
+fn discover_source_files_into(
+    dir: &Path,
+    extension: &str,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), Diagnostic> {
+    let entries = fs::read_dir(dir).map_err(|source| io_diagnostic(dir, source))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|source| io_diagnostic(dir, source))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|source| io_diagnostic(&path, source))?;
+
+        if file_type.is_dir() {
+            discover_source_files_into(&path, extension, files)?;
+        } else if file_type.is_file() && has_extension(&path, extension) {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn has_extension(path: &Path, extension: &str) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value == extension)
+}
+
+fn io_diagnostic(path: &Path, source: io::Error) -> Diagnostic {
+    Diagnostic::error(path, 1, 1, source.to_string()).with_code(DiagnosticCode::EMIT_IO)
 }
 
 fn format_init_result(result: tlua_core::InitResult) -> String {
@@ -257,16 +365,10 @@ mod tests {
 
     #[test]
     fn command_placeholders_are_explicitly_unimplemented() {
-        let commands = [
-            (CommandName::Check, false),
-            (CommandName::Build, false),
-            (CommandName::Build, true),
-            (CommandName::Watch, false),
-            (CommandName::Lsp, false),
-        ];
+        let commands = [CommandName::Check, CommandName::Watch, CommandName::Lsp];
 
-        for (command, emit_on_error) in commands {
-            assert!(placeholder_text(command, emit_on_error).contains("not implemented yet"));
+        for command in commands {
+            assert!(placeholder_text(command).contains("not implemented yet"));
         }
     }
 
