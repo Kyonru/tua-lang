@@ -108,6 +108,8 @@ impl<'a> DefinitionResolver<'a> {
             })
         }));
 
+        candidates.extend(self.local_assignment_definitions(name, position));
+
         for function in &self.parsed.function_annotations {
             if let Some(span) = function.name_span.or(function.span) {
                 if function.name.as_deref() == Some(name) && starts_before_or_at(span, position) {
@@ -135,6 +137,36 @@ impl<'a> DefinitionResolver<'a> {
         candidates
             .into_iter()
             .max_by_key(|definition| position_key(definition.span.start))
+    }
+
+    fn local_assignment_definitions(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Vec<Definition> {
+        self.parsed
+            .ast
+            .nodes()
+            .stmts()
+            .filter_map(|stmt| {
+                let ast::Stmt::LocalAssignment(local) = stmt else {
+                    return None;
+                };
+
+                Some(local.names().iter().filter_map(|local_name| {
+                    let span = node_span(local_name)?;
+
+                    (token_text(local_name) == name && starts_before_or_at(span, position)).then(
+                        || Definition {
+                            path: self.parsed.path.clone(),
+                            span,
+                            kind: DefinitionKind::Local,
+                        },
+                    )
+                }))
+            })
+            .flatten()
+            .collect()
     }
 
     fn alias_definition(&self, name: &str) -> Option<Definition> {

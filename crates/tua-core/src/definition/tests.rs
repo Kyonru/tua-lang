@@ -107,6 +107,56 @@ fn resolves_local_usage() {
 }
 
 #[test]
+fn resolves_unannotated_local_values_returned_from_table() {
+    let source = r#"
+local Functions = require("functions")
+local Compound = require("compound")
+local Legacy = require("legacy")
+
+local player = Functions.makePlayer("Lua interop")
+local clamped = Legacy.clamp(Compound.stats.score, 0, 100)
+local message = Legacy.describe("score", clamped)
+local built_in = tostring(1)
+
+return {
+  player = player,
+  clamped = clamped,
+  message = message,
+  built_in = built_in,
+}
+"#;
+
+    assert_definition_in_source(
+        source,
+        "player = player",
+        "player = ".len(),
+        DefinitionKind::Local,
+        "player",
+    );
+    assert_definition_in_source(
+        source,
+        "clamped = clamped",
+        "clamped = ".len(),
+        DefinitionKind::Local,
+        "clamped",
+    );
+    assert_definition_in_source(
+        source,
+        "message = message",
+        "message = ".len(),
+        DefinitionKind::Local,
+        "message",
+    );
+    assert_definition_in_source(
+        source,
+        "built_in = built_in",
+        "built_in = ".len(),
+        DefinitionKind::Local,
+        "built_in",
+    );
+}
+
+#[test]
 fn resolves_parameter_usage() {
     assert_definition(
         "return target",
@@ -241,6 +291,25 @@ fn assert_definition(needle: &str, offset: usize, kind: DefinitionKind, expected
 
     assert_eq!(definition.kind, kind);
     assert_eq!(source_text(definition.span), expected_text);
+}
+
+fn assert_definition_in_source(
+    source: &'static str,
+    needle: &str,
+    offset: usize,
+    kind: DefinitionKind,
+    expected_text: &str,
+) {
+    let mut position = position_at(source, needle);
+
+    position.column += offset;
+
+    let definition = definition_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("definition should resolve");
+
+    assert_eq!(definition.kind, kind);
+    assert_eq!(source_text_from(source, definition.span), expected_text);
 }
 
 fn assert_no_definition(needle: &str, offset: usize) {

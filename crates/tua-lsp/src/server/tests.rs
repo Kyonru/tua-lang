@@ -631,6 +631,7 @@ player.hp = player.hp - 1
         hover_request(3, uri, source, "player:"),
         hover_request(4, uri, source, "damage(player"),
         hover_request(5, uri, source, "hp = player"),
+        hover_request(6, uri, source, "target.hp"),
     ]);
 
     assert_hover_contains(&output, 2, "type Vec2 = { x: number, y: number }");
@@ -641,6 +642,7 @@ player.hp = player.hp - 1
         "function damage(target: Player, amount: number): Player",
     );
     assert_hover_contains(&output, 5, "(field) hp: number");
+    assert_hover_contains(&output, 6, "parameter target: Player");
 }
 
 #[test]

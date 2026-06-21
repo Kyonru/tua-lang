@@ -37,6 +37,124 @@ fn hovers_known_local() {
 }
 
 #[test]
+fn hovers_function_parameters() {
+    let source = r#"local function recursive(a: string)
+  if a == tostring(1) then
+    return 1
+  end
+
+  if a == tostring(2) then
+    return "value"
+  end
+
+  return recursive(a + 1)
+end
+"#;
+
+    assert_hover_in_source(source, "a: string", 0, "parameter a: string");
+    assert_hover_in_source(source, "a == tostring", 0, "parameter a: string");
+    assert_hover_in_source(source, "a + 1", 0, "parameter a: string");
+}
+
+#[test]
+fn hovers_innermost_matching_parameter() {
+    let source = r#"local function outer(value: string)
+  local function inner(value: number)
+    return value
+  end
+
+  return value
+end
+"#;
+
+    assert_hover_in_source(
+        source,
+        "return value",
+        "return ".len(),
+        "parameter value: number",
+    );
+    assert_hover_in_source(
+        source,
+        "return value\nend",
+        "return ".len(),
+        "parameter value: string",
+    );
+}
+
+#[test]
+fn parameter_hover_follows_definition_identity() {
+    let source = r#"local value: number = 1
+
+local function before_shadow(value: string)
+  local result = value
+  local value: boolean = true
+  return value
+end
+"#;
+
+    assert_hover_in_source(
+        source,
+        "local result = value",
+        "local result = ".len(),
+        "parameter value: string",
+    );
+    assert_hover_in_source(
+        source,
+        "return value",
+        "return ".len(),
+        "local value: boolean",
+    );
+}
+
+#[test]
+fn hovers_unannotated_local_values_returned_from_table() {
+    let source = r#"
+type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local player = makePlayer()
+local clamped = 10
+local message = tostring(clamped)
+local built_in = tostring(1)
+
+return {
+  player = player,
+  clamped = clamped,
+  message = message,
+  built_in = built_in,
+}
+"#;
+
+    assert_hover_in_source(
+        source,
+        "player = player",
+        "player = ".len(),
+        "local player: Player",
+    );
+    assert_hover_in_source(
+        source,
+        "clamped = clamped",
+        "clamped = ".len(),
+        "local clamped: number",
+    );
+    assert_hover_in_source(
+        source,
+        "message = message",
+        "message = ".len(),
+        "local message: string",
+    );
+    assert_hover_in_source(
+        source,
+        "built_in = built_in",
+        "built_in = ".len(),
+        "local built_in: string",
+    );
+}
+
+#[test]
 fn hovers_known_function_signature() {
     let hover = hover_at("damage(player").expect("function should hover");
 
@@ -377,6 +495,18 @@ fn hover_at(needle: &str) -> Option<Hover> {
     let position = position_at(SOURCE, needle);
 
     hover_tua_source("src/main.tua", SOURCE, position).expect("source should parse and type")
+}
+
+fn assert_hover_in_source(source: &str, needle: &str, offset: usize, expected: &str) {
+    let mut position = position_at(source, needle);
+
+    position.column += offset;
+
+    let hover = hover_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("hover should resolve");
+
+    assert_eq!(hover.contents, expected);
 }
 
 struct TempProject {
