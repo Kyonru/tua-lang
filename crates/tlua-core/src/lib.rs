@@ -1,5 +1,6 @@
 pub mod config;
 pub mod diagnostic;
+pub mod emit;
 pub mod parser;
 
 pub use config::{
@@ -9,6 +10,7 @@ pub use config::{
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
+pub use emit::{emit_lua, emit_tlua_source};
 pub use parser::{
     parse_lua_source, parse_tlua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
     LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,
