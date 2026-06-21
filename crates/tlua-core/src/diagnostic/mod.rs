@@ -36,6 +36,7 @@ impl DiagnosticCode {
     pub const SYNTAX_COMPOUND_ASSIGNMENT: Self = Self(2);
     pub const TYPE_UNKNOWN_NAME: Self = Self(1001);
     pub const TYPE_DUPLICATE_ALIAS: Self = Self(1002);
+    pub const TYPE_MISMATCH: Self = Self(1003);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const CONFIG_PARSE: Self = Self(3001);

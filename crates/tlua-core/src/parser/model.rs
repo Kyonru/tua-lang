@@ -9,7 +9,7 @@ pub struct SourcePosition {
 }
 
 impl SourcePosition {
-    pub(super) fn from_full_moon(position: Position) -> Self {
+    pub(crate) fn from_full_moon(position: Position) -> Self {
         Self {
             line: position.line().max(1),
             column: position.character().max(1),
