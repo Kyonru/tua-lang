@@ -32,6 +32,7 @@ pub enum DiagnosticCategory {
 pub struct DiagnosticCode(u16);
 
 impl DiagnosticCode {
+    pub const SYNTAX_PARSE: Self = Self(1);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
 

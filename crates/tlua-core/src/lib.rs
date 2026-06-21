@@ -1,5 +1,6 @@
 pub mod config;
 pub mod diagnostic;
+pub mod parser;
 
 pub use config::{
     init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError, InitResult,
@@ -8,6 +9,7 @@ pub use config::{
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
+pub use parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
