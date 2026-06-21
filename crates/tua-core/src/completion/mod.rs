@@ -19,6 +19,7 @@ pub struct Completion {
     pub label: String,
     pub kind: CompletionKind,
     pub detail: Option<String>,
+    pub documentation: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,6 +139,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
             label: primitive.to_owned(),
             kind: CompletionKind::TypeAlias,
             detail: Some("built-in type".to_owned()),
+            documentation: None,
         })
         .collect()
 }
@@ -151,6 +153,7 @@ fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion>
             label: alias.name.clone(),
             kind: CompletionKind::TypeAlias,
             detail: Some("type alias".to_owned()),
+            documentation: None,
         })
         .collect()
 }
@@ -172,6 +175,7 @@ fn complete_identifier_items(
                     label: local.name.clone(),
                     kind: CompletionKind::Variable,
                     detail: Some("local".to_owned()),
+                    documentation: None,
                 },
             );
         }
@@ -189,6 +193,7 @@ fn complete_identifier_items(
                     label: name.clone(),
                     kind: CompletionKind::Function,
                     detail: Some("function".to_owned()),
+                    documentation: None,
                 },
             );
         }
@@ -248,6 +253,7 @@ fn complete_fields(
             label: name,
             kind: CompletionKind::Field,
             detail: Some(detail),
+            documentation: None,
         })
         .collect()
 }
@@ -305,6 +311,7 @@ fn complete_required_module_fields(
             kind: completion_kind_for_type(&ty),
             detail: Some(format!("field: {ty}")),
             label: name,
+            documentation: None,
         })
         .collect()
 }
@@ -339,6 +346,7 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         label: item.label.to_owned(),
         kind: completion_kind_from_lua_item(item.kind),
         detail: Some(item.detail.to_owned()),
+        documentation: Some(item.documentation.to_owned()),
     }
 }
 

@@ -31,7 +31,8 @@ pub(super) fn initialize_result() -> Value {
             },
             "hoverProvider": true,
             "completionProvider": {
-                "triggerCharacters": [":", ".", "\"", "'"]
+                "triggerCharacters": [":", ".", "\"", "'"],
+                "resolveProvider": true
             },
             "signatureHelpProvider": {
                 "triggerCharacters": ["(", ","]

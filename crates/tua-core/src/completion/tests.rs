@@ -83,6 +83,14 @@ fn completes_lua_standard_library_fields() {
 
     assert_eq!(labels(&completions), vec!["sin".to_owned()]);
     assert_eq!(completions[0].kind, CompletionKind::Function);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function math.sin(x: number): number")
+    );
+    assert_eq!(
+        completions[0].documentation.as_deref(),
+        Some("Returns the sine.")
+    );
 }
 
 #[test]

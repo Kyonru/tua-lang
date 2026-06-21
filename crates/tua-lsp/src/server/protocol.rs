@@ -85,14 +85,59 @@ pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
     result
 }
 
-pub(super) fn lsp_completion_from_core(completion: Completion) -> Value {
+pub(super) fn lsp_completion_from_core(uri: &str, completion: Completion) -> Value {
+    let kind = lsp_completion_kind(completion.kind);
+    let label = completion.label;
+    let detail = completion.detail;
+    let documentation = completion.documentation;
     let mut item = json!({
-        "label": completion.label,
-        "kind": lsp_completion_kind(completion.kind)
+        "label": label.clone(),
+        "kind": kind,
+        "data": {
+            "uri": uri,
+            "label": label,
+            "kind": kind,
+            "detail": detail,
+            "documentation": documentation
+        }
     });
 
-    if let Some(detail) = completion.detail {
+    if let Some(detail) = item
+        .get("data")
+        .and_then(|data| data.get("detail"))
+        .and_then(Value::as_str)
+    {
         item["detail"] = json!(detail);
+    }
+
+    item
+}
+
+pub(super) fn lsp_resolved_completion_item(mut item: Value) -> Value {
+    let detail = item
+        .get("data")
+        .and_then(|data| data.get("detail"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let documentation = item
+        .get("data")
+        .and_then(|data| data.get("documentation"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+
+    if let Some(detail) = detail {
+        if item.get("detail").is_none() || item["detail"].is_null() {
+            item["detail"] = json!(detail);
+        }
+    }
+
+    if let Some(documentation) = documentation {
+        if item.get("documentation").is_none() || item["documentation"].is_null() {
+            item["documentation"] = json!({
+                "kind": "markdown",
+                "value": documentation
+            });
+        }
     }
 
     item

@@ -18,6 +18,7 @@ impl LuaSymbol {
             label: self.name,
             kind: self.kind,
             detail: Some(self.detail),
+            documentation: None,
         }
     }
 }

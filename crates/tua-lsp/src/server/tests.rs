@@ -46,6 +46,10 @@ fn initialize_returns_server_capabilities() {
         json!([":", ".", "\"", "'"])
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["completionProvider"]["resolveProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["signatureHelpProvider"]["triggerCharacters"],
         json!(["(", ","])
     );
@@ -728,6 +732,41 @@ local draw = love.graphics.pr
 
     assert_completion_labels(&output, 2, ["sin"]);
     assert_completion_labels(&output, 3, ["print", "printf"]);
+}
+
+#[test]
+fn completion_items_can_be_resolved_for_documentation() {
+    let uri = "file:///tmp/resolve-completion.tua";
+    let source = "local value = math.si\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "math.si"),
+    ]);
+    let completions = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("completion result should be an array");
+    let sin = completions
+        .iter()
+        .find(|completion| completion["label"] == "sin")
+        .expect("math.sin completion should exist")
+        .clone();
+
+    assert_eq!(sin["data"]["uri"], uri);
+    assert!(sin.get("documentation").is_none());
+
+    let resolved = run_messages(vec![completion_resolve_request(1, sin)]);
+    let response = response_with_id(&resolved, 1);
+
+    assert_eq!(response["result"]["label"], "sin");
+    assert_eq!(
+        response["result"]["detail"],
+        "function math.sin(x: number): number"
+    );
+    assert_eq!(response["result"]["documentation"]["kind"], "markdown");
+    assert!(response["result"]["documentation"]["value"]
+        .as_str()
+        .expect("documentation should be a string")
+        .contains("Returns the sine."));
 }
 
 #[test]
@@ -1655,6 +1694,15 @@ fn completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
             },
             "position": lsp_position_after(source, needle)
         }
+    })
+}
+
+fn completion_resolve_request(id: u64, item: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "completionItem/resolve",
+        "params": item
     })
 }
 
