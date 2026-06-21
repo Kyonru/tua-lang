@@ -34,6 +34,7 @@ pub(super) fn initialize_result() -> Value {
             "documentLinkProvider": {
                 "resolveProvider": false
             },
+            "documentHighlightProvider": true,
             "documentSymbolProvider": true,
             "referencesProvider": true,
             "workspaceSymbolProvider": true,

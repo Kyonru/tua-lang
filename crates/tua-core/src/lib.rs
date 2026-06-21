@@ -3,6 +3,7 @@ pub mod completion;
 pub mod config;
 pub mod definition;
 pub mod diagnostic;
+pub mod document_highlight;
 pub mod document_symbol;
 pub mod emit;
 pub mod hover;
@@ -30,6 +31,10 @@ pub use config::{
 pub use definition::{definition_parsed_source, definition_tua_source, Definition, DefinitionKind};
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+};
+pub use document_highlight::{
+    document_highlights_parsed_source, document_highlights_tua_source, DocumentHighlight,
+    DocumentHighlightKind,
 };
 pub use document_symbol::{
     document_symbols_parsed_source, document_symbols_tua_source, DocumentSymbol, DocumentSymbolKind,

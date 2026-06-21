@@ -1,10 +1,10 @@
 use serde_json::{json, Value};
 use tua_core::{
-    Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentSymbol,
-    DocumentSymbolKind, Hover, InlayHint, InlayHintKind, ModuleLink, Reference, RenameEdit,
-    RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier, SignatureHelp,
-    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
-    WorkspaceSymbolKind,
+    Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentHighlight,
+    DocumentHighlightKind, DocumentSymbol, DocumentSymbolKind, Hover, InlayHint, InlayHintKind,
+    ModuleLink, Reference, RenameEdit, RenameTarget, SemanticToken, SemanticTokenKind,
+    SemanticTokenModifier, SignatureHelp, SignatureInformation, SourcePosition, SourceSpan,
+    TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::uri::uri_from_path;
@@ -151,6 +151,19 @@ pub(super) fn lsp_document_link_from_core(link: ModuleLink) -> Value {
         "range": lsp_range(link.span),
         "target": uri_from_path(&link.target)
     })
+}
+
+pub(super) fn lsp_document_highlight_from_core(highlight: DocumentHighlight) -> Value {
+    json!({
+        "range": lsp_range(highlight.span),
+        "kind": lsp_document_highlight_kind(highlight.kind)
+    })
+}
+
+fn lsp_document_highlight_kind(kind: DocumentHighlightKind) -> u8 {
+    match kind {
+        DocumentHighlightKind::Text => 1,
+    }
 }
 
 pub(super) fn lsp_reference_location(uri: &str, reference: Reference) -> Value {

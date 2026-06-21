@@ -196,6 +196,25 @@ request("initialize", {
   );
 
   expected.push(
+    request(
+      "textDocument/documentHighlight",
+      {
+        textDocument: { uri: inference.uri },
+        position: positionAt(inference.text, "typedPlayer.hp"),
+      },
+      (message) => {
+        const labels = (message.result || []).map((item) =>
+          sourceTextFromRange(inference.text, item.range),
+        );
+
+        if (labels.filter((label) => label === "typedPlayer").length < 4) {
+          fail(`document highlights missing typedPlayer usages: ${labels.join(", ")}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
     request("workspace/symbol", { query: "inference" }, (message) => {
       const names = (message.result || []).map((item) => item.name);
       if (!names.includes("inference")) {

@@ -47,6 +47,10 @@ fn initialize_returns_server_capabilities() {
         false
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["documentHighlightProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["documentSymbolProvider"],
         true
     );
@@ -708,6 +712,38 @@ local Missing = require("missing")
 }
 
 #[test]
+fn document_highlight_returns_symbol_usages() {
+    let uri = "file:///tmp/document-highlight.tua";
+    let source = r#"type Player = { hp: number }
+
+local player: Player = { hp = 10 }
+
+local function damage(target: Player, amount: number): Player
+  target.hp -= amount
+  return target
+end
+
+damage(player, 2)
+player.hp = player.hp - 1
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        document_highlight_request(2, uri, source, "damage(player", "damage(".len()),
+    ]);
+
+    assert_document_highlight_texts(&output, 2, source, ["player", "player", "player", "player"]);
+}
+
+#[test]
+fn document_highlight_unknown_document_returns_empty_array() {
+    let uri = "file:///tmp/missing-document-highlight.tua";
+    let output = run_messages(vec![document_highlight_request(2, uri, "", "", 0)]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(response["result"], json!([]));
+}
+
+#[test]
 fn definition_unknown_symbol_returns_null_result() {
     let uri = "file:///tmp/unknown-definition.tua";
     let source = "local result = missing\n";
@@ -1277,6 +1313,26 @@ fn document_link_request(id: u64, uri: &str) -> Value {
     })
 }
 
+fn document_highlight_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    offset: usize,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/documentHighlight",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
 fn references_request(
     id: u64,
     uri: &str,
@@ -1574,6 +1630,25 @@ fn assert_reference_texts<const N: usize>(
         .collect::<Vec<_>>();
 
     assert_eq!(texts, expected);
+}
+
+fn assert_document_highlight_texts<const N: usize>(
+    output: &[Value],
+    id: u64,
+    source: &str,
+    expected: [&str; N],
+) {
+    let response = response_with_id(output, id);
+    let highlights = response["result"]
+        .as_array()
+        .expect("document highlight result should be an array");
+    let texts = highlights
+        .iter()
+        .map(|highlight| range_text(source, &highlight["range"]))
+        .collect::<Vec<_>>();
+
+    assert_eq!(texts, expected);
+    assert!(highlights.iter().all(|highlight| highlight["kind"] == 1));
 }
 
 fn assert_rename_edit_texts<const N: usize>(

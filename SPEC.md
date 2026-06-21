@@ -377,6 +377,7 @@ The extension should provide:
   fields;
 - basic completion for known type aliases and table fields.
 - signature help for known function calls.
+- document highlights for known symbol usages.
 
 The extension may assume `tua` is available on `PATH`, with a setting for an
 explicit server binary path.

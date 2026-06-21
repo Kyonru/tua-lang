@@ -11,8 +11,8 @@ Minimal VS Code language support for tua source files.
 - Adds TextMate grammar coverage for Lua keywords, comments, strings, numbers,
   operators, type aliases, and type annotations.
 - Starts `tua lsp` over stdio and surfaces the language server's diagnostics,
-  hover, completion, signature help, navigation, rename, inlay hint, semantic
-  token, and symbol features.
+  hover, completion, signature help, document highlights, navigation, rename,
+  inlay hint, semantic token, and symbol features.
 
 ## Configuration
 
