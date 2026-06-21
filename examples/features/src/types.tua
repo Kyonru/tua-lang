@@ -1,0 +1,58 @@
+-- Type aliases are erased from emitted Lua.
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  name: string,
+  pos: Vec2,
+  hp: number,
+  alive: boolean,
+}
+
+type SaveSlot = {
+  name?: string,
+  checkpoint?: string,
+  level: number,
+}
+
+type MaybeNumber = number | nil
+
+type FeatureSummary = {
+  title: string,
+  checked: boolean,
+  total: number,
+}
+
+local origin: Vec2 = { x = 0, y = 0 }
+local hero: Player = {
+  name = "Ada",
+  pos = origin,
+  hp = 100,
+  alive = true,
+}
+
+local save: SaveSlot = {
+  level = 3,
+}
+
+local missingScore: MaybeNumber = nil
+local payload: any = { source = "dynamic" }
+payload.hp = "unchecked because payload is any"
+
+local summary: FeatureSummary = {
+  title = "types",
+  checked = true,
+  total = 5,
+}
+
+return {
+  origin = origin,
+  hero = hero,
+  save = save,
+  missingScore = missingScore,
+  payload = payload,
+  summary = summary,
+}
+

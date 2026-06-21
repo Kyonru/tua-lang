@@ -13,6 +13,11 @@ async function activate(context) {
 
   const serverCommand = configuredServerPath(context);
   const cwd = workspaceCwd();
+  outputChannel.appendLine(`Starting tua language server: ${serverCommand}`);
+  if (cwd) {
+    outputChannel.appendLine(`Workspace cwd: ${cwd}`);
+  }
+
   const preflight = await checkServerCommand(serverCommand, cwd);
 
   if (!preflight.ok) {
@@ -71,12 +76,12 @@ async function deactivate() {
 function configuredServerPath(context) {
   const envOverride = process.env.TUA_SERVER_PATH;
   if (typeof envOverride === "string" && envOverride.trim()) {
-    return envOverride.trim();
+    return resolveServerCommand(context, envOverride.trim());
   }
 
   const configured = vscode.workspace.getConfiguration("tua").get("server.path");
   if (typeof configured === "string" && configured.trim() && configured.trim() !== "tua") {
-    return configured.trim();
+    return resolveServerCommand(context, configured.trim());
   }
 
   const bundled = bundledServerPath(context);
@@ -84,7 +89,9 @@ function configuredServerPath(context) {
     return bundled;
   }
 
-  return typeof configured === "string" && configured.trim() ? configured.trim() : "tua";
+  const fallback = typeof configured === "string" && configured.trim() ? configured.trim() : "tua";
+
+  return resolveServerCommand(context, fallback);
 }
 
 function bundledServerPath(context) {
@@ -101,6 +108,33 @@ function workspaceCwd() {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   return workspaceFolder?.uri.scheme === "file" ? workspaceFolder.uri.fsPath : undefined;
+}
+
+function resolveServerCommand(context, command) {
+  if (isBareCommand(command) || path.isAbsolute(command)) {
+    return command;
+  }
+
+  const candidates = candidateRelativeServerPaths(context, command);
+  const existing = candidates.find((candidate) => fs.existsSync(candidate));
+
+  return existing || candidates[0] || command;
+}
+
+function isBareCommand(command) {
+  return !command.includes("/") && !command.includes("\\");
+}
+
+function candidateRelativeServerPaths(context, command) {
+  const bases = [
+    workspaceCwd(),
+    process.cwd(),
+    context.extensionPath,
+    path.resolve(context.extensionPath, "..", ".."),
+  ].filter(Boolean);
+  const unique = [...new Set(bases)];
+
+  return unique.map((base) => path.resolve(base, command));
 }
 
 function serverExecutable(command, cwd) {

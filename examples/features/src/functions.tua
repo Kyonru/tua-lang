@@ -1,0 +1,58 @@
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  name: string,
+  pos: Vec2,
+  hp: number,
+  alive: boolean,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+    hp = 100,
+    alive = true,
+  }
+end
+
+local function damage(player: Player, amount: number): Player
+  player.hp -= amount
+
+  if player.hp <= 0 then
+    player.alive = false
+  end
+
+  return player
+end
+
+local function heal(player: Player, amount: number): Player
+  player.hp += amount
+  player.alive = true
+
+  return player
+end
+
+function describe(player: Player): string
+  if player.alive then
+    return "alive"
+  end
+
+  return "down"
+end
+
+local player: Player = makePlayer("Mina")
+damage(player, 15)
+heal(player, 5)
+
+return {
+  makePlayer = makePlayer,
+  damage = damage,
+  heal = heal,
+  describe = describe,
+  sample = player,
+}
+

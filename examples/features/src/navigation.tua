@@ -1,0 +1,25 @@
+type Player = {
+  hp: number,
+  alive: boolean,
+}
+
+local player: Player = {
+  hp = 12,
+  alive = true,
+}
+
+local function heal(target: Player, amount: number): Player
+  target.hp += amount
+  target.alive = true
+
+  return target
+end
+
+heal(player, 2)
+player.hp = player.hp - 1
+
+return {
+  player = player,
+  heal = heal,
+}
+

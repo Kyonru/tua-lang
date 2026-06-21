@@ -1,0 +1,89 @@
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  name: string,
+  pos: Vec2,
+  hp: number,
+  alive: boolean,
+}
+
+local function makePlayer(name: string)
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+    hp = 100,
+    alive = true,
+  }
+end
+
+local function makeTypedPlayer(name: string): Player
+  return {
+    name = name,
+    pos = { x = 1, y = 2 },
+    hp = 80,
+    alive = true,
+  }
+end
+
+local function move(player: Player, delta: Vec2): Player
+  player.pos.x += delta.x
+  player.pos.y += delta.y
+
+  return player
+end
+
+local function startingHp()
+  return 100
+end
+
+function statusText(alive: boolean)
+  return "ready"
+end
+
+local inferredNumber = 42
+local inferredString = "inferred"
+local inferredBoolean = true
+local inferredNil = nil
+local inferredTable = {
+  label = "literal table",
+  count = 2,
+  enabled = true,
+}
+
+local inferredPlayer = makePlayer("Inferred")
+local typedPlayer: Player = makeTypedPlayer("Typed")
+local inferredHp = typedPlayer.hp
+local inferredX = typedPlayer.pos.x
+local inferredStart = startingHp()
+local inferredStatus = statusText(typedPlayer.alive)
+local movedPlayer = move(typedPlayer, { x = 3, y = 4 })
+
+local Legacy = require("legacy")
+local legacyMessage = Legacy.describe("hp", inferredHp)
+
+local dynamicValue: any = {
+  deep = {
+    field = "unchecked dynamic value",
+  },
+}
+local noInferenceFromAny = dynamicValue.deep.field
+
+return {
+  inferredNumber = inferredNumber,
+  inferredString = inferredString,
+  inferredBoolean = inferredBoolean,
+  inferredNil = inferredNil,
+  inferredTable = inferredTable,
+  inferredPlayer = inferredPlayer,
+  typedPlayer = typedPlayer,
+  inferredHp = inferredHp,
+  inferredX = inferredX,
+  inferredStart = inferredStart,
+  inferredStatus = inferredStatus,
+  movedPlayer = movedPlayer,
+  legacyMessage = legacyMessage,
+  noInferenceFromAny = noInferenceFromAny,
+}

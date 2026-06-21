@@ -1,0 +1,38 @@
+type Stats = {
+  score: number,
+  hp: number,
+  energy: number,
+}
+
+local stats: Stats = {
+  score = 0,
+  hp = 20,
+  energy = 10,
+}
+
+local bonus: number = 3
+bonus += 2
+bonus -= 1
+bonus *= 4
+bonus /= 2
+bonus %= 5
+
+stats.score += bonus
+stats.hp -= 4
+stats.energy *= 2
+stats.energy /= 4
+stats.score %= 100
+
+local function tick(amount: number): Stats
+  stats.score += amount
+  stats.energy -= 1
+
+  return stats
+end
+
+return {
+  stats = stats,
+  bonus = bonus,
+  tick = tick,
+}
+

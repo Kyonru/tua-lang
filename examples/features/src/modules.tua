@@ -1,0 +1,17 @@
+local Functions = require("functions")
+local Compound = require("compound")
+local Legacy = require("legacy")
+
+local player = Functions.makePlayer("Lua interop")
+Functions.damage(player, 7)
+
+local clamped = Legacy.clamp(Compound.stats.score, 0, 100)
+local message = Legacy.describe("score", clamped)
+
+return {
+  player = player,
+  stats = Compound.stats,
+  clamped = clamped,
+  message = message,
+}
+

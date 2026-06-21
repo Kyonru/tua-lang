@@ -52,6 +52,10 @@ fn emitted_example_lua_passes_syntax_validation() {
             name: "love-full",
             out: "game",
         },
+        Fixture {
+            name: "features",
+            out: "build",
+        },
     ] {
         let temp = TempDir::new(&format!("lua-syntax-{}", fixture.name));
         copy_dir_all(&example_root(fixture.name), temp.path())

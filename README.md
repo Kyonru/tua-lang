@@ -16,3 +16,9 @@ This repository is currently in the v1 scaffold stage.
 cargo test --workspace
 cargo run -p tua-cli -- --help
 ```
+
+## Examples
+
+- `examples/features` is a buildable tour of the v1 language and LSP features.
+- `examples/love-minimal` is a small LÖVE smoke-test project.
+- `examples/love-full` is a larger LÖVE conversion example with Lua interop.

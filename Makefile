@@ -56,6 +56,11 @@ lsp-smoke: ## Initialize and shutdown the LSP server to prove it responds.
 	$(CARGO) build --package tua-cli
 	node editors/vscode/scripts/lsp-smoke.js target/debug/tua
 
+.PHONY: lsp-features-smoke
+lsp-features-smoke: ## Exercise LSP requests against examples/features with the debug server.
+	$(CARGO) build --package tua-cli
+	node editors/vscode/scripts/lsp-features-smoke.js target/debug/tua examples/features
+
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.
 	cd $(EXAMPLE) && $(TUA) check
@@ -65,7 +70,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full ## Compile all bundled examples.
+build-examples: build-love-minimal build-love-full build-features ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -74,6 +79,10 @@ build-love-minimal: ## Compile examples/love-minimal to Lua.
 .PHONY: build-love-full
 build-love-full: ## Compile examples/love-full to Lua.
 	cd examples/love-full && $(TUA) build
+
+.PHONY: build-features
+build-features: ## Compile examples/features to Lua.
+	cd examples/features && $(TUA) build
 
 .PHONY: watch-example
 watch-example: ## Watch one example project. Override with EXAMPLE=examples/love-full.
@@ -114,8 +123,8 @@ extension-check: ## Syntax-check the VS Code extension activation script.
 	$(NPM) --prefix $(VSCODE_DIR) run check
 
 .PHONY: json-check
-json-check: ## Validate extension JSON metadata and grammars parse.
-	node -e "for (const file of ['$(VSCODE_DIR)/package.json','$(VSCODE_DIR)/package-lock.json','$(VSCODE_DIR)/language-configuration.json','$(VSCODE_DIR)/icons/tua-icon-theme.json','$(VSCODE_DIR)/syntaxes/tua.tmLanguage.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'));"
+json-check: ## Validate extension and workspace JSON metadata parse.
+	node -e "for (const file of ['$(VSCODE_DIR)/package.json','$(VSCODE_DIR)/package-lock.json','$(VSCODE_DIR)/language-configuration.json','$(VSCODE_DIR)/icons/tua-icon-theme.json','$(VSCODE_DIR)/syntaxes/tua.tmLanguage.json','.vscode/launch.json','.vscode/tasks.json','.vscode/extensions.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'));"
 
 .PHONY: extension-package
 extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.
@@ -134,5 +143,12 @@ extension-uninstall: ## Uninstall the VS Code extension with the code CLI.
 extension-open-example: ## Open the full LOVE example in VS Code for extension smoke testing.
 	$(CODE) examples/love-full
 
+.PHONY: extension-open-features
+extension-open-features: ## Open the features example in VS Code for extension development.
+	$(CODE) examples/features
+
 .PHONY: extension-smoke
 extension-smoke: extension-install extension-open-example ## Install the extension and open a .tua file.
+
+.PHONY: extension-smoke-features
+extension-smoke-features: extension-install extension-open-features ## Install the extension and open examples/features.

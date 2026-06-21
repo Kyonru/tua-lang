@@ -1,0 +1,15 @@
+local Types = require("types")
+local Functions = require("functions")
+local Compound = require("compound")
+local Inference = require("inference")
+local Modules = require("modules")
+local Navigation = require("navigation")
+
+return {
+  types = Types,
+  functions = Functions,
+  compound = Compound,
+  inference = Inference,
+  modules = Modules,
+  navigation = Navigation,
+}
