@@ -780,6 +780,28 @@ require("player")
 }
 
 #[test]
+fn semantic_tokens_fall_back_when_source_does_not_parse() {
+    let uri = "file:///tmp/semantic-invalid.tua";
+    let source = r#"type Player = {
+  hp: number,
+}
+
+local player: Player =
+function player.damage(amount: number)
+  player.
+"#;
+    let output = run_messages(vec![did_open(uri, source), semantic_tokens_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let tokens = decoded_semantic_tokens(source, response);
+
+    assert_semantic_token(&tokens, "Player", 0, true);
+    assert_semantic_token(&tokens, "hp", 4, false);
+    assert_semantic_token(&tokens, "number", 5, false);
+    assert_semantic_token(&tokens, "player", 2, true);
+    assert_semantic_token(&tokens, "damage", 1, true);
+}
+
+#[test]
 fn semantic_tokens_unknown_document_returns_empty_data() {
     let uri = "file:///tmp/missing-semantic-tokens.tua";
     let output = run_messages(vec![semantic_tokens_request(2, uri)]);

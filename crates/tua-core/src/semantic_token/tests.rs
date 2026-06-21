@@ -62,8 +62,40 @@ fn classifies_primitive_types_and_unresolved_identifiers() {
     );
     assert!(!tokens
         .iter()
-        .any(|token| token_text_from_source(token) == "require"
+        .any(|token| token_text_from_source(SOURCE, token) == "require"
             && token.kind == SemanticTokenKind::UnresolvedReference));
+}
+
+#[test]
+fn falls_back_to_lossy_tokens_when_source_does_not_parse() {
+    let source = r#"type Player = {
+  hp: number,
+}
+
+local player: Player =
+function player.damage(amount: number)
+  player.
+"#;
+    let tokens = semantic_tokens_tua_source("src/player.tua", source)
+        .expect("lossy semantic tokens should not fail on parse errors");
+
+    assert_token_in_source(
+        &tokens,
+        source,
+        "Player",
+        SemanticTokenKind::TypeAlias,
+        true,
+    );
+    assert_token_in_source(&tokens, source, "hp", SemanticTokenKind::Property, false);
+    assert_token_in_source(
+        &tokens,
+        source,
+        "number",
+        SemanticTokenKind::BuiltinType,
+        false,
+    );
+    assert_token_in_source(&tokens, source, "player", SemanticTokenKind::Variable, true);
+    assert_token_in_source(&tokens, source, "damage", SemanticTokenKind::Function, true);
 }
 
 #[test]
@@ -81,9 +113,19 @@ fn semantic_tokens() -> Vec<SemanticToken> {
 }
 
 fn assert_token(tokens: &[SemanticToken], text: &str, kind: SemanticTokenKind, declaration: bool) {
+    assert_token_in_source(tokens, SOURCE, text, kind, declaration);
+}
+
+fn assert_token_in_source(
+    tokens: &[SemanticToken],
+    source: &str,
+    text: &str,
+    kind: SemanticTokenKind,
+    declaration: bool,
+) {
     let token = tokens
         .iter()
-        .find(|token| token_text_from_source(token) == text && token.kind == kind)
+        .find(|token| token_text_from_source(source, token) == text && token.kind == kind)
         .unwrap_or_else(|| panic!("expected {kind:?} token `{text}`"));
 
     assert_eq!(
@@ -105,7 +147,7 @@ fn assert_token_at_line(
         .iter()
         .find(|token| {
             token.span.start.line == line
-                && token_text_from_source(token) == text
+                && token_text_from_source(SOURCE, token) == text
                 && token.kind == kind
         })
         .unwrap_or_else(|| panic!("expected {kind:?} token `{text}` on line {line}"));
@@ -118,8 +160,8 @@ fn assert_token_at_line(
     );
 }
 
-fn token_text_from_source(token: &SemanticToken) -> &str {
-    let line = line_at(SOURCE, token.span.start.line).expect("token line should exist");
+fn token_text_from_source<'a>(source: &'a str, token: &SemanticToken) -> &'a str {
+    let line = line_at(source, token.span.start.line).expect("token line should exist");
     let start = byte_for_column(line, token.span.start.column);
     let end = byte_for_column(line, token.span.end.column);
 

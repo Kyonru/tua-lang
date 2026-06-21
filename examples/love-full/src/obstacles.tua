@@ -19,7 +19,7 @@ local sound: any = require("sound")
 local particles: any = require("particles")
 
 local obstacles: ObstaclesModule = {}
-local block: any = love.graphics.newImage("assets/block.png")
+local block = love.graphics.newImage("assets/block.png")
 
 function obstacles.load()
   obstacles.list = {}
@@ -62,6 +62,8 @@ function obstacles.update(dt: number)
       table.remove(obstacles.list, i)
     end
   end
+
+  wall.x = ""
 end
 
 function obstacles.draw()

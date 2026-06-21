@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use full_moon::ast::{
-    self, Expression, Field, FunctionBody, Index, LastStmt, Parameter, Suffix, Var,
+    self, Expression, Field, FunctionBody, Index, LastStmt, LuaVersion, Parameter, Suffix, Var,
 };
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
 
 use crate::definition_parsed_source;
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TuaType};
@@ -39,7 +39,11 @@ pub fn semantic_tokens_tua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
-    let parsed = parse_tua_source(path, source)?;
+    let source = source.into();
+    let parsed = match parse_tua_source(path, source.clone()) {
+        Ok(parsed) => parsed,
+        Err(_) => return Ok(lossy_semantic_tokens(&source)),
+    };
 
     semantic_tokens_parsed_source(&parsed)
 }
@@ -120,6 +124,277 @@ fn semantic_kind_for_definition(kind: DefinitionKind) -> SemanticTokenKind {
         DefinitionKind::Parameter => SemanticTokenKind::Parameter,
         DefinitionKind::TableField => SemanticTokenKind::Property,
     }
+}
+
+fn lossy_semantic_tokens(source: &str) -> Vec<SemanticToken> {
+    let tokens = lossy_tokens(source);
+    let mut semantic_tokens = tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| lossy_semantic_token_for_identifier(&tokens, index, token))
+        .collect::<Vec<_>>();
+
+    semantic_tokens.sort_by_key(|token| position_key(token.span.start));
+    semantic_tokens.dedup_by_key(|token| {
+        (
+            token.span.start.line,
+            token.span.start.column,
+            token.span.end.line,
+            token.span.end.column,
+            token.kind,
+        )
+    });
+
+    semantic_tokens
+}
+
+fn lossy_tokens(source: &str) -> Vec<Token> {
+    match Lexer::new(source, LuaVersion::luau()).collect() {
+        LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens
+            .into_iter()
+            .filter(|token| !token.token_type().is_trivia())
+            .filter(|token| !matches!(token.token_type(), TokenType::Eof))
+            .collect(),
+        LexerResult::Fatal(_) => Vec::new(),
+    }
+}
+
+fn lossy_semantic_token_for_identifier(
+    tokens: &[Token],
+    index: usize,
+    token: &Token,
+) -> Option<SemanticToken> {
+    let text = token_identifier_text(token)?;
+    let span = token_span(token);
+
+    if text == "type" {
+        return None;
+    }
+
+    if is_lossy_type_alias_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::TypeAlias, true));
+    }
+
+    if is_lossy_function_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Function, true));
+    }
+
+    if is_lossy_property(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Property, false));
+    }
+
+    if is_lossy_local_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Variable, true));
+    }
+
+    if is_lossy_parameter_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Parameter, true));
+    }
+
+    if is_lossy_type_reference(tokens, index) {
+        let kind = if is_primitive_type(&text) {
+            SemanticTokenKind::BuiltinType
+        } else {
+            SemanticTokenKind::TypeAlias
+        };
+
+        return Some(semantic_token(span, kind, false));
+    }
+
+    None
+}
+
+fn semantic_token(span: SourceSpan, kind: SemanticTokenKind, declaration: bool) -> SemanticToken {
+    SemanticToken {
+        span,
+        kind,
+        modifiers: declaration
+            .then_some(SemanticTokenModifier::Declaration)
+            .into_iter()
+            .collect(),
+    }
+}
+
+fn is_lossy_type_alias_declaration(tokens: &[Token], index: usize) -> bool {
+    previous_identifier(tokens, index).as_deref() == Some("type")
+        && next_symbol(tokens, index) == Some(Symbol::Equal)
+}
+
+fn is_lossy_property(tokens: &[Token], index: usize) -> bool {
+    previous_symbol(tokens, index) == Some(Symbol::Dot)
+        || (next_symbol(tokens, index) == Some(Symbol::Colon)
+            && is_inside_type_table(tokens, index))
+        || (next_symbol(tokens, index) == Some(Symbol::Equal) && is_inside_table(tokens, index))
+}
+
+fn is_lossy_function_declaration(tokens: &[Token], index: usize) -> bool {
+    (previous_symbol(tokens, index) == Some(Symbol::Function)
+        && matches!(next_symbol(tokens, index), Some(Symbol::LeftParen) | None))
+        || (previous_symbol(tokens, index) == Some(Symbol::Dot)
+            && previous_symbol_before(tokens, index, Symbol::Dot) == Some(Symbol::Function))
+}
+
+fn is_lossy_local_declaration(tokens: &[Token], index: usize) -> bool {
+    previous_symbol(tokens, index) == Some(Symbol::Local)
+        || (previous_symbol(tokens, index) == Some(Symbol::Comma)
+            && is_since_line_start(tokens, index, Symbol::Local)
+            && !is_since_line_start(tokens, index, Symbol::Equal))
+}
+
+fn is_lossy_parameter_declaration(tokens: &[Token], index: usize) -> bool {
+    next_symbol(tokens, index) == Some(Symbol::Colon)
+        && is_inside_function_parameters(tokens, index)
+}
+
+fn is_lossy_type_reference(tokens: &[Token], index: usize) -> bool {
+    matches!(
+        previous_symbol(tokens, index),
+        Some(Symbol::Colon | Symbol::Pipe)
+    ) || (previous_symbol(tokens, index) == Some(Symbol::Equal)
+        && is_after_type_alias_equal(tokens, index))
+        || (previous_symbol(tokens, index) == Some(Symbol::QuestionMark)
+            && previous_symbol_before(tokens, index, Symbol::QuestionMark) == Some(Symbol::Colon))
+}
+
+fn is_after_type_alias_equal(tokens: &[Token], index: usize) -> bool {
+    let line = token_span(&tokens[index]).start.line;
+    let mut saw_equal = false;
+
+    for token in tokens[..index].iter().rev() {
+        if token_span(token).start.line != line {
+            break;
+        }
+
+        if token_symbol(token) == Some(Symbol::Equal) {
+            saw_equal = true;
+            continue;
+        }
+
+        if saw_equal && token_identifier_text(token).as_deref() == Some("type") {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_inside_type_table(tokens: &[Token], index: usize) -> bool {
+    let mut depth = 0usize;
+
+    for token in tokens[..index].iter().rev() {
+        match token_symbol(token) {
+            Some(Symbol::RightBrace) => depth += 1,
+            Some(Symbol::LeftBrace) if depth > 0 => depth -= 1,
+            Some(Symbol::LeftBrace) => return previous_type_declaration_marker(tokens, token),
+            _ => {}
+        }
+    }
+
+    false
+}
+
+fn is_inside_table(tokens: &[Token], index: usize) -> bool {
+    tokens[..index]
+        .iter()
+        .rev()
+        .find_map(|token| match token_symbol(token) {
+            Some(Symbol::LeftBrace) => Some(true),
+            Some(Symbol::RightBrace) => Some(false),
+            _ => None,
+        })
+        .unwrap_or(false)
+}
+
+fn is_inside_function_parameters(tokens: &[Token], index: usize) -> bool {
+    let mut depth = 0usize;
+
+    for token in tokens[..index].iter().rev() {
+        match token_symbol(token) {
+            Some(Symbol::RightParen) => depth += 1,
+            Some(Symbol::LeftParen) if depth > 0 => depth -= 1,
+            Some(Symbol::LeftParen) => {
+                return previous_symbol_for_token(tokens, token) == Some(Symbol::Function)
+            }
+            _ => {}
+        }
+    }
+
+    false
+}
+
+fn previous_type_declaration_marker(tokens: &[Token], left_brace: &Token) -> bool {
+    let Some(left_brace_index) = token_index(tokens, left_brace) else {
+        return false;
+    };
+
+    previous_symbol(tokens, left_brace_index) == Some(Symbol::Equal)
+        && previous_identifier(tokens, left_brace_index).is_some()
+}
+
+fn is_since_line_start(tokens: &[Token], index: usize, symbol: Symbol) -> bool {
+    let line = token_span(&tokens[index]).start.line;
+
+    tokens[..index]
+        .iter()
+        .rev()
+        .any(|token| token_span(token).start.line == line && token_symbol(token) == Some(symbol))
+}
+
+fn previous_symbol(tokens: &[Token], index: usize) -> Option<Symbol> {
+    tokens[..index].iter().rev().find_map(token_symbol)
+}
+
+fn previous_symbol_before(tokens: &[Token], index: usize, marker: Symbol) -> Option<Symbol> {
+    let marker_index =
+        tokens[..index]
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(candidate, token)| {
+                (token_symbol(token) == Some(marker)).then_some(candidate)
+            })?;
+
+    previous_symbol(tokens, marker_index)
+}
+
+fn previous_symbol_for_token(tokens: &[Token], token: &Token) -> Option<Symbol> {
+    let index = token_index(tokens, token)?;
+
+    previous_symbol(tokens, index)
+}
+
+fn previous_identifier(tokens: &[Token], index: usize) -> Option<String> {
+    tokens[..index].iter().rev().find_map(token_identifier_text)
+}
+
+fn next_symbol(tokens: &[Token], index: usize) -> Option<Symbol> {
+    tokens.get(index + 1..)?.iter().find_map(token_symbol)
+}
+
+fn token_symbol(token: &Token) -> Option<Symbol> {
+    match token.token_type() {
+        TokenType::Symbol { symbol } => Some(*symbol),
+        _ => None,
+    }
+}
+
+fn token_identifier_text(token: &Token) -> Option<String> {
+    match token.token_type() {
+        TokenType::Identifier { identifier } => Some(identifier.to_string()),
+        _ => None,
+    }
+}
+
+fn token_span(token: &Token) -> SourceSpan {
+    SourceSpan::from_range(token.start_position(), token.end_position())
+}
+
+fn token_index(tokens: &[Token], needle: &Token) -> Option<usize> {
+    tokens.iter().position(|token| {
+        token.start_position() == needle.start_position()
+            && token.end_position() == needle.end_position()
+            && token.token_type() == needle.token_type()
+    })
 }
 
 #[derive(Default)]
