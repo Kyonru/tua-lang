@@ -25,6 +25,8 @@ if ! command -v zensical >/dev/null 2>&1; then
   pip install --disable-pip-version-check zensical
 fi
 
+export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+
 if [ "$#" -eq 0 ]; then
   set -- serve
 fi
