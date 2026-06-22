@@ -170,41 +170,55 @@ impl LspServer {
 
     fn did_change_watched_files_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
         let changes = watched_file_changes(message);
-        let mut publications = Vec::new();
-        let mut published = BTreeSet::new();
+        let mut source_changes = Vec::new();
+        let mut deleted_sources = Vec::new();
+        let mut should_reindex = false;
 
         for change in changes {
+            if is_config_uri(&change.uri) {
+                should_reindex = true;
+                continue;
+            }
+
+            if !is_source_uri(&change.uri) {
+                continue;
+            }
+
             match change.kind {
                 FileChangeKind::Created | FileChangeKind::Changed => {
                     self.analysis.cache_disk_file(&change.uri);
-
-                    let diagnostics = if self.analysis.contains_document(&change.uri) {
-                        Some(self.diagnostics_for(&change.uri))
-                    } else if is_tua_uri(&change.uri) {
-                        Some(self.diagnostics_for_disk_file(&change.uri))
-                    } else {
-                        None
-                    };
-
-                    if let Some(diagnostics) = diagnostics {
-                        push_diagnostics_publication(
-                            &mut publications,
-                            &mut published,
-                            &change.uri,
-                            diagnostics,
-                        );
-                    }
+                    source_changes.push(change.uri);
                 }
                 FileChangeKind::Deleted => {
                     self.analysis.remove_file(&change.uri);
-                    push_diagnostics_publication(
-                        &mut publications,
-                        &mut published,
-                        &change.uri,
-                        Vec::new(),
-                    );
+                    deleted_sources.push(change.uri);
                 }
             }
+        }
+
+        if should_reindex {
+            self.analysis.reindex_workspace(&self.workspace_folders);
+        }
+
+        if should_reindex || !source_changes.is_empty() || !deleted_sources.is_empty() {
+            self.analysis.refresh_open_documents();
+        }
+
+        let mut publications = Vec::new();
+        let mut published = BTreeSet::new();
+
+        for uri in source_changes {
+            let diagnostics = if self.analysis.contains_document(&uri) {
+                self.diagnostics_for(&uri)
+            } else {
+                self.diagnostics_for_disk_file(&uri)
+            };
+
+            push_diagnostics_publication(&mut publications, &mut published, &uri, diagnostics);
+        }
+
+        for uri in deleted_sources {
+            push_diagnostics_publication(&mut publications, &mut published, &uri, Vec::new());
         }
 
         for uri in self.analysis.open_uris() {
@@ -551,11 +565,18 @@ fn push_diagnostics_publication(
     }
 }
 
-fn is_tua_uri(uri: &str) -> bool {
+fn is_source_uri(uri: &str) -> bool {
     path_from_uri(uri)
         .extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension == "tua")
+        .is_some_and(|extension| extension == "tua" || extension == "lua")
+}
+
+fn is_config_uri(uri: &str) -> bool {
+    path_from_uri(uri)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "tua.toml")
 }
 
 fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {

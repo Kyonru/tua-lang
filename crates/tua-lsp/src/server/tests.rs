@@ -607,6 +607,167 @@ fn watched_file_delete_clears_diagnostics_and_removes_open_document() {
 }
 
 #[test]
+fn watched_required_module_create_updates_intelligence_and_diagnostics() {
+    let temp = TempProject::new("watched-module-create");
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+local hp = Player.defaultHp
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+  defaultHp = 10,
+}
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write("src/main.tua", main);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    assert_eq!(
+        last_published_diagnostics(server.output(), &main_uri)[0]["code"],
+        "TL4002"
+    );
+
+    temp.write("src/player.tua", player);
+    server.send(watched_files_changed([(&player_uri, 1)]));
+    assert_eq!(
+        last_published_diagnostics(server.output(), &main_uri).len(),
+        0
+    );
+
+    server.send(completion_request(2, &main_uri, main, "Player."));
+    server.send(hover_request(3, &main_uri, main, "makePlayer("));
+    server.send(definition_request(
+        4,
+        &main_uri,
+        main,
+        "Player.makePlayer",
+        "Player.".len(),
+    ));
+
+    assert_completion_labels(server.output(), 2, ["defaultHp", "makePlayer"]);
+    assert_hover_contains(
+        server.output(),
+        3,
+        "function Player.makePlayer(string): Player",
+    );
+    assert_definition_text(server.output(), 4, &player_uri, player, "makePlayer");
+}
+
+#[test]
+fn watched_required_module_delete_clears_exports_and_reports_missing_require() {
+    let temp = TempProject::new("watched-module-delete");
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+    let player = r#"local function makePlayer(name)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    assert_eq!(
+        last_published_diagnostics(server.output(), &main_uri).len(),
+        0
+    );
+
+    temp.remove("src/player.tua");
+    server.send(watched_files_changed([(&player_uri, 3)]));
+    let diagnostics = last_published_diagnostics(server.output(), &main_uri);
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL4002");
+
+    server.send(completion_request(2, &main_uri, main, "Player."));
+    server.send(hover_request(3, &main_uri, main, "makePlayer("));
+    server.send(definition_request(
+        4,
+        &main_uri,
+        main,
+        "Player.makePlayer",
+        "Player.".len(),
+    ));
+
+    assert_completion_labels(server.output(), 2, []);
+    assert!(response_with_id(server.output(), 3)["result"].is_null());
+    assert!(response_with_id(server.output(), 4)["result"].is_null());
+}
+
+#[test]
+fn watched_config_change_republishes_open_diagnostics_with_new_settings() {
+    let temp = TempProject::new("watched-config-change");
+    let main = r#"local Missing = require("missing")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+
+    let config_uri = temp.uri_for("tua.toml");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    assert_eq!(
+        last_published_diagnostics(server.output(), &main_uri).len(),
+        0
+    );
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    server.send(watched_files_changed([(&config_uri, 2)]));
+
+    let diagnostics = last_published_diagnostics(server.output(), &main_uri);
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL4002");
+}
+
+#[test]
 fn hover_returns_known_alias_local_function_and_table_field_types() {
     let uri = "file:///tmp/hover.tua";
     let source = r#"type Vec2 = { x: number, y: number }
@@ -1576,6 +1737,30 @@ fn run_messages(messages: Vec<Value>) -> Vec<Value> {
     read_output_messages(&output)
 }
 
+struct TestServer {
+    server: LspServer,
+    output: Vec<Value>,
+}
+
+impl TestServer {
+    fn new() -> Self {
+        Self {
+            server: LspServer::default(),
+            output: Vec::new(),
+        }
+    }
+
+    fn send(&mut self, message: Value) {
+        if let Some(messages) = self.server.handle_message(message) {
+            self.output.extend(messages);
+        }
+    }
+
+    fn output(&self) -> &[Value] {
+        &self.output
+    }
+}
+
 fn did_open(uri: &str, source: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -1987,6 +2172,14 @@ fn diagnostics_publications<'a>(output: &'a [Value], uri: &str) -> Vec<&'a Value
         .collect()
 }
 
+fn last_published_diagnostics(output: &[Value], uri: &str) -> Vec<Value> {
+    diagnostics_publications(output, uri)
+        .last()
+        .and_then(|message| message["params"]["diagnostics"].as_array())
+        .cloned()
+        .expect("diagnostics publication should exist")
+}
+
 fn assert_hover_contains(output: &[Value], id: u64, expected: &str) {
     let response = response_with_id(output, id);
     let contents = response["result"]["contents"]["value"]
@@ -2293,6 +2486,10 @@ impl TempProject {
         }
 
         fs::write(path, contents).expect("fixture should be written");
+    }
+
+    fn remove(&self, relative: &str) {
+        fs::remove_file(self.path.join(relative)).expect("fixture should be removed");
     }
 }
 

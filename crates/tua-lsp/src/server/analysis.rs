@@ -119,14 +119,35 @@ impl AnalysisHost {
         self.documents.keys().cloned().collect()
     }
 
+    pub(super) fn refresh_open_documents(&mut self) {
+        let documents = self
+            .documents
+            .values()
+            .map(|document| (document.path.clone(), document.source.clone()))
+            .collect::<Vec<_>>();
+
+        for (path, source) in documents {
+            self.cache_source(path, source);
+        }
+    }
+
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf]) {
         let open_paths = self
             .documents
             .values()
             .map(|document| document.path.clone())
             .collect::<BTreeSet<_>>();
+        let roots = if roots.is_empty() {
+            vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
+        } else {
+            roots.to_vec()
+        };
 
-        for root in roots {
+        self.files.retain(|path, _| {
+            open_paths.contains(path) || !roots.iter().any(|root| path.starts_with(root))
+        });
+
+        for root in &roots {
             let Ok(loaded) = load_config_from_dir(root) else {
                 continue;
             };
