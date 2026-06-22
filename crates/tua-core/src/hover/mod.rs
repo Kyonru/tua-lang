@@ -7,13 +7,14 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::asset;
 use crate::lua::{self, LuaItem};
 use crate::module_index::{
     required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_for_receiver, resolve_required_module,
 };
 use crate::module_link::require_module_at_position;
-use crate::semantic::resolve_field_chain_type;
+use crate::semantic::{resolve_aliases, resolve_field_chain_type, resolve_table_field_type};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
@@ -89,6 +90,12 @@ impl<'a> HoverResolver<'a> {
                 self.required_module_field_hover(&field_parts, position, current_part.span)
             {
                 return Some(hover);
+            }
+
+            if let Some(item) =
+                self.love_object_field_item(&field_parts, position, &current_part.text)
+            {
+                return Some(lua_item_hover(item, Some(current_part.span)));
             }
 
             if self.environment.local(&field_parts[0]).is_none() {
@@ -325,6 +332,10 @@ impl<'a> HoverResolver<'a> {
             if let Some(function) = self.environment.function(root) {
                 return Some(function.return_type_or_any());
             }
+
+            if let Some(kind) = asset::loader_kind(root) {
+                return Some(kind.return_type());
+            }
         }
 
         if let Some(Type::Function(function)) = resolve_field_chain_type(self.environment, &parts) {
@@ -380,6 +391,33 @@ impl<'a> HoverResolver<'a> {
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
         resolve_field_chain_type(self.environment, parts)
+    }
+
+    fn love_object_field_item(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+        field: &str,
+    ) -> Option<LuaItem> {
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.infer_receiver_type(receiver_parts, position)?;
+
+        lua_type_field_item(self.environment, &receiver_type, field)
+    }
+
+    fn infer_receiver_type(&self, parts: &[String], position: SourcePosition) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let mut current = self
+            .environment
+            .local(root)
+            .cloned()
+            .or_else(|| self.infer_named_value(root, position, 0))?;
+
+        for field in fields {
+            current = resolve_table_field_type(self.environment, &current, field)?;
+        }
+
+        Some(current)
     }
 
     fn required_module_literal_hover(&self, position: SourcePosition) -> Option<Hover> {
@@ -687,6 +725,18 @@ fn type_from_tua_type(ty: &TuaType) -> Type {
 
             (field.name.clone(), table_field)
         })),
+    }
+}
+
+fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| lua_type_field_item(environment, ty, field)),
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
     }
 }
 

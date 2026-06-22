@@ -75,6 +75,17 @@ end
 }
 
 #[test]
+fn completes_love_builtin_type_names() {
+    let source = "local player: Im\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "Im"))
+        .expect("LOVE type completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["Image".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
+    assert_eq!(completions[0].detail.as_deref(), Some("built-in type"));
+}
+
+#[test]
 fn generates_function_documentation_snippet_from_tua_signature() {
     let source = r#"type Player = { hp: number }
 ---
@@ -155,6 +166,25 @@ fn completes_lua_keywords_and_globals_in_expression_positions() {
         .expect("Lua baseline completion should succeed");
 
     assert!(labels(&completions).contains(&"math".to_owned()));
+}
+
+#[test]
+fn completes_love_asset_loader_globals() {
+    let source = "local player = im\n";
+    let position = position_after(source, "im");
+    let completions = complete_tua_source("src/main.tua", source, position)
+        .expect("asset loader completion should succeed");
+
+    let image = completions
+        .iter()
+        .find(|completion| completion.label == "image")
+        .expect("image loader should complete");
+
+    assert_eq!(image.kind, CompletionKind::Function);
+    assert_eq!(
+        image.detail.as_deref(),
+        Some("function image(path: string): Image")
+    );
 }
 
 #[test]
@@ -264,6 +294,105 @@ fn completes_love_api_generated_fields() {
 
     assert_eq!(labels(&graphics), vec!["newCanvas".to_owned()]);
     assert_eq!(labels(&physics), vec!["newWorld".to_owned()]);
+}
+
+#[test]
+fn completes_love_image_methods_for_inferred_asset_loader_locals() {
+    let source = r#"
+local player = image "assets/player.png"
+player.getWi
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "getWi"))
+        .expect("inferred image method completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["getWidth".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Function);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function Image:getWidth(): number")
+    );
+}
+
+#[test]
+fn completes_love_image_methods_after_colon_access() {
+    let source = r#"
+local player = image "assets/player.png"
+player:getWi
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "getWi"))
+        .expect("colon image method completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["getWidth".to_owned()]);
+}
+
+#[test]
+fn completes_love_image_methods_for_inferred_function_return_locals() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+player.getH
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "getH"))
+        .expect("function-return image method completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["getHeight".to_owned()]);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function Image:getHeight(): number")
+    );
+}
+
+#[test]
+fn completes_love_image_methods_after_empty_dot_for_inferred_function_return_locals() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+local player = loadPlayerImage()
+
+player.
+
+return {
+  loadPlayerImage = loadPlayerImage,
+  loadJumpSound = loadJumpSound,
+}
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after_last(source, "player."),
+    )
+    .expect("empty-dot image method completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"getWidth".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"getHeight".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"setFilter".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn completes_love_source_methods_for_inferred_asset_loader_locals() {
+    let source = r#"
+local jump = sound "assets/jump.wav"
+jump.pl
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "pl"))
+        .expect("inferred source method completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["play".to_owned()]);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function Source:play(): boolean")
+    );
 }
 
 #[test]
@@ -515,6 +644,24 @@ fn position_after(source: &str, needle: &str) -> SourcePosition {
         line: start.line,
         column: start.column + needle.chars().count(),
     }
+}
+
+fn position_after_last(source: &str, needle: &str) -> SourcePosition {
+    let end = source.rfind(needle).expect("needle should exist in source") + needle.len();
+    let prefix = &source[..end];
+    let line = prefix
+        .chars()
+        .filter(|character| *character == '\n')
+        .count()
+        + 1;
+    let column = prefix
+        .rsplit_once('\n')
+        .map_or(prefix, |(_, line)| line)
+        .chars()
+        .count()
+        + 1;
+
+    SourcePosition { line, column }
 }
 
 fn temp_project_dir(name: &str) -> PathBuf {

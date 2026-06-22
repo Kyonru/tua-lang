@@ -15,6 +15,7 @@ pub(super) enum CompletionContext {
     FieldAccess {
         receiver_parts: Vec<String>,
         prefix: String,
+        position: SourcePosition,
     },
     Identifier {
         prefix: String,
@@ -36,7 +37,7 @@ pub(super) fn completion_context(
         .or_else(|| documentation_snippet_context(line, cursor, position))
         .or_else(|| lua_doc_type_annotation_context(line, cursor))
         .or_else(|| require_path_context(line, cursor))
-        .or_else(|| field_access_context(line, cursor))
+        .or_else(|| field_access_context(line, cursor, position))
         .or_else(|| type_annotation_context(line, cursor))
         .or_else(|| identifier_context(line, cursor, position))
 }
@@ -136,11 +137,15 @@ fn second_annotation_argument(rest: &str) -> Option<&str> {
     Some(trimmed[first_len..].trim_start())
 }
 
-fn field_access_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+fn field_access_context(
+    line: &str,
+    cursor: usize,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
     let cursor = cursor.min(line.len());
     let prefix_start = reverse_identifier_start(line, cursor);
 
-    if prefix_start == 0 || line.as_bytes().get(prefix_start - 1) != Some(&b'.') {
+    if prefix_start == 0 || !matches!(line.as_bytes().get(prefix_start - 1), Some(b'.' | b':')) {
         return None;
     }
 
@@ -156,6 +161,7 @@ fn field_access_context(line: &str, cursor: usize) -> Option<CompletionContext> 
     Some(CompletionContext::FieldAccess {
         receiver_parts,
         prefix: line[prefix_start..cursor].to_owned(),
+        position,
     })
 }
 
@@ -225,7 +231,7 @@ fn identifier_context(
 
     let prefix_start = reverse_identifier_start(line, cursor);
 
-    if prefix_start > 0 && line.as_bytes().get(prefix_start - 1) == Some(&b'.') {
+    if prefix_start > 0 && matches!(line.as_bytes().get(prefix_start - 1), Some(b'.' | b':')) {
         return None;
     }
 

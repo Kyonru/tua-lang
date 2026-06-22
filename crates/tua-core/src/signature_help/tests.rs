@@ -144,6 +144,59 @@ fn returns_lua_and_love_builtin_signatures() {
 }
 
 #[test]
+fn returns_love_asset_loader_signatures() {
+    let image = signature_at("local player = image(\n", "image(")
+        .expect("image loader should have signature help");
+    let sound = signature_at("local jump = sound(\n", "sound(")
+        .expect("sound loader should have signature help");
+
+    assert_eq!(
+        image.signatures[0].label,
+        "function image(path: string): Image"
+    );
+    assert_eq!(
+        sound.signatures[0].label,
+        "function sound(path: string): Source"
+    );
+}
+
+#[test]
+fn returns_love_object_method_signature_from_inferred_asset_loader_return() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+player:setFilter(
+"#;
+    let help = signature_at(source, "setFilter(").expect("Image method should have help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)"
+    );
+    assert_eq!(
+        parameter_labels(&help),
+        vec!["min: FilterMode", "mag?: FilterMode", "anisotropy?: number"]
+    );
+    assert_eq!(help.active_parameter, 0);
+}
+
+#[test]
+fn selects_love_object_method_active_parameter() {
+    let source = r#"
+local player = image "assets/player.png"
+player:setFilter("nearest",
+"#;
+    let help =
+        signature_at(source, "nearest\",").expect("Image method should track active parameter");
+
+    assert_eq!(help.active_parameter, 1);
+}
+
+#[test]
 fn keeps_active_parameter_through_nested_calls_comments_and_strings() {
     let source = r#"local function damage(target: string, amount: number): string
   return target

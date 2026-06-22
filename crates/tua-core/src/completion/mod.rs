@@ -1,14 +1,23 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::{
+    self, Expression, Field, FunctionCall, Index, Prefix, Suffix, TableConstructor, Var,
+};
+use full_moon::node::Node;
+
 use self::context::{completion_context, CompletionContext};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
+use crate::asset;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
-use crate::semantic::{resolve_aliases, resolve_field_chain_type};
+use crate::semantic::{resolve_aliases, resolve_field_chain_type, resolve_table_field_type};
 use crate::source_text::line_at;
-use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::types::{
+    build_type_environment_with_diagnostics, TableField, TableShape, Type, TypeEnvironment,
+    TypedFunction,
+};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -17,6 +26,8 @@ use crate::{
 mod context;
 mod require;
 mod symbol;
+
+const MAX_COMPLETION_INFERENCE_DEPTH: usize = 16;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Completion {
@@ -116,9 +127,16 @@ fn complete_parsed_source_with_context(
         CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
+            position,
         } => {
             let environment = build_completion_environment(parsed);
-            let fields = complete_fields(&environment, &receiver_parts, prefix.as_str());
+            let fields = complete_fields(
+                parsed,
+                &environment,
+                &receiver_parts,
+                prefix.as_str(),
+                position,
+            );
 
             if !fields.is_empty() {
                 return fields;
@@ -156,6 +174,7 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
         CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
+            ..
         } => complete_lua_fields(&receiver_parts, prefix.as_str()),
         CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
         CompletionContext::Identifier { prefix, position } => {
@@ -206,21 +225,23 @@ fn complete_type_names(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
 }
 
 fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
-    ["any", "boolean", "nil", "number", "string"]
-        .into_iter()
-        .filter(|primitive| primitive.starts_with(prefix))
-        .map(|primitive| Completion {
-            label: primitive.to_owned(),
-            kind: CompletionKind::TypeAlias,
-            detail: Some("built-in type".to_owned()),
-            documentation: None,
-            insert_text: None,
-            is_snippet: false,
-            module_path: None,
-            source_module: None,
-            additional_text_edits: Vec::new(),
-        })
-        .collect()
+    [
+        "Image", "Source", "any", "boolean", "nil", "number", "string",
+    ]
+    .into_iter()
+    .filter(|primitive| primitive.starts_with(prefix))
+    .map(|primitive| Completion {
+        label: primitive.to_owned(),
+        kind: CompletionKind::TypeAlias,
+        detail: Some("built-in type".to_owned()),
+        documentation: None,
+        insert_text: None,
+        is_snippet: false,
+        module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
+    })
+    .collect()
 }
 
 fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
@@ -589,32 +610,430 @@ fn insert_lossy_identifier_items(
 }
 
 fn complete_fields(
+    parsed: &ParsedSource,
     environment: &TypeEnvironment,
     receiver_parts: &[String],
     prefix: &str,
+    position: SourcePosition,
 ) -> Vec<Completion> {
-    let Some(receiver_type) = resolve_field_chain_type(environment, receiver_parts) else {
+    let Some(receiver_type) = resolve_field_chain_type(environment, receiver_parts)
+        .or_else(|| infer_field_chain_type(parsed, environment, receiver_parts, position))
+    else {
         return Vec::new();
     };
+    let mut completions = BTreeMap::new();
     let mut fields = BTreeMap::new();
 
     collect_table_fields(environment, &receiver_type, &mut fields);
 
-    fields
+    for (name, detail) in fields
         .into_iter()
         .filter(|(name, _)| name.starts_with(prefix))
-        .map(|(name, detail)| Completion {
-            label: name,
-            kind: CompletionKind::Field,
-            detail: Some(detail),
-            documentation: None,
-            insert_text: None,
-            is_snippet: false,
-            module_path: None,
-            source_module: None,
-            additional_text_edits: Vec::new(),
-        })
-        .collect()
+    {
+        completions.insert(
+            name.clone(),
+            Completion {
+                label: name,
+                kind: CompletionKind::Field,
+                detail: Some(detail),
+                documentation: None,
+                insert_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            },
+        );
+    }
+
+    collect_love_object_fields(environment, &receiver_type, prefix, &mut completions);
+
+    completions.into_values().collect()
+}
+
+fn collect_love_object_fields(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    prefix: &str,
+    completions: &mut BTreeMap<String, Completion>,
+) {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Alias(name) => {
+            for item in lua::type_field_items(&name, prefix) {
+                insert_lua_item(completions, item);
+            }
+        }
+        Type::Union(types) => {
+            for ty in types {
+                collect_love_object_fields(environment, &ty, prefix, completions);
+            }
+        }
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => {}
+    }
+}
+
+fn infer_field_chain_type(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    parts: &[String],
+    position: SourcePosition,
+) -> Option<Type> {
+    let (root, fields) = parts.split_first()?;
+    let mut current = environment
+        .local(root)
+        .cloned()
+        .or_else(|| infer_local_assignment_type(parsed, environment, root, position, 0))?;
+
+    for field in fields {
+        current = resolve_table_field_type(environment, &current, field)?;
+    }
+
+    Some(current)
+}
+
+fn infer_local_assignment_type(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    name: &str,
+    position: SourcePosition,
+    depth: usize,
+) -> Option<Type> {
+    if depth >= MAX_COMPLETION_INFERENCE_DEPTH {
+        return None;
+    }
+
+    infer_local_assignment_type_in_block(
+        parsed,
+        environment,
+        parsed.ast.nodes(),
+        name,
+        position,
+        depth,
+    )
+}
+
+fn infer_local_assignment_type_in_block(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    block: &ast::Block,
+    name: &str,
+    position: SourcePosition,
+    depth: usize,
+) -> Option<Type> {
+    for stmt in block.stmts() {
+        if !starts_before(node_start(stmt), position) {
+            continue;
+        }
+
+        match stmt {
+            ast::Stmt::LocalAssignment(local) => {
+                for (local_name, expression) in local.names().iter().zip(local.expressions()) {
+                    if token_text(local_name) != name {
+                        continue;
+                    }
+
+                    return infer_expression_type(
+                        parsed,
+                        environment,
+                        expression,
+                        position,
+                        depth + 1,
+                    );
+                }
+            }
+            ast::Stmt::Do(block) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    block.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::FunctionDeclaration(function) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    function.body().block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    for_stmt.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::If(if_stmt) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    if_stmt.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+
+                if let Some(else_ifs) = if_stmt.else_if() {
+                    for else_if in else_ifs {
+                        if let Some(ty) = infer_local_assignment_type_in_block(
+                            parsed,
+                            environment,
+                            else_if.block(),
+                            name,
+                            position,
+                            depth + 1,
+                        ) {
+                            return Some(ty);
+                        }
+                    }
+                }
+
+                if let Some(else_block) = if_stmt.else_block() {
+                    if let Some(ty) = infer_local_assignment_type_in_block(
+                        parsed,
+                        environment,
+                        else_block,
+                        name,
+                        position,
+                        depth + 1,
+                    ) {
+                        return Some(ty);
+                    }
+                }
+            }
+            ast::Stmt::LocalFunction(function) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    function.body().block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::NumericFor(for_stmt) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    for_stmt.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::Repeat(repeat) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    repeat.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            ast::Stmt::While(while_stmt) => {
+                if let Some(ty) = infer_local_assignment_type_in_block(
+                    parsed,
+                    environment,
+                    while_stmt.block(),
+                    name,
+                    position,
+                    depth + 1,
+                ) {
+                    return Some(ty);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn infer_expression_type(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    expression: &Expression,
+    position: SourcePosition,
+    depth: usize,
+) -> Option<Type> {
+    if depth >= MAX_COMPLETION_INFERENCE_DEPTH {
+        return None;
+    }
+
+    match expression {
+        Expression::Number(_) => Some(Type::number()),
+        Expression::String(_) => Some(Type::string()),
+        Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
+        Expression::TableConstructor(table) => Some(infer_table_constructor_type(
+            parsed,
+            environment,
+            table,
+            position,
+            depth + 1,
+        )),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => {
+            infer_expression_type(parsed, environment, expression, position, depth + 1)
+        }
+        Expression::FunctionCall(function_call) => {
+            infer_function_call_return_type(environment, function_call)
+        }
+        Expression::Var(var) => infer_var_type(parsed, environment, var, position, depth + 1),
+        _ => None,
+    }
+}
+
+fn infer_table_constructor_type(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    table: &TableConstructor,
+    position: SourcePosition,
+    depth: usize,
+) -> Type {
+    Type::table(table.fields().iter().filter_map(|field| {
+        let Field::NameKey { key, value, .. } = field else {
+            return None;
+        };
+        let ty = infer_expression_type(parsed, environment, value, position, depth + 1)
+            .unwrap_or(Type::Any);
+
+        Some((token_text(key), TableField::required(ty)))
+    }))
+}
+
+fn infer_var_type(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    var: &Var,
+    position: SourcePosition,
+    depth: usize,
+) -> Option<Type> {
+    match var {
+        Var::Name(name) => {
+            let name = token_text(name);
+
+            environment
+                .local(&name)
+                .cloned()
+                .or_else(|| environment.function(&name).and_then(TypedFunction::as_type))
+                .or_else(|| {
+                    infer_local_assignment_type(parsed, environment, &name, position, depth + 1)
+                })
+        }
+        Var::Expression(expression) => infer_field_chain_type(
+            parsed,
+            environment,
+            &plain_field_chain(expression)?,
+            position,
+        ),
+        _ => None,
+    }
+}
+
+fn infer_function_call_return_type(
+    environment: &TypeEnvironment,
+    function_call: &FunctionCall,
+) -> Option<Type> {
+    let parts = field_chain_before_first_call(function_call)?;
+    let (root, fields) = parts.split_first()?;
+
+    if fields.is_empty() {
+        if let Some(function) = environment.function(root) {
+            return Some(function.return_type_or_any());
+        }
+
+        if let Some(kind) = asset::loader_kind(root) {
+            return Some(kind.return_type());
+        }
+    }
+
+    let callee_type = resolve_field_chain_type(environment, &parts)?;
+    let Type::Function(function) = callee_type else {
+        return None;
+    };
+
+    Some(*function.return_type)
+}
+
+fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {
+    let Prefix::Name(name) = expression.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in expression.suffixes() {
+        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
+            return None;
+        };
+
+        parts.push(token_text(name));
+    }
+
+    Some(parts)
+}
+
+fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(_) => return Some(parts),
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+fn infer_symbol_type(symbol: &str) -> Option<Type> {
+    match symbol {
+        "true" | "false" => Some(Type::boolean()),
+        "nil" => Some(Type::nil()),
+        _ => None,
+    }
+}
+
+fn node_start(node: &impl Node) -> SourcePosition {
+    node.range()
+        .map(|(start, _)| SourcePosition::from_full_moon(start))
+        .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn starts_before(left: SourcePosition, right: SourcePosition) -> bool {
+    (left.line, left.column) < (right.line, right.column)
+}
+
+fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
+    token.to_string().trim().to_owned()
 }
 
 fn collect_table_fields(

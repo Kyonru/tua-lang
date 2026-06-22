@@ -1,0 +1,18 @@
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+local player = loadPlayerImage()
+
+player.
+
+
+
+return {
+  loadPlayerImage = loadPlayerImage,
+  loadJumpSound = loadJumpSound,
+}

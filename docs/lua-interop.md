@@ -62,6 +62,23 @@ Tua includes a curated Lua catalog and a built-in LOVE catalog generated from
 roadmap includes LuaHelper/LuaLS-style annotation stub ingestion so Tua can use
 richer project-local Lua docs too.
 
+Tua also includes small typed LOVE asset loader helpers:
+
+```tua
+local player: Image = image "assets/player.png"
+local jump: Source = sound "assets/jump.wav"
+```
+
+They emit plain LOVE calls in generated Lua:
+
+```lua
+local player = love.graphics.newImage("assets/player.png")
+local jump = love.audio.newSource("assets/jump.wav", "static")
+```
+
+Values inferred as `Image` or `Source` expose common LOVE object methods in
+completion, such as `player:getWidth()` or `jump:play()`.
+
 ## Practical Guidance
 
 - Keep module returns explicit when you want editor tooling to understand them.

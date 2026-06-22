@@ -816,6 +816,25 @@ Acceptance:
 - LOVE hover and signature help show generated argument and return labels.
 - No project configuration is required to enable LOVE autocomplete.
 
+### 48.6 `feat(assets): add typed love asset loaders`
+
+Scope:
+
+- Add typed LOVE-focused asset loader helpers:
+  - `image "assets/player.png"` returns `Image`.
+  - `sound "assets/jump.wav"` returns `Source`.
+- Lower helpers to LuaJIT/LÖVE-compatible calls during emission:
+  - `image "path"` emits `love.graphics.newImage("path")`.
+  - `sound "path"` emits `love.audio.newSource("path", "static")`.
+- Include loader completions, hover, and signature help in the builtin catalog.
+- Treat `Image` and `Source` as built-in nominal LOVE type names.
+
+Acceptance:
+
+- Annotated locals can use `Image` and `Source` without project-local aliases.
+- Asset loader calls infer their returned LOVE resource type.
+- Emitted Lua contains ordinary LOVE API calls and no Tua-only asset syntax.
+
 ### 49. `test(lsp): add luahelper parity fixtures`
 
 Scope:

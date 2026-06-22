@@ -422,6 +422,53 @@ fn hovers_love_items() {
 }
 
 #[test]
+fn hovers_love_asset_loader_items_and_inferred_locals() {
+    let source = r#"
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+"#;
+    let image = hover_tua_source("src/main.tua", source, position_at(source, "image"))
+        .expect("hover should not fail")
+        .expect("image loader should hover");
+    let player = hover_tua_source("src/main.tua", source, position_at(source, "player"))
+        .expect("hover should not fail")
+        .expect("inferred image local should hover");
+    let jump = hover_tua_source("src/main.tua", source, position_at(source, "jump"))
+        .expect("hover should not fail")
+        .expect("inferred sound local should hover");
+
+    assert_eq!(image.contents, "function image(path: string): Image");
+    assert_eq!(player.contents, "local player: Image");
+    assert_eq!(jump.contents, "local jump: Source");
+}
+
+#[test]
+fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+player:setFilter()
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "setFilter"))
+        .expect("hover should not fail")
+        .expect("Image method should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)"
+    );
+    assert!(hover
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("filter mode"));
+}
+
+#[test]
 fn local_symbols_shadow_lua_global_hover() {
     let source = "local math: any = {}\nlocal value = math.sin\n";
     let position = position_at(source, "sin");

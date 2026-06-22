@@ -57,6 +57,22 @@ fn hints_parameter_names_for_known_calls() {
     assert_hint_position(&hints, "amount:", 19, "damage(player, ".len() + 1);
 }
 
+#[test]
+fn hints_love_asset_loader_local_types() {
+    let source = r#"
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+"#;
+    let hints = inlay_hints_tua_source("src/assets.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(type_hints, vec![": Image", ": Source"]);
+}
+
 fn inlay_hints() -> Vec<InlayHint> {
     inlay_hints_tua_source("src/player.tua", SOURCE).expect("source should parse")
 }

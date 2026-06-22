@@ -7,6 +7,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::asset;
 use crate::config::DiagnosticsConfig;
 use crate::lint::lint_parsed_source;
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
@@ -339,6 +340,10 @@ impl<'a> Checker<'a> {
             if let Some(function) = self.environment.function(root) {
                 return Some(Callable::from_typed_function(function));
             }
+
+            if let Some(kind) = asset::loader_kind(root) {
+                return Some(Callable::Function(kind.function_type()));
+            }
         }
 
         let callee_type = self.resolve_field_chain_type(&parts)?;
@@ -347,7 +352,7 @@ impl<'a> Checker<'a> {
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
-        let arguments = parenthesized_arguments(function_call).unwrap_or_default();
+        let arguments = call_arguments(function_call).unwrap_or_default();
 
         if arguments.len() != function.parameters.len() {
             self.diagnostics.push(argument_count_diagnostic(
@@ -360,7 +365,21 @@ impl<'a> Checker<'a> {
         }
 
         for (argument, parameter) in arguments.into_iter().zip(&function.parameters) {
-            self.check_expression_assignable(argument, parameter);
+            match argument {
+                CallArgument::Expression(argument) => {
+                    self.check_expression_assignable(argument, parameter);
+                }
+                CallArgument::Inferred(argument_type) => {
+                    if !self.context.is_assignable(&argument_type, parameter) {
+                        self.diagnostics.push(mismatch_diagnostic(
+                            &self.parsed.path,
+                            function_call,
+                            parameter,
+                            &argument_type,
+                        ));
+                    }
+                }
+            }
         }
     }
 
@@ -437,6 +456,11 @@ impl<'a> Checker<'a> {
 enum Callable {
     Any,
     Function(FunctionType),
+}
+
+enum CallArgument<'a> {
+    Expression(&'a Expression),
+    Inferred(Type),
 }
 
 impl Callable {
@@ -524,7 +548,7 @@ fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<Str
     None
 }
 
-fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expression>> {
+fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>> {
     let call = function_call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
         _ => None,
@@ -532,7 +556,10 @@ fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expressi
 
     match call {
         Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            Some(arguments.iter().collect())
+            Some(arguments.iter().map(CallArgument::Expression).collect())
+        }
+        Call::AnonymousCall(FunctionArgs::String(_)) => {
+            Some(vec![CallArgument::Inferred(Type::string())])
         }
         _ => None,
     }

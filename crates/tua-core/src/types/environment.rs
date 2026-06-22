@@ -10,7 +10,7 @@ use crate::parser::{
     LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
-use crate::{Diagnostic, DiagnosticCode};
+use crate::{asset, Diagnostic, DiagnosticCode};
 
 use super::model::{TableField, Type, TypeAlias};
 use super::TypeContext;
@@ -132,6 +132,11 @@ pub(crate) fn build_type_environment_with_diagnostics(
     let alias_names = alias_names
         .into_iter()
         .chain(doc_aliases.iter().map(|alias| alias.name.clone()))
+        .chain(
+            asset::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
     let mut alias_docs = BTreeMap::new();
@@ -1721,6 +1726,7 @@ fn infer_function_call_return_type(
             .get(name)
             .or_else(|| locals.get(name))
             .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
+            .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
     } else {
         infer_field_chain_type(parsed, aliases, locals, &parts)
     }?;

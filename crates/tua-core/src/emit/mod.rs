@@ -4,7 +4,7 @@ use full_moon::ast;
 use full_moon::ast::span::ContainedSpan;
 use full_moon::tokenizer::TokenReference;
 
-use crate::{parse_tua_source, Diagnostic, DiagnosticCode, ParsedSource};
+use crate::{asset, parse_tua_source, Diagnostic, DiagnosticCode, ParsedSource};
 
 pub fn emit_tua_source(
     path: impl AsRef<Path>,
@@ -21,9 +21,10 @@ pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
     let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
 
     if diagnostics.is_empty() {
-        Ok(lower_compound_assignments_text(&normalize_emitted_lua(
-            ast.to_string(),
-        )))
+        let output = normalize_emitted_lua(ast.to_string());
+        let output = lower_asset_loader_calls_text(&output);
+
+        Ok(lower_compound_assignments_text(&output))
     } else {
         Err(diagnostics)
     }
@@ -287,6 +288,194 @@ fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
     ]
     .into_iter()
     .find_map(|(sugar, binary)| input.strip_prefix(sugar).map(|rhs| (binary, rhs)))
+}
+
+fn lower_asset_loader_calls_text(output: &str) -> String {
+    let mut lowered = String::with_capacity(output.len());
+    let mut index = 0;
+
+    while index < output.len() {
+        let rest = &output[index..];
+
+        if rest.starts_with("--") {
+            let end = consume_comment(output, index);
+
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(output, index) {
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(identifier_end) = consume_identifier(rest) {
+            let name = &output[index..index + identifier_end];
+
+            if can_start_asset_loader(output, index) {
+                if let Some(kind) = asset::loader_kind(name) {
+                    let argument_start = skip_whitespace(output, index + identifier_end);
+
+                    if let Some((replacement, end)) =
+                        lower_asset_loader_call(output, argument_start, kind)
+                    {
+                        lowered.push_str(&replacement);
+                        index = end;
+                        continue;
+                    }
+                }
+            }
+
+            lowered.push_str(name);
+            index += identifier_end;
+            continue;
+        }
+
+        let character = rest
+            .chars()
+            .next()
+            .expect("loop only runs at valid string boundaries");
+
+        lowered.push(character);
+        index += character.len_utf8();
+    }
+
+    lowered
+}
+
+fn lower_asset_loader_call(
+    output: &str,
+    argument_start: usize,
+    kind: asset::AssetLoaderKind,
+) -> Option<(String, usize)> {
+    if let Some(path_end) = consume_string_literal(output, argument_start) {
+        let path_literal = &output[argument_start..path_end];
+
+        return Some((kind.emitted_call(path_literal), path_end));
+    }
+
+    if !output[argument_start..].starts_with('(') {
+        return None;
+    }
+
+    let path_start = skip_whitespace(output, argument_start + 1);
+    let path_end = consume_string_literal(output, path_start)?;
+    let close = skip_whitespace(output, path_end);
+
+    if !output[close..].starts_with(')') {
+        return None;
+    }
+
+    let path_literal = &output[path_start..path_end];
+
+    Some((kind.emitted_call(path_literal), close + 1))
+}
+
+fn can_start_asset_loader(output: &str, index: usize) -> bool {
+    let Some(previous) = previous_char(output, index) else {
+        return true;
+    };
+
+    !is_identifier_part(previous) && previous != '.' && previous != ':'
+}
+
+fn previous_char(output: &str, index: usize) -> Option<char> {
+    output[..index].chars().next_back()
+}
+
+fn skip_whitespace(output: &str, mut index: usize) -> usize {
+    while index < output.len() {
+        let character = output[index..]
+            .chars()
+            .next()
+            .expect("index should stay on a valid string boundary");
+
+        if !character.is_whitespace() {
+            break;
+        }
+
+        index += character.len_utf8();
+    }
+
+    index
+}
+
+fn consume_comment(output: &str, index: usize) -> usize {
+    if let Some(end) = consume_long_bracket(output, index + 2) {
+        return end;
+    }
+
+    output[index..]
+        .find('\n')
+        .map_or(output.len(), |offset| index + offset)
+}
+
+fn consume_string_literal(output: &str, index: usize) -> Option<usize> {
+    consume_short_string_literal(output, index).or_else(|| consume_long_bracket(output, index))
+}
+
+fn consume_short_string_literal(output: &str, index: usize) -> Option<usize> {
+    let quote = match output[index..].chars().next()? {
+        '"' => '"',
+        '\'' => '\'',
+        _ => return None,
+    };
+    let mut escaped = false;
+    let mut cursor = index + quote.len_utf8();
+
+    while cursor < output.len() {
+        let character = output[cursor..]
+            .chars()
+            .next()
+            .expect("cursor should stay on a valid string boundary");
+
+        cursor += character.len_utf8();
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if character == quote {
+            return Some(cursor);
+        }
+    }
+
+    None
+}
+
+fn consume_long_bracket(output: &str, index: usize) -> Option<usize> {
+    let rest = &output[index..];
+
+    if !rest.starts_with('[') {
+        return None;
+    }
+
+    let mut equals_count = 0;
+    let mut cursor = index + 1;
+
+    while output[cursor..].starts_with('=') {
+        equals_count += 1;
+        cursor += 1;
+    }
+
+    if !output[cursor..].starts_with('[') {
+        return None;
+    }
+
+    cursor += 1;
+
+    let closing = format!("]{}]", "=".repeat(equals_count));
+    output[cursor..]
+        .find(&closing)
+        .map(|offset| cursor + offset + closing.len())
 }
 
 fn reclassify_compound_assignment_diagnostics(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {

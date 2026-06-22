@@ -1,4 +1,4 @@
-use crate::love_api;
+use crate::{asset, love_api};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct LuaItem {
@@ -27,6 +27,7 @@ pub(crate) fn keyword_items(prefix: &str) -> Vec<LuaItem> {
 pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
     TOP_LEVEL
         .iter()
+        .chain(ASSET_LOADERS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
         .collect()
@@ -52,11 +53,27 @@ pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaIte
         .collect()
 }
 
+pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
+    let Some(items) = items_for_type(type_name) else {
+        return Vec::new();
+    };
+
+    items
+        .iter()
+        .copied()
+        .filter(|item| item.label.starts_with(prefix))
+        .collect()
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 
     if receiver.is_empty() {
-        return TOP_LEVEL.iter().find(|item| item.label == name).copied();
+        return TOP_LEVEL
+            .iter()
+            .chain(ASSET_LOADERS.iter())
+            .find(|item| item.label == name)
+            .copied();
     }
 
     if receiver_is_love(parts) {
@@ -67,6 +84,14 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
 
     items_for_receiver(receiver)
         .and_then(|items| items.iter().find(|item| item.label == name).copied())
+}
+
+fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
+    match type_name {
+        "Image" => Some(IMAGE_ITEMS),
+        "Source" => Some(SOURCE_ITEMS),
+        _ => None,
+    }
 }
 
 fn receiver_is_love(parts: &[String]) -> bool {
@@ -468,6 +493,218 @@ const TOP_LEVEL: &[LuaItem] = &[
         "Calls a function in protected mode with a message handler.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-xpcall",
     ),
 ];
+
+const ASSET_LOADERS: &[LuaItem] = &[
+    asset_item(asset::AssetLoaderKind::Image),
+    asset_item(asset::AssetLoaderKind::Sound),
+];
+
+const IMAGE_ITEMS: &[LuaItem] = &[
+    item(
+        "getDimensions",
+        LuaItemKind::Function,
+        "function Image:getDimensions(): number, number",
+        "Gets the width and height of the Image.",
+    ),
+    item(
+        "getDPIScale",
+        LuaItemKind::Function,
+        "function Image:getDPIScale(): number",
+        "Gets the DPI scale factor of the Image.",
+    ),
+    item(
+        "getFilter",
+        LuaItemKind::Function,
+        "function Image:getFilter(): FilterMode, FilterMode, number",
+        "Gets the filter mode used when scaling the Image.",
+    ),
+    item(
+        "getHeight",
+        LuaItemKind::Function,
+        "function Image:getHeight(): number",
+        "Gets the height of the Image.",
+    ),
+    item(
+        "getMipmapCount",
+        LuaItemKind::Function,
+        "function Image:getMipmapCount(): number",
+        "Gets the number of mipmaps contained in the Image.",
+    ),
+    item(
+        "getPixelDimensions",
+        LuaItemKind::Function,
+        "function Image:getPixelDimensions(): number, number",
+        "Gets the pixel width and height of the Image.",
+    ),
+    item(
+        "getPixelHeight",
+        LuaItemKind::Function,
+        "function Image:getPixelHeight(): number",
+        "Gets the pixel height of the Image.",
+    ),
+    item(
+        "getPixelWidth",
+        LuaItemKind::Function,
+        "function Image:getPixelWidth(): number",
+        "Gets the pixel width of the Image.",
+    ),
+    item(
+        "getWidth",
+        LuaItemKind::Function,
+        "function Image:getWidth(): number",
+        "Gets the width of the Image.",
+    ),
+    item(
+        "getWrap",
+        LuaItemKind::Function,
+        "function Image:getWrap(): WrapMode, WrapMode",
+        "Gets the wrapping properties of the Image.",
+    ),
+    item(
+        "setFilter",
+        LuaItemKind::Function,
+        "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+        "Sets the filter mode used when scaling the Image.",
+    ),
+    item(
+        "setMipmapFilter",
+        LuaItemKind::Function,
+        "function Image:setMipmapFilter(filtermode?: FilterMode, sharpness?: number)",
+        "Sets the mipmap filter mode for the Image.",
+    ),
+    item(
+        "setWrap",
+        LuaItemKind::Function,
+        "function Image:setWrap(horizontal: WrapMode, vertical?: WrapMode)",
+        "Sets the wrapping properties of the Image.",
+    ),
+];
+
+const SOURCE_ITEMS: &[LuaItem] = &[
+    item(
+        "clone",
+        LuaItemKind::Function,
+        "function Source:clone(): Source",
+        "Creates an identical copy of the Source in the stopped state.",
+    ),
+    item(
+        "getDuration",
+        LuaItemKind::Function,
+        "function Source:getDuration(unit?: TimeUnit): number",
+        "Gets the duration of the Source.",
+    ),
+    item(
+        "getLooping",
+        LuaItemKind::Function,
+        "function Source:getLooping(): boolean",
+        "Gets whether the Source loops.",
+    ),
+    item(
+        "getPitch",
+        LuaItemKind::Function,
+        "function Source:getPitch(): number",
+        "Gets the pitch of the Source.",
+    ),
+    item(
+        "getPosition",
+        LuaItemKind::Function,
+        "function Source:getPosition(): number, number, number",
+        "Gets the position of the Source.",
+    ),
+    item(
+        "getType",
+        LuaItemKind::Function,
+        "function Source:getType(): SourceType",
+        "Gets the type of the Source.",
+    ),
+    item(
+        "getVolume",
+        LuaItemKind::Function,
+        "function Source:getVolume(): number",
+        "Gets the volume of the Source.",
+    ),
+    item(
+        "isLooping",
+        LuaItemKind::Function,
+        "function Source:isLooping(): boolean",
+        "Gets whether the Source loops.",
+    ),
+    item(
+        "isPaused",
+        LuaItemKind::Function,
+        "function Source:isPaused(): boolean",
+        "Gets whether the Source is paused.",
+    ),
+    item(
+        "isPlaying",
+        LuaItemKind::Function,
+        "function Source:isPlaying(): boolean",
+        "Gets whether the Source is playing.",
+    ),
+    item(
+        "pause",
+        LuaItemKind::Function,
+        "function Source:pause(): boolean",
+        "Pauses the Source.",
+    ),
+    item(
+        "play",
+        LuaItemKind::Function,
+        "function Source:play(): boolean",
+        "Starts playing the Source.",
+    ),
+    item(
+        "seek",
+        LuaItemKind::Function,
+        "function Source:seek(offset: number, unit?: TimeUnit)",
+        "Sets the playback position of the Source.",
+    ),
+    item(
+        "setLooping",
+        LuaItemKind::Function,
+        "function Source:setLooping(loop: boolean)",
+        "Sets whether the Source should loop.",
+    ),
+    item(
+        "setPitch",
+        LuaItemKind::Function,
+        "function Source:setPitch(pitch: number)",
+        "Sets the pitch of the Source.",
+    ),
+    item(
+        "setPosition",
+        LuaItemKind::Function,
+        "function Source:setPosition(x: number, y: number, z: number)",
+        "Sets the position of the Source.",
+    ),
+    item(
+        "setVolume",
+        LuaItemKind::Function,
+        "function Source:setVolume(volume: number)",
+        "Sets the volume of the Source.",
+    ),
+    item(
+        "stop",
+        LuaItemKind::Function,
+        "function Source:stop()",
+        "Stops the Source.",
+    ),
+    item(
+        "tell",
+        LuaItemKind::Function,
+        "function Source:tell(unit?: TimeUnit): number",
+        "Gets the current playback position of the Source.",
+    ),
+];
+
+const fn asset_item(kind: asset::AssetLoaderKind) -> LuaItem {
+    LuaItem {
+        label: kind.name(),
+        kind: LuaItemKind::Function,
+        detail: kind.detail(),
+        documentation: kind.documentation(),
+    }
+}
 
 const MATH_ITEMS: &[LuaItem] = &[
     item(

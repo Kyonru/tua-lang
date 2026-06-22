@@ -29,6 +29,8 @@ make build-features
   interop, and cross-file go to definition for required module exports.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
+- `src/assets.tua` covers typed LÖVE asset loader helpers such as
+  `image "assets/player.png"` and `sound "assets/jump.wav"`.
 - `src/main.tua` ties the feature modules together while keeping `require`
   calls unchanged in emitted Lua.
 - `src/legacy.lua` is intentionally plain Lua. The current v1 build only

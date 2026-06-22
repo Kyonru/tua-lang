@@ -1,13 +1,22 @@
 use std::path::Path;
 
+use full_moon::ast::{
+    self, Expression, Field, FunctionCall, Index, Prefix, Suffix, TableConstructor, Var,
+};
+use full_moon::node::Node;
+
+use crate::asset;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
-use crate::semantic::{resolve_aliases, resolve_field_chain_type};
+use crate::semantic::{resolve_aliases, resolve_field_chain_type, resolve_table_field_type};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
-    build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
+    build_type_environment_with_diagnostics, FunctionType, TableField, Type, TypeEnvironment,
+    TypedFunction,
 };
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
+
+const MAX_SIGNATURE_INFERENCE_DEPTH: usize = 16;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureHelp {
@@ -70,7 +79,7 @@ fn signature_help_parsed_source_with_context(
         parsed,
         environment: &environment,
     };
-    let signature = resolver.signature_for_parts(&context.callee_parts)?;
+    let signature = resolver.signature_for_context(&context)?;
     let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
 
     Some(SignatureHelp {
@@ -86,7 +95,15 @@ struct SignatureResolver<'a> {
 }
 
 impl<'a> SignatureResolver<'a> {
-    fn signature_for_parts(&self, parts: &[String]) -> Option<SignatureInformation> {
+    fn signature_for_context(&self, context: &CallContext) -> Option<SignatureInformation> {
+        self.signature_for_parts(&context.callee_parts, context.position)
+    }
+
+    fn signature_for_parts(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<SignatureInformation> {
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
@@ -112,6 +129,10 @@ impl<'a> SignatureResolver<'a> {
         }
 
         if !fields.is_empty() {
+            if let Some(signature) = self.love_object_method_signature(parts, position) {
+                return Some(signature);
+            }
+
             if let Some(export) = required_module_export_for_fields(self.parsed, root, fields) {
                 if let Some(mut signature) =
                     signature_from_type(&qualified_name, &export.ty, self.environment)
@@ -132,12 +153,189 @@ impl<'a> SignatureResolver<'a> {
 
         lua_signature_for_parts(parts)
     }
+
+    fn love_object_method_signature(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<SignatureInformation> {
+        let method = parts.last()?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.infer_receiver_type(receiver_parts, position)?;
+        let item = lua_type_field_item(self.environment, &receiver_type, method)?;
+
+        (item.kind == LuaItemKind::Function)
+            .then(|| signature_from_lua_item(item))
+            .flatten()
+    }
+
+    fn infer_receiver_type(&self, parts: &[String], position: SourcePosition) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let mut current = self
+            .environment
+            .local(root)
+            .cloned()
+            .or_else(|| self.infer_named_value(root, position, 0))?;
+
+        for field in fields {
+            current = resolve_table_field_type(self.environment, &current, field)?;
+        }
+
+        Some(current)
+    }
+
+    fn infer_named_value(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        if depth >= MAX_SIGNATURE_INFERENCE_DEPTH {
+            return None;
+        }
+
+        self.environment
+            .local(name)
+            .cloned()
+            .or_else(|| {
+                self.environment
+                    .function(name)
+                    .and_then(TypedFunction::as_type)
+            })
+            .or_else(|| {
+                let local = self.local_assignment_value(name, position)?;
+
+                local.and_then(|expression| self.infer_expression(expression, position, depth + 1))
+            })
+    }
+
+    fn local_assignment_value(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Option<&'a Expression>> {
+        let mut candidates = Vec::new();
+
+        for stmt in self.parsed.ast.nodes().stmts() {
+            let ast::Stmt::LocalAssignment(local) = stmt else {
+                continue;
+            };
+            let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+            for (index, local_name) in local.names().iter().enumerate() {
+                let Some(span) = node_span(local_name) else {
+                    continue;
+                };
+
+                if token_text(local_name) != name || !starts_before_or_at(span.start, position) {
+                    continue;
+                }
+
+                candidates.push((span.start, expressions.get(index).copied()));
+            }
+        }
+
+        candidates
+            .into_iter()
+            .max_by_key(|(position, _)| position_key(*position))
+            .map(|(_, expression)| expression)
+    }
+
+    fn infer_expression(
+        &self,
+        expression: &Expression,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        if depth >= MAX_SIGNATURE_INFERENCE_DEPTH {
+            return None;
+        }
+
+        match expression {
+            Expression::Number(_) => Some(Type::number()),
+            Expression::String(_) => Some(Type::string()),
+            Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
+            Expression::TableConstructor(table) => {
+                Some(self.infer_table_constructor(table, position, depth + 1))
+            }
+            Expression::FunctionCall(function_call) => {
+                self.infer_function_call_return_type(function_call)
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => {
+                self.infer_expression(expression, position, depth + 1)
+            }
+            Expression::Var(var) => self.infer_var_value(var, position, depth + 1),
+            _ => None,
+        }
+    }
+
+    fn infer_table_constructor(
+        &self,
+        table: &TableConstructor,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Type {
+        Type::table(table.fields().iter().filter_map(|field| {
+            let Field::NameKey { key, value, .. } = field else {
+                return None;
+            };
+            let ty = self
+                .infer_expression(value, position, depth + 1)
+                .unwrap_or(Type::Any);
+
+            Some((token_text(key), TableField::required(ty)))
+        }))
+    }
+
+    fn infer_function_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        let (root, fields) = parts.split_first()?;
+
+        if fields.is_empty() {
+            if let Some(function) = self.environment.function(root) {
+                return Some(function.return_type_or_any());
+            }
+
+            if let Some(kind) = asset::loader_kind(root) {
+                return Some(kind.return_type());
+            }
+        }
+
+        let Type::Function(function) = resolve_field_chain_type(self.environment, &parts)? else {
+            return None;
+        };
+
+        Some(*function.return_type)
+    }
+
+    fn infer_var_value(&self, var: &Var, position: SourcePosition, depth: usize) -> Option<Type> {
+        match var {
+            Var::Name(name) => self.infer_named_value(&token_text(name), position, depth + 1),
+            Var::Expression(expression) => {
+                self.infer_field_chain_type(&plain_field_chain(expression)?, position)
+            }
+            _ => None,
+        }
+    }
+
+    fn infer_field_chain_type(&self, parts: &[String], position: SourcePosition) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let mut current = self.infer_named_value(root, position, 0)?;
+
+        for field in fields {
+            current = resolve_table_field_type(self.environment, &current, field)?;
+        }
+
+        Some(current)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CallContext {
     callee_parts: Vec<String>,
     active_parameter: usize,
+    position: SourcePosition,
 }
 
 fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
@@ -149,6 +347,7 @@ fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
     Some(CallContext {
         callee_parts,
         active_parameter,
+        position,
     })
 }
 
@@ -371,6 +570,18 @@ fn lua_signature_for_parts(parts: &[String]) -> Option<SignatureInformation> {
     signature_from_lua_item(item)
 }
 
+fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| lua_type_field_item(environment, ty, field)),
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
 fn signature_from_lua_item(item: LuaItem) -> Option<SignatureInformation> {
     let parameters = parameters_from_function_label(item.detail)?;
 
@@ -448,6 +659,67 @@ fn active_parameter_for_signature(active: usize, signature: &SignatureInformatio
         .checked_sub(1)
         .map(|last| active.min(last))
         .unwrap_or(0)
+}
+
+fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {
+    let Prefix::Name(name) = expression.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in expression.suffixes() {
+        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
+            return None;
+        };
+
+        parts.push(token_text(name));
+    }
+
+    Some(parts)
+}
+
+fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(_) => return Some(parts),
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+fn infer_symbol_type(symbol: &str) -> Option<Type> {
+    match symbol {
+        "true" | "false" => Some(Type::boolean()),
+        "nil" => Some(Type::nil()),
+        _ => None,
+    }
+}
+
+fn node_span(node: &impl Node) -> Option<crate::SourceSpan> {
+    node.range()
+        .map(|(start, end)| crate::SourceSpan::from_range(start, end))
+}
+
+fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
+    token.to_string().trim().to_owned()
+}
+
+fn starts_before_or_at(left: SourcePosition, right: SourcePosition) -> bool {
+    position_key(left) <= position_key(right)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn parse_signature_help_source(

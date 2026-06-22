@@ -4,6 +4,7 @@ local Compound = require("compound")
 local Inference = require("inference")
 local Modules = require("modules")
 local Navigation = require("navigation")
+local Assets = require("assets")
 
 return {
   types = Types,
@@ -12,4 +13,5 @@ return {
   inference = Inference,
   modules = Modules,
   navigation = Navigation,
+  assets = Assets,
 }

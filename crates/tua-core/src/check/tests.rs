@@ -16,6 +16,31 @@ local maybe_hp: number | nil = nil
 }
 
 #[test]
+fn accepts_typed_love_asset_loader_initializers() {
+    check_tua_source(
+        "src/assets.tua",
+        r#"
+local player: Image = image "assets/player.png"
+local jump: Source = sound "assets/jump.wav"
+"#,
+    )
+    .expect("LOVE asset loaders should produce their nominal asset types");
+}
+
+#[test]
+fn rejects_love_asset_loader_initializer_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/assets.tua",
+        r#"
+local player: Source = image "assets/player.png"
+"#,
+    )
+    .expect_err("asset loader type mismatch should be reported");
+
+    assert_single_mismatch(&diagnostics, "expected Source, found Image");
+}
+
+#[test]
 fn rejects_primitive_annotated_local_initializer_mismatch() {
     let diagnostics = check_tua_source(
         "src/main.tua",

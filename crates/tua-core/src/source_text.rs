@@ -86,7 +86,7 @@ pub(crate) fn dotted_chain_at_position(
 
             current = end;
 
-            if current >= line.len() || line.as_bytes()[current] != b'.' {
+            if current >= line.len() || !matches!(line.as_bytes()[current], b'.' | b':') {
                 break;
             }
 

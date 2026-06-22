@@ -6,6 +6,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::asset::{self, AssetLoaderKind};
 use crate::semantic::resolve_field_chain_type;
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
@@ -247,9 +248,13 @@ impl<'a> InlayHintCollector<'a> {
         let (root, fields) = parts.split_first()?;
 
         if fields.is_empty() {
-            return self.environment.function(root).cloned().filter(|function| {
+            if let Some(function) = self.environment.function(root).cloned().filter(|function| {
                 function.has_fully_annotated_parameters() && function.return_type.is_some()
-            });
+            }) {
+                return Some(function);
+            }
+
+            return asset::loader_kind(root).map(typed_function_from_asset_loader);
         }
 
         let callee_type = resolve_field_chain_type(self.environment, &parts)?;
@@ -258,6 +263,21 @@ impl<'a> InlayHintCollector<'a> {
         };
 
         Some(typed_function_from_function_type(function))
+    }
+}
+
+fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
+    TypedFunction {
+        name: Some(kind.name().to_owned()),
+        parameters: vec![crate::TypedParameter {
+            name: "path".to_owned(),
+            ty: Type::string(),
+            documentation: None,
+        }],
+        parameter_count: 1,
+        has_varargs: false,
+        return_type: Some(kind.return_type()),
+        documentation: Some(kind.documentation().to_owned()),
     }
 }
 

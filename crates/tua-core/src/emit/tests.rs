@@ -177,6 +177,46 @@ player.hp = player.hp - amount
 }
 
 #[test]
+fn snapshot_lowers_love_asset_loader_calls() {
+    let emitted = emit_tua_source(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+local ui = image("assets/ui.png")
+"#,
+    )
+    .expect("asset loader calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local player = love.graphics.newImage("assets/player.png")
+local jump = love.audio.newSource("assets/jump.wav", "static")
+local ui = love.graphics.newImage("assets/ui.png")
+"#
+    );
+}
+
+#[test]
+fn snapshot_does_not_lower_love_asset_loader_names_in_strings_or_comments() {
+    let emitted = emit_tua_source(
+        "src/assets.tua",
+        r#"
+-- image "assets/player.png"
+local text = "sound \"assets/jump.wav\""
+"#,
+    )
+    .expect("comments and strings should emit");
+
+    assert_eq!(
+        emitted,
+        r#"-- image "assets/player.png"
+local text = "sound \"assets/jump.wav\""
+"#
+    );
+}
+
+#[test]
 fn unsupported_compound_assignment_lhs_emits_lowering_diagnostic() {
     let diagnostics = emit_tua_source("src/compound.tua", "player[\"hp\"] += 1\n")
         .expect_err("computed-index compound assignment should not lower");
