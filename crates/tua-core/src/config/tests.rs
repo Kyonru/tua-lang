@@ -62,6 +62,11 @@ duplicate_keys = true
 missing_requires = true
 self_assignments = true
 doc_annotations = true
+undefined_variables = true
+unused_locals = true
+unused_parameters = true
+use_before_definition = true
+globals = ["Game", "World"]
 "#,
     )
     .expect("config should parse");
@@ -79,6 +84,11 @@ doc_annotations = true
                 missing_requires: true,
                 self_assignments: true,
                 doc_annotations: true,
+                undefined_variables: true,
+                unused_locals: true,
+                unused_parameters: true,
+                use_before_definition: true,
+                globals: vec!["Game".to_owned(), "World".to_owned()],
             },
         }
     );
@@ -116,6 +126,11 @@ duplicate_keys = true
     assert!(!config.diagnostics.missing_requires);
     assert!(!config.diagnostics.self_assignments);
     assert!(!config.diagnostics.doc_annotations);
+    assert!(!config.diagnostics.undefined_variables);
+    assert!(!config.diagnostics.unused_locals);
+    assert!(!config.diagnostics.unused_parameters);
+    assert!(!config.diagnostics.use_before_definition);
+    assert!(config.diagnostics.globals.is_empty());
 }
 
 #[test]
@@ -159,7 +174,7 @@ fn rejects_invalid_boolean_values() {
 
 #[test]
 fn rejects_unknown_diagnostics_keys() {
-    let error = parse_config("[diagnostics]\nunused_locals = true\n").unwrap_err();
+    let error = parse_config("[diagnostics]\nmissing_requirez = true\n").unwrap_err();
 
     assert_eq!(error.line, 2);
     assert!(error.message.contains("unknown diagnostics config key"));

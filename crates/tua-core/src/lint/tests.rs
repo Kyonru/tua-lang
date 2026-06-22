@@ -39,6 +39,7 @@ local Missing = require("definitely_missing_lint_module")
             missing_requires: true,
             self_assignments: true,
             doc_annotations: false,
+            ..DiagnosticsConfig::default()
         },
     )
     .expect_err("enabled lints should report diagnostics");
@@ -87,6 +88,149 @@ fn missing_require_lint_accepts_resolved_project_modules() {
         },
     )
     .expect("resolved project requires should not warn");
+}
+
+#[test]
+fn reports_undefined_variables_independently() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local value = missing + math.sin(1)
+love.graphics.print(value)
+ConfiguredGlobal()
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            globals: vec!["ConfiguredGlobal".to_owned()],
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("undefined variable lint should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("undefined variable `missing`"));
+}
+
+#[test]
+fn reports_unused_locals_and_parameters_independently() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local used = 1
+print(used)
+
+local unused = 2
+local _ignored = 3
+
+local function test(used_param, unused_param, _ignored_param)
+  print(used_param)
+end
+
+test(1, 2, 3)
+"#,
+        &DiagnosticsConfig {
+            unused_locals: true,
+            unused_parameters: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("unused symbol lints should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
+            && diagnostic.message.contains("unused local `unused`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_PARAMETER)
+            && diagnostic
+                .message
+                .contains("unused parameter `unused_param`")
+    }));
+}
+
+#[test]
+fn shadowing_and_nested_scopes_track_the_right_binding() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local value = 1
+
+do
+  local value = 2
+  print(value)
+end
+
+print(value)
+"#,
+        &DiagnosticsConfig {
+            unused_locals: true,
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("shadowed locals should each count their own uses");
+}
+
+#[test]
+fn reports_use_before_local_definition_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+print(score)
+local score = 1
+print(score)
+"#,
+        &DiagnosticsConfig {
+            use_before_definition: true,
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("use-before-definition should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_USE_BEFORE_DEFINITION)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("use of local `score` before its definition"));
+}
+
+#[test]
+fn dynamic_required_modules_and_known_globals_remain_permissive() {
+    let project = TempProject::new("symbol-globals");
+
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/player.lua", "return {}\n");
+
+    let main_path = project.path.join("src/main.tua");
+
+    check_tua_source_with_diagnostics_config(
+        &main_path,
+        r#"
+local Player = require("player")
+Player.unknown_export()
+math.sin(1)
+love.graphics.print("ok")
+ConfiguredGlobal()
+_G.DynamicGlobal()
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            globals: vec!["ConfiguredGlobal".to_owned()],
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("known globals and dynamic module fields should not warn");
 }
 
 struct TempProject {

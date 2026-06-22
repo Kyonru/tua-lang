@@ -20,6 +20,11 @@ duplicate_keys = false
 missing_requires = false
 self_assignments = false
 doc_annotations = false
+undefined_variables = false
+unused_locals = false
+unused_parameters = false
+use_before_definition = false
+globals = []
 ";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,12 +50,17 @@ impl Default for ProjectConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiagnosticsConfig {
     pub duplicate_keys: bool,
     pub missing_requires: bool,
     pub self_assignments: bool,
     pub doc_annotations: bool,
+    pub undefined_variables: bool,
+    pub unused_locals: bool,
+    pub unused_parameters: bool,
+    pub use_before_definition: bool,
+    pub globals: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -266,6 +276,19 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 "doc_annotations" => {
                     config.diagnostics.doc_annotations = parse_bool(line_number, value)?
                 }
+                "undefined_variables" => {
+                    config.diagnostics.undefined_variables = parse_bool(line_number, value)?
+                }
+                "unused_locals" => {
+                    config.diagnostics.unused_locals = parse_bool(line_number, value)?
+                }
+                "unused_parameters" => {
+                    config.diagnostics.unused_parameters = parse_bool(line_number, value)?
+                }
+                "use_before_definition" => {
+                    config.diagnostics.use_before_definition = parse_bool(line_number, value)?
+                }
+                "globals" => config.diagnostics.globals = parse_string_array(line_number, value)?,
                 "" => {
                     return Err(ConfigParseError::new(line_number, "missing config key"));
                 }
@@ -361,6 +384,25 @@ fn parse_bool(line: usize, value: &str) -> Result<bool, ConfigParseError> {
         "false" => Ok(false),
         _ => Err(ConfigParseError::new(line, "expected boolean value")),
     }
+}
+
+fn parse_string_array(line: usize, value: &str) -> Result<Vec<String>, ConfigParseError> {
+    let Some(inner) = value
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+    else {
+        return Err(ConfigParseError::new(line, "expected string array value"));
+    };
+    let inner = inner.trim();
+
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    inner
+        .split(',')
+        .map(|item| parse_string(line, item.trim()))
+        .collect()
 }
 
 fn strip_comment(line: &str) -> Result<String, &'static str> {

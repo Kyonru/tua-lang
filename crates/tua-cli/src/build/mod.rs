@@ -86,7 +86,7 @@ pub(crate) fn build_changed_files(
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = loaded.config.diagnostics;
+    let diagnostics_config = loaded.config.diagnostics.clone();
     let mut outcome = BuildOutcome::default();
 
     for source_path in source_files {
@@ -165,7 +165,7 @@ fn build_project_files(
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = loaded.config.diagnostics;
+    let diagnostics_config = loaded.config.diagnostics.clone();
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
     let tua_outputs = tua_outputs_by_path(&source_dir, &out_dir, &source_files);

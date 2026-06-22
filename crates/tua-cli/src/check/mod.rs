@@ -12,7 +12,7 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
         discover_source_files(&source_dir, &loaded.config.extension).map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?;
-    let diagnostics_config = loaded.config.diagnostics;
+    let diagnostics_config = loaded.config.diagnostics.clone();
     let checked = source_files.len();
     let mut diagnostics = Vec::new();
 

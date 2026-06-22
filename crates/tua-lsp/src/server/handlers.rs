@@ -291,14 +291,14 @@ impl LspServer {
                 .into_iter()
                 .rev()
                 .find_map(|root| load_config_from_dir(root).ok())
-                .map(|loaded| loaded.config.diagnostics)
+                .map(|loaded| loaded.config.diagnostics.clone())
                 .unwrap_or_default();
         }
 
         if let Some(parent) = path.parent() {
             for ancestor in parent.ancestors() {
                 match load_config_from_dir(ancestor) {
-                    Ok(loaded) if loaded.found => return loaded.config.diagnostics,
+                    Ok(loaded) if loaded.found => return loaded.config.diagnostics.clone(),
                     Ok(_) | Err(_) => {}
                 }
             }

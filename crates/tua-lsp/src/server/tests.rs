@@ -371,23 +371,34 @@ source = "src"
 
 [diagnostics]
 duplicate_keys = true
+undefined_variables = true
 "#,
     );
 
     let uri = temp.uri_for("src/main.tua");
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
-        did_open(&uri, "local config = { hp = 10, hp = 20 }\n"),
+        did_open(&uri, "local config = { hp = 10, hp = 20 }\nmissing()\n"),
     ]);
     let diagnostics = published_diagnostics(&output, &uri);
 
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0]["severity"], 2);
-    assert_eq!(diagnostics[0]["code"], "TL4001");
-    assert!(diagnostics[0]["message"]
-        .as_str()
-        .expect("diagnostic message should be a string")
-        .contains("duplicate table key `hp`"));
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["severity"] == 2
+            && diagnostic["code"] == "TL4001"
+            && diagnostic["message"]
+                .as_str()
+                .expect("diagnostic message should be a string")
+                .contains("duplicate table key `hp`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["severity"] == 2
+            && diagnostic["code"] == "TL4004"
+            && diagnostic["message"]
+                .as_str()
+                .expect("diagnostic message should be a string")
+                .contains("undefined variable `missing`")
+    }));
 }
 
 #[test]

@@ -50,6 +50,10 @@ impl DiagnosticCode {
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
     pub const LINT_MISSING_REQUIRE: Self = Self(4002);
     pub const LINT_SELF_ASSIGNMENT: Self = Self(4003);
+    pub const LINT_UNDEFINED_VARIABLE: Self = Self(4004);
+    pub const LINT_UNUSED_LOCAL: Self = Self(4005);
+    pub const LINT_UNUSED_PARAMETER: Self = Self(4006);
+    pub const LINT_USE_BEFORE_DEFINITION: Self = Self(4007);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {
