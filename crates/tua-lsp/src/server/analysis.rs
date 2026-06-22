@@ -210,6 +210,20 @@ impl AnalysisSnapshot {
         }
     }
 
+    pub(super) fn resolve_completion(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        label: &str,
+        kind: Option<tua_core::CompletionKind>,
+    ) -> Option<Completion> {
+        self.completion(path, position)
+            .into_iter()
+            .find(|completion| {
+                completion.label == label && kind.is_none_or(|kind| completion.kind == kind)
+            })
+    }
+
     pub(super) fn signature_help(
         &self,
         path: &Path,

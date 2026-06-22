@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
 
 use super::protocol::{
-    error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
+    completion_resolve_data, error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
     lsp_document_highlight_from_core, lsp_document_link_from_core, lsp_document_symbol_from_core,
     lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_location_from_core,
     lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
@@ -329,17 +329,24 @@ impl LspServer {
         Value::Array(
             completions
                 .into_iter()
-                .map(|completion| lsp_completion_from_core(request.uri, completion))
+                .map(|completion| lsp_completion_from_core(request.uri, position, completion))
                 .collect(),
         )
     }
 
     fn completion_resolve_response(&self, message: Value) -> Value {
-        message
-            .get("params")
-            .cloned()
-            .map(lsp_resolved_completion_item)
-            .unwrap_or(Value::Null)
+        let Some(item) = message.get("params").cloned() else {
+            return Value::Null;
+        };
+        let Some(data) = completion_resolve_data(&item) else {
+            return item;
+        };
+
+        let path = path_from_uri(&data.uri);
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let completion = snapshot.resolve_completion(&path, data.position, &data.label, data.kind);
+
+        lsp_resolved_completion_item(item, completion)
     }
 
     fn signature_help_response(&self, message: &Value) -> Option<Value> {

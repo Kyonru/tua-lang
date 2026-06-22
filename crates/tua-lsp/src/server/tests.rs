@@ -959,11 +959,12 @@ local draw = love.graphics.pr
 fn completion_items_can_be_resolved_for_documentation() {
     let uri = "file:///tmp/resolve-completion.tua";
     let source = "local value = math.si\n";
-    let output = run_messages(vec![
-        did_open(uri, source),
-        completion_request(2, uri, source, "math.si"),
-    ]);
-    let completions = response_with_id(&output, 2)["result"]
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(completion_request(2, uri, source, "math.si"));
+
+    let completions = response_with_id(server.output(), 2)["result"]
         .as_array()
         .expect("completion result should be an array");
     let sin = completions
@@ -973,10 +974,15 @@ fn completion_items_can_be_resolved_for_documentation() {
         .clone();
 
     assert_eq!(sin["data"]["uri"], uri);
+    assert_eq!(sin["data"]["label"], "sin");
+    assert_eq!(sin["data"]["kind"], "function");
+    assert!(sin.get("detail").is_none());
     assert!(sin.get("documentation").is_none());
+    assert!(sin["data"].get("detail").is_none());
+    assert!(sin["data"].get("documentation").is_none());
 
-    let resolved = run_messages(vec![completion_resolve_request(1, sin)]);
-    let response = response_with_id(&resolved, 1);
+    server.send(completion_resolve_request(3, sin));
+    let response = response_with_id(server.output(), 3);
 
     assert_eq!(response["result"]["label"], "sin");
     assert_eq!(
@@ -988,6 +994,95 @@ fn completion_items_can_be_resolved_for_documentation() {
         .as_str()
         .expect("documentation should be a string")
         .contains("Returns the sine."));
+    assert_eq!(response["result"]["data"]["symbolKind"], "function");
+    assert_eq!(
+        response["result"]["data"]["typeLabel"],
+        "function math.sin(x: number): number"
+    );
+}
+
+#[test]
+fn completion_resolve_uses_latest_snapshot_after_edits() {
+    let uri = "file:///tmp/resolve-after-edit.tua";
+    let source = "local value = math.si\n";
+    let edited = "local value = math.si\nlocal other = 1\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(completion_request(2, uri, source, "math.si"));
+
+    let sin = response_with_id(server.output(), 2)["result"][0].clone();
+
+    server.send(did_change(uri, edited, 2));
+    server.send(completion_resolve_request(3, sin));
+
+    let response = response_with_id(server.output(), 3);
+
+    assert_eq!(
+        response["result"]["detail"],
+        "function math.sin(x: number): number"
+    );
+}
+
+#[test]
+fn completion_resolve_enriches_project_symbols_and_snippets() {
+    let uri = "file:///tmp/resolve-project-symbols.tua";
+    let source = r#"type Player = { hp: number }
+local score = 1
+
+local function damage(player: Player): Player
+  return player
+end
+
+local typed: Pl = nil
+local value = sco
+local call = dam
+---
+local function heal(player: Player): Player
+  return player
+end
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(completion_request(2, uri, source, "typed: Pl"));
+    server.send(completion_request(3, uri, source, "value = sco"));
+    server.send(completion_request(4, uri, source, "call = dam"));
+    server.send(completion_request(5, uri, source, "---"));
+
+    let alias = response_with_id(server.output(), 2)["result"][0].clone();
+    let local = response_with_id(server.output(), 3)["result"][0].clone();
+    let function = response_with_id(server.output(), 4)["result"][0].clone();
+    let snippet = response_with_id(server.output(), 5)["result"][0].clone();
+
+    assert!(alias.get("detail").is_none());
+    assert!(local.get("detail").is_none());
+    assert!(function.get("detail").is_none());
+    assert!(snippet.get("detail").is_none());
+
+    server.send(completion_resolve_request(6, alias));
+    server.send(completion_resolve_request(7, local));
+    server.send(completion_resolve_request(8, function));
+    server.send(completion_resolve_request(9, snippet));
+
+    let alias = response_with_id(server.output(), 6);
+    let local = response_with_id(server.output(), 7);
+    let function = response_with_id(server.output(), 8);
+    let snippet = response_with_id(server.output(), 9);
+
+    assert_eq!(alias["result"]["detail"], "type alias");
+    assert_eq!(alias["result"]["data"]["symbolKind"], "typeAlias");
+    assert_eq!(local["result"]["detail"], "local");
+    assert_eq!(local["result"]["data"]["symbolKind"], "variable");
+    assert_eq!(function["result"]["detail"], "function");
+    assert_eq!(function["result"]["data"]["symbolKind"], "function");
+    assert_eq!(snippet["result"]["detail"], "LuaDoc function documentation");
+    assert_eq!(snippet["result"]["data"]["symbolKind"], "snippet");
+    assert_eq!(snippet["result"]["insertTextFormat"], 2);
+    assert!(snippet["result"]["insertText"]
+        .as_str()
+        .expect("snippet insert text should be a string")
+        .contains("@param player Player"));
 }
 
 #[test]
@@ -1071,21 +1166,62 @@ local value = audio.play
     temp.write("src/main.tua", source);
     temp.write(
         "src/audio.lua",
-        r#"
+        r#"---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
 return {
-  play = function(source) end,
+  play = play,
   volume = 1,
 }
 "#,
     );
 
     let uri = temp.uri_for("src/main.tua");
-    let output = run_messages(vec![
-        did_open(&uri, source),
-        completion_request(2, &uri, source, "audio."),
-    ]);
+    let mut server = TestServer::new();
 
-    assert_completion_labels(&output, 2, ["play", "volume"]);
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "audio."));
+
+    assert_completion_labels(server.output(), 2, ["play", "volume"]);
+
+    let play = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .find(|completion| completion["label"] == "play")
+        .expect("play completion should exist")
+        .clone();
+
+    assert!(play.get("detail").is_none());
+    assert!(play.get("documentation").is_none());
+
+    server.send(completion_resolve_request(3, play));
+
+    let response = response_with_id(server.output(), 3);
+
+    assert_eq!(
+        response["result"]["detail"],
+        "field: function(string): boolean"
+    );
+    assert!(response["result"]["documentation"]["value"]
+        .as_str()
+        .expect("documentation should be a string")
+        .contains("audio source\nsuccess flag"));
+    assert_eq!(response["result"]["data"]["symbolKind"], "function");
+    assert_eq!(
+        response["result"]["data"]["typeLabel"],
+        "field: function(string): boolean"
+    );
+    assert_eq!(
+        response["result"]["data"]["modulePath"],
+        temp.path
+            .join("src/audio.lua")
+            .to_string_lossy()
+            .to_string()
+    );
 }
 
 #[test]
@@ -1830,6 +1966,24 @@ fn did_open(uri: &str, source: &str) -> Value {
                 "version": 1,
                 "text": source
             }
+        }
+    })
+}
+
+fn did_change(uri: &str, source: &str, version: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {
+                "uri": uri,
+                "version": version
+            },
+            "contentChanges": [
+                {
+                    "text": source
+                }
+            ]
         }
     })
 }

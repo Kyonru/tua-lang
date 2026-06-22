@@ -21,6 +21,7 @@ impl LuaSymbol {
             documentation: None,
             insert_text: None,
             is_snippet: false,
+            module_path: None,
         }
     }
 }

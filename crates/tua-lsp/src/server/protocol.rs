@@ -85,22 +85,32 @@ pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
     result
 }
 
-pub(super) fn lsp_completion_from_core(uri: &str, completion: Completion) -> Value {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct CompletionResolveData {
+    pub(super) uri: String,
+    pub(super) position: SourcePosition,
+    pub(super) label: String,
+    pub(super) kind: Option<CompletionKind>,
+}
+
+pub(super) fn lsp_completion_from_core(
+    uri: &str,
+    position: SourcePosition,
+    completion: Completion,
+) -> Value {
     let kind = lsp_completion_kind(completion.kind);
     let label = completion.label;
-    let detail = completion.detail;
-    let documentation = completion.documentation;
     let insert_text = completion.insert_text;
     let is_snippet = completion.is_snippet;
+    let core_kind = completion.kind.as_str();
     let mut item = json!({
         "label": label.clone(),
         "kind": kind,
         "data": {
             "uri": uri,
             "label": label,
-            "kind": kind,
-            "detail": detail,
-            "documentation": documentation
+            "kind": core_kind,
+            "position": lsp_position(position)
         }
     });
 
@@ -112,41 +122,73 @@ pub(super) fn lsp_completion_from_core(uri: &str, completion: Completion) -> Val
         item["insertTextFormat"] = json!(2);
     }
 
-    if let Some(detail) = item
-        .get("data")
-        .and_then(|data| data.get("detail"))
-        .and_then(Value::as_str)
-    {
-        item["detail"] = json!(detail);
-    }
-
     item
 }
 
-pub(super) fn lsp_resolved_completion_item(mut item: Value) -> Value {
-    let detail = item
-        .get("data")
-        .and_then(|data| data.get("detail"))
+pub(super) fn completion_resolve_data(item: &Value) -> Option<CompletionResolveData> {
+    let data = item.get("data")?;
+    let uri = data.get("uri")?.as_str()?.to_owned();
+    let label = data.get("label")?.as_str()?.to_owned();
+    let position = source_position_from_lsp(data.get("position")?);
+    let kind = data
+        .get("kind")
         .and_then(Value::as_str)
-        .map(str::to_owned);
-    let documentation = item
-        .get("data")
-        .and_then(|data| data.get("documentation"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
+        .and_then(CompletionKind::parse_kind);
 
-    if let Some(detail) = detail {
-        if item.get("detail").is_none() || item["detail"].is_null() {
-            item["detail"] = json!(detail);
+    Some(CompletionResolveData {
+        uri,
+        position: position?,
+        label,
+        kind,
+    })
+}
+
+pub(super) fn lsp_resolved_completion_item(
+    mut item: Value,
+    completion: Option<Completion>,
+) -> Value {
+    let Some(completion) = completion else {
+        return item;
+    };
+
+    if let Some(detail) = completion.detail {
+        item["detail"] = json!(detail);
+    }
+
+    if let Some(documentation) = completion.documentation {
+        item["documentation"] = json!({
+            "kind": "markdown",
+            "value": documentation
+        });
+    }
+
+    if item.get("insertText").is_none() {
+        if let Some(insert_text) = completion.insert_text {
+            item["insertText"] = json!(insert_text);
         }
     }
 
-    if let Some(documentation) = documentation {
-        if item.get("documentation").is_none() || item["documentation"].is_null() {
-            item["documentation"] = json!({
-                "kind": "markdown",
-                "value": documentation
-            });
+    if completion.is_snippet {
+        item["insertTextFormat"] = json!(2);
+    }
+
+    let type_label = item
+        .get("detail")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+
+    if let Some(data) = item.get_mut("data").and_then(Value::as_object_mut) {
+        data.insert("symbolKind".to_owned(), json!(completion.kind.as_str()));
+
+        if let Some(type_label) = type_label {
+            data.insert("typeLabel".to_owned(), json!(type_label));
+        }
+
+        if let Some(module_path) = completion.module_path {
+            data.insert(
+                "modulePath".to_owned(),
+                json!(module_path.to_string_lossy().to_string()),
+            );
         }
     }
 

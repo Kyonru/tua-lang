@@ -67,6 +67,7 @@ fn collect_require_paths(
                 documentation: None,
                 insert_text: None,
                 is_snippet: false,
+                module_path: Some(path),
             },
         );
     }

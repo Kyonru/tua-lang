@@ -1,13 +1,11 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use self::context::{completion_context, CompletionContext};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
-use crate::module_index::{
-    required_module_export_for_fields, required_module_exports_for_receiver,
-};
+use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
 use crate::source_text::line_at;
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
@@ -27,6 +25,7 @@ pub struct Completion {
     pub documentation: Option<String>,
     pub insert_text: Option<String>,
     pub is_snippet: bool,
+    pub module_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +38,35 @@ pub enum CompletionKind {
     Module,
     Variable,
     Value,
+}
+
+impl CompletionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Snippet => "snippet",
+            Self::Function => "function",
+            Self::TypeAlias => "typeAlias",
+            Self::Field => "field",
+            Self::Keyword => "keyword",
+            Self::Module => "module",
+            Self::Variable => "variable",
+            Self::Value => "value",
+        }
+    }
+
+    pub fn parse_kind(value: &str) -> Option<Self> {
+        match value {
+            "snippet" => Some(Self::Snippet),
+            "function" => Some(Self::Function),
+            "typeAlias" => Some(Self::TypeAlias),
+            "field" => Some(Self::Field),
+            "keyword" => Some(Self::Keyword),
+            "module" => Some(Self::Module),
+            "variable" => Some(Self::Variable),
+            "value" => Some(Self::Value),
+            _ => None,
+        }
+    }
 }
 
 pub fn complete_tua_source(
@@ -153,6 +181,7 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         documentation: None,
         insert_text: None,
         is_snippet: false,
+        module_path: None,
     })
     .collect()
 }
@@ -182,6 +211,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
             documentation: None,
             insert_text: None,
             is_snippet: false,
+            module_path: None,
         })
         .collect()
 }
@@ -199,6 +229,7 @@ fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion>
             documentation: environment.alias_documentation(name).map(str::to_owned),
             insert_text: None,
             is_snippet: false,
+            module_path: None,
         })
         .collect()
 }
@@ -223,6 +254,7 @@ fn complete_documentation_snippet(
         ),
         insert_text: Some(snippet),
         is_snippet: true,
+        module_path: None,
     }]
 }
 
@@ -240,6 +272,7 @@ fn complete_lossy_documentation_snippet(source: &str, position: SourcePosition) 
         ),
         insert_text: Some(snippet),
         is_snippet: true,
+        module_path: None,
     }]
 }
 
@@ -476,6 +509,7 @@ fn complete_identifier_items(
                     documentation: None,
                     insert_text: None,
                     is_snippet: false,
+                    module_path: None,
                 },
             );
         }
@@ -496,6 +530,7 @@ fn complete_identifier_items(
                     documentation: None,
                     insert_text: None,
                     is_snippet: false,
+                    module_path: None,
                 },
             );
         }
@@ -558,6 +593,7 @@ fn complete_fields(
             documentation: None,
             insert_text: None,
             is_snippet: false,
+            module_path: None,
         })
         .collect()
 }
@@ -601,10 +637,12 @@ fn complete_required_module_fields(
     let Some((receiver, fields)) = receiver_parts.split_first() else {
         return Vec::new();
     };
+    let Some(exports) = required_module_exports_for_receiver(parsed, receiver) else {
+        return Vec::new();
+    };
+
     if fields.is_empty() {
-        let Some(exports) = required_module_exports_for_receiver(parsed, receiver) else {
-            return Vec::new();
-        };
+        let module_path = exports.path.clone();
 
         return exports
             .fields
@@ -617,13 +655,15 @@ fn complete_required_module_fields(
                 documentation: field.documentation,
                 insert_text: None,
                 is_snippet: false,
+                module_path: Some(module_path.clone()),
             })
             .collect();
     }
 
-    let Some(export) = required_module_export_for_fields(parsed, receiver, fields) else {
+    let Some(export) = exported_field_for_fields(&exports, fields) else {
         return Vec::new();
     };
+    let module_path = exports.path;
     let mut fields = BTreeMap::new();
 
     collect_export_fields(&export.ty, &mut fields);
@@ -638,6 +678,7 @@ fn complete_required_module_fields(
             documentation: export.documentation.clone(),
             insert_text: None,
             is_snippet: false,
+            module_path: Some(module_path.clone()),
         })
         .collect()
 }
@@ -675,6 +716,7 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         documentation: Some(item.documentation.to_owned()),
         insert_text: None,
         is_snippet: false,
+        module_path: None,
     }
 }
 
