@@ -68,6 +68,8 @@ fn collect_require_paths(
                 insert_text: None,
                 is_snippet: false,
                 module_path: Some(path),
+                source_module: None,
+                additional_text_edits: Vec::new(),
             },
         );
     }

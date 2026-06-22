@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -12,14 +12,19 @@ use tua_core::{
     infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
     load_config_from_dir, module_links_tua_source, parse_lua_source, parse_tua_source,
     reference_kind_for_rename, references_to_definition_parsed_source,
-    rename_target_for_definition, semantic_tokens_parsed_source, semantic_tokens_tua_source,
-    signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
-    workspace_symbols_from_dir, CodeAction, CodeActionRange, Completion, Diagnostic,
-    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint, ModuleExports,
-    ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
-    SourcePosition, SourceSpan, TextEdit, TypeEnvironment, WorkspaceSymbol,
+    rename_target_for_definition, require_bindings_for_parsed_source,
+    semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
+    signature_help_tua_source, type_alias_definition_count, workspace_symbols_from_dir, CodeAction,
+    CodeActionRange, Completion, Diagnostic, DiagnosticsConfig, DocumentHighlight, DocumentSymbol,
+    Hover, InlayHint, ModuleExports, ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit, TypeEnvironment,
+    WorkspaceSymbol,
 };
 
+use super::auto_import::{
+    auto_import_completion, identifier_prefix_at, module_name_for_path, unique_import_alias,
+    AutoImportCandidate,
+};
 use super::uri::path_from_uri;
 
 #[derive(Default)]
@@ -209,10 +214,17 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        match &file.parsed {
+        let mut completions = match &file.parsed {
             Ok(parsed) => complete_parsed_source(parsed, position).unwrap_or_default(),
             Err(_) => complete_tua_source(path, file.source.clone(), position).unwrap_or_default(),
-        }
+        };
+        let existing_labels = completions
+            .iter()
+            .map(|completion| completion.label.clone())
+            .collect::<BTreeSet<_>>();
+
+        completions.extend(self.auto_import_completions(path, position, &existing_labels));
+        completions
     }
 
     pub(super) fn resolve_completion(
@@ -221,12 +233,100 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         label: &str,
         kind: Option<tua_core::CompletionKind>,
+        module_path: Option<&Path>,
+        source_module: Option<&str>,
     ) -> Option<Completion> {
         self.completion(path, position)
             .into_iter()
             .find(|completion| {
-                completion.label == label && kind.is_none_or(|kind| completion.kind == kind)
+                completion.label == label
+                    && kind.is_none_or(|kind| completion.kind == kind)
+                    && module_path
+                        .is_none_or(|path| completion.module_path.as_deref() == Some(path))
+                    && source_module
+                        .is_none_or(|module| completion.source_module.as_deref() == Some(module))
             })
+    }
+
+    fn auto_import_completions(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        existing_labels: &BTreeSet<String>,
+    ) -> Vec<Completion> {
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+        let Ok(parsed) = &file.parsed else {
+            return Vec::new();
+        };
+        let Some(prefix) = identifier_prefix_at(&file.source, position) else {
+            return Vec::new();
+        };
+
+        if prefix.is_empty() {
+            return Vec::new();
+        }
+
+        let Some((source_dir, _)) = self.project_source_for_path(path) else {
+            return Vec::new();
+        };
+
+        let require_aliases = require_bindings_for_parsed_source(parsed)
+            .into_iter()
+            .map(|binding| (binding.module, binding.alias))
+            .collect::<BTreeMap<_, _>>();
+        let reserved_aliases = existing_labels
+            .iter()
+            .chain(require_aliases.values())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut completions = Vec::new();
+        let mut exports = self
+            .files
+            .values()
+            .filter_map(|file| file.exports())
+            .collect::<Vec<_>>();
+
+        exports.sort_by(|left, right| left.path.cmp(&right.path));
+
+        for exports in exports {
+            if exports.path == path {
+                continue;
+            }
+
+            let Some(module) = module_name_for_path(&source_dir, &exports.path) else {
+                continue;
+            };
+            let existing_alias = require_aliases.get(&module).cloned();
+            let alias = existing_alias
+                .clone()
+                .unwrap_or_else(|| unique_import_alias(&module, &reserved_aliases));
+
+            for (name, field) in &exports.fields {
+                if !name.starts_with(&prefix) || existing_labels.contains(name) {
+                    continue;
+                }
+
+                completions.push(auto_import_completion(AutoImportCandidate {
+                    current_path: path,
+                    current_source: &file.source,
+                    exports,
+                    module: &module,
+                    alias: &alias,
+                    already_imported: existing_alias.is_some(),
+                    name,
+                    field,
+                }));
+            }
+        }
+
+        completions.sort_by(|left, right| {
+            left.label
+                .cmp(&right.label)
+                .then_with(|| left.source_module.cmp(&right.source_module))
+        });
+        completions
     }
 
     pub(super) fn signature_help(

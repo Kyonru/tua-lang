@@ -345,7 +345,14 @@ impl LspServer {
 
         let path = path_from_uri(&data.uri);
         let snapshot = self.analysis.snapshot(&self.workspace_folders);
-        let completion = snapshot.resolve_completion(&path, data.position, &data.label, data.kind);
+        let completion = snapshot.resolve_completion(
+            &path,
+            data.position,
+            &data.label,
+            data.kind,
+            data.module_path.as_deref(),
+            data.source_module.as_deref(),
+        );
 
         lsp_resolved_completion_item(item, completion)
     }

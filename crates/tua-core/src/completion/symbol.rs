@@ -22,6 +22,8 @@ impl LuaSymbol {
             insert_text: None,
             is_snippet: false,
             module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
         }
     }
 }

@@ -10,7 +10,8 @@ use crate::semantic::{resolve_aliases, resolve_field_chain_type};
 use crate::source_text::line_at;
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{
-    parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TuaType,
+    parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
+    TuaType,
 };
 
 mod context;
@@ -26,6 +27,8 @@ pub struct Completion {
     pub insert_text: Option<String>,
     pub is_snippet: bool,
     pub module_path: Option<PathBuf>,
+    pub source_module: Option<String>,
+    pub additional_text_edits: Vec<TextEdit>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -182,6 +185,8 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         insert_text: None,
         is_snippet: false,
         module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
     })
     .collect()
 }
@@ -212,6 +217,8 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
             insert_text: None,
             is_snippet: false,
             module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
         })
         .collect()
 }
@@ -230,6 +237,8 @@ fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion>
             insert_text: None,
             is_snippet: false,
             module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
         })
         .collect()
 }
@@ -255,6 +264,8 @@ fn complete_documentation_snippet(
         insert_text: Some(snippet),
         is_snippet: true,
         module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
     }]
 }
 
@@ -273,6 +284,8 @@ fn complete_lossy_documentation_snippet(source: &str, position: SourcePosition) 
         insert_text: Some(snippet),
         is_snippet: true,
         module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
     }]
 }
 
@@ -510,6 +523,8 @@ fn complete_identifier_items(
                     insert_text: None,
                     is_snippet: false,
                     module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
                 },
             );
         }
@@ -531,6 +546,8 @@ fn complete_identifier_items(
                     insert_text: None,
                     is_snippet: false,
                     module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
                 },
             );
         }
@@ -594,6 +611,8 @@ fn complete_fields(
             insert_text: None,
             is_snippet: false,
             module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
         })
         .collect()
 }
@@ -656,6 +675,8 @@ fn complete_required_module_fields(
                 insert_text: None,
                 is_snippet: false,
                 module_path: Some(module_path.clone()),
+                source_module: None,
+                additional_text_edits: Vec::new(),
             })
             .collect();
     }
@@ -679,6 +700,8 @@ fn complete_required_module_fields(
             insert_text: None,
             is_snippet: false,
             module_path: Some(module_path.clone()),
+            source_module: None,
+            additional_text_edits: Vec::new(),
         })
         .collect()
 }
@@ -717,6 +740,8 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         insert_text: None,
         is_snippet: false,
         module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
     }
 }
 

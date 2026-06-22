@@ -32,6 +32,12 @@ pub struct RequiredModule {
     pub path: PathBuf,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RequireBinding {
+    pub alias: String,
+    pub module: String,
+}
+
 impl ModuleExports {
     pub fn field(&self, name: &str) -> Option<&Type> {
         self.fields.get(name).map(|field| &field.ty)
@@ -42,6 +48,13 @@ impl ModuleExports {
             .get(name)
             .and_then(|field| field.documentation.as_deref())
     }
+}
+
+pub fn require_bindings_for_parsed_source(parsed: &ParsedSource) -> Vec<RequireBinding> {
+    require_bindings(parsed)
+        .into_iter()
+        .map(|(alias, module)| RequireBinding { alias, module })
+        .collect()
 }
 
 pub fn required_module_for_receiver(

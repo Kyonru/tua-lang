@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tua_core::{
@@ -151,6 +152,8 @@ pub(super) struct CompletionResolveData {
     pub(super) position: SourcePosition,
     pub(super) label: String,
     pub(super) kind: Option<CompletionKind>,
+    pub(super) module_path: Option<PathBuf>,
+    pub(super) source_module: Option<String>,
 }
 
 pub(super) fn lsp_completion_from_core(
@@ -163,6 +166,11 @@ pub(super) fn lsp_completion_from_core(
     let insert_text = completion.insert_text;
     let is_snippet = completion.is_snippet;
     let core_kind = completion.kind.as_str();
+    let module_path = completion
+        .module_path
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string());
+    let source_module = completion.source_module.clone();
     let mut item = json!({
         "label": label.clone(),
         "kind": kind,
@@ -182,6 +190,14 @@ pub(super) fn lsp_completion_from_core(
         item["insertTextFormat"] = json!(2);
     }
 
+    if let Some(module_path) = module_path {
+        item["data"]["modulePath"] = json!(module_path);
+    }
+
+    if let Some(source_module) = source_module {
+        item["data"]["sourceModule"] = json!(source_module);
+    }
+
     item
 }
 
@@ -194,12 +210,22 @@ pub(super) fn completion_resolve_data(item: &Value) -> Option<CompletionResolveD
         .get("kind")
         .and_then(Value::as_str)
         .and_then(CompletionKind::parse_kind);
+    let module_path = data
+        .get("modulePath")
+        .and_then(Value::as_str)
+        .map(PathBuf::from);
+    let source_module = data
+        .get("sourceModule")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
 
     Some(CompletionResolveData {
         uri,
         position: position?,
         label,
         kind,
+        module_path,
+        source_module,
     })
 }
 
@@ -232,6 +258,14 @@ pub(super) fn lsp_resolved_completion_item(
         item["insertTextFormat"] = json!(2);
     }
 
+    if !completion.additional_text_edits.is_empty() {
+        item["additionalTextEdits"] = json!(completion
+            .additional_text_edits
+            .into_iter()
+            .map(lsp_text_edit)
+            .collect::<Vec<_>>());
+    }
+
     let type_label = item
         .get("detail")
         .and_then(Value::as_str)
@@ -249,6 +283,10 @@ pub(super) fn lsp_resolved_completion_item(
                 "modulePath".to_owned(),
                 json!(module_path.to_string_lossy().to_string()),
             );
+        }
+
+        if let Some(source_module) = completion.source_module {
+            data.insert("sourceModule".to_owned(), json!(source_module));
         }
     }
 

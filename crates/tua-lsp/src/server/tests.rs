@@ -1116,6 +1116,129 @@ end
 }
 
 #[test]
+fn completion_returns_auto_imported_exported_functions() {
+    let temp = TempProject::new("auto-import-completion");
+    let main = "local made = make\n";
+    let player = r#"local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let module_path = temp.path.join("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    let completion = completion_with_label(server.output(), 2, "makePlayer");
+
+    assert_eq!(completion["kind"], 3);
+    assert_eq!(completion["insertText"], "Player.makePlayer");
+    assert_eq!(completion["data"]["sourceModule"], "player");
+    assert_eq!(
+        completion["data"]["modulePath"],
+        module_path.to_string_lossy().as_ref()
+    );
+    assert!(completion.get("detail").is_none());
+}
+
+#[test]
+fn completion_resolve_adds_auto_import_require_once() {
+    let temp = TempProject::new("auto-import-resolve");
+    let main = "local made = make\n";
+    let player = r#"---Creates a player.
+local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    let completion = completion_with_label(server.output(), 2, "makePlayer");
+
+    server.send(completion_resolve_request(3, completion));
+
+    let resolved = &response_with_id(server.output(), 3)["result"];
+
+    assert_eq!(resolved["insertText"], "Player.makePlayer");
+    assert_eq!(
+        resolved["detail"],
+        "auto import from player: function(string): { name: string }"
+    );
+    assert_eq!(resolved["additionalTextEdits"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["newText"],
+        "local Player = require(\"player\")\n"
+    );
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 0 }
+        })
+    );
+}
+
+#[test]
+fn completion_reuses_existing_require_alias_for_auto_import() {
+    let temp = TempProject::new("auto-import-existing-alias");
+    let main = r#"local Functions = require("player")
+
+local made = make
+"#;
+    let player = r#"local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    let completion = completion_with_label(server.output(), 2, "makePlayer");
+
+    assert_eq!(completion["insertText"], "Functions.makePlayer");
+
+    server.send(completion_resolve_request(3, completion));
+
+    let resolved = &response_with_id(server.output(), 3)["result"];
+
+    assert_eq!(resolved["insertText"], "Functions.makePlayer");
+    assert!(resolved.get("additionalTextEdits").is_none());
+}
+
+#[test]
 fn signature_help_returns_known_function_signature() {
     let uri = "file:///tmp/signature-help.tua";
     let source = r#"type Player = { hp: number }
@@ -3044,6 +3167,16 @@ fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected:
         .collect::<Vec<_>>();
 
     assert_eq!(labels, expected);
+}
+
+fn completion_with_label(output: &[Value], id: u64, label: &str) -> Value {
+    response_with_id(output, id)["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .find(|item| item["label"] == label)
+        .unwrap_or_else(|| panic!("completion {label:?} should exist"))
+        .clone()
 }
 
 fn assert_signature_label(output: &[Value], id: u64, expected: &str) {
