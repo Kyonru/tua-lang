@@ -32,6 +32,7 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Require path completion | Offers module path completions from resolvable project files. | Comparable Lua module workflow. | Project model drives path/module completion. | Deepen with 31, 32 |
 | Workspace folders | Initialize and workspace-folder change notifications are accepted. | Basic multi-root editor support. | Workspace roots feed project discovery. | Deepen with 31, 46 |
 | Watched files registration | Dynamically registers watchers for `**/*.tua`, `**/*.lua`, and `**/tua.toml` when the client supports it. | Comparable editor watcher setup. | File watching invalidates indexed state. | Deepen with 32 |
+| Workspace configuration changes | Handles `workspace/didChangeConfiguration` for diagnostics, file associations, ignored paths, require path separator, and preview settings. | Comparable editor-settings overlay behavior. | Editor/project config feeds the analysis host without restarting the server. | Landed with 46 |
 
 ## Protocol Surface Supported But Shallow
 
@@ -63,7 +64,6 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Safe cross-file rename | Same-file rename only. | Workspace edits for project-identity symbols such as exported functions and aliases. | 43 |
 | Code actions / quick fixes | `codeActionProvider` is not advertised. | Conservative mechanical fixes for selected diagnostics. | 44 |
 | Auto-import completion | Unresolved identifiers do not propose imports. | Offer exported module symbols and insert or reuse `require` bindings. | 45 |
-| Workspace configuration changes | `workspace/didChangeConfiguration` is not handled. | Apply editor-provided diagnostics, associations, ignored paths, and preview settings with documented precedence. | 46 |
 | Richer semantic tokens | Compact token legend only. | Add globals, module names, methods, fields, annotation tags, readonly/deprecated modifiers, and unresolved categories. | 47 |
 | Call hierarchy | Call hierarchy is not advertised. | Show incoming/outgoing calls for known functions and module exports. | 48 |
 | LuaHelper parity fixtures | No dedicated parity fixture suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49 |

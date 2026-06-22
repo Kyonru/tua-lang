@@ -783,6 +783,161 @@ missing_requires = true
 }
 
 #[test]
+fn did_change_configuration_republishes_diagnostic_overrides() {
+    let temp = TempProject::new("configuration-diagnostic-toggle");
+    let source = "local unused = 1\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+unused_locals = false
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "unusedLocals": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL4005");
+}
+
+#[test]
+fn did_change_configuration_null_diagnostics_defer_to_project_config() {
+    let temp = TempProject::new("configuration-diagnostic-precedence");
+    let source = "local unused = 1\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+unused_locals = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 1);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "unusedLocals": null
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL4005");
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "unusedLocals": false
+        }
+    })));
+
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+}
+
+#[test]
+fn did_change_configuration_file_associations_index_lua_interop_sources() {
+    let temp = TempProject::new("configuration-file-associations");
+    let main = "local value = cla\n";
+    let legacy = r#"local function clamp(value)
+  return value
+end
+
+return {
+  clamp = clamp,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/legacy.script", legacy);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "cla"));
+    assert_completion_labels(server.output(), 2, []);
+
+    server.send(did_change_configuration(json!({
+        "fileAssociations": {
+            "*.script": "lua"
+        }
+    })));
+    server.send(completion_request(3, &main_uri, main, "cla"));
+
+    let completion = completion_with_label(server.output(), 3, "clamp");
+
+    assert_eq!(completion["insertText"], "Legacy.clamp");
+    assert_eq!(completion["data"]["sourceModule"], "legacy");
+}
+
+#[test]
+fn did_change_configuration_ignored_paths_skip_indexing_and_diagnostics() {
+    let temp = TempProject::new("configuration-ignored-paths");
+    let ignored = r#"local unused = 1
+
+local function makeIgnored()
+  return {}
+end
+
+return {
+  makeIgnored = makeIgnored,
+}
+"#;
+    let main = "local value = make\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/generated/ignored.tua", ignored);
+    temp.write("src/main.tua", main);
+
+    let ignored_uri = temp.uri_for("src/generated/ignored.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "unusedLocals": true
+        },
+        "ignoredPaths": [
+            "src/generated/**"
+        ]
+    })));
+    server.send(did_open(&ignored_uri, ignored));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    assert_eq!(
+        last_published_diagnostics(server.output(), &ignored_uri).len(),
+        0
+    );
+    assert_completion_labels(server.output(), 2, []);
+}
+
+#[test]
 fn hover_returns_known_alias_local_function_and_table_field_types() {
     let uri = "file:///tmp/hover.tua";
     let source = r#"type Vec2 = { x: number, y: number }
@@ -2761,6 +2916,18 @@ fn watched_files_changed<const N: usize>(changes: [(&str, u8); N]) -> Value {
                     })
                 })
                 .collect::<Vec<_>>()
+        }
+    })
+}
+
+fn did_change_configuration(settings: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "workspace/didChangeConfiguration",
+        "params": {
+            "settings": {
+                "tua": settings
+            }
         }
     })
 }

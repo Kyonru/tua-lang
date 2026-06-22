@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::{Component, Path};
+use std::path::Path;
 
 use tua_core::{
     Completion, CompletionKind, ModuleExportField, ModuleExports, SourcePosition, SourceSpan,
@@ -72,31 +72,6 @@ pub(super) fn identifier_prefix_at(source: &str, position: SourcePosition) -> Op
     }
 
     is_identifier_start(prefix.as_bytes()[0]).then(|| prefix.to_owned())
-}
-
-pub(super) fn module_name_for_path(source_dir: &Path, path: &Path) -> Option<String> {
-    let relative = path.strip_prefix(source_dir).ok()?;
-    let mut parts = Vec::new();
-
-    for component in relative.components() {
-        let Component::Normal(component) = component else {
-            return None;
-        };
-        let component = component.to_str()?;
-
-        parts.push(component.to_owned());
-    }
-
-    let last = parts.last_mut()?;
-    let stem = Path::new(last).file_stem()?.to_str()?.to_owned();
-
-    *last = stem;
-
-    if parts.last().is_some_and(|part| part == "init") {
-        parts.pop();
-    }
-
-    (!parts.is_empty()).then(|| parts.join("."))
 }
 
 pub(super) fn unique_import_alias(module: &str, reserved: &BTreeSet<String>) -> String {

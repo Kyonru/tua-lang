@@ -22,9 +22,9 @@ use tua_core::{
 };
 
 use super::auto_import::{
-    auto_import_completion, identifier_prefix_at, module_name_for_path, unique_import_alias,
-    AutoImportCandidate,
+    auto_import_completion, identifier_prefix_at, unique_import_alias, AutoImportCandidate,
 };
+use super::configuration::{SourceKind, WorkspaceSettings};
 use super::uri::path_from_uri;
 
 #[derive(Default)]
@@ -39,6 +39,7 @@ pub(super) struct AnalysisSnapshot {
     documents: HashMap<String, OpenDocument>,
     files: HashMap<PathBuf, CachedFile>,
     workspace_folders: Vec<PathBuf>,
+    settings: WorkspaceSettings,
 }
 
 #[derive(Clone, Debug)]
@@ -59,15 +60,26 @@ struct CachedFile {
 }
 
 impl AnalysisHost {
-    pub(super) fn snapshot(&self, workspace_folders: &[PathBuf]) -> AnalysisSnapshot {
+    pub(super) fn snapshot(
+        &self,
+        workspace_folders: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> AnalysisSnapshot {
         AnalysisSnapshot {
             documents: self.documents.clone(),
             files: self.files.clone(),
             workspace_folders: workspace_folders.to_vec(),
+            settings: settings.clone(),
         }
     }
 
-    pub(super) fn open_document(&mut self, uri: impl Into<String>, source: impl Into<String>) {
+    pub(super) fn open_document(
+        &mut self,
+        uri: impl Into<String>,
+        source: impl Into<String>,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
         let uri = uri.into();
         let path = path_from_uri(&uri);
         let source = source.into();
@@ -79,11 +91,17 @@ impl AnalysisHost {
                 source: source.clone(),
             },
         );
-        self.cache_source(path, source);
+        self.cache_source(path, source, roots, settings);
     }
 
-    pub(super) fn update_document(&mut self, uri: impl Into<String>, source: impl Into<String>) {
-        self.open_document(uri, source);
+    pub(super) fn update_document(
+        &mut self,
+        uri: impl Into<String>,
+        source: impl Into<String>,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
+        self.open_document(uri, source, roots, settings);
     }
 
     pub(super) fn close_document(&mut self, uri: &str) {
@@ -99,7 +117,12 @@ impl AnalysisHost {
         self.files.remove(&path);
     }
 
-    pub(super) fn cache_disk_file(&mut self, uri: &str) {
+    pub(super) fn cache_disk_file(
+        &mut self,
+        uri: &str,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
         let path = path_from_uri(uri);
 
         if self
@@ -110,8 +133,13 @@ impl AnalysisHost {
             return;
         }
 
+        if settings.is_ignored(&path, roots) {
+            self.files.remove(&path);
+            return;
+        }
+
         if let Ok(source) = fs::read_to_string(&path) {
-            self.cache_source(path, source);
+            self.cache_source(path, source, roots, settings);
         }
     }
 
@@ -129,7 +157,11 @@ impl AnalysisHost {
         self.documents.keys().cloned().collect()
     }
 
-    pub(super) fn refresh_open_documents(&mut self) {
+    pub(super) fn refresh_open_documents(
+        &mut self,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
         let documents = self
             .documents
             .values()
@@ -137,11 +169,11 @@ impl AnalysisHost {
             .collect::<Vec<_>>();
 
         for (path, source) in documents {
-            self.cache_source(path, source);
+            self.cache_source(path, source, roots, settings);
         }
     }
 
-    pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf]) {
+    pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
         let open_paths = self
             .documents
             .values()
@@ -154,7 +186,8 @@ impl AnalysisHost {
         };
 
         self.files.retain(|path, _| {
-            open_paths.contains(path) || !roots.iter().any(|root| path.starts_with(root))
+            (open_paths.contains(path) && !settings.is_ignored(path, &roots))
+                || !roots.iter().any(|root| path.starts_with(root))
         });
 
         for root in &roots {
@@ -163,23 +196,41 @@ impl AnalysisHost {
             };
             let source_dir = root.join(&loaded.config.source);
 
-            for path in discover_project_sources(&source_dir, &loaded.config.extension) {
+            for path in
+                discover_project_sources(&source_dir, &loaded.config.extension, settings, &roots)
+            {
                 if open_paths.contains(&path) {
                     continue;
                 }
 
                 if let Ok(source) = fs::read_to_string(&path) {
-                    self.cache_source(path, source);
+                    self.cache_source(path, source, &roots, settings);
                 }
             }
         }
     }
 
-    fn cache_source(&mut self, path: PathBuf, source: String) {
+    fn cache_source(
+        &mut self,
+        path: PathBuf,
+        source: String,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
+        if settings.is_ignored(&path, roots) {
+            self.files.remove(&path);
+            return;
+        }
+
+        let Some(kind) = source_kind_for_path(&path, roots, settings) else {
+            self.files.remove(&path);
+            return;
+        };
+
         self.next_revision += 1;
         self.files.insert(
             path.clone(),
-            CachedFile::new(path, source, self.next_revision),
+            CachedFile::new(path, source, self.next_revision, kind),
         );
     }
 
@@ -284,7 +335,9 @@ impl AnalysisSnapshot {
         let mut completions = Vec::new();
         let mut exports = self
             .files
-            .values()
+            .iter()
+            .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
+            .map(|(_, file)| file)
             .filter_map(|file| file.exports())
             .collect::<Vec<_>>();
 
@@ -295,7 +348,10 @@ impl AnalysisSnapshot {
                 continue;
             }
 
-            let Some(module) = module_name_for_path(&source_dir, &exports.path) else {
+            let Some(module) = self
+                .settings
+                .module_name_for_path(&source_dir, &exports.path)
+            else {
                 continue;
             };
             let existing_alias = require_aliases.get(&module).cloned();
@@ -418,7 +474,11 @@ impl AnalysisSnapshot {
             .and_then(|parsed| global_type_alias_name_for_definition(parsed, &target));
         let mut references = Vec::new();
 
-        for file in self.files.values() {
+        for (path, file) in &self.files {
+            if self.settings.is_ignored(path, &self.workspace_folders) {
+                continue;
+            }
+
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
@@ -551,6 +611,11 @@ impl AnalysisSnapshot {
         roots
             .into_iter()
             .flat_map(|root| workspace_symbols_from_dir(root, query).unwrap_or_default())
+            .filter(|symbol| {
+                !self
+                    .settings
+                    .is_ignored(&symbol.path, &self.workspace_folders)
+            })
             .collect()
     }
 
@@ -559,6 +624,10 @@ impl AnalysisSnapshot {
     }
 
     fn file(&self, path: &Path) -> Option<&CachedFile> {
+        if self.settings.is_ignored(path, &self.workspace_folders) {
+            return None;
+        }
+
         self.files.get(path).or_else(|| {
             self.documents
                 .values()
@@ -606,8 +675,9 @@ impl AnalysisSnapshot {
                 };
 
                 self.files
-                    .values()
-                    .filter_map(|file| file.parsed.as_ref().ok())
+                    .iter()
+                    .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
+                    .filter_map(|(_, file)| file.parsed.as_ref().ok())
                     .map(|parsed| global_function_definition_count(parsed, &global_name))
                     .sum::<usize>()
                     > 1
@@ -621,8 +691,9 @@ impl AnalysisSnapshot {
                 };
 
                 self.files
-                    .values()
-                    .filter_map(|file| file.parsed.as_ref().ok())
+                    .iter()
+                    .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
+                    .filter_map(|(_, file)| file.parsed.as_ref().ok())
                     .map(|parsed| type_alias_definition_count(parsed, &alias_name))
                     .sum::<usize>()
                     > 1
@@ -673,8 +744,8 @@ fn reference_kind_key(kind: tua_core::ReferenceKind) -> u8 {
 }
 
 impl CachedFile {
-    fn new(path: PathBuf, source: String, revision: u64) -> Self {
-        let parsed = parse_source(&path, source.clone());
+    fn new(path: PathBuf, source: String, revision: u64, kind: SourceKind) -> Self {
+        let parsed = parse_source(&path, source.clone(), kind);
         let environment = parsed
             .as_ref()
             .ok()
@@ -714,22 +785,37 @@ impl CachedFile {
     }
 }
 
-fn parse_source(path: &Path, source: String) -> Result<ParsedSource, Vec<Diagnostic>> {
-    match path.extension().and_then(|extension| extension.to_str()) {
-        Some("lua") => parse_lua_source(path, source),
-        _ => parse_tua_source(path, source),
+fn parse_source(
+    path: &Path,
+    source: String,
+    kind: SourceKind,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    match kind {
+        SourceKind::Lua => parse_lua_source(path, source),
+        SourceKind::Tua => parse_tua_source(path, source),
     }
 }
 
-fn discover_project_sources(source_dir: &Path, extension: &str) -> Vec<PathBuf> {
+fn discover_project_sources(
+    source_dir: &Path,
+    extension: &str,
+    settings: &WorkspaceSettings,
+    roots: &[PathBuf],
+) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
-    discover_project_sources_into(source_dir, extension, &mut files);
+    discover_project_sources_into(source_dir, extension, settings, roots, &mut files);
     files.sort();
     files
 }
 
-fn discover_project_sources_into(dir: &Path, extension: &str, files: &mut Vec<PathBuf>) {
+fn discover_project_sources_into(
+    dir: &Path,
+    extension: &str,
+    settings: &WorkspaceSettings,
+    roots: &[PathBuf],
+    files: &mut Vec<PathBuf>,
+) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -741,17 +827,46 @@ fn discover_project_sources_into(dir: &Path, extension: &str, files: &mut Vec<Pa
         };
 
         if file_type.is_dir() {
-            discover_project_sources_into(&path, extension, files);
-        } else if file_type.is_file() && is_project_source(&path, extension) {
+            if !settings.is_ignored(&path, roots) {
+                discover_project_sources_into(&path, extension, settings, roots, files);
+            }
+        } else if file_type.is_file()
+            && !settings.is_ignored(&path, roots)
+            && settings
+                .source_kind_for_path(&path, extension, roots)
+                .is_some()
+        {
             files.push(path);
         }
     }
 }
 
-fn is_project_source(path: &Path, extension: &str) -> bool {
-    path.extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| value == extension || value == "lua")
+fn source_kind_for_path(
+    path: &Path,
+    roots: &[PathBuf],
+    settings: &WorkspaceSettings,
+) -> Option<SourceKind> {
+    let mut roots = if roots.is_empty() {
+        vec![std::env::current_dir().ok()?]
+    } else {
+        roots.to_vec()
+    };
+
+    roots.sort_by_key(|root| std::cmp::Reverse(root.components().count()));
+
+    for root in &roots {
+        if !path.starts_with(root) {
+            continue;
+        }
+
+        let Ok(loaded) = load_config_from_dir(root) else {
+            continue;
+        };
+
+        return settings.source_kind_for_path(path, &loaded.config.extension, &roots);
+    }
+
+    settings.source_kind_for_path(path, "tua", &roots)
 }
 
 #[cfg(test)]
@@ -761,11 +876,13 @@ mod tests {
     #[test]
     fn updating_one_open_document_invalidates_only_that_cached_file() {
         let mut host = AnalysisHost::default();
+        let roots = Vec::new();
+        let settings = WorkspaceSettings::default();
         let player_uri = "file:///tmp/analysis-player.tua";
         let enemy_uri = "file:///tmp/analysis-enemy.tua";
 
-        host.open_document(player_uri, "local hp: number = 1\n");
-        host.open_document(enemy_uri, "local hp: number = 2\n");
+        host.open_document(player_uri, "local hp: number = 1\n", &roots, &settings);
+        host.open_document(enemy_uri, "local hp: number = 2\n", &roots, &settings);
 
         let player_before = host
             .cache_revision_for_uri(player_uri)
@@ -774,7 +891,7 @@ mod tests {
             .cache_revision_for_uri(enemy_uri)
             .expect("enemy should be cached");
 
-        host.update_document(player_uri, "local hp: number = 3\n");
+        host.update_document(player_uri, "local hp: number = 3\n", &roots, &settings);
 
         let player_after = host
             .cache_revision_for_uri(player_uri)

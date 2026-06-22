@@ -741,7 +741,7 @@ Scope:
 - Offer completion items for unresolved identifiers that can be imported from a
   known module.
 - Resolve the item into a text edit that inserts or updates a `local X =
-  require("module")` binding.
+require("module")` binding.
 
 Acceptance:
 
@@ -794,6 +794,8 @@ Acceptance:
 - Preparing call hierarchy on a function returns one item.
 - Incoming calls include same-file and cross-file callers.
 - Dynamic calls through `any` are ignored rather than guessed.
+
+### 48.5 `feat(love): add optional love api inclusion (if false, it should work as now) https://github.com/love2d-community/love-api/tree/master`
 
 ### 49. `test(lsp): add luahelper parity fixtures`
 

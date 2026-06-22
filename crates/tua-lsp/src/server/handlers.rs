@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
 
+use super::configuration::WorkspaceSettings;
 use super::protocol::{
     completion_resolve_data, core_diagnostic_from_lsp, error_response, lsp_code_action_from_core,
     lsp_completion_from_core, lsp_diagnostic_from_core, lsp_document_highlight_from_core,
@@ -47,7 +48,8 @@ impl LspServer {
         match method {
             "initialize" => {
                 self.workspace_folders = workspace_folders_from_initialize(&message);
-                self.analysis.reindex_workspace(&self.workspace_folders);
+                self.analysis
+                    .reindex_workspace(&self.workspace_folders, &self.settings);
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
 
@@ -114,6 +116,9 @@ impl LspServer {
             "workspace/didChangeWorkspaceFolders" => {
                 self.did_change_workspace_folders_notification(message)
             }
+            "workspace/didChangeConfiguration" => {
+                self.did_change_configuration_notification(message)
+            }
             _ => None,
         }
     }
@@ -131,7 +136,8 @@ impl LspServer {
         let uri = text_document.get("uri")?.as_str()?.to_owned();
         let text = text_document.get("text")?.as_str()?.to_owned();
 
-        self.analysis.open_document(uri.clone(), text);
+        self.analysis
+            .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
 
         Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
     }
@@ -142,7 +148,8 @@ impl LspServer {
         let current = self.analysis.document_text(&uri)?;
         let text = apply_content_changes(current, params.get("contentChanges")?.as_array()?)?;
 
-        self.analysis.update_document(uri.clone(), text);
+        self.analysis
+            .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
 
         Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
     }
@@ -152,7 +159,12 @@ impl LspServer {
         let uri = document_uri(params)?.to_owned();
 
         if let Some(text) = params.get("text").and_then(Value::as_str) {
-            self.analysis.update_document(uri.clone(), text.to_owned());
+            self.analysis.update_document(
+                uri.clone(),
+                text.to_owned(),
+                &self.workspace_folders,
+                &self.settings,
+            );
         }
 
         self.analysis
@@ -181,13 +193,17 @@ impl LspServer {
                 continue;
             }
 
-            if !is_source_uri(&change.uri) {
+            if !is_source_uri(&change.uri, &self.workspace_folders, &self.settings) {
                 continue;
             }
 
             match change.kind {
                 FileChangeKind::Created | FileChangeKind::Changed => {
-                    self.analysis.cache_disk_file(&change.uri);
+                    self.analysis.cache_disk_file(
+                        &change.uri,
+                        &self.workspace_folders,
+                        &self.settings,
+                    );
                     source_changes.push(change.uri);
                 }
                 FileChangeKind::Deleted => {
@@ -198,11 +214,13 @@ impl LspServer {
         }
 
         if should_reindex {
-            self.analysis.reindex_workspace(&self.workspace_folders);
+            self.analysis
+                .reindex_workspace(&self.workspace_folders, &self.settings);
         }
 
         if should_reindex || !source_changes.is_empty() || !deleted_sources.is_empty() {
-            self.analysis.refresh_open_documents();
+            self.analysis
+                .refresh_open_documents(&self.workspace_folders, &self.settings);
         }
 
         let mut publications = Vec::new();
@@ -245,9 +263,28 @@ impl LspServer {
             }
         }
 
-        self.analysis.reindex_workspace(&self.workspace_folders);
+        self.analysis
+            .reindex_workspace(&self.workspace_folders, &self.settings);
 
         None
+    }
+
+    fn did_change_configuration_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        self.settings = WorkspaceSettings::from_did_change_configuration(message);
+        self.analysis
+            .reindex_workspace(&self.workspace_folders, &self.settings);
+        self.analysis
+            .refresh_open_documents(&self.workspace_folders, &self.settings);
+
+        Some(self.publish_all_open_diagnostics())
+    }
+
+    fn publish_all_open_diagnostics(&self) -> Vec<Value> {
+        self.analysis
+            .open_uris()
+            .into_iter()
+            .map(|uri| publish_diagnostics(&uri, self.diagnostics_for(&uri)))
+            .collect()
     }
 
     fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
@@ -257,7 +294,9 @@ impl LspServer {
 
         let path = path_from_uri(uri);
         let diagnostics_config = self.diagnostics_config_for_path(&path);
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
             .diagnostics_for_uri(uri, &diagnostics_config)
@@ -269,7 +308,9 @@ impl LspServer {
     fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {
         let path = path_from_uri(uri);
         let diagnostics_config = self.diagnostics_config_for_path(&path);
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
             .diagnostics_for_uri(uri, &diagnostics_config)
@@ -292,26 +333,31 @@ impl LspServer {
                 .into_iter()
                 .rev()
                 .find_map(|root| load_config_from_dir(root).ok())
-                .map(|loaded| loaded.config.diagnostics.clone())
+                .map(|loaded| self.settings.diagnostics_config(loaded.config.diagnostics))
                 .unwrap_or_default();
         }
 
         if let Some(parent) = path.parent() {
             for ancestor in parent.ancestors() {
                 match load_config_from_dir(ancestor) {
-                    Ok(loaded) if loaded.found => return loaded.config.diagnostics.clone(),
+                    Ok(loaded) if loaded.found => {
+                        return self.settings.diagnostics_config(loaded.config.diagnostics);
+                    }
                     Ok(_) | Err(_) => {}
                 }
             }
         }
 
-        DiagnosticsConfig::default()
+        self.settings
+            .diagnostics_config(DiagnosticsConfig::default())
     }
 
     fn hover_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let hover = snapshot.hover(&request.path, position)?;
 
         Some(lsp_hover_from_core(hover))
@@ -324,7 +370,9 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let completions = snapshot.completion(&request.path, position);
 
         Value::Array(
@@ -344,7 +392,9 @@ impl LspServer {
         };
 
         let path = path_from_uri(&data.uri);
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let completion = snapshot.resolve_completion(
             &path,
             data.position,
@@ -360,7 +410,9 @@ impl LspServer {
     fn signature_help_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let help = snapshot.signature_help(&request.path, position)?;
 
         Some(lsp_signature_help_from_core(help))
@@ -369,7 +421,9 @@ impl LspServer {
     fn definition_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let definition = snapshot.definition(&request.path, position)?;
 
         Some(lsp_location_from_core(definition))
@@ -379,7 +433,9 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let links = snapshot.document_links(&request.path);
 
         Value::Array(links.into_iter().map(lsp_document_link_from_core).collect())
@@ -392,7 +448,9 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let highlights = snapshot.document_highlights(&request.path, position);
 
         Value::Array(
@@ -407,7 +465,9 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let symbols = snapshot.document_symbols(&request.path);
 
         Value::Array(
@@ -437,7 +497,9 @@ impl LspServer {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let actions = snapshot.code_actions(
             &request.path,
             tua_core::CodeActionRange {
@@ -463,7 +525,9 @@ impl LspServer {
             .and_then(|context| context.get("includeDeclaration"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let references = snapshot.references(&request.path, position, include_declaration);
 
         Value::Array(references.into_iter().map(lsp_reference_location).collect())
@@ -472,7 +536,9 @@ impl LspServer {
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let target = snapshot.prepare_rename(&request.path, position)?;
 
         Some(lsp_prepare_rename_from_core(target))
@@ -482,7 +548,9 @@ impl LspServer {
         let request = self.document_request(message)?;
         let position = request.position()?;
         let new_name = request.params.get("newName")?.as_str()?;
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let edit = snapshot.rename(&request.path, position, new_name)?;
 
         Some(lsp_workspace_edit(edit))
@@ -493,7 +561,9 @@ impl LspServer {
             return json!([]);
         };
         let range = request.params.get("range").and_then(lsp_source_range);
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let hints = snapshot.inlay_hints(&request.path);
 
         Value::Array(
@@ -513,7 +583,9 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let tokens = snapshot.semantic_tokens(&request.path);
 
         lsp_semantic_tokens_from_core(tokens)
@@ -524,7 +596,9 @@ impl LspServer {
             return json!([]);
         };
         let query = params.get("query").and_then(Value::as_str).unwrap_or("");
-        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
         let symbols = snapshot.workspace_symbols(query);
 
         Value::Array(
@@ -607,11 +681,26 @@ fn push_diagnostics_publication(
     }
 }
 
-fn is_source_uri(uri: &str) -> bool {
-    path_from_uri(uri)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension == "tua" || extension == "lua")
+fn is_source_uri(uri: &str, roots: &[PathBuf], settings: &WorkspaceSettings) -> bool {
+    let path = path_from_uri(uri);
+
+    if settings.is_ignored(&path, roots) {
+        return false;
+    }
+
+    if roots.is_empty() {
+        return settings.source_kind_for_path(&path, "tua", roots).is_some();
+    }
+
+    roots
+        .iter()
+        .filter(|root| path.starts_with(root))
+        .find_map(|root| load_config_from_dir(root).ok())
+        .is_some_and(|loaded| {
+            settings
+                .source_kind_for_path(&path, &loaded.config.extension, roots)
+                .is_some()
+        })
 }
 
 fn is_config_uri(uri: &str) -> bool {

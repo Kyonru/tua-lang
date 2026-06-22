@@ -66,3 +66,32 @@ doc_annotations = true
 
 The LSP chooses the nearest workspace folder or ancestor containing `tua.toml`
 when resolving diagnostic settings. If no config is found, defaults are used.
+
+## Editor Settings
+
+The LSP also accepts editor-provided settings through
+`workspace/didChangeConfiguration`.
+
+Configuration precedence is:
+
+1. Built-in defaults.
+2. The nearest applicable `tua.toml`.
+3. Editor settings sent by the LSP client.
+
+Editor settings are an in-memory overlay for the running language server. They
+do not rewrite `tua.toml`.
+
+For diagnostic toggles, use `true` or `false` to override the project config.
+Leave the value unset or `null` to inherit from `tua.toml`.
+
+Supported editor settings:
+
+- `tua.diagnostics.*`: overrides matching `[diagnostics]` keys.
+- `tua.diagnostics.globals`: replaces the configured global allow-list.
+- `tua.fileAssociations`: maps glob patterns to `lua` or `tua` so extra file
+  extensions can be indexed.
+- `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
+- `tua.requirePathSeparator`: controls suggested require paths, either `.` or
+  `/`.
+- `tua.preview.enabled`: reserves an editor-facing preview toggle for
+  experimental features.

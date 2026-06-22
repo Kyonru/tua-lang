@@ -31,6 +31,195 @@
           "type": "string",
           "default": "tua",
           "description": "Path to the tua executable used to launch the language server."
+        },
+        "tua.diagnostics.duplicateKeys": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report duplicate table keys."
+        },
+        "tua.diagnostics.missingRequires": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report require calls that cannot be resolved."
+        },
+        "tua.diagnostics.selfAssignments": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report assignments where the target and value are the same symbol."
+        },
+        "tua.diagnostics.docAnnotations": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report malformed LuaHelper/LuaLS-style documentation annotations."
+        },
+        "tua.diagnostics.undefinedVariables": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report undefined variables when static analysis can prove them."
+        },
+        "tua.diagnostics.unusedLocals": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report unused local variables."
+        },
+        "tua.diagnostics.unusedParameters": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report unused function parameters."
+        },
+        "tua.diagnostics.useBeforeDefinition": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report use of locals before their definition when provable."
+        },
+        "tua.diagnostics.duplicateParameters": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report duplicate function parameter names."
+        },
+        "tua.diagnostics.wrongArgumentCount": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report calls with the wrong number of arguments."
+        },
+        "tua.diagnostics.badRequires": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report invalid require targets."
+        },
+        "tua.diagnostics.impossibleBooleanExpressions": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report boolean expressions that can never be true."
+        },
+        "tua.diagnostics.duplicateIfConditions": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report repeated if or elseif conditions."
+        },
+        "tua.diagnostics.duplicateBinaryOperands": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report binary expressions that repeat the same operand suspiciously."
+        },
+        "tua.diagnostics.floatEquality": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report direct equality comparisons on numbers."
+        },
+        "tua.diagnostics.constAssignments": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report assignments to values marked as constant by annotations."
+        },
+        "tua.diagnostics.parameterTypeMismatches": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report function argument type mismatches."
+        },
+        "tua.diagnostics.returnTypeMismatches": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report function return type mismatches."
+        },
+        "tua.diagnostics.globals": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional global names accepted by diagnostics."
+        },
+        "tua.fileAssociations": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "lua",
+              "tua"
+            ]
+          },
+          "description": "Map glob patterns to language kinds so extra file extensions can be indexed as Lua or tua sources."
+        },
+        "tua.ignoredPaths": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Path patterns excluded from indexing and diagnostics."
+        },
+        "tua.requirePathSeparator": {
+          "type": "string",
+          "default": ".",
+          "enum": [
+            ".",
+            "/"
+          ],
+          "description": "Separator used when tua suggests require paths."
+        },
+        "tua.preview.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable experimental preview features in editor integrations."
         }
       }
     },

@@ -1,6 +1,7 @@
 mod analysis;
 mod auto_import;
 mod capabilities;
+mod configuration;
 mod handlers;
 mod protocol;
 mod transport;
@@ -10,6 +11,7 @@ use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
 
 use analysis::AnalysisHost;
+use configuration::WorkspaceSettings;
 use transport::{read_message, write_message};
 
 pub fn server_name() -> &'static str {
@@ -51,6 +53,7 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
 struct LspServer {
     analysis: AnalysisHost,
     workspace_folders: Vec<PathBuf>,
+    settings: WorkspaceSettings,
     client_watched_files_dynamic_registration: bool,
     next_server_request_id: u64,
     shutdown_requested: bool,
