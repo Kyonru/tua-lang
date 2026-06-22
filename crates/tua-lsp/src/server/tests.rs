@@ -1145,7 +1145,7 @@ local draw = love.graphics.pr
     ]);
 
     assert_completion_labels(&output, 2, ["sin"]);
-    assert_completion_labels(&output, 3, ["print", "printf"]);
+    assert_completion_labels(&output, 3, ["present", "print", "printf"]);
 }
 
 #[test]
@@ -1579,7 +1579,12 @@ love.graphics.print("hi", 0, 0)
     ]);
 
     assert_hover_contains(&output, 2, "function math.sin(x: number): number");
-    assert_hover_contains(&output, 3, "function love.graphics.print(text, x?, y?)");
+    assert_hover_contains(
+        &output,
+        3,
+        "function love.graphics.print(text: string, x?: number, y?: number",
+    );
+    assert_hover_contains(&output, 3, "Draws text on screen");
 }
 
 #[test]

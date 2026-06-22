@@ -239,8 +239,31 @@ fn completes_love_fields() {
 
     assert_eq!(
         labels(&completions),
-        vec!["print".to_owned(), "printf".to_owned()]
+        vec![
+            "present".to_owned(),
+            "print".to_owned(),
+            "printf".to_owned()
+        ]
     );
+}
+
+#[test]
+fn completes_love_api_generated_fields() {
+    let graphics = complete_tua_source(
+        "src/main.tua",
+        "love.graphics.newCan\n",
+        position_after("love.graphics.newCan\n", "love.graphics.newCan"),
+    )
+    .expect("LÖVE graphics completion should succeed");
+    let physics = complete_tua_source(
+        "src/main.tua",
+        "love.physics.newWo\n",
+        position_after("love.physics.newWo\n", "love.physics.newWo"),
+    )
+    .expect("LÖVE physics completion should succeed");
+
+    assert_eq!(labels(&graphics), vec!["newCanvas".to_owned()]);
+    assert_eq!(labels(&physics), vec!["newWorld".to_owned()]);
 }
 
 #[test]

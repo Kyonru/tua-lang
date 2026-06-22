@@ -795,7 +795,26 @@ Acceptance:
 - Incoming calls include same-file and cross-file callers.
 - Dynamic calls through `any` are ignored rather than guessed.
 
-### 48.5 `feat(love): add optional love api inclusion (if false, it should work as now) https://github.com/love2d-community/love-api/tree/master`
+### 48.5 `feat(love): add built-in love api catalog`
+
+Scope:
+
+- Generate and check in a LOVE 11.x API catalog from
+  <https://github.com/love2d-community/love-api>.
+- Use the generated catalog by default for LOVE completions, hover, and
+  signature help.
+- Keep the existing curated Lua builtin catalog unchanged.
+- Preserve the older curated LOVE table only as fallback data for entries that
+  are not covered by the generated catalog.
+
+Acceptance:
+
+- `love.graphics.pr` completes generated LOVE API fields such as `present`,
+  `print`, and `printf`.
+- APIs outside the old curated subset, such as `love.physics.newWorld`, are
+  available through completion.
+- LOVE hover and signature help show generated argument and return labels.
+- No project configuration is required to enable LOVE autocomplete.
 
 ### 49. `test(lsp): add luahelper parity fixtures`
 

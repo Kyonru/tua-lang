@@ -57,9 +57,10 @@ local player = Player.makePlayer("Ada")
 
 ## Builtins And Stubs
 
-Tua includes a curated Lua and LOVE catalog for completions, hover, and
-signature help. The roadmap includes LuaHelper/LuaLS-style annotation stub
-ingestion so Tua can use richer standard-library and project-local Lua docs.
+Tua includes a curated Lua catalog and a built-in LOVE catalog generated from
+`love2d-community/love-api` for completions, hover, and signature help. The
+roadmap includes LuaHelper/LuaLS-style annotation stub ingestion so Tua can use
+richer project-local Lua docs too.
 
 ## Practical Guidance
 

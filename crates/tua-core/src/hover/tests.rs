@@ -410,7 +410,15 @@ fn hovers_love_items() {
         .expect("hover should not fail")
         .expect("love.graphics.print should hover");
 
-    assert_eq!(hover.contents, "function love.graphics.print(text, x?, y?)");
+    assert_eq!(
+        hover.contents,
+        "function love.graphics.print(text: string, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
+    );
+    assert!(hover
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("Draws text on screen"));
 }
 
 #[test]

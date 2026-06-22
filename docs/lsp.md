@@ -14,9 +14,10 @@ The VS Code extension starts this server and surfaces editor features for
 - Incremental document sync with open, change, save, and close notifications.
 - Diagnostics on open, change, save, and watched-file updates.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
-  LOVE items, modules, and inferred unannotated locals where possible.
-- Completion for type aliases, local symbols, table fields, Lua builtins, LOVE
-  items, require paths, and required-module fields.
+  generated LOVE API items, modules, and inferred unannotated locals where
+  possible.
+- Completion for type aliases, local symbols, table fields, Lua builtins,
+  generated LOVE API items, require paths, and required-module fields.
 - Completion item resolve for documentation/details already attached to core
   completion data.
 - Signature help triggered by `(` and `,`.

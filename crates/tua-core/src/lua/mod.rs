@@ -1,3 +1,5 @@
+use crate::love_api;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct LuaItem {
     pub label: &'static str,
@@ -31,6 +33,14 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
 }
 
 pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaItem> {
+    if receiver_is_love(receiver_parts) {
+        let love_items = love_api::field_items(receiver_parts, prefix);
+
+        if !love_items.is_empty() {
+            return love_items;
+        }
+    }
+
     let Some(items) = items_for_receiver(receiver_parts) else {
         return Vec::new();
     };
@@ -49,8 +59,18 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
         return TOP_LEVEL.iter().find(|item| item.label == name).copied();
     }
 
+    if receiver_is_love(parts) {
+        if let Some(item) = love_api::hover_item(parts) {
+            return Some(item);
+        }
+    }
+
     items_for_receiver(receiver)
         .and_then(|items| items.iter().find(|item| item.label == name).copied())
+}
+
+fn receiver_is_love(parts: &[String]) -> bool {
+    parts.first().is_some_and(|part| part == "love")
 }
 
 fn items_for_receiver(receiver_parts: &[String]) -> Option<&'static [LuaItem]> {

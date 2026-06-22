@@ -7,7 +7,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::lua;
+use crate::lua::{self, LuaItem};
 use crate::module_index::{
     required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_for_receiver, resolve_required_module,
@@ -93,7 +93,7 @@ impl<'a> HoverResolver<'a> {
 
             if self.environment.local(&field_parts[0]).is_none() {
                 if let Some(item) = lua::hover_item(&field_parts) {
-                    return Some(hover(item.detail.to_owned(), Some(current_part.span)));
+                    return Some(lua_item_hover(item, Some(current_part.span)));
                 }
             }
         }
@@ -151,7 +151,7 @@ impl<'a> HoverResolver<'a> {
             .map(|function| self.function_hover(function, position, current_part.span))
             .or_else(|| {
                 lua::hover_item(std::slice::from_ref(&current_part.text))
-                    .map(|item| hover(item.detail.to_owned(), Some(current_part.span)))
+                    .map(|item| lua_item_hover(item, Some(current_part.span)))
             })
     }
 
@@ -483,6 +483,16 @@ fn hover(contents: impl Into<String>, span: Option<SourceSpan>) -> Hover {
         documentation: None,
         context: Vec::new(),
     }
+}
+
+fn lua_item_hover(item: LuaItem, span: Option<SourceSpan>) -> Hover {
+    let mut hover = hover(item.detail.to_owned(), span);
+
+    if !item.documentation.is_empty() {
+        hover.documentation = Some(item.documentation.to_owned());
+    }
+
+    hover
 }
 
 fn format_function_signature(function: &TypedFunction) -> String {

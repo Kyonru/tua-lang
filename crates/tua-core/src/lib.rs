@@ -11,6 +11,7 @@ pub mod emit;
 pub mod hover;
 pub mod inlay_hint;
 mod lint;
+mod love_api;
 mod lua;
 pub mod module_index;
 pub mod module_link;

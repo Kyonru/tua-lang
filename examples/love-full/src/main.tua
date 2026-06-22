@@ -61,6 +61,8 @@ end
 
 function love.keypressed(key: string)
   inspect.keypressed(key)
+  -- uhm i would like properties being a different color
+  love.graphics.newImage("")
 end
 
 function erica(age: number)

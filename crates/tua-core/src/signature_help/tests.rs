@@ -123,7 +123,22 @@ fn returns_lua_and_love_builtin_signatures() {
         .contains("pdf-warn"));
     assert_eq!(
         love.signatures[0].label,
-        "function love.graphics.print(text, x?, y?)"
+        "function love.graphics.print(text: string, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
+    );
+    assert_eq!(
+        parameter_labels(&love),
+        vec![
+            "text: string",
+            "x?: number",
+            "y?: number",
+            "r?: number",
+            "sx?: number",
+            "sy?: number",
+            "ox?: number",
+            "oy?: number",
+            "kx?: number",
+            "ky?: number"
+        ]
     );
     assert_eq!(love.active_parameter, 1);
 }
