@@ -186,6 +186,57 @@ local label: string = "width: " .. z
 }
 
 #[test]
+fn accepts_love_method_enum_string_arguments() {
+    check_tua_source(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+
+player:setFilter("nearest")
+player:setFilter("nearest", "linear", 4)
+"#,
+    )
+    .expect("Love enum-like parameters should accept string values");
+}
+
+#[test]
+fn rejects_love_method_argument_count_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+
+player:setFilter()
+"#,
+    )
+    .expect_err("Love method argument count mismatch should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("argument count mismatch: expected 1, found 0"));
+}
+
+#[test]
+fn rejects_love_method_argument_type_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+
+player:setFilter(123)
+"#,
+    )
+    .expect_err("Love method argument type mismatch should be reported");
+
+    assert_single_mismatch(&diagnostics, "expected FilterMode, found number");
+}
+
+#[test]
 fn rejects_function_call_argument_count_mismatch() {
     let diagnostics = check_tua_source(
         "src/combat.tua",

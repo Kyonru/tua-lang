@@ -396,6 +396,52 @@ jump.pl
 }
 
 #[test]
+fn completes_love_enum_values_in_method_string_arguments() {
+    let source = r#"
+local player = image "assets/player.png"
+player:setFilter("")
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "setFilter(\""),
+    )
+    .expect("FilterMode value completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["linear", "nearest"]);
+    assert!(completions
+        .iter()
+        .all(|completion| completion.kind == CompletionKind::Value));
+    assert!(completions
+        .iter()
+        .all(|completion| completion.detail.as_deref() == Some("FilterMode")));
+}
+
+#[test]
+fn filters_love_enum_values_by_string_prefix() {
+    let source = r#"
+local player = image "assets/player.png"
+player:setFilter("li")
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "\"li"))
+        .expect("FilterMode prefix completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["linear"]);
+}
+
+#[test]
+fn completes_love_enum_values_in_incomplete_string_arguments() {
+    let source = r#"
+local player = image "assets/player.png"
+player:setFilter("ne
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "\"ne"))
+        .expect("lossy FilterMode value completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["nearest"]);
+}
+
+#[test]
 fn completes_local_lua_symbols() {
     let source = r#"local score = 0
 local function spawn_player(x, y)

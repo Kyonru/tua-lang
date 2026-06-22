@@ -65,6 +65,18 @@ pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
         .collect()
 }
 
+pub(crate) fn enum_value_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
+    let Some(items) = items_for_enum(type_name) else {
+        return Vec::new();
+    };
+
+    items
+        .iter()
+        .copied()
+        .filter(|item| item.label.starts_with(prefix))
+        .collect()
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 
@@ -90,6 +102,13 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
     match type_name {
         "Image" => Some(IMAGE_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
+        _ => None,
+    }
+}
+
+fn items_for_enum(type_name: &str) -> Option<&'static [LuaItem]> {
+    match type_name {
+        "FilterMode" => Some(FILTER_MODE_ITEMS),
         _ => None,
     }
 }
@@ -577,6 +596,21 @@ const IMAGE_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function Image:setWrap(horizontal: WrapMode, vertical?: WrapMode)",
         "Sets the wrapping properties of the Image.",
+    ),
+];
+
+const FILTER_MODE_ITEMS: &[LuaItem] = &[
+    item(
+        "linear",
+        LuaItemKind::Value,
+        "FilterMode",
+        "Scales using linear interpolation.",
+    ),
+    item(
+        "nearest",
+        LuaItemKind::Value,
+        "FilterMode",
+        "Scales using nearest-neighbor interpolation.",
     ),
 ];
 

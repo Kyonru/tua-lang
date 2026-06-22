@@ -155,6 +155,18 @@ fn complete_parsed_source_with_context(
 
             complete_lua_fields(&receiver_parts, prefix.as_str())
         }
+        CompletionContext::StringArgument {
+            callee_parts,
+            active_parameter,
+            prefix,
+            position,
+        } => complete_string_argument_values(
+            parsed,
+            &callee_parts,
+            active_parameter,
+            prefix.as_str(),
+            position,
+        ),
         CompletionContext::RequirePath { prefix } => {
             complete_require_paths(&parsed.path, prefix.as_str())
         }
@@ -176,6 +188,7 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
             prefix,
             ..
         } => complete_lua_fields(&receiver_parts, prefix.as_str()),
+        CompletionContext::StringArgument { .. } => Vec::new(),
         CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
         CompletionContext::Identifier { prefix, position } => {
             complete_lossy_identifier_items(source, prefix.as_str(), position)
@@ -649,6 +662,77 @@ fn complete_fields(
     collect_love_object_fields(environment, &receiver_type, prefix, &mut completions);
 
     completions.into_values().collect()
+}
+
+fn complete_string_argument_values(
+    parsed: &ParsedSource,
+    callee_parts: &[String],
+    active_parameter: usize,
+    prefix: &str,
+    position: SourcePosition,
+) -> Vec<Completion> {
+    let environment = build_completion_environment(parsed);
+    let Some(item) = lua_function_item_for_call_parts(parsed, &environment, callee_parts, position)
+    else {
+        return Vec::new();
+    };
+    let Some(parameter_type) = parameter_type_from_function_detail(item.detail, active_parameter)
+    else {
+        return Vec::new();
+    };
+
+    complete_lua_enum_values(&parameter_type, prefix)
+}
+
+fn lua_function_item_for_call_parts(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    parts: &[String],
+    position: SourcePosition,
+) -> Option<LuaItem> {
+    if let Some(item) = lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function) {
+        return Some(item);
+    }
+
+    let (method, receiver_parts) = parts.split_last()?;
+    let receiver_type = resolve_field_chain_type(environment, receiver_parts)
+        .or_else(|| infer_field_chain_type(parsed, environment, receiver_parts, position))?;
+
+    lua_type_field_item(environment, &receiver_type, method)
+}
+
+fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| lua_type_field_item(environment, ty, field)),
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
+fn parameter_type_from_function_detail(detail: &str, index: usize) -> Option<String> {
+    let start = detail.find('(')? + 1;
+    let end = detail[start..].find(')')? + start;
+    let parameter = detail[start..end]
+        .split(',')
+        .map(str::trim)
+        .filter(|parameter| !parameter.is_empty())
+        .nth(index)?;
+    let (_, ty) = parameter.split_once(':')?;
+
+    Some(ty.trim().to_owned())
+}
+
+fn complete_lua_enum_values(type_label: &str, prefix: &str) -> Vec<Completion> {
+    type_label
+        .split('|')
+        .map(str::trim)
+        .flat_map(|type_name| lua::enum_value_items(type_name, prefix))
+        .map(completion_from_lua_item)
+        .collect()
 }
 
 fn collect_love_object_fields(

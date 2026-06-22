@@ -17,6 +17,8 @@ end
 
 local c = azul()
 
+player:setFilter("")
+
 return {
   loadPlayerImage = loadPlayerImage,
   loadJumpSound = loadJumpSound,

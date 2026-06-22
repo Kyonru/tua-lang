@@ -17,6 +17,12 @@ pub(super) enum CompletionContext {
         prefix: String,
         position: SourcePosition,
     },
+    StringArgument {
+        callee_parts: Vec<String>,
+        active_parameter: usize,
+        prefix: String,
+        position: SourcePosition,
+    },
     Identifier {
         prefix: String,
         position: SourcePosition,
@@ -37,6 +43,7 @@ pub(super) fn completion_context(
         .or_else(|| documentation_snippet_context(line, cursor, position))
         .or_else(|| lua_doc_type_annotation_context(line, cursor))
         .or_else(|| require_path_context(line, cursor))
+        .or_else(|| string_argument_context(source, line, cursor, position))
         .or_else(|| field_access_context(line, cursor, position))
         .or_else(|| type_annotation_context(line, cursor))
         .or_else(|| identifier_context(line, cursor, position))
@@ -186,6 +193,32 @@ fn require_path_context(line: &str, cursor: usize) -> Option<CompletionContext> 
     None
 }
 
+fn string_argument_context(
+    source: &str,
+    line: &str,
+    cursor: usize,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
+    let cursor = cursor.min(line.len());
+
+    if line[..cursor].trim_start().starts_with("--") {
+        return None;
+    }
+
+    let prefix = string_prefix_at(line, cursor)?;
+    let cursor = byte_offset_for_position(source, position)?;
+    let open = active_call_open(source, cursor)?;
+    let callee_parts = callee_parts_before(source, open)?;
+    let active_parameter = active_parameter_index(source, open + 1, cursor);
+
+    Some(CompletionContext::StringArgument {
+        callee_parts,
+        active_parameter,
+        prefix,
+        position,
+    })
+}
+
 fn type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContext> {
     let cursor = cursor.min(line.len());
     let prefix = &line[..cursor];
@@ -318,4 +351,210 @@ fn is_inside_string(line: &str, cursor: usize) -> bool {
     }
 
     quote.is_some()
+}
+
+fn string_prefix_at(line: &str, cursor: usize) -> Option<String> {
+    let mut quote = None;
+    let mut escaped = false;
+    let cursor = cursor.min(line.len());
+
+    for (index, character) in line[..cursor].char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        match quote {
+            Some((current, _)) if character == current => quote = None,
+            None if character == '"' || character == '\'' => quote = Some((character, index)),
+            _ => {}
+        }
+    }
+
+    let (_, start) = quote?;
+
+    Some(line[start + 1..cursor].to_owned())
+}
+
+fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut current_line = 1;
+    let mut line_start = 0;
+
+    for (index, character) in source.char_indices() {
+        if character != '\n' {
+            continue;
+        }
+
+        if current_line == position.line {
+            let line = source[line_start..index]
+                .strip_suffix('\r')
+                .unwrap_or(&source[line_start..index]);
+
+            return Some(line_start + byte_for_column(line, position.column));
+        }
+
+        current_line += 1;
+        line_start = index + 1;
+    }
+
+    if current_line == position.line {
+        let line = source[line_start..]
+            .strip_suffix('\r')
+            .unwrap_or(&source[line_start..]);
+
+        return Some(line_start + byte_for_column(line, position.column));
+    }
+
+    None
+}
+
+fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
+    let mut stack = Vec::new();
+    let mut scanner = Scanner::new(source, cursor);
+
+    while let Some((index, byte)) = scanner.next_code_byte() {
+        match byte {
+            b'(' => stack.push(index),
+            b')' => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+
+    stack
+        .into_iter()
+        .rev()
+        .find(|open| callee_parts_before(source, *open).is_some())
+}
+
+fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
+    let bytes = source.as_bytes();
+    let mut end = trim_ascii_whitespace_before(bytes, open);
+    let mut parts = Vec::new();
+
+    loop {
+        let start = reverse_identifier_start_bytes(bytes, end)?;
+
+        parts.push(source[start..end].to_owned());
+        end = trim_ascii_whitespace_before(bytes, start);
+
+        if end == 0 || !matches!(bytes[end - 1], b'.' | b':') {
+            break;
+        }
+
+        end = trim_ascii_whitespace_before(bytes, end - 1);
+    }
+
+    parts.reverse();
+    (!parts.is_empty()).then_some(parts)
+}
+
+fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
+    let mut active = 0;
+    let mut depth = 0usize;
+    let mut scanner = Scanner::new(
+        &source[start.min(source.len())..],
+        cursor.saturating_sub(start),
+    );
+
+    while let Some((_, byte)) = scanner.next_code_byte() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => active += 1,
+            _ => {}
+        }
+    }
+
+    active
+}
+
+fn trim_ascii_whitespace_before(bytes: &[u8], mut end: usize) -> usize {
+    while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+
+    end
+}
+
+fn reverse_identifier_start_bytes(bytes: &[u8], end: usize) -> Option<usize> {
+    let mut start = end;
+
+    while start > 0 && is_identifier_continue(bytes[start - 1]) {
+        start -= 1;
+    }
+
+    (start < end && is_identifier_start(bytes[start])).then_some(start)
+}
+
+struct Scanner<'a> {
+    source: &'a str,
+    cursor: usize,
+    index: usize,
+    quote: Option<u8>,
+    escaped: bool,
+    line_comment: bool,
+}
+
+impl<'a> Scanner<'a> {
+    fn new(source: &'a str, cursor: usize) -> Self {
+        Self {
+            source,
+            cursor: cursor.min(source.len()),
+            index: 0,
+            quote: None,
+            escaped: false,
+            line_comment: false,
+        }
+    }
+
+    fn next_code_byte(&mut self) -> Option<(usize, u8)> {
+        let bytes = self.source.as_bytes();
+
+        while self.index < self.cursor {
+            let index = self.index;
+            let byte = bytes[index];
+
+            self.index += 1;
+
+            if self.line_comment {
+                if byte == b'\n' {
+                    self.line_comment = false;
+                }
+                continue;
+            }
+
+            if let Some(quote) = self.quote {
+                if self.escaped {
+                    self.escaped = false;
+                } else if byte == b'\\' {
+                    self.escaped = true;
+                } else if byte == quote {
+                    self.quote = None;
+                }
+                continue;
+            }
+
+            if byte == b'-' && self.index < self.cursor && bytes[self.index] == b'-' {
+                self.index += 1;
+                self.line_comment = true;
+                continue;
+            }
+
+            if byte == b'"' || byte == b'\'' {
+                self.quote = Some(byte);
+                continue;
+            }
+
+            return Some((index, byte));
+        }
+
+        None
+    }
 }

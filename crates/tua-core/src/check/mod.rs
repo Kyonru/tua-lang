@@ -398,7 +398,11 @@ impl<'a> Checker<'a> {
 
                 function.return_types_or_any().to_vec()
             }
-            Callable::ExternalFunction(function) => function.return_types_or_any().to_vec(),
+            Callable::ExternalFunction(function) => {
+                self.check_external_call_arguments(function_call, &function);
+
+                function.return_types
+            }
         }
     }
 
@@ -431,13 +435,13 @@ impl<'a> Checker<'a> {
         callable_from_type(&callee_type, self.environment)
     }
 
-    fn love_object_method_call_target(&self, parts: &[String]) -> Option<FunctionType> {
+    fn love_object_method_call_target(&self, parts: &[String]) -> Option<ExternalFunctionType> {
         let method = parts.last()?;
         let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
         let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
         let item = lua_type_field_item(self.environment, &receiver_type, method)?;
 
-        function_type_from_lua_item(item)
+        external_function_type_from_lua_item(item)
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
@@ -470,6 +474,65 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    fn check_external_call_arguments(
+        &mut self,
+        function_call: &FunctionCall,
+        function: &ExternalFunctionType,
+    ) {
+        let arguments = call_arguments(function_call).unwrap_or_default();
+        let required_parameter_count = function.required_parameter_count();
+
+        if arguments.len() < required_parameter_count {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                required_parameter_count,
+                arguments.len(),
+            ));
+            return;
+        }
+
+        if arguments.len() > function.parameters.len() {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                function.parameters.len(),
+                arguments.len(),
+            ));
+            return;
+        }
+
+        for (argument, parameter) in arguments.into_iter().zip(&function.parameters) {
+            match argument {
+                CallArgument::Expression(argument) => {
+                    let Some(argument_type) = self.infer_expression(argument) else {
+                        continue;
+                    };
+
+                    self.check_external_argument_type(argument, &argument_type, &parameter.ty);
+                }
+                CallArgument::Inferred(argument_type) => {
+                    self.check_external_argument_type(function_call, &argument_type, &parameter.ty);
+                }
+            }
+        }
+    }
+
+    fn check_external_argument_type(&mut self, node: &impl Node, source: &Type, target: &Type) {
+        if self.external_argument_assignable(source, target) {
+            return;
+        }
+
+        self.diagnostics
+            .push(mismatch_diagnostic(&self.parsed.path, node, target, source));
+    }
+
+    fn external_argument_assignable(&self, source: &Type, target: &Type) -> bool {
+        self.context.is_assignable(source, target)
+            || matches!(source, Type::Primitive(crate::PrimitiveType::String))
+                && matches!(target, Type::Alias(name) if self.context.alias(name).is_none())
     }
 
     fn function_return_types(&self, name: &str) -> Option<Vec<Type>> {
@@ -585,12 +648,33 @@ impl<'a> Checker<'a> {
 enum Callable {
     Any,
     Function(FunctionType),
-    ExternalFunction(FunctionType),
+    ExternalFunction(ExternalFunctionType),
 }
 
 enum CallArgument<'a> {
     Expression(&'a Expression),
     Inferred(Type),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ExternalFunctionType {
+    parameters: Vec<ExternalParameter>,
+    return_types: Vec<Type>,
+}
+
+impl ExternalFunctionType {
+    fn required_parameter_count(&self) -> usize {
+        self.parameters
+            .iter()
+            .filter(|parameter| !parameter.optional)
+            .count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ExternalParameter {
+    ty: Type,
+    optional: bool,
 }
 
 impl Callable {
@@ -733,14 +817,47 @@ fn lua_type_field_item(
     }
 }
 
-fn function_type_from_lua_item(item: lua::LuaItem) -> Option<FunctionType> {
+fn external_function_type_from_lua_item(item: lua::LuaItem) -> Option<ExternalFunctionType> {
+    let parameters = parameters_from_function_detail(item.detail)?;
     let mut return_types = return_types_from_function_detail(item.detail);
 
     if return_types.is_empty() {
         return_types.push(Type::Any);
     }
 
-    Some(FunctionType::new_returns([], return_types))
+    Some(ExternalFunctionType {
+        parameters,
+        return_types,
+    })
+}
+
+fn parameters_from_function_detail(detail: &str) -> Option<Vec<ExternalParameter>> {
+    let start = detail.find('(')? + 1;
+    let end = detail[start..].find(')')? + start;
+    let parameters = detail[start..end].trim();
+
+    if parameters.is_empty() {
+        return Some(Vec::new());
+    }
+
+    Some(
+        parameters
+            .split(',')
+            .map(str::trim)
+            .filter(|parameter| !parameter.is_empty())
+            .map(|parameter| {
+                let (name, ty) = parameter
+                    .split_once(':')
+                    .map(|(name, ty)| (name.trim(), ty.trim()))
+                    .unwrap_or(("", parameter));
+
+                ExternalParameter {
+                    ty: type_from_lua_label(ty).unwrap_or(Type::Any),
+                    optional: name.ends_with('?'),
+                }
+            })
+            .collect(),
+    )
 }
 
 fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
@@ -796,6 +913,16 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
         Call::AnonymousCall(FunctionArgs::String(_)) => {
             Some(vec![CallArgument::Inferred(Type::string())])
         }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => {
+                Some(arguments.iter().map(CallArgument::Expression).collect())
+            }
+            FunctionArgs::String(_) => Some(vec![CallArgument::Inferred(Type::string())]),
+            FunctionArgs::TableConstructor(_) => {
+                Some(vec![CallArgument::Inferred(Type::empty_table())])
+            }
+            _ => None,
+        },
         _ => None,
     }
 }

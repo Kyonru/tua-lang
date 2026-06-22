@@ -352,6 +352,26 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_love_method_argument_diagnostics() {
+    let uri = "file:///tmp/assets.tua";
+    let source = r#"
+local player = image "assets/player.png"
+
+player:setFilter(123)
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL1003");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("type mismatch: expected FilterMode, found number"));
+}
+
+#[test]
 fn did_open_publishes_impossible_comparison_warnings() {
     let uri = "file:///tmp/comparison.tua";
     let source = r#"local function recursive(a: string)
@@ -1135,17 +1155,21 @@ local unknown_field = missing.value
 #[test]
 fn completion_returns_lua_and_love_items() {
     let uri = "file:///tmp/lua-completion.tua";
-    let source = r#"local value = math.si
+    let source = r#"local player = image "assets/player.png"
+local value = math.si
 local draw = love.graphics.pr
+player:setFilter("")
 "#;
     let output = run_messages(vec![
         did_open(uri, source),
         completion_request(2, uri, source, "math.si"),
         completion_request(3, uri, source, "love.graphics.pr"),
+        completion_request(4, uri, source, "setFilter(\""),
     ]);
 
     assert_completion_labels(&output, 2, ["sin"]);
     assert_completion_labels(&output, 3, ["present", "print", "printf"]);
+    assert_completion_labels(&output, 4, ["linear", "nearest"]);
 }
 
 #[test]
