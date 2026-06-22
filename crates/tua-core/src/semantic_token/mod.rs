@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use full_moon::ast::{
-    self, Expression, Field, FunctionBody, Index, LastStmt, LuaVersion, Parameter, Suffix, Var,
+    self, Call, Expression, Field, FunctionBody, Index, LastStmt, LuaVersion, Parameter, Suffix,
+    Var,
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
@@ -28,11 +29,17 @@ pub enum SemanticTokenKind {
     Property,
     BuiltinType,
     UnresolvedReference,
+    Global,
+    Module,
+    Method,
+    AnnotationTag,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SemanticTokenModifier {
     Declaration,
+    Readonly,
+    Deprecated,
 }
 
 pub fn semantic_tokens_tua_source(
@@ -58,6 +65,10 @@ pub fn semantic_tokens_parsed_source(
         .filter(|token| is_identifier(token))
         .filter_map(|token| semantic_token_for_identifier(parsed, &declarations, token))
         .collect::<Vec<_>>();
+
+    tokens.extend(lua_doc_semantic_tokens(parsed));
+    tokens.extend(annotation_tag_semantic_tokens(&parsed.source));
+    tokens.extend(require_module_semantic_tokens(&parsed.source));
 
     tokens.sort_by_key(|token| position_key(token.span.start));
     tokens.dedup_by_key(|token| {
@@ -105,20 +116,28 @@ fn semantic_token_for_identifier(
         return Some(SemanticToken {
             span,
             kind,
-            modifiers: Vec::new(),
+            modifiers: semantic_modifiers_for_name(&text, false),
         });
     }
 
-    (!is_known_global(&text)).then_some(SemanticToken {
+    if is_known_global(&text) {
+        return Some(SemanticToken {
+            span,
+            kind: SemanticTokenKind::Global,
+            modifiers: semantic_modifiers_for_name(&text, false),
+        });
+    }
+
+    Some(SemanticToken {
         span,
         kind: SemanticTokenKind::UnresolvedReference,
-        modifiers: Vec::new(),
+        modifiers: semantic_modifiers_for_name(&text, false),
     })
 }
 
 fn semantic_kind_for_definition(kind: DefinitionKind) -> SemanticTokenKind {
     match kind {
-        DefinitionKind::Module => SemanticTokenKind::Variable,
+        DefinitionKind::Module => SemanticTokenKind::Module,
         DefinitionKind::TypeAlias => SemanticTokenKind::TypeAlias,
         DefinitionKind::Local => SemanticTokenKind::Variable,
         DefinitionKind::Function => SemanticTokenKind::Function,
@@ -134,6 +153,9 @@ fn lossy_semantic_tokens(source: &str) -> Vec<SemanticToken> {
         .enumerate()
         .filter_map(|(index, token)| lossy_semantic_token_for_identifier(&tokens, index, token))
         .collect::<Vec<_>>();
+
+    semantic_tokens.extend(annotation_tag_semantic_tokens(source));
+    semantic_tokens.extend(require_module_semantic_tokens(source));
 
     semantic_tokens.sort_by_key(|token| position_key(token.span.start));
     semantic_tokens.dedup_by_key(|token| {
@@ -209,10 +231,7 @@ fn semantic_token(span: SourceSpan, kind: SemanticTokenKind, declaration: bool) 
     SemanticToken {
         span,
         kind,
-        modifiers: declaration
-            .then_some(SemanticTokenModifier::Declaration)
-            .into_iter()
-            .collect(),
+        modifiers: semantic_modifiers_for_name("", declaration),
     }
 }
 
@@ -417,6 +436,7 @@ impl DeclarationIndex {
         }
 
         collect_block_declarations(parsed.ast.nodes(), &mut index);
+        mark_deprecated_declarations(parsed, &mut index);
 
         index
     }
@@ -427,6 +447,8 @@ impl DeclarationIndex {
             Classification {
                 kind,
                 declaration: true,
+                readonly: looks_like_const_name(name),
+                deprecated: false,
             },
         );
 
@@ -449,7 +471,33 @@ impl DeclarationIndex {
             .or_insert(Classification {
                 kind: SemanticTokenKind::Property,
                 declaration: false,
+                readonly: false,
+                deprecated: false,
             });
+    }
+
+    fn insert_property_declaration(&mut self, span: SourceSpan, name: &str) {
+        self.insert_declaration(span, name, SemanticTokenKind::Property);
+    }
+
+    fn insert_method(&mut self, span: SourceSpan, name: &str, declaration: bool) {
+        self.by_span.insert(
+            span_key(span),
+            Classification {
+                kind: SemanticTokenKind::Method,
+                declaration,
+                readonly: looks_like_const_name(name),
+                deprecated: false,
+            },
+        );
+    }
+
+    fn mark_deprecated_on_line(&mut self, line: usize) {
+        for (span, classification) in &mut self.by_span {
+            if span.0 == line && classification.declaration {
+                classification.deprecated = true;
+            }
+        }
     }
 
     fn nearest_value_kind(
@@ -470,15 +518,25 @@ impl DeclarationIndex {
 struct Classification {
     kind: SemanticTokenKind,
     declaration: bool,
+    readonly: bool,
+    deprecated: bool,
 }
 
 impl Classification {
     fn to_token(self, span: SourceSpan) -> SemanticToken {
-        let modifiers = self
+        let mut modifiers = self
             .declaration
             .then_some(SemanticTokenModifier::Declaration)
             .into_iter()
-            .collect();
+            .collect::<Vec<_>>();
+
+        if self.readonly {
+            modifiers.push(SemanticTokenModifier::Readonly);
+        }
+
+        if self.deprecated {
+            modifiers.push(SemanticTokenModifier::Deprecated);
+        }
 
         SemanticToken {
             span,
@@ -520,7 +578,7 @@ fn collect_block_declarations(block: &ast::Block, index: &mut DeclarationIndex) 
 
     if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
         for expression in return_stmt.returns() {
-            collect_expression_properties(expression, index);
+            collect_return_expression_properties(expression, index);
         }
     }
 }
@@ -534,20 +592,10 @@ fn collect_stmt_declarations(stmt: &ast::Stmt, index: &mut DeclarationIndex) {
         }
         ast::Stmt::Do(block) => collect_block_declarations(block.block(), index),
         ast::Stmt::FunctionCall(function_call) => {
-            for suffix in function_call.suffixes() {
-                if let Suffix::Call(_) = suffix {
-                    break;
-                }
-            }
+            collect_function_call_methods(function_call, index)
         }
         ast::Stmt::FunctionDeclaration(function) => {
-            if let Some(span) = node_span(function.name()) {
-                index.insert_declaration(
-                    span,
-                    &function.name().to_string(),
-                    SemanticTokenKind::Function,
-                );
-            }
+            collect_function_name_declaration(function.name(), index);
 
             collect_function_body_declarations(function.body(), index);
         }
@@ -619,11 +667,7 @@ fn collect_expression_properties(expression: &Expression, index: &mut Declaratio
             collect_function_body_declarations(function.body(), index);
         }
         Expression::FunctionCall(function_call) => {
-            for suffix in function_call.suffixes() {
-                if let Suffix::Call(_) = suffix {
-                    break;
-                }
-            }
+            collect_function_call_methods(function_call, index)
         }
         Expression::Parentheses { expression, .. } => {
             collect_expression_properties(expression, index)
@@ -658,6 +702,65 @@ fn collect_expression_properties(expression: &Expression, index: &mut Declaratio
     }
 }
 
+fn collect_return_expression_properties(expression: &Expression, index: &mut DeclarationIndex) {
+    match expression {
+        Expression::TableConstructor(table) => {
+            for field in table.fields() {
+                match field {
+                    Field::ExpressionKey { key, value, .. } => {
+                        collect_expression_properties(key, index);
+                        collect_expression_properties(value, index);
+                    }
+                    Field::NameKey { key, value, .. } => {
+                        if let Some(span) = node_span(key) {
+                            index.insert_property_declaration(span, &token_text(key));
+                        }
+
+                        collect_expression_properties(value, index);
+                    }
+                    Field::NoKey(value) => collect_expression_properties(value, index),
+                    _ => {}
+                }
+            }
+        }
+        _ => collect_expression_properties(expression, index),
+    }
+}
+
+fn collect_function_name_declaration(name: &ast::FunctionName, index: &mut DeclarationIndex) {
+    if let Some(method_name) = name.method_name() {
+        if let Some(span) = node_span(method_name) {
+            index.insert_method(span, &token_text(method_name), true);
+        }
+
+        return;
+    }
+
+    if let Some(function_name) = name.names().iter().last() {
+        if let Some(span) = node_span(function_name) {
+            index.insert_declaration(
+                span,
+                &token_text(function_name),
+                SemanticTokenKind::Function,
+            );
+        }
+    }
+}
+
+fn collect_function_call_methods(function_call: &ast::FunctionCall, index: &mut DeclarationIndex) {
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Call(Call::MethodCall(method)) => {
+                if let Some(span) = node_span(method.name()) {
+                    index.insert_method(span, &token_text(method.name()), false);
+                }
+            }
+            Suffix::Call(Call::AnonymousCall(_)) => break,
+            _ => {}
+        }
+    }
+}
+
 fn collect_var_properties(var: &Var, index: &mut DeclarationIndex) {
     let Var::Expression(expression) = var else {
         return;
@@ -670,6 +773,263 @@ fn collect_var_properties(var: &Var, index: &mut DeclarationIndex) {
             }
         }
     }
+}
+
+fn mark_deprecated_declarations(parsed: &ParsedSource, index: &mut DeclarationIndex) {
+    let mut pending = false;
+
+    for (offset, line) in parsed.source.lines().enumerate() {
+        let line_number = offset + 1;
+        let trimmed = line.trim_start();
+
+        if trimmed.starts_with("---@deprecated") {
+            pending = true;
+            continue;
+        }
+
+        if trimmed.starts_with("---") || trimmed.is_empty() {
+            continue;
+        }
+
+        if pending {
+            index.mark_deprecated_on_line(line_number);
+            pending = false;
+        }
+    }
+}
+
+fn lua_doc_semantic_tokens(parsed: &ParsedSource) -> Vec<SemanticToken> {
+    let mut tokens = Vec::new();
+
+    for annotation in &parsed.lua_doc_annotations {
+        match &annotation.kind {
+            crate::LuaDocAnnotationKind::Class(class) => {
+                tokens.push(semantic_token(
+                    class.name_span,
+                    SemanticTokenKind::TypeAlias,
+                    true,
+                ));
+
+                if let Some(span) = class.extends_span {
+                    tokens.push(semantic_token(span, SemanticTokenKind::TypeAlias, false));
+                }
+            }
+            crate::LuaDocAnnotationKind::Field(field) => {
+                tokens.push(semantic_token(
+                    field.name_span,
+                    SemanticTokenKind::Property,
+                    true,
+                ));
+                tokens.extend(type_tokens_in_span(&parsed.source, field.type_span));
+            }
+            crate::LuaDocAnnotationKind::Alias(alias) => {
+                tokens.push(semantic_token(
+                    alias.name_span,
+                    SemanticTokenKind::TypeAlias,
+                    true,
+                ));
+                tokens.extend(type_tokens_in_span(&parsed.source, alias.type_span));
+            }
+            crate::LuaDocAnnotationKind::Type(type_annotation) => {
+                tokens.extend(type_tokens_in_span(
+                    &parsed.source,
+                    type_annotation.type_span,
+                ));
+            }
+            crate::LuaDocAnnotationKind::Param(param) => {
+                tokens.push(semantic_token(
+                    param.name_span,
+                    SemanticTokenKind::Parameter,
+                    true,
+                ));
+                tokens.extend(type_tokens_in_span(&parsed.source, param.type_span));
+            }
+            crate::LuaDocAnnotationKind::Return(return_annotation) => {
+                for return_ty in &return_annotation.returns {
+                    tokens.extend(type_tokens_in_span(&parsed.source, return_ty.type_span));
+                }
+            }
+            crate::LuaDocAnnotationKind::Generic(generic) => {
+                for parameter in &generic.parameters {
+                    tokens.push(semantic_token(
+                        parameter.name_span,
+                        SemanticTokenKind::TypeAlias,
+                        true,
+                    ));
+
+                    if let Some(bound_span) = parameter.bound_span {
+                        tokens.extend(type_tokens_in_span(&parsed.source, bound_span));
+                    }
+                }
+            }
+            crate::LuaDocAnnotationKind::Version(_) => {}
+        }
+    }
+
+    tokens
+}
+
+fn annotation_tag_semantic_tokens(source: &str) -> Vec<SemanticToken> {
+    let mut tokens = Vec::new();
+
+    for (offset, line) in source.lines().enumerate() {
+        let line_number = offset + 1;
+        let Some(marker_start) = line.find("---@") else {
+            continue;
+        };
+        let tag_start = marker_start + 3;
+        let tag_end = line[tag_start..]
+            .char_indices()
+            .find_map(|(offset, ch)| {
+                (!ch.is_ascii_alphanumeric() && ch != '@' && ch != '_')
+                    .then_some(tag_start + offset)
+            })
+            .unwrap_or(line.len());
+
+        if tag_end <= tag_start + 1 {
+            continue;
+        }
+
+        let text = &line[tag_start..tag_end];
+        let mut token = semantic_token(
+            SourceSpan {
+                start: SourcePosition {
+                    line: line_number,
+                    column: tag_start + 1,
+                },
+                end: SourcePosition {
+                    line: line_number,
+                    column: tag_end + 1,
+                },
+            },
+            SemanticTokenKind::AnnotationTag,
+            false,
+        );
+
+        if text == "@deprecated" {
+            token.modifiers.push(SemanticTokenModifier::Deprecated);
+        }
+
+        tokens.push(token);
+    }
+
+    tokens
+}
+
+fn type_tokens_in_span(source: &str, span: SourceSpan) -> Vec<SemanticToken> {
+    let Some(line) = line_at(source, span.start.line) else {
+        return Vec::new();
+    };
+    let start = byte_for_column(line, span.start.column);
+    let end = byte_for_column(line, span.end.column).min(line.len());
+    let text = &line[start..end];
+    let mut tokens = Vec::new();
+    let mut cursor = 0usize;
+
+    while cursor < text.len() {
+        let Some((relative_start, _)) = text[cursor..]
+            .char_indices()
+            .find(|(_, ch)| is_identifier_start(*ch))
+        else {
+            break;
+        };
+        let token_start = cursor + relative_start;
+        let token_end = text[token_start..]
+            .char_indices()
+            .find_map(|(offset, ch)| (!is_identifier_continue(ch)).then_some(token_start + offset))
+            .unwrap_or(text.len());
+        let name = &text[token_start..token_end];
+        let after = text[token_end..].trim_start();
+        let kind = if after.starts_with(':') || after.starts_with("?:") {
+            SemanticTokenKind::Property
+        } else if is_primitive_type(name) {
+            SemanticTokenKind::BuiltinType
+        } else {
+            SemanticTokenKind::TypeAlias
+        };
+
+        tokens.push(semantic_token(
+            SourceSpan {
+                start: SourcePosition {
+                    line: span.start.line,
+                    column: span.start.column + token_start,
+                },
+                end: SourcePosition {
+                    line: span.start.line,
+                    column: span.start.column + token_end,
+                },
+            },
+            kind,
+            kind == SemanticTokenKind::Property,
+        ));
+
+        cursor = token_end;
+    }
+
+    tokens
+}
+
+fn require_module_semantic_tokens(source: &str) -> Vec<SemanticToken> {
+    let mut tokens = Vec::new();
+
+    for (offset, line) in source.lines().enumerate() {
+        let line_number = offset + 1;
+        let mut search_start = 0usize;
+
+        while let Some(relative) = line[search_start..].find("require") {
+            let require_start = search_start + relative;
+            let after_require = require_start + "require".len();
+
+            if !identifier_boundary_before(line, require_start)
+                || !identifier_boundary_after(line, after_require)
+            {
+                search_start = after_require;
+                continue;
+            }
+
+            let mut cursor = skip_ascii_spaces(line, after_require);
+
+            if line[cursor..].starts_with('(') {
+                cursor = skip_ascii_spaces(line, cursor + 1);
+            }
+
+            let Some(quote) = line[cursor..].chars().next() else {
+                break;
+            };
+
+            if quote != '"' && quote != '\'' {
+                search_start = after_require;
+                continue;
+            }
+
+            let content_start = cursor + quote.len_utf8();
+            let Some(content_len) = line[content_start..].find(quote) else {
+                break;
+            };
+            let content_end = content_start + content_len;
+
+            if content_end > content_start {
+                tokens.push(semantic_token(
+                    SourceSpan {
+                        start: SourcePosition {
+                            line: line_number,
+                            column: content_start + 1,
+                        },
+                        end: SourcePosition {
+                            line: line_number,
+                            column: content_end + 1,
+                        },
+                    },
+                    SemanticTokenKind::Module,
+                    false,
+                ));
+            }
+
+            search_start = content_end + quote.len_utf8();
+        }
+    }
+
+    tokens
 }
 
 fn is_type_reference(source: &str, position: SourcePosition) -> bool {
@@ -685,7 +1045,9 @@ fn is_type_reference(source: &str, position: SourcePosition) -> bool {
     let before_marker = &prefix[..marker_index];
 
     match marker {
-        b':' => true,
+        b':' => line[marker_index + 1..cursor]
+            .chars()
+            .all(char::is_whitespace),
         b'|' => before_marker.contains(':') || before_marker.contains("type "),
         b'=' => before_marker.contains("type "),
         _ => false,
@@ -728,6 +1090,66 @@ fn is_known_global(name: &str) -> bool {
 
 fn is_primitive_type(text: &str) -> bool {
     matches!(text, "number" | "string" | "boolean" | "nil" | "any")
+}
+
+fn semantic_modifiers_for_name(name: &str, declaration: bool) -> Vec<SemanticTokenModifier> {
+    let mut modifiers = declaration
+        .then_some(SemanticTokenModifier::Declaration)
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if looks_like_const_name(name) {
+        modifiers.push(SemanticTokenModifier::Readonly);
+    }
+
+    modifiers
+}
+
+fn looks_like_const_name(name: &str) -> bool {
+    let mut has_uppercase = false;
+    let mut has_lowercase = false;
+
+    for ch in name.chars() {
+        if ch.is_ascii_uppercase() {
+            has_uppercase = true;
+        } else if ch.is_ascii_lowercase() {
+            has_lowercase = true;
+        } else if ch != '_' && !ch.is_ascii_digit() {
+            return false;
+        }
+    }
+
+    has_uppercase && !has_lowercase
+}
+
+fn is_identifier_start(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphabetic()
+}
+
+fn is_identifier_continue(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
+}
+
+fn identifier_boundary_before(line: &str, index: usize) -> bool {
+    line[..index]
+        .chars()
+        .next_back()
+        .is_none_or(|ch| !is_identifier_continue(ch))
+}
+
+fn identifier_boundary_after(line: &str, index: usize) -> bool {
+    line[index..]
+        .chars()
+        .next()
+        .is_none_or(|ch| !is_identifier_continue(ch))
+}
+
+fn skip_ascii_spaces(line: &str, mut cursor: usize) -> usize {
+    while cursor < line.len() && line.as_bytes()[cursor].is_ascii_whitespace() {
+        cursor += 1;
+    }
+
+    cursor
 }
 
 fn is_identifier(token: &TokenReference) -> bool {

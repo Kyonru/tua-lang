@@ -3,7 +3,7 @@ use tua_core::project_description;
 
 pub(super) const SERVER_NAME: &str = "tua-lsp";
 
-pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 7] = [
+pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 11] = [
     "typeAlias",
     "function",
     "variable",
@@ -11,9 +11,13 @@ pub(super) const SEMANTIC_TOKEN_TYPES: [&str; 7] = [
     "property",
     "builtinType",
     "unresolvedReference",
+    "global",
+    "module",
+    "method",
+    "annotationTag",
 ];
 
-pub(super) const SEMANTIC_TOKEN_MODIFIERS: [&str; 1] = ["declaration"];
+pub(super) const SEMANTIC_TOKEN_MODIFIERS: [&str; 3] = ["declaration", "readonly", "deprecated"];
 
 pub(super) fn server_description() -> String {
     format!("{} language server", project_description())

@@ -33,6 +33,7 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Workspace folders | Initialize and workspace-folder change notifications are accepted. | Basic multi-root editor support. | Workspace roots feed project discovery. | Deepen with 31, 46 |
 | Watched files registration | Dynamically registers watchers for `**/*.tua`, `**/*.lua`, and `**/tua.toml` when the client supports it. | Comparable editor watcher setup. | File watching invalidates indexed state. | Deepen with 32 |
 | Workspace configuration changes | Handles `workspace/didChangeConfiguration` for diagnostics, file associations, ignored paths, require path separator, and preview settings. | Comparable editor-settings overlay behavior. | Editor/project config feeds the analysis host without restarting the server. | Landed with 46 |
+| Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and readonly/deprecated modifiers. | Still narrower than LuaHelper's full Lua/project semantic model, but the core token classes are present. | Semantic highlighting uses a stable legend with richer appended classes. | Landed with 47 |
 
 ## Protocol Surface Supported But Shallow
 
@@ -47,7 +48,6 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Hover documentation | Hover shows compact type/signature labels. | No doc comments, annotation docs, declaration path, or rich module context. | Hover combines type, docs, and declaration context. | 40 |
 | Signature documentation | Signature help has labels and active parameters. | No parameter documentation from comments or annotations. | Parameter docs attached to signatures. | 41 |
 | Inlay hints | Type and parameter hints exist for supported inferred/known cases. | No deeper expression-chain type hints or project-aware hints. | rust-analyzer-style local type, argument, and expression hints. | 60, 64 |
-| Semantic tokens | Compact legend covers type aliases, functions, variables, parameters, properties, builtin types, unresolved references, and declarations. | No globals, modules, methods, annotation tags, deprecated/readonly modifiers, or richer token classes. | LuaHelper/rust-analyzer-style semantic token detail. | 47 |
 | Required Lua module typing | Tua can infer simple exports from `.lua` modules in some hover/definition paths. | No LuaHelper annotation parsing, comment docs, or typed Lua stub ingestion. | Annotated Lua modules contribute full type info. | 33, 34 |
 
 ## Missing And Planned
@@ -64,7 +64,6 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Safe cross-file rename | Same-file rename only. | Workspace edits for project-identity symbols such as exported functions and aliases. | 43 |
 | Code actions / quick fixes | `codeActionProvider` is not advertised. | Conservative mechanical fixes for selected diagnostics. | 44 |
 | Auto-import completion | Unresolved identifiers do not propose imports. | Offer exported module symbols and insert or reuse `require` bindings. | 45 |
-| Richer semantic tokens | Compact token legend only. | Add globals, module names, methods, fields, annotation tags, readonly/deprecated modifiers, and unresolved categories. | 47 |
 | Call hierarchy | Call hierarchy is not advertised. | Show incoming/outgoing calls for known functions and module exports. | 48 |
 | LuaHelper parity fixtures | No dedicated parity fixture suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49 |
 | Post-milestone doc refresh | Current docs track the pre-parity implementation. | Update docs and non-goals after parity commits land. | 50 |

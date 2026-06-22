@@ -53,6 +53,8 @@ fn classifies_primitive_types_and_unresolved_identifiers() {
 
     assert_token(&tokens, "number", SemanticTokenKind::BuiltinType, false);
     assert_token(&tokens, "string", SemanticTokenKind::BuiltinType, false);
+    assert_token(&tokens, "require", SemanticTokenKind::Global, false);
+    assert_token(&tokens, "player", SemanticTokenKind::Module, false);
     assert_token_at_line(
         &tokens,
         "missing",
@@ -64,6 +66,143 @@ fn classifies_primitive_types_and_unresolved_identifiers() {
         .iter()
         .any(|token| token_text_from_source(SOURCE, token) == "require"
             && token.kind == SemanticTokenKind::UnresolvedReference));
+}
+
+#[test]
+fn classifies_annotations_globals_modules_methods_exports_and_modifiers() {
+    let source = r#"---@class Player playable character
+---@field hp number current health
+---@alias PlayerId string|number stable id
+---@param player Player target player
+---@deprecated
+local function LEGACY(player: Player)
+  print(player.hp)
+  player:heal()
+end
+
+function Player:heal()
+end
+
+local MAX_HP = 10
+
+require("systems.player")
+unknownGlobal()
+
+return {
+  makePlayer = LEGACY,
+}
+"#;
+    let tokens = semantic_tokens_tua_source("src/player.tua", source).expect("source should parse");
+
+    assert_token_in_source(
+        &tokens,
+        source,
+        "@class",
+        SemanticTokenKind::AnnotationTag,
+        false,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "@field",
+        SemanticTokenKind::AnnotationTag,
+        false,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "@alias",
+        SemanticTokenKind::AnnotationTag,
+        false,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "@param",
+        SemanticTokenKind::AnnotationTag,
+        false,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "@deprecated",
+        SemanticTokenKind::AnnotationTag,
+        false,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "Player",
+        SemanticTokenKind::TypeAlias,
+        true,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "PlayerId",
+        SemanticTokenKind::TypeAlias,
+        true,
+    );
+    assert_token_in_source(&tokens, source, "hp", SemanticTokenKind::Property, true);
+    assert_token_in_source(
+        &tokens,
+        source,
+        "player",
+        SemanticTokenKind::Parameter,
+        true,
+    );
+    assert_token_in_source(&tokens, source, "print", SemanticTokenKind::Global, false);
+    assert_token_in_source(
+        &tokens,
+        source,
+        "systems.player",
+        SemanticTokenKind::Module,
+        false,
+    );
+    assert_token_in_source(&tokens, source, "heal", SemanticTokenKind::Method, true);
+    assert_token_in_source(&tokens, source, "heal", SemanticTokenKind::Method, false);
+    assert_token_in_source(
+        &tokens,
+        source,
+        "makePlayer",
+        SemanticTokenKind::Property,
+        true,
+    );
+    assert_token_in_source(
+        &tokens,
+        source,
+        "unknownGlobal",
+        SemanticTokenKind::UnresolvedReference,
+        false,
+    );
+    assert_token_modifier(
+        &tokens,
+        source,
+        "LEGACY",
+        SemanticTokenKind::Function,
+        SemanticTokenModifier::Readonly,
+    );
+    assert_token_modifier(
+        &tokens,
+        source,
+        "LEGACY",
+        SemanticTokenKind::Function,
+        SemanticTokenModifier::Deprecated,
+    );
+    assert_token_modifier(
+        &tokens,
+        source,
+        "MAX_HP",
+        SemanticTokenKind::Variable,
+        SemanticTokenModifier::Readonly,
+    );
+    assert_token_modifier(
+        &tokens,
+        source,
+        "@deprecated",
+        SemanticTokenKind::AnnotationTag,
+        SemanticTokenModifier::Deprecated,
+    );
 }
 
 #[test]
@@ -125,14 +264,23 @@ fn assert_token_in_source(
 ) {
     let token = tokens
         .iter()
-        .find(|token| token_text_from_source(source, token) == text && token.kind == kind)
+        .find(|token| {
+            token_text_from_source(source, token) == text
+                && token.kind == kind
+                && token
+                    .modifiers
+                    .contains(&SemanticTokenModifier::Declaration)
+                    == declaration
+        })
         .unwrap_or_else(|| panic!("expected {kind:?} token `{text}`"));
 
     assert_eq!(
         token
             .modifiers
             .contains(&SemanticTokenModifier::Declaration),
-        declaration
+        declaration,
+        "expected {kind:?} token `{text}` declaration={declaration}, got {:?}",
+        token.modifiers
     );
 }
 
@@ -156,7 +304,28 @@ fn assert_token_at_line(
         token
             .modifiers
             .contains(&SemanticTokenModifier::Declaration),
-        declaration
+        declaration,
+        "expected {kind:?} token `{text}` on line {line} declaration={declaration}, got {:?}",
+        token.modifiers
+    );
+}
+
+fn assert_token_modifier(
+    tokens: &[SemanticToken],
+    source: &str,
+    text: &str,
+    kind: SemanticTokenKind,
+    modifier: SemanticTokenModifier,
+) {
+    let token = tokens
+        .iter()
+        .find(|token| token_text_from_source(source, token) == text && token.kind == kind)
+        .unwrap_or_else(|| panic!("expected {kind:?} token `{text}`"));
+
+    assert!(
+        token.modifiers.contains(&modifier),
+        "expected {kind:?} token `{text}` to have {modifier:?}, got {:?}",
+        token.modifiers
     );
 }
 

@@ -560,6 +560,10 @@ fn semantic_token_type_index(kind: SemanticTokenKind) -> usize {
         SemanticTokenKind::Property => 4,
         SemanticTokenKind::BuiltinType => 5,
         SemanticTokenKind::UnresolvedReference => 6,
+        SemanticTokenKind::Global => 7,
+        SemanticTokenKind::Module => 8,
+        SemanticTokenKind::Method => 9,
+        SemanticTokenKind::AnnotationTag => 10,
     }
 }
 
@@ -572,6 +576,8 @@ fn semantic_token_modifier_bits(modifiers: &[SemanticTokenModifier]) -> usize {
 fn semantic_token_modifier_bit(modifier: SemanticTokenModifier) -> usize {
     match modifier {
         SemanticTokenModifier::Declaration => 1 << 0,
+        SemanticTokenModifier::Readonly => 1 << 1,
+        SemanticTokenModifier::Deprecated => 1 << 2,
     }
 }
 

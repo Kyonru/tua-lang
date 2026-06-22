@@ -98,12 +98,16 @@ fn initialize_returns_server_capabilities() {
             "parameter",
             "property",
             "builtinType",
-            "unresolvedReference"
+            "unresolvedReference",
+            "global",
+            "module",
+            "method",
+            "annotationTag"
         ])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenModifiers"],
-        json!(["declaration"])
+        json!(["declaration", "readonly", "deprecated"])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
@@ -2710,7 +2714,10 @@ fn inlay_hint_unknown_document_returns_empty_array() {
 #[test]
 fn semantic_tokens_return_encoded_token_classes() {
     let uri = "file:///tmp/semantic-tokens.tua";
-    let source = r#"type Player = {
+    let source = r#"---@class Player playable character
+---@field armor number
+---@deprecated
+type Player = {
   hp: number,
   name: string,
 }
@@ -2721,13 +2728,21 @@ end
 
 local function damage(player: Player, amount: number): Player
   player.hp -= amount
+  player:heal()
   return player
 end
 
+function Player:heal()
+end
+
+local MAX_HP = 10
 local hero = makePlayer()
 damage(hero, 10)
 missing(hero)
-require("player")
+require("systems.player")
+return {
+  makePlayer = makePlayer,
+}
 "#;
     let output = run_messages(vec![did_open(uri, source), semantic_tokens_request(2, uri)]);
     let response = response_with_id(&output, 2);
@@ -2740,12 +2755,31 @@ require("player")
     assert_semantic_token(&tokens, "hp", 4, true);
     assert_semantic_token(&tokens, "number", 5, false);
     assert_semantic_token(&tokens, "missing", 6, false);
+    assert_semantic_token(&tokens, "require", 7, false);
+    assert_semantic_token(&tokens, "systems.player", 8, false);
+    assert_semantic_token(&tokens, "heal", 9, true);
+    assert_semantic_token(&tokens, "heal", 9, false);
+    assert_semantic_token(&tokens, "@class", 10, false);
+    assert_semantic_token(&tokens, "@field", 10, false);
+    assert_semantic_token(&tokens, "@deprecated", 10, false);
     assert!(tokens
         .iter()
         .any(|token| token.text == "damage" && token.token_type == 1 && !token.declaration));
     assert!(!tokens
         .iter()
         .any(|token| token.text == "require" && token.token_type == 6));
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "makePlayer" && token.token_type == 4 && token.declaration));
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "MAX_HP" && token.token_type == 2 && token.readonly));
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "Player" && token.token_type == 0 && token.deprecated));
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "@deprecated" && token.token_type == 10 && token.deprecated));
 }
 
 #[test]
@@ -3513,6 +3547,8 @@ struct DecodedSemanticToken<'a> {
     text: &'a str,
     token_type: usize,
     declaration: bool,
+    readonly: bool,
+    deprecated: bool,
 }
 
 fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<DecodedSemanticToken<'a>> {
@@ -3547,6 +3583,8 @@ fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<Decoded
             text,
             token_type,
             declaration: modifiers & 1 == 1,
+            readonly: modifiers & 2 == 2,
+            deprecated: modifiers & 4 == 4,
         });
     }
 
