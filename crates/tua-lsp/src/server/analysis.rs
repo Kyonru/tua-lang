@@ -5,14 +5,15 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, check_parsed_source_with_diagnostics_config, complete_parsed_source,
     complete_tua_source, definition_tua_source, document_highlights_parsed_source,
-    document_symbols_parsed_source, hover_parsed_source, infer_module_exports,
+    document_symbols_parsed_source, global_function_name_for_definition,
+    global_references_to_definition_parsed_source, hover_parsed_source, infer_module_exports,
     inlay_hints_parsed_source, load_config_from_dir, module_links_tua_source, parse_lua_source,
-    parse_tua_source, prepare_rename_parsed_source, references_parsed_source, rename_parsed_source,
-    semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
-    signature_help_tua_source, workspace_symbols_from_dir, Completion, Diagnostic,
-    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint, ModuleExports,
-    ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
-    SourcePosition, TypeEnvironment, WorkspaceSymbol,
+    parse_tua_source, prepare_rename_parsed_source, references_to_definition_parsed_source,
+    rename_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
+    signature_help_parsed_source, signature_help_tua_source, workspace_symbols_from_dir,
+    Completion, Diagnostic, DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint,
+    ModuleExports, ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken,
+    SignatureHelp, SourcePosition, TypeEnvironment, WorkspaceSymbol,
 };
 
 use super::uri::path_from_uri;
@@ -281,9 +282,43 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         include_declaration: bool,
     ) -> Vec<Reference> {
-        self.parsed(path)
-            .and_then(|parsed| references_parsed_source(parsed, position, include_declaration).ok())
-            .unwrap_or_default()
+        let Some(target) = self.definition(path, position) else {
+            return Vec::new();
+        };
+        let global_name = self
+            .parsed(&target.path)
+            .and_then(|parsed| global_function_name_for_definition(parsed, &target));
+        let mut references = Vec::new();
+
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            let Ok(mut file_references) =
+                references_to_definition_parsed_source(parsed, &target, include_declaration)
+            else {
+                continue;
+            };
+
+            references.append(&mut file_references);
+
+            if let Some(global_name) = global_name.as_deref() {
+                let Ok(mut global_references) = global_references_to_definition_parsed_source(
+                    parsed,
+                    &target,
+                    global_name,
+                    include_declaration,
+                ) else {
+                    continue;
+                };
+
+                references.append(&mut global_references);
+            }
+        }
+
+        references.sort_by_key(reference_key);
+        references.dedup_by_key(|reference| reference_key(reference));
+        references
     }
 
     pub(super) fn prepare_rename(
@@ -352,6 +387,28 @@ impl AnalysisSnapshot {
                 .find(|document| document.path == path)
                 .and_then(|document| self.files.get(&document.path))
         })
+    }
+}
+
+fn reference_key(reference: &Reference) -> (PathBuf, usize, usize, usize, usize, u8) {
+    (
+        reference.path.clone(),
+        reference.span.start.line,
+        reference.span.start.column,
+        reference.span.end.line,
+        reference.span.end.column,
+        reference_kind_key(reference.kind),
+    )
+}
+
+fn reference_kind_key(kind: tua_core::ReferenceKind) -> u8 {
+    match kind {
+        tua_core::ReferenceKind::Module => 0,
+        tua_core::ReferenceKind::TypeAlias => 1,
+        tua_core::ReferenceKind::Local => 2,
+        tua_core::ReferenceKind::Function => 3,
+        tua_core::ReferenceKind::Parameter => 4,
+        tua_core::ReferenceKind::TableField => 5,
     }
 }
 

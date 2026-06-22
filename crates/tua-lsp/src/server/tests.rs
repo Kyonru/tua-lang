@@ -1718,6 +1718,175 @@ local unresolved = missing
 }
 
 #[test]
+fn references_project_wide_include_exported_module_callers() {
+    let temp = TempProject::new("project-references-export");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+    let enemy = r#"local Player = require("player")
+
+local enemy = Player.makePlayer("Bea")
+"#;
+    let outside = r#"local Player = require("player")
+
+local skipped = Player.makePlayer("Outside")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main);
+    temp.write("src/enemy.tua", enemy);
+    temp.write("scratch/outside.tua", outside);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let enemy_uri = temp.uri_for("src/enemy.tua");
+    let outside_uri = temp.uri_for("scratch/outside.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&player_uri, player),
+        references_request(2, &player_uri, player, "makePlayer(name", 0, true),
+        references_request(3, &player_uri, player, "makePlayer(name", 0, false),
+    ]);
+
+    assert_reference_texts_for_uri(
+        &output,
+        2,
+        &player_uri,
+        player,
+        ["makePlayer", "makePlayer", "makePlayer"],
+    );
+    assert_reference_texts_for_uri(&output, 2, &main_uri, main, ["makePlayer"]);
+    assert_reference_texts_for_uri(&output, 2, &enemy_uri, enemy, ["makePlayer"]);
+    assert_reference_texts_for_uri(&output, 2, &outside_uri, outside, []);
+
+    assert_reference_texts_for_uri(
+        &output,
+        3,
+        &player_uri,
+        player,
+        ["makePlayer", "makePlayer"],
+    );
+    assert_reference_texts_for_uri(&output, 3, &main_uri, main, ["makePlayer"]);
+    assert_reference_texts_for_uri(&output, 3, &enemy_uri, enemy, ["makePlayer"]);
+}
+
+#[test]
+fn references_project_wide_update_after_watched_file_changes() {
+    let temp = TempProject::new("project-references-watch");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main_before = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+    let main_after = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+local other = Player.makePlayer("Bea")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main_before);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&player_uri, player));
+    server.send(references_request(
+        2,
+        &player_uri,
+        player,
+        "makePlayer(name",
+        0,
+        false,
+    ));
+    assert_reference_texts_for_uri(server.output(), 2, &main_uri, main_before, ["makePlayer"]);
+
+    temp.write("src/main.tua", main_after);
+    server.send(watched_files_changed([(&main_uri, 2)]));
+    server.send(references_request(
+        3,
+        &player_uri,
+        player,
+        "makePlayer(name",
+        0,
+        false,
+    ));
+
+    assert_reference_texts_for_uri(
+        server.output(),
+        3,
+        &main_uri,
+        main_after,
+        ["makePlayer", "makePlayer"],
+    );
+}
+
+#[test]
+fn references_project_wide_include_globals_without_local_shadows() {
+    let temp = TempProject::new("project-references-globals");
+    let globals = r#"function greet(name: string): string
+  return name
+end
+
+local own = greet("Local")
+"#;
+    let main = r#"local message = greet("Ada")
+"#;
+    let shadow = r#"local function greet()
+  return "shadow"
+end
+
+local value = greet()
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/globals.tua", globals);
+    temp.write("src/main.tua", main);
+    temp.write("src/shadow.tua", shadow);
+
+    let globals_uri = temp.uri_for("src/globals.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let shadow_uri = temp.uri_for("src/shadow.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&globals_uri, globals),
+        references_request(2, &globals_uri, globals, "greet(name", 0, true),
+        references_request(3, &globals_uri, globals, "greet(name", 0, false),
+    ]);
+
+    assert_reference_texts_for_uri(&output, 2, &globals_uri, globals, ["greet", "greet"]);
+    assert_reference_texts_for_uri(&output, 2, &main_uri, main, ["greet"]);
+    assert_reference_texts_for_uri(&output, 2, &shadow_uri, shadow, []);
+
+    assert_reference_texts_for_uri(&output, 3, &globals_uri, globals, ["greet"]);
+    assert_reference_texts_for_uri(&output, 3, &main_uri, main, ["greet"]);
+}
+
+#[test]
 fn references_unknown_document_returns_empty_array() {
     let uri = "file:///tmp/missing-references.tua";
     let output = run_messages(vec![references_request(
@@ -2583,6 +2752,25 @@ fn assert_reference_texts<const N: usize>(
         .as_array()
         .expect("references result should be an array")
         .iter()
+        .map(|location| range_text(source, &location["range"]))
+        .collect::<Vec<_>>();
+
+    assert_eq!(texts, expected);
+}
+
+fn assert_reference_texts_for_uri<const N: usize>(
+    output: &[Value],
+    id: u64,
+    uri: &str,
+    source: &str,
+    expected: [&str; N],
+) {
+    let response = response_with_id(output, id);
+    let texts = response["result"]
+        .as_array()
+        .expect("references result should be an array")
+        .iter()
+        .filter(|location| location["uri"] == uri)
         .map(|location| range_text(source, &location["range"]))
         .collect::<Vec<_>>();
 

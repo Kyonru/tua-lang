@@ -295,8 +295,8 @@ fn lsp_document_highlight_kind(kind: DocumentHighlightKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_reference_location(uri: &str, reference: Reference) -> Value {
-    lsp_location(uri, reference.span)
+pub(super) fn lsp_reference_location(reference: Reference) -> Value {
+    lsp_location(&uri_from_path(&reference.path), reference.span)
 }
 
 pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {

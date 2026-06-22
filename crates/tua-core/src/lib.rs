@@ -62,7 +62,11 @@ pub use parser::{
     SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
 };
 pub use project::project_description;
-pub use references::{references_parsed_source, references_tua_source, Reference, ReferenceKind};
+pub use references::{
+    global_function_name_for_definition, global_references_to_definition_parsed_source,
+    references_parsed_source, references_to_definition_parsed_source, references_tua_source,
+    Reference, ReferenceKind,
+};
 pub use rename::{
     prepare_rename_parsed_source, prepare_rename_tua_source, rename_parsed_source,
     rename_tua_source, RenameEdit, RenameKind, RenameTarget, TextEdit,

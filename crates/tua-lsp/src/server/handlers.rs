@@ -426,12 +426,7 @@ impl LspServer {
         let snapshot = self.analysis.snapshot(&self.workspace_folders);
         let references = snapshot.references(&request.path, position, include_declaration);
 
-        Value::Array(
-            references
-                .into_iter()
-                .map(|reference| lsp_reference_location(request.uri, reference))
-                .collect(),
-        )
+        Value::Array(references.into_iter().map(lsp_reference_location).collect())
     }
 
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {

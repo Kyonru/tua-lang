@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use full_moon::ast;
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
@@ -44,21 +45,90 @@ pub fn references_parsed_source(
     let Some(target) = definition_parsed_source(parsed, position)? else {
         return Ok(Vec::new());
     };
+
+    references_to_definition_parsed_source(parsed, &target, include_declaration)
+}
+
+pub fn references_to_definition_parsed_source(
+    parsed: &ParsedSource,
+    target: &Definition,
+    include_declaration: bool,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     let mut references = parsed
         .ast
         .tokens()
         .filter(|token| is_identifier(token))
-        .filter_map(|token| reference_for_token(parsed, token, &target).transpose())
+        .filter_map(|token| reference_for_token(parsed, token, target).transpose())
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
-    if include_declaration && target.kind == DefinitionKind::TableField {
-        references.push(reference_from_definition(&target));
+    if include_declaration
+        && target.kind == DefinitionKind::TableField
+        && parsed.path == target.path
+    {
+        references.push(reference_from_definition(target));
     }
 
     if !include_declaration {
         references.retain(|reference| {
             reference.span != target.span || reference.kind != reference_kind(target.kind)
         });
+    }
+
+    references.sort_by_key(|reference| position_key(reference.span.start));
+    references.dedup_by_key(|reference| {
+        (
+            reference.path.clone(),
+            reference.span.start.line,
+            reference.span.start.column,
+            reference.span.end.line,
+            reference.span.end.column,
+            reference.kind,
+        )
+    });
+
+    Ok(references)
+}
+
+pub fn global_function_name_for_definition(
+    parsed: &ParsedSource,
+    target: &Definition,
+) -> Option<String> {
+    if target.path != parsed.path || target.kind != DefinitionKind::Function {
+        return None;
+    }
+
+    parsed.ast.nodes().stmts().find_map(|stmt| {
+        let ast::Stmt::FunctionDeclaration(function) = stmt else {
+            return None;
+        };
+        let span = node_span(function.name())?;
+
+        if span != target.span {
+            return None;
+        }
+
+        let name = function.name().to_string().trim().to_owned();
+
+        (!name.contains('.') && !name.contains(':')).then_some(name)
+    })
+}
+
+pub fn global_references_to_definition_parsed_source(
+    parsed: &ParsedSource,
+    target: &Definition,
+    name: &str,
+    include_declaration: bool,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    let mut references = parsed
+        .ast
+        .tokens()
+        .filter(|token| is_identifier(token))
+        .filter(|token| token_text(token) == name)
+        .filter_map(|token| global_reference_for_token(parsed, token, target).transpose())
+        .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
+
+    if !include_declaration {
+        references.retain(|reference| reference.span != target.span);
     }
 
     references.sort_by_key(|reference| position_key(reference.span.start));
@@ -95,6 +165,30 @@ fn reference_for_token(
     }))
 }
 
+fn global_reference_for_token(
+    parsed: &ParsedSource,
+    token: &TokenReference,
+    target: &Definition,
+) -> Result<Option<Reference>, Vec<Diagnostic>> {
+    let Some(span) = node_span(token) else {
+        return Ok(None);
+    };
+    let definition = definition_parsed_source(parsed, span.start)?;
+
+    if definition
+        .as_ref()
+        .is_some_and(|definition| !same_definition(definition, target))
+    {
+        return Ok(None);
+    }
+
+    Ok(Some(Reference {
+        path: parsed.path.clone(),
+        span,
+        kind: ReferenceKind::Function,
+    }))
+}
+
 fn reference_from_definition(definition: &Definition) -> Reference {
     Reference {
         path: definition.path.clone(),
@@ -120,6 +214,10 @@ fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
 
 fn is_identifier(token: &TokenReference) -> bool {
     matches!(token.token().token_type(), TokenType::Identifier { .. })
+}
+
+fn token_text(token: &TokenReference) -> String {
+    token.to_string().trim().to_owned()
 }
 
 fn node_span(node: &impl Node) -> Option<SourceSpan> {
