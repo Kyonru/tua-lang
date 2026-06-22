@@ -170,6 +170,10 @@ return {
         exports.field_documentation("play"),
         Some("audio source\nsuccess flag")
     );
+    assert_eq!(
+        exports.fields["play"].parameter_documentation,
+        vec![Some("audio source".to_owned())]
+    );
 }
 
 #[test]
@@ -196,6 +200,10 @@ return {
     assert_eq!(
         exports.field_documentation("play"),
         Some("inline source\ninline success")
+    );
+    assert_eq!(
+        exports.fields["play"].parameter_documentation,
+        vec![Some("inline source".to_owned())]
     );
 }
 

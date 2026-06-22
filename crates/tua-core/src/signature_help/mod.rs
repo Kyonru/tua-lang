@@ -26,6 +26,7 @@ pub struct SignatureInformation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParameterInformation {
     pub label: String,
+    pub documentation: Option<String>,
 }
 
 pub fn signature_help_tua_source(
@@ -118,6 +119,7 @@ impl<'a> SignatureResolver<'a> {
                     if signature.documentation.is_none() {
                         signature.documentation = export.documentation;
                     }
+                    apply_parameter_documentation(&mut signature, export.parameter_documentation);
 
                     return Some(signature);
                 }
@@ -283,23 +285,35 @@ fn signature_from_typed_function(
     name: Option<&str>,
 ) -> SignatureInformation {
     let name = name.or(function.name.as_deref()).unwrap_or("<anonymous>");
-    let mut parameters = function
+    let mut parameter_labels = function
         .parameters
         .iter()
         .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
         .collect::<Vec<_>>();
+    let mut parameters = function
+        .parameters
+        .iter()
+        .map(|parameter| ParameterInformation {
+            label: format!("{}: {}", parameter.name, parameter.ty),
+            documentation: parameter.documentation.clone(),
+        })
+        .collect::<Vec<_>>();
 
     if function.has_varargs {
-        parameters.push("...".to_owned());
+        parameter_labels.push("...".to_owned());
+        parameters.push(ParameterInformation {
+            label: "...".to_owned(),
+            documentation: None,
+        });
     }
 
-    signature_from_parts(
+    signature_from_parameter_information(
+        parameters,
         format!(
             "function {name}({}): {}",
-            parameters.join(", "),
+            parameter_labels.join(", "),
             function.return_type_or_any()
         ),
-        parameters,
         function.documentation.clone(),
     )
 }
@@ -391,13 +405,39 @@ fn signature_from_parts(
     parameters: Vec<String>,
     documentation: Option<String>,
 ) -> SignatureInformation {
+    signature_from_parameter_information(
+        parameters
+            .into_iter()
+            .map(|label| ParameterInformation {
+                label,
+                documentation: None,
+            })
+            .collect(),
+        label,
+        documentation,
+    )
+}
+
+fn signature_from_parameter_information(
+    parameters: Vec<ParameterInformation>,
+    label: String,
+    documentation: Option<String>,
+) -> SignatureInformation {
     SignatureInformation {
         label,
-        parameters: parameters
-            .into_iter()
-            .map(|label| ParameterInformation { label })
-            .collect(),
+        parameters,
         documentation,
+    }
+}
+
+fn apply_parameter_documentation(
+    signature: &mut SignatureInformation,
+    documentation: Vec<Option<String>>,
+) {
+    for (parameter, documentation) in signature.parameters.iter_mut().zip(documentation) {
+        if parameter.documentation.is_none() {
+            parameter.documentation = documentation;
+        }
     }
 }
 

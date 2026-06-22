@@ -1118,7 +1118,10 @@ fn signature_help_returns_known_function_signature() {
 
 local player: Player = { hp = 10 }
 
-local function damage(target: Player, amount: number): Player
+---@param target Player player receiving damage
+---@param amount number damage amount
+---@return Player updated player
+local function damage(target, amount)
   return target
 end
 
@@ -1144,6 +1147,14 @@ damage(player,
         response["result"]["signatures"][0]["parameters"][1]["label"],
         "amount: number"
     );
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][0]["documentation"]["value"],
+        "player receiving damage"
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][1]["documentation"]["value"],
+        "damage amount"
+    );
 }
 
 #[test]
@@ -1156,7 +1167,9 @@ local player = Player.makePlayer(
 "#;
     let player = r#"type Player = { name: string, hp: number }
 
-local function makePlayer(name: string): Player
+---@param name string player name
+---@return Player created player
+local function makePlayer(name)
   return { name = name, hp = 10 }
 end
 
@@ -1178,6 +1191,19 @@ return {
 
     assert_signature_label(&output, 2, "function math.sin(x: number): number");
     assert_signature_label(&output, 3, "function Player.makePlayer(string): Player");
+
+    let lua_response = response_with_id(&output, 2);
+    assert_eq!(
+        lua_response["result"]["signatures"][0]["parameters"][0]["label"],
+        "x: number"
+    );
+    assert!(lua_response["result"]["signatures"][0]["parameters"][0]["documentation"].is_null());
+
+    let module_response = response_with_id(&output, 3);
+    assert_eq!(
+        module_response["result"]["signatures"][0]["parameters"][0]["documentation"]["value"],
+        "player name"
+    );
 }
 
 #[test]

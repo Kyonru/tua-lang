@@ -229,11 +229,26 @@ fn lsp_signature_information_from_core(signature: SignatureInformation) -> Value
         "parameters": signature
             .parameters
             .into_iter()
-            .map(|parameter| json!({ "label": parameter.label }))
+            .map(lsp_parameter_information_from_core)
             .collect::<Vec<_>>()
     });
 
     if let Some(documentation) = signature.documentation {
+        item["documentation"] = json!({
+            "kind": "markdown",
+            "value": documentation
+        });
+    }
+
+    item
+}
+
+fn lsp_parameter_information_from_core(parameter: tua_core::ParameterInformation) -> Value {
+    let mut item = json!({
+        "label": parameter.label
+    });
+
+    if let Some(documentation) = parameter.documentation {
         item["documentation"] = json!({
             "kind": "markdown",
             "value": documentation

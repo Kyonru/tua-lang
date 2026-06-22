@@ -23,6 +23,7 @@ pub struct ModuleExports {
 pub struct ModuleExportField {
     pub ty: Type,
     pub documentation: Option<String>,
+    pub parameter_documentation: Vec<Option<String>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -96,6 +97,7 @@ pub fn exported_field_for_fields(
     export_field_type(&field.ty, rest).map(|ty| ModuleExportField {
         ty,
         documentation: None,
+        parameter_documentation: Vec::new(),
     })
 }
 
@@ -258,6 +260,7 @@ struct ExportInferer<'a> {
     environment: Option<TypeEnvironment>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
+    function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
     table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
     return_expr: Option<&'a Expression>,
 }
@@ -269,6 +272,7 @@ impl<'a> ExportInferer<'a> {
             environment: build_type_environment(parsed).ok(),
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
+            function_parameter_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
             return_expr: None,
         }
@@ -296,6 +300,7 @@ impl<'a> ExportInferer<'a> {
                             ModuleExportField {
                                 ty,
                                 documentation: function.documentation.clone(),
+                                parameter_documentation: parameter_documentation(function),
                             },
                         );
                 } else {
@@ -306,6 +311,10 @@ impl<'a> ExportInferer<'a> {
                             .entry(name.clone())
                             .or_insert_with(|| documentation.clone());
                     }
+
+                    self.function_parameter_docs
+                        .entry(name.clone())
+                        .or_insert_with(|| parameter_documentation(function));
                 }
             }
         }
@@ -346,6 +355,7 @@ impl<'a> ExportInferer<'a> {
                         .or_insert_with(|| ModuleExportField {
                             ty: function_type_from_body(function.body()),
                             documentation: None,
+                            parameter_documentation: Vec::new(),
                         });
                 }
             }
@@ -378,6 +388,7 @@ impl<'a> ExportInferer<'a> {
             ModuleExportField {
                 ty,
                 documentation: None,
+                parameter_documentation: Vec::new(),
             },
         );
     }
@@ -429,6 +440,7 @@ impl<'a> ExportInferer<'a> {
                     return None;
                 };
                 let name = token_text(key);
+                let lua_doc_export = lua_doc_function_export_for_field(self.parsed, field);
                 let documentation = field_documentation(self.parsed, field).or_else(|| {
                     let Expression::Var(Var::Name(name)) = value else {
                         return None;
@@ -436,10 +448,29 @@ impl<'a> ExportInferer<'a> {
 
                     self.function_docs.get(&token_text(name)).cloned()
                 });
-                let ty = lua_doc_function_type_for_field(self.parsed, field)
+                let parameter_documentation = lua_doc_export
+                    .as_ref()
+                    .map(|export| export.parameter_documentation.clone())
+                    .or_else(|| {
+                        let Expression::Var(Var::Name(name)) = value else {
+                            return None;
+                        };
+
+                        self.function_parameter_docs.get(&token_text(name)).cloned()
+                    })
+                    .unwrap_or_default();
+                let ty = lua_doc_export
+                    .map(|export| export.ty)
                     .unwrap_or_else(|| self.infer_expression(value));
 
-                Some((name, ModuleExportField { ty, documentation }))
+                Some((
+                    name,
+                    ModuleExportField {
+                        ty,
+                        documentation,
+                        parameter_documentation,
+                    },
+                ))
             })
             .collect()
     }
@@ -488,6 +519,7 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
                     ModuleExportField {
                         ty: field.ty.clone(),
                         documentation: None,
+                        parameter_documentation: Vec::new(),
                     },
                 )
             }));
@@ -521,7 +553,10 @@ fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
     }
 }
 
-fn lua_doc_function_type_for_field(parsed: &ParsedSource, field: &Field) -> Option<Type> {
+fn lua_doc_function_export_for_field(
+    parsed: &ParsedSource,
+    field: &Field,
+) -> Option<ModuleExportField> {
     let Field::NameKey { key, value, .. } = field else {
         return None;
     };
@@ -537,7 +572,7 @@ fn lua_doc_function_type_for_field(parsed: &ParsedSource, field: &Field) -> Opti
         return None;
     }
 
-    let param_types = lua_doc_param_types(&docs);
+    let param_annotations = lua_doc_param_annotations(&docs);
     let parameters = body
         .parameters()
         .iter()
@@ -546,11 +581,27 @@ fn lua_doc_function_type_for_field(parsed: &ParsedSource, field: &Field) -> Opti
                 return None;
             };
 
+            let name = token_text(name);
             Some(
-                param_types
-                    .get(&token_text(name))
-                    .cloned()
+                param_annotations
+                    .get(&name)
+                    .map(|annotation| type_from_lua_doc_type(&annotation.0.ty))
                     .unwrap_or(Type::Any),
+            )
+        })
+        .collect::<Vec<_>>();
+    let parameter_documentation = body
+        .parameters()
+        .iter()
+        .filter_map(|parameter| {
+            let ast::Parameter::Name(name) = parameter else {
+                return None;
+            };
+
+            Some(
+                param_annotations
+                    .get(&token_text(name))
+                    .and_then(|annotation| annotation.1.clone()),
             )
         })
         .collect::<Vec<_>>();
@@ -565,7 +616,11 @@ fn lua_doc_function_type_for_field(parsed: &ParsedSource, field: &Field) -> Opti
         })
         .unwrap_or(Type::Any);
 
-    Some(Type::function(parameters, return_type))
+    Some(ModuleExportField {
+        ty: Type::function(parameters, return_type),
+        documentation: field_documentation(parsed, field),
+        parameter_documentation,
+    })
 }
 
 fn field_documentation(parsed: &ParsedSource, field: &Field) -> Option<String> {
@@ -673,12 +728,15 @@ fn function_body_from_expression(expression: &Expression) -> Option<&ast::Functi
     }
 }
 
-fn lua_doc_param_types(docs: &[&LuaDocAnnotation]) -> BTreeMap<String, Type> {
+fn lua_doc_param_annotations<'a>(
+    docs: &[&'a LuaDocAnnotation],
+) -> BTreeMap<String, (&'a crate::LuaDocParam, Option<String>)> {
     docs.iter()
         .filter_map(|annotation| match &annotation.kind {
-            LuaDocAnnotationKind::Param(param) => {
-                Some((param.name.clone(), type_from_lua_doc_type(&param.ty)))
-            }
+            LuaDocAnnotationKind::Param(param) => Some((
+                param.name.clone(),
+                (param, annotation.documentation.clone()),
+            )),
             _ => None,
         })
         .collect()
@@ -778,6 +836,14 @@ fn typed_function_type(function: &TypedFunction) -> Type {
     };
 
     Type::function(parameters, function.return_type_or_any())
+}
+
+fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {
+    function
+        .parameters
+        .iter()
+        .map(|parameter| parameter.documentation.clone())
+        .collect()
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

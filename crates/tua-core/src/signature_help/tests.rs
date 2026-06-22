@@ -58,6 +58,36 @@ damage(
 }
 
 #[test]
+fn returns_parameter_documentation_for_lua_doc_function() {
+    let source = r#"type Player = { hp: number }
+
+---@param target Player player receiving damage
+---@param amount number damage amount
+---@return Player updated player
+local function damage(target, amount)
+  return target
+end
+
+damage(player,
+"#;
+    let help =
+        signature_at(source, "damage(player,").expect("documented function should have help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function damage(target: Player, amount: number): Player"
+    );
+    assert_eq!(
+        parameter_documentation(&help),
+        vec![Some("player receiving damage"), Some("damage amount")]
+    );
+    assert_eq!(
+        help.signatures[0].documentation.as_deref(),
+        Some("player receiving damage\ndamage amount\nupdated player")
+    );
+}
+
+#[test]
 fn returns_lua_and_love_builtin_signatures() {
     let lua =
         signature_at("local value = math.sin(\n", "math.sin(").expect("math.sin should have help");
@@ -96,6 +126,22 @@ fn returns_lua_and_love_builtin_signatures() {
         "function love.graphics.print(text, x?, y?)"
     );
     assert_eq!(love.active_parameter, 1);
+}
+
+#[test]
+fn keeps_active_parameter_through_nested_calls_comments_and_strings() {
+    let source = r#"local function damage(target: string, amount: number): string
+  return target
+end
+
+damage(format("a,b"), -- comma, in comment
+  0
+)
+"#;
+    let help = signature_at(source, "comma, in comment")
+        .expect("nested call with comment should still have help");
+
+    assert_eq!(help.active_parameter, 1);
 }
 
 #[test]
@@ -170,10 +216,50 @@ return {
         "function Audio.play(string): boolean"
     );
     assert_eq!(parameter_labels(&help), vec!["string"]);
+    assert_eq!(parameter_documentation(&help), vec![Some("audio source")]);
     assert_eq!(
         help.signatures[0].documentation.as_deref(),
         Some("audio source\nsuccess flag")
     );
+}
+
+#[test]
+fn returns_annotated_tua_module_function_parameter_docs() {
+    let temp = TempProject::new("annotated-tua-module-signature");
+    let source = r#"local Player = require("player")
+
+local player = Player.makePlayer(
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+---@param name string player name
+---@return Player created player
+local function makePlayer(name)
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", player);
+
+    let help = signature_help_tua_source(
+        temp.path.join("src/main.tua"),
+        source,
+        position_after(source, "Player.makePlayer("),
+    )
+    .expect("signature help should succeed")
+    .expect("annotated Tua module signature should resolve");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function Player.makePlayer(string): Player"
+    );
+    assert_eq!(parameter_documentation(&help), vec![Some("player name")]);
 }
 
 #[test]
@@ -201,6 +287,14 @@ fn parameter_labels(help: &SignatureHelp) -> Vec<&str> {
         .parameters
         .iter()
         .map(|parameter| parameter.label.as_str())
+        .collect()
+}
+
+fn parameter_documentation(help: &SignatureHelp) -> Vec<Option<&str>> {
+    help.signatures[0]
+        .parameters
+        .iter()
+        .map(|parameter| parameter.documentation.as_deref())
         .collect()
 }
 
