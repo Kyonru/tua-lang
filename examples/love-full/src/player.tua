@@ -30,7 +30,7 @@ local particles: any = require("particles")
 
 local player: PlayerModule = {}
 
-local PLAYER_SPRITES: any = {
+local PLAYER_SPRITES = {
   IDLE = love.graphics.newImage("assets/player/idle.png"),
   LIVE = love.graphics.newImage("assets/player/live.png"),
   DOWN = love.graphics.newImage("assets/player/down.png"),

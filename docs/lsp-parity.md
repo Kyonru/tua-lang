@@ -28,6 +28,7 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Document links | `require("...")` literals become module links when resolvable. | Comparable to Lua module navigation. | File/module links are part of navigation support. | Deepen with 31, 32 |
 | Document symbols | Type aliases, functions, annotated locals, parameters, table fields, and simple returned exports appear in file outline. | Comparable file outline basics. | File structure powers outline and breadcrumbs. | Landed before 30 |
 | Document highlights | Known symbols can be highlighted within the active document. | Comparable local highlight behavior. | Highlight references for symbol under cursor. | Deepen with 31, 42 |
+| Call hierarchy | Advertises prepare, incoming, and outgoing call hierarchy for known local functions, module-exported functions, and typed receiver methods; unknown and `any` calls are ignored. | LuaHelper supports broader dynamic Lua project call graphs. | Incoming/outgoing calls are core navigation paths. | Landed with 48 |
 | Lua and LOVE builtin surface | Curated builtin catalog provides hover, completion, and signature help. | LuaHelper commonly uses annotation stubs for this. | Standard-library knowledge comes from indexed metadata. | Replace/adapt with 35 |
 | Require path completion | Offers module path completions from resolvable project files. | Comparable Lua module workflow. | Project model drives path/module completion. | Deepen with 31, 32 |
 | Workspace folders | Initialize and workspace-folder change notifications are accepted. | Basic multi-root editor support. | Workspace roots feed project discovery. | Deepen with 31, 46 |
@@ -64,7 +65,6 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 | Safe cross-file rename | Same-file rename only. | Workspace edits for project-identity symbols such as exported functions and aliases. | 43 |
 | Code actions / quick fixes | `codeActionProvider` is not advertised. | Conservative mechanical fixes for selected diagnostics. | 44 |
 | Auto-import completion | Unresolved identifiers do not propose imports. | Offer exported module symbols and insert or reuse `require` bindings. | 45 |
-| Call hierarchy | Call hierarchy is not advertised. | Show incoming/outgoing calls for known functions and module exports. | 48 |
 | LuaHelper parity fixtures | No dedicated parity fixture suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49 |
 | Post-milestone doc refresh | Current docs track the pre-parity implementation. | Update docs and non-goals after parity commits land. | 50 |
 

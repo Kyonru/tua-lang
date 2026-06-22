@@ -1,3 +1,4 @@
+pub mod call_hierarchy;
 pub mod check;
 pub mod code_action;
 pub mod completion;
@@ -24,6 +25,12 @@ mod source_text;
 pub mod types;
 pub mod workspace_symbol;
 
+pub use call_hierarchy::{
+    call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
+    call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
+    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyExport, CallHierarchySymbol,
+    CallHierarchySymbolKind, CallHierarchySymbolTarget,
+};
 pub use check::{
     check_parsed_source, check_parsed_source_with_diagnostics_config, check_tua_source,
     check_tua_source_with_diagnostics_config,

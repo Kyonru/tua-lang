@@ -58,6 +58,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["callHierarchyProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["documentLinkProvider"]["resolveProvider"],
         false
     );
@@ -1780,6 +1784,147 @@ return {
 }
 
 #[test]
+fn call_hierarchy_returns_same_file_and_cross_file_callers() {
+    let temp = TempProject::new("call-hierarchy-modules");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+local function localCaller()
+  return makePlayer("local")
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main = r#"local Player = require("player")
+
+local function spawn()
+  return Player.makePlayer("Ada")
+end
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&player_uri, player));
+    server.send(did_open(&main_uri, main));
+    server.send(prepare_call_hierarchy_request(
+        2,
+        &player_uri,
+        player,
+        "makePlayer(name",
+        0,
+    ));
+
+    let item = first_call_hierarchy_item(server.output(), 2);
+
+    assert_eq!(item["name"], "makePlayer");
+    assert_eq!(item["kind"], 12);
+    assert_eq!(item["uri"], player_uri);
+    assert_eq!(range_text(player, &item["selectionRange"]), "makePlayer");
+
+    server.send(call_hierarchy_incoming_request(3, item.clone()));
+
+    let incoming = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .expect("incoming calls should be an array");
+
+    assert_eq!(
+        call_hierarchy_from_names(incoming),
+        vec!["spawn", "localCaller"]
+    );
+    assert_call_hierarchy_range_text(incoming, "spawn", main, "makePlayer");
+    assert_call_hierarchy_range_text(incoming, "localCaller", player, "makePlayer");
+
+    server.send(prepare_call_hierarchy_request(
+        4, &main_uri, main, "spawn()", 0,
+    ));
+    let spawn = first_call_hierarchy_item(server.output(), 4);
+
+    server.send(call_hierarchy_outgoing_request(5, spawn));
+
+    let outgoing = response_with_id(server.output(), 5)["result"]
+        .as_array()
+        .expect("outgoing calls should be an array");
+
+    assert_eq!(call_hierarchy_to_names(outgoing), vec!["makePlayer"]);
+    assert_call_hierarchy_outgoing_range_text(outgoing, "makePlayer", main, "makePlayer");
+}
+
+#[test]
+fn call_hierarchy_resolves_known_receiver_methods_and_ignores_any() {
+    let uri = "file:///tmp/call-hierarchy-method.tua";
+    let source = r#"type Player = { hp: number }
+
+function Player:heal()
+end
+
+local function healPlayer(player: Player, payload: any)
+  player:heal()
+  payload:heal()
+end
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(prepare_call_hierarchy_request(2, uri, source, "heal()", 0));
+
+    let method = first_call_hierarchy_item(server.output(), 2);
+
+    assert_eq!(method["name"], "Player:heal");
+    assert_eq!(method["kind"], 6);
+
+    server.send(call_hierarchy_incoming_request(3, method));
+
+    let incoming = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .expect("incoming calls should be an array");
+
+    assert_eq!(call_hierarchy_from_names(incoming), vec!["healPlayer"]);
+    assert_call_hierarchy_range_text(incoming, "healPlayer", source, "heal");
+
+    server.send(prepare_call_hierarchy_request(
+        4,
+        uri,
+        source,
+        "healPlayer(player",
+        0,
+    ));
+    let caller = first_call_hierarchy_item(server.output(), 4);
+
+    server.send(call_hierarchy_outgoing_request(5, caller));
+
+    let outgoing = response_with_id(server.output(), 5)["result"]
+        .as_array()
+        .expect("outgoing calls should be an array");
+
+    assert_eq!(call_hierarchy_to_names(outgoing), vec!["Player:heal"]);
+    assert_call_hierarchy_outgoing_range_text(outgoing, "Player:heal", source, "heal");
+}
+
+#[test]
+fn call_hierarchy_unknown_symbol_returns_empty_array() {
+    let uri = "file:///tmp/missing-call-hierarchy.tua";
+    let source = "missing()\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        prepare_call_hierarchy_request(2, uri, source, "missing", 0),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"], json!([]));
+}
+
+#[test]
 fn document_link_returns_resolved_require_targets() {
     let temp = TempProject::new("document-links");
     let main = r#"local Player = require("player")
@@ -3044,6 +3189,48 @@ fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: us
     })
 }
 
+fn prepare_call_hierarchy_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    offset: usize,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/prepareCallHierarchy",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
+fn call_hierarchy_incoming_request(id: u64, item: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "callHierarchy/incomingCalls",
+        "params": {
+            "item": item
+        }
+    })
+}
+
+fn call_hierarchy_outgoing_request(id: u64, item: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "callHierarchy/outgoingCalls",
+        "params": {
+            "item": item
+        }
+    })
+}
+
 fn document_symbol_request(id: u64, uri: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -3407,6 +3594,75 @@ fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, ex
         .expect("definition line should exist");
 
     assert_eq!(&text[start..end], expected);
+}
+
+fn first_call_hierarchy_item(output: &[Value], id: u64) -> Value {
+    response_with_id(output, id)["result"]
+        .as_array()
+        .expect("call hierarchy prepare result should be an array")
+        .first()
+        .expect("call hierarchy prepare should return an item")
+        .clone()
+}
+
+fn call_hierarchy_from_names(calls: &[Value]) -> Vec<&str> {
+    calls
+        .iter()
+        .map(|call| {
+            call["from"]["name"]
+                .as_str()
+                .expect("incoming caller name should be a string")
+        })
+        .collect()
+}
+
+fn call_hierarchy_to_names(calls: &[Value]) -> Vec<&str> {
+    calls
+        .iter()
+        .map(|call| {
+            call["to"]["name"]
+                .as_str()
+                .expect("outgoing callee name should be a string")
+        })
+        .collect()
+}
+
+fn assert_call_hierarchy_range_text(
+    calls: &[Value],
+    caller_name: &str,
+    source: &str,
+    expected: &str,
+) {
+    let call = calls
+        .iter()
+        .find(|call| call["from"]["name"] == caller_name)
+        .unwrap_or_else(|| panic!("incoming call from {caller_name:?} should exist"));
+    let range = call["fromRanges"]
+        .as_array()
+        .expect("incoming call ranges should be an array")
+        .first()
+        .expect("incoming call should have a range");
+
+    assert_eq!(range_text(source, range), expected);
+}
+
+fn assert_call_hierarchy_outgoing_range_text(
+    calls: &[Value],
+    callee_name: &str,
+    source: &str,
+    expected: &str,
+) {
+    let call = calls
+        .iter()
+        .find(|call| call["to"]["name"] == callee_name)
+        .unwrap_or_else(|| panic!("outgoing call to {callee_name:?} should exist"));
+    let range = call["fromRanges"]
+        .as_array()
+        .expect("outgoing call ranges should be an array")
+        .first()
+        .expect("outgoing call should have a range");
+
+    assert_eq!(range_text(source, range), expected);
 }
 
 fn assert_lsp_document_symbol_ranges_contain_selection(symbol: &Value) {

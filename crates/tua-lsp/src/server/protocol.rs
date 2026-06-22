@@ -11,6 +11,10 @@ use tua_core::{
     WorkspaceSymbolKind,
 };
 
+use super::analysis::{
+    CallHierarchyIdentity, CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyItemKind,
+    CallHierarchyOutgoingCall,
+};
 use super::uri::uri_from_path;
 
 pub(super) fn response(id: Value, result: Value) -> Value {
@@ -355,6 +359,62 @@ fn lsp_completion_kind(kind: CompletionKind) -> u8 {
 
 pub(super) fn lsp_location_from_core(definition: Definition) -> Value {
     lsp_location(&uri_from_path(&definition.path), definition.span)
+}
+
+pub(super) fn lsp_call_hierarchy_item(item: CallHierarchyItem) -> Value {
+    json!({
+        "name": item.name,
+        "kind": lsp_call_hierarchy_kind(item.kind),
+        "uri": uri_from_path(&item.path),
+        "range": lsp_range(item.range),
+        "selectionRange": lsp_range(item.selection_range),
+        "data": {
+            "path": item.path.to_string_lossy().to_string(),
+            "selectionRange": lsp_range(item.selection_range)
+        }
+    })
+}
+
+pub(super) fn call_hierarchy_identity_from_lsp(item: &Value) -> Option<CallHierarchyIdentity> {
+    let data = item.get("data")?;
+    let range = lsp_source_range(data.get("selectionRange")?)?;
+
+    Some(CallHierarchyIdentity {
+        path: PathBuf::from(data.get("path")?.as_str()?),
+        selection_range: SourceSpan {
+            start: range.start,
+            end: range.end,
+        },
+    })
+}
+
+pub(super) fn lsp_call_hierarchy_incoming_call(call: CallHierarchyIncomingCall) -> Value {
+    json!({
+        "from": lsp_call_hierarchy_item(call.from),
+        "fromRanges": call
+            .from_ranges
+            .into_iter()
+            .map(lsp_range)
+            .collect::<Vec<_>>()
+    })
+}
+
+pub(super) fn lsp_call_hierarchy_outgoing_call(call: CallHierarchyOutgoingCall) -> Value {
+    json!({
+        "to": lsp_call_hierarchy_item(call.to),
+        "fromRanges": call
+            .from_ranges
+            .into_iter()
+            .map(lsp_range)
+            .collect::<Vec<_>>()
+    })
+}
+
+fn lsp_call_hierarchy_kind(kind: CallHierarchyItemKind) -> u8 {
+    match kind {
+        CallHierarchyItemKind::Function => 12,
+        CallHierarchyItemKind::Method => 6,
+    }
 }
 
 pub(super) fn lsp_document_link_from_core(link: ModuleLink) -> Value {

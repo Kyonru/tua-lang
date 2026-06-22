@@ -6,13 +6,15 @@ use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
-    completion_resolve_data, core_diagnostic_from_lsp, error_response, lsp_code_action_from_core,
-    lsp_completion_from_core, lsp_diagnostic_from_core, lsp_document_highlight_from_core,
-    lsp_document_link_from_core, lsp_document_symbol_from_core, lsp_hover_from_core,
-    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
-    lsp_reference_location, lsp_resolved_completion_item, lsp_semantic_tokens_from_core,
-    lsp_signature_help_from_core, lsp_source_range, lsp_workspace_edit,
-    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    call_hierarchy_identity_from_lsp, completion_resolve_data, core_diagnostic_from_lsp,
+    error_response, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
+    lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_completion_from_core,
+    lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
+    lsp_document_symbol_from_core, lsp_hover_from_core, lsp_inlay_hint_from_core,
+    lsp_location_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
+    lsp_resolved_completion_item, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
+    lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
+    response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer};
@@ -74,6 +76,15 @@ impl LspServer {
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
+            "textDocument/prepareCallHierarchy" => {
+                response(id, self.prepare_call_hierarchy_response(&message))
+            }
+            "callHierarchy/incomingCalls" => {
+                response(id, self.call_hierarchy_incoming_response(&message))
+            }
+            "callHierarchy/outgoingCalls" => {
+                response(id, self.call_hierarchy_outgoing_response(&message))
+            }
             "textDocument/documentLink" => response(id, self.document_link_response(&message)),
             "textDocument/documentHighlight" => {
                 response(id, self.document_highlight_response(&message))
@@ -427,6 +438,61 @@ impl LspServer {
         let definition = snapshot.definition(&request.path, position)?;
 
         Some(lsp_location_from_core(definition))
+    }
+
+    fn prepare_call_hierarchy_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let Some(position) = request.position() else {
+            return json!([]);
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let items = snapshot.prepare_call_hierarchy(&request.path, position);
+
+        Value::Array(items.into_iter().map(lsp_call_hierarchy_item).collect())
+    }
+
+    fn call_hierarchy_incoming_response(&self, message: &Value) -> Value {
+        let Some(item) = message.get("params").and_then(|params| params.get("item")) else {
+            return json!([]);
+        };
+        let Some(identity) = call_hierarchy_identity_from_lsp(item) else {
+            return json!([]);
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let calls = snapshot.incoming_calls(&identity);
+
+        Value::Array(
+            calls
+                .into_iter()
+                .map(lsp_call_hierarchy_incoming_call)
+                .collect(),
+        )
+    }
+
+    fn call_hierarchy_outgoing_response(&self, message: &Value) -> Value {
+        let Some(item) = message.get("params").and_then(|params| params.get("item")) else {
+            return json!([]);
+        };
+        let Some(identity) = call_hierarchy_identity_from_lsp(item) else {
+            return json!([]);
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let calls = snapshot.outgoing_calls(&identity);
+
+        Value::Array(
+            calls
+                .into_iter()
+                .map(lsp_call_hierarchy_outgoing_call)
+                .collect(),
+        )
     }
 
     fn document_link_response(&self, message: &Value) -> Value {

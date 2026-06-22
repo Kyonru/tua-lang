@@ -42,6 +42,7 @@ pub(super) fn initialize_result() -> Value {
                 "triggerCharacters": ["(", ","]
             },
             "definitionProvider": true,
+            "callHierarchyProvider": true,
             "documentLinkProvider": {
                 "resolveProvider": false
             },
