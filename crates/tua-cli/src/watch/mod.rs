@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::build::{build_changed_files, build_project, output_path_for, BuildOutcome};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_source_files, io_diagnostic};
+use crate::source::{discover_build_files, io_diagnostic};
 use tua_core::{format_diagnostics_for_cli, Diagnostic, LoadedConfig};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -114,10 +114,7 @@ fn run_watch_with_options<W: Write, E: Write>(
         stdout,
         &format!(
             "watching {}",
-            display_path(
-                cwd,
-                &source_dir.join(format!("**/*.{}", loaded.config.extension))
-            )
+            display_path(cwd, &source_dir.join(watch_glob(&loaded.config.extension)))
         ),
     )?;
 
@@ -202,7 +199,8 @@ fn wait_for_debounced_changes(
 fn snapshot_source_tree(source_dir: &Path, extension: &str) -> Result<SourceSnapshot, Diagnostic> {
     let mut files = BTreeMap::new();
 
-    for path in discover_source_files(source_dir, extension)? {
+    for source_file in discover_build_files(source_dir, extension)? {
+        let path = source_file.path;
         let metadata = fs::metadata(&path).map_err(|source| io_diagnostic(&path, source))?;
         let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
 
@@ -304,6 +302,14 @@ fn display_path(cwd: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn watch_glob(extension: &str) -> String {
+    if extension == "lua" {
+        "**/*.lua".to_owned()
+    } else {
+        format!("**/*.{{{extension},lua}}")
+    }
 }
 
 #[cfg(test)]

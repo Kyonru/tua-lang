@@ -293,18 +293,20 @@ return {
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
 
-    assert!(stdout.contains("built 2 file(s)"));
+    assert!(stdout.contains("built 3 file(s)"));
 
     let main_output =
         fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read main output");
     let nested_output = fs::read_to_string(temp.path().join("build/systems/player/core.lua"))
         .expect("failed to read nested output");
+    let lua_output = fs::read_to_string(temp.path().join("build/assets/ignored.lua"))
+        .expect("failed to read copied lua output");
 
     assert!(main_output.contains(r#"require("systems.player.core")"#));
     assert!(!main_output.contains(": Player"));
     assert!(nested_output.contains("player.hp = player.hp - amount"));
     assert!(!nested_output.contains("type Player"));
-    assert!(!temp.path().join("build/assets/ignored.lua").exists());
+    assert_eq!(lua_output, "return { ignored = true }\n");
 }
 
 #[test]
@@ -341,6 +343,34 @@ return Menu
     assert!(output.status.success());
     assert!(temp.path().join("dist/lua/client/ui/menu.lua").is_file());
     assert!(!temp.path().join("dist/lua/client/ui/menu.tua").exists());
+}
+
+#[test]
+fn build_copies_lua_files_without_compiling_them() {
+    let temp = TempDir::new("build-copies-lua");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/lib")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/lib/legacy.lua"),
+        "local value = 1\nvalue = value + 1\nreturn value\n",
+    )
+    .expect("failed to write lua source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let copied = fs::read_to_string(temp.path().join("build/lib/legacy.lua"))
+        .expect("failed to read copied lua output");
+
+    assert!(stdout.contains("built 1 file(s)"));
+    assert_eq!(copied, "local value = 1\nvalue = value + 1\nreturn value\n");
 }
 
 #[test]
@@ -459,7 +489,7 @@ return hp
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
     assert!(stderr.is_empty(), "unexpected watch stderr:\n{stderr}");
-    assert!(stdout.contains("watching src/**/*.tua"));
+    assert!(stdout.contains("watching src/**/*.{tua,lua}"));
     assert!(stdout.contains("initial build: built 1 file(s)"));
     assert_eq!(stdout.matches("changed 1 file(s)").count(), 1);
     assert_eq!(stdout.matches("rebuild: rebuilt 1 file(s)").count(), 1);
