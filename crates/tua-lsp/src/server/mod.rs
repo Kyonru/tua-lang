@@ -1,13 +1,14 @@
+mod analysis;
 mod capabilities;
 mod handlers;
 mod protocol;
 mod transport;
 mod uri;
 
-use std::collections::HashMap;
 use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
 
+use analysis::AnalysisHost;
 use transport::{read_message, write_message};
 
 pub fn server_name() -> &'static str {
@@ -47,7 +48,7 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
 
 #[derive(Default)]
 struct LspServer {
-    documents: HashMap<String, String>,
+    analysis: AnalysisHost,
     workspace_folders: Vec<PathBuf>,
     client_watched_files_dynamic_registration: bool,
     next_server_request_id: u64,

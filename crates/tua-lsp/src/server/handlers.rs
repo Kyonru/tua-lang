@@ -1,16 +1,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::{env, fs};
 
 use serde_json::{json, Value};
-use tua_core::{
-    check_tua_source_with_diagnostics_config, complete_tua_source, definition_tua_source,
-    document_highlights_tua_source, document_symbols_tua_source, hover_tua_source,
-    inlay_hints_tua_source, load_config_from_dir, module_links_tua_source,
-    prepare_rename_tua_source, references_tua_source, rename_tua_source,
-    semantic_tokens_tua_source, signature_help_tua_source, workspace_symbols_from_dir,
-    DiagnosticsConfig, SourcePosition,
-};
+use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
 
 use super::protocol::{
     error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
@@ -27,7 +19,6 @@ use super::{capabilities, LspServer};
 struct DocumentRequest<'a> {
     params: &'a Value,
     uri: &'a str,
-    text: &'a str,
     path: PathBuf,
 }
 
@@ -56,6 +47,7 @@ impl LspServer {
         match method {
             "initialize" => {
                 self.workspace_folders = workspace_folders_from_initialize(&message);
+                self.analysis.reindex_workspace(&self.workspace_folders);
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
 
@@ -138,7 +130,7 @@ impl LspServer {
         let uri = text_document.get("uri")?.as_str()?.to_owned();
         let text = text_document.get("text")?.as_str()?.to_owned();
 
-        self.documents.insert(uri.clone(), text);
+        self.analysis.open_document(uri.clone(), text);
 
         Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
     }
@@ -146,10 +138,10 @@ impl LspServer {
     fn did_change_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
         let params = message.get("params")?;
         let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_owned();
-        let current = self.documents.get(&uri)?;
+        let current = self.analysis.document_text(&uri)?;
         let text = apply_content_changes(current, params.get("contentChanges")?.as_array()?)?;
 
-        self.documents.insert(uri.clone(), text);
+        self.analysis.update_document(uri.clone(), text);
 
         Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
     }
@@ -159,11 +151,11 @@ impl LspServer {
         let uri = document_uri(params)?.to_owned();
 
         if let Some(text) = params.get("text").and_then(Value::as_str) {
-            self.documents.insert(uri.clone(), text.to_owned());
+            self.analysis.update_document(uri.clone(), text.to_owned());
         }
 
-        self.documents
-            .contains_key(&uri)
+        self.analysis
+            .contains_document(&uri)
             .then(|| vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
     }
 
@@ -171,7 +163,7 @@ impl LspServer {
         let params = message.get("params")?;
         let uri = document_uri(params)?.to_owned();
 
-        self.documents.remove(&uri);
+        self.analysis.close_document(&uri);
 
         Some(vec![publish_diagnostics(&uri, Vec::new())])
     }
@@ -184,7 +176,9 @@ impl LspServer {
         for change in changes {
             match change.kind {
                 FileChangeKind::Created | FileChangeKind::Changed => {
-                    let diagnostics = if self.documents.contains_key(&change.uri) {
+                    self.analysis.cache_disk_file(&change.uri);
+
+                    let diagnostics = if self.analysis.contains_document(&change.uri) {
                         Some(self.diagnostics_for(&change.uri))
                     } else if is_tua_uri(&change.uri) {
                         Some(self.diagnostics_for_disk_file(&change.uri))
@@ -202,7 +196,7 @@ impl LspServer {
                     }
                 }
                 FileChangeKind::Deleted => {
-                    self.documents.remove(&change.uri);
+                    self.analysis.remove_file(&change.uri);
                     push_diagnostics_publication(
                         &mut publications,
                         &mut published,
@@ -213,12 +207,12 @@ impl LspServer {
             }
         }
 
-        for uri in self.documents.keys() {
+        for uri in self.analysis.open_uris() {
             push_diagnostics_publication(
                 &mut publications,
                 &mut published,
-                uri,
-                self.diagnostics_for(uri),
+                &uri,
+                self.diagnostics_for(&uri),
             );
         }
 
@@ -236,39 +230,37 @@ impl LspServer {
             }
         }
 
+        self.analysis.reindex_workspace(&self.workspace_folders);
+
         None
     }
 
     fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
-        let Some(text) = self.documents.get(uri) else {
+        if !self.analysis.contains_document(uri) {
             return Vec::new();
-        };
+        }
+
         let path = path_from_uri(uri);
         let diagnostics_config = self.diagnostics_config_for_path(&path);
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
 
-        match check_tua_source_with_diagnostics_config(&path, text.clone(), &diagnostics_config) {
-            Ok(()) => Vec::new(),
-            Err(diagnostics) => diagnostics
-                .into_iter()
-                .map(lsp_diagnostic_from_core)
-                .collect(),
-        }
+        snapshot
+            .diagnostics_for_uri(uri, &diagnostics_config)
+            .into_iter()
+            .map(lsp_diagnostic_from_core)
+            .collect()
     }
 
     fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {
         let path = path_from_uri(uri);
-        let Ok(source) = fs::read_to_string(&path) else {
-            return Vec::new();
-        };
         let diagnostics_config = self.diagnostics_config_for_path(&path);
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
 
-        match check_tua_source_with_diagnostics_config(&path, source, &diagnostics_config) {
-            Ok(()) => Vec::new(),
-            Err(diagnostics) => diagnostics
-                .into_iter()
-                .map(lsp_diagnostic_from_core)
-                .collect(),
-        }
+        snapshot
+            .diagnostics_for_uri(uri, &diagnostics_config)
+            .into_iter()
+            .map(lsp_diagnostic_from_core)
+            .collect()
     }
 
     fn diagnostics_config_for_path(&self, path: &Path) -> DiagnosticsConfig {
@@ -304,9 +296,8 @@ impl LspServer {
     fn hover_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let hover = hover_tua_source(request.path, request.text.to_owned(), position)
-            .ok()
-            .flatten()?;
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let hover = snapshot.hover(&request.path, position)?;
 
         Some(lsp_hover_from_core(hover))
     }
@@ -318,8 +309,8 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let completions = complete_tua_source(request.path, request.text.to_owned(), position)
-            .unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let completions = snapshot.completion(&request.path, position);
 
         Value::Array(
             completions
@@ -340,9 +331,8 @@ impl LspServer {
     fn signature_help_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let help = signature_help_tua_source(request.path, request.text.to_owned(), position)
-            .ok()
-            .flatten()?;
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let help = snapshot.signature_help(&request.path, position)?;
 
         Some(lsp_signature_help_from_core(help))
     }
@@ -350,9 +340,8 @@ impl LspServer {
     fn definition_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let definition = definition_tua_source(request.path, request.text.to_owned(), position)
-            .ok()
-            .flatten()?;
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let definition = snapshot.definition(&request.path, position)?;
 
         Some(lsp_location_from_core(definition))
     }
@@ -361,7 +350,8 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let links = module_links_tua_source(request.path, request.text.to_owned());
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let links = snapshot.document_links(&request.path);
 
         Value::Array(links.into_iter().map(lsp_document_link_from_core).collect())
     }
@@ -373,9 +363,8 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let highlights =
-            document_highlights_tua_source(request.path, request.text.to_owned(), position)
-                .unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let highlights = snapshot.document_highlights(&request.path, position);
 
         Value::Array(
             highlights
@@ -389,8 +378,8 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let symbols =
-            document_symbols_tua_source(request.path, request.text.to_owned()).unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let symbols = snapshot.document_symbols(&request.path);
 
         Value::Array(
             symbols
@@ -413,13 +402,8 @@ impl LspServer {
             .and_then(|context| context.get("includeDeclaration"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let references = references_tua_source(
-            request.path,
-            request.text.to_owned(),
-            position,
-            include_declaration,
-        )
-        .unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let references = snapshot.references(&request.path, position, include_declaration);
 
         Value::Array(
             references
@@ -432,9 +416,8 @@ impl LspServer {
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let target = prepare_rename_tua_source(request.path, request.text.to_owned(), position)
-            .ok()
-            .flatten()?;
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let target = snapshot.prepare_rename(&request.path, position)?;
 
         Some(lsp_prepare_rename_from_core(target))
     }
@@ -443,9 +426,8 @@ impl LspServer {
         let request = self.document_request(message)?;
         let position = request.position()?;
         let new_name = request.params.get("newName")?.as_str()?;
-        let edit = rename_tua_source(request.path, request.text.to_owned(), position, new_name)
-            .ok()
-            .flatten()?;
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let edit = snapshot.rename(&request.path, position, new_name)?;
 
         Some(lsp_workspace_edit(request.uri, edit))
     }
@@ -455,8 +437,8 @@ impl LspServer {
             return json!([]);
         };
         let range = request.params.get("range").and_then(lsp_source_range);
-        let hints =
-            inlay_hints_tua_source(request.path, request.text.to_owned()).unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let hints = snapshot.inlay_hints(&request.path);
 
         Value::Array(
             hints
@@ -475,8 +457,8 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
-        let tokens =
-            semantic_tokens_tua_source(request.path, request.text.to_owned()).unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let tokens = snapshot.semantic_tokens(&request.path);
 
         lsp_semantic_tokens_from_core(tokens)
     }
@@ -486,15 +468,8 @@ impl LspServer {
             return json!([]);
         };
         let query = params.get("query").and_then(Value::as_str).unwrap_or("");
-        let roots = if self.workspace_folders.is_empty() {
-            vec![env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
-        } else {
-            self.workspace_folders.clone()
-        };
-        let symbols = roots
-            .into_iter()
-            .flat_map(|root| workspace_symbols_from_dir(root, query).unwrap_or_default())
-            .collect::<Vec<_>>();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let symbols = snapshot.workspace_symbols(query);
 
         Value::Array(
             symbols
@@ -507,12 +482,11 @@ impl LspServer {
     fn document_request<'a>(&'a self, message: &'a Value) -> Option<DocumentRequest<'a>> {
         let params = message.get("params")?;
         let uri = document_uri(params)?;
-        let text = self.documents.get(uri)?;
+        self.analysis.document_text(uri)?;
 
         Some(DocumentRequest {
             params,
             uri,
-            text,
             path: path_from_uri(uri),
         })
     }
