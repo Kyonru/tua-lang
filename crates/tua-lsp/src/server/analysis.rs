@@ -5,15 +5,19 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, check_parsed_source_with_diagnostics_config, complete_parsed_source,
     complete_tua_source, definition_tua_source, document_highlights_parsed_source,
-    document_symbols_parsed_source, global_function_name_for_definition,
-    global_references_to_definition_parsed_source, hover_parsed_source, infer_module_exports,
-    inlay_hints_parsed_source, load_config_from_dir, module_links_tua_source, parse_lua_source,
-    parse_tua_source, prepare_rename_parsed_source, references_to_definition_parsed_source,
-    rename_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
-    signature_help_parsed_source, signature_help_tua_source, workspace_symbols_from_dir,
-    Completion, Diagnostic, DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint,
-    ModuleExports, ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken,
-    SignatureHelp, SourcePosition, TypeEnvironment, WorkspaceSymbol,
+    document_symbols_parsed_source, global_function_definition_count,
+    global_function_name_for_definition, global_references_to_definition_parsed_source,
+    global_type_alias_name_for_definition,
+    global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
+    infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
+    load_config_from_dir, module_links_tua_source, parse_lua_source, parse_tua_source,
+    reference_kind_for_rename, references_to_definition_parsed_source,
+    rename_target_for_definition, semantic_tokens_parsed_source, semantic_tokens_tua_source,
+    signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
+    workspace_symbols_from_dir, Completion, Diagnostic, DiagnosticsConfig, DocumentHighlight,
+    DocumentSymbol, Hover, InlayHint, ModuleExports, ModuleLink, ParsedSource, Reference,
+    RenameEdit, RenameTarget, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit,
+    TypeEnvironment, WorkspaceSymbol,
 };
 
 use super::uri::path_from_uri;
@@ -288,6 +292,9 @@ impl AnalysisSnapshot {
         let global_name = self
             .parsed(&target.path)
             .and_then(|parsed| global_function_name_for_definition(parsed, &target));
+        let alias_name = self
+            .parsed(&target.path)
+            .and_then(|parsed| global_type_alias_name_for_definition(parsed, &target));
         let mut references = Vec::new();
 
         for file in self.files.values() {
@@ -314,6 +321,21 @@ impl AnalysisSnapshot {
 
                 references.append(&mut global_references);
             }
+
+            if let Some(alias_name) = alias_name.as_deref() {
+                let Ok(mut alias_references) =
+                    global_type_alias_references_to_definition_parsed_source(
+                        parsed,
+                        &target,
+                        alias_name,
+                        include_declaration,
+                    )
+                else {
+                    continue;
+                };
+
+                references.append(&mut alias_references);
+            }
         }
 
         references.sort_by_key(reference_key);
@@ -326,11 +348,23 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<RenameTarget> {
-        self.parsed(path).and_then(|parsed| {
-            prepare_rename_parsed_source(parsed, position)
-                .ok()
-                .flatten()
-        })
+        let target = self.definition(path, position)?;
+        let target_parsed = self.parsed(&target.path)?;
+        let mut rename_target = rename_target_for_definition(target_parsed, target)?;
+        let reference_kind = reference_kind_for_rename(rename_target.kind);
+        let current_reference =
+            self.references(path, position, true)
+                .into_iter()
+                .find(|reference| {
+                    reference.path == path
+                        && reference.kind == reference_kind
+                        && span_contains(reference.span, position)
+                })?;
+
+        rename_target.path = current_reference.path;
+        rename_target.span = current_reference.span;
+
+        Some(rename_target)
     }
 
     pub(super) fn rename(
@@ -339,11 +373,34 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         new_name: &str,
     ) -> Option<RenameEdit> {
-        self.parsed(path).and_then(|parsed| {
-            rename_parsed_source(parsed, position, new_name)
-                .ok()
-                .flatten()
-        })
+        if !is_valid_rename_identifier(new_name) {
+            return None;
+        }
+
+        let target = self.definition(path, position)?;
+        let target_parsed = self.parsed(&target.path)?;
+        let rename_target = rename_target_for_definition(target_parsed, target.clone())?;
+
+        if self.is_ambiguous_project_rename(&target, &rename_target) {
+            return None;
+        }
+
+        let reference_kind = reference_kind_for_rename(rename_target.kind);
+        let mut edits = self
+            .references(path, position, true)
+            .into_iter()
+            .filter(|reference| reference.kind == reference_kind)
+            .map(|reference| TextEdit {
+                path: reference.path,
+                span: reference.span,
+                new_text: new_name.to_owned(),
+            })
+            .collect::<Vec<_>>();
+
+        edits.sort_by_key(text_edit_key);
+        edits.dedup_by_key(|edit| text_edit_key(edit));
+
+        (!edits.is_empty()).then_some(RenameEdit { edits })
     }
 
     pub(super) fn inlay_hints(&self, path: &Path) -> Vec<InlayHint> {
@@ -388,6 +445,46 @@ impl AnalysisSnapshot {
                 .and_then(|document| self.files.get(&document.path))
         })
     }
+
+    fn is_ambiguous_project_rename(
+        &self,
+        target: &tua_core::Definition,
+        rename_target: &RenameTarget,
+    ) -> bool {
+        match rename_target.kind {
+            tua_core::RenameKind::Function => {
+                let Some(global_name) = self
+                    .parsed(&target.path)
+                    .and_then(|parsed| global_function_name_for_definition(parsed, target))
+                else {
+                    return false;
+                };
+
+                self.files
+                    .values()
+                    .filter_map(|file| file.parsed.as_ref().ok())
+                    .map(|parsed| global_function_definition_count(parsed, &global_name))
+                    .sum::<usize>()
+                    > 1
+            }
+            tua_core::RenameKind::TypeAlias => {
+                let Some(alias_name) = self
+                    .parsed(&target.path)
+                    .and_then(|parsed| global_type_alias_name_for_definition(parsed, target))
+                else {
+                    return false;
+                };
+
+                self.files
+                    .values()
+                    .filter_map(|file| file.parsed.as_ref().ok())
+                    .map(|parsed| type_alias_definition_count(parsed, &alias_name))
+                    .sum::<usize>()
+                    > 1
+            }
+            tua_core::RenameKind::Local | tua_core::RenameKind::Parameter => false,
+        }
+    }
 }
 
 fn reference_key(reference: &Reference) -> (PathBuf, usize, usize, usize, usize, u8) {
@@ -399,6 +496,24 @@ fn reference_key(reference: &Reference) -> (PathBuf, usize, usize, usize, usize,
         reference.span.end.column,
         reference_kind_key(reference.kind),
     )
+}
+
+fn text_edit_key(edit: &TextEdit) -> (PathBuf, usize, usize, usize, usize) {
+    (
+        edit.path.clone(),
+        edit.span.start.line,
+        edit.span.start.column,
+        edit.span.end.line,
+        edit.span.end.column,
+    )
+}
+
+fn span_contains(span: SourceSpan, position: SourcePosition) -> bool {
+    let start = (span.start.line, span.start.column);
+    let end = (span.end.line, span.end.column);
+    let position = (position.line, position.column);
+
+    start <= position && position < end
 }
 
 fn reference_kind_key(kind: tua_core::ReferenceKind) -> u8 {

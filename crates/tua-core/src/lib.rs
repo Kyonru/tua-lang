@@ -63,13 +63,17 @@ pub use parser::{
 };
 pub use project::project_description;
 pub use references::{
-    global_function_name_for_definition, global_references_to_definition_parsed_source,
-    references_parsed_source, references_to_definition_parsed_source, references_tua_source,
+    global_function_definition_count, global_function_name_for_definition,
+    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
+    global_type_alias_references_to_definition_parsed_source, references_parsed_source,
+    references_to_definition_parsed_source, references_tua_source, type_alias_definition_count,
     Reference, ReferenceKind,
 };
 pub use rename::{
-    prepare_rename_parsed_source, prepare_rename_tua_source, rename_parsed_source,
-    rename_tua_source, RenameEdit, RenameKind, RenameTarget, TextEdit,
+    is_valid_rename_identifier, prepare_rename_parsed_source, prepare_rename_tua_source,
+    reference_kind_for_rename, rename_kind_for_definition, rename_parsed_source,
+    rename_target_for_definition, rename_tua_source, RenameEdit, RenameKind, RenameTarget,
+    TextEdit,
 };
 pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,

@@ -445,7 +445,7 @@ impl LspServer {
         let snapshot = self.analysis.snapshot(&self.workspace_folders);
         let edit = snapshot.rename(&request.path, position, new_name)?;
 
-        Some(lsp_workspace_edit(request.uri, edit))
+        Some(lsp_workspace_edit(edit))
     }
 
     fn inlay_hint_response(&self, message: &Value) -> Value {

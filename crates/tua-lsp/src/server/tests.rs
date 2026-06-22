@@ -1977,6 +1977,103 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn rename_project_wide_exported_function_from_caller() {
+    let temp = TempProject::new("rename-exported-function");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+    let enemy = r#"local Player = require("player")
+
+local enemy = Player.makePlayer("Bea")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main);
+    temp.write("src/enemy.tua", enemy);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let enemy_uri = temp.uri_for("src/enemy.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&main_uri, main),
+        prepare_rename_request(2, &main_uri, main, "Player.makePlayer", "Player.".len()),
+        rename_request(
+            3,
+            &main_uri,
+            main,
+            "Player.makePlayer",
+            "Player.".len(),
+            "createPlayer",
+        ),
+    ]);
+    let prepared = response_with_id(&output, 2);
+
+    assert_eq!(range_text(main, &prepared["result"]["range"]), "makePlayer");
+    assert_eq!(prepared["result"]["placeholder"], "makePlayer");
+    assert_rename_edit_texts(
+        &output,
+        3,
+        &player_uri,
+        player,
+        ["makePlayer", "makePlayer", "makePlayer"],
+        "createPlayer",
+    );
+    assert_rename_edit_texts(&output, 3, &main_uri, main, ["makePlayer"], "createPlayer");
+    assert_rename_edit_texts(
+        &output,
+        3,
+        &enemy_uri,
+        enemy,
+        ["makePlayer"],
+        "createPlayer",
+    );
+}
+
+#[test]
+fn rename_project_wide_type_alias_references() {
+    let temp = TempProject::new("rename-type-alias");
+    let types = r#"type Player = { hp: number }
+
+local localPlayer: Player = { hp = 10 }
+"#;
+    let main = r#"local player: Player = { hp = 10 }
+"#;
+    let enemy = r#"local enemy: Player | nil = nil
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/types.tua", types);
+    temp.write("src/main.tua", main);
+    temp.write("src/enemy.tua", enemy);
+
+    let types_uri = temp.uri_for("src/types.tua");
+    let main_uri = temp.uri_for("src/main.tua");
+    let enemy_uri = temp.uri_for("src/enemy.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&types_uri, types),
+        rename_request(2, &types_uri, types, "type Player", "type ".len(), "Actor"),
+    ]);
+
+    assert_rename_edit_texts(&output, 2, &types_uri, types, ["Player", "Player"], "Actor");
+    assert_rename_edit_texts(&output, 2, &main_uri, main, ["Player"], "Actor");
+    assert_rename_edit_texts(&output, 2, &enemy_uri, enemy, ["Player"], "Actor");
+}
+
+#[test]
 fn rename_returns_null_for_unsupported_unknown_and_invalid_names() {
     let uri = "file:///tmp/quiet-rename.tua";
     let source = r#"type Player = { hp: number }
@@ -2003,6 +2100,32 @@ local unresolved = missing
     assert!(response_with_id(&output, 3)["result"].is_null());
     assert!(response_with_id(&output, 4)["result"].is_null());
     assert!(response_with_id(&output, 5)["result"].is_null());
+}
+
+#[test]
+fn rename_returns_null_for_ambiguous_project_globals() {
+    let temp = TempProject::new("rename-ambiguous-globals");
+    let first = r#"function greet(name: string): string
+  return name
+end
+"#;
+    let second = r#"function greet()
+  return "shadow"
+end
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/first.tua", first);
+    temp.write("src/second.tua", second);
+
+    let first_uri = temp.uri_for("src/first.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&first_uri, first),
+        rename_request(2, &first_uri, first, "greet(name", 0, "salute"),
+    ]);
+
+    assert!(response_with_id(&output, 2)["result"].is_null());
 }
 
 #[test]

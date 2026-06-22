@@ -4,6 +4,7 @@ use full_moon::ast;
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
+use crate::source_text::{byte_for_column, line_at};
 use crate::{
     definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
     ParsedSource, SourcePosition, SourceSpan,
@@ -113,6 +114,47 @@ pub fn global_function_name_for_definition(
     })
 }
 
+pub fn global_type_alias_name_for_definition(
+    parsed: &ParsedSource,
+    target: &Definition,
+) -> Option<String> {
+    if target.path != parsed.path || target.kind != DefinitionKind::TypeAlias {
+        return None;
+    }
+
+    parsed.type_aliases.iter().find_map(|alias| {
+        let span = alias.name_span.or(alias.span)?;
+
+        (span == target.span).then(|| alias.name.clone())
+    })
+}
+
+pub fn global_function_definition_count(parsed: &ParsedSource, name: &str) -> usize {
+    parsed
+        .ast
+        .nodes()
+        .stmts()
+        .filter_map(|stmt| {
+            let ast::Stmt::FunctionDeclaration(function) = stmt else {
+                return None;
+            };
+
+            Some(function.name().to_string().trim().to_owned())
+        })
+        .filter(|function_name| {
+            function_name == name && !function_name.contains('.') && !function_name.contains(':')
+        })
+        .count()
+}
+
+pub fn type_alias_definition_count(parsed: &ParsedSource, name: &str) -> usize {
+    parsed
+        .type_aliases
+        .iter()
+        .filter(|alias| alias.name == name)
+        .count()
+}
+
 pub fn global_references_to_definition_parsed_source(
     parsed: &ParsedSource,
     target: &Definition,
@@ -125,6 +167,41 @@ pub fn global_references_to_definition_parsed_source(
         .filter(|token| is_identifier(token))
         .filter(|token| token_text(token) == name)
         .filter_map(|token| global_reference_for_token(parsed, token, target).transpose())
+        .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
+
+    if !include_declaration {
+        references.retain(|reference| reference.span != target.span);
+    }
+
+    references.sort_by_key(|reference| position_key(reference.span.start));
+    references.dedup_by_key(|reference| {
+        (
+            reference.path.clone(),
+            reference.span.start.line,
+            reference.span.start.column,
+            reference.span.end.line,
+            reference.span.end.column,
+            reference.kind,
+        )
+    });
+
+    Ok(references)
+}
+
+pub fn global_type_alias_references_to_definition_parsed_source(
+    parsed: &ParsedSource,
+    target: &Definition,
+    name: &str,
+    include_declaration: bool,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    let mut references = parsed
+        .ast
+        .tokens()
+        .filter(|token| is_identifier(token))
+        .filter(|token| token_text(token) == name)
+        .filter_map(|token| {
+            global_type_alias_reference_for_token(parsed, token, target).transpose()
+        })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
     if !include_declaration {
@@ -189,6 +266,37 @@ fn global_reference_for_token(
     }))
 }
 
+fn global_type_alias_reference_for_token(
+    parsed: &ParsedSource,
+    token: &TokenReference,
+    target: &Definition,
+) -> Result<Option<Reference>, Vec<Diagnostic>> {
+    let Some(span) = node_span(token) else {
+        return Ok(None);
+    };
+    let definition = definition_parsed_source(parsed, span.start)?;
+
+    if definition.as_ref().is_some_and(|definition| {
+        definition.kind == DefinitionKind::TypeAlias && same_definition(definition, target)
+    }) {
+        return Ok(Some(Reference {
+            path: parsed.path.clone(),
+            span,
+            kind: ReferenceKind::TypeAlias,
+        }));
+    }
+
+    if definition.is_some() || !is_type_reference(parsed, span.start) {
+        return Ok(None);
+    }
+
+    Ok(Some(Reference {
+        path: parsed.path.clone(),
+        span,
+        kind: ReferenceKind::TypeAlias,
+    }))
+}
+
 fn reference_from_definition(definition: &Definition) -> Reference {
     Reference {
         path: definition.path.clone(),
@@ -218,6 +326,26 @@ fn is_identifier(token: &TokenReference) -> bool {
 
 fn token_text(token: &TokenReference) -> String {
     token.to_string().trim().to_owned()
+}
+
+fn is_type_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {
+    let Some(line) = line_at(&parsed.source, position.line) else {
+        return false;
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let prefix = &line[..cursor];
+    let Some(marker_index) = prefix.rfind([':', '|', '=']) else {
+        return false;
+    };
+    let marker = prefix.as_bytes()[marker_index];
+    let before_marker = &prefix[..marker_index];
+
+    match marker {
+        b':' => true,
+        b'|' => before_marker.contains(':') || before_marker.contains("type "),
+        b'=' => before_marker.contains("type "),
+        _ => false,
+    }
 }
 
 fn node_span(node: &impl Node) -> Option<SourceSpan> {

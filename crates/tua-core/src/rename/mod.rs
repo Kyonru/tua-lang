@@ -51,19 +51,8 @@ pub fn prepare_rename_parsed_source(
     let Some(definition) = definition_parsed_source(parsed, position)? else {
         return Ok(None);
     };
-    let Some(kind) = rename_kind(definition.kind) else {
-        return Ok(None);
-    };
-    let Some(placeholder) = text_for_span(&parsed.source, definition.span) else {
-        return Ok(None);
-    };
 
-    Ok(Some(RenameTarget {
-        path: definition.path,
-        span: definition.span,
-        placeholder: placeholder.to_owned(),
-        kind,
-    }))
+    Ok(rename_target_for_definition(parsed, definition))
 }
 
 pub fn rename_tua_source(
@@ -91,7 +80,7 @@ pub fn rename_parsed_source(
     let Some(target) = prepare_rename_parsed_source(parsed, position)? else {
         return Ok(None);
     };
-    let reference_kind = reference_kind(target.kind);
+    let reference_kind = reference_kind_for_rename(target.kind);
     let edits = references_parsed_source(parsed, position, true)?
         .into_iter()
         .filter(|reference| reference.kind == reference_kind)
@@ -105,7 +94,22 @@ pub fn rename_parsed_source(
     Ok((!edits.is_empty()).then_some(RenameEdit { edits }))
 }
 
-fn rename_kind(kind: DefinitionKind) -> Option<RenameKind> {
+pub fn rename_target_for_definition(
+    parsed: &ParsedSource,
+    definition: crate::Definition,
+) -> Option<RenameTarget> {
+    let kind = rename_kind_for_definition(definition.kind)?;
+    let placeholder = text_for_span(&parsed.source, definition.span)?;
+
+    Some(RenameTarget {
+        path: definition.path,
+        span: definition.span,
+        placeholder: placeholder.to_owned(),
+        kind,
+    })
+}
+
+pub fn rename_kind_for_definition(kind: DefinitionKind) -> Option<RenameKind> {
     match kind {
         DefinitionKind::Module => None,
         DefinitionKind::TypeAlias => Some(RenameKind::TypeAlias),
@@ -116,7 +120,7 @@ fn rename_kind(kind: DefinitionKind) -> Option<RenameKind> {
     }
 }
 
-fn reference_kind(kind: RenameKind) -> ReferenceKind {
+pub fn reference_kind_for_rename(kind: RenameKind) -> ReferenceKind {
     match kind {
         RenameKind::TypeAlias => ReferenceKind::TypeAlias,
         RenameKind::Local => ReferenceKind::Local,
@@ -125,7 +129,7 @@ fn reference_kind(kind: RenameKind) -> ReferenceKind {
     }
 }
 
-fn is_valid_rename_identifier(name: &str) -> bool {
+pub fn is_valid_rename_identifier(name: &str) -> bool {
     let mut chars = name.chars();
     let Some(first) = chars.next() else {
         return false;

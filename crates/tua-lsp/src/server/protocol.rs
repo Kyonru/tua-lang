@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde_json::{json, Value};
 use tua_core::{
     Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentHighlight,
@@ -306,11 +308,18 @@ pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {
     })
 }
 
-pub(super) fn lsp_workspace_edit(uri: &str, edit: RenameEdit) -> Value {
+pub(super) fn lsp_workspace_edit(edit: RenameEdit) -> Value {
+    let mut changes = BTreeMap::new();
+
+    for edit in edit.edits {
+        changes
+            .entry(uri_from_path(&edit.path))
+            .or_insert_with(Vec::new)
+            .push(lsp_text_edit(edit));
+    }
+
     json!({
-        "changes": {
-            uri: edit.edits.into_iter().map(lsp_text_edit).collect::<Vec<_>>()
-        }
+        "changes": changes
     })
 }
 
