@@ -165,6 +165,35 @@ fn hovers_known_function_signature() {
 }
 
 #[test]
+fn hovers_annotated_function_docs_and_declaration_context() {
+    let source = r#"type Player = { hp: number }
+
+--- Applies damage.
+---@param target Player affected player
+---@return Player updated player
+local function damage(target)
+  return target
+end
+
+damage({ hp = 10 })
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "damage({"))
+        .expect("hover should succeed")
+        .expect("annotated function should hover");
+
+    assert_eq!(hover.contents, "function damage(target: Player): Player");
+    assert_eq!(
+        hover.documentation.as_deref(),
+        Some("Applies damage.\naffected player\nupdated player")
+    );
+    assert!(hover.context.contains(&"kind: function".to_owned()));
+    assert!(hover
+        .context
+        .iter()
+        .any(|item| item.contains("declared: src/main.tua:")));
+}
+
+#[test]
 fn hovers_inferred_function_return_type_on_definition_and_call() {
     let source = r#"function test(a: boolean)
   return ""
@@ -496,10 +525,53 @@ return {
         .expect("hover should not fail")
         .expect("annotated Lua module function should hover");
 
+    assert_eq!(hover.contents, "function Audio.play(string): boolean");
     assert_eq!(
-        hover.contents,
-        "function Audio.play(string): boolean\n\naudio source\nsuccess flag"
+        hover.documentation.as_deref(),
+        Some("audio source\nsuccess flag")
     );
+    assert!(hover.context.iter().any(|item| item.contains("audio.lua")));
+    assert!(hover.context.contains(&"kind: function".to_owned()));
+}
+
+#[test]
+fn hovers_module_export_plain_doc_comment_and_origin_context() {
+    let temp = TempProject::new("module-export-doc-hover");
+    let source = r#"local Audio = require("audio")
+local ok = Audio.play("theme")
+"#;
+    let audio = r#"--- Plays a source.
+---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/audio.lua", audio);
+
+    let hover = hover_tua_source(
+        temp.path.join("src/main.tua"),
+        source,
+        position_at(source, "play("),
+    )
+    .expect("hover should not fail")
+    .expect("module export should hover");
+
+    assert_eq!(hover.contents, "function Audio.play(string): boolean");
+    assert_eq!(
+        hover.documentation.as_deref(),
+        Some("Plays a source.\naudio source\nsuccess flag")
+    );
+    assert!(hover.context.contains(&"kind: function".to_owned()));
+    assert!(hover.context.iter().any(|item| item.contains("module:")));
+    assert!(hover.context.iter().any(|item| item.contains("declared:")));
 }
 
 #[test]

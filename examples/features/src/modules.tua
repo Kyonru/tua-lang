@@ -5,7 +5,7 @@ local Legacy = require("legacy")
 local player = Functions.makePlayer("Lua interop")
 Functions.damage(player, 7)
 
-local clamped = Legacy.clamp(Compound.stats.score, 0, 100)
+local clamped: number = Legacy.clamp(Compound.stats.score, 0, 100)
 local message = Legacy.describe("score", clamped)
 
 local built_in = tostring(1)

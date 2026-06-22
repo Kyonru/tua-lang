@@ -837,6 +837,32 @@ test(false)
 }
 
 #[test]
+fn hover_renders_docs_and_declaration_context_as_markdown() {
+    let uri = "file:///tmp/documented-hover.tua";
+    let source = r#"type Player = { hp: number }
+
+--- Applies damage.
+---@param target Player affected player
+---@return Player updated player
+local function damage(target)
+  return target
+end
+
+damage({ hp = 10 })
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "damage({"),
+    ]);
+    let contents = hover_contents(&output, 2);
+
+    assert!(contents.starts_with("```tua\nfunction damage(target: Player): Player\n```"));
+    assert!(contents.contains("Applies damage.\naffected player\nupdated player"));
+    assert!(contents.contains("- kind: function"));
+    assert!(contents.contains("- declared: /tmp/documented-hover.tua:"));
+}
+
+#[test]
 fn hover_unknown_symbol_returns_null_result() {
     let uri = "file:///tmp/unknown-hover.tua";
     let source = "local result = missing\n";
@@ -1288,6 +1314,42 @@ return {
     assert_hover_contains(&output, 4, "function Player.makePlayer(string): Player");
     assert_hover_contains(&output, 5, "(field) Player.defaultHp: number");
     assert_hover_contains(&output, 6, "function Legacy.describe(any, any): any");
+}
+
+#[test]
+fn hover_renders_module_export_docs_and_module_path() {
+    let temp = TempProject::new("documented-module-hover");
+    let source = r#"local Audio = require("audio")
+local ok = Audio.play("theme")
+"#;
+    let audio = r#"--- Plays a source.
+---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/audio.lua", audio);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "play("),
+    ]);
+    let contents = hover_contents(&output, 2);
+
+    assert!(contents.contains("```tua\nfunction Audio.play(string): boolean\n```"));
+    assert!(contents.contains("Plays a source.\naudio source\nsuccess flag"));
+    assert!(contents.contains("- kind: function"));
+    assert!(contents.contains("- module:"));
+    assert!(contents.contains("audio.lua"));
 }
 
 #[test]
@@ -2393,15 +2455,20 @@ fn last_published_diagnostics(output: &[Value], uri: &str) -> Vec<Value> {
 }
 
 fn assert_hover_contains(output: &[Value], id: u64, expected: &str) {
-    let response = response_with_id(output, id);
-    let contents = response["result"]["contents"]["value"]
-        .as_str()
-        .expect("hover contents should be a string");
+    let contents = hover_contents(output, id);
 
     assert!(
         contents.contains(expected),
         "expected hover contents to contain {expected:?}, got {contents:?}"
     );
+}
+
+fn hover_contents(output: &[Value], id: u64) -> &str {
+    let response = response_with_id(output, id);
+
+    response["result"]["contents"]["value"]
+        .as_str()
+        .expect("hover contents should be a string")
 }
 
 fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected: [&str; N]) {

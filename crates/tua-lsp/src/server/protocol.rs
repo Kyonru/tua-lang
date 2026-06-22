@@ -71,10 +71,26 @@ fn lsp_severity(severity: DiagnosticSeverity) -> u8 {
 }
 
 pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
+    let mut markdown = format!("```tua\n{}\n```", hover.contents);
+
+    if let Some(documentation) = &hover.documentation {
+        markdown.push_str("\n\n");
+        markdown.push_str(documentation);
+    }
+
+    if !hover.context.is_empty() {
+        markdown.push_str("\n\n---\n");
+
+        for item in &hover.context {
+            markdown.push_str("\n- ");
+            markdown.push_str(item);
+        }
+    }
+
     let mut result = json!({
         "contents": {
             "kind": "markdown",
-            "value": format!("```tua\n{}\n```", hover.contents)
+            "value": markdown
         }
     });
 
