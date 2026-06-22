@@ -32,6 +32,7 @@ depth: a shared project analysis snapshot that every request can query instead
 of re-reading and recomputing required modules independently.
 
 The roadmap tracks this under the LuaHelper and rust-analyzer parity phases.
+The current gap breakdown lives in the [LSP parity matrix](lsp-parity.md).
 
 ## VS Code
 

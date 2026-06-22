@@ -71,6 +71,8 @@ player.hp = player.hp - 10
 - [Configuration](configuration.md) - `tua.toml` options and diagnostics.
 - [CLI](cli.md) - command reference.
 - [Language Server](lsp.md) - editor features and capability notes.
+- [LSP Parity Matrix](lsp-parity.md) - Tua, LuaHelper, and rust-analyzer gap
+  tracking.
 - [Lua Interop](lua-interop.md) - requiring Lua from Tua and Tua from Lua.
 - [Examples](examples.md) - bundled projects and verification commands.
 - [Roadmap](roadmap.md) - implementation status and planned parity work.
