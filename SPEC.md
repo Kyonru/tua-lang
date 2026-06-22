@@ -38,15 +38,26 @@ The default project layout is:
 └── tua.toml
 ```
 
-By default, `tua build` mirrors Tua and Lua source files into `build/`:
+By default, `tua build` mirrors the configured source tree into `build/`:
 
 - `src/**/*.tua` is checked, lowered, erased, and emitted as matching
   `build/**/*.lua`;
-- `src/**/*.lua` is copied unchanged to the matching `build/**/*.lua` path.
+- every non-`.tua` file is copied unchanged to the matching output path.
 
-This makes `build/` a runnable Lua/LÖVE distribution directory. Plain Lua files
-remain interoperability files, not typed source files, unless a later feature
-adds explicit Lua annotation checking.
+This makes `build/` a runnable Lua/LÖVE distribution directory containing code,
+images, audio, fonts, maps, and other project files. Plain Lua files remain
+interoperability files, not typed source files, unless a later feature adds
+explicit Lua annotation checking.
+
+If `source` and `out` point to the same directory, `tua build` runs in-place:
+only `.tua` files are processed, non-`.tua` files are left alone, and emitted Lua
+is written next to the source file. In-place builds are allowed but should be
+used carefully because `main.tua` emits `main.lua`.
+
+If a `.tua` file and a `.lua` file would both write the same output path, the
+compiler emits a warning. In a separate output directory, generated Lua wins and
+the colliding `.lua` asset copy is skipped. In an in-place build, the warning
+reports that the sibling `.lua` file will be overwritten by generated Lua.
 
 Default `tua.toml`:
 
@@ -275,14 +286,14 @@ value.
 The compiler pipeline is:
 
 1. Read project config.
-2. Discover `.tua` and `.lua` source files under the configured source directory.
-3. Parse each file.
-4. Build per-file and project-wide type information.
+2. Discover project files under the configured source directory.
+3. Parse each `.tua` file.
+4. Build per-file and project-wide type information for parsed `.tua` files.
 5. Type-check annotated code.
 6. Lower tua-only syntax to Lua syntax.
 7. Erase type aliases and type annotations.
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
-9. Copy plain `.lua` files unchanged into the configured output directory.
+9. Copy non-`.tua` files unchanged into the configured output directory.
 10. Optionally emit source maps or line maps when `emit_maps = true`.
 
 Emitted Lua should be readable and line-stable where practical. Readability is
@@ -340,7 +351,10 @@ Checks and emits Lua output.
 Expected behavior:
 
 - mirrors `src/**/*.tua` to `build/**/*.lua`;
-- copies `src/**/*.lua` unchanged to `build/**/*.lua`;
+- copies non-`.tua` files unchanged to matching output paths;
+- supports in-place transpilation when `source` and `out` are the same
+  directory;
+- warns when a `.tua` output collides with an existing `.lua` file;
 - erases type-only syntax;
 - lowers supported sugar;
 - preserves `require`;

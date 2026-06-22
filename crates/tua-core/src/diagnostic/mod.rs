@@ -42,6 +42,7 @@ impl DiagnosticCode {
     pub const TYPE_IMPOSSIBLE_COMPARISON: Self = Self(1005);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
+    pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);

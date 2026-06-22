@@ -346,16 +346,22 @@ return Menu
 }
 
 #[test]
-fn build_copies_lua_files_without_compiling_them() {
-    let temp = TempDir::new("build-copies-lua");
+fn build_copies_non_tua_files_without_compiling_them() {
+    let temp = TempDir::new("build-copies-assets");
 
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
     fs::create_dir_all(temp.path().join("src/lib")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create assets");
     fs::write(
         temp.path().join("src/lib/legacy.lua"),
         "local value = 1\nvalue = value + 1\nreturn value\n",
     )
     .expect("failed to write lua source");
+    fs::write(
+        temp.path().join("src/assets/player.png"),
+        [0x89, b'P', b'N', b'G'],
+    )
+    .expect("failed to write asset");
 
     let output = tua()
         .arg("build")
@@ -368,9 +374,123 @@ fn build_copies_lua_files_without_compiling_them() {
     let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
     let copied = fs::read_to_string(temp.path().join("build/lib/legacy.lua"))
         .expect("failed to read copied lua output");
+    let copied_asset =
+        fs::read(temp.path().join("build/assets/player.png")).expect("failed to read copied asset");
 
-    assert!(stdout.contains("built 1 file(s)"));
+    assert!(stdout.contains("built 2 file(s)"));
     assert_eq!(copied, "local value = 1\nvalue = value + 1\nreturn value\n");
+    assert_eq!(copied_asset, [0x89, b'P', b'N', b'G']);
+}
+
+#[test]
+fn build_excludes_output_directory_when_source_is_project_root() {
+    let temp = TempDir::new("build-root-excludes-dist");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "."
+out = "dist"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(temp.path().join("main.tua"), "return 1\n").expect("failed to write source");
+    fs::create_dir_all(temp.path().join("dist")).expect("failed to create previous dist");
+    fs::write(temp.path().join("dist/old.lua"), "return 'old'\n")
+        .expect("failed to write previous dist file");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+    assert!(temp.path().join("dist/main.lua").is_file());
+    assert!(!temp.path().join("dist/dist/old.lua").exists());
+}
+
+#[test]
+fn build_warns_and_keeps_generated_lua_when_lua_asset_collides_with_tua_output() {
+    let temp = TempDir::new("build-collision");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/player.tua"),
+        "local hp: number = 1\nreturn hp\n",
+    )
+    .expect("failed to write tua source");
+    fs::write(temp.path().join("src/player.lua"), "return 'handwritten'\n")
+        .expect("failed to write lua source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/player.lua")).expect("failed to read output");
+
+    assert!(stdout.contains("warning TL2003"));
+    assert!(stdout.contains("skipping asset copy"));
+    assert!(stdout.contains("built 1 file(s)"));
+    assert!(emitted.contains("local hp = 1"));
+    assert!(!emitted.contains("handwritten"));
+}
+
+#[test]
+fn build_can_transpile_tua_in_place_without_copying_assets() {
+    let temp = TempDir::new("build-in-place");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "game"
+out = "game"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("game/assets")).expect("failed to create source");
+    fs::write(
+        temp.path().join("game/main.tua"),
+        "local hp: number = 2\nhp += 3\nreturn hp\n",
+    )
+    .expect("failed to write tua source");
+    fs::write(temp.path().join("game/main.lua"), "return 'old'\n")
+        .expect("failed to write colliding lua source");
+    fs::write(temp.path().join("game/assets/player.png"), [1, 2, 3, 4])
+        .expect("failed to write asset");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("game/main.lua")).expect("failed to read output");
+    let asset = fs::read(temp.path().join("game/assets/player.png")).expect("asset should remain");
+
+    assert!(stdout.contains("warning TL2003"));
+    assert!(stdout.contains("will be overwritten"));
+    assert!(stdout.contains("built 1 file(s)"));
+    assert!(emitted.contains("local hp = 2"));
+    assert!(emitted.contains("hp = hp + 3"));
+    assert_eq!(asset, [1, 2, 3, 4]);
 }
 
 #[test]
@@ -489,7 +609,7 @@ return hp
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
     assert!(stderr.is_empty(), "unexpected watch stderr:\n{stderr}");
-    assert!(stdout.contains("watching src/**/*.{tua,lua}"));
+    assert!(stdout.contains("watching src/**/*"));
     assert!(stdout.contains("initial build: built 1 file(s)"));
     assert_eq!(stdout.matches("changed 1 file(s)").count(), 1);
     assert_eq!(stdout.matches("rebuild: rebuilt 1 file(s)").count(), 1);

@@ -1,14 +1,16 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{
-    discover_build_files, io_diagnostic, read_source_file, SourceFile, SourceKind,
+    discover_build_files, io_diagnostic, paths_same_location, read_source_file, SourceFile,
+    SourceKind,
 };
 use tua_core::{
-    check_tua_source_with_diagnostics_config, emit_tua_source, Diagnostic, DiagnosticCategory,
-    LoadedConfig,
+    check_tua_source_with_diagnostics_config, emit_tua_source, format_diagnostics_for_cli,
+    Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig,
 };
 
 #[derive(Debug, Default)]
@@ -24,7 +26,7 @@ enum SourceUnit {
         source: String,
         emit_candidate: bool,
     },
-    Lua {
+    Asset {
         source_path: PathBuf,
         output_path: PathBuf,
     },
@@ -37,12 +39,16 @@ pub(crate) fn run_build(
 ) -> Result<String, CliError> {
     let outcome = build_project(cwd, loaded, emit_on_error)?;
 
-    if outcome.diagnostics.is_empty() {
-        Ok(format!("built {} file(s)", outcome.emitted))
-    } else {
+    if has_errors(&outcome.diagnostics) {
         Err(CliError::from_diagnostics(
             "project build failed",
             sorted_diagnostics(outcome.diagnostics),
+        ))
+    } else {
+        Ok(format_success(
+            "built",
+            outcome.emitted,
+            outcome.diagnostics,
         ))
     }
 }
@@ -54,10 +60,14 @@ pub(crate) fn build_project(
 ) -> Result<BuildOutcome, CliError> {
     let cwd = cwd.as_ref();
     let source_dir = cwd.join(&loaded.config.source);
-    let source_files =
-        discover_build_files(&source_dir, &loaded.config.extension).map_err(|error| {
-            CliError::from_diagnostics("failed to discover source files", vec![error])
-        })?;
+    let out_dir = cwd.join(&loaded.config.out);
+    let in_place = paths_same_location(&source_dir, &out_dir);
+    let source_files = discover_build_files(
+        &source_dir,
+        &loaded.config.extension,
+        (!in_place).then_some(&out_dir),
+    )
+    .map_err(|error| CliError::from_diagnostics("failed to discover source files", vec![error]))?;
 
     Ok(build_project_files(
         cwd,
@@ -75,17 +85,30 @@ pub(crate) fn build_changed_files(
     let cwd = cwd.as_ref();
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
+    let in_place = paths_same_location(&source_dir, &out_dir);
     let diagnostics_config = loaded.config.diagnostics;
     let mut outcome = BuildOutcome::default();
 
     for source_path in source_files {
-        let Some(source_kind) = SourceKind::for_build_path(&source_path, &loaded.config.extension)
-        else {
-            continue;
-        };
+        let source_kind = SourceKind::for_path(&source_path, &loaded.config.extension);
+        let output_path = output_path_for(&source_dir, &out_dir, &source_path, source_kind);
 
-        let output_path = output_path_for(&source_dir, &out_dir, &source_path);
-        if source_kind == SourceKind::Lua {
+        if source_kind == SourceKind::Asset {
+            if in_place {
+                continue;
+            }
+
+            if let Some(tua_source_path) =
+                colliding_tua_source_for_asset(&source_path, &loaded.config.extension)
+            {
+                outcome.diagnostics.push(output_collision_diagnostic(
+                    &source_path,
+                    &tua_source_path,
+                    in_place,
+                ));
+                continue;
+            }
+
             match copy_output(&source_path, &output_path) {
                 Ok(()) => outcome.emitted += 1,
                 Err(diagnostic) => outcome.diagnostics.push(diagnostic),
@@ -106,9 +129,15 @@ pub(crate) fn build_changed_files(
             source.clone(),
             &diagnostics_config,
         ) {
+            let has_source_errors = has_errors(&source_diagnostics);
             outcome.diagnostics.append(&mut source_diagnostics);
-            continue;
+
+            if has_source_errors {
+                continue;
+            }
         }
+
+        push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
 
         let output = match emit_tua_source(&source_path, source) {
             Ok(output) => output,
@@ -135,16 +164,31 @@ fn build_project_files(
 ) -> BuildOutcome {
     let source_dir = cwd.join(&loaded.config.source);
     let out_dir = cwd.join(&loaded.config.out);
+    let in_place = paths_same_location(&source_dir, &out_dir);
     let diagnostics_config = loaded.config.diagnostics;
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
+    let tua_outputs = tua_outputs_by_path(&source_dir, &out_dir, &source_files);
 
     for source_file in source_files {
         let source_path = source_file.path;
-        let output_path = output_path_for(&source_dir, &out_dir, &source_path);
+        let output_path = output_path_for(&source_dir, &out_dir, &source_path, source_file.kind);
 
-        if source_file.kind == SourceKind::Lua {
-            units.push(SourceUnit::Lua {
+        if source_file.kind == SourceKind::Asset {
+            if let Some(tua_source_path) = tua_outputs.get(&output_path) {
+                diagnostics.push(output_collision_diagnostic(
+                    &source_path,
+                    tua_source_path,
+                    in_place,
+                ));
+                continue;
+            }
+
+            if in_place {
+                continue;
+            }
+
+            units.push(SourceUnit::Asset {
                 source_path,
                 output_path,
             });
@@ -183,10 +227,11 @@ fn build_project_files(
             source.clone(),
             &diagnostics_config,
         ) {
-            if source_diagnostics
+            let has_non_emittable_error = source_diagnostics
                 .iter()
-                .any(|diagnostic| !can_emit_after_diagnostic(diagnostic))
-            {
+                .any(|diagnostic| !can_emit_after_diagnostic(diagnostic));
+
+            if has_non_emittable_error {
                 *emit_candidate = false;
             }
 
@@ -194,7 +239,7 @@ fn build_project_files(
         }
     }
 
-    if !diagnostics.is_empty() && !emit_on_error {
+    if has_errors(&diagnostics) && !emit_on_error {
         return BuildOutcome {
             emitted: 0,
             diagnostics,
@@ -228,7 +273,7 @@ fn build_project_files(
                     Err(diagnostic) => diagnostics.push(diagnostic),
                 }
             }
-            SourceUnit::Lua {
+            SourceUnit::Asset {
                 source_path,
                 output_path,
             } => match copy_output(&source_path, &output_path) {
@@ -244,19 +289,36 @@ fn build_project_files(
     }
 }
 
-pub(crate) fn output_path_for(source_dir: &Path, out_dir: &Path, source_path: &Path) -> PathBuf {
+pub(crate) fn output_path_for(
+    source_dir: &Path,
+    out_dir: &Path,
+    source_path: &Path,
+    source_kind: SourceKind,
+) -> PathBuf {
     let relative_path = source_path
         .strip_prefix(source_dir)
         .expect("discovered source file should be under source directory");
 
-    out_dir.join(relative_path).with_extension("lua")
+    let output_path = out_dir.join(relative_path);
+
+    match source_kind {
+        SourceKind::Tua => output_path.with_extension("lua"),
+        SourceKind::Asset => output_path,
+    }
 }
 
 fn can_emit_after_diagnostic(diagnostic: &Diagnostic) -> bool {
-    !matches!(
-        diagnostic.code.map(|code| code.category()),
-        Some(DiagnosticCategory::Syntax | DiagnosticCategory::LoweringEmission)
-    )
+    diagnostic.severity != DiagnosticSeverity::Error
+        || !matches!(
+            diagnostic.code.map(|code| code.category()),
+            Some(DiagnosticCategory::Syntax | DiagnosticCategory::LoweringEmission)
+        )
+}
+
+pub(crate) fn has_errors(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
 }
 
 fn write_output(output_path: &Path, output: String) -> Result<(), Diagnostic> {
@@ -275,4 +337,81 @@ fn copy_output(source_path: &Path, output_path: &Path) -> Result<(), Diagnostic>
     fs::copy(source_path, output_path)
         .map(|_| ())
         .map_err(|source| io_diagnostic(output_path, source))
+}
+
+fn tua_outputs_by_path(
+    source_dir: &Path,
+    out_dir: &Path,
+    source_files: &[SourceFile],
+) -> BTreeMap<PathBuf, PathBuf> {
+    source_files
+        .iter()
+        .filter(|source_file| source_file.kind == SourceKind::Tua)
+        .map(|source_file| {
+            (
+                output_path_for(source_dir, out_dir, &source_file.path, source_file.kind),
+                source_file.path.clone(),
+            )
+        })
+        .collect()
+}
+
+fn colliding_tua_source_for_asset(asset_path: &Path, extension: &str) -> Option<PathBuf> {
+    let tua_path = asset_path.with_extension(extension);
+
+    (tua_path != asset_path && tua_path.exists()).then_some(tua_path)
+}
+
+fn push_sibling_collision_warning(
+    diagnostics: &mut Vec<Diagnostic>,
+    tua_source_path: &Path,
+    in_place: bool,
+) {
+    let lua_path = tua_source_path.with_extension("lua");
+
+    if lua_path != tua_source_path && lua_path.exists() {
+        diagnostics.push(output_collision_diagnostic(
+            &lua_path,
+            tua_source_path,
+            in_place,
+        ));
+    }
+}
+
+fn output_collision_diagnostic(
+    lua_source_path: &Path,
+    tua_source_path: &Path,
+    in_place: bool,
+) -> Diagnostic {
+    let message = if in_place {
+        format!(
+            "`{}` will be overwritten by generated Lua from `{}`",
+            display_path(lua_source_path),
+            display_path(tua_source_path)
+        )
+    } else {
+        format!(
+            "`{}` would overwrite generated Lua from `{}`; skipping asset copy",
+            display_path(lua_source_path),
+            display_path(tua_source_path)
+        )
+    };
+
+    Diagnostic::new(lua_source_path, 1, 1, DiagnosticSeverity::Warning, message)
+        .with_code(DiagnosticCode::EMIT_OUTPUT_COLLISION)
+}
+
+fn format_success(verb: &str, emitted: usize, diagnostics: Vec<Diagnostic>) -> String {
+    if diagnostics.is_empty() {
+        return format!("{verb} {emitted} file(s)");
+    }
+
+    format!(
+        "{}\n{verb} {emitted} file(s)",
+        format_diagnostics_for_cli(&sorted_diagnostics(diagnostics))
+    )
+}
+
+fn display_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }

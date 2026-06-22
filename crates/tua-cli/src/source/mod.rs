@@ -7,7 +7,7 @@ use tua_core::{Diagnostic, DiagnosticCode};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SourceKind {
     Tua,
-    Lua,
+    Asset,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,6 +24,7 @@ pub(crate) fn discover_source_files(
 
     discover_files_into(
         source_dir,
+        None,
         &|path| has_extension(path, extension).then(|| path.to_path_buf()),
         &mut files,
     )?;
@@ -35,15 +36,17 @@ pub(crate) fn discover_source_files(
 pub(crate) fn discover_build_files(
     source_dir: &Path,
     extension: &str,
+    excluded_dir: Option<&Path>,
 ) -> Result<Vec<SourceFile>, Diagnostic> {
     let mut files = Vec::new();
 
     discover_files_into(
         source_dir,
+        excluded_dir,
         &|path| {
-            SourceKind::for_build_path(path, extension).map(|kind| SourceFile {
+            Some(SourceFile {
                 path: path.to_path_buf(),
-                kind,
+                kind: SourceKind::for_path(path, extension),
             })
         },
         &mut files,
@@ -59,6 +62,7 @@ pub(crate) fn read_source_file(path: &Path) -> Result<String, Diagnostic> {
 
 fn discover_files_into<T>(
     dir: &Path,
+    excluded_dir: Option<&Path>,
     classify_file: &impl Fn(&Path) -> Option<T>,
     files: &mut Vec<T>,
 ) -> Result<(), Diagnostic> {
@@ -72,7 +76,11 @@ fn discover_files_into<T>(
             .map_err(|source| io_diagnostic(&path, source))?;
 
         if file_type.is_dir() {
-            discover_files_into(&path, classify_file, files)?;
+            if excluded_dir.is_some_and(|excluded| paths_same_location(&path, excluded)) {
+                continue;
+            }
+
+            discover_files_into(&path, excluded_dir, classify_file, files)?;
         } else if file_type.is_file() {
             if let Some(file) = classify_file(&path) {
                 files.push(file);
@@ -84,15 +92,36 @@ fn discover_files_into<T>(
 }
 
 impl SourceKind {
-    pub(crate) fn for_build_path(path: &Path, extension: &str) -> Option<Self> {
+    pub(crate) fn for_path(path: &Path, extension: &str) -> Self {
         if has_extension(path, extension) {
-            Some(Self::Tua)
-        } else if has_extension(path, "lua") {
-            Some(Self::Lua)
+            Self::Tua
         } else {
-            None
+            Self::Asset
         }
     }
+}
+
+pub(crate) fn paths_same_location(left: &Path, right: &Path) -> bool {
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => normalize_path(left) == normalize_path(right),
+    }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+
+    normalized
 }
 
 fn has_extension(path: &Path, extension: &str) -> bool {

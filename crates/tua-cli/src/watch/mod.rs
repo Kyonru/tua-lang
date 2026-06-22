@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::build::{build_changed_files, build_project, output_path_for, BuildOutcome};
+use crate::build::{build_changed_files, build_project, has_errors, output_path_for, BuildOutcome};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_build_files, io_diagnostic};
+use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
 use tua_core::{format_diagnostics_for_cli, Diagnostic, LoadedConfig};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -109,35 +109,56 @@ fn run_watch_with_options<W: Write, E: Write>(
     stderr: &mut E,
 ) -> Result<(), CliError> {
     let source_dir = cwd.join(&loaded.config.source);
+    let out_dir = cwd.join(&loaded.config.out);
+    let in_place = paths_same_location(&source_dir, &out_dir);
 
     write_stdout(
         stdout,
         &format!(
             "watching {}",
-            display_path(cwd, &source_dir.join(watch_glob(&loaded.config.extension)))
+            display_path(
+                cwd,
+                &source_dir.join(watch_glob(&loaded.config.extension, !in_place))
+            )
         ),
     )?;
 
     let initial = build_project(cwd, loaded.clone(), false)?;
     write_outcome(stdout, stderr, "initial build", "built", &initial)?;
 
-    let mut snapshot = snapshot_source_tree(&source_dir, &loaded.config.extension)
-        .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
+    let mut snapshot = snapshot_source_tree(
+        &source_dir,
+        &loaded.config.extension,
+        (!in_place).then_some(out_dir.as_path()),
+        !in_place,
+    )
+    .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
     let mut rebuilds = 0usize;
 
     loop {
         thread::sleep(options.poll_interval);
 
-        let next = snapshot_source_tree(&source_dir, &loaded.config.extension)
-            .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
+        let next = snapshot_source_tree(
+            &source_dir,
+            &loaded.config.extension,
+            (!in_place).then_some(out_dir.as_path()),
+            !in_place,
+        )
+        .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
 
         if snapshot == next {
             continue;
         }
 
-        let (stable_snapshot, changes) =
-            wait_for_debounced_changes(&source_dir, &loaded.config.extension, &snapshot, options)
-                .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
+        let (stable_snapshot, changes) = wait_for_debounced_changes(
+            &source_dir,
+            &loaded.config.extension,
+            (!in_place).then_some(out_dir.as_path()),
+            !in_place,
+            &snapshot,
+            options,
+        )
+        .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
 
         snapshot = stable_snapshot;
 
@@ -147,7 +168,11 @@ fn run_watch_with_options<W: Write, E: Write>(
 
         write_stdout(stdout, &format!("changed {} file(s)", changes.len()))?;
 
-        let removed = remove_deleted_outputs(cwd, &loaded, &changes.deleted);
+        let removed = if in_place {
+            RemovalOutcome::default()
+        } else {
+            remove_deleted_outputs(cwd, &loaded, &changes.deleted)
+        };
         let mut outcome = build_changed_files(cwd, loaded.clone(), changes.changed);
         outcome.diagnostics.extend(removed.diagnostics);
 
@@ -173,16 +198,18 @@ fn run_watch_with_options<W: Write, E: Write>(
 fn wait_for_debounced_changes(
     source_dir: &Path,
     extension: &str,
+    excluded_dir: Option<&Path>,
+    include_assets: bool,
     previous: &SourceSnapshot,
     options: WatchOptions,
 ) -> Result<(SourceSnapshot, ChangeSet), Diagnostic> {
-    let mut latest = snapshot_source_tree(source_dir, extension)?;
+    let mut latest = snapshot_source_tree(source_dir, extension, excluded_dir, include_assets)?;
     let mut stable_since = Instant::now();
 
     loop {
         thread::sleep(options.poll_interval);
 
-        let current = snapshot_source_tree(source_dir, extension)?;
+        let current = snapshot_source_tree(source_dir, extension, excluded_dir, include_assets)?;
 
         if current == latest {
             if stable_since.elapsed() >= options.debounce {
@@ -196,10 +223,19 @@ fn wait_for_debounced_changes(
     }
 }
 
-fn snapshot_source_tree(source_dir: &Path, extension: &str) -> Result<SourceSnapshot, Diagnostic> {
+fn snapshot_source_tree(
+    source_dir: &Path,
+    extension: &str,
+    excluded_dir: Option<&Path>,
+    include_assets: bool,
+) -> Result<SourceSnapshot, Diagnostic> {
     let mut files = BTreeMap::new();
 
-    for source_file in discover_build_files(source_dir, extension)? {
+    for source_file in discover_build_files(source_dir, extension, excluded_dir)? {
+        if !include_assets && source_file.kind == SourceKind::Asset {
+            continue;
+        }
+
         let path = source_file.path;
         let metadata = fs::metadata(&path).map_err(|source| io_diagnostic(&path, source))?;
         let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
@@ -226,7 +262,8 @@ fn remove_deleted_outputs(
     let mut outcome = RemovalOutcome::default();
 
     for source_path in deleted {
-        let output_path = output_path_for(&source_dir, &out_dir, source_path);
+        let source_kind = SourceKind::for_path(source_path, &loaded.config.extension);
+        let output_path = output_path_for(&source_dir, &out_dir, source_path, source_kind);
 
         match fs::remove_file(&output_path) {
             Ok(()) => outcome.removed += 1,
@@ -252,13 +289,21 @@ fn write_outcome<W: Write, E: Write>(
             stdout,
             &format!("{label}: {clean_verb} {} file(s)", outcome.emitted),
         )
-    } else {
+    } else if has_errors(&outcome.diagnostics) {
         let diagnostics = sorted_diagnostics(outcome.diagnostics.clone());
 
         write_stderr(stderr, &format_diagnostics_for_cli(&diagnostics))?;
         write_stdout(
             stdout,
             &format!("{label}: {} file(s) emitted with errors", outcome.emitted),
+        )
+    } else {
+        let diagnostics = sorted_diagnostics(outcome.diagnostics.clone());
+
+        write_stderr(stderr, &format_diagnostics_for_cli(&diagnostics))?;
+        write_stdout(
+            stdout,
+            &format!("{label}: {} file(s) emitted with warnings", outcome.emitted),
         )
     }
 }
@@ -304,11 +349,13 @@ fn display_path(cwd: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-fn watch_glob(extension: &str) -> String {
-    if extension == "lua" {
+fn watch_glob(extension: &str, include_assets: bool) -> String {
+    if include_assets {
+        "**/*".to_owned()
+    } else if extension == "lua" {
         "**/*.lua".to_owned()
     } else {
-        format!("**/*.{{{extension},lua}}")
+        format!("**/*.{extension}")
     }
 }
 
