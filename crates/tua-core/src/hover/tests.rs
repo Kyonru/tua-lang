@@ -471,6 +471,38 @@ local label = Legacy.describe("hp", 10)
 }
 
 #[test]
+fn hovers_annotated_lua_module_export_docs() {
+    let temp = TempProject::new("annotated-required-lua-module-hover");
+    let source = r#"local Audio = require("audio")
+local ok = Audio.play("theme")
+"#;
+    let audio = r#"---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/audio.lua", audio);
+    let main_path = temp.path.join("src/main.tua");
+
+    let hover = hover_tua_source(&main_path, source, position_at(source, "play("))
+        .expect("hover should not fail")
+        .expect("annotated Lua module function should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function Audio.play(string): boolean\n\naudio source\nsuccess flag"
+    );
+}
+
+#[test]
 fn unresolved_required_module_fields_do_not_hover() {
     let temp = TempProject::new("missing-required-module-hover");
     let source = r#"local Missing = require("missing")

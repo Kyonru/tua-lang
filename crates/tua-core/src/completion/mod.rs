@@ -5,7 +5,9 @@ use self::context::{completion_context, CompletionContext};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
-use crate::module_index::required_module_export_type_for_fields;
+use crate::module_index::{
+    required_module_export_for_fields, required_module_exports_for_receiver,
+};
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
@@ -145,15 +147,16 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
 }
 
 fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
-    parsed
-        .type_aliases
-        .iter()
-        .filter(|alias| alias.name.starts_with(prefix))
-        .map(|alias| Completion {
-            label: alias.name.clone(),
+    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+    environment
+        .aliases()
+        .filter(|(name, _)| name.starts_with(prefix))
+        .map(|(name, _)| Completion {
+            label: name.to_owned(),
             kind: CompletionKind::TypeAlias,
             detail: Some("type alias".to_owned()),
-            documentation: None,
+            documentation: environment.alias_documentation(name).map(str::to_owned),
         })
         .collect()
 }
@@ -297,12 +300,30 @@ fn complete_required_module_fields(
     let Some((receiver, fields)) = receiver_parts.split_first() else {
         return Vec::new();
     };
-    let Some(ty) = required_module_export_type_for_fields(parsed, receiver, fields) else {
+    if fields.is_empty() {
+        let Some(exports) = required_module_exports_for_receiver(parsed, receiver) else {
+            return Vec::new();
+        };
+
+        return exports
+            .fields
+            .into_iter()
+            .filter(|(name, _)| name.starts_with(prefix))
+            .map(|(name, field)| Completion {
+                kind: completion_kind_for_type(&field.ty),
+                detail: Some(format!("field: {}", field.ty)),
+                label: name,
+                documentation: field.documentation,
+            })
+            .collect();
+    }
+
+    let Some(export) = required_module_export_for_fields(parsed, receiver, fields) else {
         return Vec::new();
     };
     let mut fields = BTreeMap::new();
 
-    collect_export_fields(&ty, &mut fields);
+    collect_export_fields(&export.ty, &mut fields);
 
     fields
         .into_iter()
@@ -311,7 +332,7 @@ fn complete_required_module_fields(
             kind: completion_kind_for_type(&ty),
             detail: Some(format!("field: {ty}")),
             label: name,
-            documentation: None,
+            documentation: export.documentation.clone(),
         })
         .collect()
 }

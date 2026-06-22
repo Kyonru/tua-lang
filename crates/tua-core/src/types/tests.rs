@@ -1,5 +1,5 @@
 use super::*;
-use crate::{parse_tua_source, DiagnosticCode};
+use crate::{parse_lua_source, parse_tua_source, DiagnosticCode};
 
 #[test]
 fn primitive_assignability_requires_matching_primitives() {
@@ -193,6 +193,92 @@ end
             .and_then(|function| function.return_type.clone()),
         Some(Type::number())
     );
+}
+
+#[test]
+fn lowers_lua_doc_annotations_into_type_environment() {
+    let parsed = parse_lua_source(
+        "src/player.lua",
+        r#"---@class Player player object
+---@field hp number current health
+---@field name? string display name
+---@alias PlayerId string|number stable id
+---@type Player
+Player = {}
+
+---@type number global score
+Score = 0
+
+---@param name string player name
+---@return Player created player
+function makePlayer(name)
+  return Player
+end
+"#,
+    )
+    .expect("Lua source with doc annotations should parse");
+    let environment = build_type_environment(&parsed).expect("Lua doc annotations should lower");
+
+    assert_eq!(
+        environment.alias("PlayerId"),
+        Some(&Type::union([Type::string(), Type::number()]))
+    );
+    assert_eq!(
+        environment.alias_documentation("Player"),
+        Some("player object")
+    );
+    assert_eq!(environment.local("Player"), Some(&Type::alias("Player")));
+    assert_eq!(
+        environment.local_documentation("Score"),
+        Some("global score")
+    );
+
+    let Type::Table(player) = environment.alias("Player").expect("Player should exist") else {
+        panic!("Player should lower to a table shape");
+    };
+
+    assert_eq!(
+        player.field("hp").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+    assert_eq!(player.field("name").map(|field| field.optional), Some(true));
+
+    let make_player = environment
+        .function("makePlayer")
+        .expect("doc function should lower");
+
+    assert_eq!(make_player.parameters[0].name, "name");
+    assert_eq!(make_player.parameters[0].ty, Type::string());
+    assert_eq!(
+        make_player.parameters[0].documentation.as_deref(),
+        Some("player name")
+    );
+    assert_eq!(make_player.return_type, Some(Type::alias("Player")));
+    assert_eq!(
+        make_player.documentation.as_deref(),
+        Some("player name\ncreated player")
+    );
+}
+
+#[test]
+fn reports_conflicts_between_tua_and_lua_doc_annotations() {
+    let parsed = parse_tua_source(
+        "src/conflict.tua",
+        r#"---@param value string documented type
+local function test(value: number): number
+  return value
+end
+"#,
+    )
+    .expect("source should parse");
+    let diagnostics = build_type_environment(&parsed)
+        .expect_err("conflicting doc and Tua annotations should be rejected");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_DOC_CONFLICT));
+    assert!(diagnostics[0]
+        .message
+        .contains("conflicting annotations for `test` parameter `value`"));
 }
 
 #[test]

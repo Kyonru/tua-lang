@@ -47,9 +47,10 @@ pub use emit::{emit_lua, emit_tua_source};
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use module_index::{
-    exported_type_for_fields, infer_module_exports, required_module_export_type_for_fields,
+    exported_field_for_fields, exported_type_for_fields, infer_module_exports,
+    required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_exports_for_receiver, required_module_for_receiver, resolve_required_module,
-    ModuleExports, RequiredModule,
+    ModuleExportField, ModuleExports, RequiredModule,
 };
 pub use module_link::{module_links_tua_source, ModuleLink};
 pub use parser::{

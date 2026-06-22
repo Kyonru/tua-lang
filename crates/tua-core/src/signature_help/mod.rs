@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::lua::{self, LuaItem, LuaItemKind};
-use crate::module_index::required_module_export_type_for_fields;
+use crate::module_index::required_module_export_for_fields;
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
@@ -111,9 +111,14 @@ impl<'a> SignatureResolver<'a> {
         }
 
         if !fields.is_empty() {
-            if let Some(ty) = required_module_export_type_for_fields(self.parsed, root, fields) {
-                if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment)
+            if let Some(export) = required_module_export_for_fields(self.parsed, root, fields) {
+                if let Some(mut signature) =
+                    signature_from_type(&qualified_name, &export.ty, self.environment)
                 {
+                    if signature.documentation.is_none() {
+                        signature.documentation = export.documentation;
+                    }
+
                     return Some(signature);
                 }
             }
@@ -295,7 +300,7 @@ fn signature_from_typed_function(
             function.return_type_or_any()
         ),
         parameters,
-        None,
+        function.documentation.clone(),
     )
 }
 

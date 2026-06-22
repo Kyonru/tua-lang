@@ -318,6 +318,50 @@ local volume = settings.audio.volume
 }
 
 #[test]
+fn completes_required_module_fields_with_lua_doc_documentation() {
+    let root = temp_project_dir("annotated_required_module_completion");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("src dir should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("audio.lua"),
+        r#"---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#,
+    )
+    .expect("Lua module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"
+local Audio = require("audio")
+local value = Audio.play
+"#;
+    let completions = complete_tua_source(&main_path, source, position_after(source, "Audio."))
+        .expect("annotated module completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["play".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Function);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("field: function(string): boolean")
+    );
+    assert_eq!(
+        completions[0].documentation.as_deref(),
+        Some("audio source\nsuccess flag")
+    );
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completion_remains_quiet_for_any_values() {
     let source = format!("{SOURCE}local dynamic = payload.\n");
     let position = position_after(&source, "payload.");

@@ -136,6 +136,47 @@ return {
 }
 
 #[test]
+fn returns_annotated_lua_module_function_signature_and_docs() {
+    let temp = TempProject::new("annotated-module-signature");
+    let source = r#"local Audio = require("audio")
+
+local ok = Audio.play(
+"#;
+    let audio = r#"---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/audio.lua", audio);
+
+    let help = signature_help_tua_source(
+        temp.path.join("src/main.tua"),
+        source,
+        position_after(source, "Audio.play("),
+    )
+    .expect("signature help should succeed")
+    .expect("annotated Lua module signature should resolve");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function Audio.play(string): boolean"
+    );
+    assert_eq!(parameter_labels(&help), vec!["string"]);
+    assert_eq!(
+        help.signatures[0].documentation.as_deref(),
+        Some("audio source\nsuccess flag")
+    );
+}
+
+#[test]
 fn unknown_call_returns_none() {
     let source = "missing(\n";
     let help =

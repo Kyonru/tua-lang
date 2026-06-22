@@ -8,7 +8,8 @@ use full_moon::node::Node;
 
 use crate::lua;
 use crate::module_index::{
-    required_module_export_type_for_fields, required_module_for_receiver, resolve_required_module,
+    required_module_export_for_fields, required_module_export_type_for_fields,
+    required_module_for_receiver, resolve_required_module,
 };
 use crate::module_link::require_module_at_position;
 use crate::semantic::resolve_field_chain_type;
@@ -102,8 +103,15 @@ impl<'a> HoverResolver<'a> {
         }
 
         if let Some(ty) = self.environment.alias(&current_part.text) {
+            let mut contents = format!("type {} = {ty}", current_part.text);
+
+            if let Some(documentation) = self.environment.alias_documentation(&current_part.text) {
+                contents.push_str("\n\n");
+                contents.push_str(documentation);
+            }
+
             return Some(Hover {
-                contents: format!("type {} = {ty}", current_part.text),
+                contents,
                 span: Some(current_part.span),
             });
         }
@@ -117,8 +125,15 @@ impl<'a> HoverResolver<'a> {
         }
 
         if let Some(ty) = self.environment.local(&current_part.text) {
+            let mut contents = format!("local {}: {ty}", current_part.text);
+
+            if let Some(documentation) = self.environment.local_documentation(&current_part.text) {
+                contents.push_str("\n\n");
+                contents.push_str(documentation);
+            }
+
             return Some(Hover {
-                contents: format!("local {}: {ty}", current_part.text),
+                contents,
                 span: Some(current_part.span),
             });
         }
@@ -391,10 +406,16 @@ impl<'a> HoverResolver<'a> {
 
     fn required_module_field_hover(&self, parts: &[String], span: SourceSpan) -> Option<Hover> {
         let (receiver, fields) = parts.split_first()?;
-        let ty = required_module_export_type_for_fields(self.parsed, receiver, fields)?;
+        let export = required_module_export_for_fields(self.parsed, receiver, fields)?;
+        let mut contents = format_export_hover(parts, &export.ty);
+
+        if let Some(documentation) = export.documentation {
+            contents.push_str("\n\n");
+            contents.push_str(&documentation);
+        }
 
         Some(Hover {
-            contents: format_export_hover(parts, &ty),
+            contents,
             span: Some(span),
         })
     }
@@ -417,11 +438,18 @@ fn format_function(function: &TypedFunction) -> String {
         parameters.push("...".to_owned());
     }
 
-    format!(
+    let mut contents = format!(
         "function {name}({}): {}",
         parameters.join(", "),
         function.return_type_or_any()
-    )
+    );
+
+    if let Some(documentation) = &function.documentation {
+        contents.push_str("\n\n");
+        contents.push_str(documentation);
+    }
+
+    contents
 }
 
 fn format_export_hover(parts: &[String], ty: &Type) -> String {

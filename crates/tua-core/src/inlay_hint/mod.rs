@@ -270,11 +270,13 @@ fn typed_function_from_function_type(function: FunctionType) -> TypedFunction {
             .map(|ty| crate::TypedParameter {
                 name: String::new(),
                 ty,
+                documentation: None,
             })
             .collect(),
         parameter_count: 0,
         has_varargs: false,
         return_type: Some(*function.return_type),
+        documentation: None,
     }
 }
 

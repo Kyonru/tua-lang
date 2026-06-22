@@ -5,16 +5,24 @@ use std::path::{Path, PathBuf};
 use full_moon::ast::{
     self, Expression, Field, FunctionArgs, Index, LastStmt, Prefix, Suffix, TableConstructor, Var,
 };
+use full_moon::node::Node;
 
 use crate::config::{load_config_from_dir, CONFIG_FILE};
+use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::semantic::resolve_aliases;
 use crate::types::{build_type_environment, TableField, Type, TypeEnvironment, TypedFunction};
-use crate::{parse_lua_source, parse_tua_source, ParsedSource};
+use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModuleExports {
     pub path: PathBuf,
-    pub fields: BTreeMap<String, Type>,
+    pub fields: BTreeMap<String, ModuleExportField>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleExportField {
+    pub ty: Type,
+    pub documentation: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,7 +33,13 @@ pub struct RequiredModule {
 
 impl ModuleExports {
     pub fn field(&self, name: &str) -> Option<&Type> {
-        self.fields.get(name)
+        self.fields.get(name).map(|field| &field.ty)
+    }
+
+    pub fn field_documentation(&self, name: &str) -> Option<&str> {
+        self.fields
+            .get(name)
+            .and_then(|field| field.documentation.as_deref())
     }
 }
 
@@ -55,24 +69,38 @@ pub fn required_module_export_type_for_fields(
     receiver: &str,
     fields: &[String],
 ) -> Option<Type> {
+    required_module_export_for_fields(parsed, receiver, fields).map(|field| field.ty)
+}
+
+pub fn required_module_export_for_fields(
+    parsed: &ParsedSource,
+    receiver: &str,
+    fields: &[String],
+) -> Option<ModuleExportField> {
     let exports = required_module_exports_for_receiver(parsed, receiver)?;
 
-    exported_type_for_fields(&exports, fields)
+    exported_field_for_fields(&exports, fields)
+}
+
+pub fn exported_field_for_fields(
+    exports: &ModuleExports,
+    fields: &[String],
+) -> Option<ModuleExportField> {
+    let (first, rest) = fields.split_first()?;
+    let field = exports.fields.get(first)?;
+
+    if rest.is_empty() {
+        return Some(field.clone());
+    }
+
+    export_field_type(&field.ty, rest).map(|ty| ModuleExportField {
+        ty,
+        documentation: None,
+    })
 }
 
 pub fn exported_type_for_fields(exports: &ModuleExports, fields: &[String]) -> Option<Type> {
-    let mut current = Type::table(
-        exports
-            .fields
-            .iter()
-            .map(|(name, ty)| (name.clone(), TableField::required(ty.clone()))),
-    );
-
-    for field in fields {
-        current = export_field_type(&current, field)?;
-    }
-
-    Some(current)
+    exported_field_for_fields(exports, fields).map(|field| field.ty)
 }
 
 pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<PathBuf> {
@@ -90,14 +118,24 @@ pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<Path
     None
 }
 
-fn export_field_type(ty: &Type, field: &str) -> Option<Type> {
+fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
+    let mut current = ty.clone();
+
+    for field in fields {
+        current = export_table_field_type(&current, field)?;
+    }
+
+    Some(current)
+}
+
+fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
     match ty {
         Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
         Type::Union(types) => {
             let mut resolved = Vec::new();
 
             for ty in types {
-                if let Some(field_ty) = export_field_type(ty, field) {
+                if let Some(field_ty) = export_table_field_type(ty, field) {
                     resolved.push(field_ty);
                 }
             }
@@ -219,7 +257,8 @@ struct ExportInferer<'a> {
     parsed: &'a ParsedSource,
     environment: Option<TypeEnvironment>,
     locals: BTreeMap<String, Type>,
-    table_members: BTreeMap<String, BTreeMap<String, Type>>,
+    function_docs: BTreeMap<String, String>,
+    table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
     return_expr: Option<&'a Expression>,
 }
 
@@ -229,6 +268,7 @@ impl<'a> ExportInferer<'a> {
             parsed,
             environment: build_type_environment(parsed).ok(),
             locals: BTreeMap::new(),
+            function_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
             return_expr: None,
         }
@@ -251,9 +291,21 @@ impl<'a> ExportInferer<'a> {
                     self.table_members
                         .entry(table.trim().to_owned())
                         .or_default()
-                        .insert(field.trim().to_owned(), ty);
+                        .insert(
+                            field.trim().to_owned(),
+                            ModuleExportField {
+                                ty,
+                                documentation: function.documentation.clone(),
+                            },
+                        );
                 } else {
                     self.locals.entry(name.clone()).or_insert(ty);
+
+                    if let Some(documentation) = &function.documentation {
+                        self.function_docs
+                            .entry(name.clone())
+                            .or_insert_with(|| documentation.clone());
+                    }
                 }
             }
         }
@@ -291,7 +343,10 @@ impl<'a> ExportInferer<'a> {
                         .entry(table.clone())
                         .or_default()
                         .entry(field.clone())
-                        .or_insert_with(|| function_type_from_body(function.body()));
+                        .or_insert_with(|| ModuleExportField {
+                            ty: function_type_from_body(function.body()),
+                            documentation: None,
+                        });
                 }
             }
             ast::Stmt::LocalAssignment(local) => {
@@ -318,10 +373,13 @@ impl<'a> ExportInferer<'a> {
         };
         let ty = self.infer_expression(expression);
 
-        self.table_members
-            .entry(table.clone())
-            .or_default()
-            .insert(field.clone(), ty);
+        self.table_members.entry(table.clone()).or_default().insert(
+            field.clone(),
+            ModuleExportField {
+                ty,
+                documentation: None,
+            },
+        );
     }
 
     fn exports(&mut self) -> Option<ModuleExports> {
@@ -345,7 +403,7 @@ impl<'a> ExportInferer<'a> {
         })
     }
 
-    fn fields_for_returned_local(&mut self, name: &str) -> BTreeMap<String, Type> {
+    fn fields_for_returned_local(&mut self, name: &str) -> BTreeMap<String, ModuleExportField> {
         let mut fields = BTreeMap::new();
 
         if let Some(ty) = self.locals.get(name).cloned() {
@@ -359,7 +417,10 @@ impl<'a> ExportInferer<'a> {
         fields
     }
 
-    fn infer_table_fields(&mut self, table: &TableConstructor) -> BTreeMap<String, Type> {
+    fn infer_table_fields(
+        &mut self,
+        table: &TableConstructor,
+    ) -> BTreeMap<String, ModuleExportField> {
         table
             .fields()
             .iter()
@@ -367,8 +428,18 @@ impl<'a> ExportInferer<'a> {
                 let Field::NameKey { key, value, .. } = field else {
                     return None;
                 };
+                let name = token_text(key);
+                let documentation = field_documentation(self.parsed, field).or_else(|| {
+                    let Expression::Var(Var::Name(name)) = value else {
+                        return None;
+                    };
 
-                Some((token_text(key), self.infer_expression(value)))
+                    self.function_docs.get(&token_text(name)).cloned()
+                });
+                let ty = lua_doc_function_type_for_field(self.parsed, field)
+                    .unwrap_or_else(|| self.infer_expression(value));
+
+                Some((name, ModuleExportField { ty, documentation }))
             })
             .collect()
     }
@@ -385,7 +456,7 @@ impl<'a> ExportInferer<'a> {
             Expression::TableConstructor(table) => Type::table(
                 self.infer_table_fields(table)
                     .into_iter()
-                    .map(|(name, ty)| (name, TableField::required(ty))),
+                    .map(|(name, field)| (name, TableField::required(field.ty))),
             ),
             Expression::Function(function) => function_type_from_body(function.body()),
             Expression::Parentheses { expression, .. } => self.infer_expression(expression),
@@ -408,14 +479,18 @@ impl<'a> ExportInferer<'a> {
     }
 }
 
-fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
+fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportField>) {
     match ty {
         Type::Table(table) => {
-            fields.extend(
-                table
-                    .fields()
-                    .map(|(name, field)| (name.to_owned(), field.ty.clone())),
-            );
+            fields.extend(table.fields().map(|(name, field)| {
+                (
+                    name.to_owned(),
+                    ModuleExportField {
+                        ty: field.ty.clone(),
+                        documentation: None,
+                    },
+                )
+            }));
         }
         Type::Union(types) => {
             for ty in types {
@@ -444,6 +519,251 @@ fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
         ),
         resolved => resolved,
     }
+}
+
+fn lua_doc_function_type_for_field(parsed: &ParsedSource, field: &Field) -> Option<Type> {
+    let Field::NameKey { key, value, .. } = field else {
+        return None;
+    };
+    let body = function_body_from_expression(value)?;
+    let docs = lua_doc_annotations_for_field(parsed, &token_text(key), field);
+
+    if !docs.iter().any(|annotation| {
+        matches!(
+            annotation.kind,
+            LuaDocAnnotationKind::Param(_) | LuaDocAnnotationKind::Return(_)
+        )
+    }) {
+        return None;
+    }
+
+    let param_types = lua_doc_param_types(&docs);
+    let parameters = body
+        .parameters()
+        .iter()
+        .filter_map(|parameter| {
+            let ast::Parameter::Name(name) = parameter else {
+                return None;
+            };
+
+            Some(
+                param_types
+                    .get(&token_text(name))
+                    .cloned()
+                    .unwrap_or(Type::Any),
+            )
+        })
+        .collect::<Vec<_>>();
+    let return_type = docs
+        .iter()
+        .find_map(|annotation| match &annotation.kind {
+            LuaDocAnnotationKind::Return(return_annotation) => return_annotation
+                .returns
+                .first()
+                .map(|return_type| type_from_lua_doc_type(&return_type.ty)),
+            _ => None,
+        })
+        .unwrap_or(Type::Any);
+
+    Some(Type::function(parameters, return_type))
+}
+
+fn field_documentation(parsed: &ParsedSource, field: &Field) -> Option<String> {
+    let Field::NameKey { key, .. } = field else {
+        return None;
+    };
+    let docs = lua_doc_annotations_for_field(parsed, &token_text(key), field);
+    let documentation = docs
+        .iter()
+        .filter_map(|annotation| annotation.documentation.as_deref())
+        .collect::<Vec<_>>();
+
+    (!documentation.is_empty()).then(|| documentation.join("\n"))
+}
+
+fn lua_doc_annotations_for_field<'a>(
+    parsed: &'a ParsedSource,
+    name: &str,
+    field: &Field,
+) -> Vec<&'a LuaDocAnnotation> {
+    let docs = node_span(field)
+        .and_then(|span| first_code_line_span(parsed, span))
+        .map(|span| leading_lua_doc_annotations(parsed, span.start.line))
+        .unwrap_or_default();
+
+    if !docs.is_empty() {
+        return docs;
+    }
+
+    lua_doc_annotations_for_code_field(parsed, name)
+}
+
+fn lua_doc_annotations_for_code_field<'a>(
+    parsed: &'a ParsedSource,
+    name: &str,
+) -> Vec<&'a LuaDocAnnotation> {
+    let mut by_line = BTreeMap::new();
+
+    for annotation in &parsed.lua_doc_annotations {
+        by_line.insert(annotation.span.start.line, annotation);
+    }
+
+    let mut pending = Vec::new();
+
+    for (index, line) in parsed.source.lines().enumerate() {
+        let line_number = index + 1;
+        let trimmed = line.trim_start();
+
+        if let Some(annotation) = by_line.get(&line_number) {
+            pending.push(*annotation);
+            continue;
+        }
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if trimmed.starts_with("--") {
+            pending.clear();
+            continue;
+        }
+
+        if pending.is_empty() {
+            continue;
+        }
+
+        let matched = field_name_from_code_line(trimmed)
+            .as_deref()
+            .is_some_and(|field_name| field_name == name);
+
+        if matched {
+            return pending;
+        }
+
+        pending.clear();
+    }
+
+    Vec::new()
+}
+
+fn field_name_from_code_line(code: &str) -> Option<String> {
+    let end = code
+        .char_indices()
+        .find_map(|(index, ch)| (!is_lua_name_char(ch)).then_some(index))
+        .unwrap_or(code.len());
+
+    if end == 0 {
+        return None;
+    }
+
+    let rest = code[end..].trim_start();
+
+    rest.starts_with('=').then(|| code[..end].to_owned())
+}
+
+fn is_lua_name_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+fn function_body_from_expression(expression: &Expression) -> Option<&ast::FunctionBody> {
+    match expression {
+        Expression::Function(function) => Some(function.body()),
+        Expression::Parentheses { expression, .. } => function_body_from_expression(expression),
+        _ => None,
+    }
+}
+
+fn lua_doc_param_types(docs: &[&LuaDocAnnotation]) -> BTreeMap<String, Type> {
+    docs.iter()
+        .filter_map(|annotation| match &annotation.kind {
+            LuaDocAnnotationKind::Param(param) => {
+                Some((param.name.clone(), type_from_lua_doc_type(&param.ty)))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
+    match ty {
+        crate::TuaType::Named(name) => Type::named(name),
+        crate::TuaType::Union(types) => Type::union(types.iter().map(type_from_lua_doc_type)),
+        crate::TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
+            (
+                field.name.clone(),
+                TableField {
+                    ty: type_from_lua_doc_type(&field.ty),
+                    optional: field.optional,
+                },
+            )
+        })),
+    }
+}
+
+fn leading_lua_doc_annotations(parsed: &ParsedSource, line: usize) -> Vec<&LuaDocAnnotation> {
+    if line <= 1 {
+        return Vec::new();
+    }
+
+    let lines = parsed.source.lines().collect::<Vec<_>>();
+    let mut current = line - 1;
+    let mut first_doc_line = None;
+
+    while current > 0 {
+        let text = lines.get(current - 1).copied().unwrap_or("").trim_start();
+
+        if text.is_empty() {
+            current -= 1;
+            continue;
+        }
+
+        if text.starts_with("---") {
+            first_doc_line = Some(current);
+            current -= 1;
+            continue;
+        }
+
+        break;
+    }
+
+    let first = first_doc_line.unwrap_or(line);
+
+    parsed
+        .lua_doc_annotations
+        .iter()
+        .filter(|annotation| annotation.span.start.line >= first && annotation.span.end.line < line)
+        .collect()
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
+}
+
+fn first_code_line_span(parsed: &ParsedSource, span: SourceSpan) -> Option<SourceSpan> {
+    for line in span.start.line..=span.end.line.max(span.start.line) {
+        let text = parsed.source.lines().nth(line.saturating_sub(1))?;
+        let trimmed = text.trim_start();
+
+        if trimmed.is_empty() || trimmed.starts_with("--") {
+            continue;
+        }
+
+        let leading = text.len() - trimmed.len();
+
+        return Some(SourceSpan {
+            start: crate::SourcePosition {
+                line,
+                column: leading + 1,
+            },
+            end: crate::SourcePosition {
+                line,
+                column: text.len() + 1,
+            },
+        });
+    }
+
+    None
 }
 
 fn typed_function_type(function: &TypedFunction) -> Type {
@@ -497,7 +817,7 @@ fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Opt
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
+    token.token().to_string().trim().to_owned()
 }
 
 fn unquote_string(value: &str) -> String {

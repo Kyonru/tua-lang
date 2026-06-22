@@ -131,6 +131,75 @@ return {
 }
 
 #[test]
+fn annotated_lua_modules_provide_typed_function_exports() {
+    let temp = TempProject::new("annotated-lua-module");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/main.tua",
+        r#"
+local Audio = require("audio")
+local ok = Audio.play("theme")
+"#,
+    );
+    temp.write(
+        "src/audio.lua",
+        r#"---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#,
+    );
+
+    let main = temp.path.join("src/main.tua");
+    let source = fs::read_to_string(&main).expect("main source should be readable");
+    let parsed = parse_tua_source(&main, source).expect("main source should parse");
+    let exports = required_module_exports_for_receiver(&parsed, "Audio")
+        .expect("required module exports should resolve");
+
+    assert_eq!(
+        exports.field("play"),
+        Some(&Type::function([Type::string()], Type::boolean()))
+    );
+    assert_eq!(
+        exports.field_documentation("play"),
+        Some("audio source\nsuccess flag")
+    );
+}
+
+#[test]
+fn returned_table_function_fields_use_lua_doc_annotations() {
+    let parsed = parse_lua_source(
+        "src/audio.lua",
+        r#"
+return {
+  ---@param source string inline source
+  ---@return boolean inline success
+  play = function(source)
+    return true
+  end,
+}
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+    assert_eq!(
+        exports.field("play"),
+        Some(&Type::function([Type::string()], Type::boolean()))
+    );
+    assert_eq!(
+        exports.field_documentation("play"),
+        Some("inline source\ninline success")
+    );
+}
+
+#[test]
 fn unknown_requires_and_dynamic_exports_are_quiet() {
     let parsed = parse_lua_source(
         "src/dynamic.lua",
