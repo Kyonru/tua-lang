@@ -9,12 +9,19 @@ This repository is currently in the v1 scaffold stage.
 - [SPEC.md](SPEC.md) defines the v1 language and toolchain contract.
 - [ROADMAP.md](ROADMAP.md) breaks the spec into committable implementation
   slices.
+- [docs/](docs/index.md) contains the Zensical documentation site source.
 
 ## Development
 
 ```sh
 cargo test --workspace
 cargo run -p tua-cli -- --help
+```
+
+Serve the documentation site locally:
+
+```sh
+make docs
 ```
 
 ## Examples

@@ -38,9 +38,15 @@ The default project layout is:
 └── tua.toml
 ```
 
-By default, `tua build` mirrors `src/**/*.tua` into `build/**/*.lua`.
-Non-`.tua` files needed by a LÖVE project may be copied by future tooling, but
-v1 only specifies compilation of `.tua` sources.
+By default, `tua build` mirrors Tua and Lua source files into `build/`:
+
+- `src/**/*.tua` is checked, lowered, erased, and emitted as matching
+  `build/**/*.lua`;
+- `src/**/*.lua` is copied unchanged to the matching `build/**/*.lua` path.
+
+This makes `build/` a runnable Lua/LÖVE distribution directory. Plain Lua files
+remain interoperability files, not typed source files, unless a later feature
+adds explicit Lua annotation checking.
 
 Default `tua.toml`:
 
@@ -269,14 +275,15 @@ value.
 The compiler pipeline is:
 
 1. Read project config.
-2. Discover `.tua` source files under the configured source directory.
+2. Discover `.tua` and `.lua` source files under the configured source directory.
 3. Parse each file.
 4. Build per-file and project-wide type information.
 5. Type-check annotated code.
 6. Lower tua-only syntax to Lua syntax.
 7. Erase type aliases and type annotations.
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
-9. Optionally emit source maps or line maps when `emit_maps = true`.
+9. Copy plain `.lua` files unchanged into the configured output directory.
+10. Optionally emit source maps or line maps when `emit_maps = true`.
 
 Emitted Lua should be readable and line-stable where practical. Readability is
 more important than aggressive minification or optimization.
@@ -333,6 +340,7 @@ Checks and emits Lua output.
 Expected behavior:
 
 - mirrors `src/**/*.tua` to `build/**/*.lua`;
+- copies `src/**/*.lua` unchanged to `build/**/*.lua`;
 - erases type-only syntax;
 - lowers supported sugar;
 - preserves `require`;

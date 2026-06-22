@@ -39,6 +39,14 @@ verify: fmt test clippy extension-check json-check diff-check ## Run the main lo
 diff-check: ## Check the git diff for whitespace errors.
 	git diff --check
 
+.PHONY: docs
+docs: ## Serve the Zensical documentation site locally.
+	bash scripts/docs.sh serve
+
+.PHONY: docs-build
+docs-build: ## Build the Zensical documentation site.
+	bash scripts/docs.sh build
+
 .PHONY: cli-help
 cli-help: ## Print tua CLI help.
 	$(TUA) --help
