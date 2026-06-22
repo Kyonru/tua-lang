@@ -21,13 +21,18 @@ pub(crate) fn lint_parsed_source(
         && !config.missing_requires
         && !config.self_assignments
         && !symbol_lints_enabled(config)
+        && !correctness_lints_enabled(config)
     {
         return Vec::new();
     }
 
     let mut diagnostics = Vec::new();
 
-    if config.duplicate_keys || config.missing_requires || config.self_assignments {
+    if config.duplicate_keys
+        || config.missing_requires
+        || config.self_assignments
+        || correctness_lints_enabled(config)
+    {
         let mut visitor = LintVisitor {
             parsed,
             config,
@@ -52,6 +57,16 @@ fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
         || config.use_before_definition
 }
 
+fn correctness_lints_enabled(config: &DiagnosticsConfig) -> bool {
+    config.duplicate_parameters
+        || config.bad_requires
+        || config.impossible_boolean_expressions
+        || config.duplicate_if_conditions
+        || config.duplicate_binary_operands
+        || config.float_equality
+        || config.const_assignments
+}
+
 struct LintVisitor<'a> {
     parsed: &'a ParsedSource,
     config: &'a DiagnosticsConfig,
@@ -60,30 +75,46 @@ struct LintVisitor<'a> {
 
 impl Visitor for LintVisitor<'_> {
     fn visit_assignment(&mut self, assignment: &full_moon::ast::Assignment) {
-        if !self.config.self_assignments {
-            return;
+        if self.config.self_assignments {
+            for (variable, expression) in
+                assignment.variables().iter().zip(assignment.expressions())
+            {
+                let Some(left) = plain_field_chain_from_var(variable) else {
+                    continue;
+                };
+                let Some(right) = plain_field_chain_from_expression(expression) else {
+                    continue;
+                };
+
+                if left == right {
+                    self.diagnostics.push(self_assignment_diagnostic(
+                        &self.parsed.path,
+                        variable,
+                        &left.join("."),
+                    ));
+                }
+            }
         }
 
-        for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
-            let Some(left) = plain_field_chain_from_var(variable) else {
-                continue;
-            };
-            let Some(right) = plain_field_chain_from_expression(expression) else {
-                continue;
-            };
+        if self.config.const_assignments {
+            for variable in assignment.variables() {
+                let Some(name) = plain_field_chain_from_var(variable).and_then(|parts| {
+                    (parts.len() == 1 && looks_like_const_name(&parts[0])).then(|| parts[0].clone())
+                }) else {
+                    continue;
+                };
 
-            if left == right {
-                self.diagnostics.push(self_assignment_diagnostic(
+                self.diagnostics.push(const_assignment_diagnostic(
                     &self.parsed.path,
-                    variable,
-                    &left.join("."),
+                    node_position(variable),
+                    &name,
                 ));
             }
         }
     }
 
     fn visit_function_call(&mut self, function_call: &FunctionCall) {
-        if !self.config.missing_requires {
+        if !self.config.missing_requires && !self.config.bad_requires {
             return;
         }
 
@@ -92,11 +123,16 @@ impl Visitor for LintVisitor<'_> {
         };
 
         if resolve_required_module(&self.parsed.path, &module).is_none() {
-            self.diagnostics.push(missing_require_diagnostic(
-                &self.parsed.path,
-                position,
-                &module,
-            ));
+            if self.config.bad_requires {
+                self.diagnostics
+                    .push(bad_require_diagnostic(&self.parsed.path, position, &module));
+            } else {
+                self.diagnostics.push(missing_require_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &module,
+                ));
+            }
         }
     }
 
@@ -119,6 +155,135 @@ impl Visitor for LintVisitor<'_> {
                     &label,
                 ));
             }
+        }
+    }
+
+    fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+        if !self.config.duplicate_parameters {
+            return;
+        }
+
+        let mut seen = BTreeSet::new();
+
+        for parameter in body.parameters() {
+            let Parameter::Name(name) = parameter else {
+                continue;
+            };
+            let name_text = token_text(name);
+
+            if !seen.insert(name_text.clone()) {
+                self.diagnostics.push(duplicate_parameter_diagnostic(
+                    &self.parsed.path,
+                    token_position(name),
+                    &name_text,
+                ));
+            }
+        }
+    }
+
+    fn visit_if(&mut self, if_stmt: &ast::If) {
+        if !self.config.duplicate_if_conditions {
+            return;
+        }
+
+        let mut seen = BTreeMap::new();
+        let first = expression_key(if_stmt.condition());
+        seen.insert(first, node_position(if_stmt.condition()));
+
+        if let Some(else_ifs) = if_stmt.else_if() {
+            for else_if in else_ifs {
+                let key = expression_key(else_if.condition());
+
+                if let Some(first_position) = seen.get(&key).copied() {
+                    self.diagnostics.push(duplicate_if_condition_diagnostic(
+                        &self.parsed.path,
+                        node_position(else_if.condition()),
+                        first_position,
+                    ));
+                } else {
+                    seen.insert(key, node_position(else_if.condition()));
+                }
+            }
+        }
+    }
+
+    fn visit_expression(&mut self, expression: &Expression) {
+        if let Expression::BinaryOperator { lhs, binop, rhs } = expression {
+            self.check_binary_expression(lhs, binop, rhs);
+        }
+
+        if self.config.impossible_boolean_expressions {
+            if let Expression::UnaryOperator { unop, expression } = expression {
+                if matches!(unop, ast::UnOp::Not(_)) {
+                    if let Some(value) = boolean_literal(expression) {
+                        self.diagnostics.push(impossible_boolean_diagnostic(
+                            &self.parsed.path,
+                            node_position(unop),
+                            !value,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl LintVisitor<'_> {
+    fn check_binary_expression(&mut self, lhs: &Expression, binop: &ast::BinOp, rhs: &Expression) {
+        if self.config.impossible_boolean_expressions {
+            self.check_impossible_boolean_expression(lhs, binop, rhs);
+        }
+
+        if self.config.duplicate_binary_operands
+            && is_suspicious_duplicate_operand_operator(binop)
+            && expression_key(lhs) == expression_key(rhs)
+        {
+            let operator = binop_label(binop);
+
+            self.diagnostics.push(duplicate_binary_operand_diagnostic(
+                &self.parsed.path,
+                node_position(binop),
+                &operator,
+            ));
+        }
+
+        if self.config.float_equality
+            && is_equality_operator(binop)
+            && (is_float_literal(lhs) || is_float_literal(rhs))
+        {
+            self.diagnostics.push(float_equality_diagnostic(
+                &self.parsed.path,
+                node_position(binop),
+            ));
+        }
+    }
+
+    fn check_impossible_boolean_expression(
+        &mut self,
+        lhs: &Expression,
+        binop: &ast::BinOp,
+        rhs: &Expression,
+    ) {
+        match binop {
+            ast::BinOp::And(_) => {
+                if boolean_literal(lhs) == Some(false) || boolean_literal(rhs) == Some(false) {
+                    self.diagnostics.push(impossible_boolean_diagnostic(
+                        &self.parsed.path,
+                        node_position(binop),
+                        false,
+                    ));
+                }
+            }
+            ast::BinOp::Or(_) => {
+                if boolean_literal(lhs) == Some(true) || boolean_literal(rhs) == Some(true) {
+                    self.diagnostics.push(impossible_boolean_diagnostic(
+                        &self.parsed.path,
+                        node_position(binop),
+                        true,
+                    ));
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -820,6 +985,174 @@ fn use_before_definition_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::LINT_USE_BEFORE_DEFINITION)
+}
+
+fn duplicate_parameter_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("duplicate function parameter `{name}`"),
+    )
+    .with_code(DiagnosticCode::LINT_DUPLICATE_PARAMETER)
+}
+
+fn bad_require_diagnostic(path: &Path, position: SourcePosition, module: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("bad require file: `{module}`"),
+    )
+    .with_code(DiagnosticCode::LINT_BAD_REQUIRE)
+}
+
+fn impossible_boolean_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    result: bool,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("boolean expression is always {result}"),
+    )
+    .with_code(DiagnosticCode::LINT_IMPOSSIBLE_BOOLEAN)
+}
+
+fn duplicate_if_condition_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    first_position: SourcePosition,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "duplicate if condition; first seen at {}:{}",
+            first_position.line, first_position.column
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_DUPLICATE_IF_CONDITION)
+}
+
+fn duplicate_binary_operand_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    operator: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("duplicate binary operands around `{operator}`"),
+    )
+    .with_code(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND)
+}
+
+fn float_equality_diagnostic(path: &Path, position: SourcePosition) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        "float equality comparison may be unstable",
+    )
+    .with_code(DiagnosticCode::LINT_FLOAT_EQUALITY)
+}
+
+fn const_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("assignment to const-like name `{name}`"),
+    )
+    .with_code(DiagnosticCode::LINT_CONST_ASSIGNMENT)
+}
+
+fn expression_key(expression: &Expression) -> String {
+    expression
+        .to_string()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn boolean_literal(expression: &Expression) -> Option<bool> {
+    match expression {
+        Expression::Symbol(token) => match token_text(token).as_str() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        },
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => boolean_literal(expression),
+        _ => None,
+    }
+}
+
+fn is_float_literal(expression: &Expression) -> bool {
+    match expression {
+        Expression::Number(token) => number_literal_text(token)
+            .map(|number| number.contains('.') || number.contains('e') || number.contains('E'))
+            .unwrap_or(false),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => is_float_literal(expression),
+        _ => false,
+    }
+}
+
+fn is_equality_operator(binop: &ast::BinOp) -> bool {
+    matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_))
+}
+
+fn is_suspicious_duplicate_operand_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::And(_)
+            | ast::BinOp::Or(_)
+            | ast::BinOp::GreaterThan(_)
+            | ast::BinOp::GreaterThanEqual(_)
+            | ast::BinOp::LessThan(_)
+            | ast::BinOp::LessThanEqual(_)
+            | ast::BinOp::TildeEqual(_)
+            | ast::BinOp::TwoEqual(_)
+            | ast::BinOp::Minus(_)
+            | ast::BinOp::Slash(_)
+            | ast::BinOp::Percent(_)
+    )
+}
+
+fn binop_label(binop: &ast::BinOp) -> String {
+    token_text(binop.token())
+}
+
+fn looks_like_const_name(name: &str) -> bool {
+    let mut has_uppercase = false;
+
+    for character in name.chars() {
+        if character.is_ascii_uppercase() {
+            has_uppercase = true;
+            continue;
+        }
+
+        if character.is_ascii_digit() || character == '_' {
+            continue;
+        }
+
+        return false;
+    }
+
+    has_uppercase
 }
 
 fn node_position(node: &impl Node) -> SourcePosition {

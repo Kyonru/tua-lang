@@ -54,6 +54,16 @@ impl DiagnosticCode {
     pub const LINT_UNUSED_LOCAL: Self = Self(4005);
     pub const LINT_UNUSED_PARAMETER: Self = Self(4006);
     pub const LINT_USE_BEFORE_DEFINITION: Self = Self(4007);
+    pub const LINT_DUPLICATE_PARAMETER: Self = Self(4008);
+    pub const LINT_WRONG_ARGUMENT_COUNT: Self = Self(4009);
+    pub const LINT_BAD_REQUIRE: Self = Self(4010);
+    pub const LINT_IMPOSSIBLE_BOOLEAN: Self = Self(4011);
+    pub const LINT_DUPLICATE_IF_CONDITION: Self = Self(4012);
+    pub const LINT_DUPLICATE_BINARY_OPERAND: Self = Self(4013);
+    pub const LINT_FLOAT_EQUALITY: Self = Self(4014);
+    pub const LINT_CONST_ASSIGNMENT: Self = Self(4015);
+    pub const LINT_PARAMETER_TYPE_MISMATCH: Self = Self(4016);
+    pub const LINT_RETURN_TYPE_MISMATCH: Self = Self(4017);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {

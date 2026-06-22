@@ -24,6 +24,16 @@ undefined_variables = false
 unused_locals = false
 unused_parameters = false
 use_before_definition = false
+duplicate_parameters = false
+wrong_argument_count = false
+bad_requires = false
+impossible_boolean_expressions = false
+duplicate_if_conditions = false
+duplicate_binary_operands = false
+float_equality = false
+const_assignments = false
+parameter_type_mismatches = false
+return_type_mismatches = false
 globals = []
 ";
 
@@ -60,6 +70,16 @@ pub struct DiagnosticsConfig {
     pub unused_locals: bool,
     pub unused_parameters: bool,
     pub use_before_definition: bool,
+    pub duplicate_parameters: bool,
+    pub wrong_argument_count: bool,
+    pub bad_requires: bool,
+    pub impossible_boolean_expressions: bool,
+    pub duplicate_if_conditions: bool,
+    pub duplicate_binary_operands: bool,
+    pub float_equality: bool,
+    pub const_assignments: bool,
+    pub parameter_type_mismatches: bool,
+    pub return_type_mismatches: bool,
     pub globals: Vec<String>,
 }
 
@@ -287,6 +307,35 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 }
                 "use_before_definition" => {
                     config.diagnostics.use_before_definition = parse_bool(line_number, value)?
+                }
+                "duplicate_parameters" => {
+                    config.diagnostics.duplicate_parameters = parse_bool(line_number, value)?
+                }
+                "wrong_argument_count" => {
+                    config.diagnostics.wrong_argument_count = parse_bool(line_number, value)?
+                }
+                "bad_requires" => config.diagnostics.bad_requires = parse_bool(line_number, value)?,
+                "impossible_boolean_expressions" => {
+                    config.diagnostics.impossible_boolean_expressions =
+                        parse_bool(line_number, value)?
+                }
+                "duplicate_if_conditions" => {
+                    config.diagnostics.duplicate_if_conditions = parse_bool(line_number, value)?
+                }
+                "duplicate_binary_operands" => {
+                    config.diagnostics.duplicate_binary_operands = parse_bool(line_number, value)?
+                }
+                "float_equality" => {
+                    config.diagnostics.float_equality = parse_bool(line_number, value)?
+                }
+                "const_assignments" => {
+                    config.diagnostics.const_assignments = parse_bool(line_number, value)?
+                }
+                "parameter_type_mismatches" => {
+                    config.diagnostics.parameter_type_mismatches = parse_bool(line_number, value)?
+                }
+                "return_type_mismatches" => {
+                    config.diagnostics.return_type_mismatches = parse_bool(line_number, value)?
                 }
                 "globals" => config.diagnostics.globals = parse_string_array(line_number, value)?,
                 "" => {

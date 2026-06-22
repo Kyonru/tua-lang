@@ -70,6 +70,257 @@ local Missing = require("definitely_missing_lint_module")
 }
 
 #[test]
+fn reports_duplicate_function_parameters_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function move(player, player)
+  return player
+end
+"#,
+        &DiagnosticsConfig {
+            duplicate_parameters: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("duplicate parameters should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_DUPLICATE_PARAMETER)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("duplicate function parameter `player`"));
+}
+
+#[test]
+fn reports_bad_require_files_with_dedicated_toggle() {
+    let project = TempProject::new("bad-require");
+
+    project.write("tua.toml", "source = \"src\"\n");
+
+    let main_path = project.path.join("src/main.tua");
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        &main_path,
+        r#"local Missing = require("definitely_missing_bad_require_module")
+"#,
+        &DiagnosticsConfig {
+            bad_requires: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("bad require lint should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
+    assert!(diagnostics[0]
+        .message
+        .contains("bad require file: `definitely_missing_bad_require_module`"));
+}
+
+#[test]
+fn bad_require_lint_does_not_duplicate_missing_require_lint() {
+    let project = TempProject::new("bad-require-no-duplicate");
+
+    project.write("tua.toml", "source = \"src\"\n");
+
+    let main_path = project.path.join("src/main.tua");
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        &main_path,
+        r#"local Missing = require("definitely_missing_bad_require_module")
+"#,
+        &DiagnosticsConfig {
+            missing_requires: true,
+            bad_requires: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("bad require lint should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
+}
+
+#[test]
+fn reports_impossible_boolean_expressions_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local ready = true
+
+if ready and false then
+end
+
+if true or ready then
+end
+
+if not false then
+end
+"#,
+        &DiagnosticsConfig {
+            impossible_boolean_expressions: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("impossible boolean lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_IMPOSSIBLE_BOOLEAN),
+        3
+    );
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_IMPOSSIBLE_BOOLEAN)
+            && diagnostic.severity == DiagnosticSeverity::Warning
+    }));
+}
+
+#[test]
+fn reports_duplicate_if_conditions_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local hp = 10
+
+if hp > 0 then
+elseif hp > 0 then
+end
+"#,
+        &DiagnosticsConfig {
+            duplicate_if_conditions: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("duplicate if condition lint should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_DUPLICATE_IF_CONDITION)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("duplicate if condition; first seen at"));
+}
+
+#[test]
+fn reports_duplicate_binary_operands_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local hp = 10
+local same = hp - hp
+
+if hp == hp then
+end
+"#,
+        &DiagnosticsConfig {
+            duplicate_binary_operands: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("duplicate binary operand lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND),
+        2
+    );
+}
+
+#[test]
+fn reports_float_equality_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local value = 0
+
+if value == 0.5 then
+end
+
+if 1e-3 ~= value then
+end
+"#,
+        &DiagnosticsConfig {
+            float_equality: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("float equality lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FLOAT_EQUALITY),
+        2
+    );
+}
+
+#[test]
+fn reports_const_assignments_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local MAX_HP = 10
+MAX_HP = 20
+"#,
+        &DiagnosticsConfig {
+            const_assignments: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("const assignment lint should report diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_CONST_ASSIGNMENT)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("assignment to const-like name `MAX_HP`"));
+}
+
+#[test]
+fn checker_backed_function_lints_do_not_duplicate_type_diagnostics() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function damage(amount: number): string
+  return amount
+end
+
+damage()
+damage("bad")
+"#,
+        &DiagnosticsConfig {
+            wrong_argument_count: true,
+            parameter_type_mismatches: true,
+            return_type_mismatches: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("checker-backed function diagnostics should report");
+
+    assert_eq!(diagnostics.len(), 3);
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::TYPE_ARGUMENT_COUNT),
+        1
+    );
+    assert_eq!(count_code(&diagnostics, DiagnosticCode::TYPE_MISMATCH), 2);
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_WRONG_ARGUMENT_COUNT),
+        0
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_PARAMETER_TYPE_MISMATCH),
+        0
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_RETURN_TYPE_MISMATCH),
+        0
+    );
+}
+
+#[test]
 fn missing_require_lint_accepts_resolved_project_modules() {
     let project = TempProject::new("resolved-require");
 
@@ -231,6 +482,13 @@ _G.DynamicGlobal()
         },
     )
     .expect("known globals and dynamic module fields should not warn");
+}
+
+fn count_code(diagnostics: &[crate::Diagnostic], code: DiagnosticCode) -> usize {
+    diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(code))
+        .count()
 }
 
 struct TempProject {

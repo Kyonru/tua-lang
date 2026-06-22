@@ -66,6 +66,16 @@ undefined_variables = true
 unused_locals = true
 unused_parameters = true
 use_before_definition = true
+duplicate_parameters = true
+wrong_argument_count = true
+bad_requires = true
+impossible_boolean_expressions = true
+duplicate_if_conditions = true
+duplicate_binary_operands = true
+float_equality = true
+const_assignments = true
+parameter_type_mismatches = true
+return_type_mismatches = true
 globals = ["Game", "World"]
 "#,
     )
@@ -88,6 +98,16 @@ globals = ["Game", "World"]
                 unused_locals: true,
                 unused_parameters: true,
                 use_before_definition: true,
+                duplicate_parameters: true,
+                wrong_argument_count: true,
+                bad_requires: true,
+                impossible_boolean_expressions: true,
+                duplicate_if_conditions: true,
+                duplicate_binary_operands: true,
+                float_equality: true,
+                const_assignments: true,
+                parameter_type_mismatches: true,
+                return_type_mismatches: true,
                 globals: vec!["Game".to_owned(), "World".to_owned()],
             },
         }
@@ -130,6 +150,16 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_locals);
     assert!(!config.diagnostics.unused_parameters);
     assert!(!config.diagnostics.use_before_definition);
+    assert!(!config.diagnostics.duplicate_parameters);
+    assert!(!config.diagnostics.wrong_argument_count);
+    assert!(!config.diagnostics.bad_requires);
+    assert!(!config.diagnostics.impossible_boolean_expressions);
+    assert!(!config.diagnostics.duplicate_if_conditions);
+    assert!(!config.diagnostics.duplicate_binary_operands);
+    assert!(!config.diagnostics.float_equality);
+    assert!(!config.diagnostics.const_assignments);
+    assert!(!config.diagnostics.parameter_type_mismatches);
+    assert!(!config.diagnostics.return_type_mismatches);
     assert!(config.diagnostics.globals.is_empty());
 }
 
