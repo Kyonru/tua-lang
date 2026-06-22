@@ -38,6 +38,8 @@ pub struct ParsedSource {
     pub source: String,
     pub ast: full_moon::ast::Ast,
     pub span: Option<SourceSpan>,
+    pub lua_doc_annotations: Vec<LuaDocAnnotation>,
+    pub lua_doc_diagnostics: Vec<crate::Diagnostic>,
     pub type_aliases: Vec<TypeAlias>,
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
@@ -142,4 +144,107 @@ impl CompoundOperator {
             Self::Modulo => "%",
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LuaDocParseOptions {
+    pub diagnostics_enabled: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocParseResult {
+    pub annotations: Vec<LuaDocAnnotation>,
+    pub diagnostics: Vec<crate::Diagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocAnnotation {
+    pub kind: LuaDocAnnotationKind,
+    pub raw: String,
+    pub documentation: Option<String>,
+    pub span: SourceSpan,
+    pub tag_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LuaDocAnnotationKind {
+    Class(LuaDocClass),
+    Field(LuaDocField),
+    Alias(LuaDocAlias),
+    Type(LuaDocTypeAnnotation),
+    Param(LuaDocParam),
+    Return(LuaDocReturn),
+    Generic(LuaDocGeneric),
+    Version(LuaDocVersion),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocClass {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub extends: Option<String>,
+    pub extends_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocField {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub optional: bool,
+    pub visibility: Option<String>,
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocAlias {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocTypeAnnotation {
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocParam {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub optional: bool,
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocReturn {
+    pub returns: Vec<LuaDocReturnType>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocReturnType {
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocGeneric {
+    pub parameters: Vec<LuaDocGenericParameter>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocGenericParameter {
+    pub name: String,
+    pub name_span: SourceSpan,
+    pub bound: Option<TuaType>,
+    pub bound_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocVersion {
+    pub expression: String,
+    pub expression_span: SourceSpan,
 }

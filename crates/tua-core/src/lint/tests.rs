@@ -38,6 +38,7 @@ local Missing = require("definitely_missing_lint_module")
             duplicate_keys: true,
             missing_requires: true,
             self_assignments: true,
+            doc_annotations: false,
         },
     )
     .expect_err("enabled lints should report diagnostics");

@@ -61,6 +61,7 @@ emit_maps = false
 duplicate_keys = true
 missing_requires = true
 self_assignments = true
+doc_annotations = true
 "#,
     )
     .expect("config should parse");
@@ -77,6 +78,7 @@ self_assignments = true
                 duplicate_keys: true,
                 missing_requires: true,
                 self_assignments: true,
+                doc_annotations: true,
             },
         }
     );
@@ -113,6 +115,7 @@ duplicate_keys = true
     assert!(config.diagnostics.duplicate_keys);
     assert!(!config.diagnostics.missing_requires);
     assert!(!config.diagnostics.self_assignments);
+    assert!(!config.diagnostics.doc_annotations);
 }
 
 #[test]

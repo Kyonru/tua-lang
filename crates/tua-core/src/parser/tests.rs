@@ -1,4 +1,5 @@
 use super::*;
+use crate::{check_tua_source, check_tua_source_with_diagnostics_config};
 use std::path::PathBuf;
 
 #[test]
@@ -237,6 +238,190 @@ end
     assert_eq!(
         function.return_type,
         Some(TuaType::Named("Player".to_owned()))
+    );
+}
+
+#[test]
+fn parses_luahelper_doc_annotations_into_source_model() {
+    let parsed = parse_tua_source(
+        "src/lua_doc.tua",
+        r#"---@class Player : Entity playable character
+---@field public hp number current health
+---@field name? string optional display name
+---@alias PlayerId string|number identifier
+---@type { hp: number, alive?: boolean }
+---@generic T:Player, U
+---@version JIT
+---@param player Player target player
+---@param amount? number optional amount
+---@return Player updated player
+local function damage(player, amount)
+  return player
+end
+"#,
+    )
+    .expect("Lua doc annotations should parse with Tua source");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 10);
+
+    let LuaDocAnnotationKind::Class(class) = &parsed.lua_doc_annotations[0].kind else {
+        panic!("first annotation should be a class");
+    };
+    assert_eq!(class.name, "Player");
+    assert_eq!(class.extends.as_deref(), Some("Entity"));
+    assert_eq!(
+        parsed.lua_doc_annotations[0].documentation.as_deref(),
+        Some("playable character")
+    );
+    assert_eq!(class.name_span.start.line, 1);
+
+    let LuaDocAnnotationKind::Field(field) = &parsed.lua_doc_annotations[1].kind else {
+        panic!("second annotation should be a field");
+    };
+    assert_eq!(field.name, "hp");
+    assert_eq!(field.visibility.as_deref(), Some("public"));
+    assert!(!field.optional);
+    assert_eq!(field.ty, TuaType::Named("number".to_owned()));
+    assert_eq!(
+        parsed.lua_doc_annotations[1].documentation.as_deref(),
+        Some("current health")
+    );
+
+    let LuaDocAnnotationKind::Field(field) = &parsed.lua_doc_annotations[2].kind else {
+        panic!("third annotation should be a field");
+    };
+    assert_eq!(field.name, "name");
+    assert!(field.optional);
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[3].kind else {
+        panic!("fourth annotation should be an alias");
+    };
+    assert_eq!(alias.name, "PlayerId");
+    assert_eq!(
+        alias.ty,
+        TuaType::Union(vec![
+            TuaType::Named("string".to_owned()),
+            TuaType::Named("number".to_owned())
+        ])
+    );
+
+    let LuaDocAnnotationKind::Type(type_annotation) = &parsed.lua_doc_annotations[4].kind else {
+        panic!("fifth annotation should be a type annotation");
+    };
+    let TuaType::Table(fields) = &type_annotation.ty else {
+        panic!("type annotation should contain a table shape");
+    };
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].name, "hp");
+    assert!(!fields[0].optional);
+    assert_eq!(fields[1].name, "alive");
+    assert!(fields[1].optional);
+
+    let LuaDocAnnotationKind::Generic(generic) = &parsed.lua_doc_annotations[5].kind else {
+        panic!("sixth annotation should be generic");
+    };
+    assert_eq!(generic.parameters.len(), 2);
+    assert_eq!(generic.parameters[0].name, "T");
+    assert_eq!(
+        generic.parameters[0].bound,
+        Some(TuaType::Named("Player".to_owned()))
+    );
+    assert_eq!(generic.parameters[1].name, "U");
+
+    let LuaDocAnnotationKind::Version(version) = &parsed.lua_doc_annotations[6].kind else {
+        panic!("seventh annotation should be version");
+    };
+    assert_eq!(version.expression, "JIT");
+
+    let LuaDocAnnotationKind::Param(param) = &parsed.lua_doc_annotations[7].kind else {
+        panic!("eighth annotation should be a param");
+    };
+    assert_eq!(param.name, "player");
+    assert_eq!(param.ty, TuaType::Named("Player".to_owned()));
+    assert!(!param.optional);
+
+    let LuaDocAnnotationKind::Param(param) = &parsed.lua_doc_annotations[8].kind else {
+        panic!("ninth annotation should be a param");
+    };
+    assert_eq!(param.name, "amount");
+    assert!(param.optional);
+
+    let LuaDocAnnotationKind::Return(return_annotation) = &parsed.lua_doc_annotations[9].kind
+    else {
+        panic!("tenth annotation should be return");
+    };
+    assert_eq!(return_annotation.returns.len(), 1);
+    assert_eq!(
+        return_annotation.returns[0].ty,
+        TuaType::Named("Player".to_owned())
+    );
+    assert_eq!(
+        parsed.lua_doc_annotations[9].documentation.as_deref(),
+        Some("updated player")
+    );
+    assert_eq!(parsed.lua_doc_annotations[9].span.start.line, 10);
+    assert_eq!(parsed.lua_doc_annotations[9].tag_span.start.column, 4);
+}
+
+#[test]
+fn parses_lua_doc_annotations_without_requiring_valid_lua() {
+    let result = parse_lua_doc_annotations(
+        "src/broken.lua",
+        r#"---@class Broken
+local value =
+"#,
+    );
+
+    assert_eq!(result.annotations.len(), 1);
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn malformed_lua_doc_annotations_are_diagnostic_only_when_enabled() {
+    let source = r#"---@class
+---@field hp
+---@param value
+---@return
+"#;
+    let quiet = parse_lua_doc_annotations("src/bad_doc.lua", source);
+    let noisy = parse_lua_doc_annotations_with_options(
+        "src/bad_doc.lua",
+        source,
+        LuaDocParseOptions {
+            diagnostics_enabled: true,
+        },
+    );
+
+    assert_eq!(quiet.annotations.len(), 0);
+    assert!(quiet.diagnostics.is_empty());
+    assert_eq!(noisy.diagnostics.len(), 4);
+    assert!(noisy.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::SYNTAX_DOC_ANNOTATION)
+            && diagnostic.severity == crate::DiagnosticSeverity::Warning
+    }));
+}
+
+#[test]
+fn lua_doc_annotation_diagnostics_are_reported_only_when_configured() {
+    let source = "---@param value\nlocal value = 1\n";
+
+    check_tua_source("src/doc_quiet.tua", source)
+        .expect("malformed Lua doc annotations should be quiet by default");
+
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/doc_noisy.tua",
+        source,
+        &crate::DiagnosticsConfig {
+            doc_annotations: true,
+            ..crate::DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("enabled doc annotation diagnostics should report malformed comments");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::SYNTAX_DOC_ANNOTATION)
     );
 }
 

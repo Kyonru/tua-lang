@@ -53,9 +53,12 @@ pub use module_index::{
 };
 pub use module_link::{module_links_tua_source, ModuleLink};
 pub use parser::{
-    parse_lua_source, parse_tua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation,
-    LocalAnnotation, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TableFieldType,
-    TuaType, TypeAlias,
+    parse_lua_doc_annotations, parse_lua_doc_annotations_with_options, parse_lua_source,
+    parse_tua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation,
+    LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric,
+    LuaDocGenericParameter, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, ParameterAnnotation, ParsedSource,
+    SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
 };
 pub use project::project_description;
 pub use references::{references_parsed_source, references_tua_source, Reference, ReferenceKind};

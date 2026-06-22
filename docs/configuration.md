@@ -15,6 +15,7 @@ emit_maps = true
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
+doc_annotations = false
 ```
 
 ## Root Options
@@ -44,6 +45,7 @@ Optional lints are disabled by default.
 duplicate_keys = true
 missing_requires = true
 self_assignments = true
+doc_annotations = true
 ```
 
 `duplicate_keys`
@@ -55,6 +57,10 @@ self_assignments = true
 
 `self_assignments`
 : Reports assignments such as `player.hp = player.hp`.
+
+`doc_annotations`
+: Reports malformed supported LuaHelper/LuaLS-style doc annotations such as
+  `---@param` without a parameter type.
 
 ## Workspace Resolution
 

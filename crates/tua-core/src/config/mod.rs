@@ -19,6 +19,7 @@ emit_maps = true
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
+doc_annotations = false
 ";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,6 +50,7 @@ pub struct DiagnosticsConfig {
     pub duplicate_keys: bool,
     pub missing_requires: bool,
     pub self_assignments: bool,
+    pub doc_annotations: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -260,6 +262,9 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 }
                 "self_assignments" => {
                     config.diagnostics.self_assignments = parse_bool(line_number, value)?
+                }
+                "doc_annotations" => {
+                    config.diagnostics.doc_annotations = parse_bool(line_number, value)?
                 }
                 "" => {
                     return Err(ConfigParseError::new(line_number, "missing config key"));

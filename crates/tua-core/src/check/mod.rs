@@ -53,6 +53,12 @@ pub fn check_parsed_source_with_diagnostics_config(
         .diagnostics
         .extend(lint_parsed_source(parsed, diagnostics_config));
 
+    if diagnostics_config.doc_annotations {
+        checker
+            .diagnostics
+            .extend(parsed.lua_doc_diagnostics.iter().cloned());
+    }
+
     if checker.diagnostics.is_empty() {
         Ok(())
     } else {

@@ -1,3 +1,4 @@
+mod doc;
 mod model;
 mod normalize;
 
@@ -8,9 +9,13 @@ use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 
 use crate::{Diagnostic, DiagnosticCode};
+pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
-    CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation, ParameterAnnotation,
-    ParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation, LuaDocAlias,
+    LuaDocAnnotation, LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric,
+    LuaDocGenericParameter, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, ParameterAnnotation, ParsedSource,
+    SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 
@@ -36,6 +41,7 @@ fn parse_source_with_version(
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
     let source = source.into();
+    let doc_result = doc::collect_lua_doc_annotations(&path, &source);
 
     let parser_source = if collect_types {
         normalize_tua_source_for_luau_parser(&source)
@@ -63,6 +69,8 @@ fn parse_source_with_version(
                 source,
                 ast,
                 span,
+                lua_doc_annotations: doc_result.annotations,
+                lua_doc_diagnostics: doc_result.diagnostics,
                 type_aliases: syntax.type_aliases,
                 local_annotations: syntax.local_annotations,
                 function_annotations: syntax.function_annotations,

@@ -35,6 +35,7 @@ pub struct DiagnosticCode(u16);
 impl DiagnosticCode {
     pub const SYNTAX_PARSE: Self = Self(1);
     pub const SYNTAX_COMPOUND_ASSIGNMENT: Self = Self(2);
+    pub const SYNTAX_DOC_ANNOTATION: Self = Self(3);
     pub const TYPE_UNKNOWN_NAME: Self = Self(1001);
     pub const TYPE_DUPLICATE_ALIAS: Self = Self(1002);
     pub const TYPE_MISMATCH: Self = Self(1003);
