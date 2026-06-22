@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 
 use serde_json::{json, Value};
 use tua_core::{
-    Completion, CompletionKind, Definition, Diagnostic, DiagnosticSeverity, DocumentHighlight,
-    DocumentHighlightKind, DocumentSymbol, DocumentSymbolKind, Hover, InlayHint, InlayHintKind,
-    ModuleLink, Reference, RenameEdit, RenameTarget, SemanticToken, SemanticTokenKind,
-    SemanticTokenModifier, SignatureHelp, SignatureInformation, SourcePosition, SourceSpan,
-    TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
+    CodeAction, CodeActionEdit, CodeActionKind, Completion, CompletionKind, Definition, Diagnostic,
+    DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
+    DocumentSymbolKind, Hover, InlayHint, InlayHintKind, ModuleLink, Reference, RenameEdit,
+    RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier, SignatureHelp,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
+    WorkspaceSymbolKind,
 };
 
 use super::uri::uri_from_path;
@@ -61,6 +62,47 @@ pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
         "source": "tua",
         "message": diagnostic.message
     })
+}
+
+pub(super) fn core_diagnostic_from_lsp(
+    path: &std::path::Path,
+    diagnostic: &Value,
+) -> Option<Diagnostic> {
+    let start = diagnostic.get("range")?.get("start")?;
+    let position = source_position_from_lsp(start)?;
+    let code = diagnostic
+        .get("code")
+        .and_then(Value::as_str)
+        .and_then(parse_diagnostic_code);
+    let severity = diagnostic
+        .get("severity")
+        .and_then(Value::as_u64)
+        .map(lsp_diagnostic_severity)
+        .unwrap_or(DiagnosticSeverity::Warning);
+    let message = diagnostic.get("message")?.as_str()?.to_owned();
+    let mut output = Diagnostic::new(path, position.line, position.column, severity, message);
+
+    if let Some(code) = code {
+        output = output.with_code(code);
+    }
+
+    Some(output)
+}
+
+fn parse_diagnostic_code(code: &str) -> Option<DiagnosticCode> {
+    let number = code.strip_prefix("TL")?.parse::<u16>().ok()?;
+
+    DiagnosticCode::new(number)
+}
+
+fn lsp_diagnostic_severity(severity: u64) -> DiagnosticSeverity {
+    match severity {
+        1 => DiagnosticSeverity::Error,
+        2 => DiagnosticSeverity::Warning,
+        3 => DiagnosticSeverity::Info,
+        4 => DiagnosticSeverity::Hint,
+        _ => DiagnosticSeverity::Warning,
+    }
 }
 
 fn lsp_severity(severity: DiagnosticSeverity) -> u8 {
@@ -308,19 +350,96 @@ pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {
     })
 }
 
-pub(super) fn lsp_workspace_edit(edit: RenameEdit) -> Value {
-    let mut changes = BTreeMap::new();
+pub(super) fn lsp_code_action_from_core(action: CodeAction) -> Value {
+    json!({
+        "title": action.title,
+        "kind": lsp_code_action_kind(action.kind),
+        "edit": lsp_code_action_edit(action.edit)
+    })
+}
 
-    for edit in edit.edits {
-        changes
-            .entry(uri_from_path(&edit.path))
-            .or_insert_with(Vec::new)
-            .push(lsp_text_edit(edit));
+fn lsp_code_action_kind(kind: CodeActionKind) -> &'static str {
+    match kind {
+        CodeActionKind::QuickFix => "quickfix",
+    }
+}
+
+fn lsp_code_action_edit(edit: CodeActionEdit) -> Value {
+    let raw_changes = edit.changes;
+    let changes = lsp_changes(raw_changes.clone());
+
+    if edit.create_files.is_empty() {
+        return json!({
+            "changes": changes
+        });
+    }
+
+    let mut document_changes = edit
+        .create_files
+        .into_iter()
+        .map(|file| {
+            json!({
+                "kind": "create",
+                "uri": uri_from_path(&file.path),
+                "options": {
+                    "ignoreIfExists": file.ignore_if_exists
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for (uri, edits) in changes_for_document_changes(raw_changes) {
+        document_changes.push(json!({
+            "textDocument": {
+                "uri": uri,
+                "version": null
+            },
+            "edits": edits
+        }));
     }
 
     json!({
-        "changes": changes
+        "documentChanges": document_changes
     })
+}
+
+pub(super) fn lsp_workspace_edit(edit: RenameEdit) -> Value {
+    json!({
+        "changes": lsp_changes(group_text_edits(edit.edits))
+    })
+}
+
+fn group_text_edits(edits: Vec<TextEdit>) -> BTreeMap<std::path::PathBuf, Vec<TextEdit>> {
+    let mut changes = BTreeMap::new();
+
+    for edit in edits {
+        changes
+            .entry(edit.path.clone())
+            .or_insert_with(Vec::new)
+            .push(edit);
+    }
+
+    changes
+}
+
+fn lsp_changes(
+    changes: BTreeMap<std::path::PathBuf, Vec<TextEdit>>,
+) -> BTreeMap<String, Vec<Value>> {
+    changes
+        .into_iter()
+        .map(|(path, edits)| {
+            (
+                uri_from_path(&path),
+                edits.into_iter().map(lsp_text_edit).collect(),
+            )
+        })
+        .collect()
+}
+
+fn changes_for_document_changes(
+    changes: BTreeMap<std::path::PathBuf, Vec<TextEdit>>,
+) -> Vec<(String, Vec<Value>)> {
+    lsp_changes(changes).into_iter().collect()
 }
 
 fn lsp_text_edit(edit: TextEdit) -> Value {
@@ -502,8 +621,8 @@ fn lsp_position(position: SourcePosition) -> Value {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct SourceRange {
-    start: SourcePosition,
-    end: SourcePosition,
+    pub(super) start: SourcePosition,
+    pub(super) end: SourcePosition,
 }
 
 impl SourceRange {

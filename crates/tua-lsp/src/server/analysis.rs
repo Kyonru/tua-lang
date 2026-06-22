@@ -3,21 +3,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use tua_core::{
-    build_type_environment, check_parsed_source_with_diagnostics_config, complete_parsed_source,
-    complete_tua_source, definition_tua_source, document_highlights_parsed_source,
-    document_symbols_parsed_source, global_function_definition_count,
-    global_function_name_for_definition, global_references_to_definition_parsed_source,
-    global_type_alias_name_for_definition,
+    build_type_environment, check_parsed_source_with_diagnostics_config,
+    code_actions_parsed_source, complete_parsed_source, complete_tua_source, definition_tua_source,
+    document_highlights_parsed_source, document_symbols_parsed_source,
+    global_function_definition_count, global_function_name_for_definition,
+    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
     infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
     load_config_from_dir, module_links_tua_source, parse_lua_source, parse_tua_source,
     reference_kind_for_rename, references_to_definition_parsed_source,
     rename_target_for_definition, semantic_tokens_parsed_source, semantic_tokens_tua_source,
     signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
-    workspace_symbols_from_dir, Completion, Diagnostic, DiagnosticsConfig, DocumentHighlight,
-    DocumentSymbol, Hover, InlayHint, ModuleExports, ModuleLink, ParsedSource, Reference,
-    RenameEdit, RenameTarget, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit,
-    TypeEnvironment, WorkspaceSymbol,
+    workspace_symbols_from_dir, CodeAction, CodeActionRange, Completion, Diagnostic,
+    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint, ModuleExports,
+    ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
+    SourcePosition, SourceSpan, TextEdit, TypeEnvironment, WorkspaceSymbol,
 };
 
 use super::uri::path_from_uri;
@@ -280,6 +280,27 @@ impl AnalysisSnapshot {
             .unwrap_or_default()
     }
 
+    pub(super) fn code_actions(
+        &self,
+        path: &Path,
+        range: CodeActionRange,
+        diagnostics: &[Diagnostic],
+    ) -> Vec<CodeAction> {
+        let Some(parsed) = self.parsed(path) else {
+            return Vec::new();
+        };
+        let (source_dir, extension) = self.project_source_for_path(path).unwrap_or_else(|| {
+            (
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf(),
+                "tua".to_owned(),
+            )
+        });
+
+        code_actions_parsed_source(parsed, diagnostics, range, &source_dir, &extension)
+    }
+
     pub(super) fn references(
         &self,
         path: &Path,
@@ -444,6 +465,30 @@ impl AnalysisSnapshot {
                 .find(|document| document.path == path)
                 .and_then(|document| self.files.get(&document.path))
         })
+    }
+
+    fn project_source_for_path(&self, path: &Path) -> Option<(PathBuf, String)> {
+        let mut roots = if self.workspace_folders.is_empty() {
+            vec![std::env::current_dir().ok()?]
+        } else {
+            self.workspace_folders.clone()
+        };
+
+        roots.sort_by_key(|root| std::cmp::Reverse(root.components().count()));
+
+        for root in roots {
+            if !path.starts_with(&root) {
+                continue;
+            }
+
+            let Ok(loaded) = load_config_from_dir(&root) else {
+                continue;
+            };
+
+            return Some((root.join(loaded.config.source), loaded.config.extension));
+        }
+
+        None
     }
 
     fn is_ambiguous_project_rename(

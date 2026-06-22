@@ -5,13 +5,13 @@ use serde_json::{json, Value};
 use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
 
 use super::protocol::{
-    completion_resolve_data, error_response, lsp_completion_from_core, lsp_diagnostic_from_core,
-    lsp_document_highlight_from_core, lsp_document_link_from_core, lsp_document_symbol_from_core,
-    lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_location_from_core,
-    lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
-    lsp_semantic_tokens_from_core, lsp_signature_help_from_core, lsp_source_range,
-    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
-    source_position_from_lsp,
+    completion_resolve_data, core_diagnostic_from_lsp, error_response, lsp_code_action_from_core,
+    lsp_completion_from_core, lsp_diagnostic_from_core, lsp_document_highlight_from_core,
+    lsp_document_link_from_core, lsp_document_symbol_from_core, lsp_hover_from_core,
+    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_semantic_tokens_from_core,
+    lsp_signature_help_from_core, lsp_source_range, lsp_workspace_edit,
+    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer};
@@ -77,6 +77,7 @@ impl LspServer {
                 response(id, self.document_highlight_response(&message))
             }
             "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
+            "textDocument/codeAction" => response(id, self.code_action_response(&message)),
             "textDocument/references" => response(id, self.references_response(&message)),
             "textDocument/prepareRename" => response(
                 id,
@@ -408,6 +409,38 @@ impl LspServer {
                 .map(lsp_document_symbol_from_core)
                 .collect(),
         )
+    }
+
+    fn code_action_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let Some(range) = request.params.get("range").and_then(lsp_source_range) else {
+            return json!([]);
+        };
+        let diagnostics = request
+            .params
+            .get("context")
+            .and_then(|context| context.get("diagnostics"))
+            .and_then(Value::as_array)
+            .map(|diagnostics| {
+                diagnostics
+                    .iter()
+                    .filter_map(|diagnostic| core_diagnostic_from_lsp(&request.path, diagnostic))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let snapshot = self.analysis.snapshot(&self.workspace_folders);
+        let actions = snapshot.code_actions(
+            &request.path,
+            tua_core::CodeActionRange {
+                start: range.start,
+                end: range.end,
+            },
+            &diagnostics,
+        );
+
+        Value::Array(actions.into_iter().map(lsp_code_action_from_core).collect())
     }
 
     fn references_response(&self, message: &Value) -> Value {

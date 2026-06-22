@@ -70,6 +70,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["codeActionProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["referencesProvider"],
         true
     );
@@ -1658,6 +1662,209 @@ fn document_symbol_unknown_document_returns_empty_array() {
 }
 
 #[test]
+fn code_action_creates_missing_require_target() {
+    let temp = TempProject::new("code-action-missing-require");
+    let source = "local Player = require(\"player\")\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    server.send(code_action_request(2, &uri, 0, 0, 0, 40, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Create module `player`");
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(action["edit"]["documentChanges"][0]["kind"], "create");
+    assert_eq!(action["edit"]["documentChanges"][0]["uri"], player_uri);
+    assert_eq!(
+        action["edit"]["documentChanges"][0]["options"]["ignoreIfExists"],
+        true
+    );
+    assert!(action["edit"].get("changes").is_none());
+    assert_eq!(
+        action["edit"]["documentChanges"][1]["edits"][0]["newText"],
+        "return {}\n"
+    );
+}
+
+#[test]
+fn code_action_adds_missing_local_annotation() {
+    let uri = "file:///tmp/code-action-annotation.tua";
+    let source = "local hp = 10\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request(2, uri, 0, 0, 0, 20, Vec::new()),
+    ]);
+    let action = code_action_result(&output, 2, 0);
+
+    assert_eq!(action["title"], "Add type annotation `: number`");
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(action["edit"]["changes"][uri][0]["newText"], ": number");
+    assert_eq!(
+        range_text(source, &action["edit"]["changes"][uri][0]["range"]),
+        ""
+    );
+}
+
+#[test]
+fn code_action_removes_unused_local() {
+    let temp = TempProject::new("code-action-unused-local");
+    let source = "local unused = 1\nlocal used = 2\nprint(used)\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+unused_locals = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL4005")
+        .collect::<Vec<_>>();
+
+    server.send(code_action_request(2, &uri, 0, 0, 0, 30, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Remove unused local");
+    assert_eq!(action["edit"]["changes"][&uri][0]["newText"], "");
+    assert_eq!(
+        action["edit"]["changes"][&uri][0]["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 1, "character": 0 }
+        })
+    );
+}
+
+#[test]
+fn code_action_renames_duplicate_table_key() {
+    let temp = TempProject::new("code-action-duplicate-key");
+    let source = "local config = { hp = 10, hp = 20 }\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+duplicate_keys = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    server.send(code_action_request(2, &uri, 0, 0, 0, 60, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Rename duplicate key to `hp2`");
+    assert_eq!(action["edit"]["changes"][&uri][0]["newText"], "hp2");
+    assert_eq!(
+        range_text(source, &action["edit"]["changes"][&uri][0]["range"]),
+        "hp"
+    );
+}
+
+#[test]
+fn code_action_removes_self_assignment() {
+    let temp = TempProject::new("code-action-self-assignment");
+    let source = "hp = hp\nlocal ok = 1\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+self_assignments = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    server.send(code_action_request(2, &uri, 0, 0, 0, 20, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Remove self-assignment");
+    assert_eq!(action["edit"]["changes"][&uri][0]["newText"], "");
+    assert_eq!(
+        action["edit"]["changes"][&uri][0]["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 1, "character": 0 }
+        })
+    );
+}
+
+#[test]
+fn code_action_is_absent_for_unsafe_edits() {
+    let temp = TempProject::new("code-action-unsafe");
+    let source = r#"local unused, other = 1, 2
+local config = { ["hp"] = 10, ["hp"] = 20 }
+print(config)
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+unused_locals = true
+duplicate_keys = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    server.send(code_action_request(2, &uri, 0, 0, 1, 80, diagnostics));
+
+    assert_eq!(response_with_id(server.output(), 2)["result"], json!([]));
+}
+
+#[test]
 fn references_returns_alias_function_local_and_table_field_locations() {
     let uri = "file:///tmp/references.tua";
     let source = r#"type Vec2 = { x: number, y: number }
@@ -2559,6 +2766,40 @@ fn document_highlight_request(
     })
 }
 
+fn code_action_request(
+    id: u64,
+    uri: &str,
+    start_line: usize,
+    start_character: usize,
+    end_line: usize,
+    end_character: usize,
+    diagnostics: Vec<Value>,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/codeAction",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "range": {
+                "start": {
+                    "line": start_line,
+                    "character": start_character
+                },
+                "end": {
+                    "line": end_line,
+                    "character": end_character
+                }
+            },
+            "context": {
+                "diagnostics": diagnostics
+            }
+        }
+    })
+}
+
 fn references_request(
     id: u64,
     uri: &str,
@@ -2917,6 +3158,12 @@ fn assert_document_highlight_texts<const N: usize>(
 
     assert_eq!(texts, expected);
     assert!(highlights.iter().all(|highlight| highlight["kind"] == 1));
+}
+
+fn code_action_result(output: &[Value], id: u64, index: usize) -> &Value {
+    &response_with_id(output, id)["result"]
+        .as_array()
+        .expect("code actions should be an array")[index]
 }
 
 fn assert_rename_edit_texts<const N: usize>(

@@ -43,6 +43,7 @@ pub(super) fn initialize_result() -> Value {
             },
             "documentHighlightProvider": true,
             "documentSymbolProvider": true,
+            "codeActionProvider": true,
             "referencesProvider": true,
             "workspaceSymbolProvider": true,
             "renameProvider": {
