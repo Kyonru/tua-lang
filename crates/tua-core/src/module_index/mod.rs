@@ -618,19 +618,23 @@ fn lua_doc_function_export_for_field(
             )
         })
         .collect::<Vec<_>>();
-    let return_type = docs
+    let return_types = docs
         .iter()
         .find_map(|annotation| match &annotation.kind {
-            LuaDocAnnotationKind::Return(return_annotation) => return_annotation
-                .returns
-                .first()
-                .map(|return_type| type_from_lua_doc_type(&return_type.ty)),
+            LuaDocAnnotationKind::Return(return_annotation) => Some(
+                return_annotation
+                    .returns
+                    .iter()
+                    .map(|return_type| type_from_lua_doc_type(&return_type.ty))
+                    .collect::<Vec<_>>(),
+            ),
             _ => None,
         })
-        .unwrap_or(Type::Any);
+        .filter(|returns| !returns.is_empty())
+        .unwrap_or_else(|| vec![Type::Any]);
 
     Some(ModuleExportField {
-        ty: Type::function(parameters, return_type),
+        ty: Type::function_returns(parameters, return_types),
         documentation: field_documentation(parsed, field),
         parameter_documentation,
     })
@@ -848,7 +852,7 @@ fn typed_function_type(function: &TypedFunction) -> Type {
         vec![Type::Any; function.parameter_count]
     };
 
-    Type::function(parameters, function.return_type_or_any())
+    Type::function_returns(parameters, function.return_types_or_any())
 }
 
 fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {

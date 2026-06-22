@@ -162,6 +162,30 @@ local total: number = add(1, 2)
 }
 
 #[test]
+fn accepts_love_method_multi_return_from_inferred_function_body() {
+    check_tua_source(
+        "src/assets.tua",
+        r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+local function azul()
+  return player.getDimensions()
+end
+
+local c = azul()
+local z: number = c + 1
+local literal: number = 1 + 3
+local label: string = "width: " .. z
+"#,
+    )
+    .expect("Love method multi-return should satisfy inferred function return checks");
+}
+
+#[test]
 fn rejects_function_call_argument_count_mismatch() {
     let diagnostics = check_tua_source(
         "src/combat.tua",

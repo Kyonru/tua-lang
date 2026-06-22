@@ -294,7 +294,7 @@ impl<'a> SignatureResolver<'a> {
 
         if fields.is_empty() {
             if let Some(function) = self.environment.function(root) {
-                return Some(function.return_type_or_any());
+                return function.return_types_or_any().into_iter().next();
             }
 
             if let Some(kind) = asset::loader_kind(root) {
@@ -306,7 +306,7 @@ impl<'a> SignatureResolver<'a> {
             return None;
         };
 
-        Some(*function.return_type)
+        function.return_types_or_any().first().cloned()
     }
 
     fn infer_var_value(&self, var: &Var, position: SourcePosition, depth: usize) -> Option<Type> {
@@ -511,7 +511,7 @@ fn signature_from_typed_function(
         format!(
             "function {name}({}): {}",
             parameter_labels.join(", "),
-            function.return_type_or_any()
+            format_type_list(&function.return_types_or_any())
         ),
         function.documentation.clone(),
     )
@@ -542,11 +542,19 @@ fn signature_from_function_type(name: &str, function: &FunctionType) -> Signatur
         format!(
             "function {name}({}): {}",
             parameters.join(", "),
-            function.return_type
+            format_type_list(function.return_types_or_any())
         ),
         parameters,
         None,
     )
+}
+
+fn format_type_list(types: &[Type]) -> String {
+    types
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn lua_signature_help(context: &CallContext) -> Option<SignatureHelp> {

@@ -7,7 +7,6 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::asset;
 use crate::config::DiagnosticsConfig;
 use crate::lint::lint_parsed_source;
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
@@ -15,6 +14,7 @@ use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
     TypedFunction,
 };
+use crate::{asset, lua};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -86,7 +86,9 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_block(&mut self, block: &ast::Block, current_return: Option<&Type>) {
+    fn check_block(&mut self, block: &ast::Block, current_return: Option<&[Type]>) {
+        self.scoped_locals.push(BTreeMap::new());
+
         for stmt in block.stmts() {
             self.check_stmt(stmt, current_return);
         }
@@ -94,9 +96,11 @@ impl<'a> Checker<'a> {
         if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
             self.check_return(return_stmt, current_return);
         }
+
+        self.scoped_locals.pop();
     }
 
-    fn check_stmt(&mut self, stmt: &ast::Stmt, current_return: Option<&Type>) {
+    fn check_stmt(&mut self, stmt: &ast::Stmt, current_return: Option<&[Type]>) {
         match stmt {
             ast::Stmt::Assignment(assignment) => self.check_assignment(assignment),
             ast::Stmt::FunctionCall(function_call) => {
@@ -120,20 +124,20 @@ impl<'a> Checker<'a> {
             ast::Stmt::GenericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
-                let return_type = self.function_return_type(&name);
+                let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_parameter_locals(&name);
 
                 self.scoped_locals.push(scoped_locals);
-                self.check_block(function.body().block(), return_type.as_ref());
+                self.check_block(function.body().block(), return_types.as_deref());
                 self.scoped_locals.pop();
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 let name = function.name().to_string();
-                let return_type = self.function_return_type(&name);
+                let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_parameter_locals(&name);
 
                 self.scoped_locals.push(scoped_locals);
-                self.check_block(function.body().block(), return_type.as_ref());
+                self.check_block(function.body().block(), return_types.as_deref());
                 self.scoped_locals.pop();
             }
             ast::Stmt::NumericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
@@ -220,6 +224,38 @@ impl<'a> Checker<'a> {
 
             self.check_expression_assignable(expression, &target);
         }
+
+        self.record_local_assignment_types(local);
+    }
+
+    fn record_local_assignment_types(&mut self, local: &ast::LocalAssignment) {
+        let expressions = local.expressions().iter().collect::<Vec<_>>();
+        let specifiers = local.type_specifiers().collect::<Vec<_>>();
+
+        for (index, name) in local.names().iter().enumerate() {
+            let name = token_text(name);
+            let ty = specifiers
+                .get(index)
+                .and_then(|specifier| *specifier)
+                .and_then(|_| self.environment.local(&name).cloned())
+                .or_else(|| {
+                    assignment_expression_for_local(&expressions, index).and_then(
+                        |(expression, return_index)| {
+                            self.infer_expression_return(expression, return_index)
+                        },
+                    )
+                });
+
+            if let Some(ty) = ty {
+                self.insert_scoped_local(name, ty);
+            }
+        }
+    }
+
+    fn insert_scoped_local(&mut self, name: String, ty: Type) {
+        if let Some(scope) = self.scoped_locals.last_mut() {
+            scope.insert(name, ty);
+        }
     }
 
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
@@ -237,45 +273,74 @@ impl<'a> Checker<'a> {
             return;
         };
 
-        if !self.context.is_assignable(&source, target) {
-            self.diagnostics.push(mismatch_diagnostic(
-                &self.parsed.path,
-                expression,
-                target,
-                &source,
-            ));
+        self.check_type_assignable(expression, &source, target);
+    }
+
+    fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
+        if !self.context.is_assignable(source, target) {
+            self.diagnostics
+                .push(mismatch_diagnostic(&self.parsed.path, node, target, source));
         }
     }
 
-    fn check_return(&mut self, return_stmt: &Return, target: Option<&Type>) {
+    fn check_return(&mut self, return_stmt: &Return, target: Option<&[Type]>) {
         let Some(target) = target else {
             return;
         };
 
-        let Some(expression) = return_stmt.returns().iter().next() else {
-            if !self.context.is_assignable(&Type::nil(), target) {
-                self.diagnostics.push(mismatch_diagnostic(
-                    &self.parsed.path,
-                    return_stmt,
-                    target,
-                    &Type::nil(),
-                ));
-            }
-            return;
-        };
+        let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
 
-        self.check_expression_assignable(expression, target);
+        if expressions.is_empty() {
+            self.check_type_assignable(
+                return_stmt,
+                &Type::nil(),
+                target.first().unwrap_or(&Type::nil()),
+            );
+            return;
+        }
+
+        for (index, target) in target.iter().enumerate() {
+            let source = assignment_expression_for_local(&expressions, index)
+                .and_then(|(expression, return_index)| {
+                    self.infer_expression_return(expression, return_index)
+                })
+                .unwrap_or_else(Type::nil);
+
+            self.check_type_assignable(return_stmt, &source, target);
+        }
     }
 
     fn infer_expression(&mut self, expression: &Expression) -> Option<Type> {
+        self.infer_expression_return(expression, 0)
+    }
+
+    fn infer_expression_return(
+        &mut self,
+        expression: &Expression,
+        return_index: usize,
+    ) -> Option<Type> {
         match expression {
+            Expression::FunctionCall(function_call) => self
+                .check_function_call_returns(function_call)
+                .get(return_index)
+                .cloned(),
+            _ if return_index > 0 => None,
+            Expression::BinaryOperator { lhs, binop, rhs } => {
+                let left = self.infer_expression(lhs)?;
+                let right = self.infer_expression(rhs)?;
+
+                self.infer_binary_operator_type(binop, &left, &right)
+            }
             Expression::Number(_) => Some(Type::number()),
             Expression::String(_) => Some(Type::string()),
             Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
             Expression::TableConstructor(table) => Some(self.infer_table_constructor(table)),
-            Expression::Parentheses { expression, .. } => self.infer_expression(expression),
-            Expression::TypeAssertion { expression, .. } => self.infer_expression(expression),
-            Expression::FunctionCall(function_call) => self.check_function_call(function_call),
+            Expression::Parentheses { expression, .. } => {
+                self.infer_expression_return(expression, return_index)
+            }
+            Expression::TypeAssertion { expression, .. } => {
+                self.infer_expression_return(expression, return_index)
+            }
             Expression::Var(var) => self.infer_var_value(var),
             _ => None,
         }
@@ -316,15 +381,24 @@ impl<'a> Checker<'a> {
     }
 
     fn check_function_call(&mut self, function_call: &FunctionCall) -> Option<Type> {
-        let callee = self.infer_call_target(function_call)?;
+        self.check_function_call_returns(function_call)
+            .into_iter()
+            .next()
+    }
+
+    fn check_function_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
+        let Some(callee) = self.infer_call_target(function_call) else {
+            return Vec::new();
+        };
 
         match callee {
-            Callable::Any => Some(Type::Any),
+            Callable::Any => vec![Type::Any],
             Callable::Function(function) => {
                 self.check_call_arguments(function_call, &function);
 
-                Some(*function.return_type)
+                function.return_types_or_any().to_vec()
             }
+            Callable::ExternalFunction(function) => function.return_types_or_any().to_vec(),
         }
     }
 
@@ -346,9 +420,24 @@ impl<'a> Checker<'a> {
             }
         }
 
+        if !fields.is_empty() {
+            if let Some(function) = self.love_object_method_call_target(&parts) {
+                return Some(Callable::ExternalFunction(function));
+            }
+        }
+
         let callee_type = self.resolve_field_chain_type(&parts)?;
 
         callable_from_type(&callee_type, self.environment)
+    }
+
+    fn love_object_method_call_target(&self, parts: &[String]) -> Option<FunctionType> {
+        let method = parts.last()?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+        let item = lua_type_field_item(self.environment, &receiver_type, method)?;
+
+        function_type_from_lua_item(item)
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
@@ -383,10 +472,10 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn function_return_type(&self, name: &str) -> Option<Type> {
+    fn function_return_types(&self, name: &str) -> Option<Vec<Type>> {
         self.environment
             .function(name.trim())
-            .and_then(|function| function.return_type.clone())
+            .map(|function| function.return_types_or_any())
     }
 
     fn infer_var_assignment_target(&self, var: &Var) -> Option<Type> {
@@ -401,7 +490,7 @@ impl<'a> Checker<'a> {
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
-        let mut current = self.environment.local(root)?.clone();
+        let mut current = self.infer_named_value(root)?;
 
         for field in fields {
             current = self.resolve_table_field_type(&current, field)?;
@@ -451,11 +540,52 @@ impl<'a> Checker<'a> {
             &resolve_aliases(right, self.environment, 0),
         )
     }
+
+    fn infer_binary_operator_type(
+        &self,
+        binop: &ast::BinOp,
+        left: &Type,
+        right: &Type,
+    ) -> Option<Type> {
+        if is_numeric_operator(binop) && self.is_number_type(left) && self.is_number_type(right) {
+            return Some(Type::number());
+        }
+
+        if matches!(binop, ast::BinOp::TwoDots(_))
+            && self.is_concat_operand_type(left)
+            && self.is_concat_operand_type(right)
+        {
+            return Some(Type::string());
+        }
+
+        if matches!(left, Type::Any) || matches!(right, Type::Any) {
+            return Some(Type::Any);
+        }
+
+        None
+    }
+
+    fn is_number_type(&self, ty: &Type) -> bool {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Primitive(crate::PrimitiveType::Number) => true,
+            Type::Union(types) => types.iter().all(|ty| self.is_number_type(ty)),
+            _ => false,
+        }
+    }
+
+    fn is_concat_operand_type(&self, ty: &Type) -> bool {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
+            Type::Union(types) => types.iter().all(|ty| self.is_concat_operand_type(ty)),
+            _ => false,
+        }
+    }
 }
 
 enum Callable {
     Any,
     Function(FunctionType),
+    ExternalFunction(FunctionType),
 }
 
 enum CallArgument<'a> {
@@ -466,12 +596,12 @@ enum CallArgument<'a> {
 impl Callable {
     fn from_typed_function(function: &TypedFunction) -> Self {
         if function.has_fully_annotated_parameters() {
-            Self::Function(FunctionType::new(
+            Self::Function(FunctionType::new_returns(
                 function
                     .parameters
                     .iter()
                     .map(|parameter| parameter.ty.clone()),
-                function.return_type_or_any(),
+                function.return_types_or_any(),
             ))
         } else {
             Self::Any
@@ -489,6 +619,18 @@ fn infer_symbol_type(symbol: &str) -> Option<Type> {
 
 fn is_equality_operator(binop: &ast::BinOp) -> bool {
     matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_))
+}
+
+fn is_numeric_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::Caret(_)
+            | ast::BinOp::Minus(_)
+            | ast::BinOp::Percent(_)
+            | ast::BinOp::Plus(_)
+            | ast::BinOp::Slash(_)
+            | ast::BinOp::Star(_)
+    )
 }
 
 fn types_can_overlap(left: &Type, right: &Type) -> bool {
@@ -540,12 +682,105 @@ fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<Str
     for suffix in function_call.suffixes() {
         match suffix {
             Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(Call::MethodCall(method)) => {
+                parts.push(token_text(method.name()));
+                return Some(parts);
+            }
             Suffix::Call(_) => return Some(parts),
             _ => return None,
         }
     }
 
     None
+}
+
+fn assignment_expression_for_local<'a>(
+    expressions: &[&'a Expression],
+    index: usize,
+) -> Option<(&'a Expression, usize)> {
+    if expressions.is_empty() {
+        return None;
+    }
+
+    let fixed_expression_count = expressions.len().saturating_sub(1);
+
+    if index < fixed_expression_count {
+        return expressions
+            .get(index)
+            .copied()
+            .map(|expression| (expression, 0));
+    }
+
+    expressions
+        .last()
+        .copied()
+        .map(|expression| (expression, index - fixed_expression_count))
+}
+
+fn lua_type_field_item(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    field: &str,
+) -> Option<lua::LuaItem> {
+    match resolve_aliases(ty, environment, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| lua_type_field_item(environment, ty, field)),
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
+fn function_type_from_lua_item(item: lua::LuaItem) -> Option<FunctionType> {
+    let mut return_types = return_types_from_function_detail(item.detail);
+
+    if return_types.is_empty() {
+        return_types.push(Type::Any);
+    }
+
+    Some(FunctionType::new_returns([], return_types))
+}
+
+fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
+    let Some(start) = detail.rfind("): ").map(|index| index + "): ".len()) else {
+        return Vec::new();
+    };
+
+    detail[start..]
+        .split(',')
+        .map(str::trim)
+        .filter_map(type_from_lua_label)
+        .collect()
+}
+
+fn type_from_lua_label(label: &str) -> Option<Type> {
+    let label = label.trim();
+
+    if label.contains('|') {
+        let members = label
+            .split('|')
+            .filter_map(type_from_lua_label)
+            .collect::<Vec<_>>();
+
+        return match members.len() {
+            0 => None,
+            1 => members.into_iter().next(),
+            _ => Some(Type::union(members)),
+        };
+    }
+
+    match label {
+        "any" => Some(Type::Any),
+        "boolean" => Some(Type::boolean()),
+        "nil" => Some(Type::nil()),
+        "number" => Some(Type::number()),
+        "string" => Some(Type::string()),
+        "table" => Some(Type::empty_table()),
+        other if !other.is_empty() => Some(Type::alias(other)),
+        _ => None,
+    }
 }
 
 fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>> {

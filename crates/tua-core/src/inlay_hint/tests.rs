@@ -73,6 +73,66 @@ local jump = sound "assets/jump.wav"
     assert_eq!(type_hints, vec![": Image", ": Source"]);
 }
 
+#[test]
+fn hints_love_object_method_return_types_from_inferred_asset_loader_returns() {
+    let source = r#"
+local player = image "assets/hero.png"
+local w = player:getWidth()
+local a, b = player.getDimensions()
+local minFilter, magFilter, anisotropy = player:getFilter()
+"#;
+    let hints = inlay_hints_tua_source("src/assets.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![
+            ": Image",
+            ": number",
+            ": number",
+            ": number",
+            ": FilterMode",
+            ": FilterMode",
+            ": number"
+        ]
+    );
+}
+
+#[test]
+fn hints_love_method_return_type_through_local_function_body() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+local function azul()
+  return player.getDimensions()
+end
+
+local c = azul()
+local z = c + 1
+local literal = 1 + 3
+local label = "width: " .. z
+"#;
+    let hints = inlay_hints_tua_source("src/assets.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![": Image", ": number", ": number", ": number", ": string"]
+    );
+}
+
 fn inlay_hints() -> Vec<InlayHint> {
     inlay_hints_tua_source("src/player.tua", SOURCE).expect("source should parse")
 }

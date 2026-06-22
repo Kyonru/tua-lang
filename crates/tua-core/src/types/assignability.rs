@@ -77,7 +77,12 @@ impl TypeContext {
                 .iter()
                 .zip(&target.parameters)
                 .all(|(source, target)| self.is_assignable_inner(target, source, depth + 1))
-            && self.is_assignable_inner(&source.return_type, &target.return_type, depth + 1)
+            && source.return_types_or_any().len() == target.return_types_or_any().len()
+            && source
+                .return_types_or_any()
+                .iter()
+                .zip(target.return_types_or_any())
+                .all(|(source, target)| self.is_assignable_inner(source, target, depth + 1))
     }
 
     fn is_table_assignable(&self, source: &TableShape, target: &TableShape, depth: usize) -> bool {

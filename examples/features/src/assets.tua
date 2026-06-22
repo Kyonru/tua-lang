@@ -8,9 +8,14 @@ end
 
 local player = loadPlayerImage()
 
-player.
+local a, b = player.getDimensions()
 
+local function azul()
 
+  return player.getDimensions()
+end
+
+local c = azul()
 
 return {
   loadPlayerImage = loadPlayerImage,

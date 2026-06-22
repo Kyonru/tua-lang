@@ -469,6 +469,86 @@ player:setFilter()
 }
 
 #[test]
+fn hovers_love_object_method_return_types_from_inferred_asset_loader_returns() {
+    let source = r#"
+local player = image "assets/hero.png"
+local w = player:getWidth()
+local a, b = player.getDimensions()
+local minFilter, magFilter, anisotropy = player:getFilter()
+local copied = anisotropy
+"#;
+    let width = hover_tua_source("src/main.tua", source, position_at(source, "w ="))
+        .expect("hover should not fail")
+        .expect("width local should hover");
+    let first_dimension = hover_tua_source("src/main.tua", source, position_at(source, "a, b"))
+        .expect("hover should not fail")
+        .expect("first dimension should hover");
+    let second_dimension = hover_tua_source("src/main.tua", source, position_at(source, "b ="))
+        .expect("hover should not fail")
+        .expect("second dimension should hover");
+    let copied = hover_tua_source("src/main.tua", source, position_at(source, "copied ="))
+        .expect("hover should not fail")
+        .expect("copied return should hover");
+
+    assert_eq!(width.contents, "local w: number");
+    assert_eq!(first_dimension.contents, "local a: number");
+    assert_eq!(second_dimension.contents, "local b: number");
+    assert_eq!(copied.contents, "local copied: number");
+}
+
+#[test]
+fn hovers_love_method_return_type_through_local_function_body() {
+    let source = r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+local player = loadPlayerImage()
+
+local a, b = player.getDimensions()
+
+local function azul()
+  return player.getDimensions()
+end
+
+local c = azul()
+local z = c + b
+local literal = 1 + 3
+local label = "width: " .. z
+
+return {
+  loadPlayerImage = loadPlayerImage,
+  loadJumpSound = loadJumpSound,
+}
+"#;
+    let function = hover_tua_source("src/main.tua", source, position_at(source, "azul()"))
+        .expect("hover should not fail")
+        .expect("azul should hover");
+    let local = hover_tua_source("src/main.tua", source, position_at(source, "c ="))
+        .expect("hover should not fail")
+        .expect("c should hover");
+    let sum = hover_tua_source("src/main.tua", source, position_at(source, "z ="))
+        .expect("hover should not fail")
+        .expect("z should hover");
+    let literal = hover_tua_source("src/main.tua", source, position_at(source, "literal ="))
+        .expect("hover should not fail")
+        .expect("literal should hover");
+    let label = hover_tua_source("src/main.tua", source, position_at(source, "label ="))
+        .expect("hover should not fail")
+        .expect("label should hover");
+
+    assert_eq!(function.contents, "function azul(): number, number");
+    assert_eq!(local.contents, "local c: number");
+    assert_eq!(sum.contents, "local z: number");
+    assert_eq!(literal.contents, "local literal: number");
+    assert_eq!(label.contents, "local label: string");
+}
+
+#[test]
 fn local_symbols_shadow_lua_global_hover() {
     let source = "local math: any = {}\nlocal value = math.sin\n";
     let position = position_at(source, "sin");

@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::{self, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var};
+use full_moon::ast::{
+    self, Call, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
+};
 use full_moon::node::Node;
 
 use crate::module_index::required_module_export_type_for_fields;
@@ -10,7 +12,7 @@ use crate::parser::{
     LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
-use crate::{asset, Diagnostic, DiagnosticCode};
+use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{TableField, Type, TypeAlias};
 use super::TypeContext;
@@ -84,6 +86,7 @@ pub struct TypedFunction {
     pub parameter_count: usize,
     pub has_varargs: bool,
     pub return_type: Option<Type>,
+    pub return_types: Vec<Type>,
     pub documentation: Option<String>,
 }
 
@@ -96,11 +99,19 @@ impl TypedFunction {
         self.return_type.clone().unwrap_or(Type::Any)
     }
 
+    pub fn return_types_or_any(&self) -> Vec<Type> {
+        if !self.return_types.is_empty() {
+            return self.return_types.clone();
+        }
+
+        vec![self.return_type_or_any()]
+    }
+
     pub fn as_type(&self) -> Option<Type> {
         self.has_fully_annotated_parameters().then(|| {
-            Type::function(
+            Type::function_returns(
                 self.parameters.iter().map(|parameter| parameter.ty.clone()),
-                self.return_type_or_any(),
+                self.return_types_or_any(),
             )
         })
     }
@@ -210,7 +221,7 @@ pub(crate) fn build_type_environment_with_diagnostics(
     let inferred_returns = infer_function_return_types(parsed, &aliases, &locals, &functions);
 
     for function in &mut functions {
-        if function.return_type.is_some() {
+        if !function.return_types.is_empty() || function.return_type.is_some() {
             continue;
         }
 
@@ -218,7 +229,10 @@ pub(crate) fn build_type_environment_with_diagnostics(
             continue;
         };
 
-        function.return_type = inferred_returns.get(name).cloned();
+        if let Some(return_types) = inferred_returns.get(name) {
+            function.return_types = return_types.clone();
+            function.return_type = function.return_types.first().cloned();
+        }
     }
 
     (
@@ -279,6 +293,7 @@ fn resolve_function_annotation(
         .return_type
         .as_ref()
         .map(|ty| resolve_tua_type(path, ty, function.span, alias_names, diagnostics));
+    let return_types = return_type.iter().cloned().collect();
 
     TypedFunction {
         name: function.name.clone(),
@@ -286,6 +301,7 @@ fn resolve_function_annotation(
         parameter_count: function.parameter_count,
         has_varargs: function.has_varargs,
         return_type,
+        return_types,
         documentation: None,
     }
 }
@@ -697,16 +713,23 @@ fn lua_doc_function_for_code_line(
             }
         })
         .collect::<Vec<_>>();
-    let return_type = group
+    let return_types = group
         .annotations
         .iter()
         .find_map(|annotation| match &annotation.kind {
-            LuaDocAnnotationKind::Return(return_annotation) => return_annotation
-                .returns
-                .first()
-                .map(|ty| resolve_lua_doc_return_type(&parsed.path, ty, alias_names, diagnostics)),
+            LuaDocAnnotationKind::Return(return_annotation) => Some(
+                return_annotation
+                    .returns
+                    .iter()
+                    .map(|ty| {
+                        resolve_lua_doc_return_type(&parsed.path, ty, alias_names, diagnostics)
+                    })
+                    .collect::<Vec<_>>(),
+            ),
             _ => None,
-        });
+        })
+        .unwrap_or_default();
+    let return_type = return_types.first().cloned();
 
     Some(TypedFunction {
         name: Some(name),
@@ -714,6 +737,7 @@ fn lua_doc_function_for_code_line(
         parameters,
         has_varargs: false,
         return_type,
+        return_types,
         documentation: lua_doc_documentation(&group.annotations),
     })
 }
@@ -933,8 +957,17 @@ pub(crate) fn typed_function_from_lua_doc_body(
             })
         })
         .collect::<Vec<_>>();
-    let return_type = return_annotation
-        .map(|(_, ty)| resolve_lua_doc_return_type(&parsed.path, ty, alias_names, diagnostics));
+    let return_types = return_annotation
+        .map(|(_, ty)| {
+            vec![resolve_lua_doc_return_type(
+                &parsed.path,
+                ty,
+                alias_names,
+                diagnostics,
+            )]
+        })
+        .unwrap_or_default();
+    let return_type = return_types.first().cloned();
     let documentation = lua_doc_documentation(docs);
 
     Some(TypedFunction {
@@ -943,6 +976,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
         parameter_count,
         has_varargs,
         return_type,
+        return_types,
         documentation,
     })
 }
@@ -1073,7 +1107,25 @@ fn merge_doc_function(
         }
     }
 
-    if let Some(return_type) = function.return_type {
+    if !function.return_types.is_empty() {
+        if !existing.return_types.is_empty() && existing.return_types != function.return_types {
+            push_doc_conflict(
+                state.diagnostics,
+                doc_conflict_diagnostic(
+                    &parsed.path,
+                    span,
+                    format!(
+                        "conflicting annotations for `{name}` return type: `{}` vs `{}`",
+                        format_type_list(&existing.return_types),
+                        format_type_list(&function.return_types)
+                    ),
+                ),
+            );
+        } else if existing.return_types.is_empty() {
+            existing.return_types = function.return_types;
+            existing.return_type = existing.return_types.first().cloned();
+        }
+    } else if let Some(return_type) = function.return_type {
         match &existing.return_type {
             Some(existing_return) if existing_return != &return_type => {
                 push_doc_conflict(
@@ -1088,7 +1140,10 @@ fn merge_doc_function(
                 );
             }
             Some(_) => {}
-            None => existing.return_type = Some(return_type),
+            None => {
+                existing.return_type = Some(return_type.clone());
+                existing.return_types = vec![return_type];
+            }
         }
     }
 
@@ -1216,20 +1271,28 @@ fn infer_function_return_types(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     functions: &[TypedFunction],
-) -> BTreeMap<String, Type> {
+) -> BTreeMap<String, Vec<Type>> {
     let mut returns = BTreeMap::new();
     let parameters = function_parameters_by_name(functions);
-    let function_types = function_types_by_name(functions);
 
-    collect_function_return_types(
-        parsed.ast.nodes(),
-        parsed,
-        aliases,
-        locals,
-        &function_types,
-        &parameters,
-        &mut returns,
-    );
+    for _ in 0..8 {
+        let previous_returns = returns.clone();
+        let function_types = function_types_by_name(functions, &returns);
+
+        collect_function_return_types(
+            parsed.ast.nodes(),
+            parsed,
+            aliases,
+            locals,
+            &function_types,
+            &parameters,
+            &mut returns,
+        );
+
+        if returns == previous_returns {
+            break;
+        }
+    }
 
     returns
 }
@@ -1247,10 +1310,36 @@ fn function_parameters_by_name(
         .collect()
 }
 
-fn function_types_by_name(functions: &[TypedFunction]) -> BTreeMap<String, Type> {
+fn function_types_by_name(
+    functions: &[TypedFunction],
+    inferred_returns: &BTreeMap<String, Vec<Type>>,
+) -> BTreeMap<String, Type> {
     functions
         .iter()
-        .filter_map(|function| Some((function.name.as_ref()?.clone(), function.as_type()?)))
+        .filter_map(|function| {
+            let name = function.name.as_ref()?;
+
+            if !function.has_fully_annotated_parameters() {
+                return None;
+            }
+
+            let return_types = (!function.return_types.is_empty())
+                .then(|| function.return_types.clone())
+                .or_else(|| inferred_returns.get(name).cloned())
+                .or_else(|| function.return_type.clone().map(|ty| vec![ty]))
+                .unwrap_or_else(|| vec![Type::Any]);
+
+            Some((
+                name.clone(),
+                Type::function_returns(
+                    function
+                        .parameters
+                        .iter()
+                        .map(|parameter| parameter.ty.clone()),
+                    return_types,
+                ),
+            ))
+        })
         .collect()
 }
 
@@ -1261,15 +1350,28 @@ fn collect_function_return_types(
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
     parameters: &BTreeMap<String, Vec<TypedParameter>>,
-    returns: &mut BTreeMap<String, Type>,
+    returns: &mut BTreeMap<String, Vec<Type>>,
 ) {
+    let mut scoped_locals = locals.clone();
+
     for stmt in block.stmts() {
         match stmt {
+            ast::Stmt::LocalAssignment(local) => {
+                infer_local_assignment_types(
+                    local,
+                    parsed,
+                    aliases,
+                    function_types,
+                    "",
+                    &mut scoped_locals,
+                );
+            }
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
-                let function_locals = locals_with_function_parameters(locals, parameters, &name);
+                let function_locals =
+                    locals_with_function_parameters(&scoped_locals, parameters, &name);
 
-                if let Some(return_type) = infer_block_return_type(
+                if let Some(return_types) = infer_block_return_types(
                     function.body().block(),
                     parsed,
                     aliases,
@@ -1277,7 +1379,7 @@ fn collect_function_return_types(
                     function_types,
                     &name,
                 ) {
-                    returns.insert(name, return_type);
+                    returns.insert(name, return_types);
                 }
                 collect_function_return_types(
                     function.body().block(),
@@ -1291,9 +1393,10 @@ fn collect_function_return_types(
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 let name = function.name().to_string();
-                let function_locals = locals_with_function_parameters(locals, parameters, &name);
+                let function_locals =
+                    locals_with_function_parameters(&scoped_locals, parameters, &name);
 
-                if let Some(return_type) = infer_block_return_type(
+                if let Some(return_types) = infer_block_return_types(
                     function.body().block(),
                     parsed,
                     aliases,
@@ -1301,7 +1404,7 @@ fn collect_function_return_types(
                     function_types,
                     &name,
                 ) {
-                    returns.insert(name, return_type);
+                    returns.insert(name, return_types);
                 }
                 collect_function_return_types(
                     function.body().block(),
@@ -1318,7 +1421,7 @@ fn collect_function_return_types(
                     block.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1329,7 +1432,7 @@ fn collect_function_return_types(
                     for_stmt.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1340,7 +1443,7 @@ fn collect_function_return_types(
                     if_stmt.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1352,7 +1455,7 @@ fn collect_function_return_types(
                             else_if.block(),
                             parsed,
                             aliases,
-                            locals,
+                            &scoped_locals,
                             function_types,
                             parameters,
                             returns,
@@ -1365,7 +1468,7 @@ fn collect_function_return_types(
                         else_block,
                         parsed,
                         aliases,
-                        locals,
+                        &scoped_locals,
                         function_types,
                         parameters,
                         returns,
@@ -1377,7 +1480,7 @@ fn collect_function_return_types(
                     for_stmt.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1388,7 +1491,7 @@ fn collect_function_return_types(
                     repeat.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1399,7 +1502,7 @@ fn collect_function_return_types(
                     while_stmt.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     parameters,
                     returns,
@@ -1426,14 +1529,14 @@ fn locals_with_function_parameters(
     scoped
 }
 
-fn infer_block_return_type(
+fn infer_block_return_types(
     block: &ast::Block,
     parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
     current_function: &str,
-) -> Option<Type> {
+) -> Option<Vec<Type>> {
     let mut returns = Vec::new();
 
     collect_return_types_in_block(
@@ -1451,10 +1554,10 @@ fn infer_block_return_type(
     }
 
     if block_may_fall_through(block) {
-        push_unique_type(&mut returns, Type::nil());
+        returns.push(vec![Type::nil()]);
     }
 
-    type_from_return_types(returns)
+    type_from_return_type_lists(returns)
 }
 
 fn collect_return_types_in_block(
@@ -1464,15 +1567,27 @@ fn collect_return_types_in_block(
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
     current_function: &str,
-    returns: &mut Vec<Type>,
+    returns: &mut Vec<Vec<Type>>,
 ) {
+    let mut scoped_locals = locals.clone();
+
     for stmt in block.stmts() {
         match stmt {
+            ast::Stmt::LocalAssignment(local) => {
+                infer_local_assignment_types(
+                    local,
+                    parsed,
+                    aliases,
+                    function_types,
+                    current_function,
+                    &mut scoped_locals,
+                );
+            }
             ast::Stmt::Do(block) => collect_return_types_in_block(
                 block.block(),
                 parsed,
                 aliases,
-                locals,
+                &scoped_locals,
                 function_types,
                 current_function,
                 returns,
@@ -1481,7 +1596,7 @@ fn collect_return_types_in_block(
                 for_stmt.block(),
                 parsed,
                 aliases,
-                locals,
+                &scoped_locals,
                 function_types,
                 current_function,
                 returns,
@@ -1491,7 +1606,7 @@ fn collect_return_types_in_block(
                     if_stmt.block(),
                     parsed,
                     aliases,
-                    locals,
+                    &scoped_locals,
                     function_types,
                     current_function,
                     returns,
@@ -1503,7 +1618,7 @@ fn collect_return_types_in_block(
                             else_if.block(),
                             parsed,
                             aliases,
-                            locals,
+                            &scoped_locals,
                             function_types,
                             current_function,
                             returns,
@@ -1516,7 +1631,7 @@ fn collect_return_types_in_block(
                         else_block,
                         parsed,
                         aliases,
-                        locals,
+                        &scoped_locals,
                         function_types,
                         current_function,
                         returns,
@@ -1527,7 +1642,7 @@ fn collect_return_types_in_block(
                 for_stmt.block(),
                 parsed,
                 aliases,
-                locals,
+                &scoped_locals,
                 function_types,
                 current_function,
                 returns,
@@ -1536,7 +1651,7 @@ fn collect_return_types_in_block(
                 repeat.block(),
                 parsed,
                 aliases,
-                locals,
+                &scoped_locals,
                 function_types,
                 current_function,
                 returns,
@@ -1545,7 +1660,7 @@ fn collect_return_types_in_block(
                 while_stmt.block(),
                 parsed,
                 aliases,
-                locals,
+                &scoped_locals,
                 function_types,
                 current_function,
                 returns,
@@ -1556,20 +1671,15 @@ fn collect_return_types_in_block(
     }
 
     if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
-        let return_type = match return_stmt.returns().iter().next() {
-            Some(expression) => infer_expression_type(
-                parsed,
-                expression,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-            ),
-            None => Some(Type::nil()),
-        };
-
-        if let Some(return_type) = return_type {
-            push_unique_type(returns, return_type);
+        if let Some(return_types) = infer_return_statement_types(
+            return_stmt,
+            parsed,
+            aliases,
+            &scoped_locals,
+            function_types,
+            current_function,
+        ) {
+            returns.push(return_types);
         }
     }
 }
@@ -1604,6 +1714,82 @@ fn if_guarantees_return(if_stmt: &ast::If) -> bool {
         .is_some_and(|else_block| !block_may_fall_through(else_block))
 }
 
+fn infer_return_statement_types(
+    return_stmt: &ast::Return,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+) -> Option<Vec<Type>> {
+    let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
+
+    if expressions.is_empty() {
+        return Some(vec![Type::nil()]);
+    }
+
+    let fixed_expression_count = expressions.len().saturating_sub(1);
+    let mut return_types = Vec::new();
+
+    for (index, expression) in expressions.iter().enumerate() {
+        if index < fixed_expression_count {
+            return_types.push(infer_expression_return_type(
+                parsed,
+                expression,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                0,
+            )?);
+            continue;
+        }
+
+        let expression_returns = infer_expression_return_types(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        );
+
+        if expression_returns.is_empty() {
+            return_types.push(infer_expression_return_type(
+                parsed,
+                expression,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+                0,
+            )?);
+        } else {
+            return_types.extend(expression_returns);
+        }
+    }
+
+    Some(return_types)
+}
+
+fn type_from_return_type_lists(return_lists: Vec<Vec<Type>>) -> Option<Vec<Type>> {
+    let max_len = return_lists.iter().map(Vec::len).max()?;
+    let mut merged = Vec::new();
+
+    for index in 0..max_len {
+        let mut slot_types = Vec::new();
+
+        for return_list in &return_lists {
+            let ty = return_list.get(index).cloned().unwrap_or_else(Type::nil);
+            push_unique_type(&mut slot_types, ty);
+        }
+
+        merged.push(type_from_return_types(slot_types)?);
+    }
+
+    Some(merged)
+}
+
 fn type_from_return_types(types: Vec<Type>) -> Option<Type> {
     match types.len() {
         0 => None,
@@ -1612,9 +1798,48 @@ fn type_from_return_types(types: Vec<Type>) -> Option<Type> {
     }
 }
 
+fn format_type_list(types: &[Type]) -> String {
+    types
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn push_unique_type(types: &mut Vec<Type>, ty: Type) {
     if !types.contains(&ty) {
         types.push(ty);
+    }
+}
+
+fn infer_local_assignment_types(
+    local: &ast::LocalAssignment,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    locals: &mut BTreeMap<String, Type>,
+) {
+    let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+    for (index, name) in local.names().iter().enumerate() {
+        let Some((expression, return_index)) = assignment_expression_for_local(&expressions, index)
+        else {
+            continue;
+        };
+        let Some(ty) = infer_expression_return_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+            return_index,
+        ) else {
+            continue;
+        };
+
+        locals.insert(token_text(name), ty);
     }
 }
 
@@ -1626,7 +1851,58 @@ fn infer_expression_type(
     function_types: &BTreeMap<String, Type>,
     current_function: &str,
 ) -> Option<Type> {
+    infer_expression_return_type(
+        parsed,
+        expression,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+        0,
+    )
+}
+
+fn infer_expression_return_type(
+    parsed: &ParsedSource,
+    expression: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    return_index: usize,
+) -> Option<Type> {
     match expression {
+        Expression::FunctionCall(function_call) => infer_function_call_return_types(
+            parsed,
+            function_call,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        )
+        .get(return_index)
+        .cloned(),
+        _ if return_index > 0 => None,
+        Expression::BinaryOperator { lhs, binop, rhs } => {
+            let left = infer_expression_type(
+                parsed,
+                lhs,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+            )?;
+            let right = infer_expression_type(
+                parsed,
+                rhs,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+            )?;
+
+            infer_binary_operator_type(aliases, binop, &left, &right)
+        }
         Expression::Number(_) => Some(Type::number()),
         Expression::String(_) => Some(Type::string()),
         Expression::Symbol(symbol) => match token_text(symbol).as_str() {
@@ -1652,24 +1928,40 @@ fn infer_expression_type(
                 Some((token_text(key), TableField::required(ty)))
             })))
         }
-        Expression::Parentheses { expression, .. } => infer_expression_type(
+        Expression::Parentheses { expression, .. } => infer_expression_return_type(
             parsed,
             expression,
             aliases,
             locals,
             function_types,
             current_function,
+            return_index,
         ),
-        Expression::TypeAssertion { expression, .. } => infer_expression_type(
+        Expression::TypeAssertion { expression, .. } => infer_expression_return_type(
             parsed,
             expression,
             aliases,
             locals,
             function_types,
             current_function,
+            return_index,
         ),
         Expression::Function(function) => Some(function_type_from_body(function.body())),
-        Expression::FunctionCall(function_call) => infer_function_call_return_type(
+        Expression::Var(var) => infer_var_type(parsed, var, aliases, locals, function_types),
+        _ => None,
+    }
+}
+
+fn infer_expression_return_types(
+    parsed: &ParsedSource,
+    expression: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+) -> Vec<Type> {
+    match expression {
+        Expression::FunctionCall(function_call) => infer_function_call_return_types(
             parsed,
             function_call,
             aliases,
@@ -1677,8 +1969,25 @@ fn infer_expression_type(
             function_types,
             current_function,
         ),
-        Expression::Var(var) => infer_var_type(parsed, var, aliases, locals, function_types),
-        _ => None,
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => infer_expression_return_types(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
+        _ => infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        )
+        .into_iter()
+        .collect(),
     }
 }
 
@@ -1705,52 +2014,186 @@ fn infer_var_type(
     }
 }
 
-fn infer_function_call_return_type(
+fn infer_function_call_return_types(
     parsed: &ParsedSource,
     function_call: &FunctionCall,
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
     current_function: &str,
-) -> Option<Type> {
-    let parts = field_chain_before_first_call(function_call)?;
+) -> Vec<Type> {
+    let Some(parts) = field_chain_before_first_call(function_call) else {
+        return Vec::new();
+    };
 
     if parts.len() == 1 && parts.first().is_some_and(|name| name == current_function) {
-        return None;
+        return Vec::new();
     }
 
-    let function_type = if parts.len() == 1 {
-        let name = parts.first()?;
+    if parts.len() == 1 {
+        let Some(name) = parts.first() else {
+            return Vec::new();
+        };
 
-        function_types
+        let function_type = function_types
             .get(name)
             .or_else(|| locals.get(name))
             .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
-            .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
-    } else {
-        infer_field_chain_type(parsed, aliases, locals, &parts)
-    }?;
+            .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())));
 
-    function_return_type(&function_type)
-}
+        return function_type
+            .map(|ty| function_return_types(&ty))
+            .unwrap_or_default();
+    }
 
-fn function_return_type(ty: &Type) -> Option<Type> {
-    match ty {
-        Type::Function(function) => Some((*function.return_type).clone()),
-        Type::Any => Some(Type::Any),
-        Type::Union(types) => {
-            let returns = types
-                .iter()
-                .filter_map(function_return_type)
-                .collect::<Vec<_>>();
+    if let Some(method) = parts.last() {
+        if let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) {
+            if let Some(receiver_type) =
+                infer_field_chain_type(parsed, aliases, locals, receiver_parts)
+            {
+                let returns = love_object_method_return_types(aliases, &receiver_type, method);
 
-            match returns.len() {
-                0 => None,
-                1 => returns.into_iter().next(),
-                _ => Some(Type::union(returns)),
+                if !returns.is_empty() {
+                    return returns;
+                }
             }
         }
-        Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+
+    infer_field_chain_type(parsed, aliases, locals, &parts)
+        .map(|ty| function_return_types(&ty))
+        .unwrap_or_default()
+}
+
+fn function_return_types(ty: &Type) -> Vec<Type> {
+    match ty {
+        Type::Function(function) => function.return_types_or_any().to_vec(),
+        Type::Any => vec![Type::Any],
+        Type::Union(types) => {
+            let returns = types.iter().map(function_return_types).collect::<Vec<_>>();
+
+            type_from_return_type_lists(returns).unwrap_or_default()
+        }
+        Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => Vec::new(),
+    }
+}
+
+fn love_object_method_return_types(
+    aliases: &BTreeMap<String, Type>,
+    ty: &Type,
+    field: &str,
+) -> Vec<Type> {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field)
+            .map(|item| return_types_from_lua_function_detail(item.detail))
+            .unwrap_or_default(),
+        Type::Union(types) => {
+            let mut returns = Vec::new();
+
+            for ty in types {
+                for return_type in love_object_method_return_types(aliases, &ty, field) {
+                    push_unique_type(&mut returns, return_type);
+                }
+            }
+
+            returns
+        }
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => Vec::new(),
+    }
+}
+
+fn return_types_from_lua_function_detail(detail: &str) -> Vec<Type> {
+    let Some(start) = detail.rfind("): ").map(|index| index + "): ".len()) else {
+        return Vec::new();
+    };
+
+    detail[start..]
+        .split(',')
+        .map(str::trim)
+        .filter_map(type_from_lua_label)
+        .collect()
+}
+
+fn type_from_lua_label(label: &str) -> Option<Type> {
+    let label = label.trim();
+
+    if label.contains('|') {
+        let members = label
+            .split('|')
+            .filter_map(type_from_lua_label)
+            .collect::<Vec<_>>();
+
+        return match members.len() {
+            0 => None,
+            1 => members.into_iter().next(),
+            _ => Some(Type::union(members)),
+        };
+    }
+
+    match label {
+        "any" => Some(Type::Any),
+        "boolean" => Some(Type::boolean()),
+        "nil" => Some(Type::nil()),
+        "number" => Some(Type::number()),
+        "string" => Some(Type::string()),
+        "table" => Some(Type::empty_table()),
+        other if !other.is_empty() => Some(Type::alias(other)),
+        _ => None,
+    }
+}
+
+fn infer_binary_operator_type(
+    aliases: &BTreeMap<String, Type>,
+    binop: &ast::BinOp,
+    left: &Type,
+    right: &Type,
+) -> Option<Type> {
+    if is_numeric_operator(binop) && is_number_type(aliases, left) && is_number_type(aliases, right)
+    {
+        return Some(Type::number());
+    }
+
+    if matches!(binop, ast::BinOp::TwoDots(_))
+        && is_concat_operand_type(aliases, left)
+        && is_concat_operand_type(aliases, right)
+    {
+        return Some(Type::string());
+    }
+
+    if matches!(left, Type::Any) || matches!(right, Type::Any) {
+        return Some(Type::Any);
+    }
+
+    None
+}
+
+fn is_numeric_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::Caret(_)
+            | ast::BinOp::Minus(_)
+            | ast::BinOp::Percent(_)
+            | ast::BinOp::Plus(_)
+            | ast::BinOp::Slash(_)
+            | ast::BinOp::Star(_)
+    )
+}
+
+fn is_number_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Primitive(crate::PrimitiveType::Number) => true,
+        Type::Union(types) => types.iter().all(|ty| is_number_type(aliases, ty)),
+        _ => false,
+    }
+}
+
+fn is_concat_operand_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
+        Type::Union(types) => types.iter().all(|ty| is_concat_operand_type(aliases, ty)),
+        _ => false,
     }
 }
 
@@ -1854,12 +2297,39 @@ fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<Str
     for suffix in function_call.suffixes() {
         match suffix {
             Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(Call::MethodCall(method)) => {
+                parts.push(token_text(method.name()));
+                return Some(parts);
+            }
             Suffix::Call(_) => return Some(parts),
             _ => return None,
         }
     }
 
     None
+}
+
+fn assignment_expression_for_local<'a>(
+    expressions: &[&'a Expression],
+    index: usize,
+) -> Option<(&'a Expression, usize)> {
+    if expressions.is_empty() {
+        return None;
+    }
+
+    let fixed_expression_count = expressions.len().saturating_sub(1);
+
+    if index < fixed_expression_count {
+        return expressions
+            .get(index)
+            .copied()
+            .map(|expression| (expression, 0));
+    }
+
+    expressions
+        .last()
+        .copied()
+        .map(|expression| (expression, index - fixed_expression_count))
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

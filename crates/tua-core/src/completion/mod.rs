@@ -962,7 +962,7 @@ fn infer_function_call_return_type(
 
     if fields.is_empty() {
         if let Some(function) = environment.function(root) {
-            return Some(function.return_type_or_any());
+            return function.return_types_or_any().into_iter().next();
         }
 
         if let Some(kind) = asset::loader_kind(root) {
@@ -975,7 +975,7 @@ fn infer_function_call_return_type(
         return None;
     };
 
-    Some(*function.return_type)
+    function.return_types_or_any().first().cloned()
 }
 
 fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {

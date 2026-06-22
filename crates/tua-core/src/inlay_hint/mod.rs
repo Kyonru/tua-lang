@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use full_moon::ast::{
@@ -7,7 +8,8 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::asset::{self, AssetLoaderKind};
-use crate::semantic::resolve_field_chain_type;
+use crate::lua::{self, LuaItem};
+use crate::semantic::{resolve_aliases, resolve_field_chain_type, resolve_table_field_type};
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
 };
@@ -39,6 +41,7 @@ pub fn inlay_hints_parsed_source(parsed: &ParsedSource) -> Result<Vec<InlayHint>
     let environment = build_type_environment(parsed)?;
     let mut collector = InlayHintCollector {
         environment: &environment,
+        inferred_locals: BTreeMap::new(),
         hints: Vec::new(),
     };
 
@@ -52,6 +55,7 @@ pub fn inlay_hints_parsed_source(parsed: &ParsedSource) -> Result<Vec<InlayHint>
 
 struct InlayHintCollector<'a> {
     environment: &'a TypeEnvironment,
+    inferred_locals: BTreeMap<String, Type>,
     hints: Vec<InlayHint>,
 }
 
@@ -103,15 +107,13 @@ impl<'a> InlayHintCollector<'a> {
 
     fn collect_local_assignment(&mut self, local: &ast::LocalAssignment) {
         let specifiers = local.type_specifiers().collect::<Vec<_>>();
+        let expressions = local.expressions().iter().collect::<Vec<_>>();
 
-        for (index, (name, expression)) in local
-            .names()
-            .iter()
-            .zip(local.expressions().iter())
-            .enumerate()
-        {
+        for expression in &expressions {
             self.collect_expression(expression);
+        }
 
+        for (index, name) in local.names().iter().enumerate() {
             if specifiers
                 .get(index)
                 .and_then(|specifier| *specifier)
@@ -120,9 +122,16 @@ impl<'a> InlayHintCollector<'a> {
                 continue;
             }
 
-            let Some(ty) = self.infer_expression(expression) else {
+            let Some((expression, return_index)) =
+                assignment_expression_for_local(&expressions, index)
+            else {
                 continue;
             };
+            let Some(ty) = self.infer_expression_return(expression, return_index) else {
+                continue;
+            };
+
+            self.inferred_locals.insert(token_text(name), ty.clone());
 
             if should_hint_type(&ty) {
                 self.hints.push(InlayHint {
@@ -198,16 +207,36 @@ impl<'a> InlayHintCollector<'a> {
     }
 
     fn infer_expression(&self, expression: &Expression) -> Option<Type> {
+        self.infer_expression_return(expression, 0)
+    }
+
+    fn infer_expression_return(
+        &self,
+        expression: &Expression,
+        return_index: usize,
+    ) -> Option<Type> {
         match expression {
+            Expression::FunctionCall(function_call) => self
+                .return_types_for_call(function_call)
+                .get(return_index)
+                .cloned(),
+            _ if return_index > 0 => None,
+            Expression::BinaryOperator { lhs, binop, rhs } => {
+                let left = self.infer_expression(lhs)?;
+                let right = self.infer_expression(rhs)?;
+
+                infer_binary_operator_type(self.environment, binop, &left, &right)
+            }
             Expression::Number(_) => Some(Type::number()),
             Expression::String(_) => Some(Type::string()),
             Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
             Expression::TableConstructor(table) => Some(self.infer_table_constructor(table)),
-            Expression::Parentheses { expression, .. } => self.infer_expression(expression),
-            Expression::TypeAssertion { expression, .. } => self.infer_expression(expression),
-            Expression::FunctionCall(function_call) => self
-                .typed_function_for_call(function_call)
-                .map(|function| function.return_type_or_any()),
+            Expression::Parentheses { expression, .. } => {
+                self.infer_expression_return(expression, return_index)
+            }
+            Expression::TypeAssertion { expression, .. } => {
+                self.infer_expression_return(expression, return_index)
+            }
             Expression::Var(var) => self.infer_var_value(var),
             _ => None,
         }
@@ -236,11 +265,15 @@ impl<'a> InlayHintCollector<'a> {
     }
 
     fn infer_named_value(&self, name: &str) -> Option<Type> {
-        self.environment.local(name).cloned().or_else(|| {
-            self.environment
-                .function(name)
-                .and_then(TypedFunction::as_type)
-        })
+        self.environment
+            .local(name)
+            .cloned()
+            .or_else(|| self.inferred_locals.get(name).cloned())
+            .or_else(|| {
+                self.environment
+                    .function(name)
+                    .and_then(TypedFunction::as_type)
+            })
     }
 
     fn typed_function_for_call(&self, function_call: &FunctionCall) -> Option<TypedFunction> {
@@ -257,6 +290,10 @@ impl<'a> InlayHintCollector<'a> {
             return asset::loader_kind(root).map(typed_function_from_asset_loader);
         }
 
+        if let Some(function) = self.typed_love_object_method_for_parts(&parts) {
+            return Some(function);
+        }
+
         let callee_type = resolve_field_chain_type(self.environment, &parts)?;
         let Type::Function(function) = callee_type else {
             return None;
@@ -264,9 +301,59 @@ impl<'a> InlayHintCollector<'a> {
 
         Some(typed_function_from_function_type(function))
     }
+
+    fn typed_love_object_method_for_parts(&self, parts: &[String]) -> Option<TypedFunction> {
+        let method = parts.last()?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.infer_field_chain_type(receiver_parts)?;
+        let item = lua_type_field_item(self.environment, &receiver_type, method)?;
+
+        typed_function_from_lua_item(item)
+    }
+
+    fn return_types_for_call(&self, function_call: &FunctionCall) -> Vec<Type> {
+        let Some(parts) = field_chain_before_first_call(function_call) else {
+            return Vec::new();
+        };
+
+        if parts.len() == 1 {
+            if let Some(function) = self.typed_function_for_call(function_call) {
+                return function.return_types_or_any();
+            }
+        }
+
+        if let Some(method) = parts.last() {
+            if let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) {
+                if let Some(receiver_type) = self.infer_field_chain_type(receiver_parts) {
+                    if let Some(item) =
+                        lua_type_field_item(self.environment, &receiver_type, method)
+                    {
+                        return return_types_from_function_detail(item.detail);
+                    }
+                }
+            }
+        }
+
+        self.typed_function_for_call(function_call)
+            .map(|function| function.return_types_or_any())
+            .unwrap_or_default()
+    }
+
+    fn infer_field_chain_type(&self, parts: &[String]) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let mut current = self.infer_named_value(root)?;
+
+        for field in fields {
+            current = resolve_table_field_type(self.environment, &current, field)?;
+        }
+
+        Some(current)
+    }
 }
 
 fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
+    let return_type = kind.return_type();
+
     TypedFunction {
         name: Some(kind.name().to_owned()),
         parameters: vec![crate::TypedParameter {
@@ -276,12 +363,15 @@ fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
         }],
         parameter_count: 1,
         has_varargs: false,
-        return_type: Some(kind.return_type()),
+        return_type: Some(return_type.clone()),
+        return_types: vec![return_type],
         documentation: Some(kind.documentation().to_owned()),
     }
 }
 
 fn typed_function_from_function_type(function: FunctionType) -> TypedFunction {
+    let return_types = function.return_types_or_any().to_vec();
+
     TypedFunction {
         name: None,
         parameters: function
@@ -295,9 +385,119 @@ fn typed_function_from_function_type(function: FunctionType) -> TypedFunction {
             .collect(),
         parameter_count: 0,
         has_varargs: false,
-        return_type: Some(*function.return_type),
+        return_type: return_types.first().cloned(),
+        return_types,
         documentation: None,
     }
+}
+
+fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {
+    let parameters = parameters_from_function_detail(item.detail)?;
+    let mut return_types = return_types_from_function_detail(item.detail);
+
+    if return_types.is_empty() {
+        return_types.push(Type::Any);
+    }
+
+    Some(TypedFunction {
+        name: Some(item.label.to_owned()),
+        parameters,
+        parameter_count: 0,
+        has_varargs: false,
+        return_type: return_types.first().cloned(),
+        return_types,
+        documentation: Some(item.documentation.to_owned()),
+    })
+}
+
+fn parameters_from_function_detail(detail: &str) -> Option<Vec<crate::TypedParameter>> {
+    let start = detail.find('(')? + 1;
+    let end = detail[start..].find(')')? + start;
+    let parameters = detail[start..end].trim();
+
+    if parameters.is_empty() {
+        return Some(Vec::new());
+    }
+
+    Some(
+        parameters
+            .split(',')
+            .map(str::trim)
+            .filter(|parameter| !parameter.is_empty())
+            .map(|parameter| {
+                let (name, ty) = parameter
+                    .split_once(':')
+                    .map(|(name, ty)| (name.trim().trim_end_matches('?'), ty.trim()))
+                    .unwrap_or(("", parameter));
+
+                crate::TypedParameter {
+                    name: name.to_owned(),
+                    ty: type_from_label(ty),
+                    documentation: None,
+                }
+            })
+            .collect(),
+    )
+}
+
+fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
+    let Some(start) = detail.rfind("): ").map(|index| index + "): ".len()) else {
+        return Vec::new();
+    };
+
+    detail[start..]
+        .split(',')
+        .map(str::trim)
+        .filter(|ty| !ty.is_empty())
+        .map(type_from_label)
+        .collect()
+}
+
+fn type_from_label(label: &str) -> Type {
+    match label {
+        "any" => Type::Any,
+        "boolean" => Type::boolean(),
+        "nil" => Type::nil(),
+        "number" => Type::number(),
+        "string" => Type::string(),
+        "table" => Type::empty_table(),
+        other => Type::alias(other),
+    }
+}
+
+fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Alias(name) => lua::type_field_items(&name, field)
+            .into_iter()
+            .find(|item| item.label == field),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| lua_type_field_item(environment, ty, field)),
+        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+    }
+}
+
+fn assignment_expression_for_local<'a>(
+    expressions: &[&'a Expression],
+    index: usize,
+) -> Option<(&'a Expression, usize)> {
+    if expressions.is_empty() {
+        return None;
+    }
+
+    let fixed_expression_count = expressions.len().saturating_sub(1);
+
+    if index < fixed_expression_count {
+        return expressions
+            .get(index)
+            .copied()
+            .map(|expression| (expression, 0));
+    }
+
+    expressions
+        .last()
+        .copied()
+        .map(|expression| (expression, index - fixed_expression_count))
 }
 
 fn should_hint_type(ty: &Type) -> bool {
@@ -309,6 +509,63 @@ fn infer_symbol_type(symbol: &str) -> Option<Type> {
         "true" | "false" => Some(Type::boolean()),
         "nil" => Some(Type::nil()),
         _ => None,
+    }
+}
+
+fn infer_binary_operator_type(
+    environment: &TypeEnvironment,
+    binop: &ast::BinOp,
+    left: &Type,
+    right: &Type,
+) -> Option<Type> {
+    if is_numeric_operator(binop)
+        && is_number_type(environment, left)
+        && is_number_type(environment, right)
+    {
+        return Some(Type::number());
+    }
+
+    if matches!(binop, ast::BinOp::TwoDots(_))
+        && is_concat_operand_type(environment, left)
+        && is_concat_operand_type(environment, right)
+    {
+        return Some(Type::string());
+    }
+
+    if matches!(left, Type::Any) || matches!(right, Type::Any) {
+        return Some(Type::Any);
+    }
+
+    None
+}
+
+fn is_numeric_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::Caret(_)
+            | ast::BinOp::Minus(_)
+            | ast::BinOp::Percent(_)
+            | ast::BinOp::Plus(_)
+            | ast::BinOp::Slash(_)
+            | ast::BinOp::Star(_)
+    )
+}
+
+fn is_number_type(environment: &TypeEnvironment, ty: &Type) -> bool {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Primitive(crate::PrimitiveType::Number) => true,
+        Type::Union(types) => types.iter().all(|ty| is_number_type(environment, ty)),
+        _ => false,
+    }
+}
+
+fn is_concat_operand_type(environment: &TypeEnvironment, ty: &Type) -> bool {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
+        Type::Union(types) => types
+            .iter()
+            .all(|ty| is_concat_operand_type(environment, ty)),
+        _ => false,
     }
 }
 
@@ -344,6 +601,10 @@ fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<Str
     for suffix in function_call.suffixes() {
         match suffix {
             Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(Call::MethodCall(method)) => {
+                parts.push(token_text(method.name()));
+                return Some(parts);
+            }
             Suffix::Call(_) => return Some(parts),
             _ => return None,
         }

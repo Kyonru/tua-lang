@@ -196,6 +196,46 @@ end
 }
 
 #[test]
+fn infers_love_method_function_returns_from_inferred_locals() {
+    let parsed = parse_tua_source(
+        "src/love_returns.tua",
+        r#"
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local player = loadPlayerImage()
+
+local function azul()
+  return player.getDimensions()
+end
+
+local c = azul()
+
+local function sumWidth()
+  return c + 1
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should infer Love returns");
+
+    let azul = environment
+        .function("azul")
+        .expect("azul should have an inferred function type");
+
+    assert_eq!(azul.return_type, Some(Type::number()));
+    assert_eq!(azul.return_types, vec![Type::number(), Type::number()]);
+    assert_eq!(
+        environment
+            .function("sumWidth")
+            .and_then(|function| function.return_type.clone()),
+        Some(Type::number())
+    );
+}
+
+#[test]
 fn lowers_lua_doc_annotations_into_type_environment() {
     let parsed = parse_lua_source(
         "src/player.lua",

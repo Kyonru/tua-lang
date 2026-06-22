@@ -53,6 +53,13 @@ impl Type {
         Self::Function(FunctionType::new(parameters, return_type))
     }
 
+    pub fn function_returns(
+        parameters: impl IntoIterator<Item = Type>,
+        return_types: impl IntoIterator<Item = Type>,
+    ) -> Self {
+        Self::Function(FunctionType::new_returns(parameters, return_types))
+    }
+
     pub fn empty_table() -> Self {
         Self::Table(TableShape::new())
     }
@@ -93,13 +100,36 @@ impl TypeAlias {
 pub struct FunctionType {
     pub parameters: Vec<Type>,
     pub return_type: Box<Type>,
+    pub return_types: Vec<Type>,
 }
 
 impl FunctionType {
     pub fn new(parameters: impl IntoIterator<Item = Type>, return_type: Type) -> Self {
+        Self::new_returns(parameters, [return_type])
+    }
+
+    pub fn new_returns(
+        parameters: impl IntoIterator<Item = Type>,
+        return_types: impl IntoIterator<Item = Type>,
+    ) -> Self {
+        let mut return_types = return_types.into_iter().collect::<Vec<_>>();
+
+        if return_types.is_empty() {
+            return_types.push(Type::nil());
+        }
+
         Self {
             parameters: parameters.into_iter().collect(),
-            return_type: Box::new(return_type),
+            return_type: Box::new(return_types[0].clone()),
+            return_types,
+        }
+    }
+
+    pub fn return_types_or_any(&self) -> &[Type] {
+        if self.return_types.is_empty() {
+            std::slice::from_ref(&self.return_type)
+        } else {
+            &self.return_types
         }
     }
 }
@@ -193,7 +223,11 @@ impl fmt::Display for Type {
                     }
                     write!(formatter, "{parameter}")?;
                 }
-                write!(formatter, "): {}", function.return_type)
+                write!(
+                    formatter,
+                    "): {}",
+                    format_type_list(function.return_types_or_any())
+                )
             }
             Type::Table(table) => {
                 write!(formatter, "{{ ")?;
@@ -211,6 +245,14 @@ impl fmt::Display for Type {
             }
         }
     }
+}
+
+fn format_type_list(types: &[Type]) -> String {
+    types
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl fmt::Display for PrimitiveType {
