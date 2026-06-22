@@ -43,7 +43,7 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
     assert_eq!(
         output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
-        json!([":", ".", "\"", "'"])
+        json!([":", ".", "\"", "'", "@", "-"])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["completionProvider"]["resolveProvider"],
@@ -873,6 +873,53 @@ local field = player.hp
 
     assert_completion_labels(&output, 2, ["Player"]);
     assert_completion_labels(&output, 3, ["alive", "hp", "pos"]);
+}
+
+#[test]
+fn completion_returns_lua_doc_tags_types_and_snippets() {
+    let uri = "file:///tmp/doc-completion.tua";
+    let source = r#"type Player = { hp: number }
+---
+local function damage(player: Player, amount: number): Player
+end
+---@p
+---@param player Pl
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "---@p"),
+        completion_request(3, uri, source, "---@param player Pl"),
+        completion_request(4, uri, source, "---"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["param"]);
+    assert_completion_labels(&output, 3, ["Player"]);
+    assert_completion_labels(&output, 4, ["document function"]);
+
+    let snippet = response_with_id(&output, 4)["result"][0].clone();
+
+    assert_eq!(snippet["kind"], 15);
+    assert_eq!(snippet["insertTextFormat"], 2);
+    assert_eq!(
+        snippet["insertText"],
+        "@param player Player ${1:description}\n---@param amount number ${2:description}\n---@return Player ${3:description}"
+    );
+}
+
+#[test]
+fn lua_doc_annotation_completion_works_for_lua_documents() {
+    let uri = "file:///tmp/doc-completion.lua";
+    let source = r#"---@alias Player { hp: number }
+---@return Pl
+local function makePlayer()
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "---@return Pl"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["Player"]);
 }
 
 #[test]

@@ -9,8 +9,11 @@ use crate::module_index::{
     required_module_export_for_fields, required_module_exports_for_receiver,
 };
 use crate::semantic::{resolve_aliases, resolve_field_chain_type};
+use crate::source_text::line_at;
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
+use crate::{
+    parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TuaType,
+};
 
 mod context;
 mod require;
@@ -22,10 +25,13 @@ pub struct Completion {
     pub kind: CompletionKind,
     pub detail: Option<String>,
     pub documentation: Option<String>,
+    pub insert_text: Option<String>,
+    pub is_snippet: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompletionKind {
+    Snippet,
     Function,
     TypeAlias,
     Field,
@@ -69,6 +75,10 @@ fn complete_parsed_source_with_context(
     context: CompletionContext,
 ) -> Vec<Completion> {
     match context {
+        CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
+        CompletionContext::DocumentationSnippet { position } => {
+            complete_documentation_snippet(parsed, position)
+        }
         CompletionContext::TypeAnnotation { prefix } => {
             complete_type_names(parsed, prefix.as_str())
         }
@@ -107,6 +117,10 @@ fn complete_parsed_source_with_context(
 
 fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) -> Vec<Completion> {
     match context {
+        CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
+        CompletionContext::DocumentationSnippet { position } => {
+            complete_lossy_documentation_snippet(source, position)
+        }
         CompletionContext::TypeAnnotation { prefix } => complete_builtin_types(prefix.as_str()),
         CompletionContext::FieldAccess {
             receiver_parts,
@@ -117,6 +131,30 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
             complete_lossy_identifier_items(source, prefix.as_str(), position)
         }
     }
+}
+
+fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
+    [
+        ("alias", "type alias annotation"),
+        ("class", "class annotation"),
+        ("field", "field annotation"),
+        ("generic", "generic annotation"),
+        ("param", "function parameter annotation"),
+        ("return", "function return annotation"),
+        ("type", "type annotation"),
+        ("version", "version annotation"),
+    ]
+    .into_iter()
+    .filter(|(tag, _)| tag.starts_with(prefix))
+    .map(|(tag, detail)| Completion {
+        label: tag.to_owned(),
+        kind: CompletionKind::Keyword,
+        detail: Some(detail.to_owned()),
+        documentation: None,
+        insert_text: None,
+        is_snippet: false,
+    })
+    .collect()
 }
 
 fn complete_type_names(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
@@ -142,6 +180,8 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
             kind: CompletionKind::TypeAlias,
             detail: Some("built-in type".to_owned()),
             documentation: None,
+            insert_text: None,
+            is_snippet: false,
         })
         .collect()
 }
@@ -157,8 +197,263 @@ fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion>
             kind: CompletionKind::TypeAlias,
             detail: Some("type alias".to_owned()),
             documentation: environment.alias_documentation(name).map(str::to_owned),
+            insert_text: None,
+            is_snippet: false,
         })
         .collect()
+}
+
+fn complete_documentation_snippet(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Vec<Completion> {
+    let Some(function) = function_after_documentation_line(parsed, position) else {
+        return Vec::new();
+    };
+    let Some(snippet) = documentation_snippet_for_function(parsed, function) else {
+        return Vec::new();
+    };
+
+    vec![Completion {
+        label: "document function".to_owned(),
+        kind: CompletionKind::Snippet,
+        detail: Some("LuaDoc function documentation".to_owned()),
+        documentation: Some(
+            "Generate LuaHelper-style parameter and return annotations.".to_owned(),
+        ),
+        insert_text: Some(snippet),
+        is_snippet: true,
+    }]
+}
+
+fn complete_lossy_documentation_snippet(source: &str, position: SourcePosition) -> Vec<Completion> {
+    let Some(snippet) = lossy_documentation_snippet_after_line(source, position.line) else {
+        return Vec::new();
+    };
+
+    vec![Completion {
+        label: "document function".to_owned(),
+        kind: CompletionKind::Snippet,
+        detail: Some("LuaDoc function documentation".to_owned()),
+        documentation: Some(
+            "Generate LuaHelper-style parameter and return annotations.".to_owned(),
+        ),
+        insert_text: Some(snippet),
+        is_snippet: true,
+    }]
+}
+
+fn function_after_documentation_line(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Option<&FunctionAnnotation> {
+    parsed
+        .function_annotations
+        .iter()
+        .filter_map(|function| Some((function, function.span?.start.line)))
+        .filter(|(_, line)| *line > position.line)
+        .min_by_key(|(_, line)| *line)
+        .and_then(|(function, line)| {
+            doc_gap_is_clear(&parsed.source, position.line + 1, line).then_some(function)
+        })
+}
+
+fn doc_gap_is_clear(source: &str, start_line: usize, function_line: usize) -> bool {
+    (start_line..function_line).all(|line_number| {
+        line_at(source, line_number)
+            .map(|line| {
+                let trimmed = line.trim();
+
+                trimmed.is_empty() || trimmed.starts_with("---")
+            })
+            .unwrap_or(true)
+    })
+}
+
+fn documentation_snippet_for_function(
+    parsed: &ParsedSource,
+    function: &FunctionAnnotation,
+) -> Option<String> {
+    let line = function
+        .span
+        .and_then(|span| line_at(&parsed.source, span.start.line))?;
+    let mut signature = parse_function_signature_line(line)?;
+
+    for parameter in &mut signature.parameters {
+        if parameter.ty == "any" {
+            if let Some(annotated) = function
+                .parameters
+                .iter()
+                .find(|annotated| annotated.name == parameter.name)
+            {
+                parameter.ty = format_tua_type(&annotated.ty);
+            }
+        }
+    }
+
+    if signature.return_type.is_none() {
+        signature.return_type = function.return_type.as_ref().map(format_tua_type);
+    }
+
+    documentation_snippet_from_signature(signature)
+}
+
+fn lossy_documentation_snippet_after_line(source: &str, line_number: usize) -> Option<String> {
+    let function_line = ((line_number + 1)..)
+        .map_while(|line| line_at(source, line).map(|content| (line, content)))
+        .find(|(_, line)| !line.trim().is_empty() && !line.trim_start().starts_with("---"))?
+        .1;
+
+    documentation_snippet_from_signature(parse_function_signature_line(function_line)?)
+}
+
+fn documentation_snippet_from_signature(signature: FunctionSignature) -> Option<String> {
+    if signature.parameters.is_empty() && signature.return_type.is_none() {
+        return None;
+    }
+
+    let mut lines = Vec::new();
+    let mut placeholder = 1;
+
+    for parameter in signature.parameters {
+        lines.push(format!(
+            "@param {} {} ${{{}:description}}",
+            parameter.name, parameter.ty, placeholder
+        ));
+        placeholder += 1;
+    }
+
+    if let Some(return_type) = signature.return_type {
+        lines.push(format!(
+            "@return {} ${{{}:description}}",
+            return_type, placeholder
+        ));
+    }
+
+    let (first, rest) = lines.split_first()?;
+    let mut snippet = first.clone();
+
+    for line in rest {
+        snippet.push('\n');
+        snippet.push_str("---");
+        snippet.push_str(line);
+    }
+
+    Some(snippet)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FunctionSignature {
+    parameters: Vec<DocParameter>,
+    return_type: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DocParameter {
+    name: String,
+    ty: String,
+}
+
+fn parse_function_signature_line(line: &str) -> Option<FunctionSignature> {
+    let open = line.find('(')?;
+    let close = matching_close_paren(line, open)?;
+    let parameters = line[open + 1..close]
+        .split(',')
+        .filter_map(parse_doc_parameter)
+        .collect::<Vec<_>>();
+    let return_type = line[close + 1..]
+        .trim_start()
+        .strip_prefix(':')
+        .map(|ty| ty.trim())
+        .filter(|ty| !ty.is_empty())
+        .map(type_prefix);
+
+    Some(FunctionSignature {
+        parameters,
+        return_type,
+    })
+}
+
+fn matching_close_paren(line: &str, open: usize) -> Option<usize> {
+    let mut depth = 0;
+
+    for (index, character) in line[open..].char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+
+                if depth == 0 {
+                    return Some(open + index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn parse_doc_parameter(raw: &str) -> Option<DocParameter> {
+    let raw = raw.trim();
+
+    if raw.is_empty() {
+        return None;
+    }
+
+    if raw == "..." {
+        return Some(DocParameter {
+            name: "...".to_owned(),
+            ty: "any".to_owned(),
+        });
+    }
+
+    let (name, ty) = raw
+        .split_once(':')
+        .map(|(name, ty)| (name.trim(), type_prefix(ty.trim())))
+        .unwrap_or((raw, "any".to_owned()));
+
+    if name.is_empty() {
+        return None;
+    }
+
+    Some(DocParameter {
+        name: name.to_owned(),
+        ty,
+    })
+}
+
+fn type_prefix(ty: &str) -> String {
+    ty.split("--")
+        .next()
+        .map(str::trim)
+        .filter(|ty| !ty.is_empty())
+        .unwrap_or("any")
+        .to_owned()
+}
+
+fn format_tua_type(ty: &TuaType) -> String {
+    match ty {
+        TuaType::Named(name) => name.clone(),
+        TuaType::Union(types) => types
+            .iter()
+            .map(format_tua_type)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        TuaType::Table(fields) => {
+            let fields = fields
+                .iter()
+                .map(|field| {
+                    let marker = if field.optional { "?:" } else { ":" };
+
+                    format!("{}{marker} {}", field.name, format_tua_type(&field.ty))
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            format!("{{ {fields} }}")
+        }
+    }
 }
 
 fn complete_identifier_items(
@@ -179,6 +474,8 @@ fn complete_identifier_items(
                     kind: CompletionKind::Variable,
                     detail: Some("local".to_owned()),
                     documentation: None,
+                    insert_text: None,
+                    is_snippet: false,
                 },
             );
         }
@@ -197,6 +494,8 @@ fn complete_identifier_items(
                     kind: CompletionKind::Function,
                     detail: Some("function".to_owned()),
                     documentation: None,
+                    insert_text: None,
+                    is_snippet: false,
                 },
             );
         }
@@ -257,6 +556,8 @@ fn complete_fields(
             kind: CompletionKind::Field,
             detail: Some(detail),
             documentation: None,
+            insert_text: None,
+            is_snippet: false,
         })
         .collect()
 }
@@ -314,6 +615,8 @@ fn complete_required_module_fields(
                 detail: Some(format!("field: {}", field.ty)),
                 label: name,
                 documentation: field.documentation,
+                insert_text: None,
+                is_snippet: false,
             })
             .collect();
     }
@@ -333,6 +636,8 @@ fn complete_required_module_fields(
             detail: Some(format!("field: {ty}")),
             label: name,
             documentation: export.documentation.clone(),
+            insert_text: None,
+            is_snippet: false,
         })
         .collect()
 }
@@ -368,6 +673,8 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         kind: completion_kind_from_lua_item(item.kind),
         detail: Some(item.detail.to_owned()),
         documentation: Some(item.documentation.to_owned()),
+        insert_text: None,
+        is_snippet: false,
     }
 }
 

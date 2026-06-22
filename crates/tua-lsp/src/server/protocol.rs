@@ -90,6 +90,8 @@ pub(super) fn lsp_completion_from_core(uri: &str, completion: Completion) -> Val
     let label = completion.label;
     let detail = completion.detail;
     let documentation = completion.documentation;
+    let insert_text = completion.insert_text;
+    let is_snippet = completion.is_snippet;
     let mut item = json!({
         "label": label.clone(),
         "kind": kind,
@@ -101,6 +103,14 @@ pub(super) fn lsp_completion_from_core(uri: &str, completion: Completion) -> Val
             "documentation": documentation
         }
     });
+
+    if let Some(insert_text) = insert_text {
+        item["insertText"] = json!(insert_text);
+    }
+
+    if is_snippet {
+        item["insertTextFormat"] = json!(2);
+    }
 
     if let Some(detail) = item
         .get("data")
@@ -177,6 +187,7 @@ fn lsp_signature_information_from_core(signature: SignatureInformation) -> Value
 
 fn lsp_completion_kind(kind: CompletionKind) -> u8 {
     match kind {
+        CompletionKind::Snippet => 15,
         CompletionKind::Function => 3,
         CompletionKind::TypeAlias => 25,
         CompletionKind::Field => 5,

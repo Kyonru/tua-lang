@@ -28,6 +28,99 @@ fn completes_type_aliases_in_annotation_positions() {
 }
 
 #[test]
+fn completes_lua_doc_annotation_tags_after_marker() {
+    let source = "---@p\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "---@p"))
+        .expect("annotation tag completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["param".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Keyword);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function parameter annotation")
+    );
+}
+
+#[test]
+fn completes_lua_doc_type_names_in_tua_files() {
+    let source = r#"type Player = { hp: number }
+---@param player Pl
+local function damage(player)
+end
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "player Pl"))
+            .expect("annotation type completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["Player".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
+}
+
+#[test]
+fn completes_lua_doc_type_names_in_lua_files() {
+    let source = r#"---@alias Player { hp: number }
+---@return Pl
+local function makePlayer()
+end
+"#;
+    let completions = complete_tua_source(
+        "src/player.lua",
+        source,
+        position_after(source, "return Pl"),
+    )
+    .expect("Lua annotation type completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["Player".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
+}
+
+#[test]
+fn generates_function_documentation_snippet_from_tua_signature() {
+    let source = r#"type Player = { hp: number }
+---
+local function damage(player: Player, amount: number): Player
+end
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "---"))
+        .expect("documentation snippet completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["document function".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Snippet);
+    assert!(completions[0].is_snippet);
+    assert_eq!(
+        completions[0].insert_text.as_deref(),
+        Some(
+            "@param player Player ${1:description}\n---@param amount number ${2:description}\n---@return Player ${3:description}"
+        )
+    );
+}
+
+#[test]
+fn generates_function_documentation_snippet_from_lua_signature() {
+    let source = r#"---
+local function play(source, ...)
+end
+"#;
+    let completions = complete_tua_source("src/audio.lua", source, position_after(source, "---"))
+        .expect("Lua documentation snippet completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["document function".to_owned()]);
+    assert_eq!(
+        completions[0].insert_text.as_deref(),
+        Some("@param source any ${1:description}\n---@param ... any ${2:description}")
+    );
+}
+
+#[test]
+fn annotation_completions_work_while_source_is_temporarily_invalid() {
+    let source = "local broken =\n---@r\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "---@r"))
+        .expect("lossy annotation completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["return".to_owned()]);
+}
+
+#[test]
 fn completes_table_fields_after_dot_access() {
     let completions = complete_at("player.").expect("field completion should succeed");
 

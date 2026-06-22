@@ -3,6 +3,12 @@ use crate::SourcePosition;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum CompletionContext {
+    AnnotationTag {
+        prefix: String,
+    },
+    DocumentationSnippet {
+        position: SourcePosition,
+    },
     TypeAnnotation {
         prefix: String,
     },
@@ -26,10 +32,108 @@ pub(super) fn completion_context(
     let line = line_at(source, position.line)?;
     let cursor = byte_for_column(line, position.column);
 
-    require_path_context(line, cursor)
+    annotation_tag_context(line, cursor)
+        .or_else(|| documentation_snippet_context(line, cursor, position))
+        .or_else(|| lua_doc_type_annotation_context(line, cursor))
+        .or_else(|| require_path_context(line, cursor))
         .or_else(|| field_access_context(line, cursor))
         .or_else(|| type_annotation_context(line, cursor))
         .or_else(|| identifier_context(line, cursor, position))
+}
+
+fn annotation_tag_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+    let cursor = cursor.min(line.len());
+    let prefix = &line[..cursor];
+    let leading = prefix.len() - prefix.trim_start().len();
+    let trimmed = &prefix[leading..];
+
+    if !trimmed.starts_with("---@") {
+        return None;
+    }
+
+    let tag_prefix = &trimmed[4..];
+
+    if !tag_prefix
+        .chars()
+        .all(|character| character == '_' || character.is_ascii_alphabetic())
+    {
+        return None;
+    }
+
+    Some(CompletionContext::AnnotationTag {
+        prefix: tag_prefix.to_owned(),
+    })
+}
+
+fn documentation_snippet_context(
+    line: &str,
+    cursor: usize,
+    position: SourcePosition,
+) -> Option<CompletionContext> {
+    let cursor = cursor.min(line.len());
+
+    if line[..cursor].trim() != "---" {
+        return None;
+    }
+
+    if !line[cursor..].trim().is_empty() {
+        return None;
+    }
+
+    Some(CompletionContext::DocumentationSnippet { position })
+}
+
+fn lua_doc_type_annotation_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+    let cursor = cursor.min(line.len());
+    let prefix = &line[..cursor];
+    let leading = prefix.len() - prefix.trim_start().len();
+    let trimmed = &prefix[leading..];
+
+    if !trimmed.starts_with("---@") {
+        return None;
+    }
+
+    let after_marker = &trimmed[4..];
+    let mut parts = after_marker.split_whitespace();
+    let tag = parts.next()?;
+    let rest_start = after_marker.find(tag)? + tag.len();
+    let rest = &after_marker[rest_start..];
+    let rest = rest.trim_start();
+
+    let type_text = match tag {
+        "type" | "return" => rest,
+        "param" | "field" => second_annotation_argument(rest)?,
+        "alias" => second_annotation_argument(rest)?,
+        "class" => rest.rsplit_once(':').map(|(_, ty)| ty.trim_start())?,
+        "generic" => rest.rsplit_once(':').map(|(_, ty)| ty.trim_start())?,
+        _ => return None,
+    };
+    let prefix = current_type_prefix(type_text);
+
+    if !prefix
+        .chars()
+        .all(|character| character == '_' || character.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+
+    Some(CompletionContext::TypeAnnotation {
+        prefix: prefix.to_owned(),
+    })
+}
+
+fn current_type_prefix(type_text: &str) -> &str {
+    let type_text = type_text.trim_end();
+    let start = reverse_identifier_start(type_text, type_text.len());
+
+    &type_text[start..]
+}
+
+fn second_annotation_argument(rest: &str) -> Option<&str> {
+    let trimmed = rest.trim_start();
+    let first_len = trimmed.find(char::is_whitespace)?;
+
+    Some(trimmed[first_len..].trim_start())
 }
 
 fn field_access_context(line: &str, cursor: usize) -> Option<CompletionContext> {
@@ -112,6 +216,10 @@ fn identifier_context(
     let cursor = cursor.min(line.len());
 
     if is_inside_string(line, cursor) {
+        return None;
+    }
+
+    if line[..cursor].trim_start().starts_with("--") {
         return None;
     }
 

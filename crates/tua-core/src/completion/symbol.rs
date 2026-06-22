@@ -19,6 +19,8 @@ impl LuaSymbol {
             kind: self.kind,
             detail: Some(self.detail),
             documentation: None,
+            insert_text: None,
+            is_snippet: false,
         }
     }
 }

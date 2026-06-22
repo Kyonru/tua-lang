@@ -65,6 +65,8 @@ fn collect_require_paths(
                 kind: CompletionKind::Module,
                 detail: Some("module".to_owned()),
                 documentation: None,
+                insert_text: None,
+                is_snippet: false,
             },
         );
     }
