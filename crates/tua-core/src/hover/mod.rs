@@ -1,20 +1,12 @@
 use std::fs;
 use std::path::Path;
 
-use full_moon::ast::{
-    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, Prefix, Suffix,
-    TableConstructor, Var,
-};
-use full_moon::node::Node;
-
-use crate::asset;
 use crate::lua::{self, LuaItem};
 use crate::module_index::{
-    required_module_export_for_fields, required_module_export_type_for_fields,
-    required_module_for_receiver, resolve_required_module,
+    required_module_export_for_fields, required_module_for_receiver, resolve_required_module,
 };
 use crate::module_link::require_module_at_position;
-use crate::semantic::{resolve_aliases, resolve_field_chain_type, resolve_table_field_type};
+use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
@@ -23,8 +15,6 @@ use crate::{
     definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
     ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TuaType,
 };
-
-const MAX_LOCAL_INFERENCE_DEPTH: usize = 16;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hover {
@@ -52,6 +42,7 @@ pub fn hover_parsed_source(
     let resolver = HoverResolver {
         parsed,
         environment: &environment,
+        semantic: SemanticModel::new(parsed, &environment),
     };
 
     Ok(resolver.hover(position))
@@ -60,6 +51,7 @@ pub fn hover_parsed_source(
 struct HoverResolver<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
+    semantic: SemanticModel<'a>,
 }
 
 impl<'a> HoverResolver<'a> {
@@ -79,17 +71,17 @@ impl<'a> HoverResolver<'a> {
                 .map(|part| part.text.clone())
                 .collect::<Vec<_>>();
 
-            if let Some(ty) = self.resolve_field_chain_type(&field_parts) {
-                return Some(hover(
-                    format!("(field) {}: {ty}", current_part.text),
-                    Some(current_part.span),
-                ));
-            }
-
             if let Some(hover) =
                 self.required_module_field_hover(&field_parts, position, current_part.span)
             {
                 return Some(hover);
+            }
+
+            if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
+                return Some(hover(
+                    format!("(field) {}: {ty}", current_part.text),
+                    Some(current_part.span),
+                ));
             }
 
             if let Some(item) =
@@ -228,14 +220,8 @@ impl<'a> HoverResolver<'a> {
         position: SourcePosition,
         hover_span: SourceSpan,
     ) -> Option<Hover> {
-        let local = self.local_assignment_value(name, position)?;
-        let contents = local
-            .expression
-            .and_then(|expression| {
-                self.infer_expression_return(expression, local.span.start, local.return_index, 0)
-            })
-            .map(|ty| format!("local {name}: {ty}"))
-            .unwrap_or_else(|| format!("local {name}"));
+        let ty = self.semantic.type_of_local_assignment(name, position)?;
+        let contents = format!("local {name}: {ty}");
 
         Some(Hover {
             contents,
@@ -245,210 +231,6 @@ impl<'a> HoverResolver<'a> {
         })
     }
 
-    fn local_assignment_value(
-        &self,
-        name: &str,
-        position: SourcePosition,
-    ) -> Option<LocalAssignmentValue<'a>> {
-        let mut candidates = Vec::new();
-
-        for stmt in self.parsed.ast.nodes().stmts() {
-            let ast::Stmt::LocalAssignment(local) = stmt else {
-                continue;
-            };
-            let expressions = local.expressions().iter().collect::<Vec<_>>();
-
-            for (index, local_name) in local.names().iter().enumerate() {
-                let Some(span) = node_span(local_name) else {
-                    continue;
-                };
-
-                if token_text(local_name) != name || !starts_before_or_at(span, position) {
-                    continue;
-                }
-
-                let (expression, return_index) =
-                    assignment_expression_for_local(&expressions, index)
-                        .map(|(expression, return_index)| (Some(expression), return_index))
-                        .unwrap_or((None, 0));
-
-                candidates.push(LocalAssignmentValue {
-                    span,
-                    expression,
-                    return_index,
-                });
-            }
-        }
-
-        candidates
-            .into_iter()
-            .max_by_key(|candidate| position_key(candidate.span.start))
-    }
-
-    fn infer_expression(
-        &self,
-        expression: &Expression,
-        position: SourcePosition,
-        depth: usize,
-    ) -> Option<Type> {
-        self.infer_expression_return(expression, position, 0, depth)
-    }
-
-    fn infer_expression_return(
-        &self,
-        expression: &Expression,
-        position: SourcePosition,
-        return_index: usize,
-        depth: usize,
-    ) -> Option<Type> {
-        if depth >= MAX_LOCAL_INFERENCE_DEPTH {
-            return None;
-        }
-
-        match expression {
-            Expression::FunctionCall(function_call) => self
-                .infer_function_call_return_types(function_call, position)
-                .get(return_index)
-                .cloned(),
-            _ if return_index > 0 => None,
-            Expression::BinaryOperator { lhs, binop, rhs } => {
-                let left = self.infer_expression(lhs, position, depth + 1)?;
-                let right = self.infer_expression(rhs, position, depth + 1)?;
-
-                infer_binary_operator_type(self.environment, binop, &left, &right)
-            }
-            Expression::Number(_) => Some(Type::number()),
-            Expression::String(_) => Some(Type::string()),
-            Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
-            Expression::TableConstructor(table) => {
-                Some(self.infer_table_constructor(table, position, depth + 1))
-            }
-            Expression::Parentheses { expression, .. }
-            | Expression::TypeAssertion { expression, .. } => {
-                self.infer_expression_return(expression, position, return_index, depth + 1)
-            }
-            Expression::Var(var) => self.infer_var_value(var, position, depth + 1),
-            _ => None,
-        }
-    }
-
-    fn infer_table_constructor(
-        &self,
-        table: &TableConstructor,
-        position: SourcePosition,
-        depth: usize,
-    ) -> Type {
-        Type::table(table.fields().iter().filter_map(|field| match field {
-            Field::NameKey { key, value, .. } => {
-                let ty = self
-                    .infer_expression(value, position, depth + 1)
-                    .unwrap_or(Type::Any);
-
-                Some((token_text(key), TableField::required(ty)))
-            }
-            _ => None,
-        }))
-    }
-
-    fn infer_function_call_return_types(
-        &self,
-        function_call: &FunctionCall,
-        position: SourcePosition,
-    ) -> Vec<Type> {
-        let Some(parts) = field_chain_before_first_call(function_call) else {
-            return Vec::new();
-        };
-        let Some((root, fields)) = parts.split_first() else {
-            return Vec::new();
-        };
-
-        if fields.is_empty() {
-            if let Some(function) = self.environment.function(root) {
-                return function.return_types_or_any();
-            }
-
-            if let Some(kind) = asset::loader_kind(root) {
-                return vec![kind.return_type()];
-            }
-        }
-
-        if let Some(Type::Function(function)) = resolve_field_chain_type(self.environment, &parts) {
-            return function.return_types_or_any().to_vec();
-        }
-
-        if !fields.is_empty() {
-            if let Some(method) = parts.last() {
-                if let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) {
-                    if let Some(receiver_type) = self.infer_receiver_type(receiver_parts, position)
-                    {
-                        if let Some(item) =
-                            lua_type_field_item(self.environment, &receiver_type, method)
-                        {
-                            return return_types_from_function_detail(item.detail);
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(Type::Function(function)) =
-            required_module_export_type_for_fields(self.parsed, root, fields)
-        {
-            return function.return_types_or_any().to_vec();
-        }
-
-        lua::hover_item(&parts)
-            .map(|item| return_types_from_function_detail(item.detail))
-            .unwrap_or_default()
-    }
-
-    fn infer_var_value(&self, var: &Var, position: SourcePosition, depth: usize) -> Option<Type> {
-        match var {
-            Var::Name(name) => self.infer_named_value(&token_text(name), position, depth + 1),
-            Var::Expression(expression) => resolve_field_chain_type(
-                self.environment,
-                &plain_field_chain_from_var_expression(expression)?,
-            ),
-            _ => None,
-        }
-    }
-
-    fn infer_named_value(
-        &self,
-        name: &str,
-        position: SourcePosition,
-        depth: usize,
-    ) -> Option<Type> {
-        if depth >= MAX_LOCAL_INFERENCE_DEPTH {
-            return None;
-        }
-
-        self.environment
-            .local(name)
-            .cloned()
-            .or_else(|| {
-                self.environment
-                    .function(name)
-                    .and_then(TypedFunction::as_type)
-            })
-            .or_else(|| {
-                let local = self.local_assignment_value(name, position)?;
-
-                local.expression.and_then(|expression| {
-                    self.infer_expression_return(
-                        expression,
-                        local.span.start,
-                        local.return_index,
-                        depth + 1,
-                    )
-                })
-            })
-    }
-
-    fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
-        resolve_field_chain_type(self.environment, parts)
-    }
-
     fn love_object_field_item(
         &self,
         parts: &[String],
@@ -456,24 +238,11 @@ impl<'a> HoverResolver<'a> {
         field: &str,
     ) -> Option<LuaItem> {
         let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
-        let receiver_type = self.infer_receiver_type(receiver_parts, position)?;
+        let receiver_type = self
+            .semantic
+            .type_of_field_chain(receiver_parts, position)?;
 
         lua_type_field_item(self.environment, &receiver_type, field)
-    }
-
-    fn infer_receiver_type(&self, parts: &[String], position: SourcePosition) -> Option<Type> {
-        let (root, fields) = parts.split_first()?;
-        let mut current = self
-            .environment
-            .local(root)
-            .cloned()
-            .or_else(|| self.infer_named_value(root, position, 0))?;
-
-        for field in fields {
-            current = resolve_table_field_type(self.environment, &current, field)?;
-        }
-
-        Some(current)
     }
 
     fn required_module_literal_hover(&self, position: SourcePosition) -> Option<Hover> {
@@ -563,12 +332,6 @@ impl<'a> HoverResolver<'a> {
 
         declaration_context(definition.as_ref(), Some(definition_kind_label(expected)))
     }
-}
-
-struct LocalAssignmentValue<'a> {
-    span: SourceSpan,
-    expression: Option<&'a Expression>,
-    return_index: usize,
 }
 
 fn hover(contents: impl Into<String>, span: Option<SourceSpan>) -> Hover {
@@ -743,102 +506,12 @@ fn format_export_function(name: &str, function: &FunctionType) -> String {
     )
 }
 
-fn infer_symbol_type(symbol: &str) -> Option<Type> {
-    match symbol {
-        "true" | "false" => Some(Type::boolean()),
-        "nil" => Some(Type::nil()),
-        _ => None,
-    }
-}
-
-fn infer_binary_operator_type(
-    environment: &TypeEnvironment,
-    binop: &ast::BinOp,
-    left: &Type,
-    right: &Type,
-) -> Option<Type> {
-    if is_numeric_operator(binop)
-        && is_number_type(environment, left)
-        && is_number_type(environment, right)
-    {
-        return Some(Type::number());
-    }
-
-    if matches!(binop, ast::BinOp::TwoDots(_))
-        && is_concat_operand_type(environment, left)
-        && is_concat_operand_type(environment, right)
-    {
-        return Some(Type::string());
-    }
-
-    if matches!(left, Type::Any) || matches!(right, Type::Any) {
-        return Some(Type::Any);
-    }
-
-    None
-}
-
-fn is_numeric_operator(binop: &ast::BinOp) -> bool {
-    matches!(
-        binop,
-        ast::BinOp::Caret(_)
-            | ast::BinOp::Minus(_)
-            | ast::BinOp::Percent(_)
-            | ast::BinOp::Plus(_)
-            | ast::BinOp::Slash(_)
-            | ast::BinOp::Star(_)
-    )
-}
-
-fn is_number_type(environment: &TypeEnvironment, ty: &Type) -> bool {
-    match resolve_aliases(environment, ty, 0) {
-        Type::Primitive(crate::PrimitiveType::Number) => true,
-        Type::Union(types) => types.iter().all(|ty| is_number_type(environment, ty)),
-        _ => false,
-    }
-}
-
-fn is_concat_operand_type(environment: &TypeEnvironment, ty: &Type) -> bool {
-    match resolve_aliases(environment, ty, 0) {
-        Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
-        Type::Union(types) => types
-            .iter()
-            .all(|ty| is_concat_operand_type(environment, ty)),
-        _ => false,
-    }
-}
-
-fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
-    let Some(start) = detail.rfind("): ").map(|index| index + "): ".len()) else {
-        return Vec::new();
-    };
-
-    detail[start..]
-        .split(',')
-        .map(str::trim)
-        .filter_map(type_from_label)
-        .collect()
-}
-
 fn format_type_list(types: &[Type]) -> String {
     types
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn type_from_label(label: &str) -> Option<Type> {
-    match label {
-        "any" => Some(Type::Any),
-        "boolean" => Some(Type::boolean()),
-        "nil" => Some(Type::nil()),
-        "number" => Some(Type::number()),
-        "string" => Some(Type::string()),
-        "table" => Some(Type::empty_table()),
-        other if !other.is_empty() => Some(Type::alias(other)),
-        _ => None,
-    }
 }
 
 fn type_from_tua_type(ty: &TuaType) -> Type {
@@ -868,82 +541,6 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
             .find_map(|ty| lua_type_field_item(environment, ty, field)),
         Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
     }
-}
-
-fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in function_call.suffixes() {
-        match suffix {
-            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
-            Suffix::Call(Call::MethodCall(method)) => {
-                parts.push(token_text(method.name()));
-                return Some(parts);
-            }
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { .. }))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_)))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(_))) => {
-                return Some(parts);
-            }
-            _ => return None,
-        }
-    }
-
-    None
-}
-
-fn assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
-}
-
-fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
-}
-
-fn node_span(node: &impl Node) -> Option<SourceSpan> {
-    node.range()
-        .map(|(start, end)| SourceSpan::from_range(start, end))
-}
-
-fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
 }
 
 fn starts_before_or_at(span: SourceSpan, position: SourcePosition) -> bool {

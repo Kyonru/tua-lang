@@ -30,8 +30,9 @@ fn hints_unannotated_local_types_from_known_expressions() {
         .map(|hint| hint.label.as_str())
         .collect::<Vec<_>>();
 
-    assert_eq!(type_hints, vec![": Player", ": number"]);
+    assert_eq!(type_hints, vec![": Player", ": number", ": number"]);
     assert_hint_position(&hints, ": Player", 13, "local player".len() + 1);
+    assert_hint_position(&hints, ": number", 14, "local hp".len() + 1);
     assert_hint_position(&hints, ": number", 15, "local total".len() + 1);
 }
 

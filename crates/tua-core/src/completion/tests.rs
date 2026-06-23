@@ -653,6 +653,83 @@ local value = Audio.play
 }
 
 #[test]
+fn completes_love_methods_for_required_module_function_return_locals() {
+    let root = temp_project_dir("required_module_return_completion");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("test dirs should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("assets.tua"),
+        r#"
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+return {
+  loadJumpSound = loadJumpSound,
+}
+"#,
+    )
+    .expect("assets module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"
+local Assets = require("assets")
+
+local a = Assets.loadJumpSound()
+
+a:
+"#;
+    let completions = complete_tua_source(&main_path, source, position_after(source, "a:"))
+        .expect("required module return completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"play".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"setVolume".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"stop".to_owned()), "{labels:?}");
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
+fn completes_required_module_fields_through_copied_module_alias() {
+    let root = temp_project_dir("required_module_alias_copy_completion");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("test dirs should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("assets.tua"),
+        r#"
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+return {
+  loadJumpSound = loadJumpSound,
+}
+"#,
+    )
+    .expect("assets module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"
+local Assets = require("assets")
+local a = Assets
+
+a.
+"#;
+    let completions = complete_tua_source(&main_path, source, position_after(source, "a."))
+        .expect("copied module alias completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"loadJumpSound".to_owned()), "{labels:?}");
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completion_remains_quiet_for_any_values() {
     let source = format!("{SOURCE}local dynamic = payload.\n");
     let position = position_after(&source, "payload.");
