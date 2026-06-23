@@ -1,5 +1,9 @@
 use super::*;
 use crate::DiagnosticCode;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn accepts_matching_annotated_local_initializers() {
@@ -186,6 +190,47 @@ local label: string = "width: " .. z
 }
 
 #[test]
+fn accepts_required_module_function_returns_in_checked_function_bodies() {
+    let temp = TempProject::new("required-module-check-return");
+    let source = r#"local Functions = require("functions")
+
+local function macarrons()
+  return Functions.makePlayer("lua interop")
+end
+
+local function make_function()
+  return Functions.makePlayer
+end
+
+macarrons()
+make_function()
+"#;
+    let functions = r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/functions.tua", functions);
+
+    check_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("required module function returns should satisfy checker return validation");
+}
+
+#[test]
 fn accepts_love_method_enum_string_arguments() {
     check_tua_source(
         "src/assets.tua",
@@ -361,4 +406,39 @@ fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
     );
     assert!(diagnostics[0].message.contains(message));
     assert!(diagnostics[0].format_cli().contains("error TL1003"));
+}
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("tua-core-check-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("temp project should be created");
+
+        Self { path }
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
+        let path = self.path.join(relative);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+
+        fs::write(path, contents).expect("fixture should be written");
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }

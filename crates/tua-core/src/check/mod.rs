@@ -9,6 +9,7 @@ use full_moon::node::Node;
 
 use crate::config::DiagnosticsConfig;
 use crate::lint::lint_parsed_source;
+use crate::module_index::required_module_export_type_for_fields;
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
@@ -428,6 +429,11 @@ impl<'a> Checker<'a> {
             if let Some(function) = self.love_object_method_call_target(&parts) {
                 return Some(Callable::ExternalFunction(function));
             }
+
+            if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
+            {
+                return callable_from_type(&export, self.environment);
+            }
         }
 
         let callee_type = self.resolve_field_chain_type(&parts)?;
@@ -553,6 +559,13 @@ impl<'a> Checker<'a> {
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
+        if !fields.is_empty() {
+            if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
+            {
+                return Some(export);
+            }
+        }
+
         let mut current = self.infer_named_value(root)?;
 
         for field in fields {
