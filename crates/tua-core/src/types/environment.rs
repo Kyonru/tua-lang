@@ -77,6 +77,17 @@ impl TypeEnvironment {
                 context.with_alias(TypeAlias::new(name.clone(), ty.clone()))
             })
     }
+
+    pub(crate) fn with_local_types(
+        mut self,
+        locals: impl IntoIterator<Item = (String, Type)>,
+    ) -> Self {
+        for (name, ty) in locals {
+            self.locals.insert(name, ty);
+        }
+
+        self
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2388,6 +2399,8 @@ fn resolve_named_type(
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Type {
+    let name = name.trim();
+
     match name {
         "number" => Type::number(),
         "string" => Type::string(),

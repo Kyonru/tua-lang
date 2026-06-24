@@ -192,6 +192,64 @@ player.hp = 9
 }
 
 #[test]
+fn check_accepts_project_aware_types_from_tua_and_lua_modules() {
+    let temp = TempDir::new("check-project-types");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local Types = require("types")
+local LuaDocTypes = require("lua_doc_types")
+
+local player: Types.Player = nil
+local enemy: LuaDocTypes.Enemy = nil
+
+return {
+  player = player,
+  enemy = enemy,
+}
+"#,
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/types.tua"),
+        r#"
+type Player = { hp: number }
+
+return {}
+"#,
+    )
+    .expect("failed to write tua type provider");
+    fs::write(
+        temp.path().join("src/lua_doc_types.lua"),
+        r#"
+---@class Enemy
+---@field hp number
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#,
+    )
+    .expect("failed to write lua type provider");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("checked 2 file(s)"));
+}
+
+#[test]
 fn check_exits_nonzero_for_parse_errors() {
     let temp = TempDir::new("check-parse-error");
 
@@ -307,6 +365,69 @@ return {
     assert!(nested_output.contains("player.hp = player.hp - amount"));
     assert!(!nested_output.contains("type Player"));
     assert_eq!(lua_output, "return { ignored = true }\n");
+}
+
+#[test]
+fn build_accepts_project_aware_types_from_tua_and_lua_modules() {
+    let temp = TempDir::new("build-project-types");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local Types = require("types")
+local LuaDocTypes = require("lua_doc_types")
+
+local player: Types.Player = nil
+local enemy: LuaDocTypes.Enemy = nil
+
+return {
+  player = player,
+  enemy = enemy,
+}
+"#,
+    )
+    .expect("failed to write main source");
+    fs::write(
+        temp.path().join("src/types.tua"),
+        r#"
+type Player = { hp: number }
+
+return {}
+"#,
+    )
+    .expect("failed to write tua type provider");
+    fs::write(
+        temp.path().join("src/lua_doc_types.lua"),
+        r#"
+---@class Enemy
+---@field hp number
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#,
+    )
+    .expect("failed to write lua type provider");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(stdout.contains("built 3 file(s)"));
+    assert!(!emitted.contains("Types.Player"));
+    assert!(!emitted.contains("LuaDocTypes.Enemy"));
+    assert!(temp.path().join("build/lua_doc_types.lua").is_file());
 }
 
 #[test]

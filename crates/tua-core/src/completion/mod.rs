@@ -15,7 +15,7 @@ use crate::{
     TuaType,
 };
 
-mod context;
+pub(crate) mod context;
 mod require;
 mod symbol;
 
@@ -100,6 +100,34 @@ pub fn complete_parsed_source(
     };
 
     Ok(complete_parsed_source_with_context(parsed, context))
+}
+
+pub(crate) fn complete_field_access_in_source_with_environment(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+) -> Vec<Completion> {
+    let Some(CompletionContext::FieldAccess {
+        receiver_parts,
+        prefix,
+        position,
+        separator,
+        separator_span,
+    }) = completion_context(source, position)
+    else {
+        return Vec::new();
+    };
+
+    complete_fields(
+        parsed,
+        environment,
+        &receiver_parts,
+        prefix.as_str(),
+        position,
+        separator,
+        separator_span,
+    )
 }
 
 fn complete_parsed_source_with_context(

@@ -10,8 +10,8 @@ use crate::source::{
 };
 use tua_core::{
     check_tua_source_with_asset_roots_and_diagnostics_config, emit_tua_source,
-    format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
-    LoadedConfig, ProjectWorkspace,
+    format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind, Diagnostic, DiagnosticCategory,
+    DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
 #[derive(Debug, Default)]
@@ -220,10 +220,43 @@ fn build_project_files(
         });
     }
 
+    let mut host = AnalysisHost::with_config(workspace.config().clone());
+    host.set_source_roots(workspace.source_roots().iter().cloned());
+    host.set_output_roots(workspace.output_roots().iter().cloned());
+
+    for unit in &units {
+        match unit {
+            SourceUnit::Tua {
+                source_path,
+                source,
+                ..
+            } => {
+                host.set_file_with_kind(source_path, source.clone(), AnalysisSourceKind::Tua);
+            }
+            SourceUnit::Asset { source_path, .. } => {
+                if source_path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    != Some("lua")
+                {
+                    continue;
+                }
+
+                match read_source_file(source_path) {
+                    Ok(source) => {
+                        host.set_file_with_kind(source_path, source, AnalysisSourceKind::Lua);
+                    }
+                    Err(diagnostic) => diagnostics.push(diagnostic),
+                }
+            }
+        }
+    }
+
+    let snapshot = host.snapshot();
+
     for unit in &mut units {
         let SourceUnit::Tua {
             source_path,
-            source,
             emit_candidate,
             ..
         } = unit
@@ -231,14 +264,9 @@ fn build_project_files(
             continue;
         };
 
-        if let Err(mut source_diagnostics) =
-            check_tua_source_with_asset_roots_and_diagnostics_config(
-                source_path,
-                source.clone(),
-                &asset_roots,
-                &diagnostics_config,
-            )
-        {
+        let mut source_diagnostics =
+            snapshot.diagnostics_with_config(source_path, &asset_roots, &diagnostics_config);
+        if !source_diagnostics.is_empty() {
             let has_non_emittable_error = source_diagnostics
                 .iter()
                 .any(|diagnostic| !can_emit_after_diagnostic(diagnostic));

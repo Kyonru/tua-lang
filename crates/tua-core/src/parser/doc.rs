@@ -378,21 +378,43 @@ fn take_type_text(line: &str, cursor: usize) -> Option<(String, usize)> {
         balanced_brace_end(line, cursor)?
     } else {
         let mut end = cursor;
+        let mut expect_type = true;
 
         while end < line.len() {
-            let Some((token, _, next)) = take_token_at(line, 1, end) else {
-                break;
-            };
+            let token_start = skip_spaces(line, end);
 
-            if token == "|" || token.starts_with('|') || line[end..].trim_start().starts_with('|') {
-                end = next;
+            if token_start >= line.len() {
+                break;
+            }
+
+            if line[token_start..].starts_with('|') {
+                if expect_type {
+                    break;
+                }
+
+                end = token_start + 1;
+                expect_type = true;
                 continue;
             }
 
-            if end == cursor {
-                end = next;
+            if !expect_type {
+                break;
             }
 
+            let next = if starts_with_quote(line, token_start) {
+                quoted_literal_end(line, token_start)?
+            } else {
+                take_token_at(line, 1, token_start)?.2
+            };
+
+            end = next;
+            expect_type = false;
+
+            let after = skip_spaces(line, end);
+
+            if line[after..].starts_with('|') {
+                continue;
+            }
             break;
         }
 
@@ -429,7 +451,15 @@ fn parse_type_text(text: &str) -> TuaType {
     let union = split_top_level(text, '|');
 
     if union.len() > 1 {
+        if union.iter().all(|part| is_quoted_string_literal(part)) {
+            return TuaType::Named("string".to_owned());
+        }
+
         return TuaType::Union(union.into_iter().map(parse_type_text).collect());
+    }
+
+    if is_quoted_string_literal(text) {
+        return TuaType::Named("string".to_owned());
     }
 
     if let Some(inner) = text
@@ -469,9 +499,24 @@ fn split_top_level(text: &str, separator: char) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0;
     let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
 
     for (index, ch) in text.char_indices() {
+        if let Some(current_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == current_quote {
+                quote = None;
+            }
+
+            continue;
+        }
+
         match ch {
+            '\'' | '"' => quote = Some(ch),
             '{' => depth += 1,
             '}' => depth -= 1,
             _ if ch == separator && depth == 0 => {
@@ -484,6 +529,40 @@ fn split_top_level(text: &str, separator: char) -> Vec<&str> {
 
     parts.push(text[start..].trim());
     parts
+}
+
+fn starts_with_quote(line: &str, cursor: usize) -> bool {
+    line[cursor..].starts_with('\'') || line[cursor..].starts_with('"')
+}
+
+fn quoted_literal_end(line: &str, cursor: usize) -> Option<usize> {
+    let quote = line[cursor..].chars().next()?;
+    let mut escaped = false;
+
+    for (offset, ch) in line[cursor + quote.len_utf8()..].char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == quote {
+            return Some(cursor + quote.len_utf8() + offset + ch.len_utf8());
+        }
+    }
+
+    None
+}
+
+fn is_quoted_string_literal(text: &str) -> bool {
+    let text = text.trim();
+
+    (text.len() >= 2 && text.starts_with('\'') && text.ends_with('\''))
+        || (text.len() >= 2 && text.starts_with('"') && text.ends_with('"'))
 }
 
 fn take_token_at(

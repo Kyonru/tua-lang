@@ -2,7 +2,7 @@ use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_
 use crate::SourcePosition;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum CompletionContext {
+pub(crate) enum CompletionContext {
     AnnotationTag {
         prefix: String,
     },
@@ -35,12 +35,12 @@ pub(super) enum CompletionContext {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum FieldAccessSeparator {
+pub(crate) enum FieldAccessSeparator {
     Dot,
     Colon,
 }
 
-pub(super) fn completion_context(
+pub(crate) fn completion_context(
     source: &str,
     position: SourcePosition,
 ) -> Option<CompletionContext> {

@@ -1,21 +1,26 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::completion::complete_field_access_in_source_with_environment;
 use crate::hir::{HirModule, HirRequireBinding};
 use crate::module_link::require_module_at_position;
 use crate::scope_map_parsed_source;
-use crate::source_text::dotted_chain_at_position;
+use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::source_text::{dotted_chain_at_position, line_at};
+use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     build_type_environment, check_parsed_source_with_asset_roots_and_diagnostics_config,
     complete_parsed_source, complete_tua_source, definition_parsed_source,
     exported_field_for_fields, hover_parsed_source, infer_module_exports, lower_parsed_source,
-    module_links_tua_source, parse_lua_source, parse_tua_source, Completion, Definition,
-    DefinitionKind, Diagnostic, Hover, ModuleExportField, ModuleExports, ModuleGraph,
+    module_links_tua_source, parse_lua_source, parse_tua_source,
+    require_bindings_for_parsed_source, required_module_for_receiver, Completion, CompletionKind,
+    Definition, DefinitionKind, Diagnostic, Hover, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
-    RequireResolution, ScopeMap, SourcePosition, SourceSpan, Type, TypeEnvironment,
-    WorkspaceSymbol, WorkspaceSymbolKind,
+    ProjectTypeDatabase, ProjectTypeDatabaseInput, RequireResolution, ScopeMap, SourcePosition,
+    SourceSpan, TableField, TuaType, Type, TypeEnvironment, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -54,6 +59,7 @@ pub struct AnalysisSnapshot {
     files: BTreeMap<PathBuf, AnalysisFile>,
     builtin_catalogs: BuiltinCatalogs,
     module_graph: ModuleGraph,
+    type_database: ProjectTypeDatabase,
 }
 
 #[derive(Clone, Debug)]
@@ -245,6 +251,15 @@ impl AnalysisHost {
                 extension: self.config.extension.clone(),
             },
         );
+        let type_database = ProjectTypeDatabase::build(
+            files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
+                path,
+                source_kind: file.kind,
+                environment: file.environment.as_ref(),
+                scope: file.scope.as_ref(),
+            }),
+            &module_graph,
+        );
 
         AnalysisSnapshot {
             config: self.config.clone(),
@@ -252,6 +267,7 @@ impl AnalysisHost {
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
             module_graph,
+            type_database,
         }
     }
 
@@ -309,7 +325,7 @@ impl AnalysisSnapshot {
         };
 
         if asset_roots == self.source_roots() && diagnostics_config == &self.config.diagnostics {
-            return file.diagnostics.clone();
+            return self.project_aware_diagnostics(path.as_ref(), file.diagnostics.clone());
         }
 
         let parsed = match &file.parsed {
@@ -317,18 +333,40 @@ impl AnalysisSnapshot {
             Err(diagnostics) => return diagnostics.clone(),
         };
 
-        check_parsed_source_with_asset_roots_and_diagnostics_config(
+        let diagnostics = check_parsed_source_with_asset_roots_and_diagnostics_config(
             parsed,
             asset_roots,
             diagnostics_config,
         )
         .err()
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+        self.project_aware_diagnostics(path.as_ref(), diagnostics)
     }
 
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
         let path = path.as_ref();
-        let parsed = self.parse(path).and_then(Result::ok)?;
+        let file = self.file(path)?;
+
+        match &file.parsed {
+            Ok(parsed) => self.hover_parsed_snapshot(parsed, position),
+            Err(_) => {
+                let recovered = source_without_incomplete_field_access_lines(&file.source);
+                let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
+
+                self.hover_parsed_snapshot(&parsed, position)
+            }
+        }
+    }
+
+    fn hover_parsed_snapshot(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        if let Some(hover) = self.project_type_hover(parsed, position) {
+            return Some(hover);
+        }
 
         if let Some(hover) = self.module_hover(parsed, position) {
             return Some(hover);
@@ -338,7 +376,14 @@ impl AnalysisSnapshot {
             return None;
         }
 
-        hover_parsed_source(parsed, position).ok().flatten()
+        if let Some(hover) = self.project_annotated_local_hover(parsed, position) {
+            return Some(hover);
+        }
+
+        hover_parsed_source(parsed, position)
+            .ok()
+            .flatten()
+            .or_else(|| self.project_symbol_hover(parsed, position))
     }
 
     pub fn completion(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Completion> {
@@ -348,8 +393,28 @@ impl AnalysisSnapshot {
         };
 
         match &file.parsed {
-            Ok(parsed) => complete_parsed_source(parsed, position).unwrap_or_default(),
-            Err(_) => complete_tua_source(path, file.source.clone(), position).unwrap_or_default(),
+            Ok(parsed) => {
+                let completions = self.project_completions(parsed, &file.source, position);
+
+                if !completions.is_empty() {
+                    return completions;
+                }
+
+                complete_parsed_source(parsed, position).unwrap_or_default()
+            }
+            Err(_) => {
+                let recovered = source_without_incomplete_field_access_lines(&file.source);
+
+                if let Ok(parsed) = parse_analysis_source(path, recovered, file.kind) {
+                    let completions = self.project_completions(&parsed, &file.source, position);
+
+                    if !completions.is_empty() {
+                        return completions;
+                    }
+                }
+
+                complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
+            }
         }
     }
 
@@ -398,6 +463,10 @@ impl AnalysisSnapshot {
 
     pub fn module_graph(&self) -> &ModuleGraph {
         &self.module_graph
+    }
+
+    pub fn type_database(&self) -> &ProjectTypeDatabase {
+        &self.type_database
     }
 
     pub fn symbol_index(&self, path: impl AsRef<Path>) -> &[WorkspaceSymbol] {
@@ -551,6 +620,464 @@ impl AnalysisSnapshot {
 
         exported_field_for_fields(exports, fields)
     }
+
+    fn project_type_hover(&self, parsed: &ParsedSource, position: SourcePosition) -> Option<Hover> {
+        if !is_type_annotation_position(parsed, position) {
+            return None;
+        }
+
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let current_part = chain.parts.get(chain.cursor_index)?;
+        let name = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index + 1)
+            .map(|part| part.text.as_str())
+            .collect::<Vec<_>>()
+            .join(".");
+        let binding =
+            self.type_database
+                .resolve_type_name(&self.module_graph, &parsed.path, &name)?;
+        let mut hover = Hover {
+            contents: format!("type {name} = {}", binding.ty),
+            span: Some(current_part.span),
+            documentation: None,
+            context: Vec::new(),
+        };
+
+        if binding.module_path != normalize_path(&parsed.path) {
+            hover
+                .context
+                .push(format!("module: {}", binding.module_path.display()));
+        }
+
+        Some(hover)
+    }
+
+    fn project_symbol_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index != 0 || chain.parts.len() != 1 {
+            return None;
+        }
+
+        let current_part = chain.parts.first()?;
+        let environment = self.project_type_environment(parsed);
+        let semantic = SemanticModel::new(parsed, &environment);
+        let ty = semantic.type_of_name(&current_part.text, position)?;
+
+        if matches!(ty, Type::Any) {
+            return None;
+        }
+
+        Some(Hover {
+            contents: format!("local {}: {ty}", current_part.text),
+            span: Some(current_part.span),
+            documentation: None,
+            context: Vec::new(),
+        })
+    }
+
+    fn project_annotated_local_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index != 0 || chain.parts.len() != 1 {
+            return None;
+        }
+
+        let current_part = chain.parts.first()?;
+        let annotation = parsed
+            .local_annotations
+            .iter()
+            .filter(|annotation| {
+                annotation.name == current_part.text
+                    && tua_type_uses_qualified_name(&annotation.ty)
+                    && annotation
+                        .name_span
+                        .is_some_and(|span| position_key(span.start) <= position_key(position))
+            })
+            .max_by_key(|annotation| annotation.name_span.map(|span| position_key(span.start)))?;
+        let ty = self.project_type_from_tua_type(parsed, &annotation.ty)?;
+
+        if matches!(ty, Type::Any) {
+            return None;
+        }
+
+        Some(Hover {
+            contents: format!("local {}: {ty}", current_part.text),
+            span: Some(current_part.span),
+            documentation: None,
+            context: Vec::new(),
+        })
+    }
+
+    fn project_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let environment = self.project_type_environment(parsed);
+        let field_completions = complete_field_access_in_source_with_environment(
+            source,
+            parsed,
+            position,
+            &environment,
+        );
+
+        if !field_completions.is_empty() {
+            return field_completions;
+        }
+
+        self.project_table_literal_completions(parsed, source, position)
+    }
+
+    fn project_type_environment(&self, parsed: &ParsedSource) -> TypeEnvironment {
+        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+        environment.with_local_types(self.project_local_annotation_types(parsed))
+    }
+
+    fn project_local_annotation_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
+        parsed
+            .local_annotations
+            .iter()
+            .filter_map(|annotation| {
+                self.project_type_from_tua_type(parsed, &annotation.ty)
+                    .map(|ty| (annotation.name.clone(), ty))
+            })
+            .collect()
+    }
+
+    fn project_type_from_tua_type(&self, parsed: &ParsedSource, ty: &TuaType) -> Option<Type> {
+        match ty {
+            TuaType::Named(name) => self
+                .type_database
+                .resolve_type_name(&self.module_graph, &parsed.path, name)
+                .map(|binding| binding.ty)
+                .or_else(|| self.required_module_type(parsed, name))
+                .or_else(|| Some(Type::named(name.trim()))),
+            TuaType::Union(types) => {
+                Some(Type::union(types.iter().filter_map(|ty| {
+                    self.project_type_from_tua_type(parsed, ty)
+                })))
+            }
+            TuaType::Table(fields) => Some(Type::table(fields.iter().filter_map(|field| {
+                self.project_type_from_tua_type(parsed, &field.ty)
+                    .map(|ty| {
+                        (
+                            field.name.clone(),
+                            TableField {
+                                ty,
+                                optional: field.optional,
+                            },
+                        )
+                    })
+            }))),
+        }
+    }
+
+    fn required_module_type(&self, parsed: &ParsedSource, name: &str) -> Option<Type> {
+        let (receiver, member) = name.trim().split_once('.')?;
+
+        if let Some(path) = self.indexed_required_module_path(parsed, receiver) {
+            let binding = self.type_database.module(path)?.alias(member.trim())?;
+
+            return Some(self.type_database.resolve_type(
+                &self.module_graph,
+                &binding.module_path,
+                &binding.ty,
+            ));
+        }
+
+        let required = required_module_for_receiver(parsed, receiver)?;
+        let source = fs::read_to_string(&required.path).ok()?;
+        let provider = match required
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+        {
+            Some("lua") => parse_lua_source(&required.path, source).ok()?,
+            _ => parse_tua_source(&required.path, source).ok()?,
+        };
+        let (environment, _) = build_type_environment_with_diagnostics(&provider);
+        let ty = environment.alias(member.trim())?;
+
+        Some(self.resolve_provider_aliases(&environment, ty))
+    }
+
+    fn indexed_required_module_path(&self, parsed: &ParsedSource, receiver: &str) -> Option<&Path> {
+        let module = require_bindings_for_parsed_source(parsed)
+            .into_iter()
+            .find(|binding| binding.alias == receiver)?
+            .module;
+
+        for candidate in self.indexed_module_candidates(&module) {
+            if self.type_database.module(&candidate).is_some() {
+                return self
+                    .type_database
+                    .module(&candidate)
+                    .map(|module| module.path.as_path());
+            }
+        }
+
+        None
+    }
+
+    fn indexed_module_candidates(&self, module: &str) -> Vec<PathBuf> {
+        let mut relative = PathBuf::new();
+
+        for part in module.split('.').filter(|part| !part.is_empty()) {
+            relative.push(part);
+        }
+
+        let mut candidates = Vec::new();
+        let extensions = if self.config.extension == "lua" {
+            vec!["lua"]
+        } else {
+            vec![self.config.extension.as_str(), "lua"]
+        };
+
+        for root in self.source_roots() {
+            for extension in &extensions {
+                candidates.push(normalize_path(
+                    root.join(&relative).with_extension(extension),
+                ));
+                candidates.push(normalize_path(
+                    root.join(&relative).join(format!("init.{extension}")),
+                ));
+            }
+        }
+
+        candidates
+    }
+
+    fn resolve_provider_aliases(&self, environment: &TypeEnvironment, ty: &Type) -> Type {
+        resolve_aliases(environment, ty, 0)
+    }
+
+    fn project_table_literal_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let Some((ty, prefix)) = self.table_literal_annotation_type(parsed, source, position)
+        else {
+            return Vec::new();
+        };
+        let mut fields = BTreeMap::new();
+
+        collect_type_fields(&ty, &mut fields);
+
+        fields
+            .into_iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, ty)| Completion {
+                label: name,
+                kind: CompletionKind::Field,
+                detail: Some(format!("field: {ty}")),
+                documentation: None,
+                insert_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect()
+    }
+
+    fn table_literal_annotation_type(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Option<(Type, String)> {
+        let prefix = identifier_prefix_before(source, position)?;
+        let annotation = parsed
+            .local_annotations
+            .iter()
+            .filter(|annotation| {
+                let Some(name_span) = annotation.name_span else {
+                    return false;
+                };
+
+                name_span.start.line <= position.line
+                    && typed_initializer_is_open(source, name_span.start.line, position)
+            })
+            .max_by_key(|annotation| annotation.name_span.map(|span| position_key(span.start)))?;
+        let ty = self.project_type_from_tua_type(parsed, &annotation.ty)?;
+
+        Some((ty, prefix))
+    }
+
+    fn project_aware_diagnostics(
+        &self,
+        path: &Path,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Vec<Diagnostic> {
+        diagnostics
+            .into_iter()
+            .filter(|diagnostic| {
+                if diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME) {
+                    return true;
+                }
+
+                let Some(name) = unknown_type_name(&diagnostic.message) else {
+                    return true;
+                };
+
+                self.type_database
+                    .resolve_type_name(&self.module_graph, path, name)
+                    .is_none()
+            })
+            .collect()
+    }
+}
+
+fn unknown_type_name(message: &str) -> Option<&str> {
+    Some(
+        message
+            .strip_prefix("unknown type `")?
+            .strip_suffix('`')?
+            .trim(),
+    )
+}
+
+fn is_type_annotation_position(parsed: &ParsedSource, position: SourcePosition) -> bool {
+    parsed.local_annotations.iter().any(|annotation| {
+        annotation
+            .span
+            .is_some_and(|span| contains_position(span, position))
+    }) || parsed.function_annotations.iter().any(|function| {
+        function.parameters.iter().any(|parameter| {
+            parameter
+                .span
+                .is_some_and(|span| contains_position(span, position))
+        })
+    })
+}
+
+fn tua_type_uses_qualified_name(ty: &TuaType) -> bool {
+    match ty {
+        TuaType::Named(name) => name.contains('.'),
+        TuaType::Union(types) => types.iter().any(tua_type_uses_qualified_name),
+        TuaType::Table(fields) => fields
+            .iter()
+            .any(|field| tua_type_uses_qualified_name(&field.ty)),
+    }
+}
+
+fn contains_position(span: SourceSpan, position: SourcePosition) -> bool {
+    let start = position_key(span.start);
+    let end = position_key(span.end);
+    let position = position_key(position);
+
+    start <= position && position < end
+}
+
+fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
+    match ty {
+        Type::Table(table) => {
+            fields.extend(
+                table
+                    .fields()
+                    .map(|(name, field)| (name.to_owned(), field.ty.clone())),
+            );
+        }
+        Type::Union(types) => {
+            for ty in types {
+                collect_type_fields(ty, fields);
+            }
+        }
+        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+    }
+}
+
+fn identifier_prefix_before(source: &str, position: SourcePosition) -> Option<String> {
+    let line = line_at(source, position.line)?;
+    let cursor = byte_for_position_column(line, position.column);
+    let mut start = cursor;
+
+    while start > 0 {
+        let byte = line.as_bytes()[start - 1];
+
+        if byte == b'_' || byte.is_ascii_alphanumeric() {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+
+    Some(line[start..cursor].to_owned())
+}
+
+fn typed_initializer_is_open(source: &str, start_line: usize, position: SourcePosition) -> bool {
+    let Some(first_line) = line_at(source, start_line) else {
+        return false;
+    };
+
+    if !first_line.contains("local ") || !first_line.contains(':') || !first_line.contains("= {") {
+        return false;
+    }
+
+    let mut depth = 0isize;
+
+    for line_number in start_line..=position.line {
+        let Some(line) = line_at(source, line_number) else {
+            continue;
+        };
+        let end = if line_number == position.line {
+            byte_for_position_column(line, position.column)
+        } else {
+            line.len()
+        };
+
+        for byte in line[..end].bytes() {
+            match byte {
+                b'{' => depth += 1,
+                b'}' => depth -= 1,
+                _ => {}
+            }
+        }
+    }
+
+    depth > 0
+}
+
+fn byte_for_position_column(line: &str, column: usize) -> usize {
+    let target = column.saturating_sub(1);
+
+    line.char_indices()
+        .nth(target)
+        .map(|(index, _)| index)
+        .unwrap_or(line.len())
+}
+
+fn source_without_incomplete_field_access_lines(source: &str) -> String {
+    let mut recovered = String::with_capacity(source.len());
+
+    for line in source.split_inclusive('\n') {
+        let content = line.strip_suffix('\n').unwrap_or(line);
+        let content = content.strip_suffix('\r').unwrap_or(content);
+        let trimmed = content.trim_end();
+
+        if trimmed.ends_with('.') || trimmed.ends_with(':') {
+            recovered.push('\n');
+        } else {
+            recovered.push_str(line);
+        }
+    }
+
+    recovered
 }
 
 impl AnalysisQueryCache {

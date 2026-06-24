@@ -325,6 +325,49 @@ assert_eq!(
 );
 ```
 
+### Project Type Database Example
+
+The project type database is built from snapshot-indexed files, cached
+per-file type environments, lexical module aliases, and the module graph. It
+resolves type aliases, LuaDoc-provided types, exported function signatures, and
+module field chains across indexed files without reading from disk during a
+request.
+
+```rust
+use tua_core::{AnalysisHost, AnalysisSourceKind, TableField, Type};
+
+let mut host = AnalysisHost::new();
+
+host.set_source_roots(["src".into()]);
+host.set_file_with_kind(
+    "src/main.tua",
+    r#"local Types = require("types")
+local player: Types.Player = nil
+"#,
+    AnalysisSourceKind::Tua,
+);
+host.set_file_with_kind(
+    "src/types.tua",
+    r#"type Player = { hp: number }
+
+return {}
+"#,
+    AnalysisSourceKind::Tua,
+);
+
+let snapshot = host.snapshot();
+let binding = snapshot
+    .type_database()
+    .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Types.Player")
+    .unwrap();
+
+assert_eq!(
+    binding.ty,
+    Type::table([("hp", TableField::required(Type::number()))])
+);
+assert!(snapshot.diagnostics("src/main.tua").is_empty());
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
@@ -335,8 +378,8 @@ assert_eq!(
 | `parser` | Parses token streams into syntax. | Raw Lua/Tua parser APIs over full_moon plus normalization for Tua-only syntax. | Existing | 57 |
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
-| `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 60, 64, 65 |
+| `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, project type database, and Lua/LOVE builtin catalogs. | Partial | 61, 62 |
+| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |

@@ -449,6 +449,27 @@ end
 }
 
 #[test]
+fn parses_lua_doc_string_literal_union_fields_as_string() {
+    let parsed = parse_lua_source(
+        "src/lua_doc.lua",
+        r#"---@class Enemy
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+"#,
+    )
+    .expect("Lua doc annotations should parse with Lua source");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 2);
+
+    let LuaDocAnnotationKind::Field(field) = &parsed.lua_doc_annotations[1].kind else {
+        panic!("second annotation should be a field");
+    };
+
+    assert_eq!(field.name, "type");
+    assert_eq!(field.ty, TuaType::Named("string".to_owned()));
+}
+
+#[test]
 fn parses_lua_doc_annotations_without_requiring_valid_lua() {
     let result = parse_lua_doc_annotations(
         "src/broken.lua",

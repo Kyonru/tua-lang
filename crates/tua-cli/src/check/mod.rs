@@ -2,26 +2,35 @@ use std::path::Path;
 
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_source_files, read_source_file};
-use tua_core::{
-    check_tua_source_with_asset_roots_and_diagnostics_config, LoadedConfig, ProjectWorkspace,
-};
+use crate::source::{discover_build_files, read_source_file, SourceKind};
+use tua_core::{AnalysisHost, AnalysisSourceKind, LoadedConfig, ProjectWorkspace};
 
 pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let source_dir = workspace.primary_source_root().to_path_buf();
     let asset_roots = workspace.asset_roots();
-    let source_files =
-        discover_source_files(&source_dir, &workspace.config().extension).map_err(|error| {
+    let source_files = discover_build_files(&source_dir, &workspace.config().extension, None)
+        .map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?;
-    let diagnostics_config = workspace.config().diagnostics.clone();
-    let checked = source_files.len();
+    let checked = source_files
+        .iter()
+        .filter(|source_file| source_file.kind == SourceKind::Tua)
+        .count();
     let mut diagnostics = Vec::new();
+    let mut host = AnalysisHost::with_config(workspace.config().clone());
 
-    for source_path in source_files {
-        let source = match read_source_file(&source_path) {
+    host.set_source_roots(workspace.source_roots().iter().cloned());
+    host.set_output_roots(workspace.output_roots().iter().cloned());
+
+    for source_file in &source_files {
+        let Some(kind) =
+            analysis_source_kind_for_path(&source_file.path, source_file.kind, &workspace)
+        else {
+            continue;
+        };
+        let source = match read_source_file(&source_file.path) {
             Ok(source) => source,
             Err(diagnostic) => {
                 diagnostics.push(diagnostic);
@@ -29,16 +38,17 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
             }
         };
 
-        if let Err(mut source_diagnostics) =
-            check_tua_source_with_asset_roots_and_diagnostics_config(
-                &source_path,
-                source,
-                &asset_roots,
-                &diagnostics_config,
-            )
-        {
-            diagnostics.append(&mut source_diagnostics);
+        host.set_file_with_kind(&source_file.path, source, kind);
+    }
+
+    let snapshot = host.snapshot();
+
+    for source_file in source_files {
+        if source_file.kind != SourceKind::Tua {
+            continue;
         }
+
+        diagnostics.extend(snapshot.diagnostics_with_asset_roots(&source_file.path, &asset_roots));
     }
 
     if diagnostics.is_empty() {
@@ -49,4 +59,24 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
             sorted_diagnostics(diagnostics),
         ))
     }
+}
+
+fn analysis_source_kind_for_path(
+    path: &Path,
+    source_kind: SourceKind,
+    workspace: &ProjectWorkspace,
+) -> Option<AnalysisSourceKind> {
+    match source_kind {
+        SourceKind::Tua => Some(AnalysisSourceKind::Tua),
+        SourceKind::Asset => (path.extension().and_then(|extension| extension.to_str())
+            == Some("lua"))
+        .then_some(AnalysisSourceKind::Lua),
+    }
+    .filter(|_| {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                extension == "lua" || extension == workspace.config().extension
+            })
+    })
 }

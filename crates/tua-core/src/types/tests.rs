@@ -301,6 +301,29 @@ end
 }
 
 #[test]
+fn lowers_lua_doc_string_literal_union_fields_as_string() {
+    let parsed = parse_lua_source(
+        "src/enemy.lua",
+        r#"---@class Enemy
+---@field hp number
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+"#,
+    )
+    .expect("Lua source with doc annotations should parse");
+    let environment = build_type_environment(&parsed).expect("Lua doc annotations should lower");
+
+    let Type::Table(enemy) = environment.alias("Enemy").expect("Enemy should exist") else {
+        panic!("Enemy should lower to a table shape");
+    };
+
+    assert_eq!(
+        enemy.field("type").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+}
+
+#[test]
 fn reports_conflicts_between_tua_and_lua_doc_annotations() {
     let parsed = parse_tua_source(
         "src/conflict.tua",

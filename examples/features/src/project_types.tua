@@ -1,0 +1,16 @@
+local Types = require("types")
+local LuaDocTypes = require("lua_doc_types")
+
+-- Feature: project-aware type database resolves aliases through require aliases.
+local playerFromTuaModule: Types.Player = nil
+
+-- Feature: Lua files with LuaDoc annotations can provide types to Tua files.
+local enemyFromLuaDocModule: LuaDocTypes.Enemy = nil
+
+local a = enemyFromLuaDocModule
+
+
+return {
+  playerFromTuaModule = playerFromTuaModule,
+  enemyFromLuaDocModule = enemyFromLuaDocModule,
+}

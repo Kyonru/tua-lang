@@ -390,3 +390,206 @@ return {
         Some("audio source\nsuccess flag".to_owned())
     );
 }
+
+#[test]
+fn snapshot_hover_prefers_project_type_aliases_in_type_annotations() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Types = require("types")
+local LuaDocTypes = require("lua_doc_types")
+
+local player: Types.<|player_type|>Player = nil
+local enemy: LuaDocTypes.<|enemy_type|>Enemy = nil
+-- file: src/types.tua
+type Player = { hp: number }
+
+return {}
+-- file: src/lua_doc_types.lua
+---@class Enemy
+---@field hp number
+---@field name string
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let player = snapshot
+        .hover("src/main.tua", fixture.position("player_type"))
+        .expect("required tua alias should hover");
+    let enemy = snapshot
+        .hover("src/main.tua", fixture.position("enemy_type"))
+        .expect("required lua doc alias should hover");
+
+    assert_eq!(player.contents, "type Types.Player = { hp: number }");
+    assert_eq!(
+        enemy.contents,
+        "type LuaDocTypes.Enemy = { hp: number, name: string, type: string }"
+    );
+    assert!(snapshot.diagnostics("src/main.tua").is_empty());
+}
+
+#[test]
+fn snapshot_uses_project_types_for_local_hover_and_field_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local LuaDocTypes = require("lua_doc_types")
+
+local enemyFromLuaDocModule: LuaDocTypes.Enemy = {
+  <|literal|>
+}
+
+local a = enemyFromLuaDocModule
+a.<|field|>
+local copied = <|hover|>enemyFromLuaDocModule
+-- file: src/lua_doc_types.lua
+---@class Enemy
+---@field hp number
+---@field name string
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("annotated project local should hover");
+    let literal_labels = snapshot
+        .completion("src/main.tua", fixture.position("literal"))
+        .into_iter()
+        .map(|completion| completion.label)
+        .collect::<Vec<_>>();
+    let field_labels = snapshot
+        .completion("src/main.tua", fixture.position("field"))
+        .into_iter()
+        .map(|completion| completion.label)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        hover.contents,
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }"
+    );
+    assert!(literal_labels.contains(&"hp".to_owned()));
+    assert!(literal_labels.contains(&"name".to_owned()));
+    assert!(field_labels.contains(&"hp".to_owned()));
+    assert!(field_labels.contains(&"name".to_owned()));
+}
+
+#[test]
+fn snapshot_hovers_parseable_lua_doc_project_locals_as_class_shapes() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local LuaDocTypes = require("lua_doc_types")
+
+local <|nil_decl_hover|>nilEnemy: LuaDocTypes.Enemy = nil
+local <|table_decl_hover|>tableEnemy: LuaDocTypes.Enemy = {
+  hp = 1,
+  name = "hello",
+}
+
+local nilCopy = <|nil_hover|>nilEnemy
+local tableCopy = <|table_hover|>tableEnemy
+-- file: src/lua_doc_types.lua
+---@class Enemy
+---@field hp number
+---@field name string
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let nil_hover = snapshot
+        .hover("src/main.tua", fixture.position("nil_hover"))
+        .expect("nil-initialized lua doc local should hover");
+    let table_hover = snapshot
+        .hover("src/main.tua", fixture.position("table_hover"))
+        .expect("table-initialized lua doc local should hover");
+    let nil_decl_hover = snapshot
+        .hover("src/main.tua", fixture.position("nil_decl_hover"))
+        .expect("nil-initialized lua doc local declaration should hover");
+    let table_decl_hover = snapshot
+        .hover("src/main.tua", fixture.position("table_decl_hover"))
+        .expect("table-initialized lua doc local declaration should hover");
+
+    assert_eq!(
+        nil_hover.contents,
+        "local nilEnemy: { hp: number, name: string, type: string }"
+    );
+    assert_eq!(
+        table_hover.contents,
+        "local tableEnemy: { hp: number, name: string, type: string }"
+    );
+    assert_eq!(
+        nil_decl_hover.contents,
+        "local nilEnemy: { hp: number, name: string, type: string }"
+    );
+    assert_eq!(
+        table_decl_hover.contents,
+        "local tableEnemy: { hp: number, name: string, type: string }"
+    );
+}

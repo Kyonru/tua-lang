@@ -31,6 +31,11 @@ make build-features
   lookup for `.tua` and `.lua` modules.
 - `src/scopes.tua` covers lexical scope maps, shadowed locals, and module
   aliases as scoped symbols.
+- `src/project_types.tua` covers the project-aware type database: aliases
+  resolved through `require` aliases and LuaDoc-provided types from `.lua`
+  files.
+- `src/lua_doc_types.lua` is a plain Lua type provider used by
+  `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as

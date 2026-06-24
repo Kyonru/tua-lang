@@ -1746,6 +1746,117 @@ return {
 }
 
 #[test]
+fn hover_and_diagnostics_use_project_type_database_after_edit() {
+    let temp = TempProject::new("project-type-hover-after-edit");
+    let source = r#"local Types = require("types")
+local LuaDocTypes = require("lua_doc_types")
+
+-- Feature: project-aware type database resolves aliases through require aliases.
+local playerFromTuaModule: Types.Player = nil
+
+-- Feature: Lua files with LuaDoc annotations can provide types to Tua files.
+local enemyFromLuaDocModule: LuaDocTypes.Enemy = nil
+"#;
+    let edited = source.replace(
+        "nil\n\n-- Feature",
+        "nil\n\nlocal touched = true\n\n-- Feature",
+    );
+    let types = r#"type Player = { hp: number }
+
+return {}
+"#;
+    let lua_doc_types = r#"---@class Enemy
+---@field hp number
+---@field name string
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/types.tua", types);
+    temp.write("src/lua_doc_types.lua", lua_doc_types);
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(did_change(&uri, &edited, 2));
+    server.send(hover_request(3, &uri, &edited, "Player = nil"));
+    server.send(hover_request(4, &uri, &edited, "Enemy = nil"));
+    server.send(hover_request(
+        5,
+        &uri,
+        &edited,
+        "enemyFromLuaDocModule: LuaDocTypes",
+    ));
+
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    assert_hover_contains(server.output(), 3, "type Types.Player = { hp: number }");
+    assert_hover_contains(
+        server.output(),
+        4,
+        "type LuaDocTypes.Enemy = { hp: number, name: string, type: string }",
+    );
+    assert_hover_contains(
+        server.output(),
+        5,
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }",
+    );
+}
+
+#[test]
+fn completion_and_local_hover_use_project_types_in_incomplete_documents() {
+    let temp = TempProject::new("project-type-completion-incomplete");
+    let source = r#"local LuaDocTypes = require("lua_doc_types")
+
+local enemyFromLuaDocModule: LuaDocTypes.Enemy = {
+  h
+}
+
+local a = enemyFromLuaDocModule
+a.
+local copied = enemyFromLuaDocModule
+"#;
+    let lua_doc_types = r#"---@class Enemy
+---@field hp number
+---@field name string
+---@field type 'friendly' | 'mad'
+local Enemy = {}
+
+return {
+  Enemy = Enemy,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/lua_doc_types.lua", lua_doc_types);
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "  h"));
+    server.send(completion_request(3, &uri, source, "a."));
+    server.send(hover_request(4, &uri, source, "enemyFromLuaDocModule\n"));
+
+    assert_completion_labels(server.output(), 2, ["hp"]);
+    assert_completion_labels(server.output(), 3, ["hp", "name", "type"]);
+    assert_hover_contains(
+        server.output(),
+        4,
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }",
+    );
+}
+
+#[test]
 fn definition_returns_known_alias_function_local_and_table_field_locations() {
     let uri = "file:///tmp/definition.tua";
     let source = r#"type Vec2 = { x: number, y: number }

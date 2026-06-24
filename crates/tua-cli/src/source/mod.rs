@@ -16,23 +16,6 @@ pub(crate) struct SourceFile {
     pub(crate) kind: SourceKind,
 }
 
-pub(crate) fn discover_source_files(
-    source_dir: &Path,
-    extension: &str,
-) -> Result<Vec<PathBuf>, Diagnostic> {
-    let mut files = Vec::new();
-
-    discover_files_into(
-        source_dir,
-        None,
-        &|path| has_extension(path, extension).then(|| path.to_path_buf()),
-        &mut files,
-    )?;
-    files.sort();
-
-    Ok(files)
-}
-
 pub(crate) fn discover_build_files(
     source_dir: &Path,
     extension: &str,

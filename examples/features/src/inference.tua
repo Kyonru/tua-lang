@@ -68,12 +68,12 @@ local movedPlayer = move(typedPlayer, { x = 3, y = 4 })
 local Legacy = require("legacy")
 local legacyMessage = Legacy.describe("hp", inferredHp)
 
-local dynamicValue: any = {
+local dynamicValue = {
   deep = {
     field = "unchecked dynamic value",
   },
 }
-local noInferenceFromAny = dynamicValue.deep.field
+local innferenceFromDynamic = dynamicValue.deep.field
 
 return {
   inferredNumber = inferredNumber,
@@ -89,5 +89,5 @@ return {
   inferredStatus = inferredStatus,
   movedPlayer = movedPlayer,
   legacyMessage = legacyMessage,
-  noInferenceFromAny = noInferenceFromAny,
+  innferenceFromDynamic = innferenceFromDynamic,
 }

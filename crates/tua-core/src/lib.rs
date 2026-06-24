@@ -31,6 +31,7 @@ mod semantic;
 pub mod semantic_token;
 pub mod signature_help;
 mod source_text;
+pub mod type_database;
 pub mod types;
 pub mod vfs;
 pub mod workspace_symbol;
@@ -131,6 +132,10 @@ pub use semantic_token::{
 pub use signature_help::{
     signature_help_parsed_source, signature_help_tua_source, ParameterInformation, SignatureHelp,
     SignatureInformation,
+};
+pub use type_database::{
+    ProjectTypeBinding, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeModule,
+    ProjectTypeOrigin,
 };
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
