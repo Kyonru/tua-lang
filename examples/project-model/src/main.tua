@@ -1,0 +1,15 @@
+-- Project model feature: require paths are resolved from the configured
+-- source root, so this maps to src/entities/player.tua.
+local Player = require("entities.player")
+
+-- Lua interop feature: regular .lua modules can live in the same source tree
+-- and are copied unchanged into the dist folder during build.
+local Legacy = require("legacy")
+
+local player = Player.new("Ada")
+local label = Legacy.label(player.name)
+
+return {
+  player = player,
+  label = label,
+}

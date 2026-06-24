@@ -1,0 +1,17 @@
+-- Type syntax feature: aliases are erased from emitted Lua but remain useful
+-- for checks, hover, definition, symbols, and completions.
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local M = {}
+
+function M.new(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return M

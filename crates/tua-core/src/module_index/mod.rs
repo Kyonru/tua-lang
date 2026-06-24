@@ -7,8 +7,8 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::config::{load_config_from_dir, CONFIG_FILE};
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
+use crate::project_model::ProjectModel;
 use crate::semantic::resolve_aliases;
 use crate::types::{build_type_environment, TableField, Type, TypeEnvironment, TypedFunction};
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
@@ -119,18 +119,9 @@ pub fn exported_type_for_fields(exports: &ModuleExports, fields: &[String]) -> O
 }
 
 pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<PathBuf> {
-    let roots = module_roots(current_path);
-    let relative = module.replace('.', "/");
-
-    for root in roots {
-        for candidate in module_candidates(&root, &relative) {
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-
-    None
+    ProjectModel::load_for_path(current_path)
+        .ok()
+        .and_then(|model| model.resolve_required_module(current_path, module))
 }
 
 fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
@@ -180,46 +171,6 @@ fn parse_module_source(
         Some("lua") => parse_lua_source(path, source),
         _ => parse_tua_source(path, source),
     }
-}
-
-fn module_roots(current_path: &Path) -> Vec<PathBuf> {
-    let current_dir = current_path.parent().unwrap_or_else(|| Path::new("."));
-    let mut roots = Vec::new();
-
-    if let Some(project_root) = project_root_for(current_dir) {
-        if let Ok(loaded) = load_config_from_dir(&project_root) {
-            push_unique(&mut roots, project_root.join(loaded.config.source));
-            push_unique(&mut roots, project_root.join(loaded.config.out));
-        }
-    }
-
-    push_unique(&mut roots, current_dir.to_path_buf());
-
-    roots
-}
-
-fn project_root_for(start: &Path) -> Option<PathBuf> {
-    start
-        .ancestors()
-        .find(|dir| dir.join(CONFIG_FILE).is_file())
-        .map(Path::to_path_buf)
-}
-
-fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
-    if !paths.iter().any(|existing| existing == &path) {
-        paths.push(path);
-    }
-}
-
-fn module_candidates(root: &Path, relative: &str) -> Vec<PathBuf> {
-    let base = root.join(relative);
-
-    vec![
-        base.with_extension("tua"),
-        base.with_extension("lua"),
-        base.join("init.tua"),
-        base.join("init.lua"),
-    ]
 }
 
 fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {

@@ -11,7 +11,7 @@ use crate::source::{
 use tua_core::{
     check_tua_source_with_asset_roots_and_diagnostics_config, emit_tua_source,
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
-    LoadedConfig,
+    LoadedConfig, ProjectWorkspace,
 };
 
 #[derive(Debug, Default)]
@@ -60,12 +60,13 @@ pub(crate) fn build_project(
     emit_on_error: bool,
 ) -> Result<BuildOutcome, CliError> {
     let cwd = cwd.as_ref();
-    let source_dir = cwd.join(&loaded.config.source);
-    let out_dir = cwd.join(&loaded.config.out);
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    let source_dir = workspace.primary_source_root().to_path_buf();
+    let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
     let source_files = discover_build_files(
         &source_dir,
-        &loaded.config.extension,
+        &workspace.config().extension,
         (!in_place).then_some(&out_dir),
     )
     .map_err(|error| CliError::from_diagnostics("failed to discover source files", vec![error]))?;
@@ -84,15 +85,16 @@ pub(crate) fn build_changed_files(
     source_files: Vec<PathBuf>,
 ) -> BuildOutcome {
     let cwd = cwd.as_ref();
-    let source_dir = cwd.join(&loaded.config.source);
-    let out_dir = cwd.join(&loaded.config.out);
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
+    let source_dir = workspace.primary_source_root().to_path_buf();
+    let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = loaded.config.diagnostics.clone();
-    let asset_roots = vec![cwd.to_path_buf(), source_dir.clone(), out_dir.clone()];
+    let diagnostics_config = workspace.config().diagnostics.clone();
+    let asset_roots = workspace.asset_roots();
     let mut outcome = BuildOutcome::default();
 
     for source_path in source_files {
-        let source_kind = SourceKind::for_path(&source_path, &loaded.config.extension);
+        let source_kind = SourceKind::for_path(&source_path, &workspace.config().extension);
         let output_path = output_path_for(&source_dir, &out_dir, &source_path, source_kind);
 
         if source_kind == SourceKind::Asset {
@@ -101,7 +103,7 @@ pub(crate) fn build_changed_files(
             }
 
             if let Some(tua_source_path) =
-                colliding_tua_source_for_asset(&source_path, &loaded.config.extension)
+                colliding_tua_source_for_asset(&source_path, &workspace.config().extension)
             {
                 outcome.diagnostics.push(output_collision_diagnostic(
                     &source_path,
@@ -167,11 +169,12 @@ fn build_project_files(
     source_files: Vec<SourceFile>,
     emit_on_error: bool,
 ) -> BuildOutcome {
-    let source_dir = cwd.join(&loaded.config.source);
-    let out_dir = cwd.join(&loaded.config.out);
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
+    let source_dir = workspace.primary_source_root().to_path_buf();
+    let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = loaded.config.diagnostics.clone();
-    let asset_roots = vec![cwd.to_path_buf(), source_dir.clone(), out_dir.clone()];
+    let diagnostics_config = workspace.config().diagnostics.clone();
+    let asset_roots = workspace.asset_roots();
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
     let tua_outputs = tua_outputs_by_path(&source_dir, &out_dir, &source_files);

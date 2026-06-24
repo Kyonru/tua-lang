@@ -11,8 +11,8 @@ use tua_core::{
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source, infer_module_exports,
-    inlay_hints_parsed_source, is_valid_rename_identifier, load_config_from_dir,
-    module_links_tua_source, parse_lua_source, parse_tua_source, reference_kind_for_rename,
+    inlay_hints_parsed_source, is_valid_rename_identifier, module_links_tua_source,
+    parse_lua_source, parse_tua_source, reference_kind_for_rename,
     references_to_definition_parsed_source, rename_target_for_definition,
     require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
     signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
@@ -21,8 +21,9 @@ use tua_core::{
     CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
     DiagnosticsConfig, DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink,
-    ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
-    SourcePosition, SourceSpan, TextEdit, TuaType, TypeEnvironment, WorkspaceSymbol,
+    ParsedSource, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit,
+    RenameTarget, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit, TuaType,
+    TypeEnvironment, VfsSourceKind, WorkspaceSymbol,
 };
 
 use super::auto_import::{
@@ -230,32 +231,27 @@ impl AnalysisHost {
             .values()
             .map(|document| document.path.clone())
             .collect::<BTreeSet<_>>();
-        let roots = if roots.is_empty() {
-            vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
-        } else {
-            roots.to_vec()
-        };
+        let model = project_model_for_roots(roots, settings).ok();
 
         self.files.retain(|path, _| {
-            (open_paths.contains(path) && !settings.is_ignored(path, &roots))
-                || !roots.iter().any(|root| path.starts_with(root))
+            (open_paths.contains(path) && !settings.is_ignored(path, roots))
+                || !project_contains_path(model.as_ref(), path)
         });
 
-        for root in &roots {
-            let Ok(loaded) = load_config_from_dir(root) else {
-                continue;
-            };
-            let source_dir = root.join(&loaded.config.source);
+        let Some(model) = model else {
+            return;
+        };
 
-            for path in
-                discover_project_sources(&source_dir, &loaded.config.extension, settings, &roots)
-            {
-                if open_paths.contains(&path) {
-                    continue;
-                }
+        for workspace in model.workspaces() {
+            for source_dir in workspace.source_roots() {
+                for path in discover_project_sources(source_dir, workspace, settings) {
+                    if open_paths.contains(&path) {
+                        continue;
+                    }
 
-                if let Ok(source) = fs::read_to_string(&path) {
-                    self.cache_source(path, source, &roots, settings);
+                    if let Ok(source) = fs::read_to_string(&path) {
+                        self.cache_source(path, source, roots, settings);
+                    }
                 }
             }
         }
@@ -294,35 +290,31 @@ impl AnalysisHost {
     }
 
     fn sync_core_project_inputs(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
-        self.core.set_source_roots(roots.iter().cloned());
-        self.core.set_ignored_paths(settings.ignored_paths.clone());
-
-        let roots = if roots.is_empty() {
-            vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
-        } else {
-            roots.to_vec()
+        let Ok(model) = project_model_for_roots(roots, settings) else {
+            return;
         };
+        let source_roots = model
+            .workspaces()
+            .iter()
+            .flat_map(|workspace| workspace.source_roots().iter().cloned())
+            .collect::<Vec<_>>();
+        let output_roots = model
+            .workspaces()
+            .iter()
+            .flat_map(|workspace| workspace.output_roots().iter().cloned())
+            .collect::<Vec<_>>();
+        let ignored_paths = model
+            .workspaces()
+            .iter()
+            .flat_map(|workspace| workspace.ignored_paths().iter().cloned())
+            .collect::<Vec<_>>();
 
-        let mut output_roots = Vec::new();
-        let mut config = None;
-
-        for root in roots {
-            if let Ok(loaded) = load_config_from_dir(root) {
-                output_roots.push(
-                    loaded
-                        .path
-                        .parent()
-                        .unwrap_or_else(|| Path::new("."))
-                        .join(&loaded.config.out),
-                );
-                config.get_or_insert(loaded.config);
-            }
-        }
-
+        self.core.set_source_roots(source_roots);
         self.core.set_output_roots(output_roots);
+        self.core.set_ignored_paths(ignored_paths);
 
-        if let Some(config) = config {
-            self.core.set_config(config);
+        if let Some(workspace) = model.primary_workspace() {
+            self.core.set_config(workspace.config().clone());
         }
     }
 
@@ -431,7 +423,11 @@ impl AnalysisSnapshot {
             return Vec::new();
         }
 
-        let Some((source_dir, _)) = self.project_source_for_path(path) else {
+        let Some(model) = project_model_for_roots(&self.workspace_folders, &self.settings).ok()
+        else {
+            return Vec::new();
+        };
+        let Some(workspace) = model.workspace_for_path(path) else {
             return Vec::new();
         };
 
@@ -460,10 +456,7 @@ impl AnalysisSnapshot {
                 continue;
             }
 
-            let Some(module) = self
-                .settings
-                .module_name_for_path(&source_dir, &exports.path)
-            else {
+            let Some(module) = workspace.module_name_for_path(&exports.path) else {
                 continue;
             };
             let existing_alias = require_aliases.get(&module).cloned();
@@ -849,27 +842,13 @@ impl AnalysisSnapshot {
     }
 
     fn project_source_for_path(&self, path: &Path) -> Option<(PathBuf, String)> {
-        let mut roots = if self.workspace_folders.is_empty() {
-            vec![std::env::current_dir().ok()?]
-        } else {
-            self.workspace_folders.clone()
-        };
+        let model = project_model_for_roots(&self.workspace_folders, &self.settings).ok()?;
+        let workspace = model.workspace_for_path(path)?;
 
-        roots.sort_by_key(|root| std::cmp::Reverse(root.components().count()));
-
-        for root in roots {
-            if !path.starts_with(&root) {
-                continue;
-            }
-
-            let Ok(loaded) = load_config_from_dir(&root) else {
-                continue;
-            };
-
-            return Some((root.join(loaded.config.source), loaded.config.extension));
-        }
-
-        None
+        Some((
+            workspace.primary_source_root().to_path_buf(),
+            workspace.config().extension.clone(),
+        ))
     }
 
     fn parsed_files(&self) -> Vec<(&PathBuf, &ParsedSource)> {
@@ -950,17 +929,13 @@ impl AnalysisSnapshot {
     }
 
     fn cached_required_module_path(&self, current_path: &Path, module: &str) -> Option<PathBuf> {
-        let (source_dir, _) = self.project_source_for_path(current_path)?;
+        let model = project_model_for_roots(&self.workspace_folders, &self.settings).ok()?;
+        let workspace = model.workspace_for_path(current_path)?;
         let mut matches = self
             .files
             .keys()
             .filter(|path| !self.settings.is_ignored(path, &self.workspace_folders))
-            .filter(|path| {
-                self.settings
-                    .module_name_for_path(&source_dir, path)
-                    .as_deref()
-                    == Some(module)
-            })
+            .filter(|path| workspace.module_name_for_path(path).as_deref() == Some(module))
             .cloned()
             .collect::<Vec<_>>();
 
@@ -1384,24 +1359,51 @@ fn core_source_kind(kind: SourceKind) -> AnalysisSourceKind {
     }
 }
 
+fn source_kind_from_vfs(kind: VfsSourceKind) -> SourceKind {
+    match kind {
+        VfsSourceKind::Lua => SourceKind::Lua,
+        VfsSourceKind::Tua => SourceKind::Tua,
+    }
+}
+
+fn project_model_for_roots(
+    roots: &[PathBuf],
+    settings: &WorkspaceSettings,
+) -> Result<ProjectModel, tua_core::ConfigError> {
+    ProjectModel::load_with_options(ProjectModelOptions {
+        workspace_folders: roots.to_vec(),
+        ignored_paths: settings.ignored_paths.clone(),
+        file_associations: settings.project_file_associations(),
+        require_path_separator: settings.module_path_separator(),
+        ..ProjectModelOptions::default()
+    })
+}
+
+fn project_contains_path(model: Option<&ProjectModel>, path: &Path) -> bool {
+    model.is_some_and(|model| {
+        model
+            .workspaces()
+            .iter()
+            .any(|workspace| path.starts_with(workspace.root()))
+    })
+}
+
 fn discover_project_sources(
     source_dir: &Path,
-    extension: &str,
+    workspace: &ProjectWorkspace,
     settings: &WorkspaceSettings,
-    roots: &[PathBuf],
 ) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
-    discover_project_sources_into(source_dir, extension, settings, roots, &mut files);
+    discover_project_sources_into(source_dir, workspace, settings, &mut files);
     files.sort();
     files
 }
 
 fn discover_project_sources_into(
     dir: &Path,
-    extension: &str,
+    workspace: &ProjectWorkspace,
     settings: &WorkspaceSettings,
-    roots: &[PathBuf],
     files: &mut Vec<PathBuf>,
 ) {
     let Ok(entries) = fs::read_dir(dir) else {
@@ -1415,14 +1417,15 @@ fn discover_project_sources_into(
         };
 
         if file_type.is_dir() {
-            if !settings.is_ignored(&path, roots) {
-                discover_project_sources_into(&path, extension, settings, roots, files);
+            if !workspace.is_ignored(&path)
+                && !settings.is_ignored(&path, &[workspace.root().to_path_buf()])
+            {
+                discover_project_sources_into(&path, workspace, settings, files);
             }
         } else if file_type.is_file()
-            && !settings.is_ignored(&path, roots)
-            && settings
-                .source_kind_for_path(&path, extension, roots)
-                .is_some()
+            && !workspace.is_ignored(&path)
+            && !settings.is_ignored(&path, &[workspace.root().to_path_buf()])
+            && workspace.source_kind_for_path(&path).is_some()
         {
             files.push(path);
         }
@@ -1434,27 +1437,14 @@ fn source_kind_for_path(
     roots: &[PathBuf],
     settings: &WorkspaceSettings,
 ) -> Option<SourceKind> {
-    let mut roots = if roots.is_empty() {
-        vec![std::env::current_dir().ok()?]
-    } else {
-        roots.to_vec()
-    };
-
-    roots.sort_by_key(|root| std::cmp::Reverse(root.components().count()));
-
-    for root in &roots {
-        if !path.starts_with(root) {
-            continue;
-        }
-
-        let Ok(loaded) = load_config_from_dir(root) else {
-            continue;
-        };
-
-        return settings.source_kind_for_path(path, &loaded.config.extension, &roots);
-    }
-
-    settings.source_kind_for_path(path, "tua", &roots)
+    project_model_for_roots(roots, settings)
+        .ok()
+        .and_then(|model| {
+            model
+                .workspace_for_path(path)
+                .and_then(|workspace| workspace.source_kind_for_path(path))
+        })
+        .map(source_kind_from_vfs)
 }
 
 #[cfg(test)]

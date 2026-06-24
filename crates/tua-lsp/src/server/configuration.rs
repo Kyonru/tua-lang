@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use tua_core::{module_name_for_path, DiagnosticsConfig, ModulePathSeparator};
+use tua_core::{DiagnosticsConfig, ModulePathSeparator, ProjectFileAssociation, VfsSourceKind};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct WorkspaceSettings {
@@ -89,46 +89,30 @@ impl WorkspaceSettings {
         project
     }
 
-    pub(super) fn source_kind_for_path(
-        &self,
-        path: &Path,
-        project_extension: &str,
-        roots: &[PathBuf],
-    ) -> Option<SourceKind> {
-        let extension = path.extension().and_then(|extension| extension.to_str());
-
-        if extension.is_some_and(|extension| extension == project_extension) {
-            return Some(SourceKind::Tua);
-        }
-
-        if extension == Some("lua") {
-            return Some(SourceKind::Lua);
-        }
-
-        self.file_associations
-            .iter()
-            .find(|association| path_matches_any_root(path, &association.pattern, roots))
-            .map(|association| match association.language {
-                AssociatedLanguage::Tua => SourceKind::Tua,
-                AssociatedLanguage::Lua => SourceKind::Lua,
-            })
-    }
-
     pub(super) fn is_ignored(&self, path: &Path, roots: &[PathBuf]) -> bool {
         self.ignored_paths
             .iter()
             .any(|pattern| path_matches_any_root(path, pattern, roots))
     }
 
-    pub(super) fn module_name_for_path(&self, source_dir: &Path, path: &Path) -> Option<String> {
-        module_name_for_path(
-            source_dir,
-            path,
-            match self.require_path_separator {
-                RequirePathSeparator::Dot => ModulePathSeparator::Dot,
-                RequirePathSeparator::Slash => ModulePathSeparator::Slash,
-            },
-        )
+    pub(super) fn project_file_associations(&self) -> Vec<ProjectFileAssociation> {
+        self.file_associations
+            .iter()
+            .map(|association| ProjectFileAssociation {
+                pattern: association.pattern.clone(),
+                kind: match association.language {
+                    AssociatedLanguage::Tua => VfsSourceKind::Tua,
+                    AssociatedLanguage::Lua => VfsSourceKind::Lua,
+                },
+            })
+            .collect()
+    }
+
+    pub(super) fn module_path_separator(&self) -> ModulePathSeparator {
+        match self.require_path_separator {
+            RequirePathSeparator::Dot => ModulePathSeparator::Dot,
+            RequirePathSeparator::Slash => ModulePathSeparator::Slash,
+        }
     }
 }
 

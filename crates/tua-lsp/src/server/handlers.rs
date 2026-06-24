@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
-use tua_core::{load_config_from_dir, DiagnosticsConfig, SourcePosition};
+use tua_core::{DiagnosticsConfig, ProjectModel, ProjectModelOptions, SourcePosition};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -338,69 +338,42 @@ impl LspServer {
     }
 
     fn asset_roots_for_path(&self, path: &Path) -> Vec<std::path::PathBuf> {
-        let mut roots = Vec::new();
-
-        for root in &self.workspace_folders {
-            if !path.starts_with(root) {
-                continue;
-            }
-
-            roots.push(root.clone());
-
-            if let Ok(loaded) = load_config_from_dir(root) {
-                roots.push(root.join(loaded.config.source));
-                roots.push(root.join(loaded.config.out));
-            }
-        }
-
-        if let Some(parent) = path.parent() {
-            for ancestor in parent.ancestors() {
-                roots.push(ancestor.to_path_buf());
-
-                if let Ok(loaded) = load_config_from_dir(ancestor) {
-                    if loaded.found {
-                        roots.push(ancestor.join(loaded.config.source));
-                        roots.push(ancestor.join(loaded.config.out));
-                        break;
-                    }
-                }
-            }
-        }
-
-        roots
+        self.project_model_for_path(path)
+            .and_then(|model| {
+                model
+                    .workspace_for_path(path)
+                    .map(|workspace| workspace.asset_roots())
+            })
+            .unwrap_or_default()
     }
 
     fn diagnostics_config_for_path(&self, path: &Path) -> DiagnosticsConfig {
-        let mut roots = self
-            .workspace_folders
-            .iter()
-            .filter(|root| path.starts_with(root))
-            .collect::<Vec<_>>();
+        self.project_model_for_path(path)
+            .and_then(|model| {
+                model
+                    .workspace_for_path(path)
+                    .map(|workspace| workspace.config().diagnostics.clone())
+            })
+            .map(|diagnostics| self.settings.diagnostics_config(diagnostics))
+            .unwrap_or_else(|| {
+                self.settings
+                    .diagnostics_config(DiagnosticsConfig::default())
+            })
+    }
 
-        if !roots.is_empty() {
-            roots.sort_by_key(|root| root.components().count());
-
-            return roots
-                .into_iter()
-                .rev()
-                .find_map(|root| load_config_from_dir(root).ok())
-                .map(|loaded| self.settings.diagnostics_config(loaded.config.diagnostics))
-                .unwrap_or_default();
+    fn project_model_for_path(&self, path: &Path) -> Option<ProjectModel> {
+        if self.workspace_folders.is_empty() {
+            return ProjectModel::load_for_path(path).ok();
         }
 
-        if let Some(parent) = path.parent() {
-            for ancestor in parent.ancestors() {
-                match load_config_from_dir(ancestor) {
-                    Ok(loaded) if loaded.found => {
-                        return self.settings.diagnostics_config(loaded.config.diagnostics);
-                    }
-                    Ok(_) | Err(_) => {}
-                }
-            }
-        }
-
-        self.settings
-            .diagnostics_config(DiagnosticsConfig::default())
+        ProjectModel::load_with_options(ProjectModelOptions {
+            workspace_folders: self.workspace_folders.clone(),
+            ignored_paths: self.settings.ignored_paths.clone(),
+            file_associations: self.settings.project_file_associations(),
+            require_path_separator: self.settings.module_path_separator(),
+            ..ProjectModelOptions::default()
+        })
+        .ok()
     }
 
     fn hover_response(&self, message: &Value) -> Option<Value> {
@@ -801,19 +774,20 @@ fn is_source_uri(uri: &str, roots: &[PathBuf], settings: &WorkspaceSettings) -> 
         return false;
     }
 
-    if roots.is_empty() {
-        return settings.source_kind_for_path(&path, "tua", roots).is_some();
-    }
-
-    roots
-        .iter()
-        .filter(|root| path.starts_with(root))
-        .find_map(|root| load_config_from_dir(root).ok())
-        .is_some_and(|loaded| {
-            settings
-                .source_kind_for_path(&path, &loaded.config.extension, roots)
-                .is_some()
-        })
+    ProjectModel::load_with_options(ProjectModelOptions {
+        workspace_folders: roots.to_vec(),
+        ignored_paths: settings.ignored_paths.clone(),
+        file_associations: settings.project_file_associations(),
+        require_path_separator: settings.module_path_separator(),
+        ..ProjectModelOptions::default()
+    })
+    .ok()
+    .and_then(|model| {
+        model
+            .workspace_for_path(&path)
+            .and_then(|workspace| workspace.source_kind_for_path(&path))
+    })
+    .is_some()
 }
 
 fn is_config_uri(uri: &str) -> bool {

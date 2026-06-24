@@ -93,13 +93,47 @@ paths from Windows-style clients, source roots, build output roots, ignored
 paths, and module-relative paths such as `entities.player` or
 `entities/player`.
 
+### Project Model Example
+
+Project modeling now sits between raw config parsing and request handlers. A
+handler or CLI command should ask the model for roots, targets, and require
+paths instead of rebuilding those rules locally.
+
+```rust
+use tua_core::{ProjectModel, ProjectModelOptions};
+
+let model = ProjectModel::load_with_options(ProjectModelOptions {
+    // Each workspace folder keeps its own tua.toml and roots.
+    workspace_folders: vec!["examples/project-model".into()],
+
+    // Editor settings can add associations without changing tua.toml.
+    file_associations: vec![],
+
+    ..ProjectModelOptions::default()
+})?;
+
+let workspace = model.primary_workspace().unwrap();
+
+// The CLI emits only the primary source root by default, but the model can
+// represent multiple roots for future indexing and generated-source workflows.
+assert_eq!(workspace.primary_source_root().ends_with("src"), true);
+
+// Require resolution is rooted in the project model, not the current file's
+// parent directory.
+let main = workspace.primary_source_root().join("main.tua");
+assert_eq!(
+    model.resolve_required_module(&main, "entities.player").unwrap(),
+    workspace.primary_source_root().join("entities/player.tua")
+);
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
 | --- | --- | --- | --- | --- |
-| `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | Partial LSP analysis snapshot plus config/source helpers. | Partial | 53, 56 |
-| `vfs`, `vfs-notify` | Tracks files, changes, paths, and file watching. | LSP open-document state, watched-file handling, CLI source discovery. | Partial | 54 |
-| `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | `tua.toml`, workspace folders, source/out roots, require lookup helpers. | Partial | 55 |
+| `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | Partial LSP analysis snapshot plus VFS and project model inputs. | Partial | 53, 56 |
+| `vfs`, `vfs-notify` | Tracks files, changes, paths, and file watching. | Core VFS plus LSP watched-file handling and CLI source discovery. | Partial | 54 |
+| `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
 | `parser` | Parses token streams into syntax. | `tua-core::parser`, full_moon-based Lua parsing, Tua syntax extraction. | Existing | 57 |
 | `syntax` | Typed syntax tree and syntax utilities. | Parser model plus source spans; no dedicated syntax crate/model boundary. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | Parsed source model, module index, type environment, symbol helpers. | Partial | 58, 59 |

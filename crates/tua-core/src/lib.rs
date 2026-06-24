@@ -21,6 +21,7 @@ pub mod module_index;
 pub mod module_link;
 pub mod parser;
 mod project;
+pub mod project_model;
 pub mod references;
 pub mod rename;
 mod semantic;
@@ -87,6 +88,10 @@ pub use parser::{
     SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
 };
 pub use project::project_description;
+pub use project_model::{
+    LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel, ProjectModelOptions,
+    ProjectTarget, ProjectWorkspace,
+};
 pub use references::{
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,

@@ -10,7 +10,7 @@ use crate::build::{build_changed_files, build_project, has_errors, output_path_f
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
-use tua_core::{format_diagnostics_for_cli, Diagnostic, LoadedConfig};
+use tua_core::{format_diagnostics_for_cli, Diagnostic, LoadedConfig, ProjectWorkspace};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(150);
@@ -108,18 +108,17 @@ fn run_watch_with_options<W: Write, E: Write>(
     stdout: &mut W,
     stderr: &mut E,
 ) -> Result<(), CliError> {
-    let source_dir = cwd.join(&loaded.config.source);
-    let out_dir = cwd.join(&loaded.config.out);
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    let source_dir = workspace.primary_source_root().to_path_buf();
+    let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
+    let extension = workspace.config().extension.clone();
 
     write_stdout(
         stdout,
         &format!(
             "watching {}",
-            display_path(
-                cwd,
-                &source_dir.join(watch_glob(&loaded.config.extension, !in_place))
-            )
+            display_path(cwd, &source_dir.join(watch_glob(&extension, !in_place)))
         ),
     )?;
 
@@ -128,7 +127,7 @@ fn run_watch_with_options<W: Write, E: Write>(
 
     let mut snapshot = snapshot_source_tree(
         &source_dir,
-        &loaded.config.extension,
+        &extension,
         (!in_place).then_some(out_dir.as_path()),
         !in_place,
     )
@@ -140,7 +139,7 @@ fn run_watch_with_options<W: Write, E: Write>(
 
         let next = snapshot_source_tree(
             &source_dir,
-            &loaded.config.extension,
+            &extension,
             (!in_place).then_some(out_dir.as_path()),
             !in_place,
         )
@@ -152,7 +151,7 @@ fn run_watch_with_options<W: Write, E: Write>(
 
         let (stable_snapshot, changes) = wait_for_debounced_changes(
             &source_dir,
-            &loaded.config.extension,
+            &extension,
             (!in_place).then_some(out_dir.as_path()),
             !in_place,
             &snapshot,
@@ -257,12 +256,13 @@ fn remove_deleted_outputs(
     loaded: &LoadedConfig,
     deleted: &[PathBuf],
 ) -> RemovalOutcome {
-    let source_dir = cwd.join(&loaded.config.source);
-    let out_dir = cwd.join(&loaded.config.out);
+    let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    let source_dir = workspace.primary_source_root().to_path_buf();
+    let out_dir = workspace.primary_output_root().to_path_buf();
     let mut outcome = RemovalOutcome::default();
 
     for source_path in deleted {
-        let source_kind = SourceKind::for_path(source_path, &loaded.config.extension);
+        let source_kind = SourceKind::for_path(source_path, &workspace.config().extension);
         let output_path = output_path_for(&source_dir, &out_dir, source_path, source_kind);
 
         match fs::remove_file(&output_path) {

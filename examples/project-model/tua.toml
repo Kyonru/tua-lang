@@ -1,0 +1,10 @@
+source = "src"
+out = "dist"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[diagnostics]
+missing_requires = true
+bad_requires = true
+globals = []
