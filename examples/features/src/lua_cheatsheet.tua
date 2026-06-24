@@ -1,0 +1,593 @@
+-- Feature: Lua cheatsheet coverage in Tua.
+-- This file is intentionally broad: it keeps normal Lua idioms buildable while
+-- showing where Tua adds erased static types, inference, hover, completion, and
+-- diagnostics. It is based on the referenced Lua cheatsheet, but adapted for
+-- Lua 5.1/LuaJIT and LÖVE-oriented Tua projects.
+
+-- Feature: comments.
+-- Single-line comments are preserved in emitted Lua.
+--[[
+  Long comments are also ordinary Lua and should not affect parsing,
+  semantic tokens, completion, hover, or emission.
+]]
+
+-- Feature: primitive values and local inference.
+local inferredNumber = 25
+local inferredString = "Lua"
+local inferredBoolean = true
+local inferredNil = nil
+
+-- Feature: globals are valid Lua, but Tua keeps stronger behavior around locals.
+cheatsheetGlobal = "global by default in Lua"
+
+-- Feature: constants are just literal values in Lua.
+local nilConstant = nil
+local falseConstant = false
+local trueConstant = true
+
+-- Feature: erased Tua annotations for primitive locals.
+local typedNumber: number = 98.5
+local typedString: string = "typed string"
+local typedBoolean: boolean = false
+local typedOptional: number | nil = nil
+local dynamicValue: any = {
+  message = "any stays permissive",
+}
+local dynamicValueInferred = {
+  property = {
+    nested = {
+      value = "valid",
+      _and = {
+        more = {
+          inferred = true
+        }
+      }
+    }
+  }
+}
+
+-- Feature: type aliases, table shapes, optional fields, and unions.
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type InventoryItem = {
+  id: string,
+  count: number,
+  label?: string,
+}
+
+type Player = {
+  name: string,
+  hp: number,
+  pos: Vec2,
+  alive: boolean,
+  held?: InventoryItem,
+}
+
+type MaybeNumber = number | nil
+type TextOrNumber = string | number
+
+-- Feature: table constructors as arrays, maps, and object-like records.
+local colors = { "red", "green", "blue" }
+
+local stats = {
+  hp = 100,
+  mp = 30,
+  ["critical-chance"] = 0.15,
+}
+local sparse = {
+  [10] = "ten",
+  [20] = "twenty",
+}
+local player: Player = {
+  name = "Mina",
+  hp = 100,
+  pos = { x = 0, y = 0 },
+  alive = true,
+  held = {
+    id = "potion",
+    count = 2,
+  },
+}
+
+-- Feature: table access through dot, bracket, and inferred field chains.
+local firstColor = colors[1]
+local playerName = player.name
+local playerX = player.pos.x
+local criticalChance = stats["critical-chance"]
+local sparseValue = sparse[10]
+local sameLookupDot = player.name
+local sameLookupBracket = player["name"]
+
+-- Feature: Lua function-call sugar.
+-- Parentheses may be omitted when the only argument is a string or table
+-- literal. Tua preserves this syntax in source and emits normal Lua.
+local shorthandType = type {}
+local shorthandUpper = string.upper "hello"
+
+local function consumeTable(value)
+  return value.x + value.y
+end
+
+local shorthandTableCall = consumeTable { x = 10, y = 20 }
+
+local function consumeLongString(value)
+  dynamicValue.longString = value
+
+  return "stored"
+end
+
+local shorthandLongString = consumeLongString [[a multi-line
+message]]
+
+-- Feature: multiple assignment.
+local two, four = 2, 4
+two, four = four, two
+
+-- Feature: arithmetic, comparison, boolean, length, and concatenation operators.
+local sum = typedNumber + 1
+local difference = typedNumber - 1
+local product = typedNumber * 2
+local quotient = typedNumber / 2
+local remainder = typedNumber % 5
+local power = 2 ^ 4
+local isHealthy = player.hp > 0 and player.alive
+local isNamed = player.name == "Mina"
+local notAlive = not player.alive
+local colorCount = #colors
+local greeting = "Hello, " .. player.name
+
+-- Feature: Tua compound assignment sugar lowers to Lua 5.1 assignments.
+player.hp -= 10
+player.pos.x += 4
+player.pos.y += 2
+
+-- Feature: if / elseif / else.
+local function grade(score: number): string
+  if score >= 90 then
+    return "A"
+  elseif score >= 80 then
+    return "B"
+  else
+    return "C"
+  end
+end
+
+-- Feature: flow-sensitive narrowing for optional values.
+local function optionalToNumber(value: MaybeNumber): number
+  if value ~= nil then
+    return value
+  end
+
+  return 0
+end
+
+-- Feature: flow-sensitive narrowing through the Lua type function.
+local function stringify(value: TextOrNumber): string
+  if type(value) == "string" then
+    return value
+  end
+
+  -- Tua can infer concatenation as string here. A direct `return tostring(value)`
+  -- is valid Lua, but current return checking does not model every builtin
+  -- return in this path yet.
+  return "" .. value
+end
+
+-- Feature: while loops.
+local whileCount = 1
+while whileCount <= 3 do
+  whileCount += 1
+end
+
+-- Feature: repeat / until loops.
+local repeatCount = 0
+repeat
+  repeatCount += 1
+until repeatCount >= 3
+
+-- Feature: numeric for loops.
+local numericTotal = 0
+for i = 1, 5, 2 do
+  numericTotal += i
+end
+
+-- Feature: generic for loops over ipairs and pairs.
+local colorText = ""
+for index, color in ipairs(colors) do
+  colorText = colorText .. index .. ":" .. color .. ";"
+end
+
+local statTotal = 0
+for key, value in pairs(stats) do
+  if type(value) == "number" then
+    statTotal += value
+  end
+
+  dynamicValue.lastStatKey = key
+end
+
+-- Feature: break in loops.
+local firstLargeNumber = nil
+for _, value in ipairs({ 1, 3, 8, 13 }) do
+  if value > 5 then
+    firstLargeNumber = value
+    break
+  end
+end
+
+-- Feature: local functions with typed parameters and returns.
+local function add(left: number, right: number): number
+  return left + right
+end
+
+-- Feature: normal Lua functions still work; Tua can infer simple returns.
+function describePlayer(target: Player): string
+  if target.alive then
+    return target.name .. " is alive"
+  end
+
+  return target.name .. " is down"
+end
+
+-- Feature: multiple returns.
+local function divideAndRemainder(left: number, right: number)
+  return left / right, left % right
+end
+
+local divided, remaining = divideAndRemainder(10, 3)
+
+-- Feature: passing an anonymous function as an argument.
+local function runCallback(callback)
+  return callback()
+end
+
+local callbackResult = runCallback(function()
+  return "callback"
+end)
+
+-- Feature: anonymous functions and closures.
+-- Returning anonymous functions from functions is valid Lua. This module-body
+-- closure keeps the example easy for current hover/inlay inference.
+local capturedBase = 10
+local addTen = function(value)
+  return capturedBase + value
+end
+
+local closureResult = addTen(5)
+
+-- Feature: varargs are plain Lua; Tua keeps them dynamic for now.
+local function joinWithSpaces(...)
+  local parts = { ... }
+  local result = ""
+
+  for index, part in ipairs(parts) do
+    if index > 1 then
+      result = result .. " "
+    end
+
+    result = result .. tostring(part)
+  end
+
+  dynamicValue.joinedPreview = result
+
+  -- Returning the accumulator directly is valid Lua; current return checking is
+  -- intentionally conservative around vararg accumulator locals.
+  return "joined"
+end
+
+local joined = joinWithSpaces("Lua", "inside", "Tua")
+
+-- Feature: methods with colon syntax and self.
+type AccountShape = {
+  name: string,
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:new(name, balance)
+  local instance = {
+    name = name,
+    balance = balance,
+  }
+
+  return setmetatable(instance, self)
+end
+
+function Account:deposit(amount)
+  self.balance = self.balance + amount
+
+  return self.balance
+end
+
+function Account:withdraw(amount)
+  self.balance = self.balance - amount
+
+  return self.balance
+end
+
+local account = Account:new("checking", 50)
+account:deposit(25)
+account:withdraw(10)
+
+-- Feature: method-call lookup equivalences.
+local lookupObject = {
+  count = 0,
+  y = function(self, amount)
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+
+local methodCallOne = lookupObject.y(lookupObject, 1)
+local methodCallTwo = lookupObject:y(2)
+local methodCallThree = lookupObject.y(lookupObject, 3)
+local methodCallFour = lookupObject:y(4)
+
+-- Feature: metatables and metamethods.
+local vectorA = { x = 10, y = 20 }
+local vectorB = { x = 5, y = 15 }
+local vectorMetatable = {
+  __add = function(left, right)
+    return {
+      x = left.x + right.x,
+      y = left.y + right.y,
+    }
+  end,
+  __tostring = function(value)
+    return "(" .. value.x .. ", " .. value.y .. ")"
+  end,
+  __index = function(_, key)
+    if key == "length" then
+      return 0
+    end
+
+    return nil
+  end,
+  __newindex = function(tableValue, key, value)
+    rawset(tableValue, key, value)
+  end,
+}
+
+setmetatable(vectorA, vectorMetatable)
+setmetatable(vectorB, vectorMetatable)
+
+local vectorSum = vectorA + vectorB
+local vectorText = tostring(vectorSum)
+vectorA.label = "uses __newindex"
+local vectorMissingLength = vectorA.length
+
+-- Feature: modules and require interop.
+local Legacy = require("legacy")
+local legacyDescription = Legacy.describe("score", numericTotal)
+
+local LocalModule = {}
+
+local function privateHelper(value: string): string
+  return "private:" .. value
+end
+
+function LocalModule.publicHelper(value)
+  return privateHelper(tostring(value))
+end
+
+-- Feature: pcall, assert, and error handling.
+local function checkedDivide(left: number, right: number): number
+  assert(right ~= 0, "division by zero")
+
+  return left / right
+end
+
+local divideOk, divideResult = pcall(checkedDivide, 10, 2)
+local divideFailed, divideError = pcall(function()
+  error("intentional sample error")
+end)
+
+-- Feature: standard library completion and hover surfaces.
+local upperText = string.upper("lua")
+local lowerText = string.lower("TUA")
+local subText = string.sub("abcdef", 2, 4)
+local formatted = string.format("%s:%d", upperText, numericTotal)
+
+local root = math.sqrt(16)
+local roundedDown = math.floor(3.8)
+local randomValue = math.random(1, 10)
+
+table.insert(colors, "yellow")
+local removedColor = table.remove(colors, 2)
+table.sort(colors)
+
+-- Feature: coroutine library.
+local worker = coroutine.create(function()
+  coroutine.yield("paused")
+
+  return "done"
+end)
+
+local resumed, yielded = coroutine.resume(worker)
+local resumedAgain, finished = coroutine.resume(worker)
+
+-- Feature: io and os libraries are available as Lua globals.
+-- The example avoids executing file writes from the module body, but the calls
+-- are present so hover/completion can be exercised in the editor.
+local tempFile = io.open("data.txt", "r")
+if tempFile then
+  local content = tempFile:read("*a")
+  tempFile:close()
+  dynamicValue.fileContent = content
+end
+
+local currentTime = os.time()
+local currentDate = os.date("*t", currentTime)
+
+-- Feature: custom environments in Lua 5.1 style.
+local sandbox = {
+  print = function(...)
+    dynamicValue.sandboxPrintArgs = { ... }
+  end,
+}
+setmetatable(sandbox, { __index = _G })
+
+local loadedChunk = loadstring("return 1 + 2")
+if loadedChunk then
+  setfenv(loadedChunk, sandbox)
+  dynamicValue.loadedValue = loadedChunk()
+end
+
+-- Feature: debug library and garbage collection.
+local debugInfo = debug.getinfo(1, "nSl")
+collectgarbage()
+
+-- Feature: LuaJIT bit operations are dynamic globals in many LOVE projects.
+if bit then
+  dynamicValue.bitMask = bit.bor(1, 2)
+end
+
+-- Feature: Lua version boundaries.
+-- Lua 5.2+ features like `_ENV`, `goto`, and `rawlen` are useful to know
+-- about, but Tua v1 targets Lua 5.1/LuaJIT-compatible output. Keep those
+-- examples commented unless the target changes.
+--
+-- local length = rawlen(colors)
+-- goto done
+-- ::done::
+
+-- Feature: LÖVE globals are built in by default.
+local function loveStyleDraw(position: Vec2)
+  love.graphics.print("Tua cheatsheet", position.x, position.y)
+end
+
+-- Feature: typed LÖVE asset loader sugar.
+-- Hover `cheatsheetImage` or type `cheatsheetImage:` to inspect Image methods.
+local cheatsheetImage = image "assets/player.png"
+local cheatsheetSound = sound "assets/jump.wav"
+cheatsheetImage:setFilter("nearest", "nearest")
+
+-- Feature: return table exports are indexed for module-aware hover,
+-- completion, definition, references, and workspace symbols.
+return {
+  primitives = {
+    inferredNumber = inferredNumber,
+    inferredString = inferredString,
+    inferredBoolean = inferredBoolean,
+    inferredNil = inferredNil,
+    nilConstant = nilConstant,
+    falseConstant = falseConstant,
+    trueConstant = trueConstant,
+    typedNumber = typedNumber,
+    typedString = typedString,
+    typedBoolean = typedBoolean,
+    typedOptional = typedOptional,
+  },
+  tables = {
+    colors = colors,
+    stats = stats,
+    sparse = sparse,
+    player = player,
+    firstColor = firstColor,
+    playerName = playerName,
+    playerX = playerX,
+    criticalChance = criticalChance,
+    sparseValue = sparseValue,
+    sameLookupDot = sameLookupDot,
+    sameLookupBracket = sameLookupBracket,
+  },
+  calls = {
+    shorthandType = shorthandType,
+    shorthandUpper = shorthandUpper,
+    shorthandTableCall = shorthandTableCall,
+    shorthandLongString = shorthandLongString,
+    consumeTable = consumeTable,
+    consumeLongString = consumeLongString,
+    two = two,
+    four = four,
+  },
+  operators = {
+    sum = sum,
+    difference = difference,
+    product = product,
+    quotient = quotient,
+    remainder = remainder,
+    power = power,
+    isHealthy = isHealthy,
+    isNamed = isNamed,
+    notAlive = notAlive,
+    colorCount = colorCount,
+    greeting = greeting,
+  },
+  controlFlow = {
+    grade = grade,
+    optionalToNumber = optionalToNumber,
+    stringify = stringify,
+    whileCount = whileCount,
+    repeatCount = repeatCount,
+    numericTotal = numericTotal,
+    colorText = colorText,
+    statTotal = statTotal,
+    firstLargeNumber = firstLargeNumber,
+  },
+  functions = {
+    add = add,
+    describePlayer = describePlayer,
+    divideAndRemainder = divideAndRemainder,
+    divided = divided,
+    remaining = remaining,
+    runCallback = runCallback,
+    callbackResult = callbackResult,
+    addTen = addTen,
+    closureResult = closureResult,
+    joinWithSpaces = joinWithSpaces,
+    joined = joined,
+  },
+  objects = {
+    Account = Account,
+    account = account,
+    lookupObject = lookupObject,
+    methodCallOne = methodCallOne,
+    methodCallTwo = methodCallTwo,
+    methodCallThree = methodCallThree,
+    methodCallFour = methodCallFour,
+    vectorSum = vectorSum,
+    vectorText = vectorText,
+    vectorMissingLength = vectorMissingLength,
+  },
+  modules = {
+    Legacy = Legacy,
+    legacyDescription = legacyDescription,
+    LocalModule = LocalModule,
+  },
+  errors = {
+    checkedDivide = checkedDivide,
+    divideOk = divideOk,
+    divideResult = divideResult,
+    divideFailed = divideFailed,
+    divideError = divideError,
+  },
+  libraries = {
+    upperText = upperText,
+    lowerText = lowerText,
+    subText = subText,
+    formatted = formatted,
+    root = root,
+    roundedDown = roundedDown,
+    randomValue = randomValue,
+    removedColor = removedColor,
+    resumed = resumed,
+    yielded = yielded,
+    resumedAgain = resumedAgain,
+    finished = finished,
+    currentTime = currentTime,
+    currentDate = currentDate,
+    debugInfo = debugInfo,
+  },
+  love = {
+    draw = loveStyleDraw,
+    image = cheatsheetImage,
+    sound = cheatsheetSound,
+  },
+}

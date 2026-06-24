@@ -8,6 +8,7 @@ local Assets = require("assets")
 local RequireGraph = require("require_graph")
 local Scopes = require("scopes")
 local ProjectTypes = require("project_types")
+local LuaCheatsheet = require("lua_cheatsheet")
 
 return {
   types = Types,
@@ -20,4 +21,5 @@ return {
   require_graph = RequireGraph,
   scopes = Scopes,
   project_types = ProjectTypes,
+  lua_cheatsheet = LuaCheatsheet,
 }

@@ -34,6 +34,13 @@ make build-features
 - `src/project_types.tua` covers the project-aware type database: aliases
   resolved through `require` aliases and LuaDoc-provided types from `.lua`
   files.
+- `src/lua_cheatsheet.tua` is an extensive Lua-in-Tua cheatsheet based on the
+  referenced Lua cheatsheet. It covers comments, primitives, tables, operators,
+  shorthand function calls, lookups, control flow, functions, closures,
+  varargs, modules, metatables, OOP-style methods, error handling, standard
+  libraries, coroutines, environments, debug/GC APIs, LuaJIT boundaries, and
+  LÖVE helper surfaces, with comments describing how Tua should interpret each
+  feature.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
