@@ -1,6 +1,6 @@
 ---
 name: tua-doc-updater
-description: Update Tua documentation whenever implementation, examples, CLI behavior, LSP capabilities, diagnostics, LOVE helpers, configuration, roadmap phases, or docs navigation change. Use to proactively find every affected doc surface, keep docs factual, update examples when needed, and verify the Zensical docs site.
+description: Update Tua documentation and examples whenever implementation, CLI behavior, LSP capabilities, diagnostics, LOVE helpers, configuration, roadmap phases, or docs navigation change. Use to proactively find every affected doc surface, keep docs factual, add or update commented examples as the project grows, and verify the Zensical docs site.
 ---
 
 # Tua Doc Updater
@@ -14,13 +14,21 @@ separate docs request when the implementation changed.
 - `ROADMAP.md` for commit-sized plans.
 - `docs/` for user-facing documentation.
 - `zensical.toml` for docs navigation.
-- `examples/` READMEs and sources for runnable examples.
+- `examples/` READMEs and sources for runnable, commented examples.
 - `README.md` and `TODO.md` for project-level summaries.
 
 ## Update Rules
 
 - If behavior changed, update the relevant docs in the same work.
-- If examples demonstrate the behavior, update example sources and READMEs.
+- For every user-facing language, CLI, LSP, LOVE, Lua interop, or build change,
+  decide whether `examples/` needs a new sample or an update to an existing
+  sample. Prefer updating `examples/features` for focused feature coverage.
+- Add comments in example source when possible, using Lua/Tua `--` comments to
+  name the feature being demonstrated near the relevant code.
+- If a feature is better shown in a LOVE project, update `examples/love-minimal`
+  or `examples/love-full` instead of adding an artificial features sample.
+- If examples demonstrate the behavior, update both example sources and their
+  README summaries.
 - If CLI output, config keys, diagnostics, or LSP capabilities changed, update
   the matching reference page.
 - If the spec contract changed, update `SPEC.md` before or with user-facing

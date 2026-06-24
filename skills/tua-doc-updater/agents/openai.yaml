@@ -1,4 +1,4 @@
 interface:
   display_name: "Tua Doc Updater"
-  short_description: "Update docs with Tua changes."
-  default_prompt: "Use this when Tua changes require docs, examples, spec, or nav updates."
+  short_description: "Update Tua docs and commented examples."
+  default_prompt: "Use this when Tua changes require docs, examples, spec, roadmap, or nav updates."

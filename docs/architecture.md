@@ -40,6 +40,59 @@ The main architectural gap is not missing editor surface. It is that too much
 semantic knowledge still lives in helper APIs and feature-specific paths instead
 of a single dependency-tracked analysis model.
 
+## VFS Overlay Example
+
+The core analysis layer now keeps file identity in a small virtual file system.
+Disk files and open editor documents share the same normalized path, so an
+unsaved editor buffer can temporarily replace disk content without changing the
+file's identity.
+
+```rust
+use tua_core::{AnalysisHost, AnalysisSourceKind, SourcePosition};
+
+let path = "game/src/player.tua";
+let mut host = AnalysisHost::new();
+
+host.set_source_roots([std::path::PathBuf::from("game/src")]);
+host.set_output_roots([std::path::PathBuf::from("game/build")]);
+host.set_file_with_kind(
+    path,
+    "type Player = { hp: number }\nlocal player: Player = { hp = 10 }\n",
+    AnalysisSourceKind::Tua,
+);
+
+host.open_document_with_kind(
+    "game\\src\\player.tua",
+    "type Enemy = { hp: number }\nlocal enemy: Enemy = { hp = 5 }\n",
+    AnalysisSourceKind::Tua,
+);
+
+let snapshot = host.snapshot();
+
+assert!(snapshot.is_open_document("./game/src/player.tua"));
+assert!(snapshot
+    .hover("game/src/player.tua", SourcePosition { line: 2, column: 14 })
+    .unwrap()
+    .contents
+    .contains("Enemy"));
+
+host.close_document("game/src/player.tua");
+
+let snapshot = host.snapshot();
+
+assert!(!snapshot.is_open_document("game/src/player.tua"));
+assert!(snapshot
+    .hover("game/src/player.tua", SourcePosition { line: 2, column: 15 })
+    .unwrap()
+    .contents
+    .contains("Player"));
+```
+
+The same VFS helpers normalize `file://` URIs with spaces, backslash-separated
+paths from Windows-style clients, source roots, build output roots, ignored
+paths, and module-relative paths such as `entities.player` or
+`entities/player`.
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
