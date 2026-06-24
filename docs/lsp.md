@@ -89,8 +89,8 @@ make profile-lsp
 ```
 
 The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
-`benchmarks/lsp/large`, reports average and p95 latency per LSP request, and
-prints analysis cache hit/miss counters from the server.
+`benchmarks/lsp/large`, reports average, p95, min, and max latency per LSP
+request, and prints analysis cache hit/miss counters from the server.
 
 Useful knobs:
 

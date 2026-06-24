@@ -165,9 +165,13 @@ function printReport(root, timings, stats) {
   for (const [label, values] of byLabel) {
     values.sort((left, right) => left - right);
     const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const p95 = values[Math.floor((values.length - 1) * 0.95)];
+    const min = values[0];
+    const max = values[values.length - 1];
+    const p95 = percentile(values, 0.95);
 
-    console.log(`${label.padEnd(24)} avg ${avg.toFixed(2)}ms  p95 ${p95.toFixed(2)}ms`);
+    console.log(
+      `${label.padEnd(24)} avg ${avg.toFixed(2)}ms  p95 ${p95.toFixed(2)}ms  min ${min.toFixed(2)}ms  max ${max.toFixed(2)}ms`,
+    );
   }
 
   console.log(
@@ -177,6 +181,16 @@ function printReport(root, timings, stats) {
       `symbols h/m ${stats.symbolIndex.hits}/${stats.symbolIndex.misses}, ` +
       `invalidations ${stats.invalidations}`,
   );
+}
+
+function percentile(sortedValues, percentileValue) {
+  if (sortedValues.length === 0) {
+    return 0;
+  }
+
+  const index = Math.ceil(sortedValues.length * percentileValue) - 1;
+
+  return sortedValues[Math.max(0, Math.min(index, sortedValues.length - 1))];
 }
 
 class LspClient {
