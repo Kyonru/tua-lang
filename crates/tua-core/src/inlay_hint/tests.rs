@@ -37,6 +37,31 @@ fn hints_unannotated_local_types_from_known_expressions() {
 }
 
 #[test]
+fn hints_anonymous_function_valued_table_fields() {
+    let source = r#"
+local lookupObject = {
+  count = 0,
+  y = function(self, amount)
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+"#;
+    let hints = inlay_hints_tua_source("src/methods.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![": { count: number, y: function(any, any): any }"]
+    );
+}
+
+#[test]
 fn skips_annotated_unknown_and_any_local_type_hints() {
     let hints = inlay_hints();
 

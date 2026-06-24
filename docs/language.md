@@ -335,7 +335,8 @@ This is meant for editor feedback and obvious checks, not for proving arbitrary
 runtime object systems.
 
 Known function-valued table fields can be called with either explicit self or
-colon syntax:
+colon syntax. Tua infers anonymous function-valued fields as function fields,
+so hovering `lookupObject` shows `y` as a function rather than `any`:
 
 ```tua
 local lookupObject = {

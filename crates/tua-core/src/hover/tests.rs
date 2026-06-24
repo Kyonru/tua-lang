@@ -406,6 +406,38 @@ fn hovers_known_table_field() {
 }
 
 #[test]
+fn hovers_anonymous_function_valued_table_fields() {
+    let source = r#"
+local lookupObject = {
+  count = 0,
+  y = function(self, amount)
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+
+local method = lookupObject.y
+"#;
+    let object_hover = hover_tua_source(
+        "src/methods.tua",
+        source,
+        position_at(source, "lookupObject ="),
+    )
+    .expect("hover should not fail")
+    .expect("lookupObject should hover");
+    let field_hover = hover_tua_source("src/methods.tua", source, position_at(source, "y\n"))
+        .expect("hover should not fail")
+        .expect("function-valued field should hover");
+
+    assert_eq!(
+        object_hover.contents,
+        "local lookupObject: { count: number, y: function(any, any): any }"
+    );
+    assert_eq!(field_hover.contents, "(field) y: function(any, any): any");
+}
+
+#[test]
 fn hovers_self_index_class_style_metatable_methods() {
     let source = r#"
 local Account = {}
