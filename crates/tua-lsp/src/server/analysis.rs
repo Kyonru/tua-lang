@@ -7,21 +7,21 @@ use tua_core::{
     call_hierarchy_exports_parsed_source, call_hierarchy_prepare_parsed_source,
     call_hierarchy_symbols_parsed_source,
     check_parsed_source_with_asset_roots_and_diagnostics_config, code_actions_parsed_source,
-    complete_parsed_source, complete_tua_source, definition_tua_source,
-    document_highlights_parsed_source, document_symbols_parsed_source,
+    complete_tua_source, document_highlights_parsed_source, document_symbols_parsed_source,
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
-    global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
-    infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
-    load_config_from_dir, module_links_tua_source, parse_lua_source, parse_tua_source,
-    reference_kind_for_rename, references_to_definition_parsed_source,
-    rename_target_for_definition, require_bindings_for_parsed_source,
-    semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
-    signature_help_tua_source, type_alias_definition_count, workspace_symbols_from_dir,
-    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
+    global_type_alias_references_to_definition_parsed_source, infer_module_exports,
+    inlay_hints_parsed_source, is_valid_rename_identifier, load_config_from_dir,
+    module_links_tua_source, parse_lua_source, parse_tua_source, reference_kind_for_rename,
+    references_to_definition_parsed_source, rename_target_for_definition,
+    require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
+    signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
+    workspace_symbols_from_dir, AnalysisHost as CoreAnalysisHost,
+    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, CallHierarchyCallSite,
+    CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
-    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, Hover, InlayHint, ModuleExports,
-    ModuleLink, ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
+    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink,
+    ParsedSource, Reference, RenameEdit, RenameTarget, SemanticToken, SignatureHelp,
     SourcePosition, SourceSpan, TextEdit, TuaType, TypeEnvironment, WorkspaceSymbol,
 };
 
@@ -33,6 +33,7 @@ use super::uri::path_from_uri;
 
 #[derive(Default)]
 pub(super) struct AnalysisHost {
+    core: CoreAnalysisHost,
     documents: HashMap<String, OpenDocument>,
     files: HashMap<PathBuf, CachedFile>,
     next_revision: u64,
@@ -40,6 +41,7 @@ pub(super) struct AnalysisHost {
 
 #[derive(Clone, Debug)]
 pub(super) struct AnalysisSnapshot {
+    core: CoreAnalysisSnapshot,
     documents: HashMap<String, OpenDocument>,
     files: HashMap<PathBuf, CachedFile>,
     workspace_folders: Vec<PathBuf>,
@@ -103,6 +105,7 @@ impl AnalysisHost {
         settings: &WorkspaceSettings,
     ) -> AnalysisSnapshot {
         AnalysisSnapshot {
+            core: self.core.snapshot(),
             documents: self.documents.clone(),
             files: self.files.clone(),
             workspace_folders: workspace_folders.to_vec(),
@@ -121,6 +124,7 @@ impl AnalysisHost {
         let path = path_from_uri(&uri);
         let source = source.into();
 
+        self.sync_core_project_inputs(roots);
         self.documents.insert(
             uri,
             OpenDocument {
@@ -128,7 +132,12 @@ impl AnalysisHost {
                 source: source.clone(),
             },
         );
-        self.cache_source(path, source, roots, settings);
+        if let Some(kind) = self.cache_source(path.clone(), source.clone(), roots, settings) {
+            self.core
+                .open_document_with_kind(path, source, core_source_kind(kind));
+        } else {
+            self.core.remove_file(path);
+        }
     }
 
     pub(super) fn update_document(
@@ -144,6 +153,7 @@ impl AnalysisHost {
     pub(super) fn close_document(&mut self, uri: &str) {
         if let Some(document) = self.documents.remove(uri) {
             self.files.remove(&document.path);
+            self.core.remove_file(&document.path);
         }
     }
 
@@ -152,6 +162,7 @@ impl AnalysisHost {
 
         self.documents.remove(uri);
         self.files.remove(&path);
+        self.core.remove_file(&path);
     }
 
     pub(super) fn cache_disk_file(
@@ -162,6 +173,7 @@ impl AnalysisHost {
     ) {
         let path = path_from_uri(uri);
 
+        self.sync_core_project_inputs(roots);
         if self
             .documents
             .values()
@@ -199,6 +211,7 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) {
+        self.sync_core_project_inputs(roots);
         let documents = self
             .documents
             .values()
@@ -211,6 +224,7 @@ impl AnalysisHost {
     }
 
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
+        self.sync_core_project_inputs(roots);
         let open_paths = self
             .documents
             .values()
@@ -253,22 +267,47 @@ impl AnalysisHost {
         source: String,
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
-    ) {
+    ) -> Option<SourceKind> {
+        self.sync_core_project_inputs(roots);
         if settings.is_ignored(&path, roots) {
             self.files.remove(&path);
-            return;
+            self.core.remove_file(&path);
+            return None;
         }
 
         let Some(kind) = source_kind_for_path(&path, roots, settings) else {
             self.files.remove(&path);
-            return;
+            self.core.remove_file(&path);
+            return None;
         };
 
         self.next_revision += 1;
+        let core_source = source.clone();
         self.files.insert(
             path.clone(),
-            CachedFile::new(path, source, self.next_revision, kind),
+            CachedFile::new(path.clone(), source, self.next_revision, kind),
         );
+        self.core
+            .set_file_with_kind(path, core_source, core_source_kind(kind));
+
+        Some(kind)
+    }
+
+    fn sync_core_project_inputs(&mut self, roots: &[PathBuf]) {
+        self.core.set_source_roots(roots.iter().cloned());
+
+        let roots = if roots.is_empty() {
+            vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
+        } else {
+            roots.to_vec()
+        };
+
+        for root in roots {
+            if let Ok(loaded) = load_config_from_dir(root) {
+                self.core.set_config(loaded.config);
+                return;
+            }
+        }
     }
 
     #[cfg(test)]
@@ -288,14 +327,25 @@ impl AnalysisSnapshot {
     ) -> Vec<Diagnostic> {
         let path = path_from_uri(uri);
 
+        if self.core.source(&path).is_some() {
+            return self
+                .core
+                .diagnostics_with_config(&path, asset_roots, diagnostics_config);
+        }
+
         self.file(&path)
             .map(|file| file.diagnostics(diagnostics_config, asset_roots))
             .unwrap_or_default()
     }
 
-    pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
-        self.parsed(path)
-            .and_then(|parsed| hover_parsed_source(parsed, position).ok().flatten())
+    pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
+        self.core.hover(path, position).or_else(|| {
+            self.parsed(path).and_then(|parsed| {
+                tua_core::hover_parsed_source(parsed, position)
+                    .ok()
+                    .flatten()
+            })
+        })
     }
 
     pub(super) fn completion(&self, path: &Path, position: SourcePosition) -> Vec<Completion> {
@@ -303,9 +353,17 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        let mut completions = match &file.parsed {
-            Ok(parsed) => complete_parsed_source(parsed, position).unwrap_or_default(),
-            Err(_) => complete_tua_source(path, file.source.clone(), position).unwrap_or_default(),
+        let mut completions = if self.core.source(path).is_some() {
+            self.core.completion(path, position)
+        } else {
+            match &file.parsed {
+                Ok(parsed) => {
+                    tua_core::complete_parsed_source(parsed, position).unwrap_or_default()
+                }
+                Err(_) => {
+                    complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
+                }
+            }
         };
         let existing_labels = completions
             .iter()
@@ -445,9 +503,13 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<tua_core::Definition> {
+        if let Some(definition) = self.core.definition(path, position) {
+            return Some(definition);
+        }
+
         let file = self.file(path)?;
 
-        definition_tua_source(path, file.source.clone(), position)
+        tua_core::definition_tua_source(path, file.source.clone(), position)
             .ok()
             .flatten()
     }
@@ -1296,6 +1358,13 @@ fn parse_source(
     match kind {
         SourceKind::Lua => parse_lua_source(path, source),
         SourceKind::Tua => parse_tua_source(path, source),
+    }
+}
+
+fn core_source_kind(kind: SourceKind) -> AnalysisSourceKind {
+    match kind {
+        SourceKind::Lua => AnalysisSourceKind::Lua,
+        SourceKind::Tua => AnalysisSourceKind::Tua,
     }
 }
 

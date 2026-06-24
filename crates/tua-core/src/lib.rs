@@ -1,3 +1,4 @@
+pub mod analysis;
 mod asset;
 pub mod call_hierarchy;
 pub mod check;
@@ -29,6 +30,7 @@ mod source_text;
 pub mod types;
 pub mod workspace_symbol;
 
+pub use analysis::{AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCatalogs};
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
