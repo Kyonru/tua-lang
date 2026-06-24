@@ -785,6 +785,193 @@ missing_requires = true
 }
 
 #[test]
+fn snapshot_backed_requests_work_after_edit_and_watched_file_change() {
+    let temp = TempProject::new("snapshot-backed-requests");
+    let main = r#"local Player = require("player")
+
+local player = Player.makePlayer("Ada")
+
+local function spawn(name: string)
+  return Player.makePlayer(name)
+end
+
+local again = spawn("Bea")
+local pending = Player.make
+
+return {
+  spawn = spawn,
+}
+"#;
+    let edited = r#"local Player = require("player")
+
+local player = Player.makePlayer("Ada")
+
+local function spawn(name: string)
+  return Player.makePlayer(name)
+end
+
+local again = spawn("Bea")
+local edited = Player.makePlayer("Cal")
+local pending = Player.make
+
+return {
+  spawn = spawn,
+}
+"#;
+    let player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let changed_player = r#"type Player = { name: string, hp: number }
+
+local function makePlayer(name: string): Player
+  return { name = name, hp = 10 }
+end
+
+local function makeEnemy(name: string): Player
+  return { name = name, hp = 3 }
+end
+
+return {
+  makeEnemy = makeEnemy,
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(did_change(&main_uri, edited, 2));
+    temp.write("src/player.tua", changed_player);
+    server.send(watched_files_changed([(&player_uri, 2)]));
+
+    server.send(hover_request(3, &main_uri, edited, "makePlayer(\"Cal\")"));
+    server.send(completion_request(4, &main_uri, edited, "Player.make"));
+    let completion = completion_with_label(server.output(), 4, "makeEnemy");
+    server.send(completion_resolve_request(5, completion));
+    server.send(signature_help_request(
+        6,
+        &main_uri,
+        edited,
+        "makePlayer(\"Cal",
+    ));
+    server.send(definition_request(
+        7,
+        &main_uri,
+        edited,
+        "Player.makePlayer",
+        "Player.".len(),
+    ));
+    server.send(document_link_request(8, &main_uri));
+    server.send(document_highlight_request(
+        9,
+        &main_uri,
+        edited,
+        "spawn(name",
+        0,
+    ));
+    server.send(document_symbol_request(10, &main_uri));
+    server.send(references_request(
+        11,
+        &main_uri,
+        edited,
+        "spawn(name",
+        0,
+        true,
+    ));
+    server.send(prepare_rename_request(
+        12,
+        &main_uri,
+        edited,
+        "spawn(name",
+        0,
+    ));
+    server.send(rename_request(
+        13,
+        &main_uri,
+        edited,
+        "spawn(name",
+        0,
+        "spawnPlayer",
+    ));
+    server.send(inlay_hint_request(14, &main_uri, 0, 0, 20, 0));
+    server.send(semantic_tokens_request(15, &main_uri));
+    server.send(workspace_symbol_request(16, "makeEnemy"));
+
+    assert_hover_contains(
+        server.output(),
+        3,
+        "function Player.makePlayer(string): Player",
+    );
+    assert_completion_labels(server.output(), 4, ["makeEnemy", "makePlayer"]);
+    assert_eq!(
+        response_with_id(server.output(), 5)["result"]["label"],
+        "makeEnemy"
+    );
+    assert!(response_with_id(server.output(), 6)["result"]["signatures"].is_array());
+    assert_definition_text(
+        server.output(),
+        7,
+        &player_uri,
+        changed_player,
+        "makePlayer",
+    );
+    assert!(!response_with_id(server.output(), 8)["result"]
+        .as_array()
+        .expect("document links should be an array")
+        .is_empty());
+    assert!(!response_with_id(server.output(), 9)["result"]
+        .as_array()
+        .expect("document highlights should be an array")
+        .is_empty());
+    assert!(workspace_symbol_names(
+        response_with_id(server.output(), 10)["result"]
+            .as_array()
+            .expect("document symbols should be an array")
+    )
+    .contains(&"spawn"));
+    assert!(!response_with_id(server.output(), 11)["result"]
+        .as_array()
+        .expect("references should be an array")
+        .is_empty());
+    assert_eq!(
+        response_with_id(server.output(), 12)["result"]["placeholder"],
+        "spawn"
+    );
+    assert!(!response_with_id(server.output(), 13)["result"]["changes"]
+        .as_object()
+        .expect("rename should return workspace changes")
+        .is_empty());
+    assert!(!response_with_id(server.output(), 14)["result"]
+        .as_array()
+        .expect("inlay hints should be an array")
+        .is_empty());
+    assert!(!response_with_id(server.output(), 15)["result"]["data"]
+        .as_array()
+        .expect("semantic tokens should have data")
+        .is_empty());
+    assert!(workspace_symbol_names(
+        response_with_id(server.output(), 16)["result"]
+            .as_array()
+            .expect("workspace symbols should be an array")
+    )
+    .contains(&"makeEnemy"));
+}
+
+#[test]
 fn watched_required_module_delete_clears_exports_and_reports_missing_require() {
     let temp = TempProject::new("watched-module-delete");
     let main = r#"local Player = require("player")
@@ -1714,6 +1901,7 @@ return {
 
     let uri = temp.uri_for("src/main.tua");
     let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
         hover_request(2, &uri, source, "player\")"),
         hover_request(3, &uri, source, "Player.makePlayer"),
@@ -1753,6 +1941,7 @@ return {
 
     let uri = temp.uri_for("src/main.tua");
     let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
         hover_request(2, &uri, source, "play("),
     ]);
@@ -2019,6 +2208,7 @@ return {
     let player_uri = path_uri(&temp.join("src/player.tua"));
     let legacy_uri = path_uri(&temp.join("src/legacy.lua"));
     let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
         did_open(&main_uri, main),
         definition_request_at(2, &main_uri, fixture.position("module")),
         definition_request_at(3, &main_uri, fixture.position("tua_export")),

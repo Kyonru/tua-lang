@@ -5,22 +5,14 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_exports_parsed_source, call_hierarchy_prepare_parsed_source,
-    call_hierarchy_symbols_parsed_source, code_actions_parsed_source, complete_tua_source,
-    document_highlights_parsed_source, document_symbols_parsed_source,
-    global_function_definition_count, global_function_name_for_definition,
-    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
-    global_type_alias_references_to_definition_parsed_source, infer_module_exports,
-    inlay_hints_parsed_source, is_valid_rename_identifier, module_links_tua_source,
-    parse_lua_source, parse_tua_source, reference_kind_for_rename,
-    references_to_definition_parsed_source, rename_target_for_definition,
-    require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
-    signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
+    call_hierarchy_symbols_parsed_source, code_actions_parsed_source, infer_module_exports,
+    parse_lua_source, parse_tua_source, require_bindings_for_parsed_source,
     AnalysisHost as CoreAnalysisHost, AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
     CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
     DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink, ParsedSource,
     ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
-    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit, TuaType, TypeEnvironment,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TuaType, TypeEnvironment,
     VfsSourceKind, WorkspaceSymbol,
 };
 
@@ -90,11 +82,9 @@ struct OpenDocument {
 struct CachedFile {
     #[cfg_attr(not(test), allow(dead_code))]
     revision: u64,
-    source: String,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
     environment: Option<TypeEnvironment>,
     exports: Option<ModuleExports>,
-    require_edges: Vec<ModuleLink>,
 }
 
 impl AnalysisHost {
@@ -347,32 +337,15 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
-        self.core.hover(path, position).or_else(|| {
-            self.parsed(path).and_then(|parsed| {
-                tua_core::hover_parsed_source(parsed, position)
-                    .ok()
-                    .flatten()
-            })
-        })
+        self.core.hover(path, position)
     }
 
     pub(super) fn completion(&self, path: &Path, position: SourcePosition) -> Vec<Completion> {
-        let Some(file) = self.file(path) else {
+        if self.core.source(path).is_none() {
             return Vec::new();
-        };
+        }
 
-        let mut completions = if self.core.source(path).is_some() {
-            self.core.completion(path, position)
-        } else {
-            match &file.parsed {
-                Ok(parsed) => {
-                    tua_core::complete_parsed_source(parsed, position).unwrap_or_default()
-                }
-                Err(_) => {
-                    complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
-                }
-            }
-        };
+        let mut completions = self.core.completion(path, position);
         let existing_labels = completions
             .iter()
             .map(|completion| completion.label.clone())
@@ -391,15 +364,20 @@ impl AnalysisSnapshot {
         module_path: Option<&Path>,
         source_module: Option<&str>,
     ) -> Option<Completion> {
-        self.completion(path, position)
-            .into_iter()
-            .find(|completion| {
-                completion.label == label
-                    && kind.is_none_or(|kind| completion.kind == kind)
-                    && module_path
-                        .is_none_or(|path| completion.module_path.as_deref() == Some(path))
-                    && source_module
-                        .is_none_or(|module| completion.source_module.as_deref() == Some(module))
+        self.core
+            .resolve_completion(path, position, label, kind, module_path, source_module)
+            .or_else(|| {
+                self.completion(path, position)
+                    .into_iter()
+                    .find(|completion| {
+                        completion.label == label
+                            && kind.is_none_or(|kind| completion.kind == kind)
+                            && module_path
+                                .is_none_or(|path| completion.module_path.as_deref() == Some(path))
+                            && source_module.is_none_or(|module| {
+                                completion.source_module.as_deref() == Some(module)
+                            })
+                    })
             })
     }
 
@@ -409,13 +387,13 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         existing_labels: &BTreeSet<String>,
     ) -> Vec<Completion> {
-        let Some(file) = self.file(path) else {
+        let Some(source) = self.core.source(path) else {
             return Vec::new();
         };
-        let Ok(parsed) = &file.parsed else {
+        let Some(Ok(parsed)) = self.core.parse(path) else {
             return Vec::new();
         };
-        let Some(prefix) = identifier_prefix_at(&file.source, position) else {
+        let Some(prefix) = identifier_prefix_at(source, position) else {
             return Vec::new();
         };
 
@@ -473,7 +451,7 @@ impl AnalysisSnapshot {
 
             completions.push(auto_import_completion(AutoImportCandidate {
                 current_path: path,
-                current_source: &file.source,
+                current_source: source,
                 module_path: &symbol.module_path,
                 module: &module,
                 alias: &alias,
@@ -496,16 +474,7 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<SignatureHelp> {
-        let file = self.file(path)?;
-
-        match &file.parsed {
-            Ok(parsed) => signature_help_parsed_source(parsed, position)
-                .ok()
-                .flatten(),
-            Err(_) => signature_help_tua_source(path, file.source.clone(), position)
-                .ok()
-                .flatten(),
-        }
+        self.core.signature_help(path, position)
     }
 
     pub(super) fn definition(
@@ -513,21 +482,11 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<tua_core::Definition> {
-        if let Some(definition) = self.core.definition(path, position) {
-            return Some(definition);
-        }
-
-        let file = self.file(path)?;
-
-        tua_core::definition_tua_source(path, file.source.clone(), position)
-            .ok()
-            .flatten()
+        self.core.definition(path, position)
     }
 
     pub(super) fn document_links(&self, path: &Path) -> Vec<ModuleLink> {
-        self.file(path)
-            .map(|file| file.require_edges.clone())
-            .unwrap_or_default()
+        self.core.document_links(path)
     }
 
     pub(super) fn document_highlights(
@@ -535,15 +494,11 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Vec<DocumentHighlight> {
-        self.parsed(path)
-            .and_then(|parsed| document_highlights_parsed_source(parsed, position).ok())
-            .unwrap_or_default()
+        self.core.document_highlights(path, position)
     }
 
     pub(super) fn document_symbols(&self, path: &Path) -> Vec<DocumentSymbol> {
-        self.parsed(path)
-            .map(document_symbols_parsed_source)
-            .unwrap_or_default()
+        self.core.document_symbols(path)
     }
 
     pub(super) fn prepare_call_hierarchy(
@@ -669,65 +624,7 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         include_declaration: bool,
     ) -> Vec<Reference> {
-        let Some(target) = self.definition(path, position) else {
-            return Vec::new();
-        };
-        let global_name = self
-            .parsed(&target.path)
-            .and_then(|parsed| global_function_name_for_definition(parsed, &target));
-        let alias_name = self
-            .parsed(&target.path)
-            .and_then(|parsed| global_type_alias_name_for_definition(parsed, &target));
-        let mut references = Vec::new();
-
-        for (path, file) in &self.files {
-            if self.settings.is_ignored(path, &self.workspace_folders) {
-                continue;
-            }
-
-            let Ok(parsed) = &file.parsed else {
-                continue;
-            };
-            let Ok(mut file_references) =
-                references_to_definition_parsed_source(parsed, &target, include_declaration)
-            else {
-                continue;
-            };
-
-            references.append(&mut file_references);
-
-            if let Some(global_name) = global_name.as_deref() {
-                let Ok(mut global_references) = global_references_to_definition_parsed_source(
-                    parsed,
-                    &target,
-                    global_name,
-                    include_declaration,
-                ) else {
-                    continue;
-                };
-
-                references.append(&mut global_references);
-            }
-
-            if let Some(alias_name) = alias_name.as_deref() {
-                let Ok(mut alias_references) =
-                    global_type_alias_references_to_definition_parsed_source(
-                        parsed,
-                        &target,
-                        alias_name,
-                        include_declaration,
-                    )
-                else {
-                    continue;
-                };
-
-                references.append(&mut alias_references);
-            }
-        }
-
-        references.sort_by_key(reference_key);
-        references.dedup_by_key(|reference| reference_key(reference));
-        references
+        self.core.references(path, position, include_declaration)
     }
 
     pub(super) fn prepare_rename(
@@ -735,23 +632,7 @@ impl AnalysisSnapshot {
         path: &Path,
         position: SourcePosition,
     ) -> Option<RenameTarget> {
-        let target = self.definition(path, position)?;
-        let target_parsed = self.parsed(&target.path)?;
-        let mut rename_target = rename_target_for_definition(target_parsed, target)?;
-        let reference_kind = reference_kind_for_rename(rename_target.kind);
-        let current_reference =
-            self.references(path, position, true)
-                .into_iter()
-                .find(|reference| {
-                    reference.path == path
-                        && reference.kind == reference_kind
-                        && span_contains(reference.span, position)
-                })?;
-
-        rename_target.path = current_reference.path;
-        rename_target.span = current_reference.span;
-
-        Some(rename_target)
+        self.core.prepare_rename(path, position)
     }
 
     pub(super) fn rename(
@@ -760,51 +641,15 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         new_name: &str,
     ) -> Option<RenameEdit> {
-        if !is_valid_rename_identifier(new_name) {
-            return None;
-        }
-
-        let target = self.definition(path, position)?;
-        let target_parsed = self.parsed(&target.path)?;
-        let rename_target = rename_target_for_definition(target_parsed, target.clone())?;
-
-        if self.is_ambiguous_project_rename(&target, &rename_target) {
-            return None;
-        }
-
-        let reference_kind = reference_kind_for_rename(rename_target.kind);
-        let mut edits = self
-            .references(path, position, true)
-            .into_iter()
-            .filter(|reference| reference.kind == reference_kind)
-            .map(|reference| TextEdit {
-                path: reference.path,
-                span: reference.span,
-                new_text: new_name.to_owned(),
-            })
-            .collect::<Vec<_>>();
-
-        edits.sort_by_key(text_edit_key);
-        edits.dedup_by_key(|edit| text_edit_key(edit));
-
-        (!edits.is_empty()).then_some(RenameEdit { edits })
+        self.core.rename(path, position, new_name)
     }
 
     pub(super) fn inlay_hints(&self, path: &Path) -> Vec<InlayHint> {
-        self.parsed(path)
-            .and_then(|parsed| inlay_hints_parsed_source(parsed).ok())
-            .unwrap_or_default()
+        self.core.inlay_hints(path)
     }
 
     pub(super) fn semantic_tokens(&self, path: &Path) -> Vec<SemanticToken> {
-        let Some(file) = self.file(path) else {
-            return Vec::new();
-        };
-
-        match &file.parsed {
-            Ok(parsed) => semantic_tokens_parsed_source(parsed).unwrap_or_default(),
-            Err(_) => semantic_tokens_tua_source(path, file.source.clone()).unwrap_or_default(),
-        }
+        self.core.semantic_tokens(path)
     }
 
     pub(super) fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
@@ -1037,48 +882,6 @@ impl AnalysisSnapshot {
 
         (matches.len() == 1).then(|| matches.remove(0))
     }
-
-    fn is_ambiguous_project_rename(
-        &self,
-        target: &tua_core::Definition,
-        rename_target: &RenameTarget,
-    ) -> bool {
-        match rename_target.kind {
-            tua_core::RenameKind::Function => {
-                let Some(global_name) = self
-                    .parsed(&target.path)
-                    .and_then(|parsed| global_function_name_for_definition(parsed, target))
-                else {
-                    return false;
-                };
-
-                self.files
-                    .iter()
-                    .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
-                    .filter_map(|(_, file)| file.parsed.as_ref().ok())
-                    .map(|parsed| global_function_definition_count(parsed, &global_name))
-                    .sum::<usize>()
-                    > 1
-            }
-            tua_core::RenameKind::TypeAlias => {
-                let Some(alias_name) = self
-                    .parsed(&target.path)
-                    .and_then(|parsed| global_type_alias_name_for_definition(parsed, target))
-                else {
-                    return false;
-                };
-
-                self.files
-                    .iter()
-                    .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
-                    .filter_map(|(_, file)| file.parsed.as_ref().ok())
-                    .map(|parsed| type_alias_definition_count(parsed, &alias_name))
-                    .sum::<usize>()
-                    > 1
-            }
-            tua_core::RenameKind::Local | tua_core::RenameKind::Parameter => false,
-        }
-    }
 }
 
 fn call_hierarchy_item_from_symbol(symbol: &CallHierarchySymbol) -> CallHierarchyItem {
@@ -1249,44 +1052,12 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
 }
 
-fn reference_key(reference: &Reference) -> (PathBuf, usize, usize, usize, usize, u8) {
-    (
-        reference.path.clone(),
-        reference.span.start.line,
-        reference.span.start.column,
-        reference.span.end.line,
-        reference.span.end.column,
-        reference_kind_key(reference.kind),
-    )
-}
-
-fn text_edit_key(edit: &TextEdit) -> (PathBuf, usize, usize, usize, usize) {
-    (
-        edit.path.clone(),
-        edit.span.start.line,
-        edit.span.start.column,
-        edit.span.end.line,
-        edit.span.end.column,
-    )
-}
-
 fn span_contains(span: SourceSpan, position: SourcePosition) -> bool {
     let start = (span.start.line, span.start.column);
     let end = (span.end.line, span.end.column);
     let position = (position.line, position.column);
 
     start <= position && position < end
-}
-
-fn reference_kind_key(kind: tua_core::ReferenceKind) -> u8 {
-    match kind {
-        tua_core::ReferenceKind::Module => 0,
-        tua_core::ReferenceKind::TypeAlias => 1,
-        tua_core::ReferenceKind::Local => 2,
-        tua_core::ReferenceKind::Function => 3,
-        tua_core::ReferenceKind::Parameter => 4,
-        tua_core::ReferenceKind::TableField => 5,
-    }
 }
 
 impl CachedFile {
@@ -1297,15 +1068,12 @@ impl CachedFile {
             .ok()
             .and_then(|parsed| build_type_environment(parsed).ok());
         let exports = parsed.as_ref().ok().and_then(infer_module_exports);
-        let require_edges = module_links_tua_source(&path, source.clone());
 
         Self {
             revision,
-            source,
             parsed,
             environment,
             exports,
-            require_edges,
         }
     }
 
