@@ -161,6 +161,7 @@ impl FunctionType {
 pub struct TableShape {
     fields: BTreeMap<String, TableField>,
     metatable: Option<Box<MetatableFacts>>,
+    self_index: bool,
 }
 
 impl TableShape {
@@ -168,6 +169,7 @@ impl TableShape {
         Self {
             fields: BTreeMap::new(),
             metatable: None,
+            self_index: false,
         }
     }
 
@@ -210,6 +212,10 @@ impl TableShape {
         if let Some(facts) = &self.metatable {
             if let IndexFallback::Table(index_table) = &facts.index {
                 for (name, field) in index_table.fields() {
+                    if is_metamethod_field(name) {
+                        continue;
+                    }
+
                     fields
                         .entry(name.to_owned())
                         .or_insert_with(|| field.clone());
@@ -231,6 +237,14 @@ impl TableShape {
 
     pub fn set_metatable_facts(&mut self, facts: MetatableFacts) {
         self.metatable = Some(Box::new(facts));
+    }
+
+    pub fn mark_self_index(&mut self) {
+        self.self_index = true;
+    }
+
+    pub fn has_self_index(&self) -> bool {
+        self.self_index
     }
 }
 
@@ -274,14 +288,18 @@ impl MetatableFacts {
             return Self::default();
         };
 
-        let index = table
-            .field("__index")
-            .map(|field| match &field.ty {
-                Type::Table(shape) => IndexFallback::Table(shape.clone()),
-                Type::Function(function) => IndexFallback::Function(function.clone()),
-                _ => IndexFallback::Unknown,
-            })
-            .unwrap_or_default();
+        let index = if table.has_self_index() {
+            IndexFallback::Table(table.clone())
+        } else {
+            table
+                .field("__index")
+                .map(|field| match &field.ty {
+                    Type::Table(shape) => IndexFallback::Table(shape.clone()),
+                    Type::Function(function) => IndexFallback::Function(function.clone()),
+                    _ => IndexFallback::Unknown,
+                })
+                .unwrap_or_default()
+        };
         let newindex = table
             .field("__newindex")
             .map(|field| match &field.ty {
@@ -321,11 +339,19 @@ impl MetatableFacts {
     }
 
     pub fn implied_field(&self, name: &str) -> Option<&TableField> {
+        if is_metamethod_field(name) {
+            return None;
+        }
+
         match &self.index {
             IndexFallback::Table(table) => table.field(name),
             _ => None,
         }
     }
+}
+
+fn is_metamethod_field(name: &str) -> bool {
+    name.starts_with("__")
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]

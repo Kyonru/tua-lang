@@ -188,6 +188,8 @@ impl<'a> Checker<'a> {
                 self.scoped_locals.pop();
             }
             ast::Stmt::FunctionDeclaration(function) => {
+                self.record_function_declaration_type(function);
+
                 let name = function.name().to_string();
                 let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_parameter_locals(&name);
@@ -334,11 +336,20 @@ impl<'a> Checker<'a> {
                 self.check_type_assignable(expression, source, &target);
             }
 
-            self.record_assignment_type(variable, source);
+            self.record_assignment_type(variable, source, expression);
         }
     }
 
-    fn record_assignment_type(&mut self, variable: &Var, ty: Option<Type>) {
+    fn record_assignment_type(
+        &mut self,
+        variable: &Var,
+        ty: Option<Type>,
+        expression: &Expression,
+    ) {
+        if self.record_table_field_assignment_type(variable, ty.clone(), expression) {
+            return;
+        }
+
         let Some(name) = directly_assigned_name(variable) else {
             return;
         };
@@ -358,6 +369,64 @@ impl<'a> Checker<'a> {
         {
             scope.remove(name);
         }
+    }
+
+    fn record_function_declaration_type(&mut self, function: &ast::FunctionDeclaration) {
+        let Some((root, field, is_method)) = function_declaration_table_field(function) else {
+            return;
+        };
+        let ty = function_type_from_body_with_receiver(function.body(), is_method);
+
+        self.record_known_table_field_type(&root, &field, ty, false);
+    }
+
+    fn record_table_field_assignment_type(
+        &mut self,
+        variable: &Var,
+        ty: Option<Type>,
+        expression: &Expression,
+    ) -> bool {
+        let Some(parts) = plain_field_chain_from_var(variable) else {
+            return false;
+        };
+        let [root, field] = parts.as_slice() else {
+            return false;
+        };
+
+        let is_self_index = field == "__index" && expression_is_name(expression, root);
+        let Some(ty) = ty else {
+            return true;
+        };
+
+        self.record_known_table_field_type(
+            root,
+            field,
+            widen_inferred_local_type(ty),
+            is_self_index,
+        );
+        true
+    }
+
+    fn record_known_table_field_type(
+        &mut self,
+        root: &str,
+        field: &str,
+        ty: Type,
+        is_self_index: bool,
+    ) {
+        let Some(mut root_ty) = self.infer_named_value(root) else {
+            return;
+        };
+        let Type::Table(table) = &mut root_ty else {
+            return;
+        };
+
+        if is_self_index {
+            table.mark_self_index();
+        }
+
+        table.insert(field.to_owned(), TableField::required(ty));
+        self.insert_scoped_local(root.to_owned(), root_ty);
     }
 
     fn check_expression_assignable(&mut self, expression: &Expression, target: &Type) {
@@ -1128,6 +1197,37 @@ fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Opt
     Some(parts)
 }
 
+fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
+    match var {
+        Var::Name(name) => Some(vec![token_text(name)]),
+        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
+        _ => None,
+    }
+}
+
+fn expression_is_name(expression: &Expression, expected: &str) -> bool {
+    matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
+}
+
+fn function_declaration_table_field(
+    function: &ast::FunctionDeclaration,
+) -> Option<(String, String, bool)> {
+    let name = function.name().to_string();
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
+        (Some(colon), None) => Some((colon, true)),
+        (None, Some(dot)) => Some((dot, false)),
+        (None, None) => None,
+    }?;
+    let owner = name[..separator.0].trim();
+    let field = name[separator.0 + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty())
+        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
+}
+
 fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
     let Prefix::Name(name) = function_call.prefix() else {
         return None;
@@ -1421,6 +1521,18 @@ fn function_type_from_body(body: &ast::FunctionBody) -> Type {
         .count();
 
     Type::function(vec![Type::Any; parameter_count], Type::Any)
+}
+
+fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_receiver: bool) -> Type {
+    let Type::Function(mut function) = function_type_from_body(body) else {
+        return Type::Any;
+    };
+
+    if include_receiver {
+        function.parameters.insert(0, Type::Any);
+    }
+
+    Type::Function(function)
 }
 
 fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {

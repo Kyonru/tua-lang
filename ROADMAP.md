@@ -1660,8 +1660,6 @@ Acceptance:
 
 ### 70.16 `docs(lsp): inventory LuaHelper codes and map missing Tua/LSP support`
 
-Status: done.
-
 Scope:
 
 - Collect LuaHelper diagnostic/code identifiers in use across the language server

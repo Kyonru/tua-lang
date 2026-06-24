@@ -355,6 +355,8 @@ tables, Tua propagates useful metatable facts into the object shape. The current
 subset understands:
 
 - table/function `__index` facts when simple string keys are visible;
+- self-index class tables such as `Account.__index = Account`, including
+  methods declared with `function Account:withdraw(amount)`;
 - `__newindex` as an assignment-compatible dynamic boundary;
 - `__add` as a vector-like operator that preserves the left operand shape;
 - `tostring(value)` as `string`, including values with `__tostring`.

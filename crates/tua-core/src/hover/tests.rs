@@ -406,6 +406,29 @@ fn hovers_known_table_field() {
 }
 
 #[test]
+fn hovers_self_index_class_style_metatable_methods() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount)
+end
+
+local account = setmetatable({}, Account)
+account:withdraw(10)
+"#;
+    let hover = hover_tua_source(
+        "src/account.tua",
+        source,
+        position_at(source, "withdraw(10)"),
+    )
+    .expect("hover should not fail")
+    .expect("self-index metatable method should hover");
+
+    assert_eq!(hover.contents, "(field) withdraw: function(any, any): any");
+}
+
+#[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
     let position = position_at(source, "missing");

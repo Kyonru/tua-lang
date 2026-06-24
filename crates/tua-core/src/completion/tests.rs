@@ -977,6 +977,31 @@ fn completion_includes_index_fields_but_hides_metamethods() {
     assert!(!fields.contains_key("__index"), "{fields:?}");
 }
 
+#[test]
+fn completes_self_index_class_style_metatable_methods() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount)
+end
+
+local account = setmetatable({}, Account)
+
+account:
+"#;
+    let completions = complete_tua_source(
+        "src/account.tua",
+        source,
+        position_after(source, "account:"),
+    )
+    .expect("self-index metatable completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"withdraw".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
+}
+
 fn complete_at(needle: &str) -> Result<Vec<Completion>, Vec<Diagnostic>> {
     complete_tua_source("src/main.tua", SOURCE, position_after(SOURCE, needle))
 }

@@ -94,6 +94,10 @@ impl<'a> SemanticModel<'a> {
         function_call: &FunctionCall,
         position: SourcePosition,
     ) -> Vec<Type> {
+        if let Some(ty) = self.setmetatable_return_type(function_call, position) {
+            return vec![ty];
+        }
+
         let Some(parts) = field_chain_before_first_call(function_call) else {
             return Vec::new();
         };
@@ -256,7 +260,8 @@ impl<'a> SemanticModel<'a> {
             return None;
         }
 
-        self.environment
+        let ty = self
+            .environment
             .local(name)
             .cloned()
             .or_else(|| {
@@ -280,7 +285,113 @@ impl<'a> SemanticModel<'a> {
                     )
                 })
             })
-            .or_else(|| self.parameter_type_at_position(name, position))
+            .or_else(|| self.parameter_type_at_position(name, position))?;
+
+        Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
+    }
+
+    fn setmetatable_return_type(
+        &self,
+        function_call: &FunctionCall,
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let (target, meta) = setmetatable_arguments(function_call)?;
+        let base = self.type_of_expression_return_at_depth(target, position, 0, 0)?;
+        let meta = self.type_of_expression_return_at_depth(meta, position, 0, 0)?;
+
+        Some(crate::types::MetatableFacts::from_type(&meta).apply_to_type(base))
+    }
+
+    fn apply_table_mutations_to_name(
+        &self,
+        name: &str,
+        ty: Type,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Type {
+        if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
+            return ty;
+        }
+        let Type::Table(mut table) = ty else {
+            return ty;
+        };
+
+        self.apply_table_mutations_in_block(
+            self.parsed.ast.nodes(),
+            name,
+            position,
+            depth + 1,
+            &mut table,
+        );
+
+        Type::Table(table)
+    }
+
+    fn apply_table_mutations_in_block(
+        &self,
+        block: &ast::Block,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+        table: &mut crate::TableShape,
+    ) {
+        for stmt in block.stmts() {
+            if !starts_before_or_at(node_start(stmt), position) {
+                continue;
+            }
+
+            match stmt {
+                ast::Stmt::Assignment(assignment) => {
+                    for (variable, expression) in
+                        assignment.variables().iter().zip(assignment.expressions())
+                    {
+                        let Some(parts) = plain_field_chain_from_var(variable) else {
+                            continue;
+                        };
+                        let [root, field] = parts.as_slice() else {
+                            continue;
+                        };
+
+                        if root != name {
+                            continue;
+                        }
+
+                        let is_self_index =
+                            field == "__index" && expression_is_name(expression, name);
+                        if is_self_index {
+                            table.mark_self_index();
+                        }
+
+                        let ty = if is_self_index {
+                            Type::Table(table.clone())
+                        } else {
+                            self.type_of_expression_return_at_depth(
+                                expression,
+                                node_start(variable),
+                                0,
+                                depth + 1,
+                            )
+                            .unwrap_or(Type::Any)
+                        };
+                        table.insert(field.to_owned(), TableField::required(ty));
+                    }
+                }
+                ast::Stmt::FunctionDeclaration(function) => {
+                    let Some((root, field, is_method)) = function_declaration_table_field(function)
+                    else {
+                        continue;
+                    };
+
+                    if root != name {
+                        continue;
+                    }
+
+                    let ty = function_type_from_body_with_receiver(function.body(), is_method);
+                    table.insert(field, TableField::required(ty));
+                }
+                _ => {}
+            }
+        }
     }
 
     fn alias_map(&self) -> BTreeMap<String, Type> {
@@ -680,6 +791,77 @@ pub(crate) fn plain_field_chain_from_var_expression(
     }
 
     Some(parts)
+}
+
+fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
+    match var {
+        Var::Name(name) => Some(vec![token_text(name)]),
+        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
+        _ => None,
+    }
+}
+
+fn expression_is_name(expression: &Expression, expected: &str) -> bool {
+    matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
+}
+
+fn function_declaration_table_field(
+    function: &ast::FunctionDeclaration,
+) -> Option<(String, String, bool)> {
+    let name = function.name().to_string();
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
+        (Some(colon), None) => Some((colon, true)),
+        (None, Some(dot)) => Some((dot, false)),
+        (None, None) => None,
+    }?;
+    let owner = name[..separator.0].trim();
+    let field = name[separator.0 + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty())
+        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
+}
+
+fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    if token_text(name) != "setmetatable" {
+        return None;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((arguments.iter().next()?, arguments.iter().nth(1)?))
+}
+
+fn function_type_from_body(body: &ast::FunctionBody) -> Type {
+    let parameter_count = body
+        .parameters()
+        .iter()
+        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
+        .count();
+
+    Type::function(vec![Type::Any; parameter_count], Type::Any)
+}
+
+fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_receiver: bool) -> Type {
+    let Type::Function(mut function) = function_type_from_body(body) else {
+        return Type::Any;
+    };
+
+    if include_receiver {
+        function.parameters.insert(0, Type::Any);
+    }
+
+    Type::Function(function)
 }
 
 pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {

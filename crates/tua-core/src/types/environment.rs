@@ -1257,6 +1257,29 @@ fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
     }
 }
 
+fn expression_is_name(expression: &Expression, expected: &str) -> bool {
+    matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
+}
+
+fn function_declaration_table_field(
+    function: &ast::FunctionDeclaration,
+) -> Option<(String, String, bool)> {
+    let name = function.name().to_string();
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
+        (Some(colon), None) => Some((colon, true)),
+        (None, Some(dot)) => Some((dot, false)),
+        (None, None) => None,
+    }?;
+    let owner = name[..separator.0].trim();
+    let field = name[separator.0 + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty())
+        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
+}
+
 fn doc_conflict_diagnostic(
     path: &Path,
     span: SourceSpan,
@@ -1414,6 +1437,8 @@ fn collect_function_return_types(
                 );
             }
             ast::Stmt::FunctionDeclaration(function) => {
+                infer_function_declaration_type(function, &mut scoped_locals);
+
                 let name = function.name().to_string();
                 let function_locals =
                     locals_with_function_parameters(&scoped_locals, parameters, &name);
@@ -1595,6 +1620,16 @@ fn collect_return_types_in_block(
 
     for stmt in block.stmts() {
         match stmt {
+            ast::Stmt::Assignment(assignment) => {
+                infer_assignment_types(
+                    assignment,
+                    parsed,
+                    aliases,
+                    function_types,
+                    current_function,
+                    &mut scoped_locals,
+                );
+            }
             ast::Stmt::LocalAssignment(local) => {
                 infer_local_assignment_types(
                     local,
@@ -1604,6 +1639,9 @@ fn collect_return_types_in_block(
                     current_function,
                     &mut scoped_locals,
                 );
+            }
+            ast::Stmt::FunctionDeclaration(function) => {
+                infer_function_declaration_type(function, &mut scoped_locals);
             }
             ast::Stmt::FunctionCall(function_call) => {
                 record_setmetatable_call(
@@ -1704,7 +1742,7 @@ fn collect_return_types_in_block(
                 current_function,
                 returns,
             ),
-            ast::Stmt::LocalFunction(_) | ast::Stmt::FunctionDeclaration(_) => {}
+            ast::Stmt::LocalFunction(_) => {}
             _ => {}
         }
     }
@@ -1891,6 +1929,18 @@ fn infer_assignment_types(
     locals: &mut BTreeMap<String, Type>,
 ) {
     for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
+        if infer_table_field_assignment_type(
+            variable,
+            expression,
+            parsed,
+            aliases,
+            function_types,
+            current_function,
+            locals,
+        ) {
+            continue;
+        }
+
         let Some(name) = directly_assigned_name(variable) else {
             continue;
         };
@@ -1908,6 +1958,68 @@ fn infer_assignment_types(
 
         locals.insert(name, ty);
     }
+}
+
+fn infer_function_declaration_type(
+    function: &ast::FunctionDeclaration,
+    locals: &mut BTreeMap<String, Type>,
+) {
+    let Some((root, field, is_method)) = function_declaration_table_field(function) else {
+        return;
+    };
+    let ty = function_type_from_body_with_receiver(function.body(), is_method);
+
+    insert_table_field_type(locals, &root, &field, ty, false);
+}
+
+fn infer_table_field_assignment_type(
+    variable: &Var,
+    expression: &Expression,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    locals: &mut BTreeMap<String, Type>,
+) -> bool {
+    let Some(parts) = plain_field_chain_from_var(variable) else {
+        return false;
+    };
+    let [root, field] = parts.as_slice() else {
+        return false;
+    };
+    let is_self_index = field == "__index" && expression_is_name(expression, root);
+    let Some(ty) = infer_expression_type(
+        parsed,
+        expression,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+    ) else {
+        return true;
+    };
+
+    insert_table_field_type(locals, root, field, ty, is_self_index);
+    true
+}
+
+fn insert_table_field_type(
+    locals: &mut BTreeMap<String, Type>,
+    root: &str,
+    field: &str,
+    ty: Type,
+    is_self_index: bool,
+) {
+    let Some(Type::Table(mut table)) = locals.get(root).cloned() else {
+        return;
+    };
+
+    if is_self_index {
+        table.mark_self_index();
+    }
+
+    table.insert(field.to_owned(), TableField::required(ty));
+    locals.insert(root.to_owned(), Type::Table(table));
 }
 
 fn record_setmetatable_call(
@@ -2577,6 +2689,18 @@ fn function_type_from_body(body: &ast::FunctionBody) -> Type {
         .count();
 
     Type::function(vec![Type::Any; parameter_count], Type::Any)
+}
+
+fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_receiver: bool) -> Type {
+    let Type::Function(mut function) = function_type_from_body(body) else {
+        return Type::Any;
+    };
+
+    if include_receiver {
+        function.parameters.insert(0, Type::Any);
+    }
+
+    Type::Function(function)
 }
 
 fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {

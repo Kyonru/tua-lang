@@ -188,6 +188,8 @@ Supported v1 facts:
 - function-valued table fields may be called as `obj.method(obj, ...)` or
   `obj:method(...)`;
 - simple `__index` table/function fallbacks may expose known string keys;
+- self-index class tables such as `Account.__index = Account` may expose
+  methods on instances created with `setmetatable({}, Account)`;
 - `__newindex` keeps unknown assignment paths permissive;
 - `__add` may preserve a vector-like left operand shape;
 - `tostring(value)` is treated as returning `string`.

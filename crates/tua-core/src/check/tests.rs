@@ -508,6 +508,24 @@ vectorA.label = "uses __newindex"
 }
 
 #[test]
+fn accepts_self_index_class_style_metatable_methods() {
+    check_tua_source(
+        "src/account.tua",
+        r#"
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount)
+end
+
+local account = setmetatable({}, Account)
+account:withdraw(10)
+"#,
+    )
+    .expect("self-index class-style metatables should expose methods on instances");
+}
+
+#[test]
 fn rejects_love_method_argument_count_mismatch() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

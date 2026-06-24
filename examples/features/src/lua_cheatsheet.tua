@@ -280,7 +280,9 @@ end
 
 local joined = joinWithSpaces("Lua", "inside", "Tua")
 
--- Feature: methods with colon syntax and self.
+-- Feature: self-index metatable class pattern.
+-- Tua recognizes Account.__index = Account and exposes Account methods on
+-- instances created with setmetatable(..., Account).
 type AccountShape = {
   name: string,
   balance: number,
