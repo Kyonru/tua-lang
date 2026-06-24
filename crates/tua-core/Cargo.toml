@@ -7,5 +7,9 @@ license.workspace = true
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+test-fixture = []
+
 [dependencies]
 full_moon = { version = "2.2.0", features = ["luau"] }

@@ -1,5 +1,6 @@
 use super::*;
 use crate::source_text::position_at;
+use crate::Fixture;
 use std::fs;
 use std::path::PathBuf;
 
@@ -29,11 +30,16 @@ fn completes_type_aliases_in_annotation_positions() {
 
 #[test]
 fn completes_lua_doc_annotation_tags_after_marker() {
-    let source = "---@p\n";
-    let completions = complete_tua_source("src/main.tua", source, position_after(source, "---@p"))
+    let fixture = Fixture::parse(
+        r#"---@p<|cursor|>
+-- expect completions: param
+"#,
+    );
+    let source = fixture.source("src/main.tua");
+    let completions = complete_tua_source("src/main.tua", source, fixture.position("cursor"))
         .expect("annotation tag completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["param".to_owned()]);
+    assert_eq!(labels(&completions), fixture.expected_list("completions"));
     assert_eq!(completions[0].kind, CompletionKind::Keyword);
     assert_eq!(
         completions[0].detail.as_deref(),

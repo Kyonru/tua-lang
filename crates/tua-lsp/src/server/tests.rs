@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tua_core::{Fixture, SourcePosition};
 
 #[test]
 fn exposes_server_name() {
@@ -1851,41 +1852,46 @@ test(false)
 
 #[test]
 fn definition_returns_cross_file_module_and_export_locations() {
-    let temp = TempProject::new("cross-file-definition");
-    let main = r#"local Player = require("player")
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Player = require("<|module|>player")
 local Legacy = require("legacy")
 
-local player = Player.makePlayer()
-local clamped = Legacy.clamp(10, 0, 20)
-"#;
-    let player = r#"local function makePlayer()
+local player = Player.<|tua_export|>makePlayer()
+local clamped = Legacy.<|lua_export|>clamp(10, 0, 20)
+-- file: src/player.tua
+local function makePlayer()
   return { hp = 10 }
 end
 
 return {
   makePlayer = makePlayer,
 }
-"#;
-    let legacy = r#"return {
+-- file: src/legacy.lua
+return {
   clamp = function(value, min, max)
     return value
   end,
 }
-"#;
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("cross-file-definition")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let player = fixture.source("src/player.tua");
+    let legacy = fixture.source("src/legacy.lua");
 
-    temp.write("tua.toml", "source = \"src\"\n");
-    temp.write("src/main.tua", main);
-    temp.write("src/player.tua", player);
-    temp.write("src/legacy.lua", legacy);
-
-    let main_uri = temp.uri_for("src/main.tua");
-    let player_uri = temp.uri_for("src/player.tua");
-    let legacy_uri = temp.uri_for("src/legacy.lua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let player_uri = path_uri(&temp.join("src/player.tua"));
+    let legacy_uri = path_uri(&temp.join("src/legacy.lua"));
     let output = run_messages(vec![
         did_open(&main_uri, main),
-        definition_request(2, &main_uri, main, "player\")", 0),
-        definition_request(3, &main_uri, main, "Player.makePlayer", "Player.".len()),
-        definition_request(4, &main_uri, main, "Legacy.clamp", "Legacy.".len()),
+        definition_request_at(2, &main_uri, fixture.position("module")),
+        definition_request_at(3, &main_uri, fixture.position("tua_export")),
+        definition_request_at(4, &main_uri, fixture.position("lua_export")),
     ]);
 
     assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
@@ -3299,6 +3305,20 @@ fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: us
     })
 }
 
+fn definition_request_at(id: u64, uri: &str, position: SourcePosition) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/definition",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position(position)
+        }
+    })
+}
+
 fn builtin_document_request(id: u64, uri: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -3583,6 +3603,13 @@ fn lsp_position_after(source: &str, needle: &str) -> Value {
     );
 
     position
+}
+
+fn lsp_position(position: SourcePosition) -> Value {
+    json!({
+        "line": position.line.saturating_sub(1),
+        "character": position.column.saturating_sub(1)
+    })
 }
 
 fn read_output_messages(mut output: &[u8]) -> Vec<Value> {
