@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Minimal Change"
+  short_description: "Keep Tua changes focused and maintainable."
+  default_prompt: "Use this before editing Tua code or docs."

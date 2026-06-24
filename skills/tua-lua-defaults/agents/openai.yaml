@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Lua Defaults"
+  short_description: "Preserve Lua/LuaHelper-style behavior."
+  default_prompt: "Use this when Tua should behave like Lua tooling by default."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua LOVE DevEx"
+  short_description: "Improve LOVE-focused developer experience."
+  default_prompt: "Use this when improving LOVE autocomplete, types, assets, or examples."

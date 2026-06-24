@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Verification"
+  short_description: "Choose the right Tua checks and tests."
+  default_prompt: "Use this before finalizing Tua changes."

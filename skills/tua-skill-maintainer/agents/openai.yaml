@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Skill Maintainer"
+  short_description: "Update Tua skills safely."
+  default_prompt: "Use this when Tua project skills need updates or validation."

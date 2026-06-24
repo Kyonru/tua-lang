@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua LSP Parity"
+  short_description: "Guide Tua LSP parity work."
+  default_prompt: "Use this when adding or fixing Tua language-server behavior."

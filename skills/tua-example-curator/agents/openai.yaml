@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Example Curator"
+  short_description: "Keep Tua examples runnable and representative."
+  default_prompt: "Use this when editing Tua examples or generated sample output."

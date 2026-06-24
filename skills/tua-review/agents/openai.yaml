@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Review"
+  short_description: "Review Tua changes for bugs and regressions."
+  default_prompt: "Use this for Tua code reviews or pre-merge checks."
