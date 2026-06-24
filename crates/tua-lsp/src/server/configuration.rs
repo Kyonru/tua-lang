@@ -32,6 +32,7 @@ pub(super) struct DiagnosticOverrides {
     pub(super) const_assignments: Option<bool>,
     pub(super) parameter_type_mismatches: Option<bool>,
     pub(super) return_type_mismatches: Option<bool>,
+    pub(super) formatting_lints: Option<bool>,
     pub(super) globals: Option<Vec<String>>,
 }
 
@@ -177,6 +178,7 @@ impl DiagnosticOverrides {
                 "return_type_mismatches",
                 "returnTypeMismatches",
             ),
+            formatting_lints: bool_setting(settings, "formatting_lints", "formattingLints"),
             globals: string_array_value(settings.get("globals")),
         }
     }
@@ -227,6 +229,7 @@ impl DiagnosticOverrides {
             self.return_type_mismatches,
             &mut diagnostics.return_type_mismatches,
         );
+        apply_bool(self.formatting_lints, &mut diagnostics.formatting_lints);
 
         if let Some(globals) = &self.globals {
             diagnostics.globals = globals.clone();

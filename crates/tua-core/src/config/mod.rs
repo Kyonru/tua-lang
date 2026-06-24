@@ -14,6 +14,8 @@ out = \"build\"
 target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
+[emit]
+annotation_mode = \"off\"\n\n\
 
 [diagnostics]
 duplicate_keys = false
@@ -34,6 +36,7 @@ float_equality = false
 const_assignments = false
 parameter_type_mismatches = false
 return_type_mismatches = false
+formatting_lints = false
 globals = []
 ";
 
@@ -44,6 +47,7 @@ pub struct ProjectConfig {
     pub target: String,
     pub extension: String,
     pub emit_maps: bool,
+    pub emit: EmitConfig,
     pub diagnostics: DiagnosticsConfig,
 }
 
@@ -55,7 +59,47 @@ impl Default for ProjectConfig {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            emit: EmitConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmitConfig {
+    pub annotation_mode: AnnotationMode,
+}
+
+impl Default for EmitConfig {
+    fn default() -> Self {
+        Self {
+            annotation_mode: AnnotationMode::Off,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnnotationMode {
+    Off,
+    Luacats,
+}
+
+impl AnnotationMode {
+    fn parse(line: usize, value: &str) -> Result<Self, ConfigParseError> {
+        match parse_string(line, value)?.as_str() {
+            "off" => Ok(Self::Off),
+            "luacats" => Ok(Self::Luacats),
+            _ => Err(ConfigParseError::new(
+                line,
+                "expected annotation mode \"off\" or \"luacats\"",
+            )),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Luacats => "luacats",
         }
     }
 }
@@ -80,6 +124,7 @@ pub struct DiagnosticsConfig {
     pub const_assignments: bool,
     pub parameter_type_mismatches: bool,
     pub return_type_mismatches: bool,
+    pub formatting_lints: bool,
     pub globals: Vec<String>,
 }
 
@@ -283,6 +328,20 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                     ));
                 }
             },
+            ConfigSection::Emit => match key {
+                "annotation_mode" => {
+                    config.emit.annotation_mode = AnnotationMode::parse(line_number, value)?
+                }
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown emit config key `{other}`"),
+                    ));
+                }
+            },
             ConfigSection::Diagnostics => match key {
                 "duplicate_keys" => {
                     config.diagnostics.duplicate_keys = parse_bool(line_number, value)?
@@ -337,6 +396,9 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 "return_type_mismatches" => {
                     config.diagnostics.return_type_mismatches = parse_bool(line_number, value)?
                 }
+                "formatting_lints" => {
+                    config.diagnostics.formatting_lints = parse_bool(line_number, value)?
+                }
                 "globals" => config.diagnostics.globals = parse_string_array(line_number, value)?,
                 "" => {
                     return Err(ConfigParseError::new(line_number, "missing config key"));
@@ -357,6 +419,7 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ConfigSection {
     Root,
+    Emit,
     Diagnostics,
 }
 
@@ -379,6 +442,7 @@ fn parse_section_header(
     };
 
     match section.trim() {
+        "emit" => Ok(Some(ConfigSection::Emit)),
         "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),
         "" => Err(ConfigParseError::new(line_number, "missing section name")),
         other => Err(ConfigParseError::new(

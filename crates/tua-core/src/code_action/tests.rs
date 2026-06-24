@@ -170,6 +170,47 @@ fn renames_duplicate_table_key() {
     );
 }
 
+#[test]
+fn removes_trailing_whitespace() {
+    let parsed =
+        parse_tua_source("src/main.tua", "local value = 1   \n").expect("source should parse");
+    let diagnostics = diagnostics(
+        &parsed,
+        DiagnosticsConfig {
+            formatting_lints: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].title, "Remove trailing whitespace");
+
+    let edit = &actions[0].edit.changes[&std::path::PathBuf::from("src/main.tua")][0];
+
+    assert_eq!(
+        edit.span.start,
+        SourcePosition {
+            line: 1,
+            column: 16
+        }
+    );
+    assert_eq!(
+        edit.span.end,
+        SourcePosition {
+            line: 1,
+            column: 19
+        }
+    );
+    assert_eq!(edit.new_text, "");
+}
+
 fn diagnostics(parsed: &ParsedSource, config: DiagnosticsConfig) -> Vec<Diagnostic> {
     check_parsed_source_with_diagnostics_config(parsed, &config)
         .err()

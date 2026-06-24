@@ -76,6 +76,7 @@ float_equality = true
 const_assignments = true
 parameter_type_mismatches = true
 return_type_mismatches = true
+formatting_lints = true
 globals = ["Game", "World"]
 "#,
     )
@@ -108,6 +109,7 @@ globals = ["Game", "World"]
                 const_assignments: true,
                 parameter_type_mismatches: true,
                 return_type_mismatches: true,
+                formatting_lints: true,
                 globals: vec!["Game".to_owned(), "World".to_owned()],
             },
         }
@@ -160,6 +162,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.const_assignments);
     assert!(!config.diagnostics.parameter_type_mismatches);
     assert!(!config.diagnostics.return_type_mismatches);
+    assert!(!config.diagnostics.formatting_lints);
     assert!(config.diagnostics.globals.is_empty());
 }
 

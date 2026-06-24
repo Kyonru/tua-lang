@@ -176,6 +176,14 @@
           "default": null,
           "description": "Report function return type mismatches."
         },
+        "tua.diagnostics.formattingLints": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report conservative Lua/Tua formatting consistency issues such as trailing whitespace, indentation, keyword spacing, and simple token spacing."
+        },
         "tua.diagnostics.globals": {
           "type": [
             "array",

@@ -13,6 +13,8 @@ The VS Code extension starts this server and surfaces editor features for
 
 - Incremental document sync with open, change, save, and close notifications.
 - Diagnostics on open, change, save, and watched-file updates.
+- Optional formatting consistency diagnostics can be enabled through
+  `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
   locals where possible.

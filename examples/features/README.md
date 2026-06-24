@@ -41,6 +41,8 @@ make build-features
   libraries, coroutines, environments, debug/GC APIs, LuaJIT boundaries, and
   LÖVE helper surfaces, with comments describing how Tua should interpret each
   feature.
+- `src/formatting_lints.tua` demonstrates the clean baseline expected by the
+  opt-in `formatting_lints` diagnostic profile.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,

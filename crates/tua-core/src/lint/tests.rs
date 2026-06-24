@@ -7,12 +7,15 @@ use crate::{
 fn configured_lints_are_disabled_by_default() {
     check_tua_source(
         "src/main.tua",
-        r#"
+        concat!(
+            r#"
 local config = { hp = 10, hp = 20 }
 local hp = 10
 hp = hp
 local Missing = require("definitely_missing_lint_module")
-"#,
+local cramped={1,2,3}"#,
+            "   \n",
+        ),
     )
     .expect("lint-only issues should be disabled by default");
 }
@@ -318,6 +321,80 @@ damage("bad")
         count_code(&diagnostics, DiagnosticCode::LINT_RETURN_TYPE_MISMATCH),
         0
     );
+}
+
+#[test]
+fn reports_formatting_lints_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        "local hp=10   \n\tlocal values = {1,2,3}\nif hp > 0  then  print( hp ) end\n",
+        &DiagnosticsConfig {
+            formatting_lints: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("formatting lints should report diagnostics");
+
+    assert_eq!(
+        count_code(
+            &diagnostics,
+            DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
+        ),
+        1
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_INDENTATION),
+        1
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING),
+        2
+    );
+    assert!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_TOKEN_SPACING) >= 5,
+        "{diagnostics:?}"
+    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning));
+}
+
+#[test]
+fn formatting_lints_accept_baseline_style() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local values = { 1, 2, 3 }
+
+if values[1] > 0 then
+  print(values[1])
+end
+"#,
+        &DiagnosticsConfig {
+            formatting_lints: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("baseline style should not report formatting diagnostics");
+}
+
+#[test]
+fn formatting_lints_ignore_strings_and_comments() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local text = "a,b"
+local block = [[
+  this , keeps spacing
+]]
+-- if value  then  print( value )
+"#,
+        &DiagnosticsConfig {
+            formatting_lints: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("strings and comments should not report formatting diagnostics");
 }
 
 #[test]

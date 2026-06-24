@@ -212,6 +212,30 @@ fn pipeline_diagnostics_use_configured_asset_roots() {
 }
 
 #[test]
+fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
+    let mut config = ProjectConfig::default();
+
+    config.diagnostics.formatting_lints = true;
+
+    let mut host = AnalysisHost::with_config(config);
+
+    host.set_file_with_kind(
+        "src/legacy.lua",
+        "local value=1   \nreturn { value=value }\n",
+        AnalysisSourceKind::Lua,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/legacy.lua");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE)
+    }));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_TOKEN_SPACING) }));
+}
+
+#[test]
 fn cache_reuses_unedited_files_across_snapshots() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");

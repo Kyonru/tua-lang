@@ -20,6 +20,7 @@ pub(crate) fn lint_parsed_source(
     if !config.duplicate_keys
         && !config.missing_requires
         && !config.self_assignments
+        && !config.formatting_lints
         && !symbol_lints_enabled(config)
         && !correctness_lints_enabled(config)
     {
@@ -41,6 +42,10 @@ pub(crate) fn lint_parsed_source(
 
         visitor.visit_ast(&parsed.ast);
         diagnostics.extend(visitor.diagnostics);
+    }
+
+    if config.formatting_lints {
+        diagnostics.extend(formatting_lints(parsed));
     }
 
     if symbol_lints_enabled(config) {
@@ -1077,6 +1082,465 @@ fn const_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str
         format!("assignment to const-like name `{name}`"),
     )
     .with_code(DiagnosticCode::LINT_CONST_ASSIGNMENT)
+}
+
+fn formatting_lints(parsed: &ParsedSource) -> Vec<Diagnostic> {
+    let mut analyzer = FormattingAnalyzer::new(parsed);
+
+    analyzer.analyze();
+    analyzer.diagnostics
+}
+
+struct FormattingAnalyzer<'a> {
+    parsed: &'a ParsedSource,
+    diagnostics: Vec<Diagnostic>,
+    state: SourceMaskState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum SourceMaskState {
+    Code,
+    ShortString { quote: u8, escaped: bool },
+    LongString { close: Vec<u8> },
+    BlockComment { close: Vec<u8> },
+}
+
+impl<'a> FormattingAnalyzer<'a> {
+    fn new(parsed: &'a ParsedSource) -> Self {
+        Self {
+            parsed,
+            diagnostics: Vec::new(),
+            state: SourceMaskState::Code,
+        }
+    }
+
+    fn analyze(&mut self) {
+        let lines = self.parsed.source.split_inclusive('\n').collect::<Vec<_>>();
+
+        for (index, raw_line) in lines.iter().enumerate() {
+            self.analyze_line(index + 1, raw_line);
+        }
+
+        if !self.parsed.source.ends_with('\n') {
+            if let Some(last) = self.parsed.source.lines().last() {
+                if self.parsed.source.is_empty() || lines.is_empty() {
+                    self.analyze_line(1, last);
+                }
+            }
+        }
+    }
+
+    fn analyze_line(&mut self, line_number: usize, raw_line: &str) {
+        let line = raw_line.trim_end_matches(['\n', '\r']);
+        let mask = self.code_mask_for_line(line);
+
+        self.check_trailing_whitespace(line_number, line);
+        self.check_indentation(line_number, line, &mask);
+        self.check_keyword_spacing(line_number, line.as_bytes(), &mask);
+        self.check_separator_spacing(line_number, line.as_bytes(), &mask);
+        self.check_bracket_spacing(line_number, line.as_bytes(), &mask);
+        self.check_assignment_spacing(line_number, line.as_bytes(), &mask);
+    }
+
+    fn code_mask_for_line(&mut self, line: &str) -> Vec<bool> {
+        let bytes = line.as_bytes();
+        let mut mask = vec![false; bytes.len()];
+        let mut index = 0;
+
+        while index < bytes.len() {
+            match &mut self.state {
+                SourceMaskState::Code => {
+                    if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                        if let Some((close, consumed)) = long_bracket_open(&bytes[index + 2..]) {
+                            self.state = SourceMaskState::BlockComment { close };
+                            index += 2 + consumed;
+                        } else {
+                            break;
+                        }
+                    } else if bytes[index] == b'\'' || bytes[index] == b'"' {
+                        mask[index] = true;
+                        self.state = SourceMaskState::ShortString {
+                            quote: bytes[index],
+                            escaped: false,
+                        };
+                        index += 1;
+                    } else if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                        mask[index] = true;
+                        self.state = SourceMaskState::LongString { close };
+                        index += consumed;
+                    } else {
+                        mask[index] = true;
+                        index += 1;
+                    }
+                }
+                SourceMaskState::ShortString { quote, escaped } => {
+                    if *escaped {
+                        *escaped = false;
+                    } else if bytes[index] == b'\\' {
+                        *escaped = true;
+                    } else if bytes[index] == *quote {
+                        mask[index] = true;
+                        self.state = SourceMaskState::Code;
+                    }
+
+                    index += 1;
+                }
+                SourceMaskState::LongString { close } | SourceMaskState::BlockComment { close } => {
+                    if bytes[index..].starts_with(close) {
+                        index += close.len();
+                        self.state = SourceMaskState::Code;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+        }
+
+        if matches!(self.state, SourceMaskState::ShortString { .. }) {
+            self.state = SourceMaskState::Code;
+        }
+
+        mask
+    }
+
+    fn check_trailing_whitespace(&mut self, line_number: usize, line: &str) {
+        let trimmed = line.trim_end_matches([' ', '\t']);
+
+        if trimmed.len() == line.len() {
+            return;
+        }
+
+        self.push(
+            DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE,
+            line_number,
+            trimmed.len() + 1,
+            "remove trailing whitespace",
+        );
+    }
+
+    fn check_indentation(&mut self, line_number: usize, line: &str, mask: &[bool]) {
+        let bytes = line.as_bytes();
+        let Some(first_code) = mask
+            .iter()
+            .enumerate()
+            .position(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
+        else {
+            return;
+        };
+
+        if line[..first_code].trim().is_empty() && bytes[..first_code].contains(&b'\t') {
+            let column = bytes[..first_code]
+                .iter()
+                .position(|byte| *byte == b'\t')
+                .unwrap_or(0)
+                + 1;
+
+            self.push(
+                DiagnosticCode::LINT_FORMAT_INDENTATION,
+                line_number,
+                column,
+                "indentation should use spaces, not tabs",
+            );
+            return;
+        }
+
+        let spaces = bytes[..first_code]
+            .iter()
+            .take_while(|byte| **byte == b' ')
+            .count();
+
+        if spaces > 0 && spaces % 2 != 0 {
+            self.push(
+                DiagnosticCode::LINT_FORMAT_INDENTATION,
+                line_number,
+                1,
+                "indentation should use multiples of two spaces",
+            );
+        }
+    }
+
+    fn check_keyword_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
+        for (keyword, label) in [(b"then".as_slice(), "`then`"), (b"do".as_slice(), "`do`")] {
+            let mut index = 0;
+
+            while index + keyword.len() <= bytes.len() {
+                if !is_code_range(mask, index, keyword.len())
+                    || !bytes[index..].starts_with(keyword)
+                    || !is_word_boundary(bytes, index, keyword.len())
+                {
+                    index += 1;
+                    continue;
+                }
+
+                if let Some(previous) = previous_code_index(bytes, mask, index) {
+                    let spaces = count_spaces_before(bytes, previous, index);
+
+                    if spaces != 1 {
+                        self.push(
+                            DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING,
+                            line_number,
+                            index + 1,
+                            format!("use one space before {label}"),
+                        );
+                    }
+                }
+
+                if let Some(next) = next_code_index(bytes, mask, index + keyword.len()) {
+                    let spaces = count_spaces_after(bytes, index + keyword.len(), next);
+
+                    if spaces > 1 {
+                        self.push(
+                            DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING,
+                            line_number,
+                            index + keyword.len() + 1,
+                            format!("use at most one space after {label}"),
+                        );
+                    }
+                }
+
+                index += keyword.len();
+            }
+        }
+    }
+
+    fn check_separator_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
+        for index in code_byte_positions(bytes, mask, b',') {
+            if previous_code_index(bytes, mask, index).is_some_and(|previous| {
+                bytes[previous + 1..index]
+                    .iter()
+                    .any(|byte| matches!(byte, b' ' | b'\t'))
+            }) {
+                self.push(
+                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                    line_number,
+                    index + 1,
+                    "remove whitespace before `,`",
+                );
+            }
+
+            let Some(next) = next_code_index(bytes, mask, index + 1) else {
+                continue;
+            };
+
+            if matches!(bytes[next], b')' | b']' | b'}') {
+                continue;
+            }
+
+            let spaces = count_spaces_after(bytes, index + 1, next);
+
+            if spaces != 1 {
+                self.push(
+                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                    line_number,
+                    index + 1,
+                    "use one space after `,`",
+                );
+            }
+        }
+    }
+
+    fn check_bracket_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
+        for index in 0..bytes.len() {
+            if !mask.get(index).copied().unwrap_or(false) {
+                continue;
+            }
+
+            match bytes[index] {
+                b'(' | b'[' => {
+                    if next_code_index(bytes, mask, index + 1)
+                        .is_some_and(|next| bytes[next].is_ascii_graphic() && next > index + 1)
+                    {
+                        self.push(
+                            DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                            line_number,
+                            index + 2,
+                            format!("remove whitespace after `{}`", bytes[index] as char),
+                        );
+                    }
+                }
+                b')' | b']' => {
+                    if previous_code_index(bytes, mask, index)
+                        .is_some_and(|previous| previous + 1 < index)
+                    {
+                        self.push(
+                            DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                            line_number,
+                            index + 1,
+                            format!("remove whitespace before `{}`", bytes[index] as char),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn check_assignment_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
+        let mut index = 0;
+
+        while index < bytes.len() {
+            let Some(operator_len) = assignment_operator_len(bytes, mask, index) else {
+                index += 1;
+                continue;
+            };
+
+            let Some(previous) = previous_code_index(bytes, mask, index) else {
+                index += operator_len;
+                continue;
+            };
+            let Some(next) = next_code_index(bytes, mask, index + operator_len) else {
+                index += operator_len;
+                continue;
+            };
+            let before = count_spaces_before(bytes, previous, index);
+            let after = count_spaces_after(bytes, index + operator_len, next);
+
+            if before != 1 || after != 1 {
+                let operator =
+                    std::str::from_utf8(&bytes[index..index + operator_len]).unwrap_or("=");
+
+                self.push(
+                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                    line_number,
+                    index + 1,
+                    format!("use one space around `{operator}`"),
+                );
+            }
+
+            index += operator_len;
+        }
+    }
+
+    fn push(
+        &mut self,
+        code: DiagnosticCode,
+        line: usize,
+        column: usize,
+        message: impl Into<String>,
+    ) {
+        self.diagnostics.push(
+            Diagnostic::new(
+                &self.parsed.path,
+                line,
+                column,
+                DiagnosticSeverity::Warning,
+                message,
+            )
+            .with_code(code),
+        );
+    }
+}
+
+fn long_bracket_open(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {
+    if bytes.first() != Some(&b'[') {
+        return None;
+    }
+
+    let mut index = 1;
+
+    while bytes.get(index) == Some(&b'=') {
+        index += 1;
+    }
+
+    if bytes.get(index) != Some(&b'[') {
+        return None;
+    }
+
+    let equals = index - 1;
+    let mut close = Vec::with_capacity(equals + 2);
+
+    close.push(b']');
+    close.extend(std::iter::repeat_n(b'=', equals));
+    close.push(b']');
+
+    Some((close, index + 1))
+}
+
+fn is_code_range(mask: &[bool], start: usize, len: usize) -> bool {
+    mask.get(start..start + len)
+        .is_some_and(|range| range.iter().all(|is_code| *is_code))
+}
+
+fn is_word_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
+    let before = start
+        .checked_sub(1)
+        .and_then(|index| bytes.get(index))
+        .copied();
+    let after = bytes.get(start + len).copied();
+
+    !before.is_some_and(is_identifier_byte) && !after.is_some_and(is_identifier_byte)
+}
+
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+fn previous_code_index(bytes: &[u8], mask: &[bool], before: usize) -> Option<usize> {
+    mask.get(..before)?
+        .iter()
+        .enumerate()
+        .rposition(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
+}
+
+fn next_code_index(bytes: &[u8], mask: &[bool], after: usize) -> Option<usize> {
+    mask.get(after..)?
+        .iter()
+        .enumerate()
+        .position(|(offset, is_code)| *is_code && !bytes[after + offset].is_ascii_whitespace())
+        .map(|offset| after + offset)
+}
+
+fn count_spaces_before(bytes: &[u8], previous: usize, current: usize) -> usize {
+    bytes[previous + 1..current]
+        .iter()
+        .filter(|byte| matches!(byte, b' ' | b'\t'))
+        .count()
+}
+
+fn count_spaces_after(bytes: &[u8], start: usize, next: usize) -> usize {
+    bytes[start..next]
+        .iter()
+        .filter(|byte| matches!(byte, b' ' | b'\t'))
+        .count()
+}
+
+fn code_byte_positions<'a>(
+    bytes: &'a [u8],
+    mask: &'a [bool],
+    byte: u8,
+) -> impl Iterator<Item = usize> + 'a {
+    bytes
+        .iter()
+        .enumerate()
+        .filter(move |(index, current)| **current == byte && mask.get(*index) == Some(&true))
+        .map(|(index, _)| index)
+}
+
+fn assignment_operator_len(bytes: &[u8], mask: &[bool], index: usize) -> Option<usize> {
+    if mask.get(index) != Some(&true) {
+        return None;
+    }
+
+    if matches!(bytes.get(index), Some(b'+' | b'-' | b'*' | b'/' | b'%'))
+        && bytes.get(index + 1) == Some(&b'=')
+        && mask.get(index + 1) == Some(&true)
+    {
+        return Some(2);
+    }
+
+    if bytes.get(index) != Some(&b'=') {
+        return None;
+    }
+
+    if matches!(
+        bytes.get(index.checked_sub(1)?),
+        Some(b'=' | b'<' | b'>' | b'~')
+    ) || bytes.get(index + 1) == Some(&b'=')
+    {
+        return None;
+    }
+
+    Some(1)
 }
 
 fn expression_key(expression: &Expression) -> String {

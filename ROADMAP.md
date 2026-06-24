@@ -1306,6 +1306,8 @@ Acceptance:
 
 ### 70.9 `lint: default linting based on lua so code can be formatted consistently`
 
+Status: done.
+
 Scope:
 
 - Add a Lua-style formatting lint pass in `tua-core` that operates on parser
@@ -1384,6 +1386,179 @@ Acceptance:
 - Examples and docs describe the supported subset honestly, including any
   LuaLS forms intentionally left shallow.
 
+### 70.11 `feat(types): support practical metatable typing for method lookup and operators`
+
+Scope:
+
+- Add conservative static metatable support for common Lua patterns used in the
+  language-guide/cheatsheet-style code.
+- Infer method style receivers for `obj:method(...)` and `obj.method(obj, ...)`
+  when the call target is a known function-with-`self` shape.
+- Use `__index` and constructor-style `setmetatable` patterns to propagate
+  object shapes:
+  - `local M = {}; M.__index = M`
+  - `function M:new(...) ... return setmetatable(instance, self) end`
+- Support function-call equivalences on table fields so the following both type-check:
+  - `lookupObject.y(lookupObject, 1)`
+  - `lookupObject:y(2)`
+- Add typed handling for selected built-in metamethods when resolvable:
+  - `__index` function/table fallback with limited key-based value typing
+  - `__newindex` assignment compatibility
+  - `__add` binary operator result typing
+  - `__tostring` result typing.
+- Keep behavior conservative when runtime metatable construction is dynamic:
+  - unknown `setmetatable` base/meta inputs,
+  - computed `__index` chains,
+  - dynamic `getmetatable` mutation.
+- Add this as opt-in/gradual-analysis behavior so existing Lua/LuaDoc workflows
+  continue to pass when only partial static information is available.
+
+Acceptance:
+
+- In a sample with `AccountShape`, `Account:new`, and `:deposit/:withdraw`, calls
+  through `:` can infer receiver and update/check `balance` as `number`.
+- For `lookupObject` method examples, both dot-call-with-explicit-self and
+  colon-call forms type-check with identical inferred function signatures.
+- For `vector` examples:
+  - `vectorA + vectorB` infers the result type from `__add` as a vector-like
+    table shape,
+  - `tostring(vectorSum)` infers `string` from `__tostring`,
+  - `vectorA.length` can use typed `__index` fallback when the key is recognized,
+  - `vectorA.label = "..."` passes through `__newindex` compatibility checks.
+- Fixtures cover constructor/layered-metatable and operator-metamethod cases with
+  stable diagnostics and non-regressive behavior for existing features.
+
+### 70.12 `feat(types): infer loop variable, table, and array types`
+
+Scope:
+
+- Add table-shape inference for constructors and updates:
+  - infer list-like arrays from sequential numeric entries (e.g. `{ 1, 2, 3 }`);
+  - infer record-like object fields from string keys (e.g. `{ name = "Ada", score = 10 }`);
+  - infer mixed tables conservatively using unioned field/value shapes.
+- Add indexing typing:
+  - `table_expr[number_expr]` on inferred arrays yields element type;
+  - string-key indexing on record-like tables yields the field value type;
+  - unknown-key indexing on arrays falls back to element type with nil union safety
+    where appropriate.
+- Add loop-variable inference for `for` families:
+  - numeric loops infer index variables from loop bounds/steps as `number`;
+  - `ipairs` value variable infers array element type and index as `number`;
+  - `pairs` key/value variables infer from known table key/value types where available.
+- Track table/index operations through aliases and simple locals so `for _, v in ipairs(xs) do` and `for k,v in pairs(t) do` propagate types through scope.
+- Keep inference conservative for dynamic iterator shapes, `next`, or unresolved custom
+  iterators: those loop variables remain `any` unless annotated/imported.
+
+Acceptance:
+
+- `for i = 1, #scores do` infers `i: number` and supports `scores[i]` as typed
+  element usage.
+- `for _, value in ipairs(numbers)` infers `value` from `numbers` array element type.
+- `for key, value in pairs(player)` infers `key`/`value` from known record fields and
+  preserves fallback `any` behavior for dynamic/untyped maps.
+- Indexing a literal/typed array and table in one pass emits stable element or field
+  types for completions/hover/diagnostics.
+- The new inference updates add no regressions to existing table completions, diagnostics,
+  or require resolution tests.
+
+### 70.13 `feat(types): inherit table shapes across metatable chains and typed callable objects`
+
+Scope:
+
+- Extend metatable typing to prototype-style inheritance where shape flows through
+  metatable chains, not only direct `__index = self` style:
+  - `setmetatable(Sub, { __index = Base })` for static inheritance of exported symbols;
+  - chained inheritance `setmetatable(Leaf, { __index = Mid })` where each link is known.
+- Propagate inherited methods and fields into call-site receiver typing so inherited
+  method lookup and completion work when call sites use either `obj:method(...)`
+  or `obj.method(obj, ...)`.
+- Add typing for object-like callability:
+  - `__call` on a table used as a constructor or factory should provide a typed call
+    signature for `tableValue(...)`;
+  - prefer known constructor return types through `setmetatable`-based class patterns.
+- Add partial iterator/metamethod inference for typed iteration hooks where present:
+  - typed `__ipairs` return tuple shape for array-like iteration;
+  - typed `__pairs` key/value pair shape for map-like iteration.
+- Keep behavior conservative on dynamic metatable composition and unknown function
+  values supplied to `setmetatable`.
+
+Acceptance:
+
+- In a two-level inheritance sample, `Sub` members and methods become available from
+  `Base` for both hover/completion and type-checking.
+- `obj:method(...)` and `obj.method(obj, ...)` behave consistently when the target
+  method comes from an inherited receiver shape.
+- `ConstructorLike(...)` style calls resolve through `__call` and return the intended
+  object type.
+- `for k, v in pairs(typedMap)` and `for _, v in ipairs(typedArray)` use iterator
+  types when `__pairs`/`__ipairs` metadata is statically known.
+- Existing dynamic/mixed metatable cases still degrade to `any` or unknown shape when
+  confidence is insufficient.
+
+### 70.14 `feat(diagnostics): add inline lint/error suppression comments`
+
+Scope:
+
+- Add inline, line-targeted suppression comments for diagnostics, analogous to
+  TypeScript `@ts-expect-error`.
+- Define first-class syntax forms:
+  - `-- tua-ignore-line [CODE ...]` suppresses matching diagnostics on this line.
+  - `-- tua-ignore-next-line [CODE ...]` suppresses matching diagnostics on the
+    immediately following line.
+  - `-- tua-ignore-file [CODE ...]` suppresses matching diagnostics in the
+    current file (useful for gradual migration, discouraged unless configured).
+- Support explicit code matching and code-group matching; if no code is provided,
+  suppresses all non-fatal diagnostics on the target scope.
+- Add typo-safe behavior:
+  - unknown diagnostic codes in suppression comments emit `TL...` warnings,
+  - empty ignore lists are rejected to avoid silent no-op suppression.
+- Integrate with shared diagnostics in CLI, LSP, and snapshot tests so behavior is
+  consistent.
+- Add config toggles under `[diagnostics]`:
+  - `inline_ignores = false` (default),
+  - `inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]` (extensible),
+  - `inline_ignore_max_per_file = 0` (0 = unlimited).
+
+Acceptance:
+
+- The following comments are parsed and enforced consistently:
+  - `-- tua-ignore-next-line TL4018`
+  - `-- tua-ignore-line TL4018 TL4042`
+  - `-- tua-ignore-file TL4018`
+- `tua-ignore-next-line TL4018` on a line with no matching TL4018 emits a warning
+  that suppression did not match.
+- Inline suppression never changes emitted Lua and never changes checker type inference.
+- Projects can gate suppression by config and default behavior remains unchanged when
+  `inline_ignores` is disabled.
+
+### 70.15 `feat(emit): export Lua code with optional LuaCATS/annotation mode`
+
+Scope:
+
+- Add an opt-in emission mode to preserve useful type information as Lua comments
+  so consumers can keep type workflow on exported `.lua`.
+- Add `[emit]`-style config for generated annotation style:
+  - `annotation_mode = "off"` (default): current erased output.
+  - `annotation_mode = "luacats"`: emit LuaCATS-style annotations from Tua types.
+- Support preserved artifacts in emitted `.lua`:
+  - `---@alias` for type aliases;
+  - `---@type` for annotated locals;
+  - `---@param` and `---@return` for function signatures;
+  - `---@field` for typed table exports where field shapes are stable.
+- Keep emitted Lua valid and runtime-equivalent to erased mode.
+- Preserve existing behavior for `.lua` passthrough and non-typed input.
+
+Acceptance:
+
+- `local player: Player = ...` emits with `---@type Player` in `luacats` mode.
+- `local function make_player(name: string): Player` emits `---@param` and `---@return`
+  comments plus a plain Lua function body.
+- `type Player = { ... }` emits `---@alias Player` when alias shape is stable.
+- Exported `.lua` output remains parse-clean and does not rely on a runtime type
+  checker to execute.
+- Users can keep existing erased output with `annotation_mode = "off"` while
+  enabling the richer mode per project.
+
 ## Phase 13: LOVE Domain Extensions
 
 This phase explores Tua's identity as a LOVE-focused Lua language. The goal is
@@ -1440,6 +1615,75 @@ Acceptance:
 - A test plugin can register one declaration and one diagnostic.
 - Plugin diagnostics use stable Tua diagnostic codes or a reserved plugin code
   range.
+
+### 73. `feat(luajit): add JIT-friendly typing and optimization-oriented constraints`
+
+Scope:
+
+- Add a JIT-oriented opt-in mode (`[jit]` or `[performance]` section in
+  `tua.toml`) that encourages static-shape friendly Lua for LuaJIT.
+- Add conservative diagnostics for variable value-shape drift:
+  - assignments that change inferred concrete variable type (for example `number`
+    to `string`) are warnings unless explicitly allowed by `any`;
+  - table-field value-type changes are warnings unless field is `any`-typed or
+    declared as a deliberate dynamic escape.
+- Add conservative diagnostics for runtime table-shape mutation:
+  - adding/removing object fields after construction (shape drift),
+  - changing per-iteration field types in the same logical table,
+  - introducing unknown metamethod/table-index behavior in hot loops.
+- Add explicit escape hatches:
+  - `any` permits deliberate dynamic behavior,
+  - opt-in annotations disable specific JIT-oriented warnings at function or
+    block scope,
+  - optional `@luajit.pragma` or equivalent config markers to document exceptions.
+- Add quick fixes where practical:
+  - field type annotations,
+  - table pre-seeding,
+  - local variable re-declaration into a typed temporary.
+- Keep current diagnostics enabled by default.
+
+Acceptance:
+
+- In JIT mode, the checker reports type-drift for variables where static type
+  changes are clear and unsupported by an explicit `any`.
+- Table values created with `local obj = { ... }` prefer fixed-shape usage and emit
+  warnings on late key insertion patterns.
+- Loop-intensive code paths gain actionable hints instead of speculative
+  inference when shapes change.
+- JIT diagnostics can be toggled off entirely in `tua.toml` and via LSP settings.
+
+### 74. `feat(ecs): explore default ECS domain support with tiny-ecs integration`
+
+Scope:
+
+- Add an experimental ECS domain extension under `tua-core` that models
+  component shapes, entities, systems, and entity IDs in a type-aware way.
+- Define a default ECS profile that maps to a tiny-ecs-style backend:
+  - typed component constructors,
+  - strongly typed world/system APIs,
+  - systems over typed component query lists.
+- Keep ECS additions conservative and opt-in (`[ecs]` in config) so projects without
+  ECS usage are unaffected.
+- Integrate with the plugin registry path from item 72:
+  - reusable ECS declarations,
+  - ECS diagnostics,
+  - completion + hover + signature help for ECS APIs,
+  - code-action suggestions for common ECS mistakes.
+- Include migration notes for existing tiny-ecs projects:
+  - how to represent existing component schemas,
+  - how to migrate dynamic component tables to typed schemas.
+
+Acceptance:
+
+- A typed ECS example can represent entities, components, and system queries with
+  stable completions and hovers.
+- Missing or mismatched component fields are diagnosed at edit time.
+- Invalid system query/filter usage is surfaced as diagnostics with deterministic
+  code locations.
+- ECS checks remain optional and do not alter baseline Lua/LOVE analysis when
+  disabled.
+- At least one reference example is added for tiny-ecs interoperability or a
+  compatible minimal adapter.
 
 ### 73. `feat(vectors): add LOVE-friendly Vec2 support`
 

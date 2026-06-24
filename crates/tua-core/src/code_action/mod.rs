@@ -106,6 +106,11 @@ pub fn code_actions_parsed_source(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE) => {
+                if let Some(action) = remove_trailing_whitespace_action(parsed, diagnostic) {
+                    actions.push(action);
+                }
+            }
             _ => {}
         }
     }
@@ -226,6 +231,40 @@ fn remove_self_assignment_action(parsed: &ParsedSource, diagnostic: &Diagnostic)
     }
 
     None
+}
+
+fn remove_trailing_whitespace_action(
+    parsed: &ParsedSource,
+    diagnostic: &Diagnostic,
+) -> Option<Assist> {
+    let line = line_at(&parsed.source, diagnostic.line)?;
+    let trimmed = line.trim_end_matches([' ', '\t']);
+
+    if trimmed.len() == line.len() {
+        return None;
+    }
+
+    Some(Assist {
+        title: "Remove trailing whitespace".to_owned(),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: SourcePosition {
+                        line: diagnostic.line,
+                        column: trimmed.len() + 1,
+                    },
+                    end: SourcePosition {
+                        line: diagnostic.line,
+                        column: line.len() + 1,
+                    },
+                },
+                new_text: String::new(),
+            },
+        ),
+    })
 }
 
 fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {

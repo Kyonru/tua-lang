@@ -69,6 +69,10 @@ impl DiagnosticCode {
     pub const LINT_DOT_METHOD_CALL: Self = Self(4018);
     pub const LINT_DUPLICATE_REQUIRE_CANDIDATE: Self = Self(4019);
     pub const LINT_REQUIRE_CYCLE: Self = Self(4020);
+    pub const LINT_FORMAT_TRAILING_WHITESPACE: Self = Self(4021);
+    pub const LINT_FORMAT_INDENTATION: Self = Self(4022);
+    pub const LINT_FORMAT_KEYWORD_SPACING: Self = Self(4023);
+    pub const LINT_FORMAT_TOKEN_SPACING: Self = Self(4024);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {

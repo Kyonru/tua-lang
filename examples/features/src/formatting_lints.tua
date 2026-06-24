@@ -1,0 +1,32 @@
+-- Feature: formatting_lints is an opt-in diagnostic profile for consistent
+-- Lua/Tua layout. This file intentionally follows the baseline style.
+
+type FormatSample = {
+  name: string,
+  values: { count: number },
+}
+
+local function makeSample(name: string, count: number): FormatSample
+  local values = { count = count }
+
+  if values.count > 0 then
+    return {
+      name = name,
+      values = values,
+    }
+  end
+
+  return {
+    name = name,
+    values = { count = 0 },
+  }
+end
+
+local function sum(values: { count: number }, bonus: number): number
+  return values.count + bonus
+end
+
+return {
+  makeSample = makeSample,
+  sum = sum,
+}

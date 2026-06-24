@@ -9,6 +9,7 @@ local RequireGraph = require("require_graph")
 local Scopes = require("scopes")
 local ProjectTypes = require("project_types")
 local LuaCheatsheet = require("lua_cheatsheet")
+local FormattingLints = require("formatting_lints")
 
 return {
   types = Types,
@@ -22,4 +23,5 @@ return {
   scopes = Scopes,
   project_types = ProjectTypes,
   lua_cheatsheet = LuaCheatsheet,
+  formatting_lints = FormattingLints,
 }

@@ -1129,6 +1129,39 @@ unused_locals = false
 }
 
 #[test]
+fn did_change_configuration_can_enable_formatting_lints() {
+    let temp = TempProject::new("configuration-formatting-lints");
+    let source = "local value=1   \n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "formattingLints": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic["code"] == "TL4021"
+            && diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("trailing whitespace"))
+    }));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL4024"));
+}
+
+#[test]
 fn did_change_configuration_null_diagnostics_defer_to_project_config() {
     let temp = TempProject::new("configuration-diagnostic-precedence");
     let source = "local unused = 1\n";
