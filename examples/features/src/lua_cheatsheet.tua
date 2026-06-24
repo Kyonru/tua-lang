@@ -373,8 +373,8 @@ local function vectorLength(value: MetaVector): number
   return value.length
 end
 
-local vectorA = { x = 10, y = 20, length = 30 }
-local vectorB = { x = 5, y = 15, length = 20 }
+local vectorA = { x = 10, y = 20 }
+local vectorB = { x = 5, y = 15 }
 local vectorMetatable = {
   __add = combineVector,
   __sub = combineVector,
@@ -415,6 +415,9 @@ local vectorLengthValue = #vectorA
 local vectorScaled = vectorA(2)
 local vectorText = tostring(vectorSum)
 vectorA.label = "checked through typed __newindex"
+-- Feature: __index function facts power hover and completion.
+-- Hover vectorA.length to see number even though length is supplied by
+-- the metatable rather than the original table literal.
 local vectorMissingLength = vectorA.length
 
 -- Feature: modules and require interop.

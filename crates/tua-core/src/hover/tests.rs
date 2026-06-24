@@ -540,6 +540,56 @@ local scaledVector = vector(2)
 }
 
 #[test]
+fn hovers_metatable_index_function_fields_and_binary_operator_expressions() {
+    let source = r#"
+type Vector = {
+  x: number,
+  y: number,
+}
+
+local function addVector(left: Vector, right: Vector): Vector
+  return {
+    x = left.x + right.x,
+    y = left.y + right.y,
+  }
+end
+
+local vectorMetatable = {
+  __add = addVector,
+  __index = function(_, key)
+    if key == "length" then
+      return 0
+    end
+
+    return nil
+  end,
+}
+
+local vectorA = { x = 10, y = 20 }
+local vectorB = { x = 5, y = 15 }
+setmetatable(vectorA, vectorMetatable)
+setmetatable(vectorB, vectorMetatable)
+
+local vectorLength = vectorA.length
+local vectorSum = vectorA + vectorB
+"#;
+    let length_hover = hover_tua_source(
+        "src/vector.tua",
+        source,
+        position_at(source, "length\nlocal vectorSum"),
+    )
+    .expect("hover should not fail")
+    .expect("__index field should hover");
+    let operator_hover =
+        hover_tua_source("src/vector.tua", source, position_at(source, "+ vectorB"))
+            .expect("hover should not fail")
+            .expect("operator expression should hover");
+
+    assert_eq!(length_hover.contents, "(field) length: number");
+    assert_eq!(operator_hover.contents, "expression: Vector");
+}
+
+#[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
     let position = position_at(source, "missing");

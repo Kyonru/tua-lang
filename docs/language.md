@@ -357,7 +357,7 @@ though it had a leading `self: Account` parameter when a type alias named
 
 For static `setmetatable(object, metatable)` calls where both sides are known
 tables, Tua propagates useful metatable facts into the object shape. The current
-subset understands:
+subset powers checker, hover, completion, and inlay-style type inference for:
 
 - table/function `__index` facts when simple string keys are visible;
 - self-index class tables such as `Account.__index = Account`, including

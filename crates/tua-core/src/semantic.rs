@@ -63,6 +63,18 @@ impl<'a> SemanticModel<'a> {
         self.type_of_expression_return_at_depth(expression, position, return_index, 0)
     }
 
+    pub(crate) fn type_of_expression_at_position(
+        &self,
+        position: SourcePosition,
+    ) -> Option<(Type, SourceSpan)> {
+        let mut candidates = Vec::new();
+        self.collect_expression_types_in_block(self.parsed.ast.nodes(), position, &mut candidates);
+
+        candidates
+            .into_iter()
+            .min_by_key(|(_, span)| span_size(*span))
+    }
+
     pub(crate) fn type_of_field_chain(
         &self,
         parts: &[String],
@@ -516,14 +528,181 @@ impl<'a> SemanticModel<'a> {
     ) -> Type {
         Type::table(table.fields().iter().filter_map(|field| match field {
             Field::NameKey { key, value, .. } => {
-                let ty = self
-                    .type_of_expression_return_at_depth(value, position, 0, depth + 1)
-                    .unwrap_or(Type::Any);
+                let key_text = token_text(key);
+                let ty = if key_text == "__index" {
+                    index_type_from_expression(value).or_else(|| {
+                        self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                    })
+                } else {
+                    self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                }
+                .unwrap_or(Type::Any);
 
-                Some((token_text(key), TableField::required(ty)))
+                Some((key_text, TableField::required(ty)))
             }
             _ => None,
         }))
+    }
+
+    fn collect_expression_types_in_block(
+        &self,
+        block: &'a ast::Block,
+        position: SourcePosition,
+        candidates: &mut Vec<(Type, SourceSpan)>,
+    ) {
+        for stmt in block.stmts() {
+            if let Some(span) = node_span(stmt) {
+                if !contains_position(span, position) {
+                    continue;
+                }
+            }
+
+            match stmt {
+                ast::Stmt::Assignment(assignment) => {
+                    for expression in assignment.expressions() {
+                        self.collect_expression_type(expression, position, candidates);
+                    }
+                }
+                ast::Stmt::Do(block) => {
+                    self.collect_expression_types_in_block(block.block(), position, candidates);
+                }
+                ast::Stmt::FunctionDeclaration(function) => {
+                    self.collect_expression_types_in_block(
+                        function.body().block(),
+                        position,
+                        candidates,
+                    );
+                }
+                ast::Stmt::FunctionCall(function_call) => {
+                    if let Some(span) = node_span(function_call) {
+                        if contains_position(span, position) {
+                            if let Some(ty) = self
+                                .return_types_of_call(function_call, position)
+                                .first()
+                                .cloned()
+                            {
+                                candidates.push((ty, span));
+                            }
+                        }
+                    }
+                }
+                ast::Stmt::GenericFor(for_stmt) => {
+                    self.collect_expression_types_in_block(for_stmt.block(), position, candidates);
+                }
+                ast::Stmt::If(if_stmt) => {
+                    self.collect_expression_type(if_stmt.condition(), position, candidates);
+                    self.collect_expression_types_in_block(if_stmt.block(), position, candidates);
+
+                    if let Some(else_ifs) = if_stmt.else_if() {
+                        for else_if in else_ifs {
+                            self.collect_expression_type(else_if.condition(), position, candidates);
+                            self.collect_expression_types_in_block(
+                                else_if.block(),
+                                position,
+                                candidates,
+                            );
+                        }
+                    }
+
+                    if let Some(else_block) = if_stmt.else_block() {
+                        self.collect_expression_types_in_block(else_block, position, candidates);
+                    }
+                }
+                ast::Stmt::LocalAssignment(local) => {
+                    for expression in local.expressions() {
+                        self.collect_expression_type(expression, position, candidates);
+                    }
+                }
+                ast::Stmt::LocalFunction(function) => {
+                    self.collect_expression_types_in_block(
+                        function.body().block(),
+                        position,
+                        candidates,
+                    );
+                }
+                ast::Stmt::NumericFor(for_stmt) => {
+                    self.collect_expression_type(for_stmt.start(), position, candidates);
+                    self.collect_expression_type(for_stmt.end(), position, candidates);
+
+                    if let Some(step) = for_stmt.step() {
+                        self.collect_expression_type(step, position, candidates);
+                    }
+
+                    self.collect_expression_types_in_block(for_stmt.block(), position, candidates);
+                }
+                ast::Stmt::Repeat(repeat) => {
+                    self.collect_expression_types_in_block(repeat.block(), position, candidates);
+                    self.collect_expression_type(repeat.until(), position, candidates);
+                }
+                ast::Stmt::While(while_stmt) => {
+                    self.collect_expression_type(while_stmt.condition(), position, candidates);
+                    self.collect_expression_types_in_block(
+                        while_stmt.block(),
+                        position,
+                        candidates,
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
+            for expression in return_stmt.returns() {
+                self.collect_expression_type(expression, position, candidates);
+            }
+        }
+    }
+
+    fn collect_expression_type(
+        &self,
+        expression: &'a Expression,
+        position: SourcePosition,
+        candidates: &mut Vec<(Type, SourceSpan)>,
+    ) {
+        let Some(span) = node_span(expression) else {
+            return;
+        };
+        if !contains_position(span, position) {
+            return;
+        }
+
+        match expression {
+            Expression::BinaryOperator { lhs, rhs, .. } => {
+                self.collect_expression_type(lhs, position, candidates);
+                self.collect_expression_type(rhs, position, candidates);
+            }
+            Expression::Function(function) => {
+                self.collect_expression_types_in_block(
+                    function.body().block(),
+                    position,
+                    candidates,
+                );
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. }
+            | Expression::UnaryOperator { expression, .. } => {
+                self.collect_expression_type(expression, position, candidates);
+            }
+            Expression::TableConstructor(table) => {
+                for field in table.fields() {
+                    match field {
+                        Field::ExpressionKey { key, value, .. } => {
+                            self.collect_expression_type(key, position, candidates);
+                            self.collect_expression_type(value, position, candidates);
+                        }
+                        Field::NameKey { value, .. } | Field::NoKey(value) => {
+                            self.collect_expression_type(value, position, candidates);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if let Some(ty) = self.type_of_expression_return(expression, position, 0) {
+            candidates.push((ty, span));
+        }
     }
 
     fn type_of_var_at_depth(
@@ -833,6 +1012,89 @@ fn type_from_tua_type(ty: &TuaType) -> Type {
             returns.iter().map(type_from_tua_type),
         ),
     }
+}
+
+fn index_type_from_expression(expression: &Expression) -> Option<Type> {
+    let fields = index_fields_from_expression(expression);
+
+    (!fields.is_empty()).then(|| Type::table(fields))
+}
+
+fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {
+    let Expression::Function(function) = expression else {
+        return Vec::new();
+    };
+
+    index_fields_from_block(function.body().block())
+}
+
+fn index_fields_from_block(block: &ast::Block) -> Vec<(String, TableField)> {
+    let mut fields = Vec::new();
+
+    for stmt in block.stmts() {
+        if let ast::Stmt::If(if_stmt) = stmt {
+            fields.extend(index_fields_from_if(if_stmt));
+        }
+    }
+
+    fields
+}
+
+fn index_fields_from_if(if_stmt: &ast::If) -> Vec<(String, TableField)> {
+    let Some(key) = string_key_comparison(if_stmt.condition()) else {
+        return Vec::new();
+    };
+    let Some(LastStmt::Return(return_stmt)) = if_stmt.block().last_stmt() else {
+        return Vec::new();
+    };
+    let Some(expression) = return_stmt.returns().iter().next() else {
+        return Vec::new();
+    };
+    let ty = match expression {
+        Expression::Number(_) => Type::number(),
+        Expression::String(value) => Type::string_literal(unquote_string(&value.to_string())),
+        Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)).unwrap_or(Type::Any),
+        Expression::TableConstructor(table) => {
+            Type::table(table.fields().iter().filter_map(|field| {
+                let Field::NameKey { key, .. } = field else {
+                    return None;
+                };
+
+                Some((token_text(key), TableField::required(Type::Any)))
+            }))
+        }
+        _ => Type::Any,
+    };
+
+    vec![(key, TableField::required(ty))]
+}
+
+fn string_key_comparison(expression: &Expression) -> Option<String> {
+    let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
+        return None;
+    };
+
+    if !matches!(binop, ast::BinOp::TwoEqual(_)) {
+        return None;
+    }
+
+    string_literal_expression(rhs).or_else(|| string_literal_expression(lhs))
+}
+
+fn string_literal_expression(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::String(value) => Some(unquote_string(&value.to_string())),
+        _ => None,
+    }
+}
+
+fn unquote_string(value: &str) -> String {
+    value
+        .trim()
+        .strip_prefix(['"', '\''])
+        .and_then(|value| value.strip_suffix(['"', '\'']))
+        .unwrap_or_else(|| value.trim())
+        .to_owned()
 }
 
 fn contains_position(span: SourceSpan, position: SourcePosition) -> bool {
@@ -1335,6 +1597,13 @@ fn node_start(node: &impl Node) -> SourcePosition {
     node.range()
         .map(|(start, _)| SourcePosition::from_full_moon(start))
         .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn span_size(span: SourceSpan) -> (usize, usize) {
+    (
+        span.end.line.saturating_sub(span.start.line),
+        span.end.column.saturating_sub(span.start.column),
+    )
 }
 
 fn starts_before_or_at(left: SourcePosition, right: SourcePosition) -> bool {

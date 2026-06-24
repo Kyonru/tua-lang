@@ -62,7 +62,9 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
-        let chain = dotted_chain_at_position(&self.parsed.source, position)?;
+        let Some(chain) = dotted_chain_at_position(&self.parsed.source, position) else {
+            return self.expression_hover(position);
+        };
         let current_part = chain.parts.get(chain.cursor_index)?;
 
         if chain.cursor_index > 0 {
@@ -154,6 +156,13 @@ impl<'a> HoverResolver<'a> {
                 lua::hover_item(std::slice::from_ref(&current_part.text))
                     .map(|item| lua_item_hover(item, Some(current_part.span)))
             })
+            .or_else(|| self.expression_hover(position))
+    }
+
+    fn expression_hover(&self, position: SourcePosition) -> Option<Hover> {
+        let (ty, span) = self.semantic.type_of_expression_at_position(position)?;
+
+        Some(hover(format!("expression: {ty}"), Some(span)))
     }
 
     fn definition_kind_at(&self, position: SourcePosition) -> Option<DefinitionKind> {

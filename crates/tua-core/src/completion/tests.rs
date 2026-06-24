@@ -978,6 +978,33 @@ fn completion_includes_index_fields_but_hides_metamethods() {
 }
 
 #[test]
+fn completes_fields_from_visible_index_function_facts() {
+    let source = r#"
+local meta = {
+  __index = function(_, key)
+    if key == "length" then
+      return 0
+    end
+
+    return nil
+  end,
+}
+
+local vectorA = { x = 10, y = 20 }
+setmetatable(vectorA, meta)
+
+vectorA.
+"#;
+    let completions =
+        complete_tua_source("src/vector.tua", source, position_after(source, "vectorA."))
+            .expect("__index function completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"length".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn completes_self_index_class_style_metatable_methods() {
     let source = r#"
 local Account = {}

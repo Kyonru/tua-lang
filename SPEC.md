@@ -181,7 +181,8 @@ union.
 
 Tua supports a conservative static subset of common metatable patterns. When
 both the base table and metatable are visible, `setmetatable(base, meta)` may
-propagate method and operator facts into the base table shape.
+propagate method and operator facts into the base table shape for checking,
+hover, completion, and inferred expression types.
 
 Supported v1 facts:
 
