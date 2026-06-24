@@ -355,7 +355,7 @@ fn did_open_publishes_matching_core_diagnostics() {
 fn did_open_publishes_love_method_argument_diagnostics() {
     let uri = "file:///tmp/assets.tua";
     let source = r#"
-local player = image "assets/player.png"
+local player: Image = love.graphics.newImage("assets/player.png")
 
 player:setFilter(123)
 "#;
@@ -369,6 +369,53 @@ player:setFilter(123)
         .as_str()
         .expect("diagnostic message should be a string")
         .contains("type mismatch: expected FilterMode, found number"));
+}
+
+#[test]
+fn did_open_publishes_love_asset_path_diagnostics() {
+    let temp = TempProject::new("missing-asset-diagnostics");
+    let source = r#"
+local player = image "assets/missing.png"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
+    temp.write("src/assets.tua", source);
+
+    let uri = temp.uri_for("src/assets.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let diagnostics = published_diagnostics(&output, &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL2004");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("image asset not found: assets/missing.png"));
+}
+
+#[test]
+fn did_open_accepts_love_assets_from_configured_output_root() {
+    let temp = TempProject::new("configured-output-asset");
+    let source = r#"
+local player = image "assets/player.png"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
+    temp.write("src/assets.tua", source);
+    temp.write("game/assets/player.png", "");
+
+    let uri = temp.uri_for("src/assets.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let diagnostics = published_diagnostics(&output, &uri);
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
 #[test]

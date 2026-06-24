@@ -9,8 +9,9 @@ use crate::source::{
     SourceKind,
 };
 use tua_core::{
-    check_tua_source_with_diagnostics_config, emit_tua_source, format_diagnostics_for_cli,
-    Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig,
+    check_tua_source_with_asset_roots_and_diagnostics_config, emit_tua_source,
+    format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+    LoadedConfig,
 };
 
 #[derive(Debug, Default)]
@@ -87,6 +88,7 @@ pub(crate) fn build_changed_files(
     let out_dir = cwd.join(&loaded.config.out);
     let in_place = paths_same_location(&source_dir, &out_dir);
     let diagnostics_config = loaded.config.diagnostics.clone();
+    let asset_roots = vec![cwd.to_path_buf(), source_dir.clone(), out_dir.clone()];
     let mut outcome = BuildOutcome::default();
 
     for source_path in source_files {
@@ -124,11 +126,14 @@ pub(crate) fn build_changed_files(
             }
         };
 
-        if let Err(mut source_diagnostics) = check_tua_source_with_diagnostics_config(
-            &source_path,
-            source.clone(),
-            &diagnostics_config,
-        ) {
+        if let Err(mut source_diagnostics) =
+            check_tua_source_with_asset_roots_and_diagnostics_config(
+                &source_path,
+                source.clone(),
+                &asset_roots,
+                &diagnostics_config,
+            )
+        {
             let has_source_errors = has_errors(&source_diagnostics);
             outcome.diagnostics.append(&mut source_diagnostics);
 
@@ -166,6 +171,7 @@ fn build_project_files(
     let out_dir = cwd.join(&loaded.config.out);
     let in_place = paths_same_location(&source_dir, &out_dir);
     let diagnostics_config = loaded.config.diagnostics.clone();
+    let asset_roots = vec![cwd.to_path_buf(), source_dir.clone(), out_dir.clone()];
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
     let tua_outputs = tua_outputs_by_path(&source_dir, &out_dir, &source_files);
@@ -222,11 +228,14 @@ fn build_project_files(
             continue;
         };
 
-        if let Err(mut source_diagnostics) = check_tua_source_with_diagnostics_config(
-            source_path,
-            source.clone(),
-            &diagnostics_config,
-        ) {
+        if let Err(mut source_diagnostics) =
+            check_tua_source_with_asset_roots_and_diagnostics_config(
+                source_path,
+                source.clone(),
+                &asset_roots,
+                &diagnostics_config,
+            )
+        {
             let has_non_emittable_error = source_diagnostics
                 .iter()
                 .any(|diagnostic| !can_emit_after_diagnostic(diagnostic));

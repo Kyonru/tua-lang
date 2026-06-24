@@ -45,6 +45,8 @@ impl DiagnosticCode {
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
+    pub const ASSET_MISSING: Self = Self(2004);
+    pub const ASSET_UNSUPPORTED_EXTENSION: Self = Self(2005);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);

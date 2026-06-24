@@ -310,12 +310,13 @@ impl LspServer {
 
         let path = path_from_uri(uri);
         let diagnostics_config = self.diagnostics_config_for_path(&path);
+        let asset_roots = self.asset_roots_for_path(&path);
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
-            .diagnostics_for_uri(uri, &diagnostics_config)
+            .diagnostics_for_uri(uri, &diagnostics_config, &asset_roots)
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
@@ -324,15 +325,49 @@ impl LspServer {
     fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {
         let path = path_from_uri(uri);
         let diagnostics_config = self.diagnostics_config_for_path(&path);
+        let asset_roots = self.asset_roots_for_path(&path);
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
-            .diagnostics_for_uri(uri, &diagnostics_config)
+            .diagnostics_for_uri(uri, &diagnostics_config, &asset_roots)
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
+    }
+
+    fn asset_roots_for_path(&self, path: &Path) -> Vec<std::path::PathBuf> {
+        let mut roots = Vec::new();
+
+        for root in &self.workspace_folders {
+            if !path.starts_with(root) {
+                continue;
+            }
+
+            roots.push(root.clone());
+
+            if let Ok(loaded) = load_config_from_dir(root) {
+                roots.push(root.join(loaded.config.source));
+                roots.push(root.join(loaded.config.out));
+            }
+        }
+
+        if let Some(parent) = path.parent() {
+            for ancestor in parent.ancestors() {
+                roots.push(ancestor.to_path_buf());
+
+                if let Ok(loaded) = load_config_from_dir(ancestor) {
+                    if loaded.found {
+                        roots.push(ancestor.join(loaded.config.source));
+                        roots.push(ancestor.join(loaded.config.out));
+                        break;
+                    }
+                }
+            }
+        }
+
+        roots
     }
 
     fn diagnostics_config_for_path(&self, path: &Path) -> DiagnosticsConfig {

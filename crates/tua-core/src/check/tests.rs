@@ -21,27 +21,110 @@ local maybe_hp: number | nil = nil
 
 #[test]
 fn accepts_typed_love_asset_loader_initializers() {
-    check_tua_source(
+    check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local player: Image = image "assets/player.png"
 local jump: Source = sound "assets/jump.wav"
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect("LOVE asset loaders should produce their nominal asset types");
 }
 
 #[test]
 fn rejects_love_asset_loader_initializer_mismatch() {
-    let diagnostics = check_tua_source(
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local player: Source = image "assets/player.png"
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect_err("asset loader type mismatch should be reported");
 
     assert_single_mismatch(&diagnostics, "expected Source, found Image");
+}
+
+#[test]
+fn accepts_existing_love_asset_loader_paths() {
+    let temp = TempProject::new("existing-assets");
+    let source = r#"
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+"#;
+
+    temp.write("src/assets.tua", source);
+    temp.write("assets/player.png", "");
+    temp.write("assets/jump.wav", "");
+
+    check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect("existing supported assets should check");
+}
+
+#[test]
+fn rejects_missing_love_asset_loader_paths() {
+    let temp = TempProject::new("missing-assets");
+    let source = r#"
+local player = image "assets/missing.png"
+"#;
+
+    temp.write("src/assets.tua", source);
+
+    let diagnostics = check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect_err("missing asset should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::ASSET_MISSING));
+    assert!(diagnostics[0]
+        .message
+        .contains("image asset not found: assets/missing.png"));
+    assert!(diagnostics[0].format_cli().contains("error TL2004"));
+}
+
+#[test]
+fn rejects_unsupported_love_asset_loader_extensions() {
+    let temp = TempProject::new("unsupported-assets");
+    let source = r#"
+local player = image "assets/player.txt"
+"#;
+
+    temp.write("src/assets.tua", source);
+    temp.write("assets/player.txt", "");
+
+    let diagnostics = check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect_err("unsupported extension should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::ASSET_UNSUPPORTED_EXTENSION)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("unsupported image asset extension"));
+    assert!(diagnostics[0].format_cli().contains("error TL2005"));
+}
+
+#[test]
+fn accepts_love_asset_loader_paths_from_configured_asset_roots() {
+    let temp = TempProject::new("configured-asset-roots");
+    let source = r#"
+local player = image "assets/player.png"
+"#;
+
+    temp.write("src/assets.tua", source);
+    temp.write("game/assets/player.png", "");
+
+    check_tua_source_with_asset_roots_and_diagnostics_config(
+        temp.path.join("src/assets.tua"),
+        source,
+        &[temp.path.join("game")],
+        &crate::DiagnosticsConfig::default(),
+    )
+    .expect("configured asset roots should be searched");
 }
 
 #[test]
@@ -167,7 +250,7 @@ local total: number = add(1, 2)
 
 #[test]
 fn accepts_love_method_multi_return_from_inferred_function_body() {
-    check_tua_source(
+    check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local function loadPlayerImage()
@@ -185,6 +268,8 @@ local z: number = c + 1
 local literal: number = 1 + 3
 local label: string = "width: " .. z
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect("Love method multi-return should satisfy inferred function return checks");
 }
@@ -232,7 +317,7 @@ return {
 
 #[test]
 fn accepts_love_method_enum_string_arguments() {
-    check_tua_source(
+    check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local player = image "assets/player.png"
@@ -240,19 +325,23 @@ local player = image "assets/player.png"
 player:setFilter("nearest")
 player:setFilter("nearest", "linear", 4)
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect("Love enum-like parameters should accept string values");
 }
 
 #[test]
 fn rejects_love_method_argument_count_mismatch() {
-    let diagnostics = check_tua_source(
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local player = image "assets/player.png"
 
 player:setFilter()
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect_err("Love method argument count mismatch should be reported");
 
@@ -268,13 +357,15 @@ player:setFilter()
 
 #[test]
 fn rejects_love_method_argument_type_mismatch() {
-    let diagnostics = check_tua_source(
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
         r#"
 local player = image "assets/player.png"
 
 player:setFilter(123)
 "#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
     )
     .expect_err("Love method argument type mismatch should be reported");
 

@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Return,
@@ -39,6 +39,21 @@ pub fn check_tua_source_with_diagnostics_config(
     check_parsed_source_with_diagnostics_config(&parsed, diagnostics_config)
 }
 
+pub fn check_tua_source_with_asset_roots_and_diagnostics_config(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+) -> Result<(), Vec<Diagnostic>> {
+    let parsed = parse_tua_source(path, source)?;
+
+    check_parsed_source_with_asset_roots_and_diagnostics_config(
+        &parsed,
+        asset_roots,
+        diagnostics_config,
+    )
+}
+
 pub fn check_parsed_source(parsed: &ParsedSource) -> Result<(), Vec<Diagnostic>> {
     check_parsed_source_with_diagnostics_config(parsed, &DiagnosticsConfig::default())
 }
@@ -47,8 +62,20 @@ pub fn check_parsed_source_with_diagnostics_config(
     parsed: &ParsedSource,
     diagnostics_config: &DiagnosticsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
+    check_parsed_source_with_asset_roots_and_diagnostics_config(
+        parsed,
+        &default_asset_roots(&parsed.path),
+        diagnostics_config,
+    )
+}
+
+pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
+    parsed: &ParsedSource,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+) -> Result<(), Vec<Diagnostic>> {
     let environment = build_type_environment(parsed)?;
-    let mut checker = Checker::new(parsed, &environment);
+    let mut checker = Checker::new(parsed, &environment, asset_roots);
 
     checker.check_block(parsed.ast.nodes(), None);
     checker
@@ -73,16 +100,24 @@ struct Checker<'a> {
     environment: &'a TypeEnvironment,
     context: TypeContext,
     scoped_locals: Vec<BTreeMap<String, Type>>,
+    asset_roots: Vec<PathBuf>,
+    reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Checker<'a> {
-    fn new(parsed: &'a ParsedSource, environment: &'a TypeEnvironment) -> Self {
+    fn new(
+        parsed: &'a ParsedSource,
+        environment: &'a TypeEnvironment,
+        asset_roots: &[PathBuf],
+    ) -> Self {
         Self {
             parsed,
             environment,
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
+            asset_roots: normalize_asset_roots(asset_roots),
+            reported_asset_diagnostics: BTreeSet::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -388,6 +423,8 @@ impl<'a> Checker<'a> {
     }
 
     fn check_function_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
+        self.check_asset_loader_call(function_call);
+
         let Some(callee) = self.infer_call_target(function_call) else {
             return Vec::new();
         };
@@ -404,6 +441,80 @@ impl<'a> Checker<'a> {
 
                 function.return_types
             }
+        }
+    }
+
+    fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
+        let Some(asset_call) = asset_loader_call(function_call) else {
+            return;
+        };
+
+        if let Some(extension) = Path::new(&asset_call.path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+        {
+            let extension = extension.to_ascii_lowercase();
+
+            if !asset_call
+                .kind
+                .supported_extensions()
+                .contains(&extension.as_str())
+            {
+                self.push_asset_diagnostic(unsupported_asset_extension_diagnostic(
+                    &self.parsed.path,
+                    function_call,
+                    asset_call.kind,
+                    &asset_call.path,
+                ));
+                return;
+            }
+        } else {
+            self.push_asset_diagnostic(unsupported_asset_extension_diagnostic(
+                &self.parsed.path,
+                function_call,
+                asset_call.kind,
+                &asset_call.path,
+            ));
+            return;
+        }
+
+        if !self.asset_exists(&asset_call.path) {
+            self.push_asset_diagnostic(missing_asset_diagnostic(
+                &self.parsed.path,
+                function_call,
+                asset_call.kind,
+                &asset_call.path,
+            ));
+        }
+    }
+
+    fn asset_exists(&self, asset_path: &str) -> bool {
+        let path = Path::new(asset_path);
+
+        if path.is_absolute() {
+            return path.exists();
+        }
+
+        if self.asset_roots.is_empty() {
+            return true;
+        }
+
+        self.asset_roots.iter().any(|root| root.join(path).exists())
+    }
+
+    fn push_asset_diagnostic(&mut self, diagnostic: Diagnostic) {
+        let key = (
+            diagnostic.line,
+            diagnostic.column,
+            diagnostic
+                .code
+                .expect("asset diagnostics should always have codes")
+                .as_u16(),
+            diagnostic.message.clone(),
+        );
+
+        if self.reported_asset_diagnostics.insert(key) {
+            self.diagnostics.push(diagnostic);
         }
     }
 
@@ -667,6 +778,11 @@ enum Callable {
 enum CallArgument<'a> {
     Expression(&'a Expression),
     Inferred(Type),
+}
+
+struct AssetLoaderCall {
+    kind: asset::AssetLoaderKind,
+    path: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -940,6 +1056,74 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
     }
 }
 
+fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+    let kind = asset::loader_kind(&token_text(name))?;
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+    let path = match call {
+        Call::AnonymousCall(FunctionArgs::String(path)) => Some(unquote_string(&path.to_string())),
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            let Expression::String(path) = arguments.iter().next()? else {
+                return None;
+            };
+
+            Some(unquote_string(&path.to_string()))
+        }
+        _ => None,
+    }?;
+
+    Some(AssetLoaderCall { kind, path })
+}
+
+fn default_asset_roots(path: &Path) -> Vec<PathBuf> {
+    let Some(parent) = path.parent() else {
+        return Vec::new();
+    };
+
+    if !parent.exists() {
+        return Vec::new();
+    }
+
+    parent.ancestors().map(Path::to_path_buf).collect()
+}
+
+fn normalize_asset_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut seen = BTreeSet::new();
+    let mut output = Vec::new();
+
+    for root in roots {
+        if root.as_os_str().is_empty() {
+            continue;
+        }
+
+        if !root.exists() {
+            continue;
+        }
+
+        let root = root.canonicalize().unwrap_or_else(|_| root.clone());
+
+        if seen.insert(root.clone()) {
+            output.push(root);
+        }
+    }
+
+    output
+}
+
+fn unquote_string(value: &str) -> String {
+    value
+        .trim()
+        .strip_prefix(['"', '\''])
+        .and_then(|value| value.strip_suffix(['"', '\'']))
+        .unwrap_or_else(|| value.trim())
+        .to_owned()
+}
+
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
@@ -977,6 +1161,44 @@ fn argument_count_diagnostic(
         format!("argument count mismatch: expected {expected}, found {found}"),
     )
     .with_code(DiagnosticCode::TYPE_ARGUMENT_COUNT)
+}
+
+fn missing_asset_diagnostic(
+    path: &Path,
+    node: &impl Node,
+    kind: asset::AssetLoaderKind,
+    asset_path: &str,
+) -> Diagnostic {
+    let position = node_position(node);
+
+    Diagnostic::error(
+        path,
+        position.line,
+        position.column,
+        format!("{} asset not found: {asset_path}", kind.asset_label()),
+    )
+    .with_code(DiagnosticCode::ASSET_MISSING)
+}
+
+fn unsupported_asset_extension_diagnostic(
+    path: &Path,
+    node: &impl Node,
+    kind: asset::AssetLoaderKind,
+    asset_path: &str,
+) -> Diagnostic {
+    let position = node_position(node);
+    let supported = kind.supported_extensions().join(", ");
+
+    Diagnostic::error(
+        path,
+        position.line,
+        position.column,
+        format!(
+            "unsupported {} asset extension for `{asset_path}`; expected one of: {supported}",
+            kind.asset_label()
+        ),
+    )
+    .with_code(DiagnosticCode::ASSET_UNSUPPORTED_EXTENSION)
 }
 
 fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &Type) -> Diagnostic {

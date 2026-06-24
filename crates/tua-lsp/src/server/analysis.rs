@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_exports_parsed_source, call_hierarchy_prepare_parsed_source,
-    call_hierarchy_symbols_parsed_source, check_parsed_source_with_diagnostics_config,
-    code_actions_parsed_source, complete_parsed_source, complete_tua_source, definition_tua_source,
+    call_hierarchy_symbols_parsed_source,
+    check_parsed_source_with_asset_roots_and_diagnostics_config, code_actions_parsed_source,
+    complete_parsed_source, complete_tua_source, definition_tua_source,
     document_highlights_parsed_source, document_symbols_parsed_source,
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
@@ -283,11 +284,12 @@ impl AnalysisSnapshot {
         &self,
         uri: &str,
         diagnostics_config: &DiagnosticsConfig,
+        asset_roots: &[PathBuf],
     ) -> Vec<Diagnostic> {
         let path = path_from_uri(uri);
 
         self.file(&path)
-            .map(|file| file.diagnostics(diagnostics_config))
+            .map(|file| file.diagnostics(diagnostics_config, asset_roots))
             .unwrap_or_default()
     }
 
@@ -1256,15 +1258,23 @@ impl CachedFile {
         }
     }
 
-    fn diagnostics(&self, diagnostics_config: &DiagnosticsConfig) -> Vec<Diagnostic> {
+    fn diagnostics(
+        &self,
+        diagnostics_config: &DiagnosticsConfig,
+        asset_roots: &[PathBuf],
+    ) -> Vec<Diagnostic> {
         let parsed = match &self.parsed {
             Ok(parsed) => parsed,
             Err(diagnostics) => return diagnostics.clone(),
         };
 
-        check_parsed_source_with_diagnostics_config(parsed, diagnostics_config)
-            .err()
-            .unwrap_or_default()
+        check_parsed_source_with_asset_roots_and_diagnostics_config(
+            parsed,
+            asset_roots,
+            diagnostics_config,
+        )
+        .err()
+        .unwrap_or_default()
     }
 
     #[allow(dead_code)]

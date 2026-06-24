@@ -56,6 +56,20 @@ impl AssetLoaderKind {
             }
         }
     }
+
+    pub(crate) const fn supported_extensions(self) -> &'static [&'static str] {
+        match self {
+            Self::Image => &["bmp", "exr", "hdr", "jpeg", "jpg", "pic", "png", "tga"],
+            Self::Sound => &["flac", "mp3", "ogg", "wav"],
+        }
+    }
+
+    pub(crate) const fn asset_label(self) -> &'static str {
+        match self {
+            Self::Image => "image",
+            Self::Sound => "sound",
+        }
+    }
 }
 
 pub(crate) fn loader_kind(name: &str) -> Option<AssetLoaderKind> {

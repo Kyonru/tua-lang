@@ -34,7 +34,9 @@ pub use call_hierarchy::{
     CallHierarchySymbolKind, CallHierarchySymbolTarget,
 };
 pub use check::{
-    check_parsed_source, check_parsed_source_with_diagnostics_config, check_tua_source,
+    check_parsed_source, check_parsed_source_with_asset_roots_and_diagnostics_config,
+    check_parsed_source_with_diagnostics_config, check_tua_source,
+    check_tua_source_with_asset_roots_and_diagnostics_config,
     check_tua_source_with_diagnostics_config,
 };
 pub use code_action::{
