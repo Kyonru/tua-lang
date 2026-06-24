@@ -326,6 +326,61 @@ v1 does not introduce `import`, `export`, or type-only import syntax. Cross-file
 type discovery may be added by scanning project files for type aliases, but
 runtime module semantics remain normal Lua.
 
+## LOVE-Focused Builtins
+
+tua includes a built-in LOVE API catalog for editor tooling and type-aware
+checks. The catalog is available by default for completions, hover, signature
+help, and simple call diagnostics.
+
+### Asset Loader Helpers
+
+tua provides typed LOVE-focused asset loader helpers:
+
+```tua
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+```
+
+These helpers are syntax sugar for ordinary LOVE calls and are lowered during
+emission.
+
+Emitted Lua:
+
+```lua
+local player = love.graphics.newImage("assets/player.png")
+local jump = love.audio.newSource("assets/jump.wav", "static")
+```
+
+`image` returns `Image`; `sound` returns `Source`. The checker should validate
+obvious missing or unsupported asset paths when the project file exists on disk
+and should stay permissive when a path cannot be proven statically.
+
+### LOVE Object Method Calls
+
+LOVE object methods usually expect Lua's colon-call syntax so `self` is passed
+implicitly.
+
+Preferred:
+
+```tua
+player:setFilter("nearest")
+local width = player:getWidth()
+```
+
+Discouraged:
+
+```tua
+player.setFilter("nearest")
+```
+
+When the receiver is known to be a LOVE object and the target field is a known
+LOVE method, the checker should warn on dot-style calls. The diagnostic should
+point at the method name and suggest the equivalent colon call.
+
+Completions for LOVE object methods should also prefer colon-call snippets. If
+completion is requested after a dot, such as `player.setF`, accepting the method
+completion may replace the dot with a colon and insert a call snippet.
+
 ## CLI
 
 The `tua` binary provides the project workflow.
@@ -340,7 +395,7 @@ Parses and type-checks the project without writing `.lua` output.
 
 Expected behavior:
 
-- returns exit code `0` when no errors are found;
+- returns exit code `0` when no errors are found, even if warnings are printed;
 - returns non-zero when parse or type errors are found;
 - prints diagnostics with file, line, column, severity, and message.
 
@@ -386,7 +441,7 @@ as the CLI.
 
 ## Editor Tooling
 
-v1 includes a minimal VS Code extension.
+v1 includes a VS Code extension and a stdio LSP server.
 
 The extension should provide:
 
@@ -395,17 +450,22 @@ The extension should provide:
 - basic syntax highlighting for Lua plus tua type syntax;
 - language server launch through `tua lsp`;
 - diagnostics from the language server;
-- hover for known type aliases, local variables, function signatures, and table
-  fields;
-- basic completion for known type aliases and table fields.
-- signature help for known function calls.
-- document highlights for known symbol usages.
+- hover for known aliases, locals, parameters, functions, table fields, Lua
+  builtins, LOVE API items, module exports, and supported LuaDoc docs;
+- completion for known aliases, locals, table fields, Lua builtins, LOVE API
+  items, LuaDoc tags/types/snippets, require paths, required-module fields, and
+  auto-import candidates;
+- signature help for known function calls, including supported parameter docs;
+- go to definition, references, rename, document links, document symbols,
+  workspace symbols, document highlights, code actions, call hierarchy, inlay
+  hints, and semantic tokens;
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
 - workspace folder initialization and workspace folder change notifications.
 
-The extension may assume `tua` is available on `PATH`, with a setting for an
-explicit server binary path.
+The extension should use a bundled server binary when packaged, fall back to
+`tua` on `PATH`, and allow an explicit server binary path through settings or
+`TUA_SERVER_PATH` during development.
 
 ## Diagnostics
 
@@ -432,7 +492,8 @@ Suggested diagnostic code ranges:
 - `TL0001`-`TL0999`: parse and syntax errors;
 - `TL1000`-`TL1999`: type errors;
 - `TL2000`-`TL2999`: lowering and emission errors;
-- `TL3000`-`TL3999`: project configuration errors.
+- `TL3000`-`TL3999`: project configuration errors;
+- `TL4000`-`TL4999`: lint and style guidance diagnostics.
 
 ## Non-Goals For v1
 

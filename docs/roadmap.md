@@ -10,14 +10,16 @@ commit title, scope, and acceptance criteria.
 ## Current Focus
 
 The v1 implementation covers the compiler, CLI, examples, VS Code extension,
-and a broad language-server surface.
+LOVE-focused helpers, LuaDoc-aware Lua interop, and a broad language-server
+surface.
 
-Recent roadmap work adds planned parity phases for:
+The active roadmap focus is now deeper architecture and precision:
 
-- LuaHelper-style annotation and lint depth;
-- rust-analyzer-inspired project analysis and editor workflows;
-- project-wide references, rename, imports, and code actions;
-- richer hover, signature, completion, semantic tokens, and docs.
+- rust-analyzer-inspired analysis database, VFS, HIR, and query caching;
+- stronger project modeling for require graphs, source roots, and exports;
+- flow-sensitive type narrowing and richer project-aware type information;
+- more LuaHelper parity fixtures and stub coverage;
+- editor assists such as selection/folding ranges and larger refactor support.
 
 ## Working Rule
 

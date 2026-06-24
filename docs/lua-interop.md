@@ -59,8 +59,31 @@ local player = Player.makePlayer("Ada")
 
 Tua includes a curated Lua catalog and a built-in LOVE catalog generated from
 `love2d-community/love-api` for completions, hover, and signature help. The
-roadmap includes LuaHelper/LuaLS-style annotation stub ingestion so Tua can use
-richer project-local Lua docs too.
+parser also understands a LuaHelper/LuaLS-style annotation subset, so plain Lua
+files can provide typed functions, aliases, fields, documentation, and simple
+module exports to `.tua` callers.
+
+```lua
+---@param value number
+---@param min number
+---@param max number
+---@return number clamped
+local function clamp(value, min, max)
+  if value < min then
+    return min
+  end
+
+  if value > max then
+    return max
+  end
+
+  return value
+end
+
+return {
+  clamp = clamp,
+}
+```
 
 Tua also includes small typed LOVE asset loader helpers:
 
@@ -78,6 +101,18 @@ local jump = love.audio.newSource("assets/jump.wav", "static")
 
 Values inferred as `Image` or `Source` expose common LOVE object methods in
 completion, such as `player:getWidth()` or `jump:play()`.
+
+Use colon-call syntax for LOVE object methods:
+
+```tua
+player:setFilter("nearest")
+jump:play()
+```
+
+When Tua can prove the receiver is a LOVE object, dot-style calls such as
+`player.setFilter("nearest")` produce warning `TL4018`. LOVE method
+completions prefer colon-call snippets and can rewrite the separator when a
+completion is accepted after `.`.
 
 ## Practical Guidance
 

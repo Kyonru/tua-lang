@@ -2,71 +2,71 @@
 
 This matrix tracks Tua's current LSP behavior against LuaHelper-style Lua
 tooling and useful rust-analyzer patterns. It is intentionally conservative:
-the Tua column describes what the checked-in implementation does today.
+the Tua column describes checked-in behavior, not planned behavior.
 
-Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
+Roadmap numbers refer to the [roadmap](roadmap.md), which points at the
+canonical root `ROADMAP.md`.
 
 ## Status Legend
 
-- **Supported**: implemented and covered by current core or LSP behavior.
-- **Shallow**: the LSP protocol surface exists, but the implementation is
-  narrower than LuaHelper-style tooling or rust-analyzer-style IDE behavior.
-- **Planned**: not implemented yet and assigned to a roadmap commit.
+- **Supported**: implemented and covered by current core or LSP tests.
+- **Shallow**: implemented, but narrower than mature LuaHelper or
+  rust-analyzer behavior.
+- **Planned**: not implemented yet and assigned to a roadmap item.
 - **Out of scope**: deliberately not planned for Tua's current direction.
 
 ## Already Supported
 
-| Feature | Tua today | LuaHelper comparison | rust-analyzer pattern | Roadmap |
-| --- | --- | --- | --- | --- |
-| Stdio language server | `tua lsp` serves JSON-RPC over stdio. | Standard editor integration shape. | `rust-analyzer` binary speaks LSP over stdio. | Landed before 30 |
-| Incremental document sync | Open, change, save, and close notifications update open-document diagnostics. | Basic live diagnostics behavior. | Open-file overlays are expected. | Deepen with 31 |
-| Diagnostics for `.tua` | Parser, checker, and lint diagnostics publish for open `.tua` documents. | Comparable base diagnostic loop, but fewer Lua-specific checks. | IDE diagnostics from the analysis database. | Expand with 36, 37 |
-| Hover | Shows known aliases, locals, parameters, functions, table fields, Lua builtins, LOVE items, require literals, module bindings, and some inferred returns. | LuaHelper also attaches richer comment docs and annotation docs. | Hover combines type, docs, and source context. | Enrich with 40 |
-| Completion | Completes aliases, locals, table fields, Lua builtins, LOVE items, require paths, and required-module fields. | LuaHelper also completes annotation tags, snippets, and richer module symbols. | Completion is driven by an indexed semantic model. | Expand with 38, 39, 45 |
-| Signature help | Shows signatures for known functions, Lua/LOVE builtins, and known required-module functions. | LuaHelper can include parameter docs from comments. | Signature help carries docs and active-parameter context. | Expand with 41 |
-| Go to definition | Resolves same-file aliases, locals, functions, parameters, typed table fields, require literals, and known module-export fields. | LuaHelper supports broader Lua project navigation. | Go to definition/declaration/type definition are core navigation paths. | Deepen with 31, 42 |
-| Document links | `require("...")` literals become module links when resolvable. | Comparable to Lua module navigation. | File/module links are part of navigation support. | Deepen with 31, 32 |
-| Document symbols | Type aliases, functions, annotated locals, parameters, table fields, and simple returned exports appear in file outline. | Comparable file outline basics. | File structure powers outline and breadcrumbs. | Landed before 30 |
-| Document highlights | Known symbols can be highlighted within the active document. | Comparable local highlight behavior. | Highlight references for symbol under cursor. | Deepen with 31, 42 |
-| Call hierarchy | Advertises prepare, incoming, and outgoing call hierarchy for known local functions, module-exported functions, and typed receiver methods; unknown and `any` calls are ignored. | LuaHelper supports broader dynamic Lua project call graphs. | Incoming/outgoing calls are core navigation paths. | Landed with 48 |
-| Lua and LOVE builtin surface | Curated Lua catalog plus built-in LOVE 11.5 catalog generated from `love2d-community/love-api` provide hover, completion, and signature help. | LuaHelper commonly uses annotation stubs for this. | Standard-library knowledge comes from indexed metadata. | LOVE expanded with 48.5; Lua stubs deepen with 35 |
-| Require path completion | Offers module path completions from resolvable project files. | Comparable Lua module workflow. | Project model drives path/module completion. | Deepen with 31, 32 |
-| Workspace folders | Initialize and workspace-folder change notifications are accepted. | Basic multi-root editor support. | Workspace roots feed project discovery. | Deepen with 31, 46 |
-| Watched files registration | Dynamically registers watchers for `**/*.tua`, `**/*.lua`, and `**/tua.toml` when the client supports it. | Comparable editor watcher setup. | File watching invalidates indexed state. | Deepen with 32 |
-| Workspace configuration changes | Handles `workspace/didChangeConfiguration` for diagnostics, file associations, ignored paths, require path separator, and preview settings. | Comparable editor-settings overlay behavior. | Editor/project config feeds the analysis host without restarting the server. | Landed with 46 |
-| Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and readonly/deprecated modifiers. | Still narrower than LuaHelper's full Lua/project semantic model, but the core token classes are present. | Semantic highlighting uses a stable legend with richer appended classes. | Landed with 47 |
+| Feature | Tua today | LuaHelper / rust-analyzer comparison | Roadmap |
+| --- | --- | --- | --- |
+| Stdio language server | `tua lsp` and `tua lsp --stdio` serve JSON-RPC over stdio. | Standard editor integration shape. | Landed before 30 |
+| Incremental document sync | Open, change, save, and close notifications update diagnostics and open-document state. | Basic live diagnostics behavior. | 22, 31 |
+| Diagnostics for `.tua` | Parser, checker, asset, and lint diagnostics publish for open `.tua` documents. | Comparable base diagnostic loop, with fewer Lua-specific checks than LuaHelper. | 36, 37, 48.6 |
+| LuaDoc annotation parsing | Parses `---@class`, `---@field`, `---@alias`, `---@type`, `---@param`, `---@return`, `---@generic`, and `---@version`. | LuaHelper has a broader annotation ecosystem, but the core tags exist. | 33 |
+| Annotation-backed type environment | Supported annotations can provide aliases, function types, locals, docs, and simple module exports. | LuaHelper supports more patterns and library stubs. | 34 |
+| Hover | Shows aliases, locals, parameters, functions, table fields, Lua builtins, LOVE items, require literals, module bindings, annotation docs, and inferred returns. | Mature tools attach richer docs and more precise project context. | 40 |
+| Completion | Completes aliases, locals, fields, Lua builtins, LOVE items, LuaDoc tags/types/snippets, require paths, required-module fields, and auto-import candidates. | LuaHelper has deeper dynamic Lua/project completions. | 38, 45 |
+| Completion resolve | Completion items can resolve documentation/details from stable item data. | Mature tools use deeper incremental databases, but resolve is no longer just eager payload reuse. | 39 |
+| Signature help | Shows known function signatures, Lua/LOVE builtins, required-module functions, active parameters, and supported parameter docs. | Comparable shape, shallower type inference. | 41 |
+| Go to definition | Resolves aliases, locals, functions, parameters, typed table fields, require literals, LOVE virtual stubs, and required-module exports. | Mature tools support more dynamic module patterns. | 22, 31 |
+| Document links | Resolved `require("...")` literals become module links. | Comparable Lua module navigation. | 31 |
+| Document symbols | Type aliases, functions, annotated locals, parameters, table fields, and simple returned exports appear in file outline. | Comparable file outline basics. | 23 |
+| Document highlights | Known symbols can be highlighted within the active document. | Comparable local highlight behavior. | 31 |
+| References | Finds same-file references and project-wide references for supported globals, module exports, aliases, and required-module callers. | Still less complete than LuaHelper for dynamic fields/metatables. | 42 |
+| Rename | Supports same-file rename and safe cross-file rename for project-identity symbols such as exported functions and type aliases. | Dynamic globals, `any`, and ambiguous fields are rejected. | 43 |
+| Workspace symbols | Scans configured workspaces for modules, aliases, and functions with fuzzy matching. | Not a persistent rust-analyzer-style symbol index yet. | 24, 63 |
+| Code actions | Provides conservative fixes for missing require targets, inferred local annotations, unused locals, duplicate table keys, and self-assignments. | Smaller action set than rust-analyzer assists. | 44 |
+| Auto-import completion | Unresolved exported functions can complete with a require insertion or reuse of an existing require alias. | Narrower than rust-analyzer auto-imports, but the workflow exists. | 45 |
+| Call hierarchy | Incoming and outgoing calls work for known local functions, module-exported functions, and typed receiver methods. | Dynamic calls through `any` are ignored instead of guessed. | 48 |
+| Inlay hints | Provides local type hints and parameter-name hints for supported known expressions. | Shallower than rust-analyzer expression-chain hints. | 60, 64 |
+| Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and modifiers. | Core semantic classes are present; deep dynamic Lua remains limited. | 47 |
+| Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
+| LOVE asset helpers | `image "..."` and `sound "..."` infer `Image`/`Source`, emit ordinary LOVE calls, and validate obvious paths/extensions. | Tua-specific LOVE-focused workflow. | 48.6 |
+| Workspace folders and watchers | Workspace folders, folder changes, watched files, and `tua.toml` changes affect diagnostics and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
 
 ## Protocol Surface Supported But Shallow
 
-| Feature | Tua today | Gap | LuaHelper / rust-analyzer target | Roadmap |
-| --- | --- | --- | --- | --- |
-| Project analysis model | Requests call parser/checker helpers directly and may re-read required modules independently. | No shared project snapshot or dependency-aware cache. | rust-analyzer-style analysis snapshot/query database. | 31 |
-| Watched-file reactions | File changes republish diagnostics for affected open files and disk `.tua` changes. | No durable module/export index to update after create/delete/change. | Watch changes invalidate only affected project data. | 32 |
-| References | `textDocument/references` is advertised, but reference search is same-file and depends on current parsed source. | No project-wide references for module exports or required fields. | LuaHelper/rust-analyzer-style project reference search. | 42 |
-| Rename | `prepareRename` and `rename` work for same-file aliases, locals, functions, and parameters. | No cross-file rename, no module export rename, no field rename. | Safe workspace edits for symbols with project identity. | 43 |
-| Workspace symbols | Scans configured `.tua` files on request and returns modules, aliases, and functions. | No persistent index, no Lua files, no fields/exports/globals, limited fuzzy metadata. | Indexed fuzzy symbol search. | 31, 63 |
-| Completion resolve | `completionItem/resolve` returns information already attached to completion data. | It is not truly lazy and cannot fetch fresh docs/details from a snapshot. | Lazy resolve from stable item data. | 39 |
-| Hover documentation | Hover shows compact type/signature labels. | No doc comments, annotation docs, declaration path, or rich module context. | Hover combines type, docs, and declaration context. | 40 |
-| Signature documentation | Signature help has labels and active parameters. | No parameter documentation from comments or annotations. | Parameter docs attached to signatures. | 41 |
-| Inlay hints | Type and parameter hints exist for supported inferred/known cases. | No deeper expression-chain type hints or project-aware hints. | rust-analyzer-style local type, argument, and expression hints. | 60, 64 |
-| Required Lua module typing | Tua can infer simple exports from `.lua` modules in some hover/definition paths. | No LuaHelper annotation parsing, comment docs, or typed Lua stub ingestion. | Annotated Lua modules contribute full type info. | 33, 34 |
+| Feature | Tua today | Gap | Roadmap |
+| --- | --- | --- | --- |
+| Analysis architecture | A shared analysis snapshot exists, and many requests reuse it. | It is not yet a rust-analyzer-style dependency-tracked query database with a VFS/HIR split. | 52-64 |
+| LuaDoc coverage | Core tags are parsed and lowered. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49 |
+| Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 60, 61 |
+| Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 58, 60 |
+| Workspace symbols | Scans files on request and supports multiple folders. | No durable symbol index or rich export/field/global symbol classes yet. | 63 |
+| Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 60, 64 |
+| Code actions | Mechanical fixes exist for a focused set of diagnostics. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 65, 68 |
+| Selection/folding ranges | Not part of the current editor surface. | Would round out rust-analyzer-style navigation/editing ergonomics. | 66 |
 
 ## Missing And Planned
 
-| Feature | Current Tua behavior | Expected parity direction | Roadmap |
+| Feature | Current Tua behavior | Expected direction | Roadmap |
 | --- | --- | --- | --- |
-| LuaHelper doc annotation parser | `---@...` comments are ordinary comments. | Parse `---@class`, `---@field`, `---@alias`, `---@type`, `---@param`, `---@return`, `---@generic`, and related docs into a source model. | 33 |
-| Annotation-backed type environment | `.lua` comments do not become typed declarations. | Lower parsed annotations into aliases, function types, globals, fields, and module exports. | 34 |
-| Standard-library annotation stubs | Builtins are represented by a curated Rust catalog. | Ingest Lua/LuaJIT-compatible annotation stubs as the source of truth where possible. | 35 |
-| Undefined and unused diagnostics | Some correctness diagnostics exist, but undefined/unused symbol analysis is not implemented. | Configurable undefined variables, unused locals, unused parameters, and use-before-definition checks. | 36 |
-| LuaHelper-style lint depth | Current lints are smaller and targeted. | Add duplicate params, bad require files, duplicate conditions, duplicate operands, float equality, const assignment, and richer type mismatch checks. | 37 |
-| Annotation and doc snippet completions | No `---@` tag completion or generated doc snippets. | Complete annotation tags/types and generate function-doc snippets. | 38 |
-| Project-wide references | Same-file reference search only. | Use the shared project snapshot to find references across indexed workspace files. | 42 |
-| Safe cross-file rename | Same-file rename only. | Workspace edits for project-identity symbols such as exported functions and aliases. | 43 |
-| Code actions / quick fixes | `codeActionProvider` is not advertised. | Conservative mechanical fixes for selected diagnostics. | 44 |
-| Auto-import completion | Unresolved identifiers do not propose imports. | Offer exported module symbols and insert or reuse `require` bindings. | 45 |
-| LuaHelper parity fixtures | No dedicated parity fixture suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49 |
-| Post-milestone doc refresh | Current docs track the pre-parity implementation. | Update docs and non-goals after parity commits land. | 50 |
+| Full analysis database | Requests still rely on a simpler snapshot and helper APIs. | Add VFS, open-file overlays, HIR-like lowering, require graph, dependency-tracked queries, and shared IDE routing. | 52-64 |
+| LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 68 |
+| Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 61 |
+| Rich project model | Source roots and require behavior are pragmatic. | Model roots, require paths, duplicate candidates, cycles, ignored paths, and target versions more explicitly. | 54, 58 |
+| Analysis tracing and benchmarks | No dedicated performance tracing. | Add profiling for parse/check/index/request work. | 69 |
+| Documentation refresh after architecture work | Docs now match the current feature surface. | Refresh again after the analysis database and HIR phases land. | 50, 51 |
 
 ## Intentionally Out Of Scope
 
@@ -82,9 +82,8 @@ Roadmap numbers refer to [ROADMAP.md](../ROADMAP.md).
 
 ## Maintenance Rules
 
-- Move a row from **Planned** or **Shallow** only when the implementation and
-  tests have landed.
-- Keep the Tua column factual and tied to current behavior.
-- Every planned gap must name a roadmap commit number.
+- Move a row only when implementation and tests have landed.
+- Keep the Tua column factual and tied to checked-in behavior.
+- Every planned gap should name a roadmap item.
 - If a LuaHelper behavior is rejected, move it to **Intentionally Out Of
   Scope** with a short reason.

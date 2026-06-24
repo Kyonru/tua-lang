@@ -75,6 +75,36 @@ type MaybeNumber = number | nil
 A value can be assigned to a union when it is compatible with at least one union
 member.
 
+## LuaDoc Annotations
+
+Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.tua` and
+`.lua` files:
+
+```lua
+---@alias Health number
+
+---@class Player
+---@field name string
+---@field hp Health
+
+---@param name string player name
+---@return Player created player
+local function makePlayer(name)
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+```
+
+Supported tags include `---@class`, `---@field`, `---@alias`, `---@type`,
+`---@param`, `---@return`, `---@generic`, and `---@version`. Tua uses these
+annotations for type environments, module export inference, hover, completion,
+and signature help where the surrounding Lua is simple enough to analyze.
+
+Malformed annotation diagnostics are controlled by `doc_annotations` in
+`tua.toml`.
+
 ## Function Annotations
 
 ```tua
@@ -95,6 +125,39 @@ end
 
 Tua checks known argument counts, known argument types, and annotated return
 types.
+
+## LOVE Asset Helpers And Methods
+
+Tua includes built-in LOVE knowledge for common game code. Asset loader helpers
+infer LOVE object types and emit ordinary LOVE API calls:
+
+```tua
+local player = image "assets/player.png"
+local jump = sound "assets/jump.wav"
+```
+
+Emitted Lua:
+
+```lua
+local player = love.graphics.newImage("assets/player.png")
+local jump = love.audio.newSource("assets/jump.wav", "static")
+```
+
+Values inferred as LOVE objects expose method completions, hover, and signature
+help:
+
+```tua
+player:setFilter("nearest")
+local width = player:getWidth()
+jump:play()
+```
+
+Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
+passes `self` only for colon calls. When Tua knows the receiver is a LOVE object,
+dot-style calls such as `player.setFilter("nearest")` produce warning `TL4018`
+with a suggested colon call. Editor completions for LOVE methods also prefer
+colon-call snippets; accepting a method completion after `player.setF` can
+replace the dot with `:`.
 
 ## Compound Assignment
 

@@ -13,6 +13,9 @@ make lsp-features-smoke
 
 Use this when changing language-server behavior.
 
+The feature tour includes placeholder assets under `src/assets/` so static LOVE
+asset validation can run without depending on real art or audio files.
+
 ## `examples/love-minimal`
 
 A small LOVE project for basic compile-and-run validation.

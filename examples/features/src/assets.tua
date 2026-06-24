@@ -8,16 +8,16 @@ end
 
 local player = loadPlayerImage()
 
-local a, b = player.getDimensions()
+local a, b = player:getDimensions()
 
 local function azul()
 
-  return player.getDimensions()
+  return player:getDimensions()
 end
 
 local c = azul()
 
-player:setFilter("")
+player:setFilter("nearest")
 
 return {
   loadPlayerImage = loadPlayerImage,

@@ -30,9 +30,12 @@ make build-features
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as
-  `image "assets/player.png"` and `sound "assets/jump.wav"`.
+  `image "assets/player.png"` and `sound "assets/jump.wav"`, plus LOVE object
+  method completion/signature behavior such as preferring `player:setFilter()`
+  over `player.setFilter()`.
+- `src/assets/` contains placeholder files used by static asset validation.
 - `src/main.tua` ties the feature modules together while keeping `require`
   calls unchanged in emitted Lua.
-- `src/legacy.lua` is intentionally plain Lua. The current v1 build only
-  compiles `.tua` files, so this file demonstrates source-side interop and LSP
-  module completions rather than automatic runtime packaging.
+- `src/legacy.lua` is intentionally plain Lua. Builds copy it unchanged into
+  `build/`, while the LSP can still infer simple returned module exports from
+  it.

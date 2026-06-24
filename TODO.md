@@ -1,16 +1,18 @@
 # Ideas
 
-- [ ] Rust like implicit types and ghost code displayal
-- [ ] hover types, documentation too
-- [ ] first class support for lls
-- [ ] .tua files using .lua icon but with another color
-- [ ] warnings when there is a .lua and a .tua with the same name
-- [ ] better autocomplete out of the box
-- [ ] Fixing "requires" or at least providing a better / simpler way that doesn't break when moving files
-- [ ] importing .lua files in .tua and viceversa, how compiler show highlights
-- [ ] explore teal, luau and python ideas
-- [ ] take advantage of love2d + luajit focus
-- [ ] Auto imports https://rust-analyzer.github.io/book/features.html#auto-import
-- [ ] Check exisiting rust analyzer features
-- [ ] refactor lsp code
-- [ ] debugging and step by step improvement
+Current open ideas and larger follow-ups. Implemented items are tracked in the
+docs and roadmap instead of staying here as stale TODOs.
+
+- [ ] Rust-like "ghost text" displays for inferred types and generated lowering.
+- [ ] Deeper LuaLS/LuaHelper compatibility for annotation stubs and project
+  settings.
+- [ ] More complete LOVE object modeling beyond the current generated catalog
+  and selected constructor/method return inference.
+- [ ] More robust require-path modeling for moved files, cycles, and duplicate
+  module candidates.
+- [ ] Plugin hooks for LOVE-focused domain syntax, asset validation, and editor
+  metadata.
+- [ ] First-class sprite/animation workflows, likely starting with anim8.
+- [ ] Built-in vector ergonomics for LOVE/LuaJIT projects.
+- [ ] Rust-analyzer-style analysis database, VFS, HIR, and query caching.
+- [ ] Debugging and step-by-step improvement workflows.

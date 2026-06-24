@@ -15,11 +15,17 @@ leaving the normal Lua and LOVE workflow.
 - Lua 5.1-compatible output for LuaJIT and LOVE 11.x.
 - `+=`, `-=`, `*=`, `/=`, and `%=` lowering for simple names and field chains.
 - Project config with mirrored `src/**/*.tua` to `build/**/*.lua` output.
+- Plain `.lua` files and assets are copied into the build output so LOVE
+  projects can produce runnable distribution folders.
+- Built-in Lua and LOVE catalogs for completion, hover, signature help, and
+  simple call checks.
+- LOVE asset helpers such as `image "assets/player.png"` and
+  `sound "assets/jump.wav"` with static path validation.
 - CLI commands for init, check, build, watch, and LSP.
 - A language server with diagnostics, hover, completion, signature help,
   document highlights, definition, references, rename, document symbols,
-  workspace symbols, inlay hints, semantic tokens, watched files, and workspace
-  folders.
+  workspace symbols, document links, code actions, call hierarchy, inlay hints,
+  semantic tokens, watched files, and workspace folders.
 - VS Code support for syntax highlighting, file icons, and LSP integration.
 
 ## Quick Start
