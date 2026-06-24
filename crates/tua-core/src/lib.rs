@@ -52,8 +52,8 @@ pub use check::{
     check_tua_source_with_diagnostics_config,
 };
 pub use code_action::{
-    code_actions_parsed_source, CodeAction, CodeActionEdit, CodeActionKind, CodeActionRange,
-    CreateFile,
+    assists_parsed_source, code_actions_parsed_source, Assist, AssistEdit, AssistKind, AssistRange,
+    CodeAction, CodeActionEdit, CodeActionKind, CodeActionRange, CreateFile,
 };
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{

@@ -12,25 +12,25 @@ use crate::source_text::{dotted_chain_at_position, line_at};
 use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
-    build_type_environment, check_parsed_source_with_asset_roots_and_diagnostics_config,
-    complete_parsed_source, complete_tua_source, definition_parsed_source,
-    document_highlights_parsed_source, document_symbols_parsed_source, emit_lua,
-    exported_field_for_fields, global_function_definition_count,
-    global_function_name_for_definition, global_references_to_definition_parsed_source,
-    global_type_alias_name_for_definition,
+    assists_parsed_source, build_type_environment,
+    check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
+    complete_tua_source, definition_parsed_source, document_highlights_parsed_source,
+    document_symbols_parsed_source, emit_lua, exported_field_for_fields,
+    global_function_definition_count, global_function_name_for_definition,
+    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
     infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
     lower_parsed_source, module_links_tua_source, parse_lua_source, parse_tua_source,
     reference_kind_for_rename, references_to_definition_parsed_source,
     rename_target_for_definition, require_bindings_for_parsed_source,
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
-    signature_help_tua_source, type_alias_definition_count, Completion, CompletionKind, Definition,
-    DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, Hover, InlayHint,
-    ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
-    ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput,
-    Reference, RenameEdit, RenameTarget, RequireResolution, ScopeMap, SemanticToken, SignatureHelp,
-    SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment,
-    WorkspaceSymbol,
+    signature_help_tua_source, type_alias_definition_count, Assist, AssistRange, Completion,
+    CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
+    Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput,
+    ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase,
+    ProjectTypeDatabaseInput, Reference, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit,
+    TuaType, Type, TypeEnvironment, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -556,6 +556,36 @@ impl AnalysisSnapshot {
             .and_then(|file| file.parsed.as_ref().ok())
             .map(document_symbols_parsed_source)
             .unwrap_or_default()
+    }
+
+    pub fn assists(
+        &self,
+        path: impl AsRef<Path>,
+        range: AssistRange,
+        diagnostics: &[Diagnostic],
+    ) -> Vec<Assist> {
+        let path = path.as_ref();
+        let Some(parsed) = self.file(path).and_then(|file| file.parsed.as_ref().ok()) else {
+            return Vec::new();
+        };
+        let source_dir = self.assist_source_root_for_path(path);
+
+        assists_parsed_source(
+            parsed,
+            diagnostics,
+            range,
+            &source_dir,
+            &self.config.extension,
+        )
+    }
+
+    pub fn code_actions(
+        &self,
+        path: impl AsRef<Path>,
+        range: AssistRange,
+        diagnostics: &[Diagnostic],
+    ) -> Vec<Assist> {
+        self.assists(path, range, diagnostics)
     }
 
     pub fn references(
@@ -1252,6 +1282,16 @@ impl AnalysisSnapshot {
             }
             _ => true,
         }
+    }
+
+    fn assist_source_root_for_path(&self, path: &Path) -> PathBuf {
+        self.source_roots()
+            .iter()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .or_else(|| path.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     fn is_ambiguous_project_rename(

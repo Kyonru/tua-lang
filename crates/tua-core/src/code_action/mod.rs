@@ -13,19 +13,19 @@ use crate::source_text::line_at;
 use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourcePosition, SourceSpan, TextEdit};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CodeAction {
+pub struct Assist {
     pub title: String,
-    pub kind: CodeActionKind,
-    pub edit: CodeActionEdit,
+    pub kind: AssistKind,
+    pub edit: AssistEdit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CodeActionKind {
+pub enum AssistKind {
     QuickFix,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CodeActionEdit {
+pub struct AssistEdit {
     pub changes: BTreeMap<PathBuf, Vec<TextEdit>>,
     pub create_files: Vec<CreateFile>,
 }
@@ -37,25 +37,40 @@ pub struct CreateFile {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CodeActionRange {
+pub struct AssistRange {
     pub start: SourcePosition,
     pub end: SourcePosition,
 }
 
-impl CodeActionRange {
+pub type CodeAction = Assist;
+pub type CodeActionKind = AssistKind;
+pub type CodeActionEdit = AssistEdit;
+pub type CodeActionRange = AssistRange;
+
+impl AssistRange {
     pub fn contains(self, position: SourcePosition) -> bool {
         position_key(self.start) <= position_key(position)
             && position_key(position) <= position_key(self.end)
     }
 }
 
+pub fn assists_parsed_source(
+    parsed: &ParsedSource,
+    diagnostics: &[Diagnostic],
+    range: AssistRange,
+    source_dir: &Path,
+    extension: &str,
+) -> Vec<Assist> {
+    code_actions_parsed_source(parsed, diagnostics, range, source_dir, extension)
+}
+
 pub fn code_actions_parsed_source(
     parsed: &ParsedSource,
     diagnostics: &[Diagnostic],
-    range: CodeActionRange,
+    range: AssistRange,
     source_dir: &Path,
     extension: &str,
-) -> Vec<CodeAction> {
+) -> Vec<Assist> {
     let mut actions = Vec::new();
 
     for diagnostic in diagnostics {
@@ -108,7 +123,7 @@ fn create_missing_require_action(
     diagnostic: &Diagnostic,
     source_dir: &Path,
     extension: &str,
-) -> Option<CodeAction> {
+) -> Option<Assist> {
     let module = module_name_from_message(&diagnostic.message)
         .or_else(|| require_module_at(parsed, diagnostic_position(diagnostic)))?;
     let target = source_dir
@@ -119,7 +134,7 @@ fn create_missing_require_action(
         return None;
     }
 
-    let mut edit = CodeActionEdit::default();
+    let mut edit = AssistEdit::default();
 
     edit.create_files.push(CreateFile {
         path: target.clone(),
@@ -134,17 +149,14 @@ fn create_missing_require_action(
         }],
     );
 
-    Some(CodeAction {
+    Some(Assist {
         title: format!("Create module `{module}`"),
-        kind: CodeActionKind::QuickFix,
+        kind: AssistKind::QuickFix,
         edit,
     })
 }
 
-fn remove_unused_local_action(
-    parsed: &ParsedSource,
-    diagnostic: &Diagnostic,
-) -> Option<CodeAction> {
+fn remove_unused_local_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
     let position = diagnostic_position(diagnostic);
 
     for stmt in parsed.ast.nodes().stmts() {
@@ -159,9 +171,9 @@ fn remove_unused_local_action(
 
         let edit = remove_single_line_stmt_edit(parsed, stmt)?;
 
-        return Some(CodeAction {
+        return Some(Assist {
             title: "Remove unused local".to_owned(),
-            kind: CodeActionKind::QuickFix,
+            kind: AssistKind::QuickFix,
             edit: edit_for(parsed.path.clone(), edit),
         });
     }
@@ -172,15 +184,15 @@ fn remove_unused_local_action(
 fn rename_duplicate_table_key_action(
     parsed: &ParsedSource,
     diagnostic: &Diagnostic,
-) -> Option<CodeAction> {
+) -> Option<Assist> {
     let position = diagnostic_position(diagnostic);
     let table = table_containing_name_key_at(parsed, position)?;
     let (key_span, key_name) = name_key_at(table, position)?;
     let new_name = unique_key_name(&key_name, table);
 
-    Some(CodeAction {
+    Some(Assist {
         title: format!("Rename duplicate key to `{new_name}`"),
-        kind: CodeActionKind::QuickFix,
+        kind: AssistKind::QuickFix,
         edit: edit_for(
             parsed.path.clone(),
             TextEdit {
@@ -192,10 +204,7 @@ fn rename_duplicate_table_key_action(
     })
 }
 
-fn remove_self_assignment_action(
-    parsed: &ParsedSource,
-    diagnostic: &Diagnostic,
-) -> Option<CodeAction> {
+fn remove_self_assignment_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
     let position = diagnostic_position(diagnostic);
 
     for stmt in parsed.ast.nodes().stmts() {
@@ -209,9 +218,9 @@ fn remove_self_assignment_action(
 
         let edit = remove_single_line_stmt_edit(parsed, stmt)?;
 
-        return Some(CodeAction {
+        return Some(Assist {
             title: "Remove self-assignment".to_owned(),
-            kind: CodeActionKind::QuickFix,
+            kind: AssistKind::QuickFix,
             edit: edit_for(parsed.path.clone(), edit),
         });
     }
@@ -219,18 +228,15 @@ fn remove_self_assignment_action(
     None
 }
 
-fn add_missing_local_annotation_actions(
-    parsed: &ParsedSource,
-    range: CodeActionRange,
-) -> Vec<CodeAction> {
+fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
     inlay_hints_parsed_source(parsed)
         .unwrap_or_default()
         .into_iter()
         .filter(|hint| range.contains(hint.position))
         .filter(|hint| hint.label.starts_with(": "))
-        .map(|hint| CodeAction {
+        .map(|hint| Assist {
             title: format!("Add type annotation `{}`", hint.label),
-            kind: CodeActionKind::QuickFix,
+            kind: AssistKind::QuickFix,
             edit: edit_for(
                 parsed.path.clone(),
                 TextEdit {
@@ -508,8 +514,8 @@ fn line_removal_span(source: &str, line: usize) -> SourceSpan {
     }
 }
 
-fn edit_for(path: PathBuf, edit: TextEdit) -> CodeActionEdit {
-    let mut output = CodeActionEdit::default();
+fn edit_for(path: PathBuf, edit: TextEdit) -> AssistEdit {
+    let mut output = AssistEdit::default();
 
     output.changes.insert(path, vec![edit]);
     output

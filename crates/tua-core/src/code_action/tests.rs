@@ -1,5 +1,8 @@
 use super::*;
-use crate::{check_parsed_source_with_diagnostics_config, parse_tua_source, DiagnosticsConfig};
+use crate::{
+    check_parsed_source_with_diagnostics_config, parse_tua_source, AnalysisHost, DiagnosticsConfig,
+    Fixture, ProjectConfig,
+};
 
 #[test]
 fn creates_missing_require_target_action() {
@@ -25,6 +28,39 @@ fn creates_missing_require_target_action() {
     assert_eq!(
         actions[0].edit.create_files[0].path,
         std::path::Path::new("src/player.tua")
+    );
+}
+
+#[test]
+fn snapshot_assists_create_same_workspace_edit_from_diagnostic() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Player = require("<|require|>player")
+"#,
+    );
+    let mut config = ProjectConfig::default();
+
+    config.diagnostics.missing_requires = true;
+
+    let mut host = AnalysisHost::with_config(config);
+
+    host.set_source_roots([std::path::PathBuf::from("src")]);
+    host.set_file("src/main.tua", fixture.source("src/main.tua"));
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let position = fixture.position("require");
+    let actions = snapshot.assists("src/main.tua", range_line(position.line), &diagnostics);
+
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].title, "Create module `player`");
+    assert_eq!(
+        actions[0].edit.create_files[0].path,
+        std::path::Path::new("src/player.tua")
+    );
+    assert_eq!(
+        actions[0].edit.changes[&std::path::PathBuf::from("src/player.tua")][0].new_text,
+        "return {}\n"
     );
 }
 

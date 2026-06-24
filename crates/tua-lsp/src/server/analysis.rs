@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_exports_parsed_source, call_hierarchy_prepare_parsed_source,
-    call_hierarchy_symbols_parsed_source, code_actions_parsed_source, infer_module_exports,
-    parse_lua_source, parse_tua_source, require_bindings_for_parsed_source,
-    AnalysisHost as CoreAnalysisHost, AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
-    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
+    call_hierarchy_symbols_parsed_source, infer_module_exports, parse_lua_source, parse_tua_source,
+    require_bindings_for_parsed_source, AnalysisHost as CoreAnalysisHost,
+    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, CallHierarchyCallSite,
+    CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
     DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink, ParsedSource,
     ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
@@ -603,19 +603,7 @@ impl AnalysisSnapshot {
         range: CodeActionRange,
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeAction> {
-        let Some(parsed) = self.parsed(path) else {
-            return Vec::new();
-        };
-        let (source_dir, extension) = self.project_source_for_path(path).unwrap_or_else(|| {
-            (
-                path.parent()
-                    .unwrap_or_else(|| Path::new("."))
-                    .to_path_buf(),
-                "tua".to_owned(),
-            )
-        });
-
-        code_actions_parsed_source(parsed, diagnostics, range, &source_dir, &extension)
+        self.core.code_actions(path, range, diagnostics)
     }
 
     pub(super) fn references(
@@ -682,16 +670,6 @@ impl AnalysisSnapshot {
                 .find(|document| document.path == path)
                 .and_then(|document| self.files.get(&document.path))
         })
-    }
-
-    fn project_source_for_path(&self, path: &Path) -> Option<(PathBuf, String)> {
-        let model = project_model_for_roots(&self.workspace_folders, &self.settings).ok()?;
-        let workspace = model.workspace_for_path(path)?;
-
-        Some((
-            workspace.primary_source_root().to_path_buf(),
-            workspace.config().extension.clone(),
-        ))
     }
 
     fn parsed_files(&self) -> Vec<(&PathBuf, &ParsedSource)> {
