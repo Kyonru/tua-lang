@@ -124,7 +124,7 @@ impl AnalysisHost {
         let path = path_from_uri(&uri);
         let source = source.into();
 
-        self.sync_core_project_inputs(roots);
+        self.sync_core_project_inputs(roots, settings);
         self.documents.insert(
             uri,
             OpenDocument {
@@ -173,7 +173,7 @@ impl AnalysisHost {
     ) {
         let path = path_from_uri(uri);
 
-        self.sync_core_project_inputs(roots);
+        self.sync_core_project_inputs(roots, settings);
         if self
             .documents
             .values()
@@ -211,7 +211,7 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) {
-        self.sync_core_project_inputs(roots);
+        self.sync_core_project_inputs(roots, settings);
         let documents = self
             .documents
             .values()
@@ -224,7 +224,7 @@ impl AnalysisHost {
     }
 
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
-        self.sync_core_project_inputs(roots);
+        self.sync_core_project_inputs(roots, settings);
         let open_paths = self
             .documents
             .values()
@@ -268,7 +268,7 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) -> Option<SourceKind> {
-        self.sync_core_project_inputs(roots);
+        self.sync_core_project_inputs(roots, settings);
         if settings.is_ignored(&path, roots) {
             self.files.remove(&path);
             self.core.remove_file(&path);
@@ -293,8 +293,9 @@ impl AnalysisHost {
         Some(kind)
     }
 
-    fn sync_core_project_inputs(&mut self, roots: &[PathBuf]) {
+    fn sync_core_project_inputs(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
         self.core.set_source_roots(roots.iter().cloned());
+        self.core.set_ignored_paths(settings.ignored_paths.clone());
 
         let roots = if roots.is_empty() {
             vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
@@ -302,11 +303,26 @@ impl AnalysisHost {
             roots.to_vec()
         };
 
+        let mut output_roots = Vec::new();
+        let mut config = None;
+
         for root in roots {
             if let Ok(loaded) = load_config_from_dir(root) {
-                self.core.set_config(loaded.config);
-                return;
+                output_roots.push(
+                    loaded
+                        .path
+                        .parent()
+                        .unwrap_or_else(|| Path::new("."))
+                        .join(&loaded.config.out),
+                );
+                config.get_or_insert(loaded.config);
             }
+        }
+
+        self.core.set_output_roots(output_roots);
+
+        if let Some(config) = config {
+            self.core.set_config(config);
         }
     }
 

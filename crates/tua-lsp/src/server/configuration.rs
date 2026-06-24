@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use tua_core::DiagnosticsConfig;
+use tua_core::{module_name_for_path, DiagnosticsConfig, ModulePathSeparator};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct WorkspaceSettings {
@@ -121,13 +121,14 @@ impl WorkspaceSettings {
     }
 
     pub(super) fn module_name_for_path(&self, source_dir: &Path, path: &Path) -> Option<String> {
-        let mut module = module_name_with_dot_separator(source_dir, path)?;
-
-        if self.require_path_separator == RequirePathSeparator::Slash {
-            module = module.replace('.', "/");
-        }
-
-        Some(module)
+        module_name_for_path(
+            source_dir,
+            path,
+            match self.require_path_separator {
+                RequirePathSeparator::Dot => ModulePathSeparator::Dot,
+                RequirePathSeparator::Slash => ModulePathSeparator::Slash,
+            },
+        )
     }
 }
 
@@ -395,19 +396,4 @@ fn normalized_path(path: &Path) -> String {
         .map(|component| component.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/")
-}
-
-fn module_name_with_dot_separator(source_dir: &Path, source_path: &Path) -> Option<String> {
-    let relative = source_path.strip_prefix(source_dir).ok()?;
-    let without_extension = relative.with_extension("");
-    let mut parts = without_extension
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy().to_string())
-        .collect::<Vec<_>>();
-
-    if parts.last().is_some_and(|part| part == "init") {
-        parts.pop();
-    }
-
-    (!parts.is_empty()).then(|| parts.join("."))
 }

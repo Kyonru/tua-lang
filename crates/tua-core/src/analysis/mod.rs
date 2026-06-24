@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
     complete_tua_source, definition_tua_source, hover_parsed_source, parse_lua_source,
@@ -32,18 +33,15 @@ pub enum AnalysisSourceKind {
 #[derive(Clone, Debug, Default)]
 pub struct AnalysisHost {
     config: ProjectConfig,
-    source_roots: Vec<PathBuf>,
-    files: BTreeMap<PathBuf, AnalysisSource>,
-    open_documents: BTreeMap<PathBuf, AnalysisSource>,
+    vfs: VirtualFileSystem,
     builtin_catalogs: BuiltinCatalogs,
 }
 
 #[derive(Clone, Debug)]
 pub struct AnalysisSnapshot {
     config: ProjectConfig,
-    source_roots: Vec<PathBuf>,
+    vfs: VfsSnapshot,
     files: BTreeMap<PathBuf, AnalysisFile>,
-    open_documents: BTreeMap<PathBuf, AnalysisSource>,
     builtin_catalogs: BuiltinCatalogs,
 }
 
@@ -51,12 +49,6 @@ pub struct AnalysisSnapshot {
 struct AnalysisFile {
     source: String,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
-}
-
-#[derive(Clone, Debug)]
-struct AnalysisSource {
-    source: String,
-    kind: Option<AnalysisSourceKind>,
 }
 
 impl AnalysisHost {
@@ -80,11 +72,19 @@ impl AnalysisHost {
     }
 
     pub fn source_roots(&self) -> &[PathBuf] {
-        &self.source_roots
+        &self.vfs.options().source_roots
     }
 
     pub fn set_source_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
-        self.source_roots = roots.into_iter().collect();
+        self.vfs.set_source_roots(roots);
+    }
+
+    pub fn set_output_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
+        self.vfs.set_output_roots(roots);
+    }
+
+    pub fn set_ignored_paths(&mut self, patterns: impl IntoIterator<Item = String>) {
+        self.vfs.set_ignored_paths(patterns);
     }
 
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
@@ -96,13 +96,10 @@ impl AnalysisHost {
     }
 
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
-        self.files.insert(
-            path.into(),
-            AnalysisSource {
-                source: source.into(),
-                kind: None,
-            },
-        );
+        let path = path.into();
+        let kind = infer_source_kind(&path, &self.config);
+
+        self.vfs.set_disk_file(path, source, vfs_source_kind(kind));
     }
 
     pub fn set_file_with_kind(
@@ -111,28 +108,19 @@ impl AnalysisHost {
         source: impl Into<String>,
         kind: AnalysisSourceKind,
     ) {
-        self.files.insert(
-            path.into(),
-            AnalysisSource {
-                source: source.into(),
-                kind: Some(kind),
-            },
-        );
+        self.vfs
+            .set_disk_file(path.into(), source, vfs_source_kind(kind));
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
-        self.files.remove(path.as_ref());
-        self.open_documents.remove(path.as_ref());
+        self.vfs.remove_file(path);
     }
 
     pub fn open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
-        self.open_documents.insert(
-            path.into(),
-            AnalysisSource {
-                source: source.into(),
-                kind: None,
-            },
-        );
+        let path = path.into();
+        let kind = infer_source_kind(&path, &self.config);
+
+        self.vfs.open_file(path, source, vfs_source_kind(kind));
     }
 
     pub fn open_document_with_kind(
@@ -141,13 +129,8 @@ impl AnalysisHost {
         source: impl Into<String>,
         kind: AnalysisSourceKind,
     ) {
-        self.open_documents.insert(
-            path.into(),
-            AnalysisSource {
-                source: source.into(),
-                kind: Some(kind),
-            },
-        );
+        self.vfs
+            .open_file(path.into(), source, vfs_source_kind(kind));
     }
 
     pub fn update_open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
@@ -155,30 +138,25 @@ impl AnalysisHost {
     }
 
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
-        self.open_documents.remove(path.as_ref());
+        self.vfs.close_file(path);
     }
 
     pub fn snapshot(&self) -> AnalysisSnapshot {
-        let mut sources = self.files.clone();
+        let vfs = self.vfs.snapshot();
 
-        for (path, source) in &self.open_documents {
-            sources.insert(path.clone(), source.clone());
-        }
-
-        let files = sources
-            .into_iter()
-            .map(|(path, analysis_source)| {
+        let files = vfs
+            .files()
+            .map(|file| {
                 let parsed = parse_analysis_source(
-                    &path,
-                    analysis_source.source.clone(),
-                    analysis_source.kind,
-                    &self.config,
+                    file.path(),
+                    file.source().to_owned(),
+                    analysis_source_kind(file.kind()),
                 );
 
                 (
-                    path,
+                    file.path().to_path_buf(),
                     AnalysisFile {
-                        source: analysis_source.source,
+                        source: file.source().to_owned(),
                         parsed,
                     },
                 )
@@ -187,9 +165,8 @@ impl AnalysisHost {
 
         AnalysisSnapshot {
             config: self.config.clone(),
-            source_roots: self.source_roots.clone(),
+            vfs,
             files,
-            open_documents: self.open_documents.clone(),
             builtin_catalogs: self.builtin_catalogs.clone(),
         }
     }
@@ -201,7 +178,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn source_roots(&self) -> &[PathBuf] {
-        &self.source_roots
+        self.vfs.source_roots()
     }
 
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
@@ -209,7 +186,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn is_open_document(&self, path: impl AsRef<Path>) -> bool {
-        self.open_documents.contains_key(path.as_ref())
+        self.vfs.is_open(path)
     }
 
     pub fn source(&self, path: impl AsRef<Path>) -> Option<&str> {
@@ -222,7 +199,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
-        self.diagnostics_with_asset_roots(path, &self.source_roots)
+        self.diagnostics_with_asset_roots(path, self.source_roots())
     }
 
     pub fn diagnostics_with_asset_roots(
@@ -288,17 +265,16 @@ impl AnalysisSnapshot {
     }
 
     fn file(&self, path: &Path) -> Option<&AnalysisFile> {
-        self.files.get(path)
+        self.files.get(&normalize_path(path))
     }
 }
 
 fn parse_analysis_source(
     path: &Path,
     source: String,
-    kind: Option<AnalysisSourceKind>,
-    config: &ProjectConfig,
+    kind: AnalysisSourceKind,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    match kind.unwrap_or_else(|| infer_source_kind(path, config)) {
+    match kind {
         AnalysisSourceKind::Lua => parse_lua_source(path, source),
         AnalysisSourceKind::Tua => parse_tua_source(path, source),
     }
@@ -309,6 +285,20 @@ fn infer_source_kind(path: &Path, config: &ProjectConfig) -> AnalysisSourceKind 
         Some("lua") => AnalysisSourceKind::Lua,
         Some(extension) if extension == config.extension => AnalysisSourceKind::Tua,
         _ => AnalysisSourceKind::Tua,
+    }
+}
+
+fn vfs_source_kind(kind: AnalysisSourceKind) -> VfsSourceKind {
+    match kind {
+        AnalysisSourceKind::Lua => VfsSourceKind::Lua,
+        AnalysisSourceKind::Tua => VfsSourceKind::Tua,
+    }
+}
+
+fn analysis_source_kind(kind: VfsSourceKind) -> AnalysisSourceKind {
+    match kind {
+        VfsSourceKind::Lua => AnalysisSourceKind::Lua,
+        VfsSourceKind::Tua => AnalysisSourceKind::Tua,
     }
 }
 

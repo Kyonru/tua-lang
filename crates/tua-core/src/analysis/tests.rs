@@ -20,6 +20,41 @@ fn snapshot_prefers_open_document_over_file_contents() {
 }
 
 #[test]
+fn open_documents_drive_hover_and_closed_documents_fall_back_to_disk() {
+    let path = PathBuf::from("src/main.tua");
+    let disk = Fixture::parse(
+        r#"type Player = { hp: number }
+local player: <|hover|>Player = { hp = 10 }
+"#,
+    );
+    let open = Fixture::parse(
+        r#"type Enemy = { hp: number }
+local enemy: <|hover|>Enemy = { hp = 5 }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, disk.source("src/main.tua"));
+    host.open_document(&path, open.source("src/main.tua"));
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover(&path, open.position("hover"))
+        .expect("open hover should resolve");
+
+    assert!(hover.contents.contains("type Enemy"));
+
+    host.close_document(&path);
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover(&path, disk.position("hover"))
+        .expect("disk hover should resolve after close");
+
+    assert!(hover.contents.contains("type Player"));
+}
+
+#[test]
 fn snapshot_answers_parse_diagnostics_hover_completion_and_definition() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

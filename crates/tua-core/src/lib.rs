@@ -28,6 +28,7 @@ pub mod semantic_token;
 pub mod signature_help;
 mod source_text;
 pub mod types;
+pub mod vfs;
 pub mod workspace_symbol;
 
 pub use analysis::{AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCatalogs};
@@ -110,6 +111,11 @@ pub use signature_help::{
 pub use types::{
     build_type_environment, is_assignable, FunctionType, PrimitiveType, TableField, TableShape,
     Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,
+};
+pub use vfs::{
+    file_uri_from_path, module_name_for_path, normalize_path, path_from_file_uri,
+    ModulePathSeparator, VfsFile, VfsFileId, VfsOptions, VfsSnapshot, VfsSourceKind,
+    VirtualFileSystem,
 };
 pub use workspace_symbol::{
     workspace_symbols_from_dir, workspace_symbols_from_files, WorkspaceSymbol, WorkspaceSymbolKind,
