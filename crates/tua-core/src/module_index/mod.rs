@@ -136,7 +136,7 @@ fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
 
 fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
     match ty {
-        Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+        Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
         Type::Union(types) => {
             let mut resolved = Vec::new();
 

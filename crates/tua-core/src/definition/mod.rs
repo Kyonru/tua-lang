@@ -744,7 +744,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
             Type::Union(types) => types
                 .iter()
                 .find_map(|ty| Self::field_target(parsed, ty, field, depth + 1)),
-            Type::Table(table) => table.field(field).map(|field| FieldTarget {
+            Type::Table(table) => table.semantic_field(field).map(|field| FieldTarget {
                 span: default_span(),
                 ty: field.ty.clone(),
             }),

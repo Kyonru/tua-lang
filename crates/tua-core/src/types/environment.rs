@@ -2373,7 +2373,9 @@ fn infer_binary_operator_type(
     }
 
     if matches!(binop, ast::BinOp::Plus(_))
-        && resolve_table_field_type_from_map(aliases, left, "__add").is_some()
+        && resolve_metatable_facts_from_map(aliases, left)
+            .and_then(|facts| facts.add)
+            .is_some()
     {
         return Some(left.clone());
     }
@@ -2451,7 +2453,7 @@ fn resolve_table_field_type_from_map(
 ) -> Option<Type> {
     match resolve_aliases_from_map(aliases, ty, 0) {
         Type::Table(table) => table
-            .field(field)
+            .semantic_field(field)
             .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
         Type::Union(types) => {
             let mut resolved = Vec::new();
@@ -2467,6 +2469,25 @@ fn resolve_table_field_type_from_map(
                 1 => resolved.into_iter().next(),
                 _ => Some(Type::union(resolved)),
             }
+        }
+        _ => None,
+    }
+}
+
+fn resolve_metatable_facts_from_map(
+    aliases: &BTreeMap<String, Type>,
+    ty: &Type,
+) -> Option<MetatableFacts> {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Table(table) => table.metatable_facts().cloned(),
+        Type::Union(types) => {
+            for ty in types {
+                if let Some(facts) = resolve_metatable_facts_from_map(aliases, &ty) {
+                    return Some(facts);
+                }
+            }
+
+            None
         }
         _ => None,
     }

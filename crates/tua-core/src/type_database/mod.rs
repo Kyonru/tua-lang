@@ -262,20 +262,29 @@ impl ProjectTypeDatabase {
 
                 Type::function_returns(parameters, return_types)
             }
-            Type::Table(table) => Type::table(table.fields().map(|(name, field)| {
-                (
-                    name.to_owned(),
-                    crate::TableField {
-                        ty: self.resolve_type_inner(
-                            module_graph,
-                            source_path,
-                            &field.ty,
-                            resolving,
-                        ),
-                        optional: field.optional,
-                    },
-                )
-            })),
+            Type::Table(table) => {
+                let mut resolved_table =
+                    crate::TableShape::from_fields(table.fields().map(|(name, field)| {
+                        (
+                            name.to_owned(),
+                            crate::TableField {
+                                ty: self.resolve_type_inner(
+                                    module_graph,
+                                    source_path,
+                                    &field.ty,
+                                    resolving,
+                                ),
+                                optional: field.optional,
+                            },
+                        )
+                    }));
+
+                if let Some(facts) = table.metatable_facts() {
+                    resolved_table.set_metatable_facts(facts.clone());
+                }
+
+                Type::Table(resolved_table)
+            }
             Type::Array(item) => {
                 Type::array(self.resolve_type_inner(module_graph, source_path, item, resolving))
             }
@@ -356,7 +365,7 @@ impl ProjectTypeDatabase {
         let mut current = self.resolve_type(module_graph, module_path, &entry.field.ty);
         for field in rest {
             current = match current {
-                Type::Table(table) => table.field(field)?.ty.clone(),
+                Type::Table(table) => table.semantic_field(field)?.ty.clone(),
                 Type::Union(types) => {
                     let mut resolved = Vec::new();
 
@@ -364,7 +373,7 @@ impl ProjectTypeDatabase {
                         if let Type::Table(table) =
                             self.resolve_type(module_graph, module_path, &ty)
                         {
-                            if let Some(field) = table.field(field) {
+                            if let Some(field) = table.semantic_field(field) {
                                 resolved.push(field.ty.clone());
                             }
                         }

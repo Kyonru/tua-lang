@@ -181,7 +181,7 @@ fn extracts_metatable_facts_from_table_shape() {
 }
 
 #[test]
-fn applies_metatable_facts_without_overwriting_base_fields() {
+fn attaches_metatable_facts_without_polluting_base_fields() {
     let base = Type::table([
         ("x", TableField::required(Type::number())),
         ("length", TableField::required(Type::string())),
@@ -209,13 +209,19 @@ fn applies_metatable_facts_without_overwriting_base_fields() {
         table.field("length").map(|field| &field.ty),
         Some(&Type::string())
     );
+    assert!(table.field("label").is_none());
+    assert!(table.field("__add").is_none());
     assert_eq!(
-        table.field("label").map(|field| &field.ty),
+        table.semantic_field("label").map(|field| &field.ty),
         Some(&Type::string())
     );
     assert_eq!(
-        table.field("__add").map(|field| &field.ty),
-        Some(&Type::Function(add))
+        table.semantic_field("length").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+    assert_eq!(
+        table.metatable_facts().and_then(|facts| facts.add.as_ref()),
+        Some(&add)
     );
 }
 
@@ -234,10 +240,32 @@ fn metatable_facts_expose_implied_fields() {
         Some(&Type::number())
     );
     assert_eq!(
-        facts.implied_field("label").map(|field| &field.ty),
+        facts.fields.field("label").map(|field| &field.ty),
         Some(&Type::string())
     );
+    assert!(facts.implied_field("label").is_none());
     assert!(facts.implied_field("missing").is_none());
+}
+
+#[test]
+fn semantic_fields_include_index_fields_but_hide_metamethods() {
+    let index_shape = TableShape::from_fields([("length", TableField::required(Type::number()))]);
+    let add = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let meta = Type::table([
+        ("__index", TableField::required(Type::Table(index_shape))),
+        ("__add", TableField::required(Type::Function(add))),
+    ]);
+    let applied = MetatableFacts::from_type(&meta)
+        .apply_to_type(Type::table([("x", TableField::required(Type::number()))]));
+    let Type::Table(table) = applied else {
+        panic!("metatable facts should preserve table shape");
+    };
+    let fields = table.semantic_fields();
+
+    assert!(fields.contains_key("x"));
+    assert!(fields.contains_key("length"));
+    assert!(!fields.contains_key("__add"));
+    assert!(!fields.contains_key("__index"));
 }
 
 #[test]

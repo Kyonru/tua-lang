@@ -892,10 +892,10 @@ fn collect_table_fields(
 }
 
 fn collect_shape_fields(table: &TableShape, fields: &mut BTreeMap<String, String>) {
-    for (name, field) in table.fields() {
+    for (name, field) in table.semantic_fields() {
         let suffix = if field.optional { " optional" } else { "" };
 
-        fields.insert(name.to_owned(), format!("field{suffix}: {}", field.ty));
+        fields.insert(name, format!("field{suffix}: {}", field.ty));
     }
 }
 

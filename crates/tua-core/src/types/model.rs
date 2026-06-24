@@ -160,12 +160,14 @@ impl FunctionType {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableShape {
     fields: BTreeMap<String, TableField>,
+    metatable: Option<Box<MetatableFacts>>,
 }
 
 impl TableShape {
     pub fn new() -> Self {
         Self {
             fields: BTreeMap::new(),
+            metatable: None,
         }
     }
 
@@ -191,10 +193,44 @@ impl TableShape {
         self.fields.get(name)
     }
 
+    pub fn semantic_field(&self, name: &str) -> Option<&TableField> {
+        self.field(name)
+            .or_else(|| self.metatable.as_ref()?.implied_field(name))
+    }
+
     pub fn fields(&self) -> impl Iterator<Item = (&str, &TableField)> {
         self.fields
             .iter()
             .map(|(name, field)| (name.as_str(), field))
+    }
+
+    pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
+        let mut fields = self.fields.clone();
+
+        if let Some(facts) = &self.metatable {
+            if let IndexFallback::Table(index_table) = &facts.index {
+                for (name, field) in index_table.fields() {
+                    fields
+                        .entry(name.to_owned())
+                        .or_insert_with(|| field.clone());
+                }
+            }
+        }
+
+        fields
+    }
+
+    pub fn metatable_facts(&self) -> Option<&MetatableFacts> {
+        self.metatable.as_deref()
+    }
+
+    pub fn with_metatable_facts(mut self, facts: MetatableFacts) -> Self {
+        self.metatable = Some(Box::new(facts));
+        self
+    }
+
+    pub fn set_metatable_facts(&mut self, facts: MetatableFacts) {
+        self.metatable = Some(Box::new(facts));
     }
 }
 
@@ -275,31 +311,19 @@ impl MetatableFacts {
             return base;
         };
 
-        self.apply_to_table(&mut base_table);
+        base_table.set_metatable_facts(self.clone());
 
         Type::Table(base_table)
     }
 
     pub fn apply_to_table(&self, table: &mut TableShape) {
-        if let IndexFallback::Table(index_table) = &self.index {
-            for (name, field) in index_table.fields() {
-                if table.field(name).is_none() {
-                    table.insert(name.to_owned(), field.clone());
-                }
-            }
-        }
-
-        for (name, field) in self.fields.fields() {
-            if table.field(name).is_none() {
-                table.insert(name.to_owned(), field.clone());
-            }
-        }
+        table.set_metatable_facts(self.clone());
     }
 
     pub fn implied_field(&self, name: &str) -> Option<&TableField> {
         match &self.index {
-            IndexFallback::Table(table) => table.field(name).or_else(|| self.fields.field(name)),
-            _ => self.fields.field(name),
+            IndexFallback::Table(table) => table.field(name),
+            _ => None,
         }
     }
 }

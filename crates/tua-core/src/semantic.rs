@@ -420,7 +420,7 @@ pub(crate) fn resolve_table_field_type(
     field: &str,
 ) -> Option<Type> {
     match resolve_aliases(environment, ty, 0) {
-        Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+        Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
         Type::Union(types) => {
             let mut resolved = Vec::new();
 

@@ -952,6 +952,31 @@ fn completion_remains_quiet_for_unknown_dynamic_values() {
     assert!(completions.is_empty());
 }
 
+#[test]
+fn completion_includes_index_fields_but_hides_metamethods() {
+    let index_shape =
+        crate::TableShape::from_fields([("length", crate::TableField::required(Type::number()))]);
+    let add = crate::FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let meta = Type::table([
+        (
+            "__index",
+            crate::TableField::required(Type::Table(index_shape)),
+        ),
+        ("__add", crate::TableField::required(Type::Function(add))),
+    ]);
+    let table =
+        crate::TableShape::from_fields([("x", crate::TableField::required(Type::number()))])
+            .with_metatable_facts(crate::types::MetatableFacts::from_type(&meta));
+    let mut fields = std::collections::BTreeMap::new();
+
+    collect_shape_fields(&table, &mut fields);
+
+    assert!(fields.contains_key("x"), "{fields:?}");
+    assert!(fields.contains_key("length"), "{fields:?}");
+    assert!(!fields.contains_key("__add"), "{fields:?}");
+    assert!(!fields.contains_key("__index"), "{fields:?}");
+}
+
 fn complete_at(needle: &str) -> Result<Vec<Completion>, Vec<Diagnostic>> {
     complete_tua_source("src/main.tua", SOURCE, position_after(SOURCE, needle))
 }

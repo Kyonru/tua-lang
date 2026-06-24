@@ -870,7 +870,7 @@ impl<'a> Checker<'a> {
 
     fn resolve_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
         match resolve_aliases(ty, self.environment, 0) {
-            Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+            Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
             Type::Union(types) => {
                 let mut resolved = Vec::new();
 
@@ -885,6 +885,22 @@ impl<'a> Checker<'a> {
                     1 => resolved.into_iter().next(),
                     _ => Some(Type::union(resolved)),
                 }
+            }
+            _ => None,
+        }
+    }
+
+    fn resolve_metatable_facts(&self, ty: &Type) -> Option<MetatableFacts> {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Table(table) => table.metatable_facts().cloned(),
+            Type::Union(types) => {
+                for ty in types {
+                    if let Some(facts) = self.resolve_metatable_facts(&ty) {
+                        return Some(facts);
+                    }
+                }
+
+                None
             }
             _ => None,
         }
@@ -938,7 +954,10 @@ impl<'a> Checker<'a> {
         }
 
         if matches!(binop, ast::BinOp::Plus(_))
-            && self.resolve_table_field_type(left, "__add").is_some()
+            && self
+                .resolve_metatable_facts(left)
+                .and_then(|facts| facts.add)
+                .is_some()
         {
             return Some(left.clone());
         }
