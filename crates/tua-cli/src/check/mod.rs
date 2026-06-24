@@ -9,7 +9,6 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let source_dir = workspace.primary_source_root().to_path_buf();
-    let asset_roots = workspace.asset_roots();
     let source_files = discover_build_files(&source_dir, &workspace.config().extension, None)
         .map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
@@ -23,6 +22,7 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
 
     host.set_source_roots(workspace.source_roots().iter().cloned());
     host.set_output_roots(workspace.output_roots().iter().cloned());
+    host.set_asset_roots(workspace.asset_roots());
 
     for source_file in &source_files {
         let Some(kind) =
@@ -48,7 +48,7 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
             continue;
         }
 
-        diagnostics.extend(snapshot.diagnostics_with_asset_roots(&source_file.path, &asset_roots));
+        diagnostics.extend(snapshot.pipeline_diagnostics(&source_file.path));
     }
 
     if diagnostics.is_empty() {

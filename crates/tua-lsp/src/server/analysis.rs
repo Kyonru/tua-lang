@@ -5,9 +5,8 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_exports_parsed_source, call_hierarchy_prepare_parsed_source,
-    call_hierarchy_symbols_parsed_source,
-    check_parsed_source_with_asset_roots_and_diagnostics_config, code_actions_parsed_source,
-    complete_tua_source, document_highlights_parsed_source, document_symbols_parsed_source,
+    call_hierarchy_symbols_parsed_source, code_actions_parsed_source, complete_tua_source,
+    document_highlights_parsed_source, document_symbols_parsed_source,
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source, infer_module_exports,
@@ -20,10 +19,10 @@ use tua_core::{
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, CallHierarchyCallSite,
     CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
-    DiagnosticsConfig, DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink,
-    ParsedSource, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit,
-    RenameTarget, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit, TuaType,
-    TypeEnvironment, VfsSourceKind, WorkspaceSymbol,
+    DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink, ParsedSource,
+    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TextEdit, TuaType, TypeEnvironment,
+    VfsSourceKind, WorkspaceSymbol,
 };
 
 use super::auto_import::{
@@ -308,13 +307,22 @@ impl AnalysisHost {
             .iter()
             .flat_map(|workspace| workspace.ignored_paths().iter().cloned())
             .collect::<Vec<_>>();
+        let asset_roots = model
+            .workspaces()
+            .iter()
+            .flat_map(|workspace| workspace.asset_roots())
+            .collect::<Vec<_>>();
 
         self.core.set_source_roots(source_roots);
         self.core.set_output_roots(output_roots);
         self.core.set_ignored_paths(ignored_paths);
+        self.core.set_asset_roots(asset_roots);
 
         if let Some(workspace) = model.primary_workspace() {
-            self.core.set_config(workspace.config().clone());
+            let mut config = workspace.config().clone();
+
+            config.diagnostics = settings.diagnostics_config(config.diagnostics);
+            self.core.set_config(config);
         }
     }
 
@@ -327,22 +335,15 @@ impl AnalysisHost {
 }
 
 impl AnalysisSnapshot {
-    pub(super) fn diagnostics_for_uri(
-        &self,
-        uri: &str,
-        diagnostics_config: &DiagnosticsConfig,
-        asset_roots: &[PathBuf],
-    ) -> Vec<Diagnostic> {
+    pub(super) fn diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {
         let path = path_from_uri(uri);
 
         if self.core.source(&path).is_some() {
-            return self
-                .core
-                .diagnostics_with_config(&path, asset_roots, diagnostics_config);
+            return self.core.pipeline_diagnostics(&path);
         }
 
         self.file(&path)
-            .map(|file| file.diagnostics(diagnostics_config, asset_roots))
+            .map(CachedFile::diagnostics)
             .unwrap_or_default()
     }
 
@@ -1311,23 +1312,11 @@ impl CachedFile {
         }
     }
 
-    fn diagnostics(
-        &self,
-        diagnostics_config: &DiagnosticsConfig,
-        asset_roots: &[PathBuf],
-    ) -> Vec<Diagnostic> {
-        let parsed = match &self.parsed {
-            Ok(parsed) => parsed,
-            Err(diagnostics) => return diagnostics.clone(),
-        };
-
-        check_parsed_source_with_asset_roots_and_diagnostics_config(
-            parsed,
-            asset_roots,
-            diagnostics_config,
-        )
-        .err()
-        .unwrap_or_default()
+    fn diagnostics(&self) -> Vec<Diagnostic> {
+        match &self.parsed {
+            Ok(_) => Vec::new(),
+            Err(diagnostics) => diagnostics.clone(),
+        }
     }
 
     #[allow(dead_code)]

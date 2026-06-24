@@ -5,7 +5,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tua_core::{Fixture, SourcePosition};
+use tua_core::{Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
 
 #[test]
 fn exposes_server_name() {
@@ -15,6 +15,26 @@ fn exposes_server_name() {
 #[test]
 fn describes_tua_language_server() {
     assert!(server_description().contains("language server"));
+}
+
+#[test]
+fn diagnostic_severities_round_trip_through_lsp() {
+    for (severity, expected) in [
+        (DiagnosticSeverity::Error, 1),
+        (DiagnosticSeverity::Warning, 2),
+        (DiagnosticSeverity::Info, 3),
+        (DiagnosticSeverity::Hint, 4),
+    ] {
+        let diagnostic = Diagnostic::new("src/main.tua", 3, 5, severity, "sample");
+        let lsp = protocol::lsp_diagnostic_from_core(diagnostic);
+
+        assert_eq!(lsp["severity"], expected);
+
+        let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("src/main.tua"), &lsp)
+            .expect("diagnostic should round-trip");
+
+        assert_eq!(round_tripped.severity, severity);
+    }
 }
 
 #[test]

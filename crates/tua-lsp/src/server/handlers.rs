@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
-use tua_core::{DiagnosticsConfig, ProjectModel, ProjectModelOptions, SourcePosition};
+use tua_core::{ProjectModel, ProjectModelOptions, SourcePosition};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -308,72 +308,27 @@ impl LspServer {
             return Vec::new();
         }
 
-        let path = path_from_uri(uri);
-        let diagnostics_config = self.diagnostics_config_for_path(&path);
-        let asset_roots = self.asset_roots_for_path(&path);
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
-            .diagnostics_for_uri(uri, &diagnostics_config, &asset_roots)
+            .diagnostics_for_uri(uri)
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
     }
 
     fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {
-        let path = path_from_uri(uri);
-        let diagnostics_config = self.diagnostics_config_for_path(&path);
-        let asset_roots = self.asset_roots_for_path(&path);
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
 
         snapshot
-            .diagnostics_for_uri(uri, &diagnostics_config, &asset_roots)
+            .diagnostics_for_uri(uri)
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
-    }
-
-    fn asset_roots_for_path(&self, path: &Path) -> Vec<std::path::PathBuf> {
-        self.project_model_for_path(path)
-            .and_then(|model| {
-                model
-                    .workspace_for_path(path)
-                    .map(|workspace| workspace.asset_roots())
-            })
-            .unwrap_or_default()
-    }
-
-    fn diagnostics_config_for_path(&self, path: &Path) -> DiagnosticsConfig {
-        self.project_model_for_path(path)
-            .and_then(|model| {
-                model
-                    .workspace_for_path(path)
-                    .map(|workspace| workspace.config().diagnostics.clone())
-            })
-            .map(|diagnostics| self.settings.diagnostics_config(diagnostics))
-            .unwrap_or_else(|| {
-                self.settings
-                    .diagnostics_config(DiagnosticsConfig::default())
-            })
-    }
-
-    fn project_model_for_path(&self, path: &Path) -> Option<ProjectModel> {
-        if self.workspace_folders.is_empty() {
-            return ProjectModel::load_for_path(path).ok();
-        }
-
-        ProjectModel::load_with_options(ProjectModelOptions {
-            workspace_folders: self.workspace_folders.clone(),
-            ignored_paths: self.settings.ignored_paths.clone(),
-            file_associations: self.settings.project_file_associations(),
-            require_path_separator: self.settings.module_path_separator(),
-            ..ProjectModelOptions::default()
-        })
-        .ok()
     }
 
     fn hover_response(&self, message: &Value) -> Option<Value> {

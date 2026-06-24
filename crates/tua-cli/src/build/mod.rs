@@ -9,9 +9,8 @@ use crate::source::{
     SourceKind,
 };
 use tua_core::{
-    check_tua_source_with_asset_roots_and_diagnostics_config, emit_tua_source,
-    format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind, Diagnostic, DiagnosticCategory,
-    DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    emit_tua_source, format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind, Diagnostic,
+    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
 #[derive(Debug, Default)]
@@ -89,9 +88,13 @@ pub(crate) fn build_changed_files(
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = workspace.config().diagnostics.clone();
-    let asset_roots = workspace.asset_roots();
     let mut outcome = BuildOutcome::default();
+    let mut units = Vec::new();
+    let mut host = AnalysisHost::with_config(workspace.config().clone());
+
+    host.set_source_roots(workspace.source_roots().iter().cloned());
+    host.set_output_roots(workspace.output_roots().iter().cloned());
+    host.set_asset_roots(workspace.asset_roots());
 
     for source_path in source_files {
         let source_kind = SourceKind::for_path(&source_path, &workspace.config().extension);
@@ -128,20 +131,20 @@ pub(crate) fn build_changed_files(
             }
         };
 
-        if let Err(mut source_diagnostics) =
-            check_tua_source_with_asset_roots_and_diagnostics_config(
-                &source_path,
-                source.clone(),
-                &asset_roots,
-                &diagnostics_config,
-            )
-        {
-            let has_source_errors = has_errors(&source_diagnostics);
-            outcome.diagnostics.append(&mut source_diagnostics);
+        host.set_file_with_kind(&source_path, source.clone(), AnalysisSourceKind::Tua);
+        units.push((source_path, output_path, source));
+    }
 
-            if has_source_errors {
-                continue;
-            }
+    let snapshot = host.snapshot();
+
+    for (source_path, output_path, source) in units {
+        let mut source_diagnostics = snapshot.pipeline_diagnostics(&source_path);
+        let has_source_errors = has_errors(&source_diagnostics);
+
+        outcome.diagnostics.append(&mut source_diagnostics);
+
+        if has_source_errors {
+            continue;
         }
 
         push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
@@ -173,8 +176,6 @@ fn build_project_files(
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let diagnostics_config = workspace.config().diagnostics.clone();
-    let asset_roots = workspace.asset_roots();
     let mut diagnostics = Vec::new();
     let mut units = Vec::new();
     let tua_outputs = tua_outputs_by_path(&source_dir, &out_dir, &source_files);
@@ -223,6 +224,7 @@ fn build_project_files(
     let mut host = AnalysisHost::with_config(workspace.config().clone());
     host.set_source_roots(workspace.source_roots().iter().cloned());
     host.set_output_roots(workspace.output_roots().iter().cloned());
+    host.set_asset_roots(workspace.asset_roots());
 
     for unit in &units {
         match unit {
@@ -264,8 +266,7 @@ fn build_project_files(
             continue;
         };
 
-        let mut source_diagnostics =
-            snapshot.diagnostics_with_config(source_path, &asset_roots, &diagnostics_config);
+        let mut source_diagnostics = snapshot.pipeline_diagnostics(source_path);
         if !source_diagnostics.is_empty() {
             let has_non_emittable_error = source_diagnostics
                 .iter()

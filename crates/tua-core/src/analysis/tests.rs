@@ -1,5 +1,5 @@
 use super::*;
-use crate::Fixture;
+use crate::{DiagnosticCode, Fixture};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -168,6 +168,47 @@ fn snapshot_keeps_project_inputs() {
     assert_eq!(snapshot.config().source, PathBuf::from("game"));
     assert_eq!(snapshot.source_roots(), &[PathBuf::from("game")]);
     assert!(!snapshot.builtin_catalogs().love);
+}
+
+#[test]
+fn pipeline_diagnostics_deduplicate_overlapping_project_require_diagnostics() {
+    let path = PathBuf::from("src/main.tua");
+    let mut config = ProjectConfig::default();
+
+    config.diagnostics.missing_requires = true;
+
+    let mut host = AnalysisHost::with_config(config);
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(&path, "local Missing = require(\"missing\")\n");
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    let missing_requires = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISSING_REQUIRE))
+        .collect::<Vec<_>>();
+
+    assert_eq!(missing_requires.len(), 1, "{diagnostics:?}");
+}
+
+#[test]
+fn pipeline_diagnostics_use_configured_asset_roots() {
+    let temp = TempProject::new("asset-roots");
+    let path = temp.write(
+        "src/main.tua",
+        "local player = image \"assets/player.png\"\n",
+    );
+
+    temp.write("assets/player.png", "");
+
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    host.set_file(
+        &path,
+        fs::read_to_string(&path).expect("source should be readable"),
+    );
+
+    assert!(host.snapshot().pipeline_diagnostics(&path).is_empty());
 }
 
 #[test]

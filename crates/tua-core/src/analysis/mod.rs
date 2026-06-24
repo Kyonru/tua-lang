@@ -13,7 +13,7 @@ use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     build_type_environment, check_parsed_source_with_asset_roots_and_diagnostics_config,
-    complete_parsed_source, complete_tua_source, definition_parsed_source,
+    complete_parsed_source, complete_tua_source, definition_parsed_source, emit_lua,
     exported_field_for_fields, hover_parsed_source, infer_module_exports, lower_parsed_source,
     module_links_tua_source, parse_lua_source, parse_tua_source,
     require_bindings_for_parsed_source, required_module_for_receiver, Completion, CompletionKind,
@@ -48,6 +48,7 @@ pub enum AnalysisSourceKind {
 pub struct AnalysisHost {
     config: ProjectConfig,
     vfs: VirtualFileSystem,
+    asset_roots: Vec<PathBuf>,
     builtin_catalogs: BuiltinCatalogs,
     cache: RefCell<AnalysisQueryCache>,
 }
@@ -56,6 +57,7 @@ pub struct AnalysisHost {
 pub struct AnalysisSnapshot {
     config: ProjectConfig,
     vfs: VfsSnapshot,
+    asset_roots: Vec<PathBuf>,
     files: BTreeMap<PathBuf, AnalysisFile>,
     builtin_catalogs: BuiltinCatalogs,
     module_graph: ModuleGraph,
@@ -126,6 +128,10 @@ impl AnalysisHost {
     }
 
     pub fn set_config(&mut self, config: ProjectConfig) {
+        if self.config == config {
+            return;
+        }
+
         self.config = config;
         self.cache.borrow_mut().invalidate_all();
     }
@@ -135,16 +141,49 @@ impl AnalysisHost {
     }
 
     pub fn set_source_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
+        let roots = roots.into_iter().map(normalize_path).collect::<Vec<_>>();
+
+        if self.vfs.options().source_roots == roots {
+            return;
+        }
+
         self.vfs.set_source_roots(roots);
         self.cache.borrow_mut().invalidate_all();
     }
 
     pub fn set_output_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
+        let roots = roots.into_iter().map(normalize_path).collect::<Vec<_>>();
+
+        if self.vfs.options().output_roots == roots {
+            return;
+        }
+
         self.vfs.set_output_roots(roots);
         self.cache.borrow_mut().invalidate_all();
     }
 
+    pub fn asset_roots(&self) -> &[PathBuf] {
+        &self.asset_roots
+    }
+
+    pub fn set_asset_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
+        let roots = roots.into_iter().map(normalize_path).collect::<Vec<_>>();
+
+        if self.asset_roots == roots {
+            return;
+        }
+
+        self.asset_roots = roots;
+        self.cache.borrow_mut().invalidate_all();
+    }
+
     pub fn set_ignored_paths(&mut self, patterns: impl IntoIterator<Item = String>) {
+        let patterns = patterns.into_iter().collect::<Vec<_>>();
+
+        if self.vfs.options().ignored_paths == patterns {
+            return;
+        }
+
         self.vfs.set_ignored_paths(patterns);
         self.cache.borrow_mut().invalidate_all();
     }
@@ -232,6 +271,7 @@ impl AnalysisHost {
                     analysis_source_kind(file.kind()),
                     &self.config,
                     &source_roots,
+                    &self.asset_roots,
                 );
 
                 (file.path().to_path_buf(), analysis_file)
@@ -264,6 +304,7 @@ impl AnalysisHost {
         AnalysisSnapshot {
             config: self.config.clone(),
             vfs,
+            asset_roots: self.asset_roots.clone(),
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
             module_graph,
@@ -285,6 +326,10 @@ impl AnalysisSnapshot {
         self.vfs.source_roots()
     }
 
+    pub fn asset_roots(&self) -> &[PathBuf] {
+        &self.asset_roots
+    }
+
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
         &self.builtin_catalogs
     }
@@ -303,45 +348,24 @@ impl AnalysisSnapshot {
     }
 
     pub fn diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
-        self.diagnostics_with_asset_roots(path, self.source_roots())
+        self.pipeline_diagnostics(path)
     }
 
-    pub fn diagnostics_with_asset_roots(
-        &self,
-        path: impl AsRef<Path>,
-        asset_roots: &[PathBuf],
-    ) -> Vec<Diagnostic> {
-        self.diagnostics_with_config(path, asset_roots, &self.config.diagnostics)
-    }
-
-    pub fn diagnostics_with_config(
-        &self,
-        path: impl AsRef<Path>,
-        asset_roots: &[PathBuf],
-        diagnostics_config: &crate::DiagnosticsConfig,
-    ) -> Vec<Diagnostic> {
+    pub fn pipeline_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
         let Some(file) = self.file(path.as_ref()) else {
             return Vec::new();
         };
+        let mut diagnostics = file.diagnostics.clone();
 
-        if asset_roots == self.source_roots() && diagnostics_config == &self.config.diagnostics {
-            return self.project_aware_diagnostics(path.as_ref(), file.diagnostics.clone());
-        }
+        diagnostics.extend(
+            self.module_graph
+                .diagnostics(path.as_ref())
+                .iter()
+                .filter(|diagnostic| self.project_diagnostic_enabled(diagnostic))
+                .cloned(),
+        );
 
-        let parsed = match &file.parsed {
-            Ok(parsed) => parsed,
-            Err(diagnostics) => return diagnostics.clone(),
-        };
-
-        let diagnostics = check_parsed_source_with_asset_roots_and_diagnostics_config(
-            parsed,
-            asset_roots,
-            diagnostics_config,
-        )
-        .err()
-        .unwrap_or_default();
-
-        self.project_aware_diagnostics(path.as_ref(), diagnostics)
+        self.project_aware_diagnostics(path.as_ref(), deduplicate_diagnostics(diagnostics))
     }
 
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
@@ -924,7 +948,7 @@ impl AnalysisSnapshot {
         path: &Path,
         diagnostics: Vec<Diagnostic>,
     ) -> Vec<Diagnostic> {
-        diagnostics
+        deduplicate_diagnostics(diagnostics)
             .into_iter()
             .filter(|diagnostic| {
                 if diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME) {
@@ -940,6 +964,63 @@ impl AnalysisSnapshot {
                     .is_none()
             })
             .collect()
+    }
+
+    fn project_diagnostic_enabled(&self, diagnostic: &Diagnostic) -> bool {
+        match diagnostic.code {
+            Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) => {
+                self.config.diagnostics.missing_requires
+            }
+            Some(crate::DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
+            | Some(crate::DiagnosticCode::LINT_REQUIRE_CYCLE) => {
+                self.config.diagnostics.bad_requires
+            }
+            _ => true,
+        }
+    }
+}
+
+fn deduplicate_diagnostics(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let mut seen = BTreeSet::new();
+    let mut output = Vec::new();
+
+    for diagnostic in diagnostics {
+        let key = diagnostic_key(&diagnostic);
+
+        if seen.insert(key) {
+            output.push(diagnostic);
+        }
+    }
+
+    output
+}
+
+fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option<u16>) {
+    if diagnostic.code == Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) {
+        return (
+            normalize_path(&diagnostic.file),
+            diagnostic.line,
+            0,
+            diagnostic_severity_key(diagnostic.severity),
+            diagnostic.code.map(crate::DiagnosticCode::as_u16),
+        );
+    }
+
+    (
+        normalize_path(&diagnostic.file),
+        diagnostic.line,
+        diagnostic.column,
+        diagnostic_severity_key(diagnostic.severity),
+        diagnostic.code.map(crate::DiagnosticCode::as_u16),
+    )
+}
+
+fn diagnostic_severity_key(severity: crate::DiagnosticSeverity) -> u8 {
+    match severity {
+        crate::DiagnosticSeverity::Error => 1,
+        crate::DiagnosticSeverity::Warning => 2,
+        crate::DiagnosticSeverity::Info => 3,
+        crate::DiagnosticSeverity::Hint => 4,
     }
 }
 
@@ -1088,6 +1169,7 @@ impl AnalysisQueryCache {
         kind: AnalysisSourceKind,
         config: &ProjectConfig,
         source_roots: &[PathBuf],
+        asset_roots: &[PathBuf],
     ) -> AnalysisFile {
         let path = normalize_path(path);
 
@@ -1102,7 +1184,14 @@ impl AnalysisQueryCache {
 
         self.record_miss();
 
-        let file = build_analysis_file(&path, source.to_owned(), kind, config, source_roots);
+        let file = build_analysis_file(
+            &path,
+            source.to_owned(),
+            kind,
+            config,
+            source_roots,
+            asset_roots,
+        );
         self.update_dependencies(&path, &file.require_edges);
         self.files.insert(
             path,
@@ -1234,6 +1323,7 @@ fn build_analysis_file(
     kind: AnalysisSourceKind,
     config: &ProjectConfig,
     source_roots: &[PathBuf],
+    asset_roots: &[PathBuf],
 ) -> AnalysisFile {
     let parsed = parse_analysis_source(path, source.clone(), kind);
     let hir = parsed.as_ref().ok().map(lower_parsed_source);
@@ -1242,16 +1332,24 @@ fn build_analysis_file(
         .as_ref()
         .ok()
         .and_then(|parsed| build_type_environment(parsed).ok());
-    let diagnostics = match &parsed {
+    let mut diagnostics = match &parsed {
         Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
             parsed,
-            source_roots,
+            analysis_asset_roots(source_roots, asset_roots),
             &config.diagnostics,
         )
         .err()
         .unwrap_or_default(),
         Err(diagnostics) => diagnostics.clone(),
     };
+    if kind == AnalysisSourceKind::Tua {
+        if let Ok(parsed) = &parsed {
+            if let Err(mut emit_diagnostics) = emit_lua(parsed) {
+                diagnostics.append(&mut emit_diagnostics);
+            }
+        }
+    }
+    let diagnostics = deduplicate_diagnostics(diagnostics);
     let exports = parsed.as_ref().ok().and_then(infer_module_exports);
     let require_edges = module_links_tua_source(path, source.clone());
     let symbols = parsed
@@ -1271,6 +1369,17 @@ fn build_analysis_file(
         exports,
         require_edges,
         symbols,
+    }
+}
+
+fn analysis_asset_roots<'a>(
+    source_roots: &'a [PathBuf],
+    asset_roots: &'a [PathBuf],
+) -> &'a [PathBuf] {
+    if asset_roots.is_empty() {
+        source_roots
+    } else {
+        asset_roots
     }
 }
 
