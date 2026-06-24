@@ -82,3 +82,4 @@ player.hp = player.hp - 10
 - [Lua Interop](lua-interop.md) - requiring Lua from Tua and Tua from Lua.
 - [Examples](examples.md) - bundled projects and verification commands.
 - [Roadmap](roadmap.md) - implementation status and planned parity work.
+- [Architecture](architecture.md) - rust-analyzer-inspired architecture gaps.

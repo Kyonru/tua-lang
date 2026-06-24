@@ -21,6 +21,8 @@ The active roadmap focus is now deeper architecture and precision:
 - more LuaHelper parity fixtures and stub coverage;
 - editor assists such as selection/folding ranges and larger refactor support.
 
+See [Architecture](architecture.md) for the Phase 12 rust-analyzer gap matrix.
+
 After that, Phase 13 explores LOVE domain extensions:
 
 - a conservative plugin architecture for domain declarations and tooling;
