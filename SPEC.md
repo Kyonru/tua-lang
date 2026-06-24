@@ -197,7 +197,13 @@ Supported v1 facts:
 - constructor methods that visibly return `setmetatable(instance, self)`, such
   as `Account:new(...)`, may infer an Account-like instance result;
 - `__newindex` keeps unknown assignment paths permissive;
-- `__add` may preserve a vector-like left operand shape;
+- visible arithmetic metamethods `__add`, `__sub`, `__mul`, and `__div` may
+  provide operator result types;
+- visible comparison metamethods `__eq`, `__lt`, and `__le` may provide
+  boolean comparison result types;
+- visible `__len` may provide the result type for `#value`;
+- visible `__call` may make a table callable, with the table receiver treated
+  as the hidden first metamethod argument;
 - `tostring(value)` is treated as returning `string`.
 
 Dynamic metatable mutation, computed `__index` chains, and unknown

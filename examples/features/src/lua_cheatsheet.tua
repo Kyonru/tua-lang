@@ -336,16 +336,52 @@ local methodCallTwo = lookupObject:y(2)
 local methodCallThree = lookupObject.y(lookupObject, 3)
 local methodCallFour = lookupObject:y(4)
 
--- Feature: metatables and metamethods.
-local vectorA = { x = 10, y = 20 }
-local vectorB = { x = 5, y = 15 }
+-- Feature: metatables and visible metamethod operators.
+-- Tua models visible __add, __sub, __mul, __div, __eq, __lt, __le, __len,
+-- __call, __index, __newindex, and __tostring facts when setmetatable is
+-- statically visible.
+type MetaVector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local function combineVector(left: MetaVector, right: MetaVector): MetaVector
+  return {
+    x = left.x + right.x,
+    y = left.y + right.y,
+    length = left.length + right.length,
+  }
+end
+
+local function compareVector(left: MetaVector, right: MetaVector): boolean
+  return true
+end
+
+local function scaleVector(value: MetaVector, scale: number): MetaVector
+  return {
+    x = value.x * scale,
+    y = value.y * scale,
+    length = value.length * scale,
+  }
+end
+
+local function vectorLength(value: MetaVector): number
+  return value.length
+end
+
+local vectorA = { x = 10, y = 20, length = 30 }
+local vectorB = { x = 5, y = 15, length = 20 }
 local vectorMetatable = {
-  __add = function(left, right)
-    return {
-      x = left.x + right.x,
-      y = left.y + right.y,
-    }
-  end,
+  __add = combineVector,
+  __sub = combineVector,
+  __mul = combineVector,
+  __div = combineVector,
+  __eq = compareVector,
+  __lt = compareVector,
+  __le = compareVector,
+  __len = vectorLength,
+  __call = scaleVector,
   __tostring = function(value)
     return "(" .. value.x .. ", " .. value.y .. ")"
   end,
@@ -365,6 +401,15 @@ setmetatable(vectorA, vectorMetatable)
 setmetatable(vectorB, vectorMetatable)
 
 local vectorSum = vectorA + vectorB
+local vectorDifference = vectorA - vectorB
+local vectorProduct = vectorA * vectorB
+local vectorQuotient = vectorA / vectorB
+local vectorIsEqual = vectorA == vectorB
+local vectorIsDifferent = vectorA ~= vectorB
+local vectorIsLess = vectorA < vectorB
+local vectorIsLessOrEqual = vectorA <= vectorB
+local vectorLengthValue = #vectorA
+local vectorScaled = vectorA(2)
 local vectorText = tostring(vectorSum)
 vectorA.label = "uses __newindex"
 local vectorMissingLength = vectorA.length
@@ -560,6 +605,15 @@ return {
     methodCallThree = methodCallThree,
     methodCallFour = methodCallFour,
     vectorSum = vectorSum,
+    vectorDifference = vectorDifference,
+    vectorProduct = vectorProduct,
+    vectorQuotient = vectorQuotient,
+    vectorIsEqual = vectorIsEqual,
+    vectorIsDifferent = vectorIsDifferent,
+    vectorIsLess = vectorIsLess,
+    vectorIsLessOrEqual = vectorIsLessOrEqual,
+    vectorLengthValue = vectorLengthValue,
+    vectorScaled = vectorScaled,
     vectorText = vectorText,
     vectorMissingLength = vectorMissingLength,
   },

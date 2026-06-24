@@ -154,6 +154,14 @@ fn container_types_are_assignable_by_shape() {
 fn extracts_metatable_facts_from_table_shape() {
     let index_shape = TableShape::from_fields([("length", TableField::required(Type::number()))]);
     let add = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let sub = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let mul = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let div = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let eq = FunctionType::new([Type::Any, Type::Any], Type::boolean());
+    let lt = FunctionType::new([Type::Any, Type::Any], Type::boolean());
+    let le = FunctionType::new([Type::Any, Type::Any], Type::boolean());
+    let len = FunctionType::new([Type::Any], Type::number());
+    let call = FunctionType::new([Type::Any, Type::number()], Type::Any);
     let tostring = FunctionType::new([Type::Any], Type::string());
     let newindex = FunctionType::new([Type::Any, Type::string(), Type::Any], Type::nil());
     let meta = Type::table([
@@ -166,6 +174,14 @@ fn extracts_metatable_facts_from_table_shape() {
             TableField::required(Type::Function(newindex.clone())),
         ),
         ("__add", TableField::required(Type::Function(add.clone()))),
+        ("__sub", TableField::required(Type::Function(sub.clone()))),
+        ("__mul", TableField::required(Type::Function(mul.clone()))),
+        ("__div", TableField::required(Type::Function(div.clone()))),
+        ("__eq", TableField::required(Type::Function(eq.clone()))),
+        ("__lt", TableField::required(Type::Function(lt.clone()))),
+        ("__le", TableField::required(Type::Function(le.clone()))),
+        ("__len", TableField::required(Type::Function(len.clone()))),
+        ("__call", TableField::required(Type::Function(call.clone()))),
         (
             "__tostring",
             TableField::required(Type::Function(tostring.clone())),
@@ -177,6 +193,14 @@ fn extracts_metatable_facts_from_table_shape() {
     assert_eq!(facts.index, IndexFallback::Table(index_shape));
     assert_eq!(facts.newindex, NewIndexRule::Function(newindex));
     assert_eq!(facts.add, Some(add));
+    assert_eq!(facts.sub, Some(sub));
+    assert_eq!(facts.mul, Some(mul));
+    assert_eq!(facts.div, Some(div));
+    assert_eq!(facts.eq, Some(eq));
+    assert_eq!(facts.lt, Some(lt));
+    assert_eq!(facts.le, Some(le));
+    assert_eq!(facts.len, Some(len));
+    assert_eq!(facts.call, Some(call));
     assert_eq!(facts.tostring, Some(tostring));
 }
 

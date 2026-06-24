@@ -15,7 +15,7 @@ use crate::parser::{
 };
 use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
-use super::model::{MetatableFacts, TableField, Type, TypeAlias};
+use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::TypeContext;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2176,6 +2176,18 @@ fn infer_expression_return_type(
 
             infer_binary_operator_type(aliases, binop, &left, &right)
         }
+        Expression::UnaryOperator { unop, expression } => {
+            let operand = infer_expression_type(
+                parsed,
+                expression,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+            )?;
+
+            infer_unary_operator_type(aliases, unop, &operand)
+        }
         Expression::Number(_) => Some(Type::number()),
         Expression::String(_) => Some(Type::string()),
         Expression::Symbol(symbol) => match token_text(symbol).as_str() {
@@ -2339,7 +2351,7 @@ fn infer_function_call_return_types(
             .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())));
 
         return function_type
-            .map(|ty| function_return_types(&ty))
+            .map(|ty| function_return_types(aliases, &ty))
             .unwrap_or_default();
     }
 
@@ -2364,7 +2376,7 @@ fn infer_function_call_return_types(
     }
 
     infer_field_chain_type(parsed, aliases, locals, &parts)
-        .map(|ty| function_return_types(&ty))
+        .map(|ty| function_return_types(aliases, &ty))
         .unwrap_or_default()
 }
 
@@ -2440,18 +2452,25 @@ fn merge_static_metatable(base: Type, meta: Type) -> Type {
     MetatableFacts::from_type(&meta).apply_to_type(base)
 }
 
-fn function_return_types(ty: &Type) -> Vec<Type> {
-    match ty {
+fn function_return_types(aliases: &BTreeMap<String, Type>, ty: &Type) -> Vec<Type> {
+    match resolve_aliases_from_map(aliases, ty, 0) {
         Type::Function(function) => function.return_types_or_any().to_vec(),
         Type::Any => vec![Type::Any],
         Type::Union(types) => {
-            let returns = types.iter().map(function_return_types).collect::<Vec<_>>();
+            let returns = types
+                .iter()
+                .map(|ty| function_return_types(aliases, ty))
+                .collect::<Vec<_>>();
 
             type_from_return_type_lists(returns).unwrap_or_default()
         }
+        Type::Table(table) => table
+            .metatable_facts()
+            .and_then(|facts| facts.call.as_ref())
+            .map(|function| function.return_types_or_any().to_vec())
+            .unwrap_or_default(),
         Type::Alias(_)
         | Type::Primitive(_)
-        | Type::Table(_)
         | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
@@ -2550,12 +2569,16 @@ fn infer_binary_operator_type(
         return Some(Type::string());
     }
 
-    if matches!(binop, ast::BinOp::Plus(_))
-        && resolve_metatable_facts_from_map(aliases, left)
-            .and_then(|facts| facts.add)
-            .is_some()
-    {
-        return Some(left.clone());
+    if let Some(name) = arithmetic_metamethod_name(binop) {
+        if let Some(function) = binary_metamethod(aliases, left, right, name) {
+            return Some(metamethod_return_or(&function, left.clone()));
+        }
+    }
+
+    if let Some(name) = comparison_metamethod_name(binop) {
+        if let Some(function) = binary_metamethod(aliases, left, right, name) {
+            return Some(metamethod_return_or(&function, Type::boolean()));
+        }
     }
 
     if matches!(left, Type::Any) || matches!(right, Type::Any) {
@@ -2563,6 +2586,92 @@ fn infer_binary_operator_type(
     }
 
     None
+}
+
+fn infer_unary_operator_type(
+    aliases: &BTreeMap<String, Type>,
+    unop: &ast::UnOp,
+    operand: &Type,
+) -> Option<Type> {
+    match unop {
+        ast::UnOp::Hash(_) => {
+            if let Some(function) =
+                resolve_metatable_facts_from_map(aliases, operand).and_then(|facts| facts.len)
+            {
+                return Some(metamethod_return_or(&function, Type::number()));
+            }
+
+            if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                Some(Type::number())
+            }
+        }
+        ast::UnOp::Minus(_) => {
+            if is_number_type(aliases, operand) {
+                Some(Type::number())
+            } else if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                None
+            }
+        }
+        ast::UnOp::Not(_) => Some(Type::boolean()),
+        _ => {
+            if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                Some(Type::number())
+            }
+        }
+    }
+}
+
+fn binary_metamethod(
+    aliases: &BTreeMap<String, Type>,
+    left: &Type,
+    right: &Type,
+    name: &str,
+) -> Option<FunctionType> {
+    resolve_metatable_facts_from_map(aliases, left)
+        .and_then(|facts| facts.metamethod(name).cloned())
+        .or_else(|| {
+            resolve_metatable_facts_from_map(aliases, right)
+                .and_then(|facts| facts.metamethod(name).cloned())
+        })
+}
+
+fn metamethod_return_or(function: &FunctionType, fallback: Type) -> Type {
+    let ty = function
+        .return_types_or_any()
+        .first()
+        .cloned()
+        .unwrap_or(Type::Any);
+
+    if matches!(ty, Type::Any) {
+        fallback
+    } else {
+        ty
+    }
+}
+
+fn arithmetic_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::Plus(_) => Some("__add"),
+        ast::BinOp::Minus(_) => Some("__sub"),
+        ast::BinOp::Star(_) => Some("__mul"),
+        ast::BinOp::Slash(_) => Some("__div"),
+        _ => None,
+    }
+}
+
+fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_) => Some("__eq"),
+        ast::BinOp::LessThan(_) | ast::BinOp::GreaterThan(_) => Some("__lt"),
+        ast::BinOp::LessThanEqual(_) | ast::BinOp::GreaterThanEqual(_) => Some("__le"),
+        _ => None,
+    }
 }
 
 fn is_numeric_operator(binop: &ast::BinOp) -> bool {

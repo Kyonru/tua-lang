@@ -365,7 +365,11 @@ subset understands:
 - constructor methods such as `Account:new(...)` when their body visibly
   returns `setmetatable(instance, self)`;
 - `__newindex` as an assignment-compatible dynamic boundary;
-- `__add` as a vector-like operator that preserves the left operand shape;
+- visible arithmetic metamethods `__add`, `__sub`, `__mul`, and `__div`;
+- visible comparison metamethods `__eq`, `__lt`, and `__le`;
+- visible `__len` for `#value`;
+- visible `__call`, with the table receiver treated as the hidden first
+  metamethod argument;
 - `tostring(value)` as `string`, including values with `__tostring`.
 
 Dynamic metatable construction remains gradual. If the base table, metatable,

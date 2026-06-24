@@ -519,6 +519,11 @@ impl<'a> Checker<'a> {
 
                 self.infer_binary_operator_type(binop, &left, &right)
             }
+            Expression::UnaryOperator { unop, expression } => {
+                let operand = self.infer_expression(expression)?;
+
+                self.infer_unary_operator_type(unop, &operand)
+            }
             Expression::Number(_) => Some(Type::number()),
             Expression::String(value) => {
                 Some(Type::string_literal(unquote_string(&value.to_string())))
@@ -1047,13 +1052,16 @@ impl<'a> Checker<'a> {
             return Some(Type::string());
         }
 
-        if matches!(binop, ast::BinOp::Plus(_))
-            && self
-                .resolve_metatable_facts(left)
-                .and_then(|facts| facts.add)
-                .is_some()
-        {
-            return Some(left.clone());
+        if let Some(name) = arithmetic_metamethod_name(binop) {
+            if let Some(function) = self.binary_metamethod(left, right, name) {
+                return Some(metamethod_return_or(&function, left.clone()));
+            }
+        }
+
+        if let Some(name) = comparison_metamethod_name(binop) {
+            if let Some(function) = self.binary_metamethod(left, right, name) {
+                return Some(metamethod_return_or(&function, Type::boolean()));
+            }
         }
 
         if matches!(left, Type::Any) || matches!(right, Type::Any) {
@@ -1061,6 +1069,51 @@ impl<'a> Checker<'a> {
         }
 
         None
+    }
+
+    fn infer_unary_operator_type(&self, unop: &ast::UnOp, operand: &Type) -> Option<Type> {
+        match unop {
+            ast::UnOp::Hash(_) => {
+                if let Some(function) = self
+                    .resolve_metatable_facts(operand)
+                    .and_then(|facts| facts.len)
+                {
+                    return Some(metamethod_return_or(&function, Type::number()));
+                }
+
+                if matches!(operand, Type::Any) {
+                    Some(Type::Any)
+                } else {
+                    Some(Type::number())
+                }
+            }
+            ast::UnOp::Minus(_) => {
+                if self.is_number_type(operand) {
+                    Some(Type::number())
+                } else if matches!(operand, Type::Any) {
+                    Some(Type::Any)
+                } else {
+                    None
+                }
+            }
+            ast::UnOp::Not(_) => Some(Type::boolean()),
+            _ => {
+                if matches!(operand, Type::Any) {
+                    Some(Type::Any)
+                } else {
+                    Some(Type::number())
+                }
+            }
+        }
+    }
+
+    fn binary_metamethod(&self, left: &Type, right: &Type, name: &str) -> Option<FunctionType> {
+        self.resolve_metatable_facts(left)
+            .and_then(|facts| facts.metamethod(name).cloned())
+            .or_else(|| {
+                self.resolve_metatable_facts(right)
+                    .and_then(|facts| facts.metamethod(name).cloned())
+            })
     }
 
     fn is_number_type(&self, ty: &Type) -> bool {
@@ -1685,6 +1738,54 @@ fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callab
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
         Type::Function(function) => Some(Callable::Function(function)),
+        Type::Table(table) => table
+            .metatable_facts()
+            .and_then(|facts| facts.call.clone())
+            .map(|function| Callable::Function(call_metamethod_type(function))),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| callable_from_type(ty, environment)),
+        _ => None,
+    }
+}
+
+fn call_metamethod_type(mut function: FunctionType) -> FunctionType {
+    if !function.parameters.is_empty() {
+        function.parameters.remove(0);
+    }
+
+    function
+}
+
+fn metamethod_return_or(function: &FunctionType, fallback: Type) -> Type {
+    let ty = function
+        .return_types_or_any()
+        .first()
+        .cloned()
+        .unwrap_or(Type::Any);
+
+    if matches!(ty, Type::Any) {
+        fallback
+    } else {
+        ty
+    }
+}
+
+fn arithmetic_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::Plus(_) => Some("__add"),
+        ast::BinOp::Minus(_) => Some("__sub"),
+        ast::BinOp::Star(_) => Some("__mul"),
+        ast::BinOp::Slash(_) => Some("__div"),
+        _ => None,
+    }
+}
+
+fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_) => Some("__eq"),
+        ast::BinOp::LessThan(_) | ast::BinOp::GreaterThan(_) => Some("__lt"),
+        ast::BinOp::LessThanEqual(_) | ast::BinOp::GreaterThanEqual(_) => Some("__le"),
         _ => None,
     }
 }

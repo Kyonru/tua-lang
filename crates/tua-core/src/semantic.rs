@@ -12,7 +12,9 @@ use crate::module_index::{
     required_module_export_type_for_fields, required_module_exports_for_receiver, ModuleExports,
 };
 use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
-use crate::types::{FunctionType, PrimitiveType, TableField, Type, TypeEnvironment, TypedFunction};
+use crate::types::{
+    FunctionType, MetatableFacts, PrimitiveType, TableField, Type, TypeEnvironment, TypedFunction,
+};
 use crate::{ParsedSource, SourcePosition, SourceSpan, TuaType, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -122,6 +124,13 @@ impl<'a> SemanticModel<'a> {
             if let Some(kind) = asset::loader_kind(root) {
                 return vec![kind.return_type()];
             }
+
+            if let Some(returns) = self
+                .type_of_name(root, position)
+                .and_then(|ty| call_metamethod_return_types(self.environment, &ty))
+            {
+                return returns;
+            }
         }
 
         if let Some(Type::Function(function)) = self.type_of_field_chain(parts, position) {
@@ -179,6 +188,16 @@ impl<'a> SemanticModel<'a> {
 
             if let Some(kind) = asset::loader_kind(root) {
                 return Some(typed_function_from_asset_loader(kind));
+            }
+
+            if let Some(function) = self
+                .type_of_name(root, position)
+                .and_then(|ty| call_metamethod_function(self.environment, &ty))
+            {
+                return Some(typed_function_from_function_type(
+                    Some(qualified_name),
+                    function,
+                ));
             }
         }
 
@@ -402,6 +421,24 @@ impl<'a> SemanticModel<'a> {
                     }
                     table.insert(field, TableField::required(ty));
                 }
+                ast::Stmt::FunctionCall(function_call) => {
+                    let Some((target, meta)) = setmetatable_arguments(function_call) else {
+                        continue;
+                    };
+                    if !expression_is_name(target, name) {
+                        continue;
+                    }
+                    let Some(meta) = self.type_of_expression_return_at_depth(
+                        meta,
+                        node_start(function_call),
+                        0,
+                        depth + 1,
+                    ) else {
+                        continue;
+                    };
+
+                    MetatableFacts::from_type(&meta).apply_to_table(table);
+                }
                 _ => {}
             }
         }
@@ -450,6 +487,12 @@ impl<'a> SemanticModel<'a> {
                 let right = self.type_of_expression_return_at_depth(rhs, position, 0, depth + 1)?;
 
                 infer_binary_operator_type(self.environment, binop, &left, &right)
+            }
+            Expression::UnaryOperator { unop, expression } => {
+                let operand =
+                    self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)?;
+
+                infer_unary_operator_type(self.environment, unop, &operand)
             }
             Expression::Number(_) => Some(Type::number()),
             Expression::String(_) => Some(Type::string()),
@@ -1095,11 +1138,158 @@ fn infer_binary_operator_type(
         return Some(Type::string());
     }
 
+    if let Some(name) = arithmetic_metamethod_name(binop) {
+        if let Some(function) = binary_metamethod(environment, left, right, name) {
+            return Some(metamethod_return_or(&function, left.clone()));
+        }
+    }
+
+    if let Some(name) = comparison_metamethod_name(binop) {
+        if let Some(function) = binary_metamethod(environment, left, right, name) {
+            return Some(metamethod_return_or(&function, Type::boolean()));
+        }
+    }
+
     if matches!(left, Type::Any) || matches!(right, Type::Any) {
         return Some(Type::Any);
     }
 
     None
+}
+
+fn infer_unary_operator_type(
+    environment: &TypeEnvironment,
+    unop: &ast::UnOp,
+    operand: &Type,
+) -> Option<Type> {
+    match unop {
+        ast::UnOp::Hash(_) => {
+            if let Some(function) =
+                resolve_metatable_facts(environment, operand).and_then(|facts| facts.len)
+            {
+                return Some(metamethod_return_or(&function, Type::number()));
+            }
+
+            if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                Some(Type::number())
+            }
+        }
+        ast::UnOp::Minus(_) => {
+            if is_number_type(environment, operand) {
+                Some(Type::number())
+            } else if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                None
+            }
+        }
+        ast::UnOp::Not(_) => Some(Type::boolean()),
+        _ => {
+            if matches!(operand, Type::Any) {
+                Some(Type::Any)
+            } else {
+                Some(Type::number())
+            }
+        }
+    }
+}
+
+fn binary_metamethod(
+    environment: &TypeEnvironment,
+    left: &Type,
+    right: &Type,
+    name: &str,
+) -> Option<FunctionType> {
+    resolve_metatable_facts(environment, left)
+        .and_then(|facts| facts.metamethod(name).cloned())
+        .or_else(|| {
+            resolve_metatable_facts(environment, right)
+                .and_then(|facts| facts.metamethod(name).cloned())
+        })
+}
+
+fn resolve_metatable_facts(environment: &TypeEnvironment, ty: &Type) -> Option<MetatableFacts> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Table(table) => table.metatable_facts().cloned(),
+        Type::Union(types) => {
+            for ty in types {
+                if let Some(facts) = resolve_metatable_facts(environment, &ty) {
+                    return Some(facts);
+                }
+            }
+
+            None
+        }
+        _ => None,
+    }
+}
+
+fn call_metamethod_return_types(environment: &TypeEnvironment, ty: &Type) -> Option<Vec<Type>> {
+    Some(
+        call_metamethod_function(environment, ty)?
+            .return_types_or_any()
+            .to_vec(),
+    )
+}
+
+fn call_metamethod_function(environment: &TypeEnvironment, ty: &Type) -> Option<FunctionType> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Table(table) => table.metatable_facts().and_then(|facts| {
+            let mut function = facts.call.clone()?;
+
+            if !function.parameters.is_empty() {
+                function.parameters.remove(0);
+            }
+
+            Some(function)
+        }),
+        Type::Union(types) => types
+            .iter()
+            .find_map(|ty| call_metamethod_function(environment, ty)),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
+    }
+}
+
+fn metamethod_return_or(function: &FunctionType, fallback: Type) -> Type {
+    let ty = function
+        .return_types_or_any()
+        .first()
+        .cloned()
+        .unwrap_or(Type::Any);
+
+    if matches!(ty, Type::Any) {
+        fallback
+    } else {
+        ty
+    }
+}
+
+fn arithmetic_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::Plus(_) => Some("__add"),
+        ast::BinOp::Minus(_) => Some("__sub"),
+        ast::BinOp::Star(_) => Some("__mul"),
+        ast::BinOp::Slash(_) => Some("__div"),
+        _ => None,
+    }
+}
+
+fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
+    match binop {
+        ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_) => Some("__eq"),
+        ast::BinOp::LessThan(_) | ast::BinOp::GreaterThan(_) => Some("__lt"),
+        ast::BinOp::LessThanEqual(_) | ast::BinOp::GreaterThanEqual(_) => Some("__le"),
+        _ => None,
+    }
 }
 
 fn is_numeric_operator(binop: &ast::BinOp) -> bool {

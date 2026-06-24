@@ -508,6 +508,107 @@ vectorA.label = "uses __newindex"
 }
 
 #[test]
+fn accepts_static_metamethod_operator_and_call_patterns() {
+    check_tua_source(
+        "src/vector.tua",
+        r#"
+type Vector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local function vectorBinary(left: Vector, right: Vector): Vector
+  return {
+    x = left.x + right.x,
+    y = left.y + right.y,
+    length = 0,
+  }
+end
+
+local function vectorCompare(left: Vector, right: Vector): boolean
+  return true
+end
+
+local function vectorLen(value: Vector): number
+  return value.length
+end
+
+local function vectorCall(value: Vector, scale: number): Vector
+  return {
+    x = value.x * scale,
+    y = value.y * scale,
+    length = value.length,
+  }
+end
+
+local vectorMetatable = {
+  __add = vectorBinary,
+  __sub = vectorBinary,
+  __mul = vectorBinary,
+  __div = vectorBinary,
+  __eq = vectorCompare,
+  __lt = vectorCompare,
+  __le = vectorCompare,
+  __len = vectorLen,
+  __call = vectorCall,
+}
+
+local vectorA = { x = 10, y = 20, length = 30 }
+local vectorB = { x = 5, y = 15, length = 20 }
+setmetatable(vectorA, vectorMetatable)
+setmetatable(vectorB, vectorMetatable)
+
+local added: Vector = vectorA + vectorB
+local subtracted: Vector = vectorA - vectorB
+local multiplied: Vector = vectorA * vectorB
+local divided: Vector = vectorA / vectorB
+local equal: boolean = vectorA == vectorB
+local different: boolean = vectorA ~= vectorB
+local less: boolean = vectorA < vectorB
+local lessEqual: boolean = vectorA <= vectorB
+local greater: boolean = vectorA > vectorB
+local greaterEqual: boolean = vectorA >= vectorB
+local length: number = #vectorA
+local scaled: Vector = vectorA(2)
+"#,
+    )
+    .expect("static metamethods should infer operator and call results");
+}
+
+#[test]
+fn rejects_static_call_metamethod_argument_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/vector.tua",
+        r#"
+type Vector = {
+  x: number,
+  y: number,
+}
+
+local function vectorCall(value: Vector, scale: number): Vector
+  return {
+    x = value.x * scale,
+    y = value.y * scale,
+  }
+end
+
+local vectorMetatable = {
+  __call = vectorCall,
+}
+
+local vector = { x = 10, y = 20 }
+setmetatable(vector, vectorMetatable)
+
+local scaled = vector("large")
+"#,
+    )
+    .expect_err("call metamethod should check visible function arguments");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn accepts_self_index_class_style_metatable_methods() {
     check_tua_source(
         "src/account.tua",

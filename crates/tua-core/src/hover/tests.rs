@@ -489,6 +489,57 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_static_metamethod_operator_and_call_results() {
+    let source = r#"
+type Vector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local function vectorLen(value: Vector): number
+  return value.length
+end
+
+local function vectorCall(value: Vector, scale: number): Vector
+  return {
+    x = value.x * scale,
+    y = value.y * scale,
+    length = value.length,
+  }
+end
+
+local vectorMetatable = {
+  __len = vectorLen,
+  __call = vectorCall,
+}
+
+local vector = { x = 10, y = 20, length = 30 }
+setmetatable(vector, vectorMetatable)
+
+local vectorLength = #vector
+local scaledVector = vector(2)
+"#;
+    let length_hover = hover_tua_source(
+        "src/vector.tua",
+        source,
+        position_at(source, "vectorLength"),
+    )
+    .expect("hover should not fail")
+    .expect("length result should hover");
+    let scaled_hover = hover_tua_source(
+        "src/vector.tua",
+        source,
+        position_at(source, "scaledVector"),
+    )
+    .expect("hover should not fail")
+    .expect("call result should hover");
+
+    assert_eq!(length_hover.contents, "local vectorLength: number");
+    assert_eq!(scaled_hover.contents, "local scaledVector: Vector");
+}
+
+#[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
     let position = position_at(source, "missing");

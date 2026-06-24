@@ -301,6 +301,14 @@ pub struct MetatableFacts {
     pub index: IndexFallback,
     pub newindex: NewIndexRule,
     pub add: Option<FunctionType>,
+    pub sub: Option<FunctionType>,
+    pub mul: Option<FunctionType>,
+    pub div: Option<FunctionType>,
+    pub eq: Option<FunctionType>,
+    pub lt: Option<FunctionType>,
+    pub le: Option<FunctionType>,
+    pub len: Option<FunctionType>,
+    pub call: Option<FunctionType>,
     pub tostring: Option<FunctionType>,
     pub fields: TableShape,
 }
@@ -335,15 +343,33 @@ impl MetatableFacts {
         Self {
             index,
             newindex,
-            add: table.field("__add").and_then(|field| match &field.ty {
-                Type::Function(function) => Some(function.clone()),
-                _ => None,
-            }),
-            tostring: table.field("__tostring").and_then(|field| match &field.ty {
-                Type::Function(function) => Some(function.clone()),
-                _ => None,
-            }),
+            add: function_field(table, "__add"),
+            sub: function_field(table, "__sub"),
+            mul: function_field(table, "__mul"),
+            div: function_field(table, "__div"),
+            eq: function_field(table, "__eq"),
+            lt: function_field(table, "__lt"),
+            le: function_field(table, "__le"),
+            len: function_field(table, "__len"),
+            call: function_field(table, "__call"),
+            tostring: function_field(table, "__tostring"),
             fields: table.clone(),
+        }
+    }
+
+    pub fn metamethod(&self, name: &str) -> Option<&FunctionType> {
+        match name {
+            "__add" => self.add.as_ref(),
+            "__sub" => self.sub.as_ref(),
+            "__mul" => self.mul.as_ref(),
+            "__div" => self.div.as_ref(),
+            "__eq" => self.eq.as_ref(),
+            "__lt" => self.lt.as_ref(),
+            "__le" => self.le.as_ref(),
+            "__len" => self.len.as_ref(),
+            "__call" => self.call.as_ref(),
+            "__tostring" => self.tostring.as_ref(),
+            _ => None,
         }
     }
 
@@ -371,6 +397,13 @@ impl MetatableFacts {
             _ => None,
         }
     }
+}
+
+fn function_field(table: &TableShape, name: &str) -> Option<FunctionType> {
+    table.field(name).and_then(|field| match &field.ty {
+        Type::Function(function) => Some(function.clone()),
+        _ => None,
+    })
 }
 
 fn is_metamethod_field(name: &str) -> bool {
