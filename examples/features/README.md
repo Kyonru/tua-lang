@@ -43,6 +43,8 @@ make build-features
   feature.
 - `src/formatting_lints.tua` demonstrates the clean baseline expected by the
   opt-in `formatting_lints` diagnostic profile.
+- `src/luacats_emit.tua` demonstrates the optional LuaCATS emission mode for
+  aliases, annotated locals, function signatures, and stable module exports.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,

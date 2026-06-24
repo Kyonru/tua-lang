@@ -19,7 +19,7 @@ use crate::{
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
     complete_tua_source, definition_parsed_source, document_highlights_parsed_source,
-    document_symbols_parsed_source, emit_lua, exported_field_for_fields,
+    document_symbols_parsed_source, emit_lua_with_mode, exported_field_for_fields,
     global_function_definition_count, global_function_name_for_definition,
     global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
@@ -2249,7 +2249,9 @@ fn build_analysis_file(
         if let Ok(parsed) = &parsed {
             let _profile = profile::span_for_path("analysis.emit.check", path);
 
-            if let Err(mut emit_diagnostics) = emit_lua(parsed) {
+            if let Err(mut emit_diagnostics) =
+                emit_lua_with_mode(parsed, config.emit.annotation_mode)
+            {
                 diagnostics.append(&mut emit_diagnostics);
             }
         }

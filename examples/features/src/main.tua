@@ -10,6 +10,7 @@ local Scopes = require("scopes")
 local ProjectTypes = require("project_types")
 local LuaCheatsheet = require("lua_cheatsheet")
 local FormattingLints = require("formatting_lints")
+local LuaCatsEmit = require("luacats_emit")
 
 return {
   types = Types,
@@ -24,4 +25,5 @@ return {
   project_types = ProjectTypes,
   lua_cheatsheet = LuaCheatsheet,
   formatting_lints = FormattingLints,
+  luacats_emit = LuaCatsEmit,
 }

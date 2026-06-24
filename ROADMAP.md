@@ -34,7 +34,7 @@ Acceptance:
 
 ### 2. `docs: add committable implementation roadmap`
 
-Status: current.
+Status: done.
 
 Scope:
 
@@ -48,6 +48,8 @@ Acceptance:
 ## Phase 1: Rust Workspace And CLI Shell
 
 ### 3. `chore: scaffold rust workspace`
+
+Status: done.
 
 Scope:
 
@@ -65,6 +67,8 @@ Acceptance:
 - `cargo run -p tua-cli -- --help` prints command help.
 
 ### 4. `feat(cli): add command structure`
+
+Status: done.
 
 Scope:
 
@@ -86,6 +90,8 @@ Acceptance:
 
 ### 5. `feat(config): load tua project configuration`
 
+Status: done.
+
 Scope:
 
 - Define `tua.toml` config with defaults:
@@ -104,6 +110,8 @@ Acceptance:
   is added.
 
 ### 6. `feat(diagnostics): add shared diagnostic model`
+
+Status: done.
 
 Scope:
 
@@ -126,6 +134,8 @@ Acceptance:
 
 ### 7. `feat(parser): parse lua-compatible tua sources`
 
+Status: done.
+
 Scope:
 
 - Integrate a Lua parser foundation.
@@ -138,6 +148,8 @@ Acceptance:
 - Syntax errors produce `TL000x` diagnostics with source locations.
 
 ### 8. `feat(parser): parse erased type syntax`
+
+Status: done.
 
 Scope:
 
@@ -153,6 +165,8 @@ Acceptance:
 
 ### 9. `feat(parser): parse compound assignment syntax`
 
+Status: done.
+
 Scope:
 
 - Parse `+=`, `-=`, `*=`, `/=`, and `%=`.
@@ -167,6 +181,8 @@ Acceptance:
 
 ### 10. `feat(emit): erase type-only syntax`
 
+Status: done.
+
 Scope:
 
 - Emit Lua with type aliases removed.
@@ -180,6 +196,8 @@ Acceptance:
 
 ### 11. `feat(emit): lower compound assignment`
 
+Status: done.
+
 Scope:
 
 - Lower supported compound assignments to Lua 5.1-compatible assignments.
@@ -192,6 +210,8 @@ Acceptance:
 - Unsupported left-hand sides produce `TL200x` diagnostics.
 
 ### 12. `feat(build): mirror source tree to output tree`
+
+Status: done.
 
 Scope:
 
@@ -209,6 +229,8 @@ Acceptance:
 
 ### 13. `feat(types): add v1 type representation`
 
+Status: done.
+
 Scope:
 
 - Represent primitive types, `any`, aliases, unions, function types, table
@@ -221,6 +243,8 @@ Acceptance:
   table shape compatibility.
 
 ### 14. `feat(types): collect aliases and annotations`
+
+Status: done.
 
 Scope:
 
@@ -235,6 +259,8 @@ Acceptance:
 
 ### 15. `feat(check): check annotated locals and assignments`
 
+Status: done.
+
 Scope:
 
 - Infer primitive literal types.
@@ -247,6 +273,8 @@ Acceptance:
 - Unannotated dynamic code remains permissive.
 
 ### 16. `feat(check): check function boundaries`
+
+Status: done.
 
 Scope:
 
@@ -262,6 +290,8 @@ Acceptance:
 
 ### 17. `feat(cli): implement check command`
 
+Status: done.
+
 Scope:
 
 - Wire config loading, source discovery, parsing, and type checking into
@@ -274,6 +304,8 @@ Acceptance:
 - Diagnostics include file, line, column, severity, and message.
 
 ### 18. `feat(cli): implement build command`
+
+Status: done.
 
 Scope:
 
@@ -288,6 +320,8 @@ Acceptance:
 - `--emit-on-error` emits possible files and still exits non-zero.
 
 ### 19. `feat(cli): implement watch command`
+
+Status: done.
 
 Scope:
 
@@ -306,6 +340,8 @@ Acceptance:
 
 ### 20. `test(love): add minimal love example`
 
+Status: done.
+
 Scope:
 
 - Add `examples/love-minimal`.
@@ -318,6 +354,8 @@ Acceptance:
 - CI or local tests skip gracefully when LÖVE is unavailable.
 
 ### 21. `test(lua): validate emitted lua syntax`
+
+Status: done.
 
 Scope:
 
@@ -335,6 +373,8 @@ Acceptance:
 
 ### 22. `feat(lsp): serve diagnostics`
 
+Status: done.
+
 Scope:
 
 - Implement `tua lsp` over stdio.
@@ -347,6 +387,8 @@ Acceptance:
 
 ### 23. `feat(lsp): add hover support`
 
+Status: done.
+
 Scope:
 
 - Add hover for known type aliases, locals, function signatures, and table
@@ -358,6 +400,8 @@ Acceptance:
 - Unknown symbols produce no hover instead of an error.
 
 ### 24. `feat(lsp): add basic completions`
+
+Status: done.
 
 Scope:
 
@@ -372,6 +416,8 @@ Acceptance:
 ## Phase 9: VS Code Extension
 
 ### 25. `feat(vscode): add minimal tua extension`
+
+Status: done.
 
 Scope:
 
@@ -388,6 +434,8 @@ Acceptance:
 
 ### 26. `feat(vscode): connect extension to tua lsp`
 
+Status: done.
+
 Scope:
 
 - Launch `tua lsp` from the extension.
@@ -403,6 +451,8 @@ Acceptance:
 
 ### 27. `docs: add user-facing quickstart`
 
+Status: done.
+
 Scope:
 
 - Add quickstart instructions to `README.md`.
@@ -416,6 +466,8 @@ Acceptance:
 
 ### 28. `test: add v1 acceptance suite`
 
+Status: done.
+
 Scope:
 
 - Add end-to-end tests that map directly to the `SPEC.md` acceptance criteria.
@@ -428,6 +480,8 @@ Acceptance:
 - Fixture names clearly match spec features.
 
 ### 29. `chore: prepare v1.0.0-alpha release`
+
+Status: done.
 
 Scope:
 
@@ -464,6 +518,8 @@ server buildable and tested.
 
 ### 30. `docs(lsp): add luahelper parity matrix`
 
+Status: done.
+
 Scope:
 
 - Add a checked-in feature matrix comparing Tua, LuaHelper, and useful
@@ -481,6 +537,8 @@ Acceptance:
 - Each planned gap points to a roadmap commit number.
 
 ### 31. `feat(project): add shared analysis snapshot`
+
+Status: done.
 
 Scope:
 
@@ -501,6 +559,8 @@ Acceptance:
 
 ### 32. `feat(lsp): reindex project on watched file changes`
 
+Status: done.
+
 Scope:
 
 - Wire `workspace/didChangeWatchedFiles` into the shared analysis snapshot.
@@ -516,6 +576,8 @@ Acceptance:
 - Changing `tua.toml` updates diagnostic settings for files under that root.
 
 ### 33. `feat(parser): parse luahelper doc annotations`
+
+Status: done.
 
 Scope:
 
@@ -541,6 +603,8 @@ Acceptance:
 
 ### 34. `feat(types): lower luahelper annotations into type environment`
 
+Status: done.
+
 Scope:
 
 - Convert parsed LuaHelper annotations into Tua `TypeEnvironment` entries.
@@ -558,6 +622,8 @@ Acceptance:
   deterministic diagnostics.
 
 ### 35. `feat(lua): ingest standard-library annotation stubs`
+
+Status: done.
 
 Scope:
 
@@ -578,6 +644,8 @@ Acceptance:
 
 ### 36. `feat(lint): add undefined and unused symbol diagnostics`
 
+Status: done.
+
 Scope:
 
 - Add configurable diagnostics for:
@@ -596,6 +664,8 @@ Acceptance:
   permissive where static proof is not possible.
 
 ### 37. `feat(lint): add luahelper-style correctness checks`
+
+Status: done.
 
 Scope:
 
@@ -621,6 +691,8 @@ Acceptance:
 
 ### 38. `feat(completion): add annotation and doc-snippet completions`
 
+Status: done.
+
 Scope:
 
 - Complete annotation tags after `---@`.
@@ -636,6 +708,8 @@ Acceptance:
 - Annotation completions work in `.lua` and `.tua` files.
 
 ### 39. `feat(completion): make resolve truly lazy`
+
+Status: done.
 
 Scope:
 
@@ -654,6 +728,8 @@ Acceptance:
 
 ### 40. `feat(hover): attach docs and declaration context`
 
+Status: done.
+
 Scope:
 
 - Include doc comments and annotation documentation in hover output.
@@ -668,6 +744,8 @@ Acceptance:
 - Hover remains empty for unknown symbols.
 
 ### 41. `feat(signature): add parameter documentation`
+
+Status: done.
 
 Scope:
 
@@ -685,6 +763,8 @@ Acceptance:
 
 ### 42. `feat(references): add project-wide symbol references`
 
+Status: done.
+
 Scope:
 
 - Use the shared analysis snapshot to find references across workspace files.
@@ -701,6 +781,8 @@ Acceptance:
 
 ### 43. `feat(rename): add safe cross-file rename`
 
+Status: done.
+
 Scope:
 
 - Extend rename from single-file edits to workspace edits when the target has a
@@ -716,6 +798,8 @@ Acceptance:
 - Workspace edits are deterministic and sorted by path and range.
 
 ### 44. `feat(code-action): add quick fixes`
+
+Status: done.
 
 Scope:
 
@@ -735,6 +819,8 @@ Acceptance:
 
 ### 45. `feat(imports): add auto-import completion`
 
+Status: done.
+
 Scope:
 
 - Index exported module symbols by name.
@@ -750,6 +836,8 @@ Acceptance:
 - Existing require aliases are reused instead of duplicated.
 
 ### 46. `feat(config): handle workspace configuration changes`
+
+Status: done.
 
 Scope:
 
@@ -767,6 +855,8 @@ Acceptance:
 
 ### 47. `feat(semantic): add richer token classes`
 
+Status: done.
+
 Scope:
 
 - Expand semantic tokens for globals, module names, methods, fields, aliases,
@@ -782,6 +872,8 @@ Acceptance:
 
 ### 48. `feat(lsp): add call hierarchy`
 
+Status: done.
+
 Scope:
 
 - Advertise and implement call hierarchy for known functions.
@@ -796,6 +888,8 @@ Acceptance:
 - Dynamic calls through `any` are ignored rather than guessed.
 
 ### 48.5 `feat(love): add built-in love api catalog`
+
+Status: done.
 
 Scope:
 
@@ -818,6 +912,8 @@ Acceptance:
 
 ### 48.6 `feat(assets): add typed love asset loaders`
 
+Status: done.
+
 Scope:
 
 - Add typed LOVE-focused asset loader helpers:
@@ -836,6 +932,8 @@ Acceptance:
 - Emitted Lua contains ordinary LOVE API calls and no Tua-only asset syntax.
 
 ### 49. `test(lsp): add luahelper parity fixtures`
+
+Status: done.
 
 Scope:
 
@@ -856,6 +954,8 @@ Acceptance:
 - The suite can be expanded without changing helper APIs.
 
 ### 50. `docs: update roadmap after parity milestone`
+
+Status: done.
 
 Scope:
 
@@ -882,9 +982,7 @@ LOVE helpers, LuaDoc parsing, and watched-file updates exist. Phase 12 should
 therefore prioritize architecture, consistency, and performance over adding
 another parallel feature path.
 
-Status: Phase 12 is complete as a pragmatic first architecture pass. Items below
-are marked done when the smaller Tua-sized version landed, or deferred when the
-remaining work is better handled by a later precision-focused roadmap item.
+Status: done.
 
 ### 51. `docs(architecture): add rust-analyzer gap matrix`
 
@@ -913,8 +1011,7 @@ Acceptance:
 
 ### 52. `test: add fixture DSL for IDE and project tests`
 
-Status: deferred follow-up. Representative fixtures exist, but broad migration
-from older ad hoc tests should stay incremental.
+Status: done.
 
 Scope:
 
@@ -1004,8 +1101,7 @@ Acceptance:
 
 ### 56. `feat(db): add dependency-tracked query cache`
 
-Status: done for the current file-granular cache. Deeper query-database
-precision is deferred until a concrete performance or correctness need appears.
+Status: done.
 
 Scope:
 
@@ -1132,8 +1228,7 @@ Acceptance:
 
 ### 62. `feat(types): add flow-sensitive narrowing`
 
-Status: deferred follow-up. Basic obvious checks exist, but full block-local
-narrowing remains future precision work.
+Status: done.
 
 Scope:
 
@@ -1152,7 +1247,7 @@ Acceptance:
 
 ### 63. `feat(diagnostics): move diagnostics to incremental pipeline`
 
-Status: done for the current CLI/LSP diagnostic path.
+Status: done.
 
 Scope:
 
@@ -1533,6 +1628,8 @@ Acceptance:
 
 ### 70.15 `feat(emit): export Lua code with optional LuaCATS/annotation mode`
 
+Status: done.
+
 Scope:
 
 - Add an opt-in emission mode to preserve useful type information as Lua comments
@@ -1558,6 +1655,48 @@ Acceptance:
   checker to execute.
 - Users can keep existing erased output with `annotation_mode = "off"` while
   enabling the richer mode per project.
+
+### 70.16 `docs(lsp): inventory LuaHelper codes and map missing Tua/LSP support`
+
+Status: done.
+
+Scope:
+
+- Collect LuaHelper diagnostic/code identifiers in use across the language server
+  behavior relevant to this project:
+  - diagnostics and warnings,
+  - lint/check categories,
+  - code-action/quick-fix families,
+  - annotation/docs tags used by diagnostics or editor surfaces.
+- Build a checked-in mapping artifact (for example `docs/luahelper-code-matrix.md`
+  or a similar dedicated doc) with columns:
+  - LuaHelper code/tag;
+  - source of truth in LuaHelper;
+  - equivalent behavior in Tua core checker/lint;
+  - equivalent behavior in `tua-lsp` editor features;
+  - support state: implemented, partial, missing, or intentionally out of scope;
+  - exact commit reference for planned implementation.
+- Include separate rows for each code/tag that currently:
+  - exists in LuaHelper and is implemented in Tua core only,
+  - exists in LuaHelper and is implemented in LSP only,
+  - exists in LuaHelper but missing in both.
+- Add short migration notes for missing entries:
+  - likely owner (parser/types/lint/emit/lsp/config/fixtures),
+  - prerequisite gap blockers, and
+  - planned replacement if Tua intentionally diverges.
+- Link missing rows to planned tasks in Phase 11 or later phases before closing the
+  gap.
+
+Acceptance:
+
+- The matrix is comprehensive enough to answer:
+  - "Is this LuaHelper code implemented in Tua core?"
+  - "Does this Tua behavior surface in the LSP?"
+  - "Which codes are missing today and why?"
+- Every "missing" LuaHelper code has a dedicated follow-up roadmap ticket or a
+  justified non-goal decision.
+- The phase parity commit list references this matrix when claiming LuaHelper parity
+  progress.
 
 ## Phase 13: LOVE Domain Extensions
 

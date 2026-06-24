@@ -368,6 +368,66 @@ return {
 }
 
 #[test]
+fn build_emits_luacats_annotations_when_configured() {
+    let temp = TempDir::new("build-luacats");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[emit]
+annotation_mode = "luacats"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 10 }
+
+local function make_player(name: string): Player
+  player.hp = #name
+  return player
+end
+
+return {
+  player = player,
+  make_player = make_player,
+}
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(emitted.contains("---@alias Player { hp: number }"));
+    assert!(emitted.contains("---@type Player\nlocal player = { hp = 10 }"));
+    assert!(emitted.contains("---@param name string\n---@return Player"));
+    assert!(emitted.contains("---@field player Player"));
+    assert!(emitted.contains("---@field make_player fun(name: string): Player"));
+    assert!(!emitted.contains("local player: Player"));
+}
+
+#[test]
 fn build_accepts_project_aware_types_from_tua_and_lua_modules() {
     let temp = TempDir::new("build-project-types");
 

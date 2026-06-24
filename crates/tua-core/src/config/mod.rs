@@ -14,8 +14,9 @@ out = \"build\"
 target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
+
 [emit]
-annotation_mode = \"off\"\n\n\
+annotation_mode = \"off\"
 
 [diagnostics]
 duplicate_keys = false

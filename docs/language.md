@@ -71,8 +71,11 @@ local player = makePlayer("Ada")
 player.hp = player.hp - 10
 ```
 
-Type aliases emit no runtime code. Function and local annotations disappear.
-Sugar such as `-=` is lowered to Lua 5.1-compatible assignment.
+Type aliases emit no runtime code. Function and local annotations disappear by
+default; set `annotation_mode = "luacats"` in your project `tua.toml` to export
+LuaCATS comments (`---@alias`, `---@type`, `---@param`, `---@return`, and stable
+`---@field` exports) with emitted Lua. Sugar such as `-=` is lowered to Lua
+5.1-compatible assignment.
 
 ## What Tua Tries To Know
 

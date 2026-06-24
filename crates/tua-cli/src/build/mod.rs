@@ -9,8 +9,9 @@ use crate::source::{
     SourceKind,
 };
 use tua_core::{
-    emit_tua_source, format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind, Diagnostic,
-    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    emit_tua_source_with_mode, format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind,
+    AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+    LoadedConfig, ProjectWorkspace,
 };
 
 #[derive(Debug, Default)]
@@ -69,10 +70,12 @@ pub(crate) fn build_project(
         (!in_place).then_some(&out_dir),
     )
     .map_err(|error| CliError::from_diagnostics("failed to discover source files", vec![error]))?;
+    let annotation_mode = workspace.config().emit.annotation_mode;
 
     Ok(build_project_files(
         cwd,
         loaded,
+        annotation_mode,
         source_files,
         emit_on_error,
     ))
@@ -137,6 +140,8 @@ pub(crate) fn build_changed_files(
 
     let snapshot = host.snapshot();
 
+    let annotation_mode = workspace.config().emit.annotation_mode;
+
     for (source_path, output_path, source) in units {
         let mut source_diagnostics = snapshot.pipeline_diagnostics(&source_path);
         let has_source_errors = has_errors(&source_diagnostics);
@@ -149,7 +154,7 @@ pub(crate) fn build_changed_files(
 
         push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
 
-        let output = match emit_tua_source(&source_path, source) {
+        let output = match emit_tua_source_with_mode(&source_path, source, annotation_mode) {
             Ok(output) => output,
             Err(mut source_diagnostics) => {
                 outcome.diagnostics.append(&mut source_diagnostics);
@@ -169,6 +174,7 @@ pub(crate) fn build_changed_files(
 fn build_project_files(
     cwd: &Path,
     loaded: LoadedConfig,
+    annotation_mode: AnnotationMode,
     source_files: Vec<SourceFile>,
     emit_on_error: bool,
 ) -> BuildOutcome {
@@ -301,7 +307,8 @@ fn build_project_files(
                     continue;
                 }
 
-                let output = match emit_tua_source(&source_path, source) {
+                let output = match emit_tua_source_with_mode(&source_path, source, annotation_mode)
+                {
                     Ok(output) => output,
                     Err(mut source_diagnostics) => {
                         diagnostics.append(&mut source_diagnostics);

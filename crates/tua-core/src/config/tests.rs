@@ -42,6 +42,9 @@ fn default_config_matches_spec() {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            emit: EmitConfig {
+                annotation_mode: AnnotationMode::Off,
+            },
             diagnostics: DiagnosticsConfig::default(),
         }
     );
@@ -56,6 +59,8 @@ out = "dist"
 target = "love11-luajit"
 extension = "tl"
 emit_maps = false
+[emit]
+annotation_mode = "luacats"
 
 [diagnostics]
 duplicate_keys = true
@@ -90,6 +95,9 @@ globals = ["Game", "World"]
             target: "love11-luajit".to_owned(),
             extension: "tl".to_owned(),
             emit_maps: false,
+            emit: EmitConfig {
+                annotation_mode: AnnotationMode::Luacats,
+            },
             diagnostics: DiagnosticsConfig {
                 duplicate_keys: true,
                 missing_requires: true,
@@ -131,6 +139,12 @@ emit_maps = false
     assert_eq!(config.target, "love11-luajit");
     assert_eq!(config.extension, "tua");
     assert!(!config.emit_maps);
+    assert_eq!(
+        config.emit,
+        EmitConfig {
+            annotation_mode: AnnotationMode::Off,
+        }
+    );
     assert_eq!(config.diagnostics, DiagnosticsConfig::default());
 }
 
@@ -203,6 +217,34 @@ fn rejects_invalid_boolean_values() {
 
     assert_eq!(error.line, 1);
     assert!(error.message.contains("expected boolean"));
+}
+
+#[test]
+fn rejects_invalid_annotation_mode() {
+    let error = parse_config("[emit]\nannotation_mode = \"strict\"\n").unwrap_err();
+
+    assert_eq!(error.line, 2);
+    assert!(error.message.contains("expected annotation mode"));
+}
+
+#[test]
+fn parses_emit_section_with_defaults() {
+    let config = parse_config(
+        r#"
+[emit]
+annotation_mode = "luacats"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.emit,
+        EmitConfig {
+            annotation_mode: AnnotationMode::Luacats,
+        }
+    );
+    assert_eq!(config.source, PathBuf::from("src"));
+    assert_eq!(config.emit.annotation_mode, AnnotationMode::Luacats);
 }
 
 #[test]

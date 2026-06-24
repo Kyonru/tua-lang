@@ -63,8 +63,9 @@ pub use code_action::{
 };
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{
-    init_project, load_config_from_dir, parse_config, ConfigError, ConfigParseError,
-    DiagnosticsConfig, InitResult, LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+    init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,
+    ConfigParseError, DiagnosticsConfig, EmitConfig, InitResult, LoadedConfig, ProjectConfig,
+    CONFIG_FILE, DEFAULT_CONFIG_TEXT,
 };
 pub use definition::{definition_parsed_source, definition_tua_source, Definition, DefinitionKind};
 pub use diagnostic::{
@@ -77,7 +78,7 @@ pub use document_highlight::{
 pub use document_symbol::{
     document_symbols_parsed_source, document_symbols_tua_source, DocumentSymbol, DocumentSymbolKind,
 };
-pub use emit::{emit_lua, emit_tua_source};
+pub use emit::{emit_lua, emit_lua_with_mode, emit_tua_source, emit_tua_source_with_mode};
 #[cfg(any(test, feature = "test-fixture"))]
 pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, FixtureTempDir};
 pub use folding_range::{

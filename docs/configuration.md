@@ -11,6 +11,9 @@ target = "love11-luajit"
 extension = "tua"
 emit_maps = true
 
+[emit]
+annotation_mode = "off"
+
 [diagnostics]
 duplicate_keys = false
 missing_requires = false
@@ -31,12 +34,7 @@ const_assignments = false
 parameter_type_mismatches = false
 return_type_mismatches = false
 formatting_lints = false
-inline_ignores = false
-inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
-inline_ignore_max_per_file = 0
 globals = []
-[emit]
-annotation_mode = "off"
 ```
 
 ## Root Options
@@ -66,7 +64,7 @@ annotation_mode = "off"
 - `luacats`: emit LuaCATS-compatible comments derived from available type
   information.
 
-Planned LuaCATS output includes:
+LuaCATS output includes:
 
 - `---@alias` for exported type aliases.
 - `---@type` for annotated locals.
@@ -98,10 +96,8 @@ const_assignments = true
 parameter_type_mismatches = true
 return_type_mismatches = true
 formatting_lints = true
-inline_ignores = false
-inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
-inline_ignore_max_per_file = 0
 globals = ["love", "_G"]
+
 [emit]
 annotation_mode = "luacats"
 ```
@@ -171,31 +167,6 @@ annotation_mode = "luacats"
   parenthesis/bracket padding, and assignment-style token spacing. These lints
   help mixed `.lua` and `.tua` code stay readable across contributors without
   rewriting files or enforcing a full formatter.
-
-`inline_ignores`
-: Enables line-level diagnostic suppression comments.
-
-`inline_ignore_scopes`
-: Limits which suppression comment forms are accepted. Valid values are comment
-  tags such as `tua-ignore-line`, `tua-ignore-next-line`, and
-  `tua-ignore-file`.
-
-`inline_ignore_max_per_file`
-: Controls suppression-policy size. A value of `0` means unlimited suppressions.
-  Any positive value caps how many comments can be used in one file.
-
-Inline suppression examples:
-
-```lua
--- tua-ignore-line TL4018
-player:setFilter("nearest")
-
--- tua-ignore-next-line TL4001 TL4018
-local x = some_dynamic_access()
-```
-
-If an ignore comment lists no matching diagnostic in scope, the checker can emit a
-special warning diagnostic so suppression is explicit instead of silent.
 
 `globals`
 : Adds project-specific global names that should be accepted by diagnostics and

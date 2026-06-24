@@ -1,0 +1,30 @@
+-- Feature: LuaCATS emission keeps useful Tua type information in exported Lua.
+-- To inspect the generated comments, set this in examples/features/tua.toml:
+--
+-- [emit]
+-- annotation_mode = "luacats"
+
+type ExportedPlayer = {
+  name: string,
+  hp: number,
+}
+
+-- Feature: annotated locals emit `---@type` before the plain Lua declaration.
+local exportedPlayer: ExportedPlayer = {
+  name = "LuaCATS",
+  hp = 100,
+}
+
+-- Feature: annotated functions emit `---@param` and `---@return`.
+local function makeExportedPlayer(name: string): ExportedPlayer
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+-- Feature: stable returned module fields emit `---@field` entries.
+return {
+  exportedPlayer = exportedPlayer,
+  makeExportedPlayer = makeExportedPlayer,
+}

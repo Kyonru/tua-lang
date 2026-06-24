@@ -86,6 +86,178 @@ end
 }
 
 #[test]
+fn snapshot_emits_luacats_annotations() {
+    let emitted = emit_tua_source_with_mode(
+        "src/functions.tua",
+        r#"
+type Player = {
+  hp: number,
+  alive: boolean,
+}
+
+local score: number = 0
+
+function heal(player: Player, amount: number): Player
+  player.hp = player.hp + amount
+  return player
+end
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("luacats mode should emit type annotations");
+
+    assert_eq!(
+        emitted,
+        r#"---@alias Player { hp: number, alive: boolean }
+
+---@type number
+local score = 0
+
+---@param player Player
+---@param amount number
+---@return Player
+function heal(player, amount)
+  player.hp = player.hp + amount
+  return player
+end
+"#
+    );
+}
+
+#[test]
+fn snapshot_emits_luacats_annotations_for_local_functions_and_exports() {
+    let emitted = emit_tua_source_with_mode(
+        "src/player_factory.tua",
+        r#"
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  name: string,
+  pos: Vec2,
+}
+
+local default_player: Player = {
+  name = "hero",
+  pos = { x = 0, y = 0 },
+}
+
+local function make_player(name: string): Player
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+  }
+end
+
+return {
+  default_player = default_player,
+  make_player = make_player,
+}
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("luacats mode should annotate stable module exports");
+
+    assert_eq!(
+        emitted,
+        r#"---@alias Vec2 { x: number, y: number }
+---@alias Player { name: string, pos: Vec2 }
+
+---@type Player
+local default_player = {
+  name = "hero",
+  pos = { x = 0, y = 0 },
+}
+
+---@param name string
+---@return Player
+local function make_player(name)
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+  }
+end
+
+---@class PlayerFactoryExports
+---@field default_player Player
+---@field make_player fun(name: string): Player
+return {
+  default_player = default_player,
+  make_player = make_player,
+}
+"#
+    );
+}
+
+#[test]
+fn snapshot_emits_luacats_type_only_alias_without_runtime_code() {
+    let emitted = emit_tua_source_with_mode(
+        "src/types.tua",
+        r#"
+type Player = {
+  hp: number,
+}
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("luacats mode should keep alias information");
+
+    assert_eq!(
+        emitted,
+        r#"---@alias Player { hp: number }
+"#
+    );
+}
+
+#[test]
+fn snapshot_luacats_annotations_follow_nested_indentation() {
+    let emitted = emit_tua_source_with_mode(
+        "src/nested.tua",
+        r#"
+if ready then
+  local score: number = 1
+end
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("luacats comments should match declaration indentation");
+
+    assert_eq!(
+        emitted,
+        r#"if ready then
+  ---@type number
+  local score = 1
+end
+"#
+    );
+}
+
+#[test]
+fn snapshot_luacats_mode_does_not_emit_annotations_by_default() {
+    let emitted = emit_tua_source_with_mode(
+        "src/functions.tua",
+        r#"
+type Player = {
+  hp: number,
+  alive: boolean,
+}
+
+local score: number = 0
+"#,
+        AnnotationMode::Off,
+    )
+    .expect("off mode should preserve erased output");
+
+    assert_eq!(
+        emitted,
+        r#"local score = 0
+"#
+    );
+}
+
+#[test]
 fn snapshot_preserves_ordinary_lua_statements_and_expressions() {
     let input = r#"
 local Player = require("player")
