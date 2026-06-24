@@ -18,6 +18,7 @@ pub mod inlay_hint;
 mod lint;
 mod love_api;
 mod lua;
+pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
 pub mod parser;
@@ -76,6 +77,10 @@ pub use hir::{
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use lua::builtin_definition_document;
+pub use module_graph::{
+    ModuleExportEntry, ModuleExportOrigin, ModuleGraph, ModuleGraphInput, ModuleGraphModule,
+    ModuleGraphOptions, RequireGraphEdge, RequireResolution,
+};
 pub use module_index::{
     exported_field_for_fields, exported_type_for_fields, infer_module_exports,
     require_bindings_for_parsed_source, required_module_export_for_fields,

@@ -38,12 +38,12 @@ pub(crate) fn require_module_at_position(source: &str, position: SourcePosition)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct RequireModuleLiteral {
-    module: String,
-    span: SourceSpan,
+pub(crate) struct RequireModuleLiteral {
+    pub module: String,
+    pub span: SourceSpan,
 }
 
-fn require_module_literals(source: &str) -> Vec<RequireModuleLiteral> {
+pub(crate) fn require_module_literals(source: &str) -> Vec<RequireModuleLiteral> {
     source
         .split('\n')
         .enumerate()

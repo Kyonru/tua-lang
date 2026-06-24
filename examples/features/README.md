@@ -27,6 +27,8 @@ make build-features
   the permissive `any` boundary.
 - `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
   interop, and cross-file go to definition for required module exports.
+- `src/require_graph.tua` covers snapshot-indexed require edges and export
+  lookup for `.tua` and `.lua` modules.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as

@@ -307,3 +307,85 @@ return M
     assert_eq!(stats.require_edge_misses, 1);
     assert_eq!(stats.symbol_index_misses, 1);
 }
+
+#[test]
+fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Player = require("player")
+local player = Player.<|usage|>new()
+-- file: src/player.tua
+local function <|def|>new<|/def|>()
+  return { hp = 100 }
+end
+
+return {
+  new = new,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("usage"))
+        .expect("required module export should resolve from snapshot index");
+
+    assert_eq!(definition.path, PathBuf::from("src/player.tua"));
+    assert_eq!(definition.span, fixture.range("def"));
+}
+
+#[test]
+fn snapshot_hover_uses_indexed_module_exports_without_reading_files() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Audio = require("audio")
+local ok = Audio.<|hover|>play("theme")
+-- file: src/audio.lua
+---@param source string audio source
+---@return boolean success flag
+local function play(source)
+  return true
+end
+
+return {
+  play = play,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("required module export hover should resolve from snapshot index");
+
+    assert!(hover
+        .contents
+        .contains("function Audio.play(string): boolean"));
+    assert_eq!(
+        hover.documentation,
+        Some("audio source\nsuccess flag".to_owned())
+    );
+}

@@ -1,0 +1,18 @@
+local Functions = require("functions")
+local Legacy = require("legacy")
+
+-- Feature: the analysis snapshot builds a require graph from indexed files.
+-- Go to definition on `Functions.makePlayer` should jump to functions.tua
+-- without rereading the required module during the request.
+local makePlayer = Functions.makePlayer
+local player = makePlayer("require graph")
+
+-- Feature: plain Lua modules participate in the export index too.
+-- Hover on `Legacy.describe` should show the inferred Lua export type.
+local description = Legacy.describe("hp", player.hp)
+
+return {
+  makePlayer = makePlayer,
+  player = player,
+  description = description,
+}

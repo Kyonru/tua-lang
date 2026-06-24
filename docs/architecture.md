@@ -210,6 +210,66 @@ assert!(matches!(module.exports[0].value, HirExportValue::Symbol(_)));
 assert_eq!(module.exports[1].value, HirExportValue::Unknown);
 ```
 
+### Require Graph Example
+
+The module graph is built from the snapshot's indexed files, HIR modules, and
+project roots. It resolves `require(...)` edges, keeps partial results for
+missing modules and cycles, and indexes public exports without rereading files
+during hover or go-to-definition requests.
+
+```rust
+use tua_core::{
+    AnalysisHost, AnalysisSourceKind, DiagnosticCode, SourcePosition,
+};
+
+let mut host = AnalysisHost::new();
+
+host.set_source_roots(["src".into()]);
+host.set_file_with_kind(
+    "src/main.tua",
+    r#"local Player = require("player")
+local player = Player.new()
+"#,
+    AnalysisSourceKind::Tua,
+);
+host.set_file_with_kind(
+    "src/player.tua",
+    r#"local function new()
+  return { hp = 100 }
+end
+
+return { new = new }
+"#,
+    AnalysisSourceKind::Tua,
+);
+
+let snapshot = host.snapshot();
+let graph = snapshot.module_graph();
+
+assert!(graph.export("src/player.tua", "new").is_some());
+assert_eq!(graph.diagnostics("src/main.tua"), []);
+
+let definition = snapshot
+    .definition("src/main.tua", SourcePosition { line: 2, column: 22 })
+    .unwrap();
+
+assert_eq!(definition.path.ends_with("src/player.tua"), true);
+
+host.set_file_with_kind(
+    "src/broken.tua",
+    r#"local Missing = require("missing")
+"#,
+    AnalysisSourceKind::Tua,
+);
+
+let snapshot = host.snapshot();
+assert!(snapshot
+    .module_graph()
+    .diagnostics("src/broken.tua")
+    .iter()
+    .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISSING_REQUIRE)));
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
@@ -219,9 +279,9 @@ assert_eq!(module.exports[1].value, HirExportValue::Unknown);
 | `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
 | `parser` | Parses token streams into syntax. | Raw Lua/Tua parser APIs over full_moon plus normalization for Tua-only syntax. | Existing | 57 |
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
-| `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58, 59 |
+| `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | Workspace symbol scans and LSP analysis helpers. | Partial | 64, 65 |
+| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 64, 65 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |

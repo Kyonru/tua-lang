@@ -2,13 +2,19 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::hir::{HirModule, HirRequireBinding};
+use crate::module_link::require_module_at_position;
+use crate::source_text::dotted_chain_at_position;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     build_type_environment, check_parsed_source_with_asset_roots_and_diagnostics_config,
-    complete_parsed_source, complete_tua_source, definition_tua_source, hover_parsed_source,
-    infer_module_exports, module_links_tua_source, parse_lua_source, parse_tua_source, Completion,
-    Definition, Diagnostic, Hover, ModuleExports, ModuleLink, ParsedSource, ProjectConfig,
-    SourcePosition, SourceSpan, TypeEnvironment, WorkspaceSymbol, WorkspaceSymbolKind,
+    complete_parsed_source, complete_tua_source, definition_parsed_source,
+    exported_field_for_fields, hover_parsed_source, infer_module_exports, lower_parsed_source,
+    module_links_tua_source, parse_lua_source, parse_tua_source, Completion, Definition,
+    DefinitionKind, Diagnostic, Hover, ModuleExportField, ModuleExports, ModuleGraph,
+    ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
+    RequireResolution, SourcePosition, SourceSpan, Type, TypeEnvironment, WorkspaceSymbol,
+    WorkspaceSymbolKind,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,12 +52,15 @@ pub struct AnalysisSnapshot {
     vfs: VfsSnapshot,
     files: BTreeMap<PathBuf, AnalysisFile>,
     builtin_catalogs: BuiltinCatalogs,
+    module_graph: ModuleGraph,
 }
 
 #[derive(Clone, Debug)]
 struct AnalysisFile {
     source: String,
+    kind: AnalysisSourceKind,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
+    hir: Option<HirModule>,
     environment: Option<TypeEnvironment>,
     diagnostics: Vec<Diagnostic>,
     exports: Option<ModuleExports>,
@@ -219,13 +228,28 @@ impl AnalysisHost {
 
                 (file.path().to_path_buf(), analysis_file)
             })
-            .collect();
+            .collect::<BTreeMap<_, _>>();
+        let module_graph = ModuleGraph::build(
+            files.iter().map(|(path, file)| ModuleGraphInput {
+                path,
+                parsed: file.parsed.as_ref().ok(),
+                hir: file.hir.as_ref(),
+                exports: file.exports.as_ref(),
+                source_kind: file.kind,
+            }),
+            ModuleGraphOptions {
+                source_roots: vfs.source_roots().to_vec(),
+                output_roots: vfs.options().output_roots.clone(),
+                extension: self.config.extension.clone(),
+            },
+        );
 
         AnalysisSnapshot {
             config: self.config.clone(),
             vfs,
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
+            module_graph,
         }
     }
 
@@ -301,9 +325,18 @@ impl AnalysisSnapshot {
     }
 
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
-        self.parse(path)
-            .and_then(Result::ok)
-            .and_then(|parsed| hover_parsed_source(parsed, position).ok().flatten())
+        let path = path.as_ref();
+        let parsed = self.parse(path).and_then(Result::ok)?;
+
+        if let Some(hover) = self.module_hover(parsed, position) {
+            return Some(hover);
+        }
+
+        if self.is_module_reference(parsed, position) {
+            return None;
+        }
+
+        hover_parsed_source(parsed, position).ok().flatten()
     }
 
     pub fn completion(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Completion> {
@@ -326,9 +359,17 @@ impl AnalysisSnapshot {
         let path = path.as_ref();
         let file = self.file(path)?;
 
-        definition_tua_source(path, file.source.clone(), position)
-            .ok()
-            .flatten()
+        let parsed = file.parsed.as_ref().ok()?;
+
+        if let Some(definition) = self.module_definition(parsed, position) {
+            return Some(definition);
+        }
+
+        if self.is_module_reference(parsed, position) {
+            return None;
+        }
+
+        definition_parsed_source(parsed, position).ok().flatten()
     }
 
     fn file(&self, path: &Path) -> Option<&AnalysisFile> {
@@ -349,10 +390,160 @@ impl AnalysisSnapshot {
             .unwrap_or_default()
     }
 
+    pub fn module_graph(&self) -> &ModuleGraph {
+        &self.module_graph
+    }
+
     pub fn symbol_index(&self, path: impl AsRef<Path>) -> &[WorkspaceSymbol] {
         self.file(path.as_ref())
             .map(|file| file.symbols.as_slice())
             .unwrap_or_default()
+    }
+
+    fn module_hover(&self, parsed: &ParsedSource, position: SourcePosition) -> Option<Hover> {
+        if let Some(module) = require_module_at_position(&parsed.source, position) {
+            let path = self.resolved_module_path(&parsed.path, &module)?;
+
+            return Some(Hover {
+                contents: format!("(module) {module} -> {}", path.display()),
+                span: None,
+                documentation: None,
+                context: Vec::new(),
+            });
+        }
+
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let current_part = chain.parts.get(chain.cursor_index)?;
+        let root = chain.parts.first()?;
+        let binding = self.require_binding(parsed, &root.text, position)?;
+
+        if chain.cursor_index == 0 {
+            let path = self.resolved_module_path(&parsed.path, &binding.module)?;
+
+            return Some(Hover {
+                contents: format!(
+                    "(module) {} = require(\"{}\") -> {}",
+                    binding.alias,
+                    binding.module,
+                    path.display()
+                ),
+                span: Some(current_part.span),
+                documentation: None,
+                context: Vec::new(),
+            });
+        }
+
+        let fields = chain
+            .parts
+            .iter()
+            .skip(1)
+            .take(chain.cursor_index)
+            .map(|part| part.text.clone())
+            .collect::<Vec<_>>();
+        let path = self.resolved_module_path(&parsed.path, &binding.module)?;
+        let export = self.module_export_for_fields(path, &fields)?;
+
+        Some(Hover {
+            contents: format_module_export_hover(
+                &chain
+                    .parts
+                    .iter()
+                    .take(chain.cursor_index + 1)
+                    .map(|part| part.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+                &export.ty,
+            ),
+            span: Some(current_part.span),
+            documentation: export.documentation,
+            context: vec![format!("module: {}", path.display())],
+        })
+    }
+
+    fn module_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        if let Some(module) = require_module_at_position(&parsed.source, position) {
+            let path = self.resolved_module_path(&parsed.path, &module)?;
+
+            return Some(module_file_definition(path));
+        }
+
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let root = chain.parts.first()?;
+        let binding = self.require_binding(parsed, &root.text, position)?;
+        let path = self.resolved_module_path(&parsed.path, &binding.module)?;
+
+        if chain.cursor_index == 0 {
+            return Some(module_file_definition(path));
+        }
+
+        let public_name = chain.parts.get(1)?.text.as_str();
+        let entry = self.module_graph.export(path, public_name)?;
+
+        Some(Definition {
+            path: path.to_path_buf(),
+            span: entry.definition_span,
+            kind: if matches!(entry.field.ty, Type::Function(_)) {
+                DefinitionKind::Function
+            } else {
+                DefinitionKind::TableField
+            },
+        })
+    }
+
+    fn is_module_reference(&self, parsed: &ParsedSource, position: SourcePosition) -> bool {
+        if require_module_at_position(&parsed.source, position).is_some() {
+            return true;
+        }
+
+        let Some(chain) = dotted_chain_at_position(&parsed.source, position) else {
+            return false;
+        };
+        let Some(root) = chain.parts.first() else {
+            return false;
+        };
+
+        self.require_binding(parsed, &root.text, position).is_some()
+    }
+
+    fn require_binding(
+        &self,
+        parsed: &ParsedSource,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<HirRequireBinding> {
+        self.file(&parsed.path)?
+            .hir
+            .as_ref()?
+            .require_bindings
+            .iter()
+            .filter(|binding| {
+                binding.alias == name
+                    && position_key(binding.alias_span.start) <= position_key(position)
+            })
+            .max_by_key(|binding| position_key(binding.alias_span.start))
+            .cloned()
+    }
+
+    fn resolved_module_path(&self, source_path: &Path, module: &str) -> Option<&Path> {
+        match self.module_graph.resolve_require(source_path, module)? {
+            RequireResolution::Resolved { path }
+            | RequireResolution::Duplicate { selected: path, .. } => Some(path.as_path()),
+            RequireResolution::Missing { .. } => None,
+        }
+    }
+
+    fn module_export_for_fields(
+        &self,
+        module_path: &Path,
+        fields: &[String],
+    ) -> Option<ModuleExportField> {
+        let exports = self.module_exports(module_path)?;
+
+        exported_field_for_fields(exports, fields)
     }
 }
 
@@ -512,6 +703,7 @@ fn build_analysis_file(
     source_roots: &[PathBuf],
 ) -> AnalysisFile {
     let parsed = parse_analysis_source(path, source.clone(), kind);
+    let hir = parsed.as_ref().ok().map(lower_parsed_source);
     let environment = parsed
         .as_ref()
         .ok()
@@ -536,13 +728,37 @@ fn build_analysis_file(
 
     AnalysisFile {
         source,
+        kind,
         parsed,
+        hir,
         environment,
         diagnostics,
         exports,
         require_edges,
         symbols,
     }
+}
+
+fn module_file_definition(path: &Path) -> Definition {
+    Definition {
+        path: path.to_path_buf(),
+        span: default_span(),
+        kind: DefinitionKind::Module,
+    }
+}
+
+fn format_module_export_hover(name: &str, ty: &Type) -> String {
+    let ty = ty.to_string();
+
+    if let Some(signature) = ty.strip_prefix("function") {
+        format!("function {name}{signature}")
+    } else {
+        format!("(field) {name}: {ty}")
+    }
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn symbol_index_for_parsed(parsed: &ParsedSource) -> Vec<WorkspaceSymbol> {

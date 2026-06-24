@@ -1081,7 +1081,7 @@ Scope:
 
 Acceptance:
 
-- Same-name locals in nested scopes resolve independently.
+- Same-name locals in nested scopes resolve independently. Maybe warns about it (configurable).
 - Rename and references use the same scope lookup.
 - Undefined/unused diagnostics can be implemented without custom tree walks.
 
@@ -1256,6 +1256,39 @@ Acceptance:
   belongs.
 - The guide links back to `SPEC.md` and the rust-analyzer gap matrix.
 - Any outdated roadmap entries from this phase are marked complete or deferred.
+
+### 70.9 `lint: default linting based on lua so code can be formatted consistently`
+
+Scope:
+
+- Add a Lua-style formatting lint pass in `tua-core` that operates on parser
+  tokens and token spans (not full code rewriting).
+- Define a default baseline profile for `.tua` and `.lua` inputs, with conservative
+  rules for:
+  - indentation and spacing,
+  - trailing whitespace,
+  - statement separation around `then`/`do`/`end` blocks,
+  - and simple bracket/comma/token spacing consistency.
+- Add new formatter-related diagnostic codes and make them configurable under
+  `[diagnostics]` with a shared opt-in toggle (for example
+  `formatting_lints`).
+- Keep diagnostics stable:
+  - one message per rule per span,
+  - no speculative suggestions for ambiguous syntax,
+  - only whitespace-safe auto-fixes where possible.
+- Add editor-facing messaging that explains how these lints help make mixed Lua/Tua
+  code style consistent across contributors.
+
+Acceptance:
+
+- A focused fixture suite covers mixed indentation, whitespace, and token-spacing
+  cases for supported Lua/Tua syntax.
+- Project `tua.toml` defaults remain unchanged until users opt in to the formatting
+  preset.
+- CI and LSP smoke checks can run with the profile enabled without adding false
+  positives in existing fixture projects.
+- Diagnostics for formatting lints include ranges that can be pinned in editor
+  UI and resolved through the current diagnostics path.
 
 ## Phase 13: LOVE Domain Extensions
 

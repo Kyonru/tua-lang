@@ -1,0 +1,536 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId};
+use crate::module_index::{ModuleExportField, ModuleExports};
+use crate::module_link::require_module_literals;
+use crate::vfs::normalize_path;
+use crate::{
+    AnalysisSourceKind, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan,
+};
+
+#[derive(Clone, Debug, Default)]
+pub struct ModuleGraph {
+    modules: BTreeMap<PathBuf, ModuleGraphModule>,
+    export_index: BTreeMap<(PathBuf, String), ModuleExportEntry>,
+    exports_by_symbol: BTreeMap<(PathBuf, HirSymbolId), Vec<ModuleExportEntry>>,
+    diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ModuleGraphInput<'a> {
+    pub path: &'a Path,
+    pub parsed: Option<&'a ParsedSource>,
+    pub hir: Option<&'a HirModule>,
+    pub exports: Option<&'a ModuleExports>,
+    pub source_kind: AnalysisSourceKind,
+}
+
+#[derive(Clone, Debug)]
+pub struct ModuleGraphOptions {
+    pub source_roots: Vec<PathBuf>,
+    pub output_roots: Vec<PathBuf>,
+    pub extension: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleGraphModule {
+    pub path: PathBuf,
+    pub source_kind: AnalysisSourceKind,
+    pub require_edges: Vec<RequireGraphEdge>,
+    pub exports: Vec<ModuleExportEntry>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RequireGraphEdge {
+    pub source: PathBuf,
+    pub module: String,
+    pub span: SourceSpan,
+    pub resolution: RequireResolution,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RequireResolution {
+    Resolved {
+        path: PathBuf,
+    },
+    Missing {
+        search_roots: Vec<PathBuf>,
+    },
+    Duplicate {
+        candidates: Vec<PathBuf>,
+        selected: PathBuf,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleExportEntry {
+    pub module_path: PathBuf,
+    pub public_name: String,
+    pub symbol_id: Option<HirSymbolId>,
+    pub definition_span: SourceSpan,
+    pub export_span: SourceSpan,
+    pub field: ModuleExportField,
+    pub origin: ModuleExportOrigin,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModuleExportOrigin {
+    Tua,
+    Lua,
+    LuaDoc,
+    GeneratedBuiltin,
+}
+
+impl ModuleGraph {
+    pub fn build<'a>(
+        inputs: impl IntoIterator<Item = ModuleGraphInput<'a>>,
+        options: ModuleGraphOptions,
+    ) -> Self {
+        let inputs = inputs.into_iter().collect::<Vec<_>>();
+        let mut graph = Self::default();
+        let indexed_paths = inputs
+            .iter()
+            .map(|input| normalize_path(input.path))
+            .collect::<BTreeSet<_>>();
+        let search_roots = search_roots(&inputs, &options);
+
+        for input in &inputs {
+            let path = normalize_path(input.path);
+            let hir = input
+                .hir
+                .cloned()
+                .or_else(|| input.parsed.map(lower_parsed_source));
+            let mut module = ModuleGraphModule {
+                path: path.clone(),
+                source_kind: input.source_kind,
+                require_edges: Vec::new(),
+                exports: Vec::new(),
+            };
+
+            if let Some(parsed) = input.parsed {
+                module.require_edges = require_edges_for_source(
+                    &path,
+                    &parsed.source,
+                    &indexed_paths,
+                    &search_roots,
+                    &options.extension,
+                );
+            }
+
+            if let Some(exports) = input.exports {
+                let entries = export_entries_for_module(
+                    &path,
+                    input.parsed,
+                    hir.as_ref(),
+                    exports,
+                    input.source_kind,
+                );
+
+                module.exports = entries.clone();
+                for entry in entries {
+                    if let Some(symbol_id) = entry.symbol_id {
+                        graph
+                            .exports_by_symbol
+                            .entry((path.clone(), symbol_id))
+                            .or_default()
+                            .push(entry.clone());
+                    }
+                    graph
+                        .export_index
+                        .insert((path.clone(), entry.public_name.clone()), entry);
+                }
+            }
+
+            graph.modules.insert(path, module);
+        }
+
+        graph.collect_require_diagnostics();
+        graph.collect_cycle_diagnostics();
+        graph
+    }
+
+    pub fn module(&self, path: impl AsRef<Path>) -> Option<&ModuleGraphModule> {
+        self.modules.get(&normalize_path(path))
+    }
+
+    pub fn modules(&self) -> impl Iterator<Item = &ModuleGraphModule> {
+        self.modules.values()
+    }
+
+    pub fn export(
+        &self,
+        module_path: impl AsRef<Path>,
+        public_name: &str,
+    ) -> Option<&ModuleExportEntry> {
+        self.export_index
+            .get(&(normalize_path(module_path), public_name.to_owned()))
+    }
+
+    pub fn exports_for_symbol(
+        &self,
+        module_path: impl AsRef<Path>,
+        symbol_id: HirSymbolId,
+    ) -> &[ModuleExportEntry] {
+        self.exports_by_symbol
+            .get(&(normalize_path(module_path), symbol_id))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    pub fn resolve_require(
+        &self,
+        source_path: impl AsRef<Path>,
+        module: &str,
+    ) -> Option<&RequireResolution> {
+        self.module(source_path)?
+            .require_edges
+            .iter()
+            .find(|edge| edge.module == module)
+            .map(|edge| &edge.resolution)
+    }
+
+    pub fn diagnostics(&self, path: impl AsRef<Path>) -> &[Diagnostic] {
+        self.diagnostics
+            .get(&normalize_path(path))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    pub fn all_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics
+            .values()
+            .flat_map(|diagnostics| diagnostics.iter())
+    }
+
+    fn collect_require_diagnostics(&mut self) {
+        for module in self.modules.values() {
+            for edge in &module.require_edges {
+                match &edge.resolution {
+                    RequireResolution::Missing { search_roots } => self
+                        .diagnostics
+                        .entry(module.path.clone())
+                        .or_default()
+                        .push(missing_module_diagnostic(edge, search_roots)),
+                    RequireResolution::Duplicate {
+                        candidates,
+                        selected,
+                    } => self
+                        .diagnostics
+                        .entry(module.path.clone())
+                        .or_default()
+                        .push(duplicate_module_diagnostic(edge, candidates, selected)),
+                    RequireResolution::Resolved { .. } => {}
+                }
+            }
+        }
+    }
+
+    fn collect_cycle_diagnostics(&mut self) {
+        let mut visiting = Vec::new();
+        let mut visited = BTreeSet::new();
+        let mut reported = BTreeSet::new();
+
+        for path in self.modules.keys().cloned().collect::<Vec<_>>() {
+            self.visit_cycles(&path, &mut visiting, &mut visited, &mut reported);
+        }
+    }
+
+    fn visit_cycles(
+        &mut self,
+        path: &Path,
+        visiting: &mut Vec<PathBuf>,
+        visited: &mut BTreeSet<PathBuf>,
+        reported: &mut BTreeSet<Vec<PathBuf>>,
+    ) {
+        let path = normalize_path(path);
+
+        if let Some(index) = visiting.iter().position(|candidate| candidate == &path) {
+            let cycle = visiting[index..].to_vec();
+            if reported.insert(cycle.clone()) {
+                let display = cycle
+                    .iter()
+                    .chain(std::iter::once(&path))
+                    .map(|path| path.to_string_lossy().replace('\\', "/"))
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+
+                self.diagnostics.entry(path.clone()).or_default().push(
+                    Diagnostic::new(
+                        path,
+                        1,
+                        1,
+                        DiagnosticSeverity::Warning,
+                        format!("require cycle detected: {display}"),
+                    )
+                    .with_code(DiagnosticCode::LINT_REQUIRE_CYCLE),
+                );
+            }
+            return;
+        }
+
+        if !visited.insert(path.clone()) {
+            return;
+        }
+
+        visiting.push(path.clone());
+        let dependencies = self
+            .module(&path)
+            .map(|module| {
+                module
+                    .require_edges
+                    .iter()
+                    .filter_map(|edge| match &edge.resolution {
+                        RequireResolution::Resolved { path }
+                        | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
+                        RequireResolution::Missing { .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        for dependency in dependencies {
+            self.visit_cycles(&dependency, visiting, visited, reported);
+        }
+
+        visiting.pop();
+    }
+}
+
+fn require_edges_for_source(
+    source_path: &Path,
+    source: &str,
+    indexed_paths: &BTreeSet<PathBuf>,
+    search_roots: &[PathBuf],
+    extension: &str,
+) -> Vec<RequireGraphEdge> {
+    require_module_literals(source)
+        .into_iter()
+        .map(|literal| {
+            let candidates =
+                existing_candidates(&literal.module, indexed_paths, search_roots, extension);
+            let resolution = match candidates.as_slice() {
+                [] => RequireResolution::Missing {
+                    search_roots: search_roots.to_vec(),
+                },
+                [path] => RequireResolution::Resolved { path: path.clone() },
+                [selected, ..] => {
+                    let selected = selected.clone();
+
+                    RequireResolution::Duplicate {
+                        candidates,
+                        selected,
+                    }
+                }
+            };
+
+            RequireGraphEdge {
+                source: source_path.to_path_buf(),
+                module: literal.module,
+                span: literal.span,
+                resolution,
+            }
+        })
+        .collect()
+}
+
+fn existing_candidates(
+    module: &str,
+    indexed_paths: &BTreeSet<PathBuf>,
+    search_roots: &[PathBuf],
+    extension: &str,
+) -> Vec<PathBuf> {
+    let relative = module_relative_path(module);
+    let extensions = module_extensions(extension);
+    let mut candidates = Vec::new();
+
+    for root in search_roots {
+        for candidate in module_candidates(root, &relative, &extensions) {
+            let candidate = normalize_path(candidate);
+
+            if indexed_paths.contains(&candidate) && !candidates.contains(&candidate) {
+                candidates.push(candidate);
+            }
+        }
+    }
+
+    candidates
+}
+
+fn export_entries_for_module(
+    path: &Path,
+    parsed: Option<&ParsedSource>,
+    hir: Option<&HirModule>,
+    exports: &ModuleExports,
+    source_kind: AnalysisSourceKind,
+) -> Vec<ModuleExportEntry> {
+    exports
+        .fields
+        .iter()
+        .filter_map(|(public_name, field)| {
+            let export = hir.and_then(|hir| {
+                hir.exports
+                    .iter()
+                    .find(|export| export.name == *public_name)
+            });
+            let symbol_id = export.and_then(|export| match export.value {
+                HirExportValue::Symbol(symbol_id) => Some(symbol_id),
+                HirExportValue::Unknown => None,
+            });
+            let definition_span = symbol_id
+                .and_then(|symbol_id| hir?.symbol(symbol_id).map(|symbol| symbol.name_span))
+                .or_else(|| export_definition_span(hir, public_name))
+                .or_else(|| export.map(|export| export.name_span))?;
+            let export_span = export
+                .map(|export| export.name_span)
+                .unwrap_or(definition_span);
+
+            Some(ModuleExportEntry {
+                module_path: path.to_path_buf(),
+                public_name: public_name.clone(),
+                symbol_id,
+                definition_span,
+                export_span,
+                field: field.clone(),
+                origin: export_origin(source_kind, parsed),
+            })
+        })
+        .collect()
+}
+
+fn export_definition_span(hir: Option<&HirModule>, public_name: &str) -> Option<SourceSpan> {
+    let hir = hir?;
+    hir.symbols()
+        .iter()
+        .find(|symbol| {
+            symbol.name == public_name
+                || symbol
+                    .name
+                    .strip_suffix(public_name)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        })
+        .map(|symbol| symbol.name_span)
+}
+
+fn export_origin(
+    source_kind: AnalysisSourceKind,
+    parsed: Option<&ParsedSource>,
+) -> ModuleExportOrigin {
+    if parsed.is_some_and(|parsed| !parsed.lua_doc_annotations.is_empty()) {
+        return ModuleExportOrigin::LuaDoc;
+    }
+
+    match source_kind {
+        AnalysisSourceKind::Tua => ModuleExportOrigin::Tua,
+        AnalysisSourceKind::Lua => ModuleExportOrigin::Lua,
+    }
+}
+
+fn search_roots(inputs: &[ModuleGraphInput<'_>], options: &ModuleGraphOptions) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    for root in &options.source_roots {
+        push_unique_path(&mut roots, root);
+    }
+    for root in &options.output_roots {
+        push_unique_path(&mut roots, root);
+    }
+
+    if roots.is_empty() {
+        for input in inputs {
+            if let Some(parent) = input.path.parent() {
+                push_unique_path(&mut roots, parent);
+            }
+        }
+    }
+
+    roots
+}
+
+fn module_relative_path(module: &str) -> PathBuf {
+    let mut relative = PathBuf::new();
+
+    for part in module.split('.').filter(|part| !part.is_empty()) {
+        relative.push(part);
+    }
+
+    relative
+}
+
+fn module_extensions(project_extension: &str) -> Vec<&str> {
+    let mut extensions = vec![project_extension];
+
+    if project_extension != "lua" {
+        extensions.push("lua");
+    }
+
+    extensions
+}
+
+fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let base = root.join(relative);
+    let mut candidates = Vec::new();
+
+    for extension in extensions {
+        candidates.push(base.with_extension(extension));
+        candidates.push(base.join(format!("init.{extension}")));
+    }
+
+    candidates
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
+    let path = normalize_path(path);
+
+    if !paths.iter().any(|existing| existing == &path) {
+        paths.push(path);
+    }
+}
+
+fn missing_module_diagnostic(edge: &RequireGraphEdge, search_roots: &[PathBuf]) -> Diagnostic {
+    let roots = search_roots
+        .iter()
+        .map(|root| root.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Diagnostic::new(
+        edge.source.clone(),
+        edge.span.start.line,
+        edge.span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "require file not found: `{}` (searched: {})",
+            edge.module, roots
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_MISSING_REQUIRE)
+}
+
+fn duplicate_module_diagnostic(
+    edge: &RequireGraphEdge,
+    candidates: &[PathBuf],
+    selected: &Path,
+) -> Diagnostic {
+    let candidates = candidates
+        .iter()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Diagnostic::new(
+        edge.source.clone(),
+        edge.span.start.line,
+        edge.span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "duplicate require candidates for `{}`: {candidates} (using {})",
+            edge.module,
+            selected.to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
+}
+
+#[cfg(test)]
+mod tests;
