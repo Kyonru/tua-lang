@@ -21,6 +21,14 @@ The active roadmap focus is now deeper architecture and precision:
 - more LuaHelper parity fixtures and stub coverage;
 - editor assists such as selection/folding ranges and larger refactor support.
 
+After that, Phase 13 explores LOVE domain extensions:
+
+- a conservative plugin architecture for domain declarations and tooling;
+- built-in vector ergonomics;
+- a prototype sprite/animation DSL;
+- richer asset validation and editor metadata;
+- optional Feather/tooling integration hooks.
+
 ## Working Rule
 
 Each commit should leave the repository buildable and tested. Behavior changes

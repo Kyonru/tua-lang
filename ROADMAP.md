@@ -876,11 +876,18 @@ making Tua faster, more maintainable, and more project-aware. It is not a goal
 to copy rust-analyzer directly; the goal is to introduce the same kinds of
 boundaries in a Lua/LÖVE-sized form.
 
+The feature surface is already broad: diagnostics, hover, completion,
+definition, references, rename, workspace symbols, code actions, call hierarchy,
+LOVE helpers, LuaDoc parsing, and watched-file updates exist. Phase 12 should
+therefore prioritize architecture, consistency, and performance over adding
+another parallel feature path.
+
 ### 51. `docs(architecture): add rust-analyzer gap matrix`
 
 Scope:
 
-- Add an architecture matrix that maps rust-analyzer crates to Tua equivalents:
+- Add `docs/architecture.md` with an architecture matrix that maps
+  rust-analyzer crates to Tua equivalents:
   - `base-db`, `ide-db`, `vfs`, `vfs-notify`;
   - `project-model`;
   - `parser` and `syntax`;
@@ -889,6 +896,8 @@ Scope:
   - `test-fixture`, `test-utils`, `profile`.
 - Mark each row as existing, partial, missing, or intentionally out of scope.
 - Link each planned missing piece to this phase's commit numbers.
+- Include a short "current architecture" diagram for the existing
+  `tua-core`, `tua-cli`, and `tua-lsp` crates.
 
 Acceptance:
 
@@ -896,24 +905,48 @@ Acceptance:
 - Every planned architecture gap maps to a committable roadmap entry.
 - Non-goals are explicit so the project does not drift into a Rust clone.
 
-### 52. `refactor(core): introduce analysis database module`
+### 52. `test: add fixture DSL for IDE and project tests`
+
+Scope:
+
+- Add a compact fixture format for:
+  - multiple files;
+  - cursor/range markers;
+  - expected diagnostics;
+  - expected completions, hovers, locations, edits, and symbols.
+- Support both core query tests and LSP protocol tests.
+- Start by migrating a small representative set of repetitive tests.
+
+Acceptance:
+
+- New tests can define files and cursor markers inline.
+- Multi-file fixtures can model `require` relationships without hand-written
+  temp-project boilerplate.
+- Existing tests can migrate gradually; no large mechanical rewrite is required.
+
+### 53. `refactor(core): introduce analysis host and snapshot`
 
 Scope:
 
 - Add an internal `analysis` domain in `tua-core`.
-- Define stable IDs for files, modules, symbols, and source roots.
-- Move shared request inputs into an `AnalysisHost` and immutable
-  `AnalysisSnapshot` API.
+- Define the public shape of `AnalysisHost` and immutable `AnalysisSnapshot`.
+- Move shared request inputs into the host/snapshot boundary:
+  - project config;
+  - source roots;
+  - file contents;
+  - open document overlays;
+  - builtin catalogs.
 - Keep the existing public query functions working as wrappers.
+- Avoid changing query behavior in this commit.
 
 Acceptance:
 
 - Existing core and LSP tests pass through the compatibility wrappers.
 - No LSP handler directly owns project-wide semantic state.
-- The snapshot API can answer parse, diagnostics, hover, completion, and
-  definition queries for one file.
+- The snapshot API can answer at least parse, diagnostics, hover, completion,
+  and definition queries for one file.
 
-### 53. `feat(vfs): add virtual file system and open-file overlays`
+### 54. `feat(vfs): add virtual file system and open-file overlays`
 
 Scope:
 
@@ -921,6 +954,7 @@ Scope:
 - Store open editor documents as overlays over disk contents.
 - Normalize paths, URIs, source roots, and module-relative paths in one place.
 - Exclude build output and ignored paths.
+- Keep file identity stable across edits and path normalization.
 
 Acceptance:
 
@@ -929,13 +963,20 @@ Acceptance:
 - Path and URI conversion has focused tests for spaces, nested paths, and
   cross-platform separators.
 
-### 54. `feat(project-model): model source roots and require paths`
+### 55. `feat(project-model): model roots, targets, and require paths`
 
 Scope:
 
-- Expand project modeling beyond current config loading.
-- Represent configured source roots, output roots, include/exclude globs,
-  require roots, target Lua version, and LÖVE version.
+- Expand project modeling beyond config parsing.
+- Represent:
+  - workspace folders;
+  - configured source roots;
+  - output roots;
+  - ignored paths;
+  - file associations;
+  - require roots and path separator;
+  - target Lua version;
+  - LÖVE version.
 - Prepare for multiple workspace folders without merging their configs
   accidentally.
 
@@ -946,7 +987,7 @@ Acceptance:
 - Require resolution uses project roots instead of ad hoc parent-directory
   probing.
 
-### 55. `feat(db): add dependency-tracked query cache`
+### 56. `feat(db): add dependency-tracked query cache`
 
 Scope:
 
@@ -959,6 +1000,7 @@ Scope:
   - symbol indexes.
 - Track dependencies between queries at file granularity first.
 - Invalidate affected results on document, file, or config changes.
+- Keep the cache deterministic and testable; avoid timing-based assertions.
 
 Acceptance:
 
@@ -966,7 +1008,7 @@ Acceptance:
 - Changing an exported module invalidates known importers.
 - Tests assert cache reuse and invalidation behavior without relying on timing.
 
-### 56. `refactor(parser): separate parse tree from semantic source model`
+### 57. `refactor(parser): separate syntax tree from semantic source model`
 
 Scope:
 
@@ -974,6 +1016,7 @@ Scope:
 - Keep full source spans and token spans for IDE features.
 - Preserve lossy/recovery parse paths used while typing.
 - Make type-only syntax and Lua-compatible syntax explicit in the model.
+- Keep LuaDoc parsing independent enough to work when Lua syntax is incomplete.
 
 Acceptance:
 
@@ -983,7 +1026,7 @@ Acceptance:
 - Incomplete source can still provide best-effort completions and semantic
   tokens.
 
-### 57. `feat(hir): lower files into a semantic module model`
+### 58. `feat(hir): lower files into semantic modules`
 
 Scope:
 
@@ -996,6 +1039,7 @@ Scope:
   - returned module exports;
   - require bindings.
 - Use stable symbol IDs instead of repeatedly searching syntax nodes.
+- Include origin spans for diagnostics, hover, navigation, and edits.
 
 Acceptance:
 
@@ -1005,13 +1049,15 @@ Acceptance:
 - Unknown dynamic expressions remain represented as dynamic/unknown instead of
   guessed.
 
-### 58. `feat(module): build require graph and export index`
+### 59. `feat(module): build require graph and export index`
 
 Scope:
 
 - Build a workspace require graph from the project model and HIR modules.
 - Index module exports by symbol ID, module path, and public name.
 - Detect missing modules, duplicate candidate modules, and require cycles.
+- Track whether exports came from `.tua`, `.lua`, LuaDoc annotations, or
+  generated LOVE/builtin catalogs.
 
 Acceptance:
 
@@ -1021,7 +1067,7 @@ Acceptance:
   roots.
 - Require cycles do not panic and produce deterministic partial results.
 
-### 59. `feat(scope): add lexical scope maps`
+### 60. `feat(scope): add lexical scope maps`
 
 Scope:
 
@@ -1030,6 +1076,8 @@ Scope:
 - Track shadowing and declaration/use ranges.
 - Make scope lookup reusable by diagnostics, completion, rename, references,
   document highlight, and semantic tokens.
+- Represent global allow-lists, Lua builtins, LOVE globals, and configured
+  globals through the same lookup path.
 
 Acceptance:
 
@@ -1037,7 +1085,7 @@ Acceptance:
 - Rename and references use the same scope lookup.
 - Undefined/unused diagnostics can be implemented without custom tree walks.
 
-### 60. `feat(types): add project-aware type database`
+### 61. `feat(types): add project-aware type database`
 
 Scope:
 
@@ -1046,6 +1094,7 @@ Scope:
   builtin stubs across files.
 - Keep gradual typing semantics: `any` and unknown dynamic values stay
   permissive.
+- Preserve existing multi-return behavior for Lua/LOVE calls.
 
 Acceptance:
 
@@ -1053,7 +1102,7 @@ Acceptance:
 - Required `.lua` files with annotations contribute types when available.
 - Type queries are cached and invalidated through the database.
 
-### 61. `feat(types): add flow-sensitive narrowing`
+### 62. `feat(types): add flow-sensitive narrowing`
 
 Scope:
 
@@ -1070,7 +1119,7 @@ Acceptance:
 - Return checking and hover use narrowed types inside guarded blocks.
 - Mutating the narrowed variable clears the narrowed fact.
 
-### 62. `feat(diagnostics): move diagnostics to incremental pipeline`
+### 63. `feat(diagnostics): move diagnostics to incremental pipeline`
 
 Scope:
 
@@ -1078,6 +1127,7 @@ Scope:
   database.
 - Deduplicate diagnostics produced by overlapping checkers.
 - Keep diagnostic config toggles in the project model.
+- Ensure asset validation uses the project model and VFS consistently.
 
 Acceptance:
 
@@ -1086,7 +1136,7 @@ Acceptance:
 - Error, warning, info, and hint severities round-trip through LSP.
 - CLI and LSP use the same diagnostic pipeline.
 
-### 63. `feat(ide-db): add shared symbol index`
+### 64. `feat(ide-db): add shared symbol index`
 
 Scope:
 
@@ -1094,6 +1144,7 @@ Scope:
   modules, and exports.
 - Support fuzzy matching for workspace symbols and auto-import candidates.
 - Store container names and module paths for display.
+- Keep index entries tied to stable symbol IDs and source ranges.
 
 Acceptance:
 
@@ -1101,7 +1152,7 @@ Acceptance:
 - Completion can ask the index for importable symbols.
 - Index updates after watched file changes.
 
-### 64. `feat(ide): route all LSP features through analysis snapshot`
+### 65. `feat(ide): route LSP features through analysis snapshot`
 
 Scope:
 
@@ -1111,6 +1162,7 @@ Scope:
   `AnalysisSnapshot`.
 - Remove request-time disk reads from feature implementations.
 - Keep simple public `*_tua_source` helpers for unit tests and CLI-like use.
+- Treat unknown/dynamic results consistently across every feature surface.
 
 Acceptance:
 
@@ -1119,22 +1171,27 @@ Acceptance:
   watched-file change.
 - Request handlers become mostly protocol conversion plus snapshot access.
 
-### 65. `feat(assists): add code action framework`
+### 66. `refactor(assists): move code actions onto analysis snapshot`
 
 Scope:
 
-- Add an `assists` or `code_action` domain modeled after rust-analyzer's
-  assist separation.
-- Represent assists as pure functions over a snapshot and source range.
-- Start with no-op plumbing plus one safe quick fix.
+- Separate code-action discovery from LSP protocol conversion.
+- Represent assists as pure functions over a snapshot, source range, and
+  diagnostics.
+- Keep existing quick fixes:
+  - create missing require target;
+  - add missing local annotation;
+  - remove unused local;
+  - rename duplicate table key;
+  - remove self-assignment.
 
 Acceptance:
 
-- LSP advertises `codeActionProvider`.
-- A diagnostic can produce a workspace edit through the framework.
+- Existing code action tests still pass.
+- A diagnostic can produce the same workspace edit through the new framework.
 - Assist tests use fixture syntax instead of hand-written JSON when possible.
 
-### 66. `feat(ide): add selection and folding ranges`
+### 67. `feat(ide): add selection and folding ranges`
 
 Scope:
 
@@ -1148,34 +1205,20 @@ Acceptance:
 - Folding ranges are stable while typing incomplete code.
 - LSP tests cover nested functions and table constructors.
 
-### 67. `feat(ide): add call hierarchy`
+### 68. `refactor(ide): route call hierarchy through require graph`
 
 Scope:
 
-- Implement call hierarchy on known local and exported functions.
-- Use the require graph and symbol index for cross-file callers.
+- Move existing call hierarchy logic onto HIR, scope maps, and the require
+  graph.
+- Preserve known local, module-exported, and typed receiver method behavior.
 - Ignore dynamic calls through `any`.
 
 Acceptance:
 
-- Incoming calls include same-file and cross-file callers.
-- Outgoing calls include known callees from function bodies.
+- Existing call hierarchy tests still pass.
+- Incoming and outgoing calls no longer perform request-time project scans.
 - Unknown/dynamic call targets are omitted without diagnostics.
-
-### 68. `test: add fixture DSL for IDE tests`
-
-Scope:
-
-- Add a compact fixture format for source text, cursor positions, expected
-  ranges, expected diagnostics, and expected edits.
-- Replace repetitive test helpers where it improves readability.
-- Support multi-file fixtures for project-aware features.
-
-Acceptance:
-
-- New tests can define files and cursor markers inline.
-- The DSL supports both core query tests and LSP protocol tests.
-- Existing tests can migrate gradually.
 
 ### 69. `chore(profile): add analysis tracing and benchmarks`
 
@@ -1213,3 +1256,158 @@ Acceptance:
   belongs.
 - The guide links back to `SPEC.md` and the rust-analyzer gap matrix.
 - Any outdated roadmap entries from this phase are marked complete or deferred.
+
+## Phase 13: LOVE Domain Extensions
+
+This phase explores Tua's identity as a LOVE-focused Lua language. The goal is
+to add domain-aware workflows without turning Tua into a closed game engine.
+Core Lua semantics should remain predictable, and extensions should be opt-in,
+conservative, and tooling-aware.
+
+### 71. `docs(plugins): design domain extension model`
+
+Scope:
+
+- Write a design document for Tua domain plugins.
+- Define what plugins may extend:
+  - new top-level declarations;
+  - domain blocks;
+  - validation passes;
+  - lowering metadata;
+  - completions, hover, diagnostics, and editor metadata.
+- Define what plugins may not do:
+  - rewrite arbitrary expressions;
+  - change core Lua/Tua semantics;
+  - execute project runtime code during analysis;
+  - emit raw Lua strings as the primary lowering API.
+- Compare possible implementation choices:
+  - Rust-only built-in plugins;
+  - Lua-authored plugins hosted by Rust through a restricted API;
+  - static manifest plugins that provide metadata but no executable code.
+
+Acceptance:
+
+- The design states v1 plugin boundaries clearly.
+- The document includes at least one sprite/animation example and one asset
+  validation example.
+- Security and determinism constraints are explicit.
+
+### 72. `feat(plugins): add experimental plugin registry`
+
+Scope:
+
+- Add a plugin registry in `tua-core`.
+- Register built-in domain plugins through Rust first.
+- Expose plugin-provided:
+  - declarations;
+  - diagnostics;
+  - completions;
+  - hover snippets;
+  - lowering hooks or structured lowering requests.
+- Keep the registry disabled for third-party executable plugins until the API is
+  proven.
+
+Acceptance:
+
+- Existing behavior is unchanged when no plugin contributes syntax.
+- A test plugin can register one declaration and one diagnostic.
+- Plugin diagnostics use stable Tua diagnostic codes or a reserved plugin code
+  range.
+
+### 73. `feat(vectors): add LOVE-friendly Vec2 support`
+
+Scope:
+
+- Add built-in `Vec2` type support for common LOVE game code.
+- Provide a `vec2(x, y)` constructor with inferred `Vec2` return type.
+- Decide whether emitted Lua uses:
+  - a tiny generated runtime module;
+  - a configured external library such as `brinevector`;
+  - plain table output for the first version.
+- Add completion, hover, and signature help for supported vector fields and
+  operations.
+
+Acceptance:
+
+- `local position: Vec2 = vec2(100, 200)` type-checks.
+- `position.x` and `position.y` complete and hover as `number`.
+- Emitted Lua is LuaJIT/LOVE-compatible and documented.
+
+### 74. `feat(sprite): prototype sprite animation DSL`
+
+Scope:
+
+- Prototype a LOVE sprite/animation declaration, likely as a built-in plugin.
+- Explore syntax for:
+  - image path;
+  - frame size;
+  - animation names;
+  - frame ranges;
+  - FPS;
+  - looping mode.
+- Prefer structured lowering metadata over raw Lua string emission.
+- Consider anim8-compatible output as the first target.
+
+Example direction:
+
+```tua
+sprite Player
+  image "assets/player.png"
+  frame 16x16
+  anim idle from 0..3 fps 8
+  anim run from 4..9 fps 12
+end
+```
+
+Acceptance:
+
+- The prototype parses one sprite declaration form.
+- Missing image assets and invalid frame ranges produce diagnostics.
+- Emitted Lua can create an anim8-compatible grid/animation structure or a
+  documented placeholder representation.
+- The feature remains isolated enough to change syntax before stabilization.
+
+### 75. `feat(assets): add richer LOVE asset metadata`
+
+Scope:
+
+- Extend asset validation beyond path and extension checks.
+- Record asset metadata where practical:
+  - kind;
+  - relative path;
+  - extension;
+  - source span;
+  - inferred LOVE type;
+  - optional dimensions or duration when available without running game code.
+- Surface metadata through hover, completion resolve, diagnostics, and future
+  plugin hooks.
+- Keep binary parsing optional and conservative.
+
+Acceptance:
+
+- Asset hovers show path, inferred LOVE type, and validation status.
+- Completion can suggest project asset paths in asset-loader positions.
+- Unsupported or missing assets produce diagnostics with actionable messages.
+- Metadata is available to built-in plugins through a stable internal API.
+
+### 76. `docs(tooling): explore optional Feather integration hooks`
+
+Scope:
+
+- Write an exploratory document for optional Feather/tooling integration.
+- List possible integration points:
+  - asset inspectors;
+  - sprite/animation previews;
+  - generated metadata export;
+  - diagnostics surfaced in external tools;
+  - plugin-provided inspector panels.
+- Keep Feather integration optional and outside the core runtime/compiler path.
+- Identify which hooks belong in Tua core and which belong in editor/tooling
+  adapters.
+
+Acceptance:
+
+- The document proposes at least three concrete integration hooks.
+- Each hook states required Tua metadata and whether it needs compiler, LSP, or
+  editor support.
+- No Feather dependency is added to the core crates in this commit.

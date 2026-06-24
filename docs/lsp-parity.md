@@ -48,25 +48,25 @@ canonical root `ROADMAP.md`.
 
 | Feature | Tua today | Gap | Roadmap |
 | --- | --- | --- | --- |
-| Analysis architecture | A shared analysis snapshot exists, and many requests reuse it. | It is not yet a rust-analyzer-style dependency-tracked query database with a VFS/HIR split. | 52-64 |
+| Analysis architecture | A shared analysis snapshot exists, and many requests reuse it. | It is not yet a rust-analyzer-style dependency-tracked query database with a VFS/HIR split. | 53-65 |
 | LuaDoc coverage | Core tags are parsed and lowered. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49 |
-| Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 60, 61 |
-| Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 58, 60 |
-| Workspace symbols | Scans files on request and supports multiple folders. | No durable symbol index or rich export/field/global symbol classes yet. | 63 |
-| Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 60, 64 |
-| Code actions | Mechanical fixes exist for a focused set of diagnostics. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 65, 68 |
-| Selection/folding ranges | Not part of the current editor surface. | Would round out rust-analyzer-style navigation/editing ergonomics. | 66 |
+| Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 61, 62 |
+| Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
+| Workspace symbols | Scans files on request and supports multiple folders. | No durable symbol index or rich export/field/global symbol classes yet. | 64 |
+| Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
+| Code actions | Mechanical fixes exist for a focused set of diagnostics. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66 |
+| Selection/folding ranges | Not part of the current editor surface. | Would round out rust-analyzer-style navigation/editing ergonomics. | 67 |
 
 ## Missing And Planned
 
 | Feature | Current Tua behavior | Expected direction | Roadmap |
 | --- | --- | --- | --- |
-| Full analysis database | Requests still rely on a simpler snapshot and helper APIs. | Add VFS, open-file overlays, HIR-like lowering, require graph, dependency-tracked queries, and shared IDE routing. | 52-64 |
-| LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 68 |
-| Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 61 |
-| Rich project model | Source roots and require behavior are pragmatic. | Model roots, require paths, duplicate candidates, cycles, ignored paths, and target versions more explicitly. | 54, 58 |
+| Full analysis database | Requests still rely on a simpler snapshot and helper APIs. | Add VFS, open-file overlays, HIR-like lowering, require graph, dependency-tracked queries, and shared IDE routing. | 53-65 |
+| LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 52 |
+| Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 62 |
+| Rich project model | Source roots and require behavior are pragmatic. | Model roots, require paths, duplicate candidates, cycles, ignored paths, and target versions more explicitly. | 55, 59 |
 | Analysis tracing and benchmarks | No dedicated performance tracing. | Add profiling for parse/check/index/request work. | 69 |
-| Documentation refresh after architecture work | Docs now match the current feature surface. | Refresh again after the analysis database and HIR phases land. | 50, 51 |
+| Documentation refresh after architecture work | Docs now match the current feature surface. | Refresh again after the analysis database and HIR phases land. | 50, 51, 70 |
 
 ## Intentionally Out Of Scope
 

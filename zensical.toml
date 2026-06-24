@@ -15,6 +15,7 @@ nav = [
   { "Getting Started" = [
     { "Installation" = "installation.md" },
     { "Quickstart" = "quickstart.md" },
+    { "Examples" = "examples.md" },
     { "Configuration" = "configuration.md" },
   ] },
   { "Language" = [
@@ -24,7 +25,7 @@ nav = [
   { "Tooling" = [
     { "CLI" = "cli.md" },
     { "Language Server" = "lsp.md" },
-    { "Examples" = "examples.md" },
+    { "LSP Parity Matrix" = "lsp-parity.md" },
   ] },
   { "Project" = [
     { "Roadmap" = "roadmap.md" },

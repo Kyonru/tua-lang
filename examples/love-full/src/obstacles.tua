@@ -12,14 +12,16 @@ type ObstaclesModule = {
   speed?: number,
 }
 
-local player: any = require("player")
-local utils: any = require("utils")
-local score: any = require("score")
-local sound: any = require("sound")
-local particles: any = require("particles")
+local player = require("player")
+local utils = require("utils")
+local score = require("score")
+local sound = require("sound")
+local particles = require("particles")
 
 local obstacles: ObstaclesModule = {}
 local block = love.graphics.newImage("assets/block.png")
+
+local block_2 = image "assets/block.png"
 
 function obstacles.load()
   obstacles.list = {}
