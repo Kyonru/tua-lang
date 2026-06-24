@@ -34,11 +34,12 @@ canonical root `ROADMAP.md`.
 | Document highlights | Known symbols can be highlighted within the active document. | Comparable local highlight behavior. | 31 |
 | References | Finds same-file references and project-wide references for supported globals, module exports, aliases, and required-module callers. | Still less complete than LuaHelper for dynamic fields/metatables. | 42 |
 | Rename | Supports same-file rename and safe cross-file rename for project-identity symbols such as exported functions and type aliases. | Dynamic globals, `any`, and ambiguous fields are rejected. | 43 |
-| Workspace symbols | Scans configured workspaces for modules, aliases, and functions with fuzzy matching. | Not a persistent rust-analyzer-style symbol index yet. | 24, 63 |
+| Workspace symbols | Uses configured workspace indexes for modules, aliases, and functions with fuzzy matching. | Smaller than rust-analyzer's global index, but it no longer has to behave like a raw scan. | 24, 64 |
 | Code actions | Provides conservative fixes for missing require targets, inferred local annotations, unused locals, duplicate table keys, and self-assignments. | Smaller action set than rust-analyzer assists. | 44 |
 | Auto-import completion | Unresolved exported functions can complete with a require insertion or reuse of an existing require alias. | Narrower than rust-analyzer auto-imports, but the workflow exists. | 45 |
 | Call hierarchy | Incoming and outgoing calls work for known local functions, module-exported functions, and typed receiver methods. | Dynamic calls through `any` are ignored instead of guessed. | 48 |
 | Inlay hints | Provides local type hints and parameter-name hints for supported known expressions. | Shallower than rust-analyzer expression-chain hints. | 60, 64 |
+| Selection and folding ranges | Provides selection growth and folding for common syntax structures. | Smaller than rust-analyzer's syntax-tree backed editing surface, but the protocol surface exists. | 67 |
 | Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and modifiers. | Core semantic classes are present; deep dynamic Lua remains limited. | 47 |
 | Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
 | LOVE asset helpers | `image "..."` and `sound "..."` infer `Image`/`Source`, emit ordinary LOVE calls, and validate obvious paths/extensions. | Tua-specific LOVE-focused workflow. | 48.6 |
@@ -48,25 +49,24 @@ canonical root `ROADMAP.md`.
 
 | Feature | Tua today | Gap | Roadmap |
 | --- | --- | --- | --- |
-| Analysis architecture | A shared analysis snapshot exists, and many requests reuse it. | It is not yet a rust-analyzer-style dependency-tracked query database with a VFS/HIR split. | 53-65 |
+| Analysis architecture | Shared analysis host/snapshot, VFS overlays, project model, HIR-like modules, module graph, scope maps, project type database, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
 | LuaDoc coverage | Core tags are parsed and lowered. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49 |
 | Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 61, 62 |
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
-| Workspace symbols | Scans files on request and supports multiple folders. | No durable symbol index or rich export/field/global symbol classes yet. | 64 |
+| Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
 | Code actions | Mechanical fixes exist for a focused set of diagnostics. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66 |
-| Selection/folding ranges | Not part of the current editor surface. | Would round out rust-analyzer-style navigation/editing ergonomics. | 67 |
 
 ## Missing And Planned
 
 | Feature | Current Tua behavior | Expected direction | Roadmap |
 | --- | --- | --- | --- |
-| Full analysis database | Requests still rely on a simpler snapshot and helper APIs. | Add VFS, open-file overlays, HIR-like lowering, require graph, dependency-tracked queries, and shared IDE routing. | 53-65 |
+| Deeper analysis precision | A smaller snapshot/database exists, but some precision work still falls back to conservative dynamic results. | Keep moving semantic facts into shared snapshot queries instead of feature-specific paths. | 62, 70.10 |
 | LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 52 |
 | Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 62 |
-| Rich project model | Source roots and require behavior are pragmatic. | Model roots, require paths, duplicate candidates, cycles, ignored paths, and target versions more explicitly. | 55, 59 |
-| Analysis tracing and benchmarks | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
-| Documentation refresh after architecture work | Docs now match the current feature surface. | Refresh again after the analysis database and HIR phases land. | 50, 51, 70 |
+| Rich project edge cases | Project roots, require paths, ignored paths, and targets are modeled. | Add more duplicate-candidate, cycle, generated-source, and multi-root regression coverage as real projects expose gaps. | 55, 59 |
+| Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
+| Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
 
 ## Intentionally Out Of Scope
 

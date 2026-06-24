@@ -63,6 +63,50 @@ parser also understands a LuaHelper/LuaLS-style annotation subset, so plain Lua
 files can provide typed functions, aliases, fields, documentation, and simple
 module exports to `.tua` callers.
 
+## LuaDoc Annotations
+
+Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.lua` and
+`.tua` files. In practice, annotations are most useful at interop boundaries:
+plain Lua modules, third-party libraries, returned module tables, and functions
+called from typed Tua code.
+
+Supported tags include:
+
+- `---@class`
+- `---@field`
+- `---@alias`
+- `---@type`
+- `---@param`
+- `---@return`
+- `---@generic`
+- `---@version`
+
+Tua uses supported annotations for type environments, module export inference,
+hover, completion, signature help, and parameter documentation where the
+surrounding Lua is simple enough to analyze.
+
+```lua
+---@alias Health number
+
+---@class Player
+---@field name string
+---@field hp Health
+
+---@param name string player name
+---@return Player created player
+local function makePlayer(name)
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+```
+
+Malformed annotation diagnostics are controlled by `doc_annotations` in
+`tua.toml`.
+
+### Annotated Lua Module Example
+
 ```lua
 ---@param value number
 ---@param min number
@@ -84,6 +128,49 @@ return {
   clamp = clamp,
 }
 ```
+
+When this file is required from Tua, the language server can use the annotated
+signature for hover, completion, signature help, and argument diagnostics.
+
+```tua
+local Legacy = require("legacy")
+
+local score = Legacy.clamp(125, 0, 100)
+```
+
+### Annotated Types From Lua
+
+Lua modules can also provide named table shapes to Tua callers:
+
+```lua
+---@class Enemy
+---@field name string
+---@field hp number
+
+---@return Enemy
+local function makeEnemy()
+  return {
+    name = "slime",
+    hp = 20,
+  }
+end
+
+return {
+  makeEnemy = makeEnemy,
+}
+```
+
+```tua
+local Enemies = require("enemies")
+
+local enemy = Enemies.makeEnemy()
+enemy.hp -= 5
+```
+
+The analyzer does not run Lua code to discover symbols. Keep module returns
+explicit when you want editor tooling to understand exports.
+
+## LOVE Interop Helpers
 
 Tua also includes small typed LOVE asset loader helpers:
 

@@ -1,15 +1,23 @@
 # Architecture
 
-This page maps rust-analyzer's crate architecture to Tua's current structure and
-the Phase 12 roadmap. The goal is not to copy rust-analyzer directly. The goal
-is to borrow boundaries that make a language tool faster, easier to reason
-about, and less likely to grow one-off feature paths.
+This page is the contributor guide for Tua's compiler and language-server
+architecture. It also maps rust-analyzer's crate architecture to Tua's current
+shape and the Phase 12 roadmap. The goal is not to copy rust-analyzer directly.
+The goal is to borrow boundaries that make a Lua/LOVE-sized language tool
+faster, easier to reason about, and less likely to grow one-off feature paths.
+
+Language behavior belongs in the root
+[SPEC](https://github.com/Kyonru/tua-lang/blob/main/SPEC.md). Commit-sized
+planning belongs in the root
+[ROADMAP](https://github.com/Kyonru/tua-lang/blob/main/ROADMAP.md). This page
+explains where code belongs and how data should flow through the implementation.
 
 Reference point: the current rust-analyzer `crates/` tree includes architecture
 families such as `base-db`, `ide-db`, `vfs`, `vfs-notify`, `project-model`,
 `parser`, `syntax`, `hir`, `hir-def`, `hir-expand`, `hir-ty`, `ide`,
 `ide-assists`, `ide-completion`, `ide-diagnostics`, `test-fixture`,
-`test-utils`, and `profile`.
+`test-utils`, and `profile`. The [gap matrix](#gap-matrix) near the end of this
+guide maps those ideas to Tua's smaller architecture.
 
 ## Current Tua Shape
 
@@ -39,6 +47,113 @@ watched-file updates.
 The main architectural gap is not missing editor surface. It is that too much
 semantic knowledge still lives in helper APIs and feature-specific paths instead
 of a single dependency-tracked analysis model.
+
+## Crates And Ownership
+
+`crates/tua-cli` owns command-line behavior: argument parsing, project
+initialization, `check`, `build`, `watch`, process exit codes, and user-facing
+diagnostic printing. It should call `tua-core` for language work. It should not
+implement parser, type, module, or IDE behavior locally.
+
+`crates/tua-core` owns the language implementation. Parser, source models, HIR,
+type representation, type checking, diagnostics, lowering, emission, project
+modeling, VFS, module graphs, LOVE/Lua catalogs, and pure IDE queries all live
+here. When a behavior must be shared by CLI and LSP, it belongs in this crate.
+
+`crates/tua-lsp` owns JSON-RPC/LSP transport, server state, capability
+advertising, protocol conversion, and workspace/document notifications. Request
+handlers should mostly convert LSP positions and URIs into core query inputs,
+read an `AnalysisSnapshot`, then convert core results back into LSP shapes.
+
+`editors/vscode` owns editor packaging: language registration, grammar,
+extension activation, bundled/server binary discovery, debug launch tasks,
+configuration settings, and VS Code smoke scripts. It should not duplicate core
+language rules in TypeScript.
+
+## Analysis Data Flow
+
+Most feature requests should follow the same path:
+
+1. The CLI or LSP updates `AnalysisHost` inputs: project config, workspace
+   folders, source roots, ignored paths, disk files, open-document overlays, and
+   builtin catalogs.
+2. The caller takes an immutable `AnalysisSnapshot`.
+3. The snapshot reads normalized files through the VFS and project model.
+4. Cached per-file queries parse source, extract typed source models, lower HIR,
+   build scopes, collect diagnostics, collect exports, and resolve type data.
+5. Project queries build require edges, module exports, symbol indexes, and
+   project-aware type information from indexed files.
+6. IDE queries such as hover, completion, definition, references, rename,
+   inlay hints, semantic tokens, document symbols, call hierarchy, and code
+   actions read from the snapshot instead of rereading files or rebuilding
+   project state during a request.
+
+Request handlers should be deterministic. If two handlers need the same
+semantic fact, that fact should move into `tua-core` or the analysis snapshot
+instead of being recomputed independently.
+
+## Where Code Belongs
+
+Parser and syntax recovery code belongs under `crates/tua-core/src/parser`.
+Keep raw syntax parsing, Tua normalization, typed source extraction, LuaDoc
+annotation parsing, and source-span utilities separate enough that incomplete
+editor text can still produce best-effort IDE results.
+
+Type representation and assignability belongs under `crates/tua-core/src/types`.
+Project-aware type lookup belongs in the type database and should use module
+aliases, require edges, LuaDoc annotations, LOVE/Lua catalogs, and HIR symbols
+through the snapshot. Avoid adding hover-only or completion-only type logic.
+
+Diagnostics belong in the shared diagnostic/check/lint pipeline. Parser,
+project, type, lint, asset, and emission diagnostics should use stable codes and
+flow through the same CLI and LSP formatting paths.
+
+Emission belongs under `crates/tua-core/src/emit` and build orchestration belongs
+in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
+and should not depend on LSP-only concepts.
+
+Project and file identity code belongs in the project model, VFS, module graph,
+and analysis host. Do not resolve `require(...)`, ignored paths, output roots,
+or open unsaved buffers separately in feature handlers.
+
+IDE features should have a pure core query first and a protocol conversion
+layer second. For example, go-to-definition logic belongs in `tua-core`; LSP
+code should only map URI/position inputs and `Location` outputs.
+
+LOVE and Lua builtin behavior belongs in curated catalogs and shared semantic
+resolution paths. A LOVE method return type, signature, or completion should be
+visible to hover, completion, signature help, diagnostics, and inlay hints
+through the same resolver.
+
+## Adding A Core Query
+
+1. Define the core result type near the domain that owns the behavior.
+2. Add a snapshot method when the query depends on project state or open files.
+3. Reuse HIR, scope maps, the module graph, the symbol index, and the type
+   database before adding a syntax walk.
+4. Return `any` or `None` consistently for dynamic Lua that cannot be proven.
+5. Add focused core tests, preferably with the fixture DSL when the query needs
+   multiple files, cursor markers, or expected diagnostics.
+6. Update examples or docs when the query changes what users can observe in the
+   editor.
+
+Compatibility helpers such as `*_tua_source(...)` may stay for small unit tests
+and CLI-like one-file calls, but new project-aware behavior should route through
+`AnalysisSnapshot`.
+
+## Adding An LSP Feature
+
+1. Advertise the capability in the LSP capability builder.
+2. Add a handler that translates LSP URI, range, position, or params into a
+   snapshot query.
+3. Keep request-time work inside protocol conversion plus one core query. Avoid
+   disk reads, ad hoc require resolution, or local type inference in handlers.
+4. Convert core ranges using the shared 1-based core to 0-based LSP helpers.
+5. Add LSP tests for capability advertisement, normal results, unresolved
+   results, and behavior after open-document edits or watched-file changes when
+   relevant.
+6. If the feature has user-visible behavior, add or update an example with `--`
+   comments naming the feature being demonstrated.
 
 ## VFS Overlay Example
 
@@ -390,9 +505,10 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua plugins must not become arbitrary macro expansion. | Out of scope | None |
 | `load-cargo`, `toolchain` | Rust toolchain and Cargo loading. | No equivalent; Tua project model stays Lua/LOVE-focused. | Out of scope | None |
 
-## Planned Architecture Path
+## Phase 12 Architecture Path
 
-Phase 12 should land in this order:
+Phase 12 landed in this order, with some rust-analyzer-like pieces intentionally
+kept smaller than their Rust equivalents:
 
 1. Add fixture DSL support so architecture changes can be tested clearly.
 2. Introduce `AnalysisHost` and immutable `AnalysisSnapshot`.
@@ -403,7 +519,12 @@ Phase 12 should land in this order:
 7. Build require graphs, scope maps, project-aware type data, and symbol indexes.
 8. Route diagnostics and IDE features through the snapshot.
 9. Move code actions and call hierarchy onto the shared model.
-10. Add selection/folding ranges, profiling, and final architecture docs.
+10. Add selection/folding ranges, profiling, and this contributor architecture
+    guide.
+
+Deferred precision work remains in later roadmap items: richer flow-sensitive
+narrowing, broader LuaLS/LuaCATS annotation compatibility, and future LOVE
+domain extensions.
 
 ## Non-Goals
 

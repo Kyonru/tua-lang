@@ -73,7 +73,9 @@ player.hp = player.hp - 10
 
 - [Installation](installation.md) - local build, CLI, and editor setup.
 - [Quickstart](quickstart.md) - create, check, build, and watch a project.
-- [Language](language.md) - Tua syntax and emission behavior.
+- [Learn](learn.md) - guided language path from Lua to typed Tua and LOVE.
+- [Language](language.md) - overview, type surface, interop, LOVE helpers, and
+  emission behavior.
 - [Configuration](configuration.md) - `tua.toml` options and diagnostics.
 - [CLI](cli.md) - command reference.
 - [Language Server](lsp.md) - editor features and capability notes.
@@ -82,4 +84,5 @@ player.hp = player.hp - 10
 - [Lua Interop](lua-interop.md) - requiring Lua from Tua and Tua from Lua.
 - [Examples](examples.md) - bundled projects and verification commands.
 - [Roadmap](roadmap.md) - implementation status and planned parity work.
-- [Architecture](architecture.md) - rust-analyzer-inspired architecture gaps.
+- [Architecture](architecture.md) - contributor guide, architecture map, and
+  rust-analyzer gap matrix.

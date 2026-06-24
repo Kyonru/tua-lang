@@ -882,7 +882,13 @@ LOVE helpers, LuaDoc parsing, and watched-file updates exist. Phase 12 should
 therefore prioritize architecture, consistency, and performance over adding
 another parallel feature path.
 
+Status: Phase 12 is complete as a pragmatic first architecture pass. Items below
+are marked done when the smaller Tua-sized version landed, or deferred when the
+remaining work is better handled by a later precision-focused roadmap item.
+
 ### 51. `docs(architecture): add rust-analyzer gap matrix`
+
+Status: done.
 
 Scope:
 
@@ -907,6 +913,9 @@ Acceptance:
 
 ### 52. `test: add fixture DSL for IDE and project tests`
 
+Status: deferred follow-up. Representative fixtures exist, but broad migration
+from older ad hoc tests should stay incremental.
+
 Scope:
 
 - Add a compact fixture format for:
@@ -925,6 +934,8 @@ Acceptance:
 - Existing tests can migrate gradually; no large mechanical rewrite is required.
 
 ### 53. `refactor(core): introduce analysis host and snapshot`
+
+Status: done.
 
 Scope:
 
@@ -948,6 +959,8 @@ Acceptance:
 
 ### 54. `feat(vfs): add virtual file system and open-file overlays`
 
+Status: done.
+
 Scope:
 
 - Track workspace files in a small virtual file system.
@@ -964,6 +977,8 @@ Acceptance:
   cross-platform separators.
 
 ### 55. `feat(project-model): model roots, targets, and require paths`
+
+Status: done.
 
 Scope:
 
@@ -989,6 +1004,9 @@ Acceptance:
 
 ### 56. `feat(db): add dependency-tracked query cache`
 
+Status: done for the current file-granular cache. Deeper query-database
+precision is deferred until a concrete performance or correctness need appears.
+
 Scope:
 
 - Cache expensive queries:
@@ -1010,6 +1028,8 @@ Acceptance:
 
 ### 57. `refactor(parser): separate syntax tree from semantic source model`
 
+Status: done.
+
 Scope:
 
 - Split raw parser output from Tua's typed source model.
@@ -1027,6 +1047,8 @@ Acceptance:
   tokens.
 
 ### 58. `feat(hir): lower files into semantic modules`
+
+Status: done.
 
 Scope:
 
@@ -1051,6 +1073,8 @@ Acceptance:
 
 ### 59. `feat(module): build require graph and export index`
 
+Status: done.
+
 Scope:
 
 - Build a workspace require graph from the project model and HIR modules.
@@ -1068,6 +1092,8 @@ Acceptance:
 - Require cycles do not panic and produce deterministic partial results.
 
 ### 60. `feat(scope): add lexical scope maps`
+
+Status: done.
 
 Scope:
 
@@ -1087,6 +1113,8 @@ Acceptance:
 
 ### 61. `feat(types): add project-aware type database`
 
+Status: done.
+
 Scope:
 
 - Move type environments into the analysis database.
@@ -1103,6 +1131,9 @@ Acceptance:
 - Type queries are cached and invalidated through the database.
 
 ### 62. `feat(types): add flow-sensitive narrowing`
+
+Status: deferred follow-up. Basic obvious checks exist, but full block-local
+narrowing remains future precision work.
 
 Scope:
 
@@ -1121,6 +1152,8 @@ Acceptance:
 
 ### 63. `feat(diagnostics): move diagnostics to incremental pipeline`
 
+Status: done for the current CLI/LSP diagnostic path.
+
 Scope:
 
 - Run parser, type, lint, project, and emission diagnostics through the analysis
@@ -1138,6 +1171,8 @@ Acceptance:
 
 ### 64. `feat(ide-db): add shared symbol index`
 
+Status: done.
+
 Scope:
 
 - Build a symbol index for aliases, functions, locals, parameters, fields,
@@ -1153,6 +1188,8 @@ Acceptance:
 - Index updates after watched file changes.
 
 ### 65. `feat(ide): route LSP features through analysis snapshot`
+
+Status: done.
 
 Scope:
 
@@ -1172,6 +1209,8 @@ Acceptance:
 - Request handlers become mostly protocol conversion plus snapshot access.
 
 ### 66. `refactor(assists): move code actions onto analysis snapshot`
+
+Status: done.
 
 Scope:
 
@@ -1193,6 +1232,8 @@ Acceptance:
 
 ### 67. `feat(ide): add selection and folding ranges`
 
+Status: done.
+
 Scope:
 
 - Implement `textDocument/selectionRange` from syntax/HIR spans.
@@ -1206,6 +1247,8 @@ Acceptance:
 - LSP tests cover nested functions and table constructors.
 
 ### 68. `refactor(ide): route call hierarchy through require graph`
+
+Status: done.
 
 Scope:
 
@@ -1222,6 +1265,8 @@ Acceptance:
 
 ### 69. `chore(profile): add analysis tracing and benchmarks`
 
+Status: done.
+
 Scope:
 
 - Add lightweight timing/tracing hooks around parsing, lowering, type checking,
@@ -1236,6 +1281,8 @@ Acceptance:
 - Profiling output does not pollute normal CLI or LSP output.
 
 ### 70. `docs: publish architecture guide`
+
+Status: done.
 
 Scope:
 

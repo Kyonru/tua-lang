@@ -13,15 +13,21 @@ The v1 implementation covers the compiler, CLI, examples, VS Code extension,
 LOVE-focused helpers, LuaDoc-aware Lua interop, and a broad language-server
 surface.
 
-The active roadmap focus is now deeper architecture and precision:
+The recent roadmap focus landed the Phase 12 architecture spine:
 
 - rust-analyzer-inspired analysis database, VFS, HIR, and query caching;
 - stronger project modeling for require graphs, source roots, and exports;
-- flow-sensitive type narrowing and richer project-aware type information;
-- more LuaHelper parity fixtures and stub coverage;
-- editor assists such as selection/folding ranges and larger refactor support.
+- shared IDE routing for navigation, symbols, call hierarchy, selection ranges,
+  folding ranges, and profiling.
 
-See [Architecture](architecture.md) for the Phase 12 rust-analyzer gap matrix.
+See [Architecture](architecture.md) for the contributor guide and Phase 12
+rust-analyzer gap matrix.
+
+Current future work is now more about precision and domain depth:
+
+- flow-sensitive type narrowing and richer LuaLS/LuaCATS annotation support;
+- more LuaHelper parity fixtures and stub coverage;
+- larger refactor support where the shared model can prove edits are safe.
 
 After that, Phase 13 explores LOVE domain extensions:
 
