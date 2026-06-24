@@ -67,5 +67,16 @@ pub(crate) fn loader_kind(name: &str) -> Option<AssetLoaderKind> {
 }
 
 pub(crate) fn builtin_type_names() -> &'static [&'static str] {
-    &["Image", "Source"]
+    &[
+        "Body",
+        "Canvas",
+        "Font",
+        "Image",
+        "ImageData",
+        "Quad",
+        "Shader",
+        "Source",
+        "SpriteBatch",
+        "World",
+    ]
 }

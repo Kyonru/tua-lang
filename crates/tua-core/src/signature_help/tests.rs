@@ -185,6 +185,25 @@ player:setFilter(
 }
 
 #[test]
+fn returns_love_object_method_signature_from_direct_constructor_local() {
+    let source = r#"
+local player = love.graphics.newImage("assets/player.png")
+
+player:setFilter(
+"#;
+    let help = signature_at(source, "setFilter(").expect("Image method should have help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)"
+    );
+    assert_eq!(
+        parameter_labels(&help),
+        vec!["min: FilterMode", "mag?: FilterMode", "anisotropy?: number"]
+    );
+}
+
+#[test]
 fn selects_love_object_method_active_parameter() {
     let source = r#"
 local player = image "assets/player.png"

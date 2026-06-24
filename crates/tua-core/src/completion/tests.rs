@@ -79,10 +79,21 @@ fn completes_love_builtin_type_names() {
     let source = "local player: Im\n";
     let completions = complete_tua_source("src/main.tua", source, position_after(source, "Im"))
         .expect("LOVE type completion should succeed");
+    let canvas_source = "local target: Can\n";
+    let canvas = complete_tua_source(
+        "src/main.tua",
+        canvas_source,
+        position_after(canvas_source, "Can"),
+    )
+    .expect("LOVE object type completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["Image".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["Image".to_owned(), "ImageData".to_owned()]
+    );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
     assert_eq!(completions[0].detail.as_deref(), Some("built-in type"));
+    assert_eq!(labels(&canvas), vec!["Canvas".to_owned()]);
 }
 
 #[test]
@@ -311,6 +322,122 @@ player.getWi
         completions[0].detail.as_deref(),
         Some("function Image:getWidth(): number")
     );
+}
+
+#[test]
+fn completes_love_image_methods_for_direct_love_constructor_locals() {
+    let source = r#"
+local player = love.graphics.newImage("assets/player.png")
+player:
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "player:"))
+            .expect("direct LOVE constructor completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"getWidth".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"setFilter".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn completes_common_love_object_methods_for_direct_constructor_locals() {
+    let canvas_source = r#"
+local canvas = love.graphics.newCanvas()
+canvas.getW
+"#;
+    let font_source = r#"
+local font = love.graphics.newFont("assets/sniglet.otf", 16)
+font.getW
+"#;
+    let quad_source = r#"
+local quad = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
+quad.getV
+"#;
+    let data_source = r#"
+local data = love.image.newImageData(16, 16)
+data.setP
+"#;
+    let shader_source = r#"
+local shader = love.graphics.newShader("void effect() {}")
+shader.se
+"#;
+    let batch_source = r#"
+local batch = love.graphics.newSpriteBatch(love.graphics.newImage("assets/player.png"))
+batch.add
+"#;
+    let world_source = r#"
+local world = love.physics.newWorld()
+world.setG
+"#;
+    let body_source = r#"
+local world = love.physics.newWorld()
+local body = love.physics.newBody(world, 0, 0)
+body.setP
+"#;
+
+    let canvas = complete_tua_source(
+        "src/main.tua",
+        canvas_source,
+        position_after(canvas_source, "canvas.getW"),
+    )
+    .expect("Canvas completion should succeed");
+    let font = complete_tua_source(
+        "src/main.tua",
+        font_source,
+        position_after(font_source, "font.getW"),
+    )
+    .expect("Font completion should succeed");
+    let quad = complete_tua_source(
+        "src/main.tua",
+        quad_source,
+        position_after(quad_source, "quad.getV"),
+    )
+    .expect("Quad completion should succeed");
+    let data = complete_tua_source(
+        "src/main.tua",
+        data_source,
+        position_after(data_source, "data.setP"),
+    )
+    .expect("ImageData completion should succeed");
+    let shader = complete_tua_source(
+        "src/main.tua",
+        shader_source,
+        position_after(shader_source, "shader.se"),
+    )
+    .expect("Shader completion should succeed");
+    let batch = complete_tua_source(
+        "src/main.tua",
+        batch_source,
+        position_after(batch_source, "batch.add"),
+    )
+    .expect("SpriteBatch completion should succeed");
+    let world = complete_tua_source(
+        "src/main.tua",
+        world_source,
+        position_after(world_source, "world.setG"),
+    )
+    .expect("World completion should succeed");
+    let body = complete_tua_source(
+        "src/main.tua",
+        body_source,
+        position_after(body_source, "body.setP"),
+    )
+    .expect("Body completion should succeed");
+
+    assert_eq!(labels(&canvas), vec!["getWidth".to_owned()]);
+    assert_eq!(
+        labels(&font),
+        vec!["getWidth".to_owned(), "getWrap".to_owned()]
+    );
+    assert_eq!(labels(&quad), vec!["getViewport".to_owned()]);
+    assert_eq!(labels(&data), vec!["setPixel".to_owned()]);
+    assert!(labels(&shader).contains(&"send".to_owned()));
+    assert_eq!(
+        labels(&batch),
+        vec!["add".to_owned(), "addLayer".to_owned()]
+    );
+    assert_eq!(labels(&world), vec!["setGravity".to_owned()]);
+    assert_eq!(labels(&body), vec!["setPosition".to_owned()]);
 }
 
 #[test]

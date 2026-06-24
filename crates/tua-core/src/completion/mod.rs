@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use self::context::{completion_context, CompletionContext};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
+use crate::asset;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::semantic::{resolve_aliases, SemanticModel};
@@ -227,23 +228,22 @@ fn complete_type_names(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
 }
 
 fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
-    [
-        "Image", "Source", "any", "boolean", "nil", "number", "string",
-    ]
-    .into_iter()
-    .filter(|primitive| primitive.starts_with(prefix))
-    .map(|primitive| Completion {
-        label: primitive.to_owned(),
-        kind: CompletionKind::TypeAlias,
-        detail: Some("built-in type".to_owned()),
-        documentation: None,
-        insert_text: None,
-        is_snippet: false,
-        module_path: None,
-        source_module: None,
-        additional_text_edits: Vec::new(),
-    })
-    .collect()
+    ["any", "boolean", "nil", "number", "string"]
+        .into_iter()
+        .chain(asset::builtin_type_names().iter().copied())
+        .filter(|primitive| primitive.starts_with(prefix))
+        .map(|primitive| Completion {
+            label: primitive.to_owned(),
+            kind: CompletionKind::TypeAlias,
+            detail: Some("built-in type".to_owned()),
+            documentation: None,
+            insert_text: None,
+            is_snippet: false,
+            module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
+        })
+        .collect()
 }
 
 fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {

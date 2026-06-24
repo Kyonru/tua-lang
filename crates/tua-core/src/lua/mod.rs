@@ -100,8 +100,16 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
 
 fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
     match type_name {
+        "Body" => Some(BODY_ITEMS),
+        "Canvas" => Some(CANVAS_ITEMS),
+        "Font" => Some(FONT_ITEMS),
         "Image" => Some(IMAGE_ITEMS),
+        "ImageData" => Some(IMAGE_DATA_ITEMS),
+        "Quad" => Some(QUAD_ITEMS),
+        "Shader" => Some(SHADER_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
+        "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
+        "World" => Some(WORLD_ITEMS),
         _ => None,
     }
 }
@@ -518,6 +526,150 @@ const ASSET_LOADERS: &[LuaItem] = &[
     asset_item(asset::AssetLoaderKind::Sound),
 ];
 
+const CANVAS_ITEMS: &[LuaItem] = &[
+    item(
+        "clear",
+        LuaItemKind::Function,
+        "function Canvas:clear(r?: number, g?: number, b?: number, a?: number)",
+        "Clears the Canvas.",
+    ),
+    item(
+        "getDimensions",
+        LuaItemKind::Function,
+        "function Canvas:getDimensions(): number, number",
+        "Gets the width and height of the Canvas.",
+    ),
+    item(
+        "getDPIScale",
+        LuaItemKind::Function,
+        "function Canvas:getDPIScale(): number",
+        "Gets the DPI scale factor of the Canvas.",
+    ),
+    item(
+        "getFilter",
+        LuaItemKind::Function,
+        "function Canvas:getFilter(): FilterMode, FilterMode, number",
+        "Gets the filter mode used when scaling the Canvas.",
+    ),
+    item(
+        "getFormat",
+        LuaItemKind::Function,
+        "function Canvas:getFormat(): PixelFormat",
+        "Gets the Canvas texture format.",
+    ),
+    item(
+        "getHeight",
+        LuaItemKind::Function,
+        "function Canvas:getHeight(): number",
+        "Gets the height of the Canvas.",
+    ),
+    item(
+        "getMSAA",
+        LuaItemKind::Function,
+        "function Canvas:getMSAA(): number",
+        "Gets the number of MSAA samples used by the Canvas.",
+    ),
+    item(
+        "getWidth",
+        LuaItemKind::Function,
+        "function Canvas:getWidth(): number",
+        "Gets the width of the Canvas.",
+    ),
+    item(
+        "newImageData",
+        LuaItemKind::Function,
+        "function Canvas:newImageData(): ImageData",
+        "Creates ImageData from the Canvas contents.",
+    ),
+    item(
+        "renderTo",
+        LuaItemKind::Function,
+        "function Canvas:renderTo(func: function)",
+        "Renders to the Canvas for the duration of a function.",
+    ),
+    item(
+        "setFilter",
+        LuaItemKind::Function,
+        "function Canvas:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+        "Sets the filter mode used when scaling the Canvas.",
+    ),
+    item(
+        "setWrap",
+        LuaItemKind::Function,
+        "function Canvas:setWrap(horizontal: WrapMode, vertical?: WrapMode)",
+        "Sets the wrapping properties of the Canvas.",
+    ),
+];
+
+const FONT_ITEMS: &[LuaItem] = &[
+    item(
+        "getAscent",
+        LuaItemKind::Function,
+        "function Font:getAscent(): number",
+        "Gets the ascent of the Font.",
+    ),
+    item(
+        "getBaseline",
+        LuaItemKind::Function,
+        "function Font:getBaseline(): number",
+        "Gets the baseline of the Font.",
+    ),
+    item(
+        "getDescent",
+        LuaItemKind::Function,
+        "function Font:getDescent(): number",
+        "Gets the descent of the Font.",
+    ),
+    item(
+        "getFilter",
+        LuaItemKind::Function,
+        "function Font:getFilter(): FilterMode, FilterMode, number",
+        "Gets the Font filter mode.",
+    ),
+    item(
+        "getHeight",
+        LuaItemKind::Function,
+        "function Font:getHeight(): number",
+        "Gets the height of the Font.",
+    ),
+    item(
+        "getLineHeight",
+        LuaItemKind::Function,
+        "function Font:getLineHeight(): number",
+        "Gets the line height scale.",
+    ),
+    item(
+        "getWidth",
+        LuaItemKind::Function,
+        "function Font:getWidth(text: string): number",
+        "Gets the width of a string when rendered with the Font.",
+    ),
+    item(
+        "getWrap",
+        LuaItemKind::Function,
+        "function Font:getWrap(text: string, wraplimit: number): number, table",
+        "Gets wrapped line information for text.",
+    ),
+    item(
+        "hasGlyphs",
+        LuaItemKind::Function,
+        "function Font:hasGlyphs(text: string): boolean",
+        "Gets whether the Font can render every glyph in the text.",
+    ),
+    item(
+        "setFilter",
+        LuaItemKind::Function,
+        "function Font:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)",
+        "Sets the Font filter mode.",
+    ),
+    item(
+        "setLineHeight",
+        LuaItemKind::Function,
+        "function Font:setLineHeight(height: number)",
+        "Sets the line height scale.",
+    ),
+];
+
 const IMAGE_ITEMS: &[LuaItem] = &[
     item(
         "getDimensions",
@@ -596,6 +748,348 @@ const IMAGE_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function Image:setWrap(horizontal: WrapMode, vertical?: WrapMode)",
         "Sets the wrapping properties of the Image.",
+    ),
+];
+
+const IMAGE_DATA_ITEMS: &[LuaItem] = &[
+    item(
+        "clone",
+        LuaItemKind::Function,
+        "function ImageData:clone(): ImageData",
+        "Creates a copy of the ImageData.",
+    ),
+    item(
+        "encode",
+        LuaItemKind::Function,
+        "function ImageData:encode(format: ImageFormat, filename?: string): FileData",
+        "Encodes the ImageData to a file format.",
+    ),
+    item(
+        "getDimensions",
+        LuaItemKind::Function,
+        "function ImageData:getDimensions(): number, number",
+        "Gets the width and height of the ImageData.",
+    ),
+    item(
+        "getHeight",
+        LuaItemKind::Function,
+        "function ImageData:getHeight(): number",
+        "Gets the height of the ImageData.",
+    ),
+    item(
+        "getPixel",
+        LuaItemKind::Function,
+        "function ImageData:getPixel(x: number, y: number): number, number, number, number",
+        "Gets the color of a pixel.",
+    ),
+    item(
+        "getWidth",
+        LuaItemKind::Function,
+        "function ImageData:getWidth(): number",
+        "Gets the width of the ImageData.",
+    ),
+    item(
+        "mapPixel",
+        LuaItemKind::Function,
+        "function ImageData:mapPixel(func: function, x?: number, y?: number, width?: number, height?: number)",
+        "Transforms pixels in the ImageData using a function.",
+    ),
+    item(
+        "paste",
+        LuaItemKind::Function,
+        "function ImageData:paste(source: ImageData, dx: number, dy: number, sx: number, sy: number, sw: number, sh: number)",
+        "Pastes another ImageData into this ImageData.",
+    ),
+    item(
+        "setPixel",
+        LuaItemKind::Function,
+        "function ImageData:setPixel(x: number, y: number, r: number, g: number, b: number, a?: number)",
+        "Sets the color of a pixel.",
+    ),
+];
+
+const QUAD_ITEMS: &[LuaItem] = &[
+    item(
+        "getLayer",
+        LuaItemKind::Function,
+        "function Quad:getLayer(): number",
+        "Gets the texture layer used by the Quad.",
+    ),
+    item(
+        "getTextureDimensions",
+        LuaItemKind::Function,
+        "function Quad:getTextureDimensions(): number, number",
+        "Gets the reference texture dimensions of the Quad.",
+    ),
+    item(
+        "getViewport",
+        LuaItemKind::Function,
+        "function Quad:getViewport(): number, number, number, number",
+        "Gets the viewport of the Quad.",
+    ),
+    item(
+        "setLayer",
+        LuaItemKind::Function,
+        "function Quad:setLayer(layer: number)",
+        "Sets the texture layer used by the Quad.",
+    ),
+    item(
+        "setViewport",
+        LuaItemKind::Function,
+        "function Quad:setViewport(x: number, y: number, w: number, h: number, sw?: number, sh?: number)",
+        "Sets the viewport of the Quad.",
+    ),
+];
+
+const SHADER_ITEMS: &[LuaItem] = &[
+    item(
+        "getWarnings",
+        LuaItemKind::Function,
+        "function Shader:getWarnings(): string",
+        "Gets warnings from shader compilation.",
+    ),
+    item(
+        "hasUniform",
+        LuaItemKind::Function,
+        "function Shader:hasUniform(name: string): boolean",
+        "Gets whether the Shader has a uniform with the given name.",
+    ),
+    item(
+        "send",
+        LuaItemKind::Function,
+        "function Shader:send(name: string, value: any, ...)",
+        "Sends one or more values to a Shader uniform.",
+    ),
+    item(
+        "sendColor",
+        LuaItemKind::Function,
+        "function Shader:sendColor(name: string, color: table, ...)",
+        "Sends colors to a Shader uniform.",
+    ),
+];
+
+const SPRITE_BATCH_ITEMS: &[LuaItem] = &[
+    item(
+        "add",
+        LuaItemKind::Function,
+        "function SpriteBatch:add(x?: number, y?: number, r?: number, sx?: number, sy?: number): number",
+        "Adds a sprite to the SpriteBatch.",
+    ),
+    item(
+        "addLayer",
+        LuaItemKind::Function,
+        "function SpriteBatch:addLayer(layerindex: number, x?: number, y?: number, r?: number, sx?: number, sy?: number): number",
+        "Adds a layered sprite to the SpriteBatch.",
+    ),
+    item(
+        "attachAttribute",
+        LuaItemKind::Function,
+        "function SpriteBatch:attachAttribute(name: string, mesh: Mesh)",
+        "Attaches a per-sprite attribute from a Mesh.",
+    ),
+    item(
+        "clear",
+        LuaItemKind::Function,
+        "function SpriteBatch:clear()",
+        "Removes all sprites from the SpriteBatch.",
+    ),
+    item(
+        "flush",
+        LuaItemKind::Function,
+        "function SpriteBatch:flush()",
+        "Immediately uploads pending SpriteBatch changes.",
+    ),
+    item(
+        "getBufferSize",
+        LuaItemKind::Function,
+        "function SpriteBatch:getBufferSize(): number",
+        "Gets the SpriteBatch buffer size.",
+    ),
+    item(
+        "getCount",
+        LuaItemKind::Function,
+        "function SpriteBatch:getCount(): number",
+        "Gets the number of sprites in the SpriteBatch.",
+    ),
+    item(
+        "set",
+        LuaItemKind::Function,
+        "function SpriteBatch:set(id: number, x?: number, y?: number, r?: number, sx?: number, sy?: number)",
+        "Changes a sprite in the SpriteBatch.",
+    ),
+    item(
+        "setColor",
+        LuaItemKind::Function,
+        "function SpriteBatch:setColor(r?: number, g?: number, b?: number, a?: number)",
+        "Sets the color used for new sprites.",
+    ),
+];
+
+const BODY_ITEMS: &[LuaItem] = &[
+    item(
+        "applyForce",
+        LuaItemKind::Function,
+        "function Body:applyForce(x: number, y: number, applyX?: number, applyY?: number)",
+        "Applies a force to the Body.",
+    ),
+    item(
+        "applyLinearImpulse",
+        LuaItemKind::Function,
+        "function Body:applyLinearImpulse(x: number, y: number, applyX?: number, applyY?: number)",
+        "Applies a linear impulse to the Body.",
+    ),
+    item(
+        "destroy",
+        LuaItemKind::Function,
+        "function Body:destroy()",
+        "Destroys the Body.",
+    ),
+    item(
+        "getAngle",
+        LuaItemKind::Function,
+        "function Body:getAngle(): number",
+        "Gets the Body angle.",
+    ),
+    item(
+        "getLinearVelocity",
+        LuaItemKind::Function,
+        "function Body:getLinearVelocity(): number, number",
+        "Gets the linear velocity of the Body.",
+    ),
+    item(
+        "getMass",
+        LuaItemKind::Function,
+        "function Body:getMass(): number",
+        "Gets the mass of the Body.",
+    ),
+    item(
+        "getPosition",
+        LuaItemKind::Function,
+        "function Body:getPosition(): number, number",
+        "Gets the position of the Body.",
+    ),
+    item(
+        "getType",
+        LuaItemKind::Function,
+        "function Body:getType(): BodyType",
+        "Gets the Body type.",
+    ),
+    item(
+        "getWorld",
+        LuaItemKind::Function,
+        "function Body:getWorld(): World",
+        "Gets the World the Body belongs to.",
+    ),
+    item(
+        "getX",
+        LuaItemKind::Function,
+        "function Body:getX(): number",
+        "Gets the x position of the Body.",
+    ),
+    item(
+        "getY",
+        LuaItemKind::Function,
+        "function Body:getY(): number",
+        "Gets the y position of the Body.",
+    ),
+    item(
+        "isAwake",
+        LuaItemKind::Function,
+        "function Body:isAwake(): boolean",
+        "Gets whether the Body is awake.",
+    ),
+    item(
+        "setAngle",
+        LuaItemKind::Function,
+        "function Body:setAngle(angle: number)",
+        "Sets the Body angle.",
+    ),
+    item(
+        "setAwake",
+        LuaItemKind::Function,
+        "function Body:setAwake(awake: boolean)",
+        "Sets whether the Body is awake.",
+    ),
+    item(
+        "setLinearVelocity",
+        LuaItemKind::Function,
+        "function Body:setLinearVelocity(x: number, y: number)",
+        "Sets the linear velocity of the Body.",
+    ),
+    item(
+        "setPosition",
+        LuaItemKind::Function,
+        "function Body:setPosition(x: number, y: number)",
+        "Sets the position of the Body.",
+    ),
+    item(
+        "setType",
+        LuaItemKind::Function,
+        "function Body:setType(type: BodyType)",
+        "Sets the Body type.",
+    ),
+];
+
+const WORLD_ITEMS: &[LuaItem] = &[
+    item(
+        "destroy",
+        LuaItemKind::Function,
+        "function World:destroy()",
+        "Destroys the World.",
+    ),
+    item(
+        "getBodies",
+        LuaItemKind::Function,
+        "function World:getBodies(): table",
+        "Gets all bodies in the World.",
+    ),
+    item(
+        "getBodyCount",
+        LuaItemKind::Function,
+        "function World:getBodyCount(): number",
+        "Gets the number of bodies in the World.",
+    ),
+    item(
+        "getGravity",
+        LuaItemKind::Function,
+        "function World:getGravity(): number, number",
+        "Gets the gravity of the World.",
+    ),
+    item(
+        "isLocked",
+        LuaItemKind::Function,
+        "function World:isLocked(): boolean",
+        "Gets whether the World is locked during callbacks.",
+    ),
+    item(
+        "queryBoundingBox",
+        LuaItemKind::Function,
+        "function World:queryBoundingBox(topLeftX: number, topLeftY: number, bottomRightX: number, bottomRightY: number, callback: function)",
+        "Calls a function for fixtures inside an axis-aligned bounding box.",
+    ),
+    item(
+        "rayCast",
+        LuaItemKind::Function,
+        "function World:rayCast(x1: number, y1: number, x2: number, y2: number, callback: function)",
+        "Casts a ray through the World and calls a function for each intersection.",
+    ),
+    item(
+        "setCallbacks",
+        LuaItemKind::Function,
+        "function World:setCallbacks(beginContact?: function, endContact?: function, preSolve?: function, postSolve?: function)",
+        "Sets collision callbacks for the World.",
+    ),
+    item(
+        "setGravity",
+        LuaItemKind::Function,
+        "function World:setGravity(x: number, y: number)",
+        "Sets the gravity of the World.",
+    ),
+    item(
+        "update",
+        LuaItemKind::Function,
+        "function World:update(dt: number)",
+        "Updates the World simulation.",
     ),
 ];
 

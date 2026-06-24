@@ -75,6 +75,36 @@ local jump = sound "assets/jump.wav"
 }
 
 #[test]
+fn hints_direct_love_constructor_local_types() {
+    let source = r#"
+local player = love.graphics.newImage("assets/player.png")
+local canvas = love.graphics.newCanvas()
+local font = love.graphics.newFont("assets/sniglet.otf", 16)
+local data = love.image.newImageData(16, 16)
+local world = love.physics.newWorld()
+local body = love.physics.newBody(world, 0, 0)
+"#;
+    let hints = inlay_hints_tua_source("src/assets.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![
+            ": Image",
+            ": Canvas",
+            ": Font",
+            ": ImageData",
+            ": World",
+            ": Body"
+        ]
+    );
+}
+
+#[test]
 fn hints_love_object_method_return_types_from_inferred_asset_loader_returns() {
     let source = r#"
 local player = image "assets/hero.png"

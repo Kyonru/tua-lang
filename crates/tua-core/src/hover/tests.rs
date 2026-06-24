@@ -469,6 +469,23 @@ player:setFilter()
 }
 
 #[test]
+fn hovers_love_object_methods_from_direct_constructor_locals() {
+    let source = r#"
+local player = love.graphics.newImage("assets/player.png")
+
+player:setFilter()
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "setFilter"))
+        .expect("hover should not fail")
+        .expect("Image method should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function Image:setFilter(min: FilterMode, mag?: FilterMode, anisotropy?: number)"
+    );
+}
+
+#[test]
 fn hovers_love_object_method_return_types_from_inferred_asset_loader_returns() {
     let source = r#"
 local player = image "assets/hero.png"
