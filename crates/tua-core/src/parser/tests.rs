@@ -449,7 +449,7 @@ end
 }
 
 #[test]
-fn parses_lua_doc_string_literal_union_fields_as_string() {
+fn parses_lua_doc_string_literal_union_fields_as_literals() {
     let parsed = parse_lua_source(
         "src/lua_doc.lua",
         r#"---@class Enemy
@@ -466,7 +466,150 @@ local Enemy = {}
     };
 
     assert_eq!(field.name, "type");
-    assert_eq!(field.ty, TuaType::Named("string".to_owned()));
+    assert_eq!(
+        field.ty,
+        TuaType::Union(vec![
+            TuaType::StringLiteral("friendly".to_owned()),
+            TuaType::StringLiteral("mad".to_owned()),
+        ])
+    );
+}
+
+#[test]
+fn parses_lua_doc_luacats_type_forms() {
+    let parsed = parse_lua_source(
+        "src/lua_doc.lua",
+        r#"---@alias MaybeName string?
+---@alias Images Image[]
+---@alias Point [number, number]
+---@alias Sources { [string]: Source }
+---@alias ImageMap table<string, Image>
+---@alias Loader fun(path: string, cache?: boolean): Image
+"#,
+    )
+    .expect("Lua doc annotations should parse with Lua source");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 6);
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[0].kind else {
+        panic!("first annotation should be alias");
+    };
+    assert_eq!(
+        alias.ty,
+        TuaType::Union(vec![
+            TuaType::Named("string".to_owned()),
+            TuaType::Named("nil".to_owned()),
+        ])
+    );
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[1].kind else {
+        panic!("second annotation should be alias");
+    };
+    assert_eq!(
+        alias.ty,
+        TuaType::Array(Box::new(TuaType::Named("Image".to_owned())))
+    );
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[2].kind else {
+        panic!("third annotation should be alias");
+    };
+    assert_eq!(
+        alias.ty,
+        TuaType::Tuple(vec![
+            TuaType::Named("number".to_owned()),
+            TuaType::Named("number".to_owned()),
+        ])
+    );
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[3].kind else {
+        panic!("fourth annotation should be alias");
+    };
+    assert_eq!(
+        alias.ty,
+        TuaType::Dictionary {
+            key: Box::new(TuaType::Named("string".to_owned())),
+            value: Box::new(TuaType::Named("Source".to_owned())),
+        }
+    );
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[4].kind else {
+        panic!("fifth annotation should be alias");
+    };
+    assert_eq!(
+        alias.ty,
+        TuaType::Dictionary {
+            key: Box::new(TuaType::Named("string".to_owned())),
+            value: Box::new(TuaType::Named("Image".to_owned())),
+        }
+    );
+
+    let LuaDocAnnotationKind::Alias(alias) = &parsed.lua_doc_annotations[5].kind else {
+        panic!("sixth annotation should be alias");
+    };
+    let TuaType::Function {
+        parameters,
+        returns,
+    } = &alias.ty
+    else {
+        panic!("function alias should parse as function type");
+    };
+    assert_eq!(parameters.len(), 2);
+    assert_eq!(parameters[0].name.as_deref(), Some("path"));
+    assert_eq!(parameters[0].ty, TuaType::Named("string".to_owned()));
+    assert_eq!(parameters[1].name.as_deref(), Some("cache"));
+    assert!(parameters[1].optional);
+    assert_eq!(returns, &vec![TuaType::Named("Image".to_owned())]);
+}
+
+#[test]
+fn parses_additional_luals_annotation_tags() {
+    let parsed = parse_lua_source(
+        "src/lua_doc.lua",
+        r#"---@meta love.graphics
+---@module 'graphics'
+---@enum BlendMode
+---@diagnostic disable-next-line: undefined-global
+---@cast value +Player
+---@as Player
+---@deprecated use newPlayer
+---@nodiscard
+"#,
+    )
+    .expect("Lua doc annotations should parse with Lua source");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 8);
+    assert!(matches!(
+        parsed.lua_doc_annotations[0].kind,
+        LuaDocAnnotationKind::Meta(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[1].kind,
+        LuaDocAnnotationKind::Module(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[2].kind,
+        LuaDocAnnotationKind::Enum(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[3].kind,
+        LuaDocAnnotationKind::Diagnostic(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[4].kind,
+        LuaDocAnnotationKind::Cast(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[5].kind,
+        LuaDocAnnotationKind::As(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[6].kind,
+        LuaDocAnnotationKind::Deprecated(_)
+    ));
+    assert!(matches!(
+        parsed.lua_doc_annotations[7].kind,
+        LuaDocAnnotationKind::NoDiscard(_)
+    ));
 }
 
 #[test]

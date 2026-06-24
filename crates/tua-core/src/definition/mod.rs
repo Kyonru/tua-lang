@@ -215,7 +215,14 @@ impl<'a> DefinitionResolver<'a> {
             Type::Union(types) => types
                 .iter()
                 .find_map(|ty| self.field_target(ty, field, depth + 1)),
-            Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+            Type::Any
+            | Type::Function(_)
+            | Type::Primitive(_)
+            | Type::Table(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
         }
     }
 
@@ -287,6 +294,7 @@ struct FieldTarget {
 fn type_from_tua_type(ty: &TuaType) -> Type {
     match ty {
         TuaType::Named(name) => Type::named(name),
+        TuaType::StringLiteral(value) => Type::string_literal(value),
         TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
         TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
             let field_type = type_from_tua_type(&field.ty);
@@ -298,6 +306,26 @@ fn type_from_tua_type(ty: &TuaType) -> Type {
 
             (field.name.clone(), table_field)
         })),
+        TuaType::Array(item) => Type::array(type_from_tua_type(item)),
+        TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_tua_type)),
+        TuaType::Dictionary { key, value } => {
+            Type::dictionary(type_from_tua_type(key), type_from_tua_type(value))
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => Type::function_returns(
+            parameters.iter().map(|parameter| {
+                let ty = type_from_tua_type(&parameter.ty);
+
+                if parameter.optional {
+                    Type::union([ty, Type::nil()])
+                } else {
+                    ty
+                }
+            }),
+            returns.iter().map(type_from_tua_type),
+        ),
     }
 }
 
@@ -720,7 +748,13 @@ impl<'a> ModuleDefinitionIndex<'a> {
                 span: default_span(),
                 ty: field.ty.clone(),
             }),
-            Type::Any | Type::Function(_) | Type::Primitive(_) => None,
+            Type::Any
+            | Type::Function(_)
+            | Type::Primitive(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
         }
     }
 }

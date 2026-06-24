@@ -1,0 +1,16 @@
+local LuaLS = require("luals_provider")
+
+-- Feature: required Lua modules can provide LuaLS/LuaCATS function signatures.
+local playerImage = LuaLS.loadImage("assets/player.png", "static")
+
+-- Feature: literal unions can power completion inside string arguments.
+-- Try typing the second argument as "st" or "str" in the editor.
+local streamedImage = LuaLS.loadImage("assets/player.png", "stream")
+
+-- Feature: invalid literal values are rejected by the checker.
+-- LuaLS.loadImage("assets/player.png", "dynamic")
+
+return {
+  playerImage = playerImage,
+  streamedImage = streamedImage,
+}

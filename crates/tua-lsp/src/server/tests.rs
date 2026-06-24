@@ -2073,12 +2073,12 @@ return {
     assert_hover_contains(
         server.output(),
         4,
-        "type LuaDocTypes.Enemy = { hp: number, name: string, type: string }",
+        "type LuaDocTypes.Enemy = { hp: number, name: string, type: \"friendly\" | \"mad\" }",
     );
     assert_hover_contains(
         server.output(),
         5,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }",
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
     );
 }
 
@@ -2124,7 +2124,7 @@ return {
     assert_hover_contains(
         server.output(),
         4,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }",
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
     );
 }
 

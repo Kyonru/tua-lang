@@ -1489,6 +1489,7 @@ impl AnalysisSnapshot {
                 .map(|binding| binding.ty)
                 .or_else(|| self.required_module_type(parsed, name))
                 .or_else(|| Some(Type::named(name.trim()))),
+            TuaType::StringLiteral(value) => Some(Type::string_literal(value)),
             TuaType::Union(types) => {
                 Some(Type::union(types.iter().filter_map(|ty| {
                     self.project_type_from_tua_type(parsed, ty)
@@ -1506,6 +1507,35 @@ impl AnalysisSnapshot {
                         )
                     })
             }))),
+            TuaType::Array(item) => self
+                .project_type_from_tua_type(parsed, item)
+                .map(Type::array),
+            TuaType::Tuple(items) => {
+                Some(Type::tuple(items.iter().filter_map(|ty| {
+                    self.project_type_from_tua_type(parsed, ty)
+                })))
+            }
+            TuaType::Dictionary { key, value } => Some(Type::dictionary(
+                self.project_type_from_tua_type(parsed, key)?,
+                self.project_type_from_tua_type(parsed, value)?,
+            )),
+            TuaType::Function {
+                parameters,
+                returns,
+            } => Some(Type::function_returns(
+                parameters.iter().filter_map(|parameter| {
+                    let ty = self.project_type_from_tua_type(parsed, &parameter.ty)?;
+
+                    Some(if parameter.optional {
+                        Type::union([ty, Type::nil()])
+                    } else {
+                        ty
+                    })
+                }),
+                returns
+                    .iter()
+                    .filter_map(|ty| self.project_type_from_tua_type(parsed, ty)),
+            )),
         }
     }
 
@@ -1817,10 +1847,25 @@ fn is_type_annotation_position(parsed: &ParsedSource, position: SourcePosition) 
 fn tua_type_uses_qualified_name(ty: &TuaType) -> bool {
     match ty {
         TuaType::Named(name) => name.contains('.'),
+        TuaType::StringLiteral(_) => false,
         TuaType::Union(types) => types.iter().any(tua_type_uses_qualified_name),
         TuaType::Table(fields) => fields
             .iter()
             .any(|field| tua_type_uses_qualified_name(&field.ty)),
+        TuaType::Array(item) => tua_type_uses_qualified_name(item),
+        TuaType::Tuple(items) => items.iter().any(tua_type_uses_qualified_name),
+        TuaType::Dictionary { key, value } => {
+            tua_type_uses_qualified_name(key) || tua_type_uses_qualified_name(value)
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            parameters
+                .iter()
+                .any(|parameter| tua_type_uses_qualified_name(&parameter.ty))
+                || returns.iter().any(tua_type_uses_qualified_name)
+        }
     }
 }
 
@@ -1846,7 +1891,14 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
                 collect_type_fields(ty, fields);
             }
         }
-        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
     }
 }
 
@@ -2017,6 +2069,7 @@ fn type_name_from_tua_type(ty: &TuaType) -> Option<String> {
     match ty {
         TuaType::Named(name) if name == "any" => None,
         TuaType::Named(name) => Some(name.clone()),
+        TuaType::StringLiteral(_) => Some("string".to_owned()),
         TuaType::Union(types) => {
             let names = types
                 .iter()
@@ -2028,7 +2081,11 @@ fn type_name_from_tua_type(ty: &TuaType) -> Option<String> {
                 .then(|| names.into_iter().next())
                 .flatten()
         }
-        TuaType::Table(_) => None,
+        TuaType::Table(_)
+        | TuaType::Array(_)
+        | TuaType::Tuple(_)
+        | TuaType::Dictionary { .. }
+        | TuaType::Function { .. } => None,
     }
 }
 

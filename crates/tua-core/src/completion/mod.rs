@@ -536,6 +536,7 @@ fn type_prefix(ty: &str) -> String {
 fn format_tua_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.clone(),
+        TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()
             .map(format_tua_type)
@@ -553,6 +554,52 @@ fn format_tua_type(ty: &TuaType) -> String {
                 .join(", ");
 
             format!("{{ {fields} }}")
+        }
+        TuaType::Array(item) => format!("{}[]", format_tua_type(item)),
+        TuaType::Tuple(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TuaType::Dictionary { key, value } => {
+            format!(
+                "{{ [{}]: {} }}",
+                format_tua_type(key),
+                format_tua_type(value)
+            )
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            let parameters = parameters
+                .iter()
+                .map(|parameter| {
+                    let label = parameter
+                        .name
+                        .as_ref()
+                        .map(|name| {
+                            format!("{name}{}: ", if parameter.optional { "?" } else { "" })
+                        })
+                        .unwrap_or_default();
+                    format!("{label}{}", format_tua_type(&parameter.ty))
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = returns
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            if returns.is_empty() {
+                format!("fun({parameters})")
+            } else {
+                format!("fun({parameters}): {returns}")
+            }
         }
     }
 }
@@ -703,6 +750,14 @@ fn complete_string_argument_values(
 ) -> Vec<Completion> {
     let environment = build_completion_environment(parsed);
     let semantic = SemanticModel::new(parsed, &environment);
+    if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
+        let Some(parameter) = function.parameters.get(active_parameter) else {
+            return Vec::new();
+        };
+
+        return complete_lua_enum_values(&parameter.to_string(), prefix);
+    }
+
     let Some(item) = semantic.lua_function_item_for_call_parts(callee_parts, position) else {
         return Vec::new();
     };
@@ -731,9 +786,45 @@ fn complete_lua_enum_values(type_label: &str, prefix: &str) -> Vec<Completion> {
     type_label
         .split('|')
         .map(str::trim)
-        .flat_map(|type_name| lua::enum_value_items(type_name, prefix))
-        .map(completion_from_lua_item)
+        .flat_map(|type_name| {
+            literal_value_item(type_name, prefix).into_iter().chain(
+                lua::enum_value_items(type_name, prefix)
+                    .into_iter()
+                    .map(completion_from_lua_item),
+            )
+        })
         .collect()
+}
+
+fn literal_value_item(type_name: &str, prefix: &str) -> Option<Completion> {
+    let value = quoted_string_literal_value(type_name)?;
+
+    if !value.starts_with(prefix) {
+        return None;
+    }
+
+    Some(Completion {
+        label: value,
+        kind: CompletionKind::Value,
+        detail: Some(type_name.to_owned()),
+        documentation: None,
+        insert_text: None,
+        is_snippet: false,
+        module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
+    })
+}
+
+fn quoted_string_literal_value(value: &str) -> Option<String> {
+    let value = value.trim();
+    let quote = value.chars().next()?;
+
+    if !matches!(quote, '\'' | '"') || !value.ends_with(quote) || value.len() < 2 {
+        return None;
+    }
+
+    Some(value[quote.len_utf8()..value.len() - quote.len_utf8()].to_owned())
 }
 
 fn collect_love_object_fields(
@@ -764,7 +855,14 @@ fn collect_love_object_fields(
                 );
             }
         }
-        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => {}
+        Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
     }
 }
 
@@ -780,7 +878,14 @@ fn collect_table_fields(
                 collect_table_fields(environment, &ty, fields);
             }
         }
-        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
     }
 }
 
@@ -871,7 +976,14 @@ fn collect_export_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
                 collect_export_fields(ty, fields);
             }
         }
-        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
     }
 }
 

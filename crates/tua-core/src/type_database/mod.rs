@@ -276,7 +276,19 @@ impl ProjectTypeDatabase {
                     },
                 )
             })),
-            Type::Primitive(_) | Type::Any => ty.clone(),
+            Type::Array(item) => {
+                Type::array(self.resolve_type_inner(module_graph, source_path, item, resolving))
+            }
+            Type::Tuple(items) => Type::tuple(
+                items
+                    .iter()
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving)),
+            ),
+            Type::Dictionary { key, value } => Type::dictionary(
+                self.resolve_type_inner(module_graph, source_path, key, resolving),
+                self.resolve_type_inner(module_graph, source_path, value, resolving),
+            ),
+            Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
         }
     }
 
@@ -365,7 +377,13 @@ impl ProjectTypeDatabase {
                     }
                 }
                 Type::Alias(_) => self.resolve_type(module_graph, module_path, &current),
-                Type::Any | Type::Function(_) | Type::Primitive(_) => return None,
+                Type::Any
+                | Type::Function(_)
+                | Type::Primitive(_)
+                | Type::StringLiteral(_)
+                | Type::Array(_)
+                | Type::Tuple(_)
+                | Type::Dictionary { .. } => return None,
             };
         }
 

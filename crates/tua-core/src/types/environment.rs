@@ -2145,7 +2145,13 @@ fn function_return_types(ty: &Type) -> Vec<Type> {
 
             type_from_return_type_lists(returns).unwrap_or_default()
         }
-        Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => Vec::new(),
+        Type::Alias(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => Vec::new(),
     }
 }
 
@@ -2171,7 +2177,14 @@ fn love_object_method_return_types(
 
             returns
         }
-        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => Vec::new(),
+        Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => Vec::new(),
     }
 }
 
@@ -2426,6 +2439,7 @@ fn resolve_tua_type(
 ) -> Type {
     match ty {
         TuaType::Named(name) => resolve_named_type(path, name, span, alias_names, diagnostics),
+        TuaType::StringLiteral(value) => Type::string_literal(value),
         TuaType::Union(types) => Type::union(
             types
                 .iter()
@@ -2440,6 +2454,41 @@ fn resolve_tua_type(
                 },
             )
         })),
+        TuaType::Array(item) => {
+            Type::array(resolve_tua_type(path, item, span, alias_names, diagnostics))
+        }
+        TuaType::Tuple(items) => Type::tuple(
+            items
+                .iter()
+                .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics)),
+        ),
+        TuaType::Dictionary { key, value } => Type::dictionary(
+            resolve_tua_type(path, key, span, alias_names, diagnostics),
+            resolve_tua_type(path, value, span, alias_names, diagnostics),
+        ),
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            let parameters = parameters
+                .iter()
+                .map(|parameter| {
+                    let ty = resolve_tua_type(path, &parameter.ty, span, alias_names, diagnostics);
+
+                    if parameter.optional {
+                        Type::union([ty, Type::nil()])
+                    } else {
+                        ty
+                    }
+                })
+                .collect::<Vec<_>>();
+            let returns = returns
+                .iter()
+                .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics))
+                .collect::<Vec<_>>();
+
+            Type::function_returns(parameters, returns)
+        }
     }
 }
 

@@ -510,7 +510,7 @@ return {
     assert_eq!(player.contents, "type Types.Player = { hp: number }");
     assert_eq!(
         enemy.contents,
-        "type LuaDocTypes.Enemy = { hp: number, name: string, type: string }"
+        "type LuaDocTypes.Enemy = { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
     assert!(snapshot.diagnostics("src/main.tua").is_empty());
 }
@@ -575,10 +575,11 @@ return {
 
     assert_eq!(
         hover.contents,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: string }"
+        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
     assert!(literal_labels.contains(&"hp".to_owned()));
     assert!(literal_labels.contains(&"name".to_owned()));
+    assert!(literal_labels.contains(&"type".to_owned()));
     assert!(field_labels.contains(&"hp".to_owned()));
     assert!(field_labels.contains(&"name".to_owned()));
 }
@@ -643,19 +644,19 @@ return {
 
     assert_eq!(
         nil_hover.contents,
-        "local nilEnemy: { hp: number, name: string, type: string }"
+        "local nilEnemy: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
     assert_eq!(
         table_hover.contents,
-        "local tableEnemy: { hp: number, name: string, type: string }"
+        "local tableEnemy: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
     assert_eq!(
         nil_decl_hover.contents,
-        "local nilEnemy: { hp: number, name: string, type: string }"
+        "local nilEnemy: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
     assert_eq!(
         table_decl_hover.contents,
-        "local tableEnemy: { hp: number, name: string, type: string }"
+        "local tableEnemy: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
     );
 }
 

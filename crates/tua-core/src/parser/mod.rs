@@ -11,12 +11,14 @@ use full_moon::node::Node;
 use crate::{Diagnostic, DiagnosticCode};
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
-    CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation, LuaDocAlias,
-    LuaDocAnnotation, LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric,
-    LuaDocGenericParameter, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
-    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource, ParameterAnnotation,
-    ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType,
-    TuaType, TypeAlias, TypedSourceModel,
+    CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionTypeParameter,
+    LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
+    LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
+    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocParam,
+    LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
+    LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage, ParsedSource,
+    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 

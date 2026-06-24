@@ -152,7 +152,14 @@ fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
                 _ => Some(Type::union(resolved)),
             }
         }
-        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => None,
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
     }
 }
 
@@ -493,7 +500,14 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
                 collect_table_fields(ty, fields);
             }
         }
-        Type::Any | Type::Alias(_) | Type::Function(_) | Type::Primitive(_) => {}
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
     }
 }
 
@@ -713,6 +727,7 @@ fn lua_doc_param_annotations<'a>(
 fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
     match ty {
         crate::TuaType::Named(name) => Type::named(name),
+        crate::TuaType::StringLiteral(value) => Type::string_literal(value),
         crate::TuaType::Union(types) => Type::union(types.iter().map(type_from_lua_doc_type)),
         crate::TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
             (
@@ -723,6 +738,26 @@ fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
                 },
             )
         })),
+        crate::TuaType::Array(item) => Type::array(type_from_lua_doc_type(item)),
+        crate::TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_lua_doc_type)),
+        crate::TuaType::Dictionary { key, value } => {
+            Type::dictionary(type_from_lua_doc_type(key), type_from_lua_doc_type(value))
+        }
+        crate::TuaType::Function {
+            parameters,
+            returns,
+        } => Type::function_returns(
+            parameters.iter().map(|parameter| {
+                let ty = type_from_lua_doc_type(&parameter.ty);
+
+                if parameter.optional {
+                    Type::union([ty, Type::nil()])
+                } else {
+                    ty
+                }
+            }),
+            returns.iter().map(type_from_lua_doc_type),
+        ),
     }
 }
 

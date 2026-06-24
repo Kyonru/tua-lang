@@ -159,8 +159,26 @@ pub struct ParameterAnnotation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TuaType {
     Named(String),
+    StringLiteral(String),
     Union(Vec<TuaType>),
     Table(Vec<TableFieldType>),
+    Array(Box<TuaType>),
+    Tuple(Vec<TuaType>),
+    Dictionary {
+        key: Box<TuaType>,
+        value: Box<TuaType>,
+    },
+    Function {
+        parameters: Vec<FunctionTypeParameter>,
+        returns: Vec<TuaType>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FunctionTypeParameter {
+    pub name: Option<String>,
+    pub ty: TuaType,
+    pub optional: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -241,6 +259,14 @@ pub enum LuaDocAnnotationKind {
     Return(LuaDocReturn),
     Generic(LuaDocGeneric),
     Version(LuaDocVersion),
+    Enum(LuaDocEnum),
+    Meta(LuaDocMeta),
+    Module(LuaDocModule),
+    Diagnostic(LuaDocDiagnostic),
+    Cast(LuaDocCast),
+    As(LuaDocAs),
+    Deprecated(LuaDocDeprecated),
+    NoDiscard(LuaDocNoDiscard),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -313,3 +339,45 @@ pub struct LuaDocVersion {
     pub expression: String,
     pub expression_span: SourceSpan,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocEnum {
+    pub name: Option<String>,
+    pub name_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocMeta {
+    pub expression: Option<String>,
+    pub expression_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocModule {
+    pub module: String,
+    pub module_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocDiagnostic {
+    pub expression: String,
+    pub expression_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocCast {
+    pub expression: String,
+    pub expression_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocAs {
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocDeprecated;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocNoDiscard;

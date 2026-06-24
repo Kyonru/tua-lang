@@ -45,6 +45,9 @@ make build-features
   opt-in `formatting_lints` diagnostic profile.
 - `src/luacats_emit.tua` demonstrates the optional LuaCATS emission mode for
   aliases, annotated locals, function signatures, and stable module exports.
+- `src/luals_provider.lua` and `src/luals_annotations.tua` demonstrate the
+  expanded LuaLS/LuaCATS annotation subset: literal unions, optional shorthand,
+  arrays, tuples, dictionaries, function types, and shallow metadata tags.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,

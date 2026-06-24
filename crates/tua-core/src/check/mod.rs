@@ -289,6 +289,10 @@ impl<'a> Checker<'a> {
 
         for (index, name) in local.names().iter().enumerate() {
             let name = token_text(name);
+            let has_annotation = specifiers
+                .get(index)
+                .and_then(|specifier| *specifier)
+                .is_some();
             let ty = specifiers
                 .get(index)
                 .and_then(|specifier| *specifier)
@@ -302,6 +306,11 @@ impl<'a> Checker<'a> {
                 });
 
             if let Some(ty) = ty {
+                let ty = if has_annotation {
+                    ty
+                } else {
+                    widen_inferred_local_type(ty)
+                };
                 self.insert_scoped_local(name, ty);
             }
         }
@@ -334,7 +343,7 @@ impl<'a> Checker<'a> {
         };
 
         match ty {
-            Some(ty) => self.insert_scoped_local(name, ty),
+            Some(ty) => self.insert_scoped_local(name, widen_inferred_local_type(ty)),
             None => self.clear_scoped_local(&name),
         }
     }
@@ -414,7 +423,9 @@ impl<'a> Checker<'a> {
                 self.infer_binary_operator_type(binop, &left, &right)
             }
             Expression::Number(_) => Some(Type::number()),
-            Expression::String(_) => Some(Type::string()),
+            Expression::String(value) => {
+                Some(Type::string_literal(unquote_string(&value.to_string())))
+            }
             Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)),
             Expression::TableConstructor(table) => Some(self.infer_table_constructor(table)),
             Expression::Parentheses { expression, .. } => {
@@ -723,8 +734,10 @@ impl<'a> Checker<'a> {
 
     fn external_argument_assignable(&self, source: &Type, target: &Type) -> bool {
         self.context.is_assignable(source, target)
-            || matches!(source, Type::Primitive(crate::PrimitiveType::String))
-                && matches!(target, Type::Alias(name) if self.context.alias(name).is_none())
+            || matches!(
+                source,
+                Type::Primitive(crate::PrimitiveType::String) | Type::StringLiteral(_)
+            ) && matches!(target, Type::Alias(name) if self.context.alias(name).is_none())
     }
 
     fn function_return_types(&self, name: &str) -> Option<Vec<Type>> {
@@ -857,7 +870,8 @@ impl<'a> Checker<'a> {
 
     fn is_concat_operand_type(&self, ty: &Type) -> bool {
         match resolve_aliases(ty, self.environment, 0) {
-            Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
+            Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String)
+            | Type::StringLiteral(_) => true,
             Type::Union(types) => types.iter().all(|ty| self.is_concat_operand_type(ty)),
             _ => false,
         }
@@ -951,16 +965,34 @@ fn is_numeric_operator(binop: &ast::BinOp) -> bool {
 fn types_can_overlap(left: &Type, right: &Type) -> bool {
     match (left, right) {
         (Type::Any, _) | (_, Type::Any) => true,
+        (Type::StringLiteral(_), Type::Primitive(crate::PrimitiveType::String))
+        | (Type::Primitive(crate::PrimitiveType::String), Type::StringLiteral(_)) => true,
+        (Type::StringLiteral(left), Type::StringLiteral(right)) => left == right,
         (Type::Primitive(left), Type::Primitive(right)) => left == right,
         (Type::Union(types), other) | (other, Type::Union(types)) => {
             types.iter().any(|ty| types_can_overlap(ty, other))
         }
         (Type::Function(_), Type::Function(_)) => true,
         (Type::Table(_), Type::Table(_)) => true,
+        (Type::Array(_), Type::Array(_)) => true,
+        (Type::Tuple(left), Type::Tuple(right)) => left.len() == right.len(),
+        (Type::Dictionary { .. }, Type::Dictionary { .. }) => true,
         (Type::Alias(_), _) | (_, Type::Alias(_)) => true,
         (
-            Type::Primitive(_) | Type::Function(_) | Type::Table(_),
-            Type::Primitive(_) | Type::Function(_) | Type::Table(_),
+            Type::Primitive(_)
+            | Type::Function(_)
+            | Type::Table(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. },
+            Type::Primitive(_)
+            | Type::Function(_)
+            | Type::Table(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. },
         ) => false,
     }
 }
@@ -1044,7 +1076,14 @@ fn lua_type_field_item(
         Type::Union(types) => types
             .iter()
             .find_map(|ty| lua_type_field_item(environment, ty, field)),
-        Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
+        Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
     }
 }
 
@@ -1126,6 +1165,9 @@ fn type_from_lua_label(label: &str) -> Option<Type> {
         "number" => Some(Type::number()),
         "string" => Some(Type::string()),
         "table" => Some(Type::empty_table()),
+        other if is_quoted_string_literal(other) => {
+            Some(Type::string_literal(unquote_string(other)))
+        }
         other if !other.is_empty() => Some(Type::alias(other)),
         _ => None,
     }
@@ -1141,9 +1183,9 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
         Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
             Some(arguments.iter().map(CallArgument::Expression).collect())
         }
-        Call::AnonymousCall(FunctionArgs::String(_)) => {
-            Some(vec![CallArgument::Inferred(Type::string())])
-        }
+        Call::AnonymousCall(FunctionArgs::String(value)) => Some(vec![CallArgument::Inferred(
+            Type::string_literal(unquote_string(&value.to_string())),
+        )]),
         Call::MethodCall(method) => match method.args() {
             FunctionArgs::Parentheses { arguments, .. } => {
                 Some(arguments.iter().map(CallArgument::Expression).collect())
@@ -1258,6 +1300,13 @@ fn unquote_string(value: &str) -> String {
         .to_owned()
 }
 
+fn is_quoted_string_literal(value: &str) -> bool {
+    let value = value.trim();
+
+    (value.len() >= 2 && value.starts_with('"') && value.ends_with('"'))
+        || (value.len() >= 2 && value.starts_with('\'') && value.ends_with('\''))
+}
+
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
     match resolve_aliases(ty, environment, 0) {
         Type::Any => Some(Callable::Any),
@@ -1355,6 +1404,7 @@ fn dot_method_call_diagnostic(
 
 fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &Type) -> Diagnostic {
     let position = node_position(node);
+    let found = mismatch_found_label(expected, found);
 
     Diagnostic::error(
         path,
@@ -1363,6 +1413,74 @@ fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &T
         format!("type mismatch: expected {expected}, found {found}"),
     )
     .with_code(DiagnosticCode::TYPE_MISMATCH)
+}
+
+fn mismatch_found_label(expected: &Type, found: &Type) -> String {
+    if type_contains_string_literal(expected) {
+        found.to_string()
+    } else {
+        type_with_string_literals_erased(found).to_string()
+    }
+}
+
+fn type_with_string_literals_erased(ty: &Type) -> Type {
+    match ty {
+        Type::StringLiteral(_) => Type::string(),
+        Type::Union(types) => Type::union(types.iter().map(type_with_string_literals_erased)),
+        Type::Function(function) => Type::function_returns(
+            function
+                .parameters
+                .iter()
+                .map(type_with_string_literals_erased),
+            function
+                .return_types_or_any()
+                .iter()
+                .map(type_with_string_literals_erased),
+        ),
+        Type::Table(table) => Type::table(table.fields().map(|(name, field)| {
+            (
+                name.to_owned(),
+                crate::TableField {
+                    ty: type_with_string_literals_erased(&field.ty),
+                    optional: field.optional,
+                },
+            )
+        })),
+        Type::Array(item) => Type::array(type_with_string_literals_erased(item)),
+        Type::Tuple(items) => Type::tuple(items.iter().map(type_with_string_literals_erased)),
+        Type::Dictionary { key, value } => Type::dictionary(
+            type_with_string_literals_erased(key),
+            type_with_string_literals_erased(value),
+        ),
+        Type::Primitive(_) | Type::Any | Type::Alias(_) => ty.clone(),
+    }
+}
+
+fn widen_inferred_local_type(ty: Type) -> Type {
+    type_with_string_literals_erased(&ty)
+}
+
+fn type_contains_string_literal(ty: &Type) -> bool {
+    match ty {
+        Type::StringLiteral(_) => true,
+        Type::Union(types) => types.iter().any(type_contains_string_literal),
+        Type::Function(function) => {
+            function.parameters.iter().any(type_contains_string_literal)
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(type_contains_string_literal)
+        }
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_contains_string_literal(&field.ty)),
+        Type::Array(item) => type_contains_string_literal(item),
+        Type::Tuple(items) => items.iter().any(type_contains_string_literal),
+        Type::Dictionary { key, value } => {
+            type_contains_string_literal(key) || type_contains_string_literal(value)
+        }
+        Type::Primitive(_) | Type::Any | Type::Alias(_) => false,
+    }
 }
 
 fn impossible_comparison_diagnostic(

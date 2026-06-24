@@ -584,6 +584,24 @@ player:setFilter("li")
 }
 
 #[test]
+fn completes_lua_doc_literal_union_values_in_string_arguments() {
+    let source = r#"
+---@param mode "static" | "stream"
+local function load(mode)
+end
+
+load("st")
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after_last(source, "\"st"))
+            .expect("literal union value completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["static", "stream"]);
+    assert_eq!(completions[0].kind, CompletionKind::Value);
+    assert_eq!(completions[0].detail.as_deref(), Some(r#""static""#));
+}
+
+#[test]
 fn completes_love_enum_values_in_incomplete_string_arguments() {
     let source = r#"
 local player = image "assets/player.png"

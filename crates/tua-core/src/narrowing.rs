@@ -448,7 +448,13 @@ fn type_contains_primitive(ty: &Type, primitive: PrimitiveType) -> bool {
             .iter()
             .any(|ty| type_contains_primitive(ty, primitive)),
         Type::Any => true,
-        Type::Alias(_) | Type::Function(_) | Type::Table(_) => false,
+        Type::Alias(_)
+        | Type::Function(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => false,
     }
 }
 

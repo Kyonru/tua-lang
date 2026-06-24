@@ -353,7 +353,14 @@ fn signature_from_type(
         Type::Union(types) => types
             .iter()
             .find_map(|ty| signature_from_type(name, ty, environment)),
-        Type::Any | Type::Alias(_) | Type::Primitive(_) | Type::Table(_) => None,
+        Type::Any
+        | Type::Alias(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
     }
 }
 

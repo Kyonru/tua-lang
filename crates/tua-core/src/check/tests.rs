@@ -20,6 +20,25 @@ local maybe_hp: number | nil = nil
 }
 
 #[test]
+fn accepts_string_concatenation_with_literal_operands() {
+    check_tua_source(
+        "src/concat.tua",
+        r#"
+type TextOrNumber = string | number
+
+local function label(value: string): string
+  return "value:" .. value
+end
+
+local function stringify(value: TextOrNumber): string
+  return "" .. value
+end
+"#,
+    )
+    .expect("Lua string concatenation should infer string for literal operands");
+}
+
+#[test]
 fn accepts_typed_love_asset_loader_initializers() {
     check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
@@ -329,6 +348,38 @@ player:setFilter("nearest", "linear", 4)
         &crate::DiagnosticsConfig::default(),
     )
     .expect("Love enum-like parameters should accept string values");
+}
+
+#[test]
+fn checks_lua_doc_literal_union_arguments() {
+    check_tua_source(
+        "src/mode.tua",
+        r#"
+---@param mode "static" | "stream"
+local function load(mode)
+end
+
+load("static")
+"#,
+    )
+    .expect("matching literal union argument should be accepted");
+
+    let diagnostics = check_tua_source(
+        "src/mode.tua",
+        r#"
+---@param mode "static" | "stream"
+local function load(mode)
+end
+
+load("dynamic")
+"#,
+    )
+    .expect_err("non-member literal union argument should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        r#"expected "static" | "stream", found "dynamic""#,
+    );
 }
 
 #[test]

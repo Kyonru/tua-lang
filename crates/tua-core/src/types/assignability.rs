@@ -54,12 +54,38 @@ impl TypeContext {
             (_, Type::Union(targets)) => targets
                 .iter()
                 .any(|target| self.is_assignable_inner(source, target, depth + 1)),
+            (Type::StringLiteral(_), Type::Primitive(super::PrimitiveType::String)) => true,
+            (Type::Primitive(super::PrimitiveType::String), Type::StringLiteral(_)) => false,
+            (Type::StringLiteral(source), Type::StringLiteral(target)) => source == target,
             (Type::Primitive(source), Type::Primitive(target)) => source == target,
             (Type::Function(source), Type::Function(target)) => {
                 self.is_function_assignable(source, target, depth + 1)
             }
             (Type::Table(source), Type::Table(target)) => {
                 self.is_table_assignable(source, target, depth + 1)
+            }
+            (Type::Array(source), Type::Array(target)) => {
+                self.is_assignable_inner(source, target, depth + 1)
+            }
+            (Type::Tuple(source), Type::Tuple(target)) => {
+                source.len() == target.len()
+                    && source
+                        .iter()
+                        .zip(target)
+                        .all(|(source, target)| self.is_assignable_inner(source, target, depth + 1))
+            }
+            (
+                Type::Dictionary {
+                    key: source_key,
+                    value: source_value,
+                },
+                Type::Dictionary {
+                    key: target_key,
+                    value: target_value,
+                },
+            ) => {
+                self.is_assignable_inner(source_key, target_key, depth + 1)
+                    && self.is_assignable_inner(source_value, target_value, depth + 1)
             }
             _ => false,
         }

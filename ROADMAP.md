@@ -1698,6 +1698,36 @@ Acceptance:
 - The phase parity commit list references this matrix when claiming LuaHelper parity
   progress.
 
+### 70.17 `feat(hover): collapse inferred structural types with explicit expansion`
+
+Scope:
+
+- Improve the default presentation of inferred types in hover and inlay text:
+  inferred primitives and named types remain fully visible, while inferred structural
+  table/function/union shapes are compacted.
+- For inferred anonymous shapes, prefer compact tokens such as `{ ... }` and ellipsis-
+  style summaries for inlay hints instead of emitting the full literal shape inline.
+- Keep explicit annotations and alias references unchanged: `MyType`, `string`, and
+  `number` stay readable without expansion.
+- Preserve a full-detail path through the existing hover/resolve channel (or equivalent
+  existing client interaction point) that can open the complete inferred shape on
+  demand.
+- Reuse current long-type trimming policy when full detail is requested and the shape
+  still exceeds display limits.
+
+Acceptance:
+
+- Primitive and named types (for example `number`, `string`, `Player` ) are shown
+  in full by default.
+- Inferred structural values default to a compact representation with `...` in
+  popovers and inlay text.
+- A user-initiated expand path shows the full inferred shape when available and
+  readable.
+- If that shape is too long, the current trimming behavior applies after expansion
+  instead of silently dropping detail.
+- Rendering changes only affect presentation and do not alter inference, checking,
+  or emitted Lua.
+
 ## Phase 13: LOVE Domain Extensions
 
 This phase explores Tua's identity as a LOVE-focused Lua language. The goal is

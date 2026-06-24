@@ -367,6 +367,7 @@ fn luacats_export_class_name(parsed: &ParsedSource) -> String {
 fn luacats_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.to_owned(),
+        TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()
             .map(luacats_type)
@@ -392,6 +393,48 @@ fn luacats_type(ty: &TuaType) -> String {
                 format!("{{ {} }}", rendered_fields)
             }
         }
+        TuaType::Array(item) => format!("{}[]", luacats_type(item)),
+        TuaType::Tuple(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(luacats_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TuaType::Dictionary { key, value } => {
+            format!("{{ [{}]: {} }}", luacats_type(key), luacats_type(value))
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            let parameters = parameters
+                .iter()
+                .map(|parameter| {
+                    let name = parameter
+                        .name
+                        .as_ref()
+                        .map(|name| {
+                            format!("{name}{}: ", if parameter.optional { "?" } else { "" })
+                        })
+                        .unwrap_or_default();
+                    format!("{name}{}", luacats_type(&parameter.ty))
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = returns
+                .iter()
+                .map(luacats_type)
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            if returns.is_empty() {
+                format!("fun({parameters})")
+            } else {
+                format!("fun({parameters}): {returns}")
+            }
+        }
     }
 }
 
@@ -413,9 +456,14 @@ fn luacats_function_type(function: &crate::FunctionAnnotation) -> String {
 fn luacats_export_type(ty: &Type) -> Option<String> {
     match ty {
         Type::Any => None,
-        Type::Primitive(_) | Type::Alias(_) | Type::Union(_) | Type::Table(_) => {
-            Some(luacats_type_from_type(ty))
-        }
+        Type::Primitive(_)
+        | Type::Alias(_)
+        | Type::StringLiteral(_)
+        | Type::Union(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => Some(luacats_type_from_type(ty)),
         Type::Function(function) => {
             let parameters = function
                 .parameters
@@ -438,7 +486,7 @@ fn luacats_export_type(ty: &Type) -> Option<String> {
 
 fn luacats_type_from_type(ty: &Type) -> String {
     match ty {
-        Type::Primitive(_) | Type::Any | Type::Alias(_) => ty.to_string(),
+        Type::Primitive(_) | Type::Any | Type::Alias(_) | Type::StringLiteral(_) => ty.to_string(),
         Type::Union(types) => types
             .iter()
             .map(luacats_type_from_type)
@@ -480,6 +528,22 @@ fn luacats_type_from_type(ty: &Type) -> String {
             } else {
                 format!("{{ {fields} }}")
             }
+        }
+        Type::Array(item) => format!("{}[]", luacats_type_from_type(item)),
+        Type::Tuple(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(luacats_type_from_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Dictionary { key, value } => {
+            format!(
+                "{{ [{}]: {} }}",
+                luacats_type_from_type(key),
+                luacats_type_from_type(value)
+            )
         }
     }
 }

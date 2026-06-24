@@ -80,10 +80,30 @@ Supported tags include:
 - `---@return`
 - `---@generic`
 - `---@version`
+- `---@enum`
+- `---@meta`
+- `---@module`
+- `---@diagnostic`
+- `---@cast`
+- `---@as`
+- `---@deprecated`
+- `---@nodiscard`
 
 Tua uses supported annotations for type environments, module export inference,
 hover, completion, signature help, and parameter documentation where the
 surrounding Lua is simple enough to analyze.
+
+Supported type forms include primitive names, aliases, unions, string literal
+types such as `"static" | "stream"`, optional shorthand such as `number?`,
+arrays such as `Image[]`, tuples such as `[number, number]`, dictionaries such
+as `{ [string]: Source }`, key-value tables such as `table<string, Image>`, and
+function types such as `fun(path: string): Image`.
+
+Some LuaLS tags are currently preserved as metadata with spans and docs but do
+not change type checking yet. This includes `---@meta`, `---@module`,
+`---@diagnostic`, `---@cast`, `---@as`, `---@deprecated`, and `---@nodiscard`.
+They are parsed so editor features can grow around them without making current
+Lua code fail.
 
 ```lua
 ---@alias Health number
@@ -101,6 +121,23 @@ local function makePlayer(name)
   }
 end
 ```
+
+Literal unions are useful for APIs with a small set of valid string values:
+
+```lua
+---@alias LoadMode "static" | "stream"
+
+---@param path string
+---@param mode LoadMode
+---@return Image
+local function loadImage(path, mode)
+  return love.graphics.newImage(path)
+end
+```
+
+When called from Tua, `"static"` and `"stream"` are accepted, other literal
+strings are rejected, and the editor can complete valid values inside string
+arguments.
 
 Malformed annotation diagnostics are controlled by `doc_annotations` in
 `tua.toml`.

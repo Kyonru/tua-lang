@@ -6,9 +6,13 @@ pub enum Type {
     Primitive(PrimitiveType),
     Any,
     Alias(String),
+    StringLiteral(String),
     Union(Vec<Type>),
     Function(FunctionType),
     Table(TableShape),
+    Array(Box<Type>),
+    Tuple(Vec<Type>),
+    Dictionary { key: Box<Type>, value: Box<Type> },
 }
 
 impl Type {
@@ -45,6 +49,10 @@ impl Type {
         Self::Alias(name.into())
     }
 
+    pub fn string_literal(value: impl Into<String>) -> Self {
+        Self::StringLiteral(value.into())
+    }
+
     pub fn union(types: impl IntoIterator<Item = Type>) -> Self {
         Self::Union(types.into_iter().collect())
     }
@@ -70,6 +78,21 @@ impl Type {
         S: Into<String>,
     {
         Self::Table(TableShape::from_fields(fields))
+    }
+
+    pub fn array(item: Type) -> Self {
+        Self::Array(Box::new(item))
+    }
+
+    pub fn tuple(items: impl IntoIterator<Item = Type>) -> Self {
+        Self::Tuple(items.into_iter().collect())
+    }
+
+    pub fn dictionary(key: Type, value: Type) -> Self {
+        Self::Dictionary {
+            key: Box::new(key),
+            value: Box::new(value),
+        }
     }
 }
 
@@ -206,6 +229,7 @@ impl fmt::Display for Type {
             Type::Primitive(primitive) => write!(formatter, "{primitive}"),
             Type::Any => write!(formatter, "any"),
             Type::Alias(name) => write!(formatter, "{name}"),
+            Type::StringLiteral(value) => write!(formatter, "{value:?}"),
             Type::Union(types) => {
                 for (index, ty) in types.iter().enumerate() {
                     if index > 0 {
@@ -243,6 +267,18 @@ impl fmt::Display for Type {
                 }
                 write!(formatter, " }}")
             }
+            Type::Array(item) => write!(formatter, "{item}[]"),
+            Type::Tuple(items) => {
+                write!(formatter, "[")?;
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        write!(formatter, ", ")?;
+                    }
+                    write!(formatter, "{item}")?;
+                }
+                write!(formatter, "]")
+            }
+            Type::Dictionary { key, value } => write!(formatter, "{{ [{key}]: {value} }}"),
         }
     }
 }

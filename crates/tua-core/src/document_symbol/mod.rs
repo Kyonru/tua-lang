@@ -233,6 +233,7 @@ fn max_position(left: SourcePosition, right: SourcePosition) -> SourcePosition {
 fn format_tua_type(ty: &TuaType) -> String {
     match ty {
         TuaType::Named(name) => name.clone(),
+        TuaType::StringLiteral(value) => format!("{value:?}"),
         TuaType::Union(types) => types
             .iter()
             .map(format_tua_type)
@@ -252,6 +253,52 @@ fn format_tua_type(ty: &TuaType) -> String {
                 .join(", ");
 
             format!("{{ {fields} }}")
+        }
+        TuaType::Array(item) => format!("{}[]", format_tua_type(item)),
+        TuaType::Tuple(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TuaType::Dictionary { key, value } => {
+            format!(
+                "{{ [{}]: {} }}",
+                format_tua_type(key),
+                format_tua_type(value)
+            )
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            let params = parameters
+                .iter()
+                .map(|parameter| {
+                    let label = parameter
+                        .name
+                        .as_ref()
+                        .map(|name| {
+                            format!("{name}{}: ", if parameter.optional { "?" } else { "" })
+                        })
+                        .unwrap_or_default();
+                    format!("{label}{}", format_tua_type(&parameter.ty))
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = returns
+                .iter()
+                .map(format_tua_type)
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            if returns.is_empty() {
+                format!("fun({params})")
+            } else {
+                format!("fun({params}): {returns}")
+            }
         }
     }
 }

@@ -119,6 +119,38 @@ fn function_types_are_contravariant_in_parameters_and_covariant_in_return() {
 }
 
 #[test]
+fn string_literals_are_assignable_to_string_and_exact_literal_targets() {
+    let mode = Type::union([
+        Type::string_literal("static"),
+        Type::string_literal("stream"),
+    ]);
+
+    assert!(is_assignable(
+        &Type::string_literal("static"),
+        &Type::string()
+    ));
+    assert!(is_assignable(&Type::string_literal("static"), &mode));
+    assert!(!is_assignable(&Type::string_literal("dynamic"), &mode));
+    assert!(!is_assignable(&Type::string(), &mode));
+}
+
+#[test]
+fn container_types_are_assignable_by_shape() {
+    assert!(is_assignable(
+        &Type::array(Type::alias("Image")),
+        &Type::array(Type::alias("Image")),
+    ));
+    assert!(is_assignable(
+        &Type::tuple([Type::number(), Type::number()]),
+        &Type::tuple([Type::number(), Type::number()]),
+    ));
+    assert!(is_assignable(
+        &Type::dictionary(Type::string(), Type::alias("Source")),
+        &Type::dictionary(Type::string(), Type::alias("Source")),
+    ));
+}
+
+#[test]
 fn builds_per_file_type_environment_from_aliases_and_annotations() {
     let parsed = parse_tua_source(
         "src/player.tua",
@@ -341,7 +373,7 @@ end
 }
 
 #[test]
-fn lowers_lua_doc_string_literal_union_fields_as_string() {
+fn lowers_lua_doc_string_literal_union_fields_as_literals() {
     let parsed = parse_lua_source(
         "src/enemy.lua",
         r#"---@class Enemy
@@ -359,7 +391,10 @@ local Enemy = {}
 
     assert_eq!(
         enemy.field("type").map(|field| &field.ty),
-        Some(&Type::string())
+        Some(&Type::union([
+            Type::string_literal("friendly"),
+            Type::string_literal("mad"),
+        ]))
     );
 }
 
