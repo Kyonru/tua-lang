@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::hir::{HirModule, HirRequireBinding};
 use crate::module_link::require_module_at_position;
+use crate::scope_map_parsed_source;
 use crate::source_text::dotted_chain_at_position;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
@@ -13,8 +14,8 @@ use crate::{
     module_links_tua_source, parse_lua_source, parse_tua_source, Completion, Definition,
     DefinitionKind, Diagnostic, Hover, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
-    RequireResolution, SourcePosition, SourceSpan, Type, TypeEnvironment, WorkspaceSymbol,
-    WorkspaceSymbolKind,
+    RequireResolution, ScopeMap, SourcePosition, SourceSpan, Type, TypeEnvironment,
+    WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +62,7 @@ struct AnalysisFile {
     kind: AnalysisSourceKind,
     parsed: Result<ParsedSource, Vec<Diagnostic>>,
     hir: Option<HirModule>,
+    scope: Option<ScopeMap>,
     environment: Option<TypeEnvironment>,
     diagnostics: Vec<Diagnostic>,
     exports: Option<ModuleExports>,
@@ -378,6 +380,10 @@ impl AnalysisSnapshot {
 
     pub fn type_environment(&self, path: impl AsRef<Path>) -> Option<&TypeEnvironment> {
         self.file(path.as_ref())?.environment.as_ref()
+    }
+
+    pub fn scope_map(&self, path: impl AsRef<Path>) -> Option<&ScopeMap> {
+        self.file(path.as_ref())?.scope.as_ref()
     }
 
     pub fn module_exports(&self, path: impl AsRef<Path>) -> Option<&ModuleExports> {
@@ -704,6 +710,7 @@ fn build_analysis_file(
 ) -> AnalysisFile {
     let parsed = parse_analysis_source(path, source.clone(), kind);
     let hir = parsed.as_ref().ok().map(lower_parsed_source);
+    let scope = parsed.as_ref().ok().map(scope_map_parsed_source);
     let environment = parsed
         .as_ref()
         .ok()
@@ -731,6 +738,7 @@ fn build_analysis_file(
         kind,
         parsed,
         hir,
+        scope,
         environment,
         diagnostics,
         exports,

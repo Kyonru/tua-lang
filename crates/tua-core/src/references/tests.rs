@@ -105,6 +105,36 @@ fn unknown_symbols_and_any_fields_return_no_references() {
     assert!(references_at("payload.value", "payload.".len(), true).is_empty());
 }
 
+#[test]
+fn same_name_locals_in_nested_scopes_reference_independently() {
+    let source = r#"
+local value = 1
+local before = value
+
+do
+  local value = 2
+  local inside = value
+end
+
+local after = value
+"#;
+    let outer_position = position_at(source, "before = value");
+    let inner_position = position_at(source, "inside = value");
+    let mut outer_use = outer_position;
+    let mut inner_use = inner_position;
+
+    outer_use.column += "before = ".len();
+    inner_use.column += "inside = ".len();
+
+    let outer = references_tua_source("src/shadow.tua", source, outer_use, true)
+        .expect("source should parse");
+    let inner = references_tua_source("src/shadow.tua", source, inner_use, true)
+        .expect("source should parse");
+
+    assert_eq!(texts(source, &outer), vec!["value", "value", "value"]);
+    assert_eq!(texts(source, &inner), vec!["value", "value"]);
+}
+
 fn references_at(needle: &str, offset: usize, include_declaration: bool) -> Vec<Reference> {
     let mut position = position_at(SOURCE, needle);
 
@@ -115,11 +145,18 @@ fn references_at(needle: &str, offset: usize, include_declaration: bool) -> Vec<
 }
 
 fn reference_texts(references: &[Reference]) -> Vec<&str> {
-    references.iter().map(reference_text).collect()
+    texts(SOURCE, references)
 }
 
-fn reference_text(reference: &Reference) -> &str {
-    let line = line_at(SOURCE, reference.span.start.line).expect("reference line should exist");
+fn texts<'a>(source: &'a str, references: &[Reference]) -> Vec<&'a str> {
+    references
+        .iter()
+        .map(|reference| reference_text(source, reference))
+        .collect()
+}
+
+fn reference_text<'a>(source: &'a str, reference: &Reference) -> &'a str {
+    let line = line_at(source, reference.span.start.line).expect("reference line should exist");
     let start = byte_for_column(line, reference.span.start.column);
     let end = byte_for_column(line, reference.span.end.column);
 

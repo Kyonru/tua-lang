@@ -270,6 +270,61 @@ assert!(snapshot
     .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISSING_REQUIRE)));
 ```
 
+### Scope Map Example
+
+Scope maps are the reusable lexical layer above HIR. They track locals,
+parameters, module aliases, globals, table-shape fields, declaration spans, use
+spans, shadowing, and unresolved names through one lookup path.
+
+```rust
+use tua_core::{
+    parse_tua_source, scope_map_parsed_source_with_globals, ScopeDeclarationKind,
+    ScopeGlobalKind,
+};
+
+let parsed = parse_tua_source(
+    "src/main.tua",
+    r#"
+local Player = require("player")
+local value = 1
+
+do
+  local value = 2
+  print(Player.make(), value, configured)
+end
+"#,
+)?;
+let scopes = scope_map_parsed_source_with_globals(&parsed, ["configured"]);
+
+let values = scopes
+    .declarations()
+    .iter()
+    .filter(|declaration| declaration.name == "value")
+    .collect::<Vec<_>>();
+
+// Same-name locals are separate symbols, and the inner one records that it
+// shadows the outer one.
+assert_eq!(values.len(), 2);
+assert_eq!(values[1].shadows, Some(values[0].id));
+
+let player = scopes
+    .declarations()
+    .iter()
+    .find(|declaration| declaration.name == "Player")
+    .unwrap();
+
+assert_eq!(
+    player.kind,
+    ScopeDeclarationKind::ModuleAlias {
+        module: "player".to_owned()
+    }
+);
+assert_eq!(
+    scopes.globals().get("configured").map(|global| global.kind),
+    Some(ScopeGlobalKind::Configured)
+);
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
@@ -281,7 +336,7 @@ assert!(snapshot
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 64, 65 |
+| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 60, 64, 65 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |

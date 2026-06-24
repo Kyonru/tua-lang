@@ -29,6 +29,8 @@ make build-features
   interop, and cross-file go to definition for required module exports.
 - `src/require_graph.tua` covers snapshot-indexed require edges and export
   lookup for `.tua` and `.lua` modules.
+- `src/scopes.tua` covers lexical scope maps, shadowed locals, and module
+  aliases as scoped symbols.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as

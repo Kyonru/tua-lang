@@ -293,6 +293,7 @@ return M
     let snapshot = host.snapshot();
 
     assert!(snapshot.type_environment(&path).is_some());
+    assert!(snapshot.scope_map(&path).is_some());
     assert!(snapshot.module_exports(&path).is_some());
     assert!(snapshot
         .symbol_index(&path)

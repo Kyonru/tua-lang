@@ -26,6 +26,7 @@ mod project;
 pub mod project_model;
 pub mod references;
 pub mod rename;
+pub mod scope;
 mod semantic;
 pub mod semantic_token;
 pub mod signature_help;
@@ -117,6 +118,11 @@ pub use rename::{
     reference_kind_for_rename, rename_kind_for_definition, rename_parsed_source,
     rename_target_for_definition, rename_tua_source, RenameEdit, RenameKind, RenameTarget,
     TextEdit,
+};
+pub use scope::{
+    scope_map_parsed_source, scope_map_parsed_source_with_globals, ScopeDeclaration,
+    ScopeDeclarationKind, ScopeGlobal, ScopeGlobalKind, ScopeMap, ScopeReference, ScopeResolution,
+    ScopeSymbolId,
 };
 pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,

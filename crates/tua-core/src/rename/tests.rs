@@ -84,6 +84,35 @@ fn rejects_table_fields_unknowns_any_fields_and_invalid_names() {
     assert!(rename_at("player: Player", "player: ".len(), "while").is_none());
 }
 
+#[test]
+fn rename_respects_nested_local_shadowing() {
+    let source = r#"
+local value = 1
+local before = value
+
+do
+  local value = 2
+  local inside = value
+end
+
+local after = value
+"#;
+    let mut position = position_at(source, "inside = value");
+
+    position.column += "inside = ".len();
+
+    let edit = rename_tua_source("src/shadow.tua", source, position, "inner")
+        .expect("source should parse")
+        .expect("inner local should rename");
+    let renamed = apply_edit(source, &edit);
+
+    assert!(renamed.contains("local value = 1"));
+    assert!(renamed.contains("local before = value"));
+    assert!(renamed.contains("local inner = 2"));
+    assert!(renamed.contains("local inside = inner"));
+    assert!(renamed.contains("local after = value"));
+}
+
 fn prepare_at(needle: &str, offset: usize) -> Option<RenameTarget> {
     let mut position = position_at(SOURCE, needle);
 

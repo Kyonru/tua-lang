@@ -6,6 +6,7 @@ local Modules = require("modules")
 local Navigation = require("navigation")
 local Assets = require("assets")
 local RequireGraph = require("require_graph")
+local Scopes = require("scopes")
 
 return {
   types = Types,
@@ -16,4 +17,5 @@ return {
   navigation = Navigation,
   assets = Assets,
   require_graph = RequireGraph,
+  scopes = Scopes,
 }

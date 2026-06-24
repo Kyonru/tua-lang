@@ -4,10 +4,12 @@ use full_moon::ast;
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
+use crate::hir::HirExportValue;
 use crate::source_text::{byte_for_column, line_at};
 use crate::{
-    definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
-    ParsedSource, SourcePosition, SourceSpan,
+    definition_parsed_source, lower_parsed_source, parse_tua_source, scope_map_parsed_source,
+    Definition, DefinitionKind, Diagnostic, ParsedSource, ScopeDeclarationKind, SourcePosition,
+    SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,6 +61,10 @@ pub fn references_to_definition_parsed_source(
         return Ok(Vec::new());
     }
 
+    if let Some(references) = scope_references_to_definition(parsed, target, include_declaration) {
+        return Ok(references);
+    }
+
     let mut references = parsed
         .ast
         .tokens()
@@ -92,6 +98,79 @@ pub fn references_to_definition_parsed_source(
     });
 
     Ok(references)
+}
+
+fn scope_references_to_definition(
+    parsed: &ParsedSource,
+    target: &Definition,
+    include_declaration: bool,
+) -> Option<Vec<Reference>> {
+    if target.path != parsed.path {
+        return None;
+    }
+
+    let expected_kind = scope_kind_for_definition(target.kind)?;
+    let scope = scope_map_parsed_source(parsed);
+    let declaration = scope.declarations().iter().find(|declaration| {
+        declaration.name_span == target.span && declaration.kind == expected_kind
+    })?;
+    let mut references = scope
+        .references_to_symbol(declaration.id, include_declaration)
+        .into_iter()
+        .map(|reference| Reference {
+            path: parsed.path.clone(),
+            span: reference.span,
+            kind: reference_kind(target.kind),
+        })
+        .collect::<Vec<_>>();
+
+    references.extend(export_key_references(parsed, target));
+    references.sort_by_key(|reference| position_key(reference.span.start));
+    references.dedup_by_key(|reference| {
+        (
+            reference.path.clone(),
+            reference.span.start.line,
+            reference.span.start.column,
+            reference.span.end.line,
+            reference.span.end.column,
+            reference.kind,
+        )
+    });
+
+    Some(references)
+}
+
+fn export_key_references(parsed: &ParsedSource, target: &Definition) -> Vec<Reference> {
+    let hir = lower_parsed_source(parsed);
+    let Some(hir_symbol) = hir
+        .symbols()
+        .iter()
+        .find(|symbol| symbol.name_span == target.span)
+    else {
+        return Vec::new();
+    };
+
+    hir.exports
+        .iter()
+        .filter(|export| export.value == HirExportValue::Symbol(hir_symbol.id))
+        .map(|export| Reference {
+            path: parsed.path.clone(),
+            span: export.name_span,
+            kind: reference_kind(target.kind),
+        })
+        .collect()
+}
+
+fn scope_kind_for_definition(kind: DefinitionKind) -> Option<ScopeDeclarationKind> {
+    match kind {
+        DefinitionKind::Local => Some(ScopeDeclarationKind::Local),
+        DefinitionKind::Function => Some(ScopeDeclarationKind::Function),
+        DefinitionKind::Parameter => Some(ScopeDeclarationKind::Parameter),
+        DefinitionKind::Module
+        | DefinitionKind::Builtin
+        | DefinitionKind::TypeAlias
+        | DefinitionKind::TableField => None,
+    }
 }
 
 pub fn global_function_name_for_definition(

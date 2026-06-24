@@ -1,0 +1,20 @@
+local Functions = require("functions")
+
+local player = Functions.makePlayer("outer")
+
+-- Feature: lexical scope maps keep same-name locals separate.
+-- Rename or references on this `player` should not touch the outer `player`.
+local function describeShadow()
+  local player = Functions.makePlayer("inner")
+
+  return Functions.describe(player)
+end
+
+-- Feature: module aliases are locals too, but they carry require metadata.
+local makePlayer = Functions.makePlayer
+
+return {
+  outer = player,
+  describeShadow = describeShadow,
+  makePlayer = makePlayer,
+}
