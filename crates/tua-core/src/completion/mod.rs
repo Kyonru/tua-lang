@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use self::context::{completion_context, CompletionContext};
+use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
 use crate::asset;
@@ -118,6 +118,8 @@ fn complete_parsed_source_with_context(
             receiver_parts,
             prefix,
             position,
+            separator,
+            separator_span,
         } => {
             let module_fields =
                 complete_required_module_fields(parsed, &receiver_parts, prefix.as_str());
@@ -133,6 +135,8 @@ fn complete_parsed_source_with_context(
                 &receiver_parts,
                 prefix.as_str(),
                 position,
+                separator,
+                separator_span,
             );
 
             if !fields.is_empty() {
@@ -617,6 +621,8 @@ fn complete_fields(
     receiver_parts: &[String],
     prefix: &str,
     position: SourcePosition,
+    separator: FieldAccessSeparator,
+    separator_span: crate::SourceSpan,
 ) -> Vec<Completion> {
     let semantic = SemanticModel::new(parsed, environment);
     let Some(receiver_type) = semantic.type_of_field_chain(receiver_parts, position) else {
@@ -647,7 +653,15 @@ fn complete_fields(
         );
     }
 
-    collect_love_object_fields(environment, &receiver_type, prefix, &mut completions);
+    collect_love_object_fields(
+        parsed,
+        environment,
+        &receiver_type,
+        prefix,
+        separator,
+        separator_span,
+        &mut completions,
+    );
 
     completions.into_values().collect()
 }
@@ -695,20 +709,31 @@ fn complete_lua_enum_values(type_label: &str, prefix: &str) -> Vec<Completion> {
 }
 
 fn collect_love_object_fields(
+    parsed: &ParsedSource,
     environment: &TypeEnvironment,
     ty: &Type,
     prefix: &str,
+    separator: FieldAccessSeparator,
+    separator_span: crate::SourceSpan,
     completions: &mut BTreeMap<String, Completion>,
 ) {
     match resolve_aliases(environment, ty, 0) {
         Type::Alias(name) => {
             for item in lua::type_field_items(&name, prefix) {
-                insert_lua_item(completions, item);
+                insert_love_object_item(completions, parsed, item, separator, separator_span);
             }
         }
         Type::Union(types) => {
             for ty in types {
-                collect_love_object_fields(environment, &ty, prefix, completions);
+                collect_love_object_fields(
+                    parsed,
+                    environment,
+                    &ty,
+                    prefix,
+                    separator,
+                    separator_span,
+                    completions,
+                );
             }
         }
         Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => {}
@@ -847,6 +872,33 @@ fn insert_lua_item(completions: &mut BTreeMap<String, Completion>, item: LuaItem
     completions
         .entry(item.label.to_owned())
         .or_insert_with(|| completion_from_lua_item(item));
+}
+
+fn insert_love_object_item(
+    completions: &mut BTreeMap<String, Completion>,
+    parsed: &ParsedSource,
+    item: LuaItem,
+    separator: FieldAccessSeparator,
+    separator_span: crate::SourceSpan,
+) {
+    completions.entry(item.label.to_owned()).or_insert_with(|| {
+        let mut completion = completion_from_lua_item(item);
+
+        if item.kind == LuaItemKind::Function {
+            completion.insert_text = Some(format!("{}($0)", item.label));
+            completion.is_snippet = true;
+
+            if separator == FieldAccessSeparator::Dot {
+                completion.additional_text_edits.push(TextEdit {
+                    path: parsed.path.clone(),
+                    span: separator_span,
+                    new_text: ":".to_owned(),
+                });
+            }
+        }
+
+        completion
+    });
 }
 
 fn completion_kind_from_lua_item(kind: LuaItemKind) -> CompletionKind {

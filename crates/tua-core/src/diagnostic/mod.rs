@@ -66,6 +66,7 @@ impl DiagnosticCode {
     pub const LINT_CONST_ASSIGNMENT: Self = Self(4015);
     pub const LINT_PARAMETER_TYPE_MISMATCH: Self = Self(4016);
     pub const LINT_RETURN_TYPE_MISMATCH: Self = Self(4017);
+    pub const LINT_DOT_METHOD_CALL: Self = Self(4018);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {

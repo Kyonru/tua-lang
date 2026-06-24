@@ -102,6 +102,7 @@ struct Checker<'a> {
     scoped_locals: Vec<BTreeMap<String, Type>>,
     asset_roots: Vec<PathBuf>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
+    reported_method_style_diagnostics: BTreeSet<(usize, usize, String)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -118,6 +119,7 @@ impl<'a> Checker<'a> {
             scoped_locals: Vec::new(),
             asset_roots: normalize_asset_roots(asset_roots),
             reported_asset_diagnostics: BTreeSet::new(),
+            reported_method_style_diagnostics: BTreeSet::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -424,6 +426,7 @@ impl<'a> Checker<'a> {
 
     fn check_function_call_returns(&mut self, function_call: &FunctionCall) -> Vec<Type> {
         self.check_asset_loader_call(function_call);
+        self.check_dot_love_method_call(function_call);
 
         let Some(callee) = self.infer_call_target(function_call) else {
             return Vec::new();
@@ -515,6 +518,34 @@ impl<'a> Checker<'a> {
 
         if self.reported_asset_diagnostics.insert(key) {
             self.diagnostics.push(diagnostic);
+        }
+    }
+
+    fn check_dot_love_method_call(&mut self, function_call: &FunctionCall) {
+        let Some(dot_call) = dot_method_call(function_call) else {
+            return;
+        };
+
+        if self
+            .love_object_method_call_target(&dot_call.parts)
+            .is_none()
+        {
+            return;
+        }
+
+        let key = (
+            dot_call.position.line,
+            dot_call.position.column,
+            dot_call.method.clone(),
+        );
+
+        if self.reported_method_style_diagnostics.insert(key) {
+            self.diagnostics.push(dot_method_call_diagnostic(
+                &self.parsed.path,
+                dot_call.position,
+                &dot_call.receiver,
+                &dot_call.method,
+            ));
         }
     }
 
@@ -783,6 +814,13 @@ enum CallArgument<'a> {
 struct AssetLoaderCall {
     kind: asset::AssetLoaderKind,
     path: String,
+}
+
+struct DotMethodCall {
+    parts: Vec<String>,
+    receiver: String,
+    method: String,
+    position: SourcePosition,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1080,6 +1118,38 @@ fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
     Some(AssetLoaderCall { kind, path })
 }
 
+fn dot_method_call(function_call: &FunctionCall) -> Option<DotMethodCall> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+    let mut parts = vec![token_text(name)];
+    let mut method_position = None;
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => {
+                method_position = name.start_position().map(SourcePosition::from_full_moon);
+                parts.push(token_text(name));
+            }
+            Suffix::Call(Call::AnonymousCall(_)) => {
+                let method = parts.last()?.clone();
+                let receiver = parts[..parts.len().saturating_sub(1)].join(".");
+
+                return Some(DotMethodCall {
+                    parts,
+                    receiver,
+                    method,
+                    position: method_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                });
+            }
+            Suffix::Call(Call::MethodCall(_)) => return None,
+            _ => return None,
+        }
+    }
+
+    None
+}
+
 fn default_asset_roots(path: &Path) -> Vec<PathBuf> {
     let Some(parent) = path.parent() else {
         return Vec::new();
@@ -1199,6 +1269,24 @@ fn unsupported_asset_extension_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::ASSET_UNSUPPORTED_EXTENSION)
+}
+
+fn dot_method_call_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    receiver: &str,
+    method: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "LOVE method `{method}` should be called with `:` so self is passed: use `{receiver}:{method}(...)`"
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_DOT_METHOD_CALL)
 }
 
 fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &Type) -> Diagnostic {

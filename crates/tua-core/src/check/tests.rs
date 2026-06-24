@@ -260,7 +260,7 @@ end
 local player = loadPlayerImage()
 
 local function azul()
-  return player.getDimensions()
+  return player:getDimensions()
 end
 
 local c = azul()
@@ -329,6 +329,32 @@ player:setFilter("nearest", "linear", 4)
         &crate::DiagnosticsConfig::default(),
     )
     .expect("Love enum-like parameters should accept string values");
+}
+
+#[test]
+fn warns_for_love_method_dot_calls() {
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+
+player.setFilter("nearest")
+"#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
+    )
+    .expect_err("dot method call should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].severity, crate::DiagnosticSeverity::Warning);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_DOT_METHOD_CALL)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("use `player:setFilter(...)`"));
+    assert!(diagnostics[0].format_cli().contains("warning TL4018"));
 }
 
 #[test]

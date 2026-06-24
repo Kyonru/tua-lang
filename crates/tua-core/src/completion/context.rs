@@ -16,6 +16,8 @@ pub(super) enum CompletionContext {
         receiver_parts: Vec<String>,
         prefix: String,
         position: SourcePosition,
+        separator: FieldAccessSeparator,
+        separator_span: crate::SourceSpan,
     },
     StringArgument {
         callee_parts: Vec<String>,
@@ -30,6 +32,12 @@ pub(super) enum CompletionContext {
     RequirePath {
         prefix: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum FieldAccessSeparator {
+    Dot,
+    Colon,
 }
 
 pub(super) fn completion_context(
@@ -157,6 +165,12 @@ fn field_access_context(
     }
 
     let receiver_end = prefix_start - 1;
+    let separator = match line.as_bytes()[receiver_end] {
+        b'.' => FieldAccessSeparator::Dot,
+        b':' => FieldAccessSeparator::Colon,
+        _ => return None,
+    };
+    let separator_column = line[..receiver_end].chars().count() + 1;
     let receiver_start = reverse_field_chain_start(line, receiver_end)?;
     let receiver = &line[receiver_start..receiver_end];
     let receiver_parts = receiver.split('.').map(str::to_owned).collect::<Vec<_>>();
@@ -169,6 +183,17 @@ fn field_access_context(
         receiver_parts,
         prefix: line[prefix_start..cursor].to_owned(),
         position,
+        separator,
+        separator_span: crate::SourceSpan {
+            start: SourcePosition {
+                line: position.line,
+                column: separator_column,
+            },
+            end: SourcePosition {
+                line: position.line,
+                column: separator_column + 1,
+            },
+        },
     })
 }
 

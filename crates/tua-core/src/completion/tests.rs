@@ -325,6 +325,27 @@ player.getWi
 }
 
 #[test]
+fn love_object_method_dot_completion_prefers_colon_snippet() {
+    let source = r#"
+local player = image "assets/player.png"
+player.setF
+"#;
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "setF"))
+        .expect("LOVE object method completion should succeed");
+    let completion = completions
+        .iter()
+        .find(|completion| completion.label == "setFilter")
+        .expect("setFilter should complete");
+
+    assert_eq!(completion.insert_text.as_deref(), Some("setFilter($0)"));
+    assert!(completion.is_snippet);
+    assert_eq!(completion.additional_text_edits.len(), 1);
+    assert_eq!(completion.additional_text_edits[0].new_text, ":");
+    assert_eq!(completion.additional_text_edits[0].span.start.line, 3);
+    assert_eq!(completion.additional_text_edits[0].span.start.column, 7);
+}
+
+#[test]
 fn completes_love_image_methods_for_direct_love_constructor_locals() {
     let source = r#"
 local player = love.graphics.newImage("assets/player.png")
