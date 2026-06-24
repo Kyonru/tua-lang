@@ -550,6 +550,56 @@ account:withdraw(10)
 }
 
 #[test]
+fn checks_typed_colon_method_arguments_and_self_fields() {
+    check_tua_source(
+        "src/account.tua",
+        r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount: number): number
+  self.balance -= amount
+  return self.balance
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+account:withdraw(10)
+"#,
+    )
+    .expect("typed colon methods should check self fields and valid arguments");
+}
+
+#[test]
+fn rejects_typed_colon_method_argument_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/account.tua",
+        r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount: number): number
+  self.balance -= amount
+  return self.balance
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+account:withdraw("ten")
+"#,
+    )
+    .expect_err("typed colon methods should check explicit arguments after self");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn rejects_love_method_argument_count_mismatch() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

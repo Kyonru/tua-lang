@@ -204,6 +204,36 @@ player:setFilter(
 }
 
 #[test]
+fn returns_typed_colon_method_signature_without_visible_self() {
+    let source = r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount: number): number
+  self.balance -= amount
+  return self.balance
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+
+account:withdraw(
+"#;
+    let help =
+        signature_at(source, "account:withdraw(").expect("typed colon method should have help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function account:withdraw(number): number"
+    );
+    assert_eq!(parameter_labels(&help), vec!["number"]);
+    assert_eq!(help.active_parameter, 0);
+}
+
+#[test]
 fn selects_love_object_method_active_parameter() {
     let source = r#"
 local player = image "assets/player.png"

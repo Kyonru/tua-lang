@@ -390,7 +390,13 @@ impl<'a> SemanticModel<'a> {
                         continue;
                     }
 
-                    let ty = function_type_from_body_with_receiver(function.body(), is_method);
+                    let ty = self
+                        .environment
+                        .function(function.name().to_string().trim())
+                        .and_then(TypedFunction::as_type)
+                        .unwrap_or_else(|| {
+                            function_type_from_body_with_receiver(function.body(), is_method)
+                        });
                     if is_method && function_body_returns_setmetatable_self(function.body()) {
                         table.mark_constructor_method(&field);
                     }

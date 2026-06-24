@@ -350,6 +350,11 @@ lookupObject.y(lookupObject, 1)
 lookupObject:y(2)
 ```
 
+Colon-defined methods with annotations get a typed receiver internally. For
+example, `function Account:withdraw(amount: number): number` is checked as
+though it had a leading `self: Account` parameter when a type alias named
+`Account` exists. The emitted Lua still uses the original colon method syntax.
+
 For static `setmetatable(object, metatable)` calls where both sides are known
 tables, Tua propagates useful metatable facts into the object shape. The current
 subset understands:

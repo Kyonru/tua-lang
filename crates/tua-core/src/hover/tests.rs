@@ -457,6 +457,38 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_typed_colon_method_from_self_index_instance() {
+    let source = r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:withdraw(amount: number): number
+  self.balance -= amount
+  return self.balance
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+account:withdraw(10)
+"#;
+    let hover = hover_tua_source(
+        "src/account.tua",
+        source,
+        position_at(source, "withdraw(10)"),
+    )
+    .expect("hover should not fail")
+    .expect("typed colon method should hover");
+
+    assert_eq!(
+        hover.contents,
+        "(field) withdraw: function(Account, number): number"
+    );
+}
+
+#[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
     let position = position_at(source, "missing");

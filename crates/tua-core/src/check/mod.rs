@@ -328,11 +328,10 @@ impl<'a> Checker<'a> {
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
         for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
             let source = self.infer_expression(expression);
-            let Some(target) = self.infer_var_assignment_target(variable) else {
-                continue;
-            };
 
-            if let Some(source) = &source {
+            if let (Some(source), Some(target)) =
+                (&source, self.infer_var_assignment_target(variable))
+            {
                 self.check_type_assignable(expression, source, &target);
             }
 
@@ -376,7 +375,11 @@ impl<'a> Checker<'a> {
             return;
         };
         let is_constructor = is_method && function_body_returns_setmetatable_self(function.body());
-        let ty = function_type_from_body_with_receiver(function.body(), is_method);
+        let ty = self
+            .environment
+            .function(function.name().to_string().trim())
+            .and_then(TypedFunction::as_type)
+            .unwrap_or_else(|| function_type_from_body_with_receiver(function.body(), is_method));
 
         self.record_known_table_field_type(&root, &field, ty, false, is_constructor);
     }
@@ -1808,15 +1811,31 @@ fn type_with_string_literals_erased(ty: &Type) -> Type {
                 .iter()
                 .map(type_with_string_literals_erased),
         ),
-        Type::Table(table) => Type::table(table.fields().map(|(name, field)| {
-            (
-                name.to_owned(),
-                crate::TableField {
-                    ty: type_with_string_literals_erased(&field.ty),
-                    optional: field.optional,
-                },
-            )
-        })),
+        Type::Table(table) => {
+            let mut erased = crate::TableShape::from_fields(table.fields().map(|(name, field)| {
+                (
+                    name.to_owned(),
+                    crate::TableField {
+                        ty: type_with_string_literals_erased(&field.ty),
+                        optional: field.optional,
+                    },
+                )
+            }));
+
+            if let Some(facts) = table.metatable_facts() {
+                erased.set_metatable_facts(facts.clone());
+            }
+
+            if table.has_self_index() {
+                erased.mark_self_index();
+            }
+
+            for method in table.constructor_methods() {
+                erased.mark_constructor_method(method);
+            }
+
+            Type::Table(erased)
+        }
         Type::Array(item) => Type::array(type_with_string_literals_erased(item)),
         Type::Tuple(items) => Type::tuple(items.iter().map(type_with_string_literals_erased)),
         Type::Dictionary { key, value } => Type::dictionary(

@@ -282,10 +282,13 @@ local joined = joinWithSpaces("Lua", "inside", "Tua")
 
 -- Feature: self-index metatable class pattern.
 -- Tua recognizes Account.__index = Account and exposes Account methods on
--- instances created with setmetatable(..., Account). Constructor methods like
--- Account:new(...) also infer Account-like instance results when they return
--- setmetatable(instance, self).
-type AccountShape = {
+-- instances created with setmetatable(..., Account).
+--
+-- Feature: typed colon methods.
+-- Because the type alias and table are both named Account, a declaration like
+-- function Account:withdraw(amount: number): number is checked internally like
+-- function Account.withdraw(self: Account, amount: number): number.
+type Account = {
   name: string,
   balance: number,
 }
@@ -302,19 +305,19 @@ function Account:new(name, balance)
   return setmetatable(instance, self)
 end
 
-function Account:deposit(amount)
+function Account:deposit(amount: number): number
   self.balance = self.balance + amount
 
   return self.balance
 end
 
-function Account:withdraw(amount)
+function Account:withdraw(amount: number): number
   self.balance = self.balance - amount
 
   return self.balance
 end
 
-local account = Account:new("checking", 50)
+local account = setmetatable({ name = "checking", balance = 50 }, Account)
 account:deposit(25)
 account:withdraw(10)
 

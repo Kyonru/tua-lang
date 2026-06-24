@@ -187,6 +187,10 @@ Supported v1 facts:
 
 - function-valued table fields may be called as `obj.method(obj, ...)` or
   `obj:method(...)`;
+- colon-defined methods with annotations, such as
+  `function Account:withdraw(amount: number): number`, are typed internally as
+  if they had a leading `self` parameter. If a type alias named `Account`
+  exists, that receiver is typed as `Account`; otherwise it remains `any`;
 - simple `__index` table/function fallbacks may expose known string keys;
 - self-index class tables such as `Account.__index = Account` may expose
   methods on instances created with `setmetatable({}, Account)`;

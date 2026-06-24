@@ -312,6 +312,37 @@ end
 }
 
 #[test]
+fn injects_self_type_for_colon_method_annotations() {
+    let parsed = parse_tua_source(
+        "src/account.tua",
+        r#"
+type Account = {
+  balance: number,
+}
+
+function Account:withdraw(amount: number): number
+  self.balance -= amount
+  return self.balance
+end
+"#,
+    )
+    .expect("typed method source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should collect annotations");
+    let function = environment
+        .function("Account:withdraw")
+        .expect("colon method should be collected");
+
+    assert_eq!(function.parameter_count, 2);
+    assert!(function.has_fully_annotated_parameters());
+    assert_eq!(function.parameters[0].name, "self");
+    assert_eq!(function.parameters[0].ty, Type::alias("Account"));
+    assert_eq!(function.parameters[1].name, "amount");
+    assert_eq!(function.parameters[1].ty, Type::number());
+    assert_eq!(function.return_type, Some(Type::number()));
+}
+
+#[test]
 fn infers_function_return_types_from_annotated_parameters() {
     let parsed = parse_tua_source(
         "src/functions.tua",

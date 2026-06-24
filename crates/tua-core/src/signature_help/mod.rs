@@ -6,6 +6,7 @@ use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
     build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
+    TypedParameter,
 };
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
@@ -71,7 +72,16 @@ fn signature_help_parsed_source_with_context(
         environment: &environment,
         semantic: SemanticModel::new(parsed, &environment),
     };
-    let signature = resolver.signature_for_context(&context)?;
+    let mut signature = resolver.signature_for_context(&context)?;
+    if context.is_method_call {
+        let receiver_type = resolver.method_receiver_type(&context);
+        strip_method_receiver(
+            &mut signature,
+            &context,
+            receiver_type.as_ref(),
+            resolver.environment,
+        );
+    }
     let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
 
     Some(SignatureHelp {
@@ -89,14 +99,23 @@ struct SignatureResolver<'a> {
 
 impl<'a> SignatureResolver<'a> {
     fn signature_for_context(&self, context: &CallContext) -> Option<SignatureInformation> {
-        self.signature_for_parts(&context.callee_parts, context.position)
+        self.signature_for_parts(context)
     }
 
-    fn signature_for_parts(
-        &self,
-        parts: &[String],
-        position: SourcePosition,
-    ) -> Option<SignatureInformation> {
+    fn method_receiver_type(&self, context: &CallContext) -> Option<Type> {
+        if !context.is_method_call || context.callee_parts.len() < 2 {
+            return None;
+        }
+
+        self.semantic.type_of_field_chain(
+            &context.callee_parts[..context.callee_parts.len() - 1],
+            context.position,
+        )
+    }
+
+    fn signature_for_parts(&self, context: &CallContext) -> Option<SignatureInformation> {
+        let parts = &context.callee_parts;
+        let position = context.position;
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
@@ -162,18 +181,20 @@ struct CallContext {
     callee_parts: Vec<String>,
     active_parameter: usize,
     position: SourcePosition,
+    is_method_call: bool,
 }
 
 fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
     let cursor = byte_offset_for_position(source, position)?;
     let open = active_call_open(source, cursor)?;
-    let callee_parts = callee_parts_before(source, open)?;
+    let (callee_parts, is_method_call) = callee_info_before(source, open)?;
     let active_parameter = active_parameter_index(source, open + 1, cursor);
 
     Some(CallContext {
         callee_parts,
         active_parameter,
         position,
+        is_method_call,
     })
 }
 
@@ -194,13 +215,14 @@ fn active_call_open(source: &str, cursor: usize) -> Option<usize> {
     stack
         .into_iter()
         .rev()
-        .find(|open| callee_parts_before(source, *open).is_some())
+        .find(|open| callee_info_before(source, *open).is_some())
 }
 
-fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
+fn callee_info_before(source: &str, open: usize) -> Option<(Vec<String>, bool)> {
     let bytes = source.as_bytes();
     let mut end = trim_ascii_whitespace_before(bytes, open);
     let mut parts = Vec::new();
+    let mut is_method_call = false;
 
     loop {
         let start = reverse_identifier_start(bytes, end)?;
@@ -212,11 +234,15 @@ fn callee_parts_before(source: &str, open: usize) -> Option<Vec<String>> {
             break;
         }
 
+        if parts.len() == 1 && bytes[end - 1] == b':' {
+            is_method_call = true;
+        }
+
         end = trim_ascii_whitespace_before(bytes, end - 1);
     }
 
     parts.reverse();
-    (!parts.is_empty()).then_some(parts)
+    (!parts.is_empty()).then_some((parts, is_method_call))
 }
 
 fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
@@ -313,13 +339,13 @@ fn signature_from_typed_function(
     let mut parameter_labels = function
         .parameters
         .iter()
-        .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
+        .map(typed_parameter_label)
         .collect::<Vec<_>>();
     let mut parameters = function
         .parameters
         .iter()
         .map(|parameter| ParameterInformation {
-            label: format!("{}: {}", parameter.name, parameter.ty),
+            label: typed_parameter_label(parameter),
             documentation: parameter.documentation.clone(),
         })
         .collect::<Vec<_>>();
@@ -341,6 +367,76 @@ fn signature_from_typed_function(
         ),
         function.documentation.clone(),
     )
+}
+
+fn typed_parameter_label(parameter: &TypedParameter) -> String {
+    if parameter.name.is_empty() {
+        parameter.ty.to_string()
+    } else {
+        format!("{}: {}", parameter.name, parameter.ty)
+    }
+}
+
+fn strip_method_receiver(
+    signature: &mut SignatureInformation,
+    context: &CallContext,
+    receiver_type: Option<&Type>,
+    environment: &TypeEnvironment,
+) {
+    let Some(first) = signature.parameters.first() else {
+        return;
+    };
+
+    if !is_synthetic_method_receiver(&first.label, receiver_type, environment) {
+        return;
+    }
+
+    signature.parameters.remove(0);
+
+    let parameter_labels = signature
+        .parameters
+        .iter()
+        .map(|parameter| parameter.label.clone())
+        .collect::<Vec<_>>();
+    let return_label = signature
+        .label
+        .rsplit_once("): ")
+        .map(|(_, return_label)| return_label)
+        .unwrap_or("any");
+
+    signature.label = format!(
+        "function {}({}): {}",
+        method_display_name(&context.callee_parts),
+        parameter_labels.join(", "),
+        return_label
+    );
+}
+
+fn is_synthetic_method_receiver(
+    label: &str,
+    receiver_type: Option<&Type>,
+    environment: &TypeEnvironment,
+) -> bool {
+    label.starts_with("self:")
+        || label == "any"
+        || receiver_type.is_some_and(|ty| {
+            label == ty.to_string()
+                || environment
+                    .to_type_context()
+                    .is_assignable(ty, &Type::named(label))
+        })
+}
+
+fn method_display_name(parts: &[String]) -> String {
+    let Some((method, receiver_parts)) = parts.split_last() else {
+        return "<anonymous>".to_owned();
+    };
+
+    if receiver_parts.is_empty() {
+        method.clone()
+    } else {
+        format!("{}:{method}", receiver_parts.join("."))
+    }
 }
 
 fn signature_from_type(

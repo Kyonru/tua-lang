@@ -265,6 +265,10 @@ impl TableShape {
     pub fn is_constructor_method(&self, name: &str) -> bool {
         self.constructor_methods.contains(name)
     }
+
+    pub fn constructor_methods(&self) -> impl Iterator<Item = &str> {
+        self.constructor_methods.iter().map(String::as_str)
+    }
 }
 
 impl Default for TableShape {

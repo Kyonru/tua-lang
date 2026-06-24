@@ -286,7 +286,7 @@ fn resolve_function_annotation(
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> TypedFunction {
-    let parameters = function
+    let mut parameters = function
         .parameters
         .iter()
         .map(|parameter| TypedParameter {
@@ -300,7 +300,21 @@ fn resolve_function_annotation(
             ),
             documentation: None,
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let mut parameter_count = function.parameter_count;
+
+    if let Some((owner, _, true)) = function.name.as_deref().and_then(function_name_table_field) {
+        parameters.insert(
+            0,
+            TypedParameter {
+                name: "self".to_owned(),
+                ty: receiver_type_for_owner(&owner, alias_names),
+                documentation: None,
+            },
+        );
+        parameter_count += 1;
+    }
+
     let return_type = function
         .return_type
         .as_ref()
@@ -310,12 +324,36 @@ fn resolve_function_annotation(
     TypedFunction {
         name: function.name.clone(),
         parameters,
-        parameter_count: function.parameter_count,
+        parameter_count,
         has_varargs: function.has_varargs,
         return_type,
         return_types,
         documentation: None,
     }
+}
+
+fn receiver_type_for_owner(owner: &str, alias_names: &BTreeSet<String>) -> Type {
+    if alias_names.contains(owner) {
+        Type::alias(owner)
+    } else {
+        Type::Any
+    }
+}
+
+fn function_name_table_field(name: &str) -> Option<(String, String, bool)> {
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
+        (Some(colon), None) => Some((colon, true)),
+        (None, Some(dot)) => Some((dot, false)),
+        (None, None) => None,
+    }?;
+    let owner = name[..separator.0].trim();
+    let field = name[separator.0 + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty())
+        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
 }
 
 #[derive(Clone, Debug)]
@@ -1437,7 +1475,7 @@ fn collect_function_return_types(
                 );
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                infer_function_declaration_type(function, &mut scoped_locals);
+                infer_function_declaration_type(function, function_types, &mut scoped_locals);
 
                 let name = function.name().to_string();
                 let function_locals =
@@ -1641,7 +1679,7 @@ fn collect_return_types_in_block(
                 );
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                infer_function_declaration_type(function, &mut scoped_locals);
+                infer_function_declaration_type(function, function_types, &mut scoped_locals);
             }
             ast::Stmt::FunctionCall(function_call) => {
                 record_setmetatable_call(
@@ -1962,13 +2000,17 @@ fn infer_assignment_types(
 
 fn infer_function_declaration_type(
     function: &ast::FunctionDeclaration,
+    function_types: &BTreeMap<String, Type>,
     locals: &mut BTreeMap<String, Type>,
 ) {
     let Some((root, field, is_method)) = function_declaration_table_field(function) else {
         return;
     };
     let is_constructor = is_method && function_body_returns_setmetatable_self(function.body());
-    let ty = function_type_from_body_with_receiver(function.body(), is_method);
+    let ty = function_types
+        .get(function.name().to_string().trim())
+        .cloned()
+        .unwrap_or_else(|| function_type_from_body_with_receiver(function.body(), is_method));
 
     insert_table_field_type(locals, &root, &field, ty, false, is_constructor);
 }
