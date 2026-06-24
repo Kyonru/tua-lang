@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use full_moon::ast::{Expression, Field, LastStmt, TableConstructor};
-use full_moon::node::Node;
-
+use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId, HirSymbolKind};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TuaType};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,13 +33,14 @@ pub fn document_symbols_tua_source(
 }
 
 pub fn document_symbols_parsed_source(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
+    let hir = lower_parsed_source(parsed);
     let mut symbols = Vec::new();
 
-    symbols.extend(type_alias_symbols(parsed));
-    symbols.extend(function_symbols(parsed));
-    symbols.extend(local_symbols(parsed));
+    symbols.extend(type_alias_symbols(parsed, &hir));
+    symbols.extend(function_symbols(parsed, &hir));
+    symbols.extend(local_symbols(parsed, &hir));
 
-    if let Some(exports) = module_exports_symbol(parsed) {
+    if let Some(exports) = module_exports_symbol(&hir) {
         symbols.push(exports);
     }
 
@@ -50,123 +49,146 @@ pub fn document_symbols_parsed_source(parsed: &ParsedSource) -> Vec<DocumentSymb
     symbols
 }
 
-fn type_alias_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
-    parsed
-        .type_aliases
+fn type_alias_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSymbol> {
+    hir.symbols()
         .iter()
-        .filter_map(|alias| {
-            let range = alias.span?;
-            let selection_range = alias.name_span.unwrap_or(range);
+        .filter(|symbol| symbol.kind == HirSymbolKind::TypeAlias)
+        .filter_map(|symbol| {
+            let alias = parsed
+                .type_aliases
+                .iter()
+                .find(|alias| alias.name_span == Some(symbol.name_span))?;
+            let range = symbol.origin_span;
+            let selection_range = symbol.name_span;
 
             Some(document_symbol(DocumentSymbol {
-                name: alias.name.clone(),
+                name: symbol.name.clone(),
                 kind: DocumentSymbolKind::TypeAlias,
                 detail: Some(format!("type {}", format_tua_type(&alias.ty))),
                 range,
                 selection_range,
-                children: table_field_symbols(&alias.ty),
+                children: table_field_symbols(hir, symbol.id),
             }))
         })
         .collect()
 }
 
-fn table_field_symbols(ty: &TuaType) -> Vec<DocumentSymbol> {
-    let TuaType::Table(fields) = ty else {
-        return Vec::new();
-    };
-
-    fields
+fn table_field_symbols(hir: &HirModule, parent: HirSymbolId) -> Vec<DocumentSymbol> {
+    hir.symbols()
         .iter()
-        .filter_map(|field| {
-            let range = field.span?;
-            let selection_range = field.name_span.unwrap_or(range);
-            let optional = field.optional.then_some("optional ");
+        .filter(|symbol| symbol.kind == HirSymbolKind::TableField && symbol.parent == Some(parent))
+        .map(|symbol| {
+            let range = symbol.origin_span;
+            let selection_range = symbol.name_span;
 
-            Some(document_symbol(DocumentSymbol {
-                name: field.name.clone(),
+            document_symbol(DocumentSymbol {
+                name: symbol.name.clone(),
                 kind: DocumentSymbolKind::Field,
-                detail: Some(format!(
-                    "{}{}",
-                    optional.unwrap_or_default(),
-                    format_tua_type(&field.ty)
-                )),
+                detail: symbol.ty.as_ref().map(format_tua_type),
                 range,
                 selection_range,
-                children: Vec::new(),
-            }))
+                children: table_field_symbols(hir, symbol.id),
+            })
         })
         .collect()
 }
 
-fn function_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
-    parsed
-        .function_annotations
+fn function_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSymbol> {
+    hir.symbols()
         .iter()
-        .filter_map(|function| {
-            let name = function.name.clone()?;
-            let range = function.span?;
-            let selection_range = function.name_span.unwrap_or(range);
+        .filter(|symbol| symbol.kind == HirSymbolKind::Function)
+        .map(|symbol| {
+            let function = parsed
+                .function_annotations
+                .iter()
+                .find(|function| function.name_span == Some(symbol.name_span));
+            let range = symbol.origin_span;
+            let selection_range = symbol.name_span;
 
-            Some(document_symbol(DocumentSymbol {
-                name,
+            document_symbol(DocumentSymbol {
+                name: symbol.name.clone(),
                 kind: DocumentSymbolKind::Function,
                 detail: function
-                    .return_type
+                    .and_then(|function| function.return_type.as_ref())
                     .as_ref()
                     .map(|ty| format!("returns {}", format_tua_type(ty))),
                 range,
                 selection_range,
-                children: function
-                    .parameters
-                    .iter()
-                    .filter_map(|parameter| {
-                        let range = parameter.span?;
-                        let selection_range = parameter.name_span.unwrap_or(range);
-
-                        Some(document_symbol(DocumentSymbol {
-                            name: parameter.name.clone(),
-                            kind: DocumentSymbolKind::Parameter,
-                            detail: Some(format_tua_type(&parameter.ty)),
-                            range,
-                            selection_range,
-                            children: Vec::new(),
-                        }))
-                    })
-                    .collect(),
-            }))
+                children: parameter_symbols(parsed, hir, symbol.id),
+            })
         })
         .collect()
 }
 
-fn local_symbols(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
-    parsed
-        .local_annotations
+fn parameter_symbols(
+    parsed: &ParsedSource,
+    hir: &HirModule,
+    parent: HirSymbolId,
+) -> Vec<DocumentSymbol> {
+    hir.symbols()
         .iter()
-        .filter_map(|local| {
-            let selection_range = local.name_span?;
-            let range = local.span.unwrap_or(selection_range);
+        .filter(|symbol| symbol.kind == HirSymbolKind::Parameter && symbol.parent == Some(parent))
+        .map(|symbol| {
+            let parameter = parsed
+                .function_annotations
+                .iter()
+                .flat_map(|function| function.parameters.iter())
+                .find(|parameter| parameter.name_span == Some(symbol.name_span));
+
+            document_symbol(DocumentSymbol {
+                name: symbol.name.clone(),
+                kind: DocumentSymbolKind::Parameter,
+                detail: parameter.map(|parameter| format_tua_type(&parameter.ty)),
+                range: symbol.origin_span,
+                selection_range: symbol.name_span,
+                children: Vec::new(),
+            })
+        })
+        .collect()
+}
+
+fn local_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSymbol> {
+    hir.symbols()
+        .iter()
+        .filter(|symbol| symbol.kind == HirSymbolKind::Local)
+        .filter_map(|symbol| {
+            let local = parsed
+                .local_annotations
+                .iter()
+                .find(|local| local.name_span == Some(symbol.name_span))?;
 
             Some(document_symbol(DocumentSymbol {
-                name: local.name.clone(),
+                name: symbol.name.clone(),
                 kind: DocumentSymbolKind::Local,
                 detail: Some(format_tua_type(&local.ty)),
-                range,
-                selection_range,
+                range: symbol.origin_span,
+                selection_range: symbol.name_span,
                 children: Vec::new(),
             }))
         })
         .collect()
 }
 
-fn module_exports_symbol(parsed: &ParsedSource) -> Option<DocumentSymbol> {
-    let LastStmt::Return(return_stmt) = parsed.ast.nodes().last_stmt()? else {
-        return None;
-    };
-    let Expression::TableConstructor(table) = return_stmt.returns().iter().next()? else {
-        return None;
-    };
-    let range = node_span(table)?;
-    let children = export_field_symbols(table);
+fn module_exports_symbol(hir: &HirModule) -> Option<DocumentSymbol> {
+    let children = hir
+        .exports
+        .iter()
+        .filter(|export| matches!(export.value, HirExportValue::Symbol(_)))
+        .map(|export| {
+            document_symbol(DocumentSymbol {
+                name: export.name.clone(),
+                kind: DocumentSymbolKind::Field,
+                detail: Some("export".to_owned()),
+                range: export.origin_span,
+                selection_range: export.name_span,
+                children: Vec::new(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let range = children
+        .iter()
+        .map(|child| child.range)
+        .reduce(enclosing_span)?;
 
     (!children.is_empty()).then(|| {
         document_symbol(DocumentSymbol {
@@ -178,29 +200,6 @@ fn module_exports_symbol(parsed: &ParsedSource) -> Option<DocumentSymbol> {
             children,
         })
     })
-}
-
-fn export_field_symbols(table: &TableConstructor) -> Vec<DocumentSymbol> {
-    table
-        .fields()
-        .iter()
-        .filter_map(|field| {
-            let Field::NameKey { key, .. } = field else {
-                return None;
-            };
-            let range = node_span(field)?;
-            let selection_range = node_span(key).unwrap_or(range);
-
-            Some(document_symbol(DocumentSymbol {
-                name: token_text(key),
-                kind: DocumentSymbolKind::Field,
-                detail: Some("export".to_owned()),
-                range,
-                selection_range,
-                children: Vec::new(),
-            }))
-        })
-        .collect()
 }
 
 fn document_symbol(mut symbol: DocumentSymbol) -> DocumentSymbol {
@@ -229,15 +228,6 @@ fn max_position(left: SourcePosition, right: SourcePosition) -> SourcePosition {
     } else {
         right
     }
-}
-
-fn node_span(node: &impl Node) -> Option<SourceSpan> {
-    node.range()
-        .map(|(start, end)| SourceSpan::from_range(start, end))
-}
-
-fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
-    token.to_string().trim().to_owned()
 }
 
 fn format_tua_type(ty: &TuaType) -> String {

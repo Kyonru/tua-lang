@@ -7,6 +7,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::hir::{lower_parsed_source, HirSymbol, HirSymbolKind};
 use crate::module_index::resolve_required_module;
 use crate::module_link::require_module_at_position;
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
@@ -104,93 +105,17 @@ impl<'a> DefinitionResolver<'a> {
     }
 
     fn value_definition(&self, name: &str, position: SourcePosition) -> Option<Definition> {
-        let mut candidates = Vec::new();
+        let hir = lower_parsed_source(self.parsed);
 
-        candidates.extend(self.parsed.local_annotations.iter().filter_map(|local| {
-            let span = local.name_span.or(local.span)?;
-
-            (local.name == name && starts_before_or_at(span, position)).then(|| Definition {
-                path: self.parsed.path.clone(),
-                span,
-                kind: DefinitionKind::Local,
-            })
-        }));
-
-        candidates.extend(self.local_assignment_definitions(name, position));
-
-        for function in &self.parsed.function_annotations {
-            if let Some(span) = function.name_span.or(function.span) {
-                if function.name.as_deref() == Some(name) && starts_before_or_at(span, position) {
-                    candidates.push(Definition {
-                        path: self.parsed.path.clone(),
-                        span,
-                        kind: DefinitionKind::Function,
-                    });
-                }
-            }
-
-            candidates.extend(function.parameters.iter().filter_map(|parameter| {
-                let span = parameter.name_span.or(parameter.span)?;
-
-                (parameter.name == name && starts_before_or_at(span, position)).then(|| {
-                    Definition {
-                        path: self.parsed.path.clone(),
-                        span,
-                        kind: DefinitionKind::Parameter,
-                    }
-                })
-            }));
-        }
-
-        candidates
-            .into_iter()
-            .max_by_key(|definition| position_key(definition.span.start))
-    }
-
-    fn local_assignment_definitions(
-        &self,
-        name: &str,
-        position: SourcePosition,
-    ) -> Vec<Definition> {
-        self.parsed
-            .ast
-            .nodes()
-            .stmts()
-            .filter_map(|stmt| {
-                let ast::Stmt::LocalAssignment(local) = stmt else {
-                    return None;
-                };
-
-                Some(local.names().iter().filter_map(|local_name| {
-                    let span = node_span(local_name)?;
-
-                    (token_text(local_name) == name && starts_before_or_at(span, position)).then(
-                        || Definition {
-                            path: self.parsed.path.clone(),
-                            span,
-                            kind: DefinitionKind::Local,
-                        },
-                    )
-                }))
-            })
-            .flatten()
-            .collect()
+        hir.definition_for_value(name, position)
+            .and_then(|symbol| definition_from_hir_symbol(&self.parsed.path, symbol))
     }
 
     fn alias_definition(&self, name: &str) -> Option<Definition> {
-        self.parsed
-            .type_aliases
-            .iter()
-            .find(|alias| alias.name == name)
-            .and_then(|alias| {
-                let span = alias.name_span.or(alias.span)?;
+        let hir = lower_parsed_source(self.parsed);
 
-                Some(Definition {
-                    path: self.parsed.path.clone(),
-                    span,
-                    kind: DefinitionKind::TypeAlias,
-                })
-            })
+        hir.definition_for_type_alias(name)
+            .and_then(|symbol| definition_from_hir_symbol(&self.parsed.path, symbol))
     }
 
     fn is_type_reference(&self, position: SourcePosition) -> bool {
@@ -484,6 +409,22 @@ fn first_module_span(parsed: &ParsedSource) -> Option<SourceSpan> {
                 .filter_map(|local| local.name_span.or(local.span)),
         )
         .min_by_key(|span| position_key(span.start))
+}
+
+fn definition_from_hir_symbol(path: &Path, symbol: &HirSymbol) -> Option<Definition> {
+    let kind = match symbol.kind {
+        HirSymbolKind::TypeAlias => DefinitionKind::TypeAlias,
+        HirSymbolKind::Local => DefinitionKind::Local,
+        HirSymbolKind::Function => DefinitionKind::Function,
+        HirSymbolKind::Parameter => DefinitionKind::Parameter,
+        HirSymbolKind::TableField => DefinitionKind::TableField,
+    };
+
+    Some(Definition {
+        path: path.to_path_buf(),
+        span: symbol.name_span,
+        kind,
+    })
 }
 
 fn exported_field_definition(parsed: &ParsedSource, field: &str) -> Option<Definition> {

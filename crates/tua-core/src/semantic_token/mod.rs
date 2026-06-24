@@ -9,7 +9,8 @@ use full_moon::node::Node;
 use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
 
 use crate::definition_parsed_source;
-use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::hir::{lower_parsed_source, HirSymbolKind};
+use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
 use crate::source_text::{byte_for_column, line_at};
 use crate::{parse_tua_source, DefinitionKind, Diagnostic};
 
@@ -433,13 +434,34 @@ struct DeclarationIndex {
 impl DeclarationIndex {
     fn new(parsed: &ParsedSource) -> Self {
         let mut index = Self::default();
+        let hir = lower_parsed_source(parsed);
 
-        for alias in &parsed.type_aliases {
-            if let Some(span) = alias.name_span.or(alias.span) {
-                index.insert_declaration(span, &alias.name, SemanticTokenKind::TypeAlias);
+        for symbol in hir.symbols() {
+            match symbol.kind {
+                HirSymbolKind::TypeAlias => index.insert_declaration(
+                    symbol.name_span,
+                    &symbol.name,
+                    SemanticTokenKind::TypeAlias,
+                ),
+                HirSymbolKind::TableField => {
+                    index.insert_property_declaration(symbol.name_span, &symbol.name)
+                }
+                HirSymbolKind::Local => index.insert_declaration(
+                    symbol.name_span,
+                    &symbol.name,
+                    SemanticTokenKind::Variable,
+                ),
+                HirSymbolKind::Function => index.insert_declaration(
+                    symbol.name_span,
+                    &symbol.name,
+                    SemanticTokenKind::Function,
+                ),
+                HirSymbolKind::Parameter => index.insert_declaration(
+                    symbol.name_span,
+                    &symbol.name,
+                    SemanticTokenKind::Parameter,
+                ),
             }
-
-            collect_type_table_fields(&alias.ty, &mut index);
         }
 
         collect_block_declarations(parsed.ast.nodes(), &mut index);
@@ -556,26 +578,6 @@ impl Classification {
 struct ValueDeclaration {
     span: SourceSpan,
     kind: SemanticTokenKind,
-}
-
-fn collect_type_table_fields(ty: &TuaType, index: &mut DeclarationIndex) {
-    match ty {
-        TuaType::Table(fields) => {
-            for field in fields {
-                if let Some(span) = field.name_span.or(field.span) {
-                    index.insert_declaration(span, &field.name, SemanticTokenKind::Property);
-                }
-
-                collect_type_table_fields(&field.ty, index);
-            }
-        }
-        TuaType::Union(types) => {
-            for ty in types {
-                collect_type_table_fields(ty, index);
-            }
-        }
-        TuaType::Named(_) => {}
-    }
 }
 
 fn collect_block_declarations(block: &ast::Block, index: &mut DeclarationIndex) {

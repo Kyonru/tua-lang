@@ -12,6 +12,7 @@ pub mod document_symbol;
 pub mod emit;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod fixture;
+pub mod hir;
 pub mod hover;
 pub mod inlay_hint;
 mod lint;
@@ -68,6 +69,10 @@ pub use document_symbol::{
 pub use emit::{emit_lua, emit_tua_source};
 #[cfg(any(test, feature = "test-fixture"))]
 pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, FixtureTempDir};
+pub use hir::{
+    lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,
+    HirModuleExport, HirRequireBinding, HirSymbol, HirSymbolId, HirSymbolKind,
+};
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use lua::builtin_definition_document;

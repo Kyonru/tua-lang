@@ -179,6 +179,37 @@ let typed = extract_tua_source_model(&raw)?;
 assert_eq!(typed.type_aliases[0].name, "Slot");
 ```
 
+### HIR Module Example
+
+The HIR-like layer lowers a parsed file into stable same-file symbols. IDE
+features should prefer this model for declarations and same-file symbol identity
+before falling back to syntax walks or dynamic Lua behavior.
+
+```rust
+use tua_core::{lower_parsed_source, parse_tua_source, HirExportValue, HirSymbolKind};
+
+let parsed = parse_tua_source(
+    "src/player.tua",
+    r#"
+type Player = { hp: number }
+local M = {}
+return { player = M, dynamic = make_player() }
+"#,
+)?;
+
+let module = lower_parsed_source(&parsed);
+
+// Symbols have stable ids and origin spans for hover, navigation, edits, and
+// semantic highlighting.
+let player = module.definition_for_type_alias("Player").unwrap();
+assert_eq!(player.kind, HirSymbolKind::TypeAlias);
+
+// Simple exports point at known symbols. Dynamic exports stay unknown instead
+// of being guessed.
+assert!(matches!(module.exports[0].value, HirExportValue::Symbol(_)));
+assert_eq!(module.exports[1].value, HirExportValue::Unknown);
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
@@ -188,7 +219,7 @@ assert_eq!(typed.type_aliases[0].name, "Slot");
 | `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
 | `parser` | Parses token streams into syntax. | Raw Lua/Tua parser APIs over full_moon plus normalization for Tua-only syntax. | Existing | 57 |
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
-| `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | Parsed source model, module index, type environment, symbol helpers. | Partial | 58, 59 |
+| `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58, 59 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, Lua/LOVE builtin catalogs. | Partial | 61, 62 |
 | `ide-db` | Shared IDE database and symbol indexes. | Workspace symbol scans and LSP analysis helpers. | Partial | 64, 65 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
