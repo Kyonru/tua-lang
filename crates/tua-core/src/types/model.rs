@@ -223,6 +223,105 @@ impl TableField {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub struct MetatableFacts {
+    pub index: IndexFallback,
+    pub newindex: NewIndexRule,
+    pub add: Option<FunctionType>,
+    pub tostring: Option<FunctionType>,
+    pub fields: TableShape,
+}
+
+impl MetatableFacts {
+    pub fn from_type(ty: &Type) -> Self {
+        let Type::Table(table) = ty else {
+            return Self::default();
+        };
+
+        let index = table
+            .field("__index")
+            .map(|field| match &field.ty {
+                Type::Table(shape) => IndexFallback::Table(shape.clone()),
+                Type::Function(function) => IndexFallback::Function(function.clone()),
+                _ => IndexFallback::Unknown,
+            })
+            .unwrap_or_default();
+        let newindex = table
+            .field("__newindex")
+            .map(|field| match &field.ty {
+                Type::Table(shape) => NewIndexRule::Table(shape.clone()),
+                Type::Function(function) => NewIndexRule::Function(function.clone()),
+                _ => NewIndexRule::Unknown,
+            })
+            .unwrap_or_default();
+
+        Self {
+            index,
+            newindex,
+            add: table.field("__add").and_then(|field| match &field.ty {
+                Type::Function(function) => Some(function.clone()),
+                _ => None,
+            }),
+            tostring: table.field("__tostring").and_then(|field| match &field.ty {
+                Type::Function(function) => Some(function.clone()),
+                _ => None,
+            }),
+            fields: table.clone(),
+        }
+    }
+
+    pub fn apply_to_type(&self, base: Type) -> Type {
+        let Type::Table(mut base_table) = base else {
+            return base;
+        };
+
+        self.apply_to_table(&mut base_table);
+
+        Type::Table(base_table)
+    }
+
+    pub fn apply_to_table(&self, table: &mut TableShape) {
+        if let IndexFallback::Table(index_table) = &self.index {
+            for (name, field) in index_table.fields() {
+                if table.field(name).is_none() {
+                    table.insert(name.to_owned(), field.clone());
+                }
+            }
+        }
+
+        for (name, field) in self.fields.fields() {
+            if table.field(name).is_none() {
+                table.insert(name.to_owned(), field.clone());
+            }
+        }
+    }
+
+    pub fn implied_field(&self, name: &str) -> Option<&TableField> {
+        match &self.index {
+            IndexFallback::Table(table) => table.field(name).or_else(|| self.fields.field(name)),
+            _ => self.fields.field(name),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub enum IndexFallback {
+    #[default]
+    None,
+    Table(TableShape),
+    Function(FunctionType),
+    Unknown,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub enum NewIndexRule {
+    #[default]
+    None,
+    Table(TableShape),
+    Function(FunctionType),
+    Unknown,
+}
+
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -15,7 +15,7 @@ use crate::parser::{
 };
 use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
-use super::model::{TableField, Type, TypeAlias};
+use super::model::{MetatableFacts, TableField, Type, TypeAlias};
 use super::TypeContext;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2259,30 +2259,7 @@ fn is_tostring_call(function_call: &FunctionCall) -> bool {
 }
 
 fn merge_static_metatable(base: Type, meta: Type) -> Type {
-    let Type::Table(mut base_table) = base else {
-        return base;
-    };
-    let Type::Table(meta_table) = meta else {
-        return Type::Table(base_table);
-    };
-
-    for (name, field) in meta_table.fields() {
-        if name == "__index" {
-            if let Type::Table(index_table) = &field.ty {
-                for (index_name, index_field) in index_table.fields() {
-                    if base_table.field(index_name).is_none() {
-                        base_table.insert(index_name.to_owned(), index_field.clone());
-                    }
-                }
-            }
-        }
-
-        if base_table.field(name).is_none() {
-            base_table.insert(name.to_owned(), field.clone());
-        }
-    }
-
-    Type::Table(base_table)
+    MetatableFacts::from_type(&meta).apply_to_type(base)
 }
 
 fn function_return_types(ty: &Type) -> Vec<Type> {

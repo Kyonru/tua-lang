@@ -151,6 +151,96 @@ fn container_types_are_assignable_by_shape() {
 }
 
 #[test]
+fn extracts_metatable_facts_from_table_shape() {
+    let index_shape = TableShape::from_fields([("length", TableField::required(Type::number()))]);
+    let add = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let tostring = FunctionType::new([Type::Any], Type::string());
+    let newindex = FunctionType::new([Type::Any, Type::string(), Type::Any], Type::nil());
+    let meta = Type::table([
+        (
+            "__index",
+            TableField::required(Type::Table(index_shape.clone())),
+        ),
+        (
+            "__newindex",
+            TableField::required(Type::Function(newindex.clone())),
+        ),
+        ("__add", TableField::required(Type::Function(add.clone()))),
+        (
+            "__tostring",
+            TableField::required(Type::Function(tostring.clone())),
+        ),
+    ]);
+
+    let facts = MetatableFacts::from_type(&meta);
+
+    assert_eq!(facts.index, IndexFallback::Table(index_shape));
+    assert_eq!(facts.newindex, NewIndexRule::Function(newindex));
+    assert_eq!(facts.add, Some(add));
+    assert_eq!(facts.tostring, Some(tostring));
+}
+
+#[test]
+fn applies_metatable_facts_without_overwriting_base_fields() {
+    let base = Type::table([
+        ("x", TableField::required(Type::number())),
+        ("length", TableField::required(Type::string())),
+    ]);
+    let index_shape = TableShape::from_fields([
+        ("length", TableField::required(Type::number())),
+        ("label", TableField::required(Type::string())),
+    ]);
+    let add = FunctionType::new_returns([Type::Any, Type::Any], [Type::Any]);
+    let meta = Type::table([
+        ("__index", TableField::required(Type::Table(index_shape))),
+        ("__add", TableField::required(Type::Function(add.clone()))),
+    ]);
+
+    let applied = MetatableFacts::from_type(&meta).apply_to_type(base);
+    let Type::Table(table) = applied else {
+        panic!("metatable facts should preserve table shape");
+    };
+
+    assert_eq!(
+        table.field("x").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+    assert_eq!(
+        table.field("length").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+    assert_eq!(
+        table.field("label").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+    assert_eq!(
+        table.field("__add").map(|field| &field.ty),
+        Some(&Type::Function(add))
+    );
+}
+
+#[test]
+fn metatable_facts_expose_implied_fields() {
+    let index_shape = TableShape::from_fields([("length", TableField::required(Type::number()))]);
+    let meta = Type::table([
+        ("__index", TableField::required(Type::Table(index_shape))),
+        ("label", TableField::required(Type::string())),
+    ]);
+
+    let facts = MetatableFacts::from_type(&meta);
+
+    assert_eq!(
+        facts.implied_field("length").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+    assert_eq!(
+        facts.implied_field("label").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+    assert!(facts.implied_field("missing").is_none());
+}
+
+#[test]
 fn builds_per_file_type_environment_from_aliases_and_annotations() {
     let parsed = parse_tua_source(
         "src/player.tua",
