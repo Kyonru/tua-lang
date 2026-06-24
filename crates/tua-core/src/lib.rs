@@ -80,12 +80,15 @@ pub use module_index::{
 };
 pub use module_link::{module_links_tua_source, ModuleLink};
 pub use parser::{
+    extract_lua_source_model, extract_tua_source_model, normalize_tua_source,
     parse_lua_doc_annotations, parse_lua_doc_annotations_with_options, parse_lua_source,
-    parse_tua_source, CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation,
-    LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric,
-    LuaDocGenericParameter, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
-    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, ParameterAnnotation, ParsedSource,
-    SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    parse_raw_lua_source, parse_raw_tua_source, parse_tua_source, CompoundAssignment,
+    CompoundOperator, FunctionAnnotation, LocalAnnotation, LuaDocAlias, LuaDocAnnotation,
+    LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric, LuaDocGenericParameter,
+    LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType,
+    LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage,
+    ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    TypedSourceModel,
 };
 pub use project::project_description;
 pub use project_model::{

@@ -34,6 +34,8 @@ impl SourceSpan {
 
 #[derive(Clone, Debug)]
 pub struct ParsedSource {
+    pub raw: RawParsedSource,
+    pub typed: TypedSourceModel,
     pub path: PathBuf,
     pub source: String,
     pub ast: full_moon::ast::Ast,
@@ -47,12 +49,75 @@ pub struct ParsedSource {
 }
 
 impl ParsedSource {
+    pub(crate) fn from_raw_and_typed(raw: RawParsedSource, typed: TypedSourceModel) -> Self {
+        Self {
+            path: raw.path.clone(),
+            source: raw.source.clone(),
+            ast: raw.ast.clone(),
+            span: raw.span,
+            lua_doc_annotations: typed.lua_doc_annotations.clone(),
+            lua_doc_diagnostics: typed.lua_doc_diagnostics.clone(),
+            type_aliases: typed.type_aliases.clone(),
+            local_annotations: typed.local_annotations.clone(),
+            function_annotations: typed.function_annotations.clone(),
+            compound_assignments: typed.compound_assignments.clone(),
+            raw,
+            typed,
+        }
+    }
+
     pub fn statement_count(&self) -> usize {
         self.ast.nodes().stmts().count()
     }
 
     pub fn has_return(&self) -> bool {
         self.ast.nodes().last_stmt().is_some()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RawParsedSource {
+    pub path: PathBuf,
+    pub source: String,
+    pub parser_source: String,
+    pub ast: full_moon::ast::Ast,
+    pub span: Option<SourceSpan>,
+    pub language: ParsedLanguage,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NormalizedSource {
+    pub original: String,
+    pub parser_source: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TypedSourceModel {
+    pub lua_doc_annotations: Vec<LuaDocAnnotation>,
+    pub lua_doc_diagnostics: Vec<crate::Diagnostic>,
+    pub type_aliases: Vec<TypeAlias>,
+    pub local_annotations: Vec<LocalAnnotation>,
+    pub function_annotations: Vec<FunctionAnnotation>,
+    pub compound_assignments: Vec<CompoundAssignment>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParsedLanguage {
+    Lua,
+    Tua,
+}
+
+impl RawParsedSource {
+    pub fn statement_count(&self) -> usize {
+        self.ast.nodes().stmts().count()
+    }
+
+    pub fn has_return(&self) -> bool {
+        self.ast.nodes().last_stmt().is_some()
+    }
+
+    pub fn uses_normalized_parser_source(&self) -> bool {
+        self.source != self.parser_source
     }
 }
 

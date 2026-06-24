@@ -3,6 +3,91 @@ use crate::{check_tua_source, check_tua_source_with_diagnostics_config};
 use std::path::PathBuf;
 
 #[test]
+fn raw_lua_parse_contains_lua_compatible_syntax_only() {
+    let raw = parse_raw_lua_source("src/plain.lua", "local value = 1\n")
+        .expect("plain Lua should raw parse");
+
+    assert_eq!(raw.path, PathBuf::from("src/plain.lua"));
+    assert_eq!(raw.language, ParsedLanguage::Lua);
+    assert_eq!(raw.source, raw.parser_source);
+    assert!(!raw.uses_normalized_parser_source());
+    assert_eq!(raw.statement_count(), 1);
+    assert!(raw.span.is_some());
+}
+
+#[test]
+fn raw_tua_parse_uses_normalized_parser_source() {
+    let raw = parse_raw_tua_source(
+        "src/types.tua",
+        r#"
+type Player = {
+  name?: string,
+}
+"#,
+    )
+    .expect("Tua source should raw parse after normalization");
+
+    assert_eq!(raw.language, ParsedLanguage::Tua);
+    assert_ne!(raw.source, raw.parser_source);
+    assert!(raw.source.contains("name?: string"));
+    assert!(raw.parser_source.contains("name: string?"));
+    assert!(raw.uses_normalized_parser_source());
+}
+
+#[test]
+fn normalized_source_preserves_original_and_exposes_parser_text() {
+    let normalized = normalize_tua_source("type Slot = { name?: string }\n");
+
+    assert_eq!(normalized.original, "type Slot = { name?: string }\n");
+    assert_eq!(normalized.parser_source, "type Slot = { name: string? }\n");
+}
+
+#[test]
+fn typed_source_extraction_is_separate_from_raw_parse() {
+    let raw = parse_raw_tua_source(
+        "src/player.tua",
+        r#"
+---@class Player documented from LuaDoc
+type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 10 }
+"#,
+    )
+    .expect("raw source should parse");
+
+    assert_eq!(raw.statement_count(), 2);
+
+    let typed = extract_tua_source_model(&raw).expect("typed model should extract");
+
+    assert_eq!(typed.lua_doc_annotations.len(), 1);
+    assert_eq!(typed.type_aliases.len(), 1);
+    assert_eq!(typed.local_annotations.len(), 1);
+    assert!(typed.function_annotations.is_empty());
+    assert!(typed.compound_assignments.is_empty());
+}
+
+#[test]
+fn parsed_source_keeps_compatibility_views_over_raw_and_typed_models() {
+    let parsed = parse_tua_source(
+        "src/compat.tua",
+        r#"
+type Player = { hp: number }
+local player: Player = { hp = 10 }
+"#,
+    )
+    .expect("source should parse");
+
+    assert_eq!(parsed.raw.language, ParsedLanguage::Tua);
+    assert_eq!(parsed.typed.type_aliases.len(), 1);
+    assert_eq!(parsed.path, parsed.raw.path);
+    assert_eq!(parsed.source, parsed.raw.source);
+    assert_eq!(parsed.type_aliases, parsed.typed.type_aliases);
+    assert_eq!(parsed.local_annotations, parsed.typed.local_annotations);
+}
+
+#[test]
 fn parses_local_assignments() {
     let parsed = parse_lua_source("src/local.tua", "local x = 1\nlocal y = x + 2\n")
         .expect("locals should parse");

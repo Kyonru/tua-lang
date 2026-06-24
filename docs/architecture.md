@@ -158,6 +158,27 @@ let _third = host.snapshot();
 assert!(host.cache_stats().invalidations > 0);
 ```
 
+### Parser Layer Example
+
+Parser output is split into explicit layers while `ParsedSource` remains the
+compatibility aggregate used by older emit/type/check code.
+
+```rust
+use tua_core::{extract_tua_source_model, normalize_tua_source, parse_raw_tua_source};
+
+let normalized = normalize_tua_source("type Slot = { name?: string }\n");
+assert_eq!(normalized.parser_source, "type Slot = { name: string? }\n");
+
+let raw = parse_raw_tua_source("src/slot.tua", normalized.original)?;
+
+// Raw syntax is Lua/Luau-compatible parser output with source spans.
+assert!(raw.span.is_some());
+
+// Typed extraction is a separate semantic-source pass over the raw tree.
+let typed = extract_tua_source_model(&raw)?;
+assert_eq!(typed.type_aliases[0].name, "Slot");
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
@@ -165,8 +186,8 @@ assert!(host.cache_stats().invalidations > 0);
 | `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | `AnalysisHost`/`AnalysisSnapshot`, VFS, project model inputs, and a file-granular query cache. | Partial | 53, 56 |
 | `vfs`, `vfs-notify` | Tracks files, changes, paths, and file watching. | Core VFS plus LSP watched-file handling and CLI source discovery. | Partial | 54 |
 | `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
-| `parser` | Parses token streams into syntax. | `tua-core::parser`, full_moon-based Lua parsing, Tua syntax extraction. | Existing | 57 |
-| `syntax` | Typed syntax tree and syntax utilities. | Parser model plus source spans; no dedicated syntax crate/model boundary. | Partial | 57 |
+| `parser` | Parses token streams into syntax. | Raw Lua/Tua parser APIs over full_moon plus normalization for Tua-only syntax. | Existing | 57 |
+| `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | Parsed source model, module index, type environment, symbol helpers. | Partial | 58, 59 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, Lua/LOVE builtin catalogs. | Partial | 61, 62 |
 | `ide-db` | Shared IDE database and symbol indexes. | Workspace symbol scans and LSP analysis helpers. | Partial | 64, 65 |

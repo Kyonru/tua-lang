@@ -2,7 +2,7 @@ mod doc;
 mod model;
 mod normalize;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use full_moon::ast::luau::{TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
 use full_moon::ast::{self, LuaVersion};
@@ -14,8 +14,9 @@ pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, LocalAnnotation, LuaDocAlias,
     LuaDocAnnotation, LuaDocAnnotationKind, LuaDocClass, LuaDocField, LuaDocGeneric,
     LuaDocGenericParameter, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
-    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, ParameterAnnotation, ParsedSource,
-    SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource, ParameterAnnotation,
+    ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType,
+    TuaType, TypeAlias, TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 
@@ -23,58 +24,115 @@ pub fn parse_lua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    parse_source_with_version(path, source, LuaVersion::lua51(), false)
+    let raw = parse_raw_lua_source(path, source)?;
+    let typed = extract_lua_source_model(&raw);
+
+    Ok(ParsedSource::from_raw_and_typed(raw, typed))
 }
 
 pub fn parse_tua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<ParsedSource, Vec<Diagnostic>> {
-    parse_source_with_version(path, source, LuaVersion::luau(), true)
+    let raw = parse_raw_tua_source(path, source)?;
+    let typed = extract_tua_source_model(&raw)?;
+
+    Ok(ParsedSource::from_raw_and_typed(raw, typed))
 }
 
-fn parse_source_with_version(
+pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
+    let original = source.into();
+    let parser_source = normalize_tua_source_for_luau_parser(&original);
+
+    NormalizedSource {
+        original,
+        parser_source,
+    }
+}
+
+pub fn parse_raw_lua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
-    lua_version: LuaVersion,
-    collect_types: bool,
-) -> Result<ParsedSource, Vec<Diagnostic>> {
+) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
     let source = source.into();
-    let doc_result = doc::collect_lua_doc_annotations(&path, &source);
+    let parser_source = source.clone();
 
-    let parser_source = if collect_types {
-        normalize_tua_source_for_luau_parser(&source)
-    } else {
-        source.clone()
-    };
+    parse_raw_source(
+        path,
+        source,
+        parser_source,
+        LuaVersion::lua51(),
+        ParsedLanguage::Lua,
+    )
+}
 
+pub fn parse_raw_tua_source(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+) -> Result<RawParsedSource, Vec<Diagnostic>> {
+    let path = path.as_ref().to_path_buf();
+    let normalized = normalize_tua_source(source);
+
+    parse_raw_source(
+        path,
+        normalized.original,
+        normalized.parser_source,
+        LuaVersion::luau(),
+        ParsedLanguage::Tua,
+    )
+}
+
+pub fn extract_lua_source_model(raw: &RawParsedSource) -> TypedSourceModel {
+    let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
+
+    TypedSourceModel {
+        lua_doc_annotations: doc_result.annotations,
+        lua_doc_diagnostics: doc_result.diagnostics,
+        ..TypedSourceModel::default()
+    }
+}
+
+pub fn extract_tua_source_model(
+    raw: &RawParsedSource,
+) -> Result<TypedSourceModel, Vec<Diagnostic>> {
+    let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
+    let syntax = collect_tua_syntax(&raw.path, &raw.ast);
+
+    if !syntax.diagnostics.is_empty() {
+        return Err(syntax.diagnostics);
+    }
+
+    Ok(TypedSourceModel {
+        lua_doc_annotations: doc_result.annotations,
+        lua_doc_diagnostics: doc_result.diagnostics,
+        type_aliases: syntax.type_aliases,
+        local_annotations: syntax.local_annotations,
+        function_annotations: syntax.function_annotations,
+        compound_assignments: syntax.compound_assignments,
+    })
+}
+
+fn parse_raw_source(
+    path: PathBuf,
+    source: String,
+    parser_source: String,
+    lua_version: LuaVersion,
+    language: ParsedLanguage,
+) -> Result<RawParsedSource, Vec<Diagnostic>> {
     match full_moon::parse_fallible(&parser_source, lua_version).into_result() {
         Ok(ast) => {
             let span = ast
                 .range()
                 .map(|(start, end)| SourceSpan::from_range(start, end));
-            let syntax = if collect_types {
-                collect_tua_syntax(&path, &ast)
-            } else {
-                TuaSyntax::default()
-            };
 
-            if !syntax.diagnostics.is_empty() {
-                return Err(syntax.diagnostics);
-            }
-
-            Ok(ParsedSource {
+            Ok(RawParsedSource {
                 path,
                 source,
+                parser_source,
                 ast,
                 span,
-                lua_doc_annotations: doc_result.annotations,
-                lua_doc_diagnostics: doc_result.diagnostics,
-                type_aliases: syntax.type_aliases,
-                local_annotations: syntax.local_annotations,
-                function_annotations: syntax.function_annotations,
-                compound_assignments: syntax.compound_assignments,
+                language,
             })
         }
         Err(errors) => Err(errors
