@@ -3,10 +3,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::completion::complete_field_access_in_source_with_environment;
+use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirModule, HirRequireBinding};
 use crate::ide_db::SymbolIndexEntry;
 use crate::module_link::require_module_at_position;
 use crate::scope_map_parsed_source;
+use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
 use crate::source_text::{dotted_chain_at_position, line_at};
 use crate::types::build_type_environment_with_diagnostics;
@@ -26,11 +28,11 @@ use crate::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
     signature_help_tua_source, type_alias_definition_count, Assist, AssistRange, Completion,
     CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
-    Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput,
-    ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase,
-    ProjectTypeDatabaseInput, Reference, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
-    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit,
-    TuaType, Type, TypeEnvironment, WorkspaceSymbol,
+    FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
+    ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
+    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, RenameEdit, RenameTarget,
+    RequireResolution, ScopeMap, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
+    SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -556,6 +558,39 @@ impl AnalysisSnapshot {
             .and_then(|file| file.parsed.as_ref().ok())
             .map(document_symbols_parsed_source)
             .unwrap_or_default()
+    }
+
+    pub fn selection_ranges(
+        &self,
+        path: impl AsRef<Path>,
+        positions: &[SourcePosition],
+    ) -> Vec<Option<SelectionRange>> {
+        let Some(file) = self.file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let file_span = file.parsed.as_ref().ok().and_then(|parsed| parsed.span);
+
+        selection_ranges_source(&file.source, file_span, positions)
+    }
+
+    pub fn folding_ranges(&self, path: impl AsRef<Path>) -> Vec<FoldingRange> {
+        let Some(file) = self.file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let type_alias_spans = file
+            .parsed
+            .as_ref()
+            .ok()
+            .map(|parsed| {
+                parsed
+                    .type_aliases
+                    .iter()
+                    .filter_map(|alias| alias.span)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        folding_ranges_source(&file.source, &type_alias_spans)
     }
 
     pub fn assists(

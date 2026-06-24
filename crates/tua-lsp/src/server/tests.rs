@@ -95,6 +95,14 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["selectionRangeProvider"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["foldingRangeProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["codeActionProvider"],
         true
     );
@@ -2526,6 +2534,88 @@ fn document_symbol_unknown_document_returns_empty_array() {
 }
 
 #[test]
+fn selection_range_grows_from_identifier_to_field_chain_statement_and_block() {
+    let uri = "file:///tmp/selection-range.tua";
+    let source = r#"
+local function update(player: Player)
+  player.hp = player.hp - 1
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        selection_range_request(2, uri, source, "hp ="),
+    ]);
+    let response = response_with_id(&output, 2);
+    let result = response["result"]
+        .as_array()
+        .expect("selection ranges should be an array");
+    let texts = selection_range_texts(source, &result[0]);
+
+    assert_eq!(texts[0], "hp");
+    assert_eq!(texts[1], "player.hp");
+    assert!(texts.contains(&"player.hp = player.hp - 1"));
+    assert!(texts
+        .iter()
+        .any(|text| text.contains("local function update")));
+}
+
+#[test]
+fn folding_range_returns_nested_functions_and_table_constructors() {
+    let uri = "file:///tmp/folding-range.tua";
+    let source = r#"
+local config = {
+  player = {
+    hp = 10,
+  },
+}
+
+local function outer()
+  local function inner()
+    return config.player.hp
+  end
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source), folding_range_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let ranges = response["result"]
+        .as_array()
+        .expect("folding ranges should be an array");
+
+    assert!(ranges.iter().any(|range| {
+        range["kind"] == "region" && range["startLine"] == 1 && range["endLine"] == 5
+    }));
+    assert!(ranges.iter().any(|range| {
+        range["kind"] == "region" && range["startLine"] == 2 && range["endLine"] == 4
+    }));
+    assert!(ranges
+        .iter()
+        .any(|range| range["startLine"] == 7 && range["endLine"] == 11));
+    assert!(ranges
+        .iter()
+        .any(|range| range["startLine"] == 8 && range["endLine"] == 10));
+}
+
+#[test]
+fn folding_range_is_stable_for_incomplete_sources() {
+    let uri = "file:///tmp/incomplete-folding-range.tua";
+    let source = r#"
+-- docs
+-- still docs
+local config = {
+  hp = 10,
+"#;
+    let output = run_messages(vec![did_open(uri, source), folding_range_request(2, uri)]);
+    let response = response_with_id(&output, 2);
+    let ranges = response["result"]
+        .as_array()
+        .expect("folding ranges should be an array");
+
+    assert!(ranges.iter().any(|range| {
+        range["kind"] == "comment" && range["startLine"] == 1 && range["endLine"] == 2
+    }));
+}
+
+#[test]
 fn code_action_creates_missing_require_target() {
     let temp = TempProject::new("code-action-missing-require");
     let source = "local Player = require(\"player\")\n";
@@ -3706,6 +3796,33 @@ fn document_symbol_request(id: u64, uri: &str) -> Value {
     })
 }
 
+fn selection_range_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/selectionRange",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "positions": [lsp_position_of(source, needle)]
+        }
+    })
+}
+
+fn folding_range_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/foldingRange",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
+        }
+    })
+}
+
 fn document_link_request(id: u64, uri: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -4348,6 +4465,67 @@ fn range_text<'a>(source: &'a str, range: &Value) -> &'a str {
         .expect("reference line should exist");
 
     &text[start..end]
+}
+
+fn selection_range_texts<'a>(source: &'a str, range: &'a Value) -> Vec<&'a str> {
+    let mut texts = Vec::new();
+    let mut current = Some(range);
+
+    while let Some(range) = current {
+        texts.push(lsp_range_text(source, &range["range"]));
+        current = range.get("parent");
+    }
+
+    texts
+}
+
+fn lsp_range_text<'a>(source: &'a str, range: &Value) -> &'a str {
+    let start_line = range["start"]["line"]
+        .as_u64()
+        .expect("range start line should be numeric") as usize;
+    let start_character = range["start"]["character"]
+        .as_u64()
+        .expect("range start character should be numeric") as usize;
+    let end_line = range["end"]["line"]
+        .as_u64()
+        .expect("range end line should be numeric") as usize;
+    let end_character = range["end"]["character"]
+        .as_u64()
+        .expect("range end character should be numeric") as usize;
+
+    if start_line == end_line {
+        let text = source
+            .split('\n')
+            .nth(start_line)
+            .expect("range line should exist");
+
+        return &text[start_character..end_character];
+    }
+
+    let start_index = lsp_byte_index(source, start_line, start_character);
+    let end_index = lsp_byte_index(source, end_line, end_character);
+
+    &source[start_index..end_index]
+}
+
+fn lsp_byte_index(source: &str, target_line: usize, target_character: usize) -> usize {
+    let mut line = 0;
+    let mut character = 0;
+
+    for (index, value) in source.char_indices() {
+        if line == target_line && character == target_character {
+            return index;
+        }
+
+        if value == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
+    }
+
+    source.len()
 }
 
 fn symbol_names(symbols: &[Value]) -> Vec<&str> {

@@ -10,10 +10,10 @@ use tua_core::{
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, CallHierarchyCallSite,
     CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
-    DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink, ParsedSource,
-    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
-    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, TuaType, TypeEnvironment,
-    VfsSourceKind, WorkspaceSymbol,
+    DocumentHighlight, DocumentSymbol, FoldingRange, InlayHint, ModuleExports, ModuleLink,
+    ParsedSource, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit,
+    RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
+    TuaType, TypeEnvironment, VfsSourceKind, WorkspaceSymbol,
 };
 
 use super::auto_import::{
@@ -499,6 +499,18 @@ impl AnalysisSnapshot {
 
     pub(super) fn document_symbols(&self, path: &Path) -> Vec<DocumentSymbol> {
         self.core.document_symbols(path)
+    }
+
+    pub(super) fn selection_ranges(
+        &self,
+        path: &Path,
+        positions: &[SourcePosition],
+    ) -> Vec<Option<SelectionRange>> {
+        self.core.selection_ranges(path, positions)
+    }
+
+    pub(super) fn folding_ranges(&self, path: &Path) -> Vec<FoldingRange> {
+        self.core.folding_ranges(path)
     }
 
     pub(super) fn prepare_call_hierarchy(

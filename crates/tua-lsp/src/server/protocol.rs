@@ -5,10 +5,10 @@ use serde_json::{json, Value};
 use tua_core::{
     CodeAction, CodeActionEdit, CodeActionKind, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
-    DocumentSymbolKind, Hover, InlayHint, InlayHintKind, ModuleLink, Reference, RenameEdit,
-    RenameTarget, SemanticToken, SemanticTokenKind, SemanticTokenModifier, SignatureHelp,
-    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
-    WorkspaceSymbolKind,
+    DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
+    ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
+    SemanticTokenKind, SemanticTokenModifier, SignatureHelp, SignatureInformation, SourcePosition,
+    SourceSpan, TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -695,6 +695,37 @@ pub(super) fn lsp_document_symbol_from_core(symbol: DocumentSymbol) -> Value {
     }
 
     item
+}
+
+pub(super) fn lsp_selection_range_from_core(range: SelectionRange) -> Value {
+    let mut item = json!({
+        "range": lsp_range(range.range)
+    });
+
+    if let Some(parent) = range.parent {
+        item["parent"] = lsp_selection_range_from_core(*parent);
+    }
+
+    item
+}
+
+pub(super) fn lsp_folding_range_from_core(range: FoldingRange) -> Value {
+    json!({
+        "startLine": range.range.start.line.saturating_sub(1),
+        "startCharacter": range.range.start.column.saturating_sub(1),
+        "endLine": range.range.end.line.saturating_sub(1),
+        "endCharacter": range.range.end.column.saturating_sub(1),
+        "kind": lsp_folding_range_kind(range.kind)
+    })
+}
+
+fn lsp_folding_range_kind(kind: FoldingRangeKind) -> &'static str {
+    match kind {
+        FoldingRangeKind::Comment => "comment",
+        FoldingRangeKind::Function | FoldingRangeKind::Table | FoldingRangeKind::TypeAlias => {
+            "region"
+        }
+    }
 }
 
 fn lsp_symbol_kind(kind: DocumentSymbolKind) -> u8 {

@@ -12,6 +12,7 @@ pub mod document_symbol;
 pub mod emit;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod fixture;
+pub mod folding_range;
 pub mod hir;
 pub mod hover;
 pub mod ide_db;
@@ -29,6 +30,7 @@ pub mod project_model;
 pub mod references;
 pub mod rename;
 pub mod scope;
+pub mod selection_range;
 mod semantic;
 pub mod semantic_token;
 pub mod signature_help;
@@ -74,6 +76,9 @@ pub use document_symbol::{
 pub use emit::{emit_lua, emit_tua_source};
 #[cfg(any(test, feature = "test-fixture"))]
 pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, FixtureTempDir};
+pub use folding_range::{
+    folding_ranges_parsed_source, folding_ranges_tua_source, FoldingRange, FoldingRangeKind,
+};
 pub use hir::{
     lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,
     HirModuleExport, HirRequireBinding, HirSymbol, HirSymbolId, HirSymbolKind,
@@ -129,6 +134,9 @@ pub use scope::{
     scope_map_parsed_source, scope_map_parsed_source_with_globals, ScopeDeclaration,
     ScopeDeclarationKind, ScopeGlobal, ScopeGlobalKind, ScopeMap, ScopeReference, ScopeResolution,
     ScopeSymbolId,
+};
+pub use selection_range::{
+    selection_ranges_parsed_source, selection_ranges_tua_source, SelectionRange,
 };
 pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,

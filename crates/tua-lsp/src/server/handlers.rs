@@ -10,11 +10,12 @@ use super::protocol::{
     error_response, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
     lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_completion_from_core,
     lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
-    lsp_document_symbol_from_core, lsp_hover_from_core, lsp_inlay_hint_from_core,
-    lsp_location_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
-    lsp_resolved_completion_item, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
-    response, source_position_from_lsp,
+    lsp_document_symbol_from_core, lsp_folding_range_from_core, lsp_hover_from_core,
+    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_selection_range_from_core,
+    lsp_semantic_tokens_from_core, lsp_signature_help_from_core, lsp_source_range,
+    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
+    source_position_from_lsp,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer};
@@ -95,6 +96,8 @@ impl LspServer {
                 response(id, self.document_highlight_response(&message))
             }
             "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
+            "textDocument/selectionRange" => response(id, self.selection_range_response(&message)),
+            "textDocument/foldingRange" => response(id, self.folding_range_response(&message)),
             "textDocument/codeAction" => response(id, self.code_action_response(&message)),
             "textDocument/references" => response(id, self.references_response(&message)),
             "textDocument/prepareRename" => response(
@@ -515,6 +518,52 @@ impl LspServer {
             symbols
                 .into_iter()
                 .map(lsp_document_symbol_from_core)
+                .collect(),
+        )
+    }
+
+    fn selection_range_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let positions = request
+            .params
+            .get("positions")
+            .and_then(Value::as_array)
+            .map(|positions| {
+                positions
+                    .iter()
+                    .filter_map(source_position_from_lsp)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let ranges = snapshot.selection_ranges(&request.path, &positions);
+
+        Value::Array(
+            ranges
+                .into_iter()
+                .flatten()
+                .map(lsp_selection_range_from_core)
+                .collect(),
+        )
+    }
+
+    fn folding_range_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let ranges = snapshot.folding_ranges(&request.path);
+
+        Value::Array(
+            ranges
+                .into_iter()
+                .map(lsp_folding_range_from_core)
                 .collect(),
         )
     }

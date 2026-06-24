@@ -48,6 +48,8 @@ pub(super) fn initialize_result() -> Value {
             },
             "documentHighlightProvider": true,
             "documentSymbolProvider": true,
+            "selectionRangeProvider": true,
+            "foldingRangeProvider": true,
             "codeActionProvider": true,
             "referencesProvider": true,
             "workspaceSymbolProvider": true,
