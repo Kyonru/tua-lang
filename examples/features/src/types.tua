@@ -19,6 +19,15 @@ type SaveSlot = {
 
 type MaybeNumber = number | nil
 
+-- Literal string unions model closed sets of string choices.
+type LoadMode = "static" | "stream"
+
+-- Enums are erased sugar for a literal string union.
+enum FilterMode
+  "linear"
+  "nearest"
+end
+
 type FeatureSummary = {
   title: string,
   checked: boolean,
@@ -38,6 +47,8 @@ local save: SaveSlot = {
 }
 
 local missingScore: MaybeNumber = nil
+local loadMode: LoadMode = "static"
+local filterMode: FilterMode = "nearest"
 local payload: any = { source = "dynamic" }
 payload.hp = "unchecked because payload is any"
 
@@ -52,7 +63,8 @@ return {
   hero = hero,
   save = save,
   missingScore = missingScore,
+  loadMode = loadMode,
+  filterMode = filterMode,
   payload = payload,
   summary = summary,
 }
-

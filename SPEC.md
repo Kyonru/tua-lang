@@ -83,6 +83,7 @@ v1 supports these primitive type names:
 - `boolean`
 - `nil`
 - `any`
+- string literal types such as `"static"` and `"stream"`
 
 `any` is the gradual escape hatch. Values of type `any` may be assigned to or
 from any other type without a type error.
@@ -148,10 +149,33 @@ Union types use `|`.
 
 ```tua
 type MaybeNumber = number | nil
+type LoadMode = "static" | "stream"
 ```
 
 Unions are checked structurally: assigning a value to a union is allowed when the
 value is compatible with at least one member of the union.
+
+### Enums
+
+Enums are erased sugar for a string literal union. They exist to make long mode
+lists easier to read and maintain, especially for LOVE APIs.
+
+```tua
+enum FilterMode
+  "linear"
+  "nearest"
+end
+```
+
+This is equivalent to:
+
+```tua
+type FilterMode = "linear" | "nearest"
+```
+
+Only string literal enum members are supported in v1. Enum declarations emit no
+runtime code. In LuaCATS annotation mode, an enum emits as an `---@alias` literal
+union.
 
 ### Function Annotations
 

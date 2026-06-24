@@ -19,6 +19,11 @@ pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
             continue;
         }
 
+        if starts_enum_declaration(&chars, index) {
+            index = push_erased_enum_block(&chars, index, &mut normalized);
+            continue;
+        }
+
         if is_optional_field_marker(&chars, index) {
             normalized.push(':');
             index += 2;
@@ -42,6 +47,62 @@ fn is_optional_field_marker(chars: &[char], index: usize) -> bool {
 
 fn is_identifier_char(character: char) -> bool {
     character == '_' || character.is_ascii_alphanumeric()
+}
+
+fn starts_enum_declaration(chars: &[char], index: usize) -> bool {
+    if !starts_keyword(chars, index, "enum") {
+        return false;
+    }
+
+    let line_start = chars[..index]
+        .iter()
+        .rposition(|character| *character == '\n')
+        .map(|position| position + 1)
+        .unwrap_or(0);
+
+    chars[line_start..index]
+        .iter()
+        .all(|character| character.is_whitespace())
+}
+
+fn starts_keyword(chars: &[char], index: usize, keyword: &str) -> bool {
+    for (offset, expected) in keyword.chars().enumerate() {
+        if chars.get(index + offset) != Some(&expected) {
+            return false;
+        }
+    }
+
+    !chars
+        .get(index + keyword.chars().count())
+        .is_some_and(|character| is_identifier_char(*character))
+}
+
+fn push_erased_enum_block(chars: &[char], mut index: usize, output: &mut String) -> usize {
+    while index < chars.len() {
+        let line_start = index;
+
+        while index < chars.len() && chars[index] != '\n' {
+            index += 1;
+        }
+
+        let line = chars[line_start..index].iter().collect::<String>();
+        let closes_enum = line.trim() == "end";
+
+        for _ in line_start..index {
+            output.push(' ');
+        }
+
+        if index < chars.len() && chars[index] == '\n' {
+            output.push('\n');
+            index += 1;
+        }
+
+        if closes_enum {
+            break;
+        }
+    }
+
+    index
 }
 
 fn starts_line_comment(chars: &[char], index: usize) -> bool {

@@ -755,6 +755,8 @@ fn complete_string_argument_values(
             return Vec::new();
         };
 
+        let parameter = resolve_aliases(&environment, parameter, 0);
+
         return complete_lua_enum_values(&parameter.to_string(), prefix);
     }
 

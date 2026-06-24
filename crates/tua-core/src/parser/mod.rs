@@ -2,6 +2,7 @@ mod doc;
 mod model;
 mod normalize;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::luau::{TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
@@ -17,7 +18,7 @@ pub use model::{
     LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocParam,
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
     LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage, ParsedSource,
-    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
     TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
@@ -99,7 +100,7 @@ pub fn extract_tua_source_model(
     raw: &RawParsedSource,
 ) -> Result<TypedSourceModel, Vec<Diagnostic>> {
     let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
-    let syntax = collect_tua_syntax(&raw.path, &raw.ast);
+    let syntax = collect_tua_syntax(&raw.path, &raw.source, &raw.ast);
 
     if !syntax.diagnostics.is_empty() {
         return Err(syntax.diagnostics);
@@ -153,10 +154,11 @@ struct TuaSyntax {
     diagnostics: Vec<Diagnostic>,
 }
 
-fn collect_tua_syntax(path: &Path, ast: &ast::Ast) -> TuaSyntax {
+fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
     let mut syntax = TuaSyntax::default();
 
     collect_block_tua_syntax(path, ast.nodes(), &mut syntax);
+    collect_enum_declarations(path, source, &mut syntax);
 
     syntax
 }
@@ -240,9 +242,206 @@ fn type_alias_from_declaration(declaration: &TypeDeclaration) -> TypeAlias {
     TypeAlias {
         name: token_text(declaration.type_name()),
         ty: tua_type_from_type_info(declaration.type_definition()),
+        kind: TypeAliasKind::Alias,
         name_span: node_span(declaration.type_name()),
         span: node_span(declaration),
     }
+}
+
+fn collect_enum_declarations(path: &Path, source: &str, syntax: &mut TuaSyntax) {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index];
+        let Some((name, name_column, enum_column)) = enum_declaration(line) else {
+            index += 1;
+            continue;
+        };
+
+        let start_line = index + 1;
+        let mut members = Vec::new();
+        let mut seen_members = BTreeSet::new();
+        let mut end_line = start_line;
+        let mut found_end = false;
+        index += 1;
+
+        while index < lines.len() {
+            let member_line = lines[index];
+            end_line = index + 1;
+
+            if member_line.trim() == "end" {
+                found_end = true;
+                index += 1;
+                break;
+            }
+
+            match enum_member(member_line) {
+                Ok(Some((member, column))) => {
+                    if !seen_members.insert(member.clone()) {
+                        syntax.diagnostics.push(enum_diagnostic(
+                            path,
+                            end_line,
+                            column,
+                            format!("duplicate enum member `{member}`"),
+                        ));
+                    }
+
+                    members.push(TuaType::StringLiteral(member));
+                }
+                Ok(None) => {}
+                Err((column, message)) => {
+                    syntax
+                        .diagnostics
+                        .push(enum_diagnostic(path, end_line, column, message));
+                }
+            }
+
+            index += 1;
+        }
+
+        if !found_end {
+            syntax.diagnostics.push(enum_diagnostic(
+                path,
+                start_line,
+                enum_column,
+                format!("unterminated enum `{name}`: expected `end`"),
+            ));
+        }
+
+        let name_len = name.chars().count();
+
+        syntax.type_aliases.push(TypeAlias {
+            name,
+            ty: TuaType::Union(members),
+            kind: TypeAliasKind::Enum,
+            name_span: Some(SourceSpan {
+                start: SourcePosition {
+                    line: start_line,
+                    column: name_column,
+                },
+                end: SourcePosition {
+                    line: start_line,
+                    column: name_column + name_len,
+                },
+            }),
+            span: Some(SourceSpan {
+                start: SourcePosition {
+                    line: start_line,
+                    column: enum_column,
+                },
+                end: SourcePosition {
+                    line: end_line,
+                    column: lines
+                        .get(end_line.saturating_sub(1))
+                        .map(|line| line.chars().count() + 1)
+                        .unwrap_or(1),
+                },
+            }),
+        });
+    }
+}
+
+fn enum_declaration(line: &str) -> Option<(String, usize, usize)> {
+    let enum_column = line
+        .chars()
+        .take_while(|character| character.is_whitespace())
+        .count()
+        + 1;
+    let trimmed = line.trim_start();
+    let rest = trimmed.strip_prefix("enum")?;
+
+    if !rest
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_whitespace())
+    {
+        return None;
+    }
+
+    let name_start = line.len() - rest.len() + rest.len() - rest.trim_start().len();
+    let rest = rest.trim_start();
+    let name = rest
+        .chars()
+        .take_while(|character| *character == '_' || character.is_ascii_alphanumeric())
+        .collect::<String>();
+
+    if name.is_empty() {
+        return None;
+    }
+
+    Some((name, line[..name_start].chars().count() + 1, enum_column))
+}
+
+fn enum_member(line: &str) -> Result<Option<(String, usize)>, (usize, String)> {
+    let trimmed = line.trim_start();
+
+    if trimmed.is_empty() || trimmed.starts_with("--") {
+        return Ok(None);
+    }
+
+    let column = line.chars().count() - trimmed.chars().count() + 1;
+    let Some((member, rest)) = parse_short_string_literal(trimmed) else {
+        return Err((
+            column,
+            "invalid enum member: expected a string literal".to_owned(),
+        ));
+    };
+
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix(',').unwrap_or(rest).trim_start();
+
+    if rest.is_empty() || rest.starts_with("--") {
+        Ok(Some((member, column)))
+    } else {
+        Err((
+            column + trimmed.len() - rest.len(),
+            "invalid enum member: expected line end, comma, or comment after string literal"
+                .to_owned(),
+        ))
+    }
+}
+
+fn parse_short_string_literal(text: &str) -> Option<(String, &str)> {
+    let mut chars = text.char_indices();
+    let (_, quote) = chars.next()?;
+
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+
+    let mut value = String::new();
+    let mut escaped = false;
+
+    for (index, character) in chars {
+        if escaped {
+            value.push(character);
+            escaped = false;
+            continue;
+        }
+
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if character == quote {
+            return Some((value, &text[index + character.len_utf8()..]));
+        }
+
+        value.push(character);
+    }
+
+    None
+}
+
+fn enum_diagnostic(
+    path: &Path,
+    line: usize,
+    column: usize,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::error(path, line, column, message).with_code(DiagnosticCode::SYNTAX_PARSE)
 }
 
 fn function_annotation(
@@ -363,6 +562,9 @@ fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Opt
 fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
     match type_info {
         TypeInfo::Basic(token) => TuaType::Named(token_text(token)),
+        TypeInfo::String(token) => {
+            TuaType::StringLiteral(unquote_short_string_token(&token_text(token)))
+        }
         TypeInfo::Optional { base, .. } => TuaType::Union(vec![
             tua_type_from_type_info(base),
             TuaType::Named("nil".to_owned()),
@@ -378,6 +580,12 @@ fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
         ),
         other => TuaType::Named(other.to_string()),
     }
+}
+
+fn unquote_short_string_token(value: &str) -> String {
+    parse_short_string_literal(value)
+        .map(|(literal, _)| literal)
+        .unwrap_or_else(|| value.to_owned())
 }
 
 fn table_field_type_from_type_field(field: &TypeField) -> Option<TableFieldType> {

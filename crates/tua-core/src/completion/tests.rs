@@ -602,6 +602,37 @@ load("st")
 }
 
 #[test]
+fn completes_tua_literal_union_and_enum_values_in_string_arguments() {
+    let source = r#"
+type LoadMode = "static" | "stream"
+
+enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local function load(mode: LoadMode)
+end
+
+local function setFilter(mode: FilterMode)
+end
+
+load("st")
+setFilter("ne")
+"#;
+
+    let load_completions =
+        complete_tua_source("src/main.tua", source, position_after_last(source, "\"st"))
+            .expect("literal union completion should succeed");
+    let filter_completions =
+        complete_tua_source("src/main.tua", source, position_after_last(source, "\"ne"))
+            .expect("enum completion should succeed");
+
+    assert_eq!(labels(&load_completions), vec!["static", "stream"]);
+    assert_eq!(labels(&filter_completions), vec!["nearest"]);
+}
+
+#[test]
 fn completes_love_enum_values_in_incomplete_string_arguments() {
     let source = r#"
 local player = image "assets/player.png"

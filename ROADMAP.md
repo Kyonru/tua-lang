@@ -1436,6 +1436,8 @@ Acceptance:
 
 ### 70.10 `feat(luadoc): expand LuaLS/LuaCATS annotation compatibility`
 
+Status: done.
+
 Scope:
 
 - Expand beyond the initial LuaHelper/LuaLS annotation subset from commits 33

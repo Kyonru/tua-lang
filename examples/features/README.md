@@ -17,7 +17,8 @@ make build-features
 ## Files
 
 - `src/types.tua` covers primitive types, `any`, aliases, table shapes,
-  optional fields, unions, and annotated locals.
+  optional fields, unions, literal string unions, erased enum sugar, and
+  annotated locals.
 - `src/functions.tua` covers annotated function parameters and returns,
   inferred return hovers, call checking, and table-field mutation.
 - `src/compound.tua` covers `+=`, `-=`, `*=`, `/=`, and `%=` lowering for

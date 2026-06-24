@@ -383,6 +383,37 @@ load("dynamic")
 }
 
 #[test]
+fn checks_tua_literal_union_and_enum_arguments() {
+    let diagnostics = check_tua_source(
+        "src/mode.tua",
+        r#"
+type LoadMode = "static" | "stream"
+
+enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local function load(mode: LoadMode)
+end
+
+local function setFilter(mode: FilterMode)
+end
+
+load("static")
+setFilter("nearest")
+load("dynamic")
+"#,
+    )
+    .expect_err("non-member literal union value should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        r#"expected "static" | "stream", found "dynamic""#,
+    );
+}
+
+#[test]
 fn warns_for_love_method_dot_calls() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

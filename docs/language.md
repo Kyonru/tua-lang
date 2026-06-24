@@ -26,6 +26,7 @@ Tua adds static-only language information on top:
 - type aliases and table shapes describe the shape of Lua values;
 - local and function annotations give the checker useful boundaries;
 - unions and optional fields model common Lua `nil` flows;
+- literal string unions and enum sugar model closed sets of string choices;
 - compound assignments lower to ordinary Lua assignments;
 - LOVE asset helpers infer common LOVE object types and lower to ordinary LOVE
   constructor calls.
@@ -86,6 +87,7 @@ same inferred fact should show up consistently across those surfaces.
 Useful static facts include:
 
 - primitive literal types such as `number`, `string`, `boolean`, and `nil`;
+- string literal types such as `"static"` and `"stream"`;
 - local annotations and simple initializer inference;
 - function parameter and return annotations;
 - inferred returns for simple unannotated functions;
@@ -99,6 +101,42 @@ Useful static facts include:
 When a value cannot be proven, Tua prefers a conservative `any` or unknown
 result. This keeps existing Lua code usable while still making typed code feel
 useful.
+
+## Literal Choices And Enums
+
+Literal string unions are the core type feature for APIs with a small set of
+valid string values:
+
+```tua
+type LoadMode = "static" | "stream"
+
+local function load(path: string, mode: LoadMode)
+  return sound(path, mode)
+end
+```
+
+The checker accepts only the listed literal values where the expected type is
+known, and the language server can complete those values inside string
+arguments.
+
+For longer LOVE-style mode lists, `enum` is available as erased sugar over the
+same literal-union representation:
+
+```tua
+enum FilterMode
+  "linear"
+  "nearest"
+end
+```
+
+This behaves like:
+
+```tua
+type FilterMode = "linear" | "nearest"
+```
+
+Enum declarations emit no runtime Lua. In LuaCATS emission mode they are
+preserved as `---@alias FilterMode "linear" | "nearest"`.
 
 ## Modules And Interop
 

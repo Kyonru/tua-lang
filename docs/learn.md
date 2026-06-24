@@ -82,7 +82,29 @@ local slot: SaveSlot = {
 Optional fields may be absent. Union values are accepted when they match one of
 the members.
 
-## 4. Keep Modules Lua-Shaped
+## 4. Model Closed String Choices
+
+Many Lua and LOVE APIs use strings as modes. Tua can make those choices
+explicit:
+
+```tua
+type LoadMode = "static" | "stream"
+
+enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local function configure(mode: LoadMode, filter: FilterMode)
+end
+
+configure("static", "nearest")
+```
+
+Literal unions are the underlying type feature. `enum` is just erased sugar for
+longer lists, so it emits no runtime table or constants.
+
+## 5. Keep Modules Lua-Shaped
 
 Tua preserves Lua's module style:
 
@@ -116,7 +138,7 @@ player.hp -= 10
 Simple returned module tables give the language server enough information for
 hover, completion, go to definition, references, and rename.
 
-## 5. Use LuaDoc For Lua Interop
+## 6. Use LuaDoc For Lua Interop
 
 Plain `.lua` files can stay dynamic, or they can expose useful type information
 with LuaDoc/LuaLS-style annotations:
@@ -152,7 +174,7 @@ enemy.hp -= 5
 See [Lua Interop](lua-interop.md) for the supported annotation subset and
 interop rules.
 
-## 6. Lean Into LOVE Helpers
+## 7. Lean Into LOVE Helpers
 
 Tua includes a built-in LOVE API catalog and small asset loader helpers:
 

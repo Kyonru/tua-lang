@@ -61,10 +61,15 @@ fn type_alias_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSym
             let range = symbol.origin_span;
             let selection_range = symbol.name_span;
 
+            let detail_prefix = match alias.kind {
+                crate::TypeAliasKind::Alias => "type",
+                crate::TypeAliasKind::Enum => "enum",
+            };
+
             Some(document_symbol(DocumentSymbol {
                 name: symbol.name.clone(),
                 kind: DocumentSymbolKind::TypeAlias,
-                detail: Some(format!("type {}", format_tua_type(&alias.ty))),
+                detail: Some(format!("{detail_prefix} {}", format_tua_type(&alias.ty))),
                 range,
                 selection_range,
                 children: table_field_symbols(hir, symbol.id),

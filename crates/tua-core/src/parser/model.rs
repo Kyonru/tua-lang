@@ -125,8 +125,15 @@ impl RawParsedSource {
 pub struct TypeAlias {
     pub name: String,
     pub ty: TuaType,
+    pub kind: TypeAliasKind,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TypeAliasKind {
+    Alias,
+    Enum,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

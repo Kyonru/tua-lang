@@ -20,6 +20,22 @@ type MaybeNumber = number | nil
 }
 
 #[test]
+fn snapshot_enums_emit_no_runtime_code() {
+    let emitted = emit_tua_source(
+        "src/enums.tua",
+        r#"
+enum FilterMode
+  "linear"
+  "nearest"
+end
+"#,
+    )
+    .expect("enum-only source should emit");
+
+    assert_eq!(emitted, "");
+}
+
+#[test]
 fn snapshot_erases_local_annotations() {
     let emitted = emit_tua_source(
         "src/locals.tua",
@@ -207,6 +223,27 @@ type Player = {
     assert_eq!(
         emitted,
         r#"---@alias Player { hp: number }
+"#
+    );
+}
+
+#[test]
+fn snapshot_emits_luacats_alias_for_enums() {
+    let emitted = emit_tua_source_with_mode(
+        "src/enums.tua",
+        r#"
+enum FilterMode
+  "linear"
+  "nearest"
+end
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("luacats mode should emit enum aliases");
+
+    assert_eq!(
+        emitted,
+        r#"---@alias FilterMode "linear" | "nearest"
 "#
     );
 }

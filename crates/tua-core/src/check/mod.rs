@@ -369,8 +369,25 @@ impl<'a> Checker<'a> {
 
     fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
         if !self.context.is_assignable(source, target) {
-            self.diagnostics
-                .push(mismatch_diagnostic(&self.parsed.path, node, target, source));
+            let target = self.display_type_for_mismatch(target);
+            self.diagnostics.push(mismatch_diagnostic(
+                &self.parsed.path,
+                node,
+                &target,
+                source,
+            ));
+        }
+    }
+
+    fn display_type_for_mismatch(&self, target: &Type) -> Type {
+        match target {
+            Type::Alias(name) => self
+                .context
+                .alias(name)
+                .filter(|ty| type_contains_string_literal(ty))
+                .cloned()
+                .unwrap_or_else(|| target.clone()),
+            _ => target.clone(),
         }
     }
 

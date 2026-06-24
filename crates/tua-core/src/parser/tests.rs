@@ -43,6 +43,27 @@ fn normalized_source_preserves_original_and_exposes_parser_text() {
 }
 
 #[test]
+fn normalized_source_erases_enum_blocks_for_luau_parser() {
+    let normalized = normalize_tua_source(
+        r#"enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local mode: FilterMode = "linear"
+"#,
+    );
+
+    assert!(normalized.original.contains("enum FilterMode"));
+    assert!(!normalized.parser_source.contains("enum FilterMode"));
+    assert!(normalized.parser_source.contains("local mode: FilterMode"));
+    assert_eq!(
+        normalized.original.lines().count(),
+        normalized.parser_source.lines().count()
+    );
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",
@@ -252,6 +273,89 @@ fn parses_union_type_aliases() {
             TuaType::Named("nil".to_owned())
         ])
     );
+}
+
+#[test]
+fn parses_literal_string_type_aliases() {
+    let parsed = parse_tua_source(
+        "src/load_mode.tua",
+        r#"type LoadMode = "static" | "stream"
+"#,
+    )
+    .expect("literal string aliases should parse");
+
+    assert_eq!(
+        parsed.type_aliases[0].ty,
+        TuaType::Union(vec![
+            TuaType::StringLiteral("static".to_owned()),
+            TuaType::StringLiteral("stream".to_owned())
+        ])
+    );
+}
+
+#[test]
+fn parses_enum_blocks_as_literal_union_aliases() {
+    let parsed = parse_tua_source(
+        "src/filter.tua",
+        r#"enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local mode: FilterMode = "linear"
+"#,
+    )
+    .expect("enum blocks should parse");
+
+    assert_eq!(parsed.statement_count(), 1);
+    assert_eq!(parsed.type_aliases.len(), 1);
+    assert_eq!(parsed.type_aliases[0].name, "FilterMode");
+    assert_eq!(parsed.type_aliases[0].kind, TypeAliasKind::Enum);
+    assert_eq!(
+        parsed.type_aliases[0].ty,
+        TuaType::Union(vec![
+            TuaType::StringLiteral("linear".to_owned()),
+            TuaType::StringLiteral("nearest".to_owned())
+        ])
+    );
+}
+
+#[test]
+fn rejects_invalid_enum_members() {
+    let diagnostics = parse_tua_source(
+        "src/filter.tua",
+        r#"enum FilterMode
+  "linear"
+  nearest
+end
+"#,
+    )
+    .expect_err("invalid enum members should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert!(diagnostics[0]
+        .message
+        .contains("invalid enum member: expected a string literal"));
+    assert!(diagnostics[0].format_cli().contains("error TL0001"));
+}
+
+#[test]
+fn rejects_duplicate_enum_members() {
+    let diagnostics = parse_tua_source(
+        "src/filter.tua",
+        r#"enum FilterMode
+  "linear"
+  "linear"
+end
+"#,
+    )
+    .expect_err("duplicate enum members should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert!(diagnostics[0]
+        .message
+        .contains("duplicate enum member `linear`"));
+    assert!(diagnostics[0].format_cli().contains("error TL0001"));
 }
 
 #[test]
