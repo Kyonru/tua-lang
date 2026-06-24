@@ -1605,6 +1605,16 @@ fn collect_return_types_in_block(
                     &mut scoped_locals,
                 );
             }
+            ast::Stmt::FunctionCall(function_call) => {
+                record_setmetatable_call(
+                    function_call,
+                    parsed,
+                    aliases,
+                    function_types,
+                    current_function,
+                    &mut scoped_locals,
+                );
+            }
             ast::Stmt::Do(block) => collect_return_types_in_block(
                 block.block(),
                 parsed,
@@ -1900,6 +1910,38 @@ fn infer_assignment_types(
     }
 }
 
+fn record_setmetatable_call(
+    function_call: &FunctionCall,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    locals: &mut BTreeMap<String, Type>,
+) {
+    let Some((target, meta)) = setmetatable_arguments(function_call) else {
+        return;
+    };
+    let Expression::Var(Var::Name(name)) = target else {
+        return;
+    };
+    let name = token_text(name);
+    let Some(base) = locals.get(&name).cloned() else {
+        return;
+    };
+    let Some(meta) = infer_expression_type(
+        parsed,
+        meta,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+    ) else {
+        return;
+    };
+
+    locals.insert(name, merge_static_metatable(base, meta));
+}
+
 fn locals_with_condition_narrowing(
     condition: &Expression,
     aliases: &BTreeMap<String, Type>,
@@ -1982,10 +2024,13 @@ fn infer_expression_return_type(
             _ => None,
         },
         Expression::TableConstructor(table) => {
-            Some(Type::table(table.fields().iter().filter_map(|field| {
+            let mut fields = Vec::new();
+
+            for field in table.fields() {
                 let Field::NameKey { key, value, .. } = field else {
-                    return None;
+                    continue;
                 };
+                let key_text = token_text(key);
                 let ty = infer_expression_type(
                     parsed,
                     value,
@@ -1996,8 +2041,14 @@ fn infer_expression_return_type(
                 )
                 .unwrap_or(Type::Any);
 
-                Some((token_text(key), TableField::required(ty)))
-            })))
+                if key_text == "__index" {
+                    fields.extend(index_fields_from_expression(value));
+                }
+
+                fields.push((key_text, TableField::required(ty)));
+            }
+
+            Some(Type::table(fields))
         }
         Expression::Parentheses { expression, .. } => infer_expression_return_type(
             parsed,
@@ -2093,6 +2144,21 @@ fn infer_function_call_return_types(
     function_types: &BTreeMap<String, Type>,
     current_function: &str,
 ) -> Vec<Type> {
+    if let Some(ty) = setmetatable_return_type(
+        parsed,
+        function_call,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+    ) {
+        return vec![ty];
+    }
+
+    if is_tostring_call(function_call) {
+        return vec![Type::string()];
+    }
+
     let Some(parts) = field_chain_before_first_call(function_call) else {
         return Vec::new();
     };
@@ -2134,6 +2200,89 @@ fn infer_function_call_return_types(
     infer_field_chain_type(parsed, aliases, locals, &parts)
         .map(|ty| function_return_types(&ty))
         .unwrap_or_default()
+}
+
+fn setmetatable_return_type(
+    parsed: &ParsedSource,
+    function_call: &FunctionCall,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+) -> Option<Type> {
+    let (target, meta) = setmetatable_arguments(function_call)?;
+    let base = infer_expression_type(
+        parsed,
+        target,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+    )?;
+    let meta = infer_expression_type(
+        parsed,
+        meta,
+        aliases,
+        locals,
+        function_types,
+        current_function,
+    )?;
+
+    Some(merge_static_metatable(base, meta))
+}
+
+fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    if token_text(name) != "setmetatable" {
+        return None;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses {
+        arguments, ..
+    }))) = function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((arguments.iter().next()?, arguments.iter().nth(1)?))
+}
+
+fn is_tostring_call(function_call: &FunctionCall) -> bool {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return false;
+    };
+
+    token_text(name) == "tostring"
+}
+
+fn merge_static_metatable(base: Type, meta: Type) -> Type {
+    let Type::Table(mut base_table) = base else {
+        return base;
+    };
+    let Type::Table(meta_table) = meta else {
+        return Type::Table(base_table);
+    };
+
+    for (name, field) in meta_table.fields() {
+        if name == "__index" {
+            if let Type::Table(index_table) = &field.ty {
+                for (index_name, index_field) in index_table.fields() {
+                    if base_table.field(index_name).is_none() {
+                        base_table.insert(index_name.to_owned(), index_field.clone());
+                    }
+                }
+            }
+        }
+
+        if base_table.field(name).is_none() {
+            base_table.insert(name.to_owned(), field.clone());
+        }
+    }
+
+    Type::Table(base_table)
 }
 
 fn function_return_types(ty: &Type) -> Vec<Type> {
@@ -2244,6 +2393,12 @@ fn infer_binary_operator_type(
         && is_concat_operand_type(aliases, right)
     {
         return Some(Type::string());
+    }
+
+    if matches!(binop, ast::BinOp::Plus(_))
+        && resolve_table_field_type_from_map(aliases, left, "__add").is_some()
+    {
+        return Some(left.clone());
     }
 
     if matches!(left, Type::Any) || matches!(right, Type::Any) {
@@ -2424,6 +2579,78 @@ fn function_type_from_body(body: &ast::FunctionBody) -> Type {
         .count();
 
     Type::function(vec![Type::Any; parameter_count], Type::Any)
+}
+
+fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {
+    let Expression::Function(function) = expression else {
+        return Vec::new();
+    };
+
+    index_fields_from_block(function.body().block())
+}
+
+fn index_fields_from_block(block: &ast::Block) -> Vec<(String, TableField)> {
+    let mut fields = Vec::new();
+
+    for stmt in block.stmts() {
+        if let ast::Stmt::If(if_stmt) = stmt {
+            fields.extend(index_fields_from_if(if_stmt));
+        }
+    }
+
+    fields
+}
+
+fn index_fields_from_if(if_stmt: &ast::If) -> Vec<(String, TableField)> {
+    let Some(key) = string_key_comparison(if_stmt.condition()) else {
+        return Vec::new();
+    };
+    let Some(LastStmt::Return(return_stmt)) = if_stmt.block().last_stmt() else {
+        return Vec::new();
+    };
+    let Some(expression) = return_stmt.returns().iter().next() else {
+        return Vec::new();
+    };
+    let ty = match expression {
+        Expression::Number(_) => Type::number(),
+        Expression::String(_) => Type::string(),
+        Expression::Symbol(symbol) => match token_text(symbol).as_str() {
+            "true" | "false" => Type::boolean(),
+            "nil" => Type::nil(),
+            _ => Type::Any,
+        },
+        Expression::TableConstructor(table) => {
+            Type::table(table.fields().iter().filter_map(|field| {
+                let Field::NameKey { key, .. } = field else {
+                    return None;
+                };
+
+                Some((token_text(key), TableField::required(Type::Any)))
+            }))
+        }
+        _ => Type::Any,
+    };
+
+    vec![(key, TableField::required(ty))]
+}
+
+fn string_key_comparison(expression: &Expression) -> Option<String> {
+    let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
+        return None;
+    };
+
+    if !matches!(binop, ast::BinOp::TwoEqual(_)) {
+        return None;
+    }
+
+    string_literal_expression(rhs).or_else(|| string_literal_expression(lhs))
+}
+
+fn string_literal_expression(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::String(value) => Some(value.to_string().trim_matches(['"', '\'']).to_owned()),
+        _ => None,
+    }
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {

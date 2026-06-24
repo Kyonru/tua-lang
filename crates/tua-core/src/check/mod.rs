@@ -153,6 +153,7 @@ impl<'a> Checker<'a> {
             ast::Stmt::Assignment(assignment) => self.check_assignment(assignment),
             ast::Stmt::FunctionCall(function_call) => {
                 self.check_function_call(function_call);
+                self.record_setmetatable_call(function_call);
             }
             ast::Stmt::LocalAssignment(local) => self.check_local_assignment(local),
             ast::Stmt::Do(block) => self.check_block(block.block(), current_return),
@@ -451,20 +452,29 @@ impl<'a> Checker<'a> {
             Expression::TypeAssertion { expression, .. } => {
                 self.infer_expression_return(expression, return_index)
             }
+            Expression::Function(function) => Some(function_type_from_body(function.body())),
             Expression::Var(var) => self.infer_var_value(var),
             _ => None,
         }
     }
 
     fn infer_table_constructor(&mut self, table: &TableConstructor) -> Type {
-        Type::table(table.fields().iter().filter_map(|field| match field {
-            Field::NameKey { key, value, .. } => {
+        let mut fields = Vec::new();
+
+        for field in table.fields() {
+            if let Field::NameKey { key, value, .. } = field {
+                let key_text = token_text(key);
                 let ty = self.infer_expression(value).unwrap_or(Type::Any);
 
-                Some((token_text(key), TableField::required(ty)))
+                if key_text == "__index" {
+                    fields.extend(index_fields_from_expression(value));
+                }
+
+                fields.push((key_text, TableField::required(ty)));
             }
-            _ => None,
-        }))
+        }
+
+        Type::table(fields)
     }
 
     fn infer_var_value(&mut self, var: &Var) -> Option<Type> {
@@ -500,6 +510,14 @@ impl<'a> Checker<'a> {
         self.check_asset_loader_call(function_call);
         self.check_dot_love_method_call(function_call);
 
+        if let Some(ty) = self.setmetatable_return_type(function_call) {
+            return vec![ty];
+        }
+
+        if is_tostring_call(function_call) {
+            return vec![Type::string()];
+        }
+
         let Some(callee) = self.infer_call_target(function_call) else {
             return Vec::new();
         };
@@ -517,6 +535,31 @@ impl<'a> Checker<'a> {
                 function.return_types
             }
         }
+    }
+
+    fn setmetatable_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let (target, meta) = setmetatable_arguments(function_call)?;
+        let base = self.infer_expression(target)?;
+        let meta = self.infer_expression(meta)?;
+
+        Some(merge_static_metatable(base, meta))
+    }
+
+    fn record_setmetatable_call(&mut self, function_call: &FunctionCall) {
+        let Some((target, meta)) = setmetatable_arguments(function_call) else {
+            return;
+        };
+        let Expression::Var(Var::Name(name)) = target else {
+            return;
+        };
+        let Some(base) = self.infer_named_value(&token_text(name)) else {
+            return;
+        };
+        let Some(meta) = self.infer_expression(meta) else {
+            return;
+        };
+
+        self.insert_scoped_local(token_text(name), merge_static_metatable(base, meta));
     }
 
     fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
@@ -665,7 +708,7 @@ impl<'a> Checker<'a> {
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
-        let arguments = call_arguments(function_call).unwrap_or_default();
+        let arguments = self.call_arguments_for_function(function_call);
 
         if arguments.len() != function.parameters.len() {
             self.diagnostics.push(argument_count_diagnostic(
@@ -694,6 +737,30 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    fn call_arguments_for_function<'b>(
+        &mut self,
+        function_call: &'b FunctionCall,
+    ) -> Vec<CallArgument<'b>> {
+        let mut arguments = call_arguments(function_call).unwrap_or_default();
+
+        if !is_method_call(function_call) {
+            return arguments;
+        }
+
+        let Some(parts) = field_chain_before_first_call(function_call) else {
+            return arguments;
+        };
+        let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) else {
+            return arguments;
+        };
+        let Some(receiver_type) = self.resolve_field_chain_type(receiver_parts) else {
+            return arguments;
+        };
+
+        arguments.insert(0, CallArgument::Inferred(receiver_type));
+        arguments
     }
 
     fn check_external_call_arguments(
@@ -868,6 +935,12 @@ impl<'a> Checker<'a> {
             && self.is_concat_operand_type(right)
         {
             return Some(Type::string());
+        }
+
+        if matches!(binop, ast::BinOp::Plus(_))
+            && self.resolve_table_field_type(left, "__add").is_some()
+        {
+            return Some(left.clone());
         }
 
         if matches!(left, Type::Any) || matches!(right, Type::Any) {
@@ -1215,6 +1288,143 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
         },
         _ => None,
     }
+}
+
+fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    if token_text(name) != "setmetatable" {
+        return None;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((arguments.iter().next()?, arguments.iter().nth(1)?))
+}
+
+fn is_tostring_call(function_call: &FunctionCall) -> bool {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return false;
+    };
+
+    token_text(name) == "tostring"
+}
+
+fn merge_static_metatable(base: Type, meta: Type) -> Type {
+    let Type::Table(mut base_table) = base else {
+        return base;
+    };
+    let Type::Table(meta_table) = meta else {
+        return Type::Table(base_table);
+    };
+
+    for (name, field) in meta_table.fields() {
+        if name == "__index" {
+            if let Type::Table(index_table) = &field.ty {
+                for (index_name, index_field) in index_table.fields() {
+                    if base_table.field(index_name).is_none() {
+                        base_table.insert(index_name.to_owned(), index_field.clone());
+                    }
+                }
+            }
+        }
+
+        if base_table.field(name).is_none() {
+            base_table.insert(name.to_owned(), field.clone());
+        }
+    }
+
+    Type::Table(base_table)
+}
+
+fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {
+    let Expression::Function(function) = expression else {
+        return Vec::new();
+    };
+
+    index_fields_from_block(function.body().block())
+}
+
+fn index_fields_from_block(block: &ast::Block) -> Vec<(String, TableField)> {
+    let mut fields = Vec::new();
+
+    for stmt in block.stmts() {
+        if let ast::Stmt::If(if_stmt) = stmt {
+            fields.extend(index_fields_from_if(if_stmt));
+        }
+    }
+
+    fields
+}
+
+fn index_fields_from_if(if_stmt: &ast::If) -> Vec<(String, TableField)> {
+    let Some(key) = string_key_comparison(if_stmt.condition()) else {
+        return Vec::new();
+    };
+    let Some(LastStmt::Return(return_stmt)) = if_stmt.block().last_stmt() else {
+        return Vec::new();
+    };
+    let Some(expression) = return_stmt.returns().iter().next() else {
+        return Vec::new();
+    };
+    let ty = match expression {
+        Expression::Number(_) => Type::number(),
+        Expression::String(value) => Type::string_literal(unquote_string(&value.to_string())),
+        Expression::Symbol(symbol) => infer_symbol_type(&token_text(symbol)).unwrap_or(Type::Any),
+        Expression::TableConstructor(table) => {
+            Type::table(table.fields().iter().filter_map(|field| {
+                let Field::NameKey { key, .. } = field else {
+                    return None;
+                };
+
+                Some((token_text(key), TableField::required(Type::Any)))
+            }))
+        }
+        _ => Type::Any,
+    };
+
+    vec![(key, TableField::required(ty))]
+}
+
+fn string_key_comparison(expression: &Expression) -> Option<String> {
+    let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
+        return None;
+    };
+
+    if !matches!(binop, ast::BinOp::TwoEqual(_)) {
+        return None;
+    }
+
+    string_literal_expression(rhs).or_else(|| string_literal_expression(lhs))
+}
+
+fn string_literal_expression(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::String(value) => Some(unquote_string(&value.to_string())),
+        _ => None,
+    }
+}
+
+fn is_method_call(function_call: &FunctionCall) -> bool {
+    function_call
+        .suffixes()
+        .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))))
+}
+
+fn function_type_from_body(body: &ast::FunctionBody) -> Type {
+    let parameter_count = body
+        .parameters()
+        .iter()
+        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
+        .count();
+
+    Type::function(vec![Type::Any; parameter_count], Type::Any)
 }
 
 fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {

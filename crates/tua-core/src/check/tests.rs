@@ -440,6 +440,74 @@ player.setFilter("nearest")
 }
 
 #[test]
+fn accepts_table_field_dot_and_colon_method_call_equivalence() {
+    check_tua_source(
+        "src/methods.tua",
+        r#"
+local lookupObject = {
+  count = 0,
+  y = function(self, amount)
+    self.count = self.count + amount
+    return self.count
+  end,
+}
+
+lookupObject.y(lookupObject, 1)
+lookupObject:y(2)
+"#,
+    )
+    .expect("colon calls should provide self for known function-valued fields");
+}
+
+#[test]
+fn accepts_static_metatable_operator_and_index_patterns() {
+    check_tua_source(
+        "src/vector.tua",
+        r#"
+type Vector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local vectorA: Vector = { x = 10, y = 20, length = 0 }
+local vectorB: Vector = { x = 5, y = 15, length = 0 }
+local vectorMetatable = {
+  __add = function(left, right)
+    return {
+      x = left.x + right.x,
+      y = left.y + right.y,
+      length = 0,
+    }
+  end,
+  __tostring = function(value)
+    return "(" .. value.x .. ", " .. value.y .. ")"
+  end,
+  __index = function(_, key)
+    if key == "length" then
+      return 0
+    end
+
+    return nil
+  end,
+  __newindex = function(tableValue, key, value)
+    rawset(tableValue, key, value)
+  end,
+}
+
+setmetatable(vectorA, vectorMetatable)
+setmetatable(vectorB, vectorMetatable)
+
+local vectorSum: Vector = vectorA + vectorB
+local vectorText: string = tostring(vectorSum)
+local vectorMissingLength: number = vectorA.length
+vectorA.label = "uses __newindex"
+"#,
+    )
+    .expect("static metatable patterns should feed conservative type inference");
+}
+
+#[test]
 fn rejects_love_method_argument_count_mismatch() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

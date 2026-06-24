@@ -189,7 +189,8 @@ jump:play()
 Tua does not try to statically prove every Lua pattern. These remain gradual or
 limited by design:
 
-- metatable behavior and dynamic `__index` lookups;
+- dynamic metatable construction, computed `__index` chains, and runtime
+  `getmetatable` mutation;
 - arbitrary mutation of table shapes over time;
 - values stored through `_G` or unknown globals;
 - runtime-computed `require` paths;
@@ -326,6 +327,41 @@ dot-style calls such as `player.setFilter("nearest")` produce warning `TL4018`
 with a suggested colon call. Editor completions for LOVE methods also prefer
 colon-call snippets; accepting a method completion after `player.setF` can
 replace the dot with `:`.
+
+## Practical Metatable Typing
+
+Tua recognizes a small, conservative subset of common Lua metatable patterns.
+This is meant for editor feedback and obvious checks, not for proving arbitrary
+runtime object systems.
+
+Known function-valued table fields can be called with either explicit self or
+colon syntax:
+
+```tua
+local lookupObject = {
+  count = 0,
+  y = function(self, amount)
+    self.count += amount
+    return self.count
+  end,
+}
+
+lookupObject.y(lookupObject, 1)
+lookupObject:y(2)
+```
+
+For static `setmetatable(object, metatable)` calls where both sides are known
+tables, Tua propagates useful metatable facts into the object shape. The current
+subset understands:
+
+- table/function `__index` facts when simple string keys are visible;
+- `__newindex` as an assignment-compatible dynamic boundary;
+- `__add` as a vector-like operator that preserves the left operand shape;
+- `tostring(value)` as `string`, including values with `__tostring`.
+
+Dynamic metatable construction remains gradual. If the base table, metatable,
+computed key, or later mutation cannot be seen statically, Tua falls back to
+permissive behavior instead of guessing.
 
 ## Compound Assignment
 

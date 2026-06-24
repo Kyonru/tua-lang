@@ -177,6 +177,24 @@ Only string literal enum members are supported in v1. Enum declarations emit no
 runtime code. In LuaCATS annotation mode, an enum emits as an `---@alias` literal
 union.
 
+### Practical Metatable Typing
+
+Tua supports a conservative static subset of common metatable patterns. When
+both the base table and metatable are visible, `setmetatable(base, meta)` may
+propagate method and operator facts into the base table shape.
+
+Supported v1 facts:
+
+- function-valued table fields may be called as `obj.method(obj, ...)` or
+  `obj:method(...)`;
+- simple `__index` table/function fallbacks may expose known string keys;
+- `__newindex` keeps unknown assignment paths permissive;
+- `__add` may preserve a vector-like left operand shape;
+- `tostring(value)` is treated as returning `string`.
+
+Dynamic metatable mutation, computed `__index` chains, and unknown
+`setmetatable` inputs remain gradual.
+
 ### Function Annotations
 
 Function parameters and returns may be annotated.
@@ -529,7 +547,7 @@ tua v1 does not include:
 - new module syntax;
 - type-only imports or exports;
 - generics;
-- metatable typing;
+- advanced or dynamic metatable typing;
 - vararg typing;
 - advanced inference;
 - package management;
