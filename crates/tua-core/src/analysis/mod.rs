@@ -7,6 +7,7 @@ use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirModule, HirRequireBinding};
 use crate::ide_db::SymbolIndexEntry;
 use crate::module_link::require_module_at_position;
+use crate::profile;
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
@@ -271,6 +272,7 @@ impl AnalysisHost {
     }
 
     pub fn snapshot(&self) -> AnalysisSnapshot {
+        let _profile = profile::span("analysis.snapshot");
         let vfs = self.vfs.snapshot();
         let source_roots = vfs.source_roots().to_vec();
         let live_paths = vfs
@@ -296,50 +298,67 @@ impl AnalysisHost {
                 (file.path().to_path_buf(), analysis_file)
             })
             .collect::<BTreeMap<_, _>>();
-        let module_graph = ModuleGraph::build(
-            files.iter().map(|(path, file)| ModuleGraphInput {
-                path,
-                parsed: file.parsed.as_ref().ok(),
-                hir: file.hir.as_ref(),
-                exports: file.exports.as_ref(),
-                source_kind: file.kind,
-            }),
-            ModuleGraphOptions {
-                source_roots: vfs.source_roots().to_vec(),
-                output_roots: vfs.options().output_roots.clone(),
-                extension: self.config.extension.clone(),
-            },
-        );
-        let type_database = ProjectTypeDatabase::build(
-            files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
-                path,
-                source_kind: file.kind,
-                environment: file.environment.as_ref(),
-                scope: file.scope.as_ref(),
-            }),
-            &module_graph,
-        );
-        let symbol_index = SymbolIndex::build(
-            files.iter().map(|(path, file)| (path, file.hir.as_ref())),
-            &module_graph,
-            vfs.source_roots(),
-        );
-        let call_hierarchy_symbols = files
-            .iter()
-            .filter_map(|(path, file)| {
-                let parsed = file.parsed.as_ref().ok()?;
+        let module_graph = {
+            let _profile = profile::span("analysis.index.module_graph");
 
-                Some((path.clone(), call_hierarchy_symbols_parsed_source(parsed)))
-            })
-            .collect::<BTreeMap<_, _>>();
-        let call_hierarchy_calls = files
-            .iter()
-            .filter_map(|(path, file)| {
-                let parsed = file.parsed.as_ref().ok()?;
+            ModuleGraph::build(
+                files.iter().map(|(path, file)| ModuleGraphInput {
+                    path,
+                    parsed: file.parsed.as_ref().ok(),
+                    hir: file.hir.as_ref(),
+                    exports: file.exports.as_ref(),
+                    source_kind: file.kind,
+                }),
+                ModuleGraphOptions {
+                    source_roots: vfs.source_roots().to_vec(),
+                    output_roots: vfs.options().output_roots.clone(),
+                    extension: self.config.extension.clone(),
+                },
+            )
+        };
+        let type_database = {
+            let _profile = profile::span("analysis.index.type_database");
 
-                Some((path.clone(), call_hierarchy_calls_parsed_source(parsed)))
-            })
-            .collect::<BTreeMap<_, _>>();
+            ProjectTypeDatabase::build(
+                files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
+                    path,
+                    source_kind: file.kind,
+                    environment: file.environment.as_ref(),
+                    scope: file.scope.as_ref(),
+                }),
+                &module_graph,
+            )
+        };
+        let symbol_index = {
+            let _profile = profile::span("analysis.index.symbol_index");
+
+            SymbolIndex::build(
+                files.iter().map(|(path, file)| (path, file.hir.as_ref())),
+                &module_graph,
+                vfs.source_roots(),
+            )
+        };
+        let (call_hierarchy_symbols, call_hierarchy_calls) = {
+            let _profile = profile::span("analysis.index.call_hierarchy");
+            let symbols = files
+                .iter()
+                .filter_map(|(path, file)| {
+                    let parsed = file.parsed.as_ref().ok()?;
+
+                    Some((path.clone(), call_hierarchy_symbols_parsed_source(parsed)))
+                })
+                .collect::<BTreeMap<_, _>>();
+            let calls = files
+                .iter()
+                .filter_map(|(path, file)| {
+                    let parsed = file.parsed.as_ref().ok()?;
+
+                    Some((path.clone(), call_hierarchy_calls_parsed_source(parsed)))
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            (symbols, calls)
+        };
 
         AnalysisSnapshot {
             config: self.config.clone(),
@@ -2189,38 +2208,72 @@ fn build_analysis_file(
     source_roots: &[PathBuf],
     asset_roots: &[PathBuf],
 ) -> AnalysisFile {
-    let parsed = parse_analysis_source(path, source.clone(), kind);
-    let hir = parsed.as_ref().ok().map(lower_parsed_source);
-    let scope = parsed.as_ref().ok().map(scope_map_parsed_source);
-    let environment = parsed
-        .as_ref()
-        .ok()
-        .and_then(|parsed| build_type_environment(parsed).ok());
-    let mut diagnostics = match &parsed {
-        Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
-            parsed,
-            analysis_asset_roots(source_roots, asset_roots),
-            &config.diagnostics,
-        )
-        .err()
-        .unwrap_or_default(),
-        Err(diagnostics) => diagnostics.clone(),
+    let parsed = {
+        let _profile = profile::span_for_path("analysis.parse", path);
+
+        parse_analysis_source(path, source.clone(), kind)
+    };
+    let hir = {
+        let _profile = profile::span_for_path("analysis.lower.hir", path);
+
+        parsed.as_ref().ok().map(lower_parsed_source)
+    };
+    let scope = {
+        let _profile = profile::span_for_path("analysis.lower.scope", path);
+
+        parsed.as_ref().ok().map(scope_map_parsed_source)
+    };
+    let environment = {
+        let _profile = profile::span_for_path("analysis.types.environment", path);
+
+        parsed
+            .as_ref()
+            .ok()
+            .and_then(|parsed| build_type_environment(parsed).ok())
+    };
+    let mut diagnostics = {
+        let _profile = profile::span_for_path("analysis.check", path);
+
+        match &parsed {
+            Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
+                parsed,
+                analysis_asset_roots(source_roots, asset_roots),
+                &config.diagnostics,
+            )
+            .err()
+            .unwrap_or_default(),
+            Err(diagnostics) => diagnostics.clone(),
+        }
     };
     if kind == AnalysisSourceKind::Tua {
         if let Ok(parsed) = &parsed {
+            let _profile = profile::span_for_path("analysis.emit.check", path);
+
             if let Err(mut emit_diagnostics) = emit_lua(parsed) {
                 diagnostics.append(&mut emit_diagnostics);
             }
         }
     }
     let diagnostics = deduplicate_diagnostics(diagnostics);
-    let exports = parsed.as_ref().ok().and_then(infer_module_exports);
-    let require_edges = module_links_tua_source(path, source.clone());
-    let symbols = parsed
-        .as_ref()
-        .ok()
-        .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), source_roots))
-        .unwrap_or_default();
+    let exports = {
+        let _profile = profile::span_for_path("analysis.index.exports", path);
+
+        parsed.as_ref().ok().and_then(infer_module_exports)
+    };
+    let require_edges = {
+        let _profile = profile::span_for_path("analysis.index.requires", path);
+
+        module_links_tua_source(path, source.clone())
+    };
+    let symbols = {
+        let _profile = profile::span_for_path("analysis.index.symbols", path);
+
+        parsed
+            .as_ref()
+            .ok()
+            .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), source_roots))
+            .unwrap_or_default()
+    };
 
     AnalysisFile {
         source,

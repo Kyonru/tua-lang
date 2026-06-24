@@ -980,6 +980,28 @@ return {
 }
 
 #[test]
+fn cache_stats_request_reports_analysis_cache_reuse() {
+    let uri = "file:///tmp/cache-stats.tua";
+    let source = r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+player.hp = player.hp - 1
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(hover_request(2, uri, source, "Player ="));
+    server.send(completion_request(3, uri, source, "player."));
+    server.send(cache_stats_request(4));
+
+    let stats = &response_with_id(server.output(), 4)["result"];
+
+    assert!(stats["parse"]["misses"].as_u64().unwrap_or(0) >= 1);
+    assert!(stats["parse"]["hits"].as_u64().unwrap_or(0) >= 1);
+    assert!(stats["symbolIndex"]["hits"].is_number());
+    assert!(stats["invalidations"].is_number());
+}
+
+#[test]
 fn watched_required_module_delete_clears_exports_and_reports_missing_require() {
     let temp = TempProject::new("watched-module-delete");
     let main = r#"local Player = require("player")
@@ -3738,6 +3760,15 @@ fn builtin_document_request(id: u64, uri: &str) -> Value {
         "params": {
             "uri": uri
         }
+    })
+}
+
+fn cache_stats_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/cacheStats",
+        "params": null
     })
 }
 

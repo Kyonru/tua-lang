@@ -69,6 +69,11 @@ lsp-features-smoke: ## Exercise LSP requests against examples/features with the 
 	$(CARGO) build --package tua-cli
 	node editors/vscode/scripts/lsp-features-smoke.js target/debug/tua examples/features
 
+.PHONY: profile-lsp
+profile-lsp: ## Profile LSP request latency against small/medium/large benchmark fixtures.
+	$(CARGO) build --package tua-cli
+	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-3} node editors/vscode/scripts/lsp-profile.js target/debug/tua benchmarks/lsp/small benchmarks/lsp/medium benchmarks/lsp/large
+
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.
 	cd $(EXAMPLE) && $(TUA) check

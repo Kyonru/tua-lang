@@ -1,0 +1,42 @@
+-- Benchmark: larger provider with nested shapes, method-like calls, and typed exports.
+local Types = require("types")
+local Assets = require("assets")
+
+type Player = {
+  name: string,
+  pos: Types.Vec2,
+  stats: Types.Stats,
+  sprite: Types.Sprite,
+}
+
+local function makePlayer(name: string): Player
+  local image = Assets.loadPlayerImage()
+  image:setFilter("nearest", "nearest")
+
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+    stats = { hp = 100, speed = 10, alive = true },
+    sprite = { image = image, frame = { x = 0, y = 0, w = 16, h = 16 } },
+  }
+end
+
+local function move(player: Player, delta: Types.Vec2): Player
+  player.pos.x += delta.x * player.stats.speed
+  player.pos.y += delta.y * player.stats.speed
+  return player
+end
+
+local function damage(player: Player, amount: number): Player
+  player.stats.hp -= amount
+  if player.stats.hp <= 0 then
+    player.stats.alive = false
+  end
+  return player
+end
+
+return {
+  makePlayer = makePlayer,
+  move = move,
+  damage = damage,
+}

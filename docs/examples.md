@@ -47,3 +47,13 @@ make lua-syntax
 ```
 
 The test skips gracefully when no compatible Lua executable is present.
+
+## LSP Benchmark Fixtures
+
+`benchmarks/lsp/small`, `benchmarks/lsp/medium`, and `benchmarks/lsp/large`
+are checked-in Tua projects for profiling editor latency and cache behavior.
+They include comments describing the feature surface each file stresses.
+
+```bash
+make profile-lsp
+```

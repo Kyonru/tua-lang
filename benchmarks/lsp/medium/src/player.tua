@@ -1,0 +1,27 @@
+-- Benchmark: module with typed locals, function boundaries, and module exports.
+local Types = require("types")
+
+type Player = {
+  name: string,
+  pos: Types.Vec2,
+  stats: Types.Stats,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+    stats = { hp = 100, speed = 8 },
+  }
+end
+
+local function move(player: Player, delta: Types.Vec2): Player
+  player.pos.x += delta.x
+  player.pos.y += delta.y
+  return player
+end
+
+return {
+  makePlayer = makePlayer,
+  move = move,
+}

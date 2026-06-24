@@ -1,0 +1,13 @@
+-- Benchmark: LOVE helpers exercise generated LOVE API types and asset validation paths.
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local function loadJumpSound()
+  return sound "assets/jump.wav"
+end
+
+return {
+  loadPlayerImage = loadPlayerImage,
+  loadJumpSound = loadJumpSound,
+}

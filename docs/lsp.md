@@ -75,3 +75,36 @@ For local smoke tests:
 make lsp-smoke
 make lsp-features-smoke
 ```
+
+## Profiling
+
+Profiling is disabled by default. Normal CLI and LSP output stays clean unless
+the `TUA_PROFILE` environment variable is set.
+
+To profile request latency against the checked-in small, medium, and large LSP
+benchmark fixtures:
+
+```bash
+make profile-lsp
+```
+
+The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
+`benchmarks/lsp/large`, reports average and p95 latency per LSP request, and
+prints analysis cache hit/miss counters from the server.
+
+Useful knobs:
+
+```bash
+TUA_PROFILE_REPEAT=20 make profile-lsp
+TUA_PROFILE=1 make profile-lsp
+TUA_PROFILE=1 TUA_PROFILE_STREAM=1 make profile-lsp
+```
+
+`TUA_PROFILE=1` enables per-phase tracing from the server. By default the
+profiling script prints those traces after each fixture; `TUA_PROFILE_STREAM=1`
+streams them live to stderr. The same tracing can be enabled for any manual LSP
+session with:
+
+```bash
+TUA_PROFILE=1 tua lsp
+```

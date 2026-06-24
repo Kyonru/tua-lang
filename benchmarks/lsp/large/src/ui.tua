@@ -1,0 +1,11 @@
+-- Benchmark: ordinary Lua control flow plus typed module calls.
+local World = require("world")
+
+local function titleText()
+  local world = World.createWorld()
+  return "HP: " .. world.player.stats.hp
+end
+
+return {
+  titleText = titleText,
+}

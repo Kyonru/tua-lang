@@ -1,0 +1,20 @@
+-- Benchmark: second provider module for workspace symbols and call hierarchy.
+local Types = require("types")
+
+type Enemy = {
+  kind: string,
+  pos: Types.Vec2,
+  hp: number,
+}
+
+local function spawnEnemy(kind: string, pos: Types.Vec2): Enemy
+  return {
+    kind = kind,
+    pos = pos,
+    hp = 20,
+  }
+end
+
+return {
+  spawnEnemy = spawnEnemy,
+}

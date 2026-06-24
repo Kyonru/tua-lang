@@ -46,6 +46,7 @@ impl LspServer {
     }
 
     fn handle_request(&mut self, message: Value, method: &str) -> Value {
+        let _profile = tua_core::profile::span(format!("lsp.request {method}"));
         let id = message.get("id").cloned().unwrap_or(Value::Null);
 
         match method {
@@ -82,6 +83,7 @@ impl LspServer {
                 self.builtin_document_response(&message)
                     .unwrap_or(Value::Null),
             ),
+            "tua/cacheStats" => response(id, self.cache_stats_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
             }
@@ -416,6 +418,39 @@ impl LspServer {
         let source = tua_core::builtin_definition_document(uri)?;
 
         Some(Value::String(source))
+    }
+
+    fn cache_stats_response(&self) -> Value {
+        let stats = self.analysis.cache_stats();
+
+        json!({
+            "parse": {
+                "hits": stats.parse_hits,
+                "misses": stats.parse_misses
+            },
+            "typeEnvironment": {
+                "hits": stats.type_environment_hits,
+                "misses": stats.type_environment_misses
+            },
+            "diagnostics": {
+                "hits": stats.diagnostics_hits,
+                "misses": stats.diagnostics_misses
+            },
+            "moduleExports": {
+                "hits": stats.module_export_hits,
+                "misses": stats.module_export_misses
+            },
+            "requireEdges": {
+                "hits": stats.require_edge_hits,
+                "misses": stats.require_edge_misses
+            },
+            "symbolIndex": {
+                "hits": stats.symbol_index_hits,
+                "misses": stats.symbol_index_misses
+            },
+            "invalidations": stats.invalidations,
+            "dependentInvalidations": stats.dependent_invalidations
+        })
     }
 
     fn prepare_call_hierarchy_response(&self, message: &Value) -> Value {

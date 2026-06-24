@@ -1,0 +1,12 @@
+-- Benchmark: shared aliases used by several modules.
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Stats = {
+  hp: number,
+  speed: number,
+}
+
+return {}

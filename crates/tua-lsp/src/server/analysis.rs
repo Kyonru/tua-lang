@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use tua_core::{
     build_type_environment, infer_module_exports, parse_lua_source, parse_tua_source,
-    require_bindings_for_parsed_source, AnalysisHost as CoreAnalysisHost,
+    require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
     CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
@@ -99,6 +99,10 @@ impl AnalysisHost {
             workspace_folders: workspace_folders.to_vec(),
             settings: settings.clone(),
         }
+    }
+
+    pub(super) fn cache_stats(&self) -> AnalysisCacheStats {
+        self.core.cache_stats()
     }
 
     pub(super) fn open_document(

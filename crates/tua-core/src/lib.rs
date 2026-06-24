@@ -25,6 +25,7 @@ pub mod module_index;
 pub mod module_link;
 mod narrowing;
 pub mod parser;
+pub mod profile;
 mod project;
 pub mod project_model;
 pub mod references;
@@ -40,7 +41,9 @@ pub mod types;
 pub mod vfs;
 pub mod workspace_symbol;
 
-pub use analysis::{AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCatalogs};
+pub use analysis::{
+    AnalysisCacheStats, AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCatalogs,
+};
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,

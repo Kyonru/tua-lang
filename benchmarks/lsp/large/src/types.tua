@@ -1,0 +1,7 @@
+-- Benchmark: larger shared type surface for project-aware type resolution.
+type Vec2 = { x: number, y: number }
+type Rect = { x: number, y: number, w: number, h: number }
+type Stats = { hp: number, speed: number, alive: boolean }
+type Sprite = { image: Image, frame: Rect }
+
+return {}

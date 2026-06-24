@@ -65,7 +65,7 @@ canonical root `ROADMAP.md`.
 | LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 52 |
 | Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 62 |
 | Rich project model | Source roots and require behavior are pragmatic. | Model roots, require paths, duplicate candidates, cycles, ignored paths, and target versions more explicitly. | 55, 59 |
-| Analysis tracing and benchmarks | No dedicated performance tracing. | Add profiling for parse/check/index/request work. | 69 |
+| Analysis tracing and benchmarks | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
 | Documentation refresh after architecture work | Docs now match the current feature surface. | Refresh again after the analysis database and HIR phases land. | 50, 51, 70 |
 
 ## Intentionally Out Of Scope

@@ -1,0 +1,31 @@
+-- Benchmark: consumer module creates many cross-file references.
+local Player = require("player")
+local Enemy = require("enemy")
+
+local function createWorld()
+  local player = Player.makePlayer("Ada")
+  local enemies = {
+    Enemy.spawnEnemy("slime", { x = 10, y = 2 }),
+    Enemy.spawnEnemy("bat", { x = 20, y = 12 }),
+  }
+
+  return {
+    player = player,
+    enemies = enemies,
+  }
+end
+
+local function updateWorld(world)
+  Player.move(world.player, { x = 1, y = 0 })
+
+  for _, enemy in pairs(world.enemies) do
+    Enemy.updateEnemy(enemy, world.player.pos)
+  end
+
+  return world
+end
+
+return {
+  createWorld = createWorld,
+  updateWorld = updateWorld,
+}

@@ -1,0 +1,9 @@
+-- Benchmark: small consumer exercises require graph, hover, completion, and symbols.
+local Player = require("player")
+
+local player = Player.makePlayer("Ada")
+player.hp -= 1
+
+return {
+  player = player,
+}

@@ -1,0 +1,15 @@
+-- Benchmark: medium consumer touches Tua modules and annotated Lua modules.
+local Player = require("player")
+local Enemy = require("enemy")
+local Legacy = require("legacy")
+
+local player = Player.makePlayer("Ada")
+local enemy = Enemy.spawnEnemy("slime", { x = 12, y = 4 })
+
+Player.move(player, { x = 1, y = 0 })
+player.stats.hp = Legacy.clamp(player.stats.hp - 3)
+
+return {
+  player = player,
+  enemy = enemy,
+}

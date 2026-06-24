@@ -1,0 +1,28 @@
+-- Benchmark: additional provider for workspace symbols and cross-module references.
+local Types = require("types")
+
+type Enemy = {
+  kind: string,
+  pos: Types.Vec2,
+  stats: Types.Stats,
+}
+
+local function spawnEnemy(kind: string, pos: Types.Vec2): Enemy
+  return {
+    kind = kind,
+    pos = pos,
+    stats = { hp = 25, speed = 4, alive = true },
+  }
+end
+
+local function updateEnemy(enemy: Enemy, target: Types.Vec2): Enemy
+  if enemy.pos.x < target.x then
+    enemy.pos.x += enemy.stats.speed
+  end
+  return enemy
+end
+
+return {
+  spawnEnemy = spawnEnemy,
+  updateEnemy = updateEnemy,
+}

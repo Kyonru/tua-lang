@@ -1,0 +1,17 @@
+-- Benchmark: main file used by LSP latency profiling requests.
+local World = require("world")
+local Player = require("player")
+local Ui = require("ui")
+
+local world = World.createWorld()
+world = World.updateWorld(world)
+
+local player = Player.damage(world.player, 1)
+local title = Ui.titleText()
+
+player.sprite.image:setFilter("nearest", "nearest")
+
+return {
+  player = player,
+  title = title,
+}

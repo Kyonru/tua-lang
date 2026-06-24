@@ -1,0 +1,16 @@
+-- Benchmark: small provider module with one typed export.
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
