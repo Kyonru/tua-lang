@@ -337,7 +337,7 @@ return M
     assert!(snapshot.scope_map(&path).is_some());
     assert!(snapshot.module_exports(&path).is_some());
     assert!(snapshot
-        .symbol_index(&path)
+        .symbol_index_for_path(&path)
         .iter()
         .any(|symbol| symbol.name == "Player"));
     assert!(snapshot.require_edges(&path).is_empty());
@@ -633,4 +633,43 @@ return {
         table_decl_hover.contents,
         "local tableEnemy: { hp: number, name: string, type: string }"
     );
+}
+
+#[test]
+fn snapshot_workspace_symbols_update_after_file_changes() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(
+        &path,
+        r#"
+type Player = { hp: number }
+"#,
+    );
+
+    let first = host.snapshot();
+
+    assert!(first
+        .workspace_symbols("Player")
+        .iter()
+        .any(|symbol| symbol.name == "Player"));
+
+    host.set_file(
+        &path,
+        r#"
+type Enemy = { hp: number }
+"#,
+    );
+
+    let second = host.snapshot();
+
+    assert!(second
+        .workspace_symbols("Enemy")
+        .iter()
+        .any(|symbol| symbol.name == "Enemy"));
+    assert!(!second
+        .workspace_symbols("Player")
+        .iter()
+        .any(|symbol| symbol.name == "Player"));
 }

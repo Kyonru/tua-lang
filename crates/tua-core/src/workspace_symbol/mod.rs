@@ -20,6 +20,10 @@ pub enum WorkspaceSymbolKind {
     TypeAlias,
     Function,
     Module,
+    Local,
+    Parameter,
+    Field,
+    Export,
 }
 
 pub fn workspace_symbols_from_dir(

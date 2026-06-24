@@ -15,9 +15,8 @@ use tua_core::{
     references_to_definition_parsed_source, rename_target_for_definition,
     require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
     signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count,
-    workspace_symbols_from_dir, AnalysisHost as CoreAnalysisHost,
-    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, CallHierarchyCallSite,
-    CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
+    AnalysisHost as CoreAnalysisHost, AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
+    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchySymbol, CallHierarchySymbolKind,
     CallHierarchySymbolTarget, CodeAction, CodeActionRange, Completion, Definition, Diagnostic,
     DocumentHighlight, DocumentSymbol, InlayHint, ModuleExports, ModuleLink, ParsedSource,
     ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
@@ -442,45 +441,46 @@ impl AnalysisSnapshot {
             .cloned()
             .collect::<BTreeSet<_>>();
         let mut completions = Vec::new();
-        let mut exports = self
-            .files
-            .iter()
-            .filter(|(path, _)| !self.settings.is_ignored(path, &self.workspace_folders))
-            .map(|(_, file)| file)
-            .filter_map(|file| file.exports())
-            .collect::<Vec<_>>();
-
-        exports.sort_by(|left, right| left.path.cmp(&right.path));
-
-        for exports in exports {
-            if exports.path == path {
+        for symbol in self.core.importable_symbols(&prefix) {
+            if symbol.module_path == path
+                || !project_contains_path(Some(&model), &symbol.module_path)
+                || self
+                    .settings
+                    .is_ignored(&symbol.module_path, &self.workspace_folders)
+            {
                 continue;
             }
 
-            let Some(module) = workspace.module_name_for_path(&exports.path) else {
+            let Some(export) = symbol.export.as_ref() else {
                 continue;
             };
+            let module = symbol
+                .module_name
+                .clone()
+                .or_else(|| workspace.module_name_for_path(&symbol.module_path));
+            let Some(module) = module else {
+                continue;
+            };
+
             let existing_alias = require_aliases.get(&module).cloned();
             let alias = existing_alias
                 .clone()
                 .unwrap_or_else(|| unique_import_alias(&module, &reserved_aliases));
 
-            for (name, field) in &exports.fields {
-                if !name.starts_with(&prefix) || existing_labels.contains(name) {
-                    continue;
-                }
-
-                completions.push(auto_import_completion(AutoImportCandidate {
-                    current_path: path,
-                    current_source: &file.source,
-                    exports,
-                    module: &module,
-                    alias: &alias,
-                    already_imported: existing_alias.is_some(),
-                    name,
-                    field,
-                }));
+            if existing_labels.contains(&symbol.name) {
+                continue;
             }
+
+            completions.push(auto_import_completion(AutoImportCandidate {
+                current_path: path,
+                current_source: &file.source,
+                module_path: &symbol.module_path,
+                module: &module,
+                alias: &alias,
+                already_imported: existing_alias.is_some(),
+                name: &export.public_name,
+                field: &export.field,
+            }));
         }
 
         completions.sort_by(|left, right| {
@@ -808,19 +808,16 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        let roots = if self.workspace_folders.is_empty() {
-            vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))]
-        } else {
-            self.workspace_folders.clone()
-        };
+        let model = project_model_for_roots(&self.workspace_folders, &self.settings).ok();
 
-        roots
+        self.core
+            .workspace_symbols(query)
             .into_iter()
-            .flat_map(|root| workspace_symbols_from_dir(root, query).unwrap_or_default())
             .filter(|symbol| {
-                !self
-                    .settings
-                    .is_ignored(&symbol.path, &self.workspace_folders)
+                project_contains_path(model.as_ref(), &symbol.path)
+                    && !self
+                        .settings
+                        .is_ignored(&symbol.path, &self.workspace_folders)
             })
             .collect()
     }

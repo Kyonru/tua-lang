@@ -569,6 +569,10 @@ fn lsp_workspace_symbol_kind(kind: WorkspaceSymbolKind) -> u8 {
         WorkspaceSymbolKind::Module => 2,
         WorkspaceSymbolKind::Function => 12,
         WorkspaceSymbolKind::TypeAlias => 23,
+        WorkspaceSymbolKind::Local => 13,
+        WorkspaceSymbolKind::Parameter => 13,
+        WorkspaceSymbolKind::Field => 8,
+        WorkspaceSymbolKind::Export => 8,
     }
 }
 

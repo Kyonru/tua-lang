@@ -1,15 +1,14 @@
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tua_core::{
-    Completion, CompletionKind, ModuleExportField, ModuleExports, SourcePosition, SourceSpan,
-    TextEdit, Type,
+    Completion, CompletionKind, ModuleExportField, SourcePosition, SourceSpan, TextEdit, Type,
 };
 
 pub(super) struct AutoImportCandidate<'a> {
     pub(super) current_path: &'a Path,
     pub(super) current_source: &'a str,
-    pub(super) exports: &'a ModuleExports,
+    pub(super) module_path: &'a Path,
     pub(super) module: &'a str,
     pub(super) alias: &'a str,
     pub(super) already_imported: bool,
@@ -41,7 +40,7 @@ pub(super) fn auto_import_completion(candidate: AutoImportCandidate<'_>) -> Comp
         documentation: candidate.field.documentation.clone(),
         insert_text: Some(format!("{}.{}", candidate.alias, candidate.name)),
         is_snippet: false,
-        module_path: Some(candidate.exports.path.clone()),
+        module_path: Some(PathBuf::from(candidate.module_path)),
         source_module: Some(candidate.module.to_owned()),
         additional_text_edits,
     }

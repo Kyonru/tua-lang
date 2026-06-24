@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::completion::complete_field_access_in_source_with_environment;
 use crate::hir::{HirModule, HirRequireBinding};
+use crate::ide_db::SymbolIndexEntry;
 use crate::module_link::require_module_at_position;
 use crate::scope_map_parsed_source;
 use crate::semantic::{resolve_aliases, SemanticModel};
@@ -20,7 +21,7 @@ use crate::{
     Definition, DefinitionKind, Diagnostic, Hover, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
     ProjectTypeDatabase, ProjectTypeDatabaseInput, RequireResolution, ScopeMap, SourcePosition,
-    SourceSpan, TableField, TuaType, Type, TypeEnvironment, WorkspaceSymbol, WorkspaceSymbolKind,
+    SourceSpan, SymbolIndex, TableField, TuaType, Type, TypeEnvironment, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +63,7 @@ pub struct AnalysisSnapshot {
     builtin_catalogs: BuiltinCatalogs,
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
+    symbol_index: SymbolIndex,
 }
 
 #[derive(Clone, Debug)]
@@ -75,7 +77,8 @@ struct AnalysisFile {
     diagnostics: Vec<Diagnostic>,
     exports: Option<ModuleExports>,
     require_edges: Vec<ModuleLink>,
-    symbols: Vec<WorkspaceSymbol>,
+    #[allow(dead_code)]
+    symbols: Vec<SymbolIndexEntry>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -300,6 +303,11 @@ impl AnalysisHost {
             }),
             &module_graph,
         );
+        let symbol_index = SymbolIndex::build(
+            files.iter().map(|(path, file)| (path, file.hir.as_ref())),
+            &module_graph,
+            vfs.source_roots(),
+        );
 
         AnalysisSnapshot {
             config: self.config.clone(),
@@ -309,6 +317,7 @@ impl AnalysisHost {
             builtin_catalogs: self.builtin_catalogs.clone(),
             module_graph,
             type_database,
+            symbol_index,
         }
     }
 
@@ -493,10 +502,20 @@ impl AnalysisSnapshot {
         &self.type_database
     }
 
-    pub fn symbol_index(&self, path: impl AsRef<Path>) -> &[WorkspaceSymbol] {
-        self.file(path.as_ref())
-            .map(|file| file.symbols.as_slice())
-            .unwrap_or_default()
+    pub fn symbol_index(&self) -> &SymbolIndex {
+        &self.symbol_index
+    }
+
+    pub fn symbol_index_for_path(&self, path: impl AsRef<Path>) -> Vec<&SymbolIndexEntry> {
+        self.symbol_index.entries_for_path(path)
+    }
+
+    pub fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        self.symbol_index.workspace_symbols(query)
+    }
+
+    pub fn importable_symbols(&self, prefix: &str) -> Vec<&SymbolIndexEntry> {
+        self.symbol_index.importable_symbols(prefix)
     }
 
     fn module_hover(&self, parsed: &ParsedSource, position: SourcePosition) -> Option<Hover> {
@@ -1355,7 +1374,7 @@ fn build_analysis_file(
     let symbols = parsed
         .as_ref()
         .ok()
-        .map(symbol_index_for_parsed)
+        .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), source_roots))
         .unwrap_or_default();
 
     AnalysisFile {
@@ -1405,53 +1424,14 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
 }
 
-fn symbol_index_for_parsed(parsed: &ParsedSource) -> Vec<WorkspaceSymbol> {
-    let module_name = parsed
-        .path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("module")
-        .to_owned();
-    let module_span = parsed.span.unwrap_or_else(default_span);
-    let mut symbols = vec![WorkspaceSymbol {
-        name: module_name.clone(),
-        kind: WorkspaceSymbolKind::Module,
-        path: parsed.path.clone(),
-        range: module_span,
-        selection_range: module_span,
-        container_name: None,
-    }];
-
-    symbols.extend(parsed.type_aliases.iter().filter_map(|alias| {
-        let range = alias.span?;
-        let selection_range = alias.name_span.unwrap_or(range);
-
-        Some(WorkspaceSymbol {
-            name: alias.name.clone(),
-            kind: WorkspaceSymbolKind::TypeAlias,
-            path: parsed.path.clone(),
-            range,
-            selection_range,
-            container_name: Some(module_name.clone()),
-        })
-    }));
-
-    symbols.extend(parsed.function_annotations.iter().filter_map(|function| {
-        let name = function.name.clone()?;
-        let range = function.span?;
-        let selection_range = function.name_span.unwrap_or(range);
-
-        Some(WorkspaceSymbol {
-            name,
-            kind: WorkspaceSymbolKind::Function,
-            path: parsed.path.clone(),
-            range,
-            selection_range,
-            container_name: Some(module_name.clone()),
-        })
-    }));
-
-    symbols
+fn symbol_entries_for_parsed(
+    parsed: &ParsedSource,
+    hir: Option<&HirModule>,
+    source_roots: &[PathBuf],
+) -> Vec<SymbolIndexEntry> {
+    SymbolIndex::build([(&parsed.path, hir)], &ModuleGraph::default(), source_roots)
+        .entries()
+        .to_vec()
 }
 
 fn default_span() -> SourceSpan {

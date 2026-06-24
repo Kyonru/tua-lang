@@ -14,6 +14,7 @@ pub mod emit;
 pub mod fixture;
 pub mod hir;
 pub mod hover;
+pub mod ide_db;
 pub mod inlay_hint;
 mod lint;
 mod love_api;
@@ -78,6 +79,9 @@ pub use hir::{
     HirModuleExport, HirRequireBinding, HirSymbol, HirSymbolId, HirSymbolKind,
 };
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
+pub use ide_db::{
+    SymbolIndex, SymbolIndexEntry, SymbolIndexExport, SymbolIndexId, SymbolIndexKind,
+};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use lua::builtin_definition_document;
 pub use module_graph::{
