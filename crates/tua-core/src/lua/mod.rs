@@ -1,5 +1,7 @@
 use crate::{asset, love_api};
 
+pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct LuaItem {
     pub label: &'static str,
@@ -98,6 +100,33 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
         .and_then(|items| items.iter().find(|item| item.label == name).copied())
 }
 
+pub(crate) fn builtin_definition_for_item(item: LuaItem) -> Option<BuiltinDefinition> {
+    let source = builtin_definition_source_for_item(item);
+    let span = span_for_label(&source, item.label)?;
+
+    Some(BuiltinDefinition {
+        path: builtin_definition_path(item),
+        span,
+    })
+}
+
+pub fn builtin_definition_document(uri: &str) -> Option<String> {
+    let id = uri.strip_prefix(BUILTIN_DEFINITION_URI_PREFIX)?;
+    let id = id.strip_suffix(".tua").unwrap_or(id);
+
+    all_builtin_items()
+        .into_iter()
+        .find(|item| builtin_definition_id(*item) == id)
+        .map(builtin_definition_source_for_item)
+        .or_else(|| love_api::builtin_definition_document(id))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BuiltinDefinition {
+    pub path: std::path::PathBuf,
+    pub span: crate::SourceSpan,
+}
+
 fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
     match type_name {
         "Body" => Some(BODY_ITEMS),
@@ -112,6 +141,83 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         "World" => Some(WORLD_ITEMS),
         _ => None,
     }
+}
+
+fn all_builtin_items() -> Vec<LuaItem> {
+    TOP_LEVEL
+        .iter()
+        .chain(ASSET_LOADERS.iter())
+        .chain(CANVAS_ITEMS.iter())
+        .chain(FONT_ITEMS.iter())
+        .chain(IMAGE_ITEMS.iter())
+        .chain(IMAGE_DATA_ITEMS.iter())
+        .chain(QUAD_ITEMS.iter())
+        .chain(SHADER_ITEMS.iter())
+        .chain(SPRITE_BATCH_ITEMS.iter())
+        .chain(BODY_ITEMS.iter())
+        .chain(WORLD_ITEMS.iter())
+        .chain(FILTER_MODE_ITEMS.iter())
+        .chain(SOURCE_ITEMS.iter())
+        .chain(MATH_ITEMS.iter())
+        .chain(STRING_ITEMS.iter())
+        .chain(TABLE_ITEMS.iter())
+        .chain(COROUTINE_ITEMS.iter())
+        .chain(DEBUG_ITEMS.iter())
+        .chain(IO_ITEMS.iter())
+        .chain(OS_ITEMS.iter())
+        .chain(PACKAGE_ITEMS.iter())
+        .copied()
+        .collect()
+}
+
+fn builtin_definition_path(item: LuaItem) -> std::path::PathBuf {
+    std::path::PathBuf::from(format!(
+        "{BUILTIN_DEFINITION_URI_PREFIX}{}.tua",
+        builtin_definition_id(item)
+    ))
+}
+
+pub(crate) fn builtin_definition_id(item: LuaItem) -> String {
+    item.detail
+        .strip_prefix("function ")
+        .and_then(|detail| detail.split_once('(').map(|(name, _)| name))
+        .unwrap_or(item.label)
+        .replace(':', ".")
+}
+
+pub(crate) fn builtin_definition_source_for_item(item: LuaItem) -> String {
+    let declaration = if item.detail.starts_with("function ") {
+        format!("{} end", item.detail)
+    } else {
+        format!("local {}: {}", item.label, item.detail)
+    };
+
+    format!(
+        "-- Tua builtin stub\n-- This virtual document is generated from Tua's builtin Lua/LOVE catalog.\n\n--- {}\n{}\n",
+        item.documentation, declaration
+    )
+}
+
+fn span_for_label(source: &str, label: &str) -> Option<crate::SourceSpan> {
+    for (line_index, line) in source.lines().enumerate() {
+        if let Some(byte_index) = line.find(label) {
+            let column = line[..byte_index].chars().count() + 1;
+            let end_column = column + label.chars().count();
+
+            return Some(crate::SourceSpan {
+                start: crate::SourcePosition {
+                    line: line_index + 1,
+                    column,
+                },
+                end: crate::SourcePosition {
+                    line: line_index + 1,
+                    column: end_column,
+                },
+            });
+        }
+    }
+
+    None
 }
 
 fn items_for_enum(type_name: &str) -> Option<&'static [LuaItem]> {

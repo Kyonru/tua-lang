@@ -76,6 +76,11 @@ impl LspServer {
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
+            "tua/builtinDocument" => response(
+                id,
+                self.builtin_document_response(&message)
+                    .unwrap_or(Value::Null),
+            ),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
             }
@@ -438,6 +443,13 @@ impl LspServer {
         let definition = snapshot.definition(&request.path, position)?;
 
         Some(lsp_location_from_core(definition))
+    }
+
+    fn builtin_document_response(&self, message: &Value) -> Option<Value> {
+        let uri = message.get("params")?.get("uri")?.as_str()?;
+        let source = tua_core::builtin_definition_document(uri)?;
+
+        Some(Value::String(source))
     }
 
     fn prepare_call_hierarchy_response(&self, message: &Value) -> Value {

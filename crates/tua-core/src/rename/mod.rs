@@ -112,6 +112,7 @@ pub fn rename_target_for_definition(
 pub fn rename_kind_for_definition(kind: DefinitionKind) -> Option<RenameKind> {
     match kind {
         DefinitionKind::Module => None,
+        DefinitionKind::Builtin => None,
         DefinitionKind::TypeAlias => Some(RenameKind::TypeAlias),
         DefinitionKind::Local => Some(RenameKind::Local),
         DefinitionKind::Function => Some(RenameKind::Function),

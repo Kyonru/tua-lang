@@ -105,9 +105,15 @@ fn semantic_token_for_identifier(
     }
 
     if let Ok(Some(definition)) = definition_parsed_source(parsed, span.start) {
+        let kind = if definition.kind == DefinitionKind::Builtin && is_known_global(&text) {
+            SemanticTokenKind::Global
+        } else {
+            semantic_kind_for_definition(definition.kind)
+        };
+
         return Some(SemanticToken {
             span,
-            kind: semantic_kind_for_definition(definition.kind),
+            kind,
             modifiers: Vec::new(),
         });
     }
@@ -138,6 +144,7 @@ fn semantic_token_for_identifier(
 fn semantic_kind_for_definition(kind: DefinitionKind) -> SemanticTokenKind {
     match kind {
         DefinitionKind::Module => SemanticTokenKind::Module,
+        DefinitionKind::Builtin => SemanticTokenKind::Function,
         DefinitionKind::TypeAlias => SemanticTokenKind::TypeAlias,
         DefinitionKind::Local => SemanticTokenKind::Variable,
         DefinitionKind::Function => SemanticTokenKind::Function,

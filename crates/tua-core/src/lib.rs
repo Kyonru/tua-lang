@@ -60,6 +60,7 @@ pub use document_symbol::{
 pub use emit::{emit_lua, emit_tua_source};
 pub use hover::{hover_parsed_source, hover_tua_source, Hover};
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
+pub use lua::builtin_definition_document;
 pub use module_index::{
     exported_field_for_fields, exported_type_for_fields, infer_module_exports,
     require_bindings_for_parsed_source, required_module_export_for_fields,

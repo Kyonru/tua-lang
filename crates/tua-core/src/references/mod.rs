@@ -55,6 +55,10 @@ pub fn references_to_definition_parsed_source(
     target: &Definition,
     include_declaration: bool,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    if target.kind == DefinitionKind::Builtin {
+        return Ok(Vec::new());
+    }
+
     let mut references = parsed
         .ast
         .tokens()
@@ -312,6 +316,7 @@ fn same_definition(left: &Definition, right: &Definition) -> bool {
 fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
     match kind {
         DefinitionKind::Module => ReferenceKind::Module,
+        DefinitionKind::Builtin => ReferenceKind::Function,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,

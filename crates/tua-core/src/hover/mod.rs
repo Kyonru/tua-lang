@@ -468,6 +468,7 @@ fn source_location(path: &Path, position: SourcePosition) -> String {
 fn definition_kind_label(kind: DefinitionKind) -> &'static str {
     match kind {
         DefinitionKind::Module => "module",
+        DefinitionKind::Builtin => "builtin",
         DefinitionKind::TypeAlias => "type alias",
         DefinitionKind::Local => "local",
         DefinitionKind::Function => "function",

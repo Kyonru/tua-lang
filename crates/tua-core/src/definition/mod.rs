@@ -10,9 +10,11 @@ use full_moon::node::Node;
 use crate::module_index::resolve_required_module;
 use crate::module_link::require_module_at_position;
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::semantic::SemanticModel;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
+use crate::types::build_type_environment_with_diagnostics;
 use crate::types::{TableField, Type};
-use crate::{parse_tua_source, Diagnostic};
+use crate::{lua, parse_tua_source, Diagnostic};
 
 const MAX_FIELD_DEFINITION_DEPTH: usize = 64;
 
@@ -26,6 +28,7 @@ pub struct Definition {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DefinitionKind {
     Module,
+    Builtin,
     TypeAlias,
     Local,
     Function,
@@ -79,6 +82,10 @@ impl<'a> DefinitionResolver<'a> {
                 return Some(definition);
             }
 
+            if let Some(definition) = self.builtin_definition(&parts, position) {
+                return Some(definition);
+            }
+
             if let Some(definition) = self.field_definition(&parts, position) {
                 return Some(definition);
             }
@@ -92,6 +99,7 @@ impl<'a> DefinitionResolver<'a> {
 
         self.value_definition(&current_part.text, position)
             .or_else(|| self.required_module_definition(&current_part.text, position))
+            .or_else(|| self.builtin_definition(std::slice::from_ref(&current_part.text), position))
             .or_else(|| self.alias_definition(&current_part.text))
     }
 
@@ -284,6 +292,32 @@ impl<'a> DefinitionResolver<'a> {
                 .find_map(|ty| self.field_target(ty, field, depth + 1)),
             Type::Any | Type::Function(_) | Type::Primitive(_) | Type::Table(_) => None,
         }
+    }
+
+    fn builtin_definition(&self, parts: &[String], position: SourcePosition) -> Option<Definition> {
+        let item = if parts.first().is_some_and(|part| part == "love") {
+            lua::hover_item(parts)
+        } else {
+            let environment = self.semantic_environment();
+            let semantic = SemanticModel::new(self.parsed, &environment);
+
+            semantic
+                .lua_function_item_for_call_parts(parts, position)
+                .or_else(|| lua::hover_item(parts))
+        }?;
+        let definition = lua::builtin_definition_for_item(item)?;
+
+        Some(Definition {
+            path: definition.path,
+            span: definition.span,
+            kind: DefinitionKind::Builtin,
+        })
+    }
+
+    fn semantic_environment(&self) -> crate::types::TypeEnvironment {
+        let (environment, _) = build_type_environment_with_diagnostics(self.parsed);
+
+        environment
     }
 
     fn required_module_definition(

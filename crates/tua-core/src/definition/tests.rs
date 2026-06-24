@@ -76,6 +76,41 @@ test(false)
 }
 
 #[test]
+fn resolves_love_builtin_function_to_virtual_stub() {
+    let source = r#"local player = love.graphics.newImage("assets/player.png")
+"#;
+    let position = position_at(source, "newImage");
+    let definition = definition_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("LOVE builtin should resolve");
+    let uri = definition.path.to_string_lossy();
+    let document = crate::builtin_definition_document(&uri).expect("builtin document should exist");
+
+    assert_eq!(definition.kind, DefinitionKind::Builtin);
+    assert_eq!(uri, "tua:/builtins/love.graphics.newImage.tua");
+    assert_eq!(source_text_owned(&document, definition.span), "newImage");
+    assert!(document.contains("function love.graphics.newImage"));
+}
+
+#[test]
+fn resolves_love_object_method_to_virtual_stub_from_inferred_receiver() {
+    let source = r#"local player = love.graphics.newImage("assets/player.png")
+player:setFilter()
+"#;
+    let position = position_at(source, "setFilter");
+    let definition = definition_tua_source("src/main.tua", source, position)
+        .expect("source should parse")
+        .expect("LOVE method should resolve");
+    let uri = definition.path.to_string_lossy();
+    let document = crate::builtin_definition_document(&uri).expect("builtin document should exist");
+
+    assert_eq!(definition.kind, DefinitionKind::Builtin);
+    assert_eq!(uri, "tua:/builtins/Image.setFilter.tua");
+    assert_eq!(source_text_owned(&document, definition.span), "setFilter");
+    assert!(document.contains("function Image:setFilter"));
+}
+
+#[test]
 fn resolves_definition_when_an_unrelated_line_is_incomplete() {
     let source = r#"type Player = { hp: number }
 local player: Player = { hp = 10 }

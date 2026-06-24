@@ -53,6 +53,10 @@ fn workspace_folders_from_value(value: &Value) -> Option<Vec<PathBuf>> {
 }
 
 pub(super) fn uri_from_path(path: &Path) -> String {
+    if let Some(uri) = path.to_str().filter(|path| path.starts_with("tua:/")) {
+        return uri.to_owned();
+    }
+
     format!("file://{}", percent_encode_path(path))
 }
 

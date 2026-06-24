@@ -4,6 +4,14 @@
 
 use crate::lua::{LuaItem, LuaItemKind};
 
+pub(crate) fn builtin_definition_document(id: &str) -> Option<String> {
+    ITEMS
+        .iter()
+        .map(lua_item)
+        .find(|item| crate::lua::builtin_definition_id(*item) == id)
+        .map(crate::lua::builtin_definition_source_for_item)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct LoveApiItem {
     path: &'static [&'static str],

@@ -1748,6 +1748,40 @@ test(false)
 }
 
 #[test]
+fn definition_returns_virtual_love_builtin_locations() {
+    let uri = "file:///tmp/love-builtin-definition.tua";
+    let source = r#"local player = love.graphics.newImage("assets/player.png")
+player:setFilter()
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(definition_request(2, uri, source, "newImage", 0));
+    server.send(definition_request(3, uri, source, "setFilter", 0));
+
+    let constructor = response_with_id(server.output(), 2)["result"].clone();
+    let method = response_with_id(server.output(), 3)["result"].clone();
+
+    assert_eq!(
+        constructor["uri"],
+        "tua:/builtins/love.graphics.newImage.tua"
+    );
+    assert_eq!(method["uri"], "tua:/builtins/Image.setFilter.tua");
+
+    server.send(builtin_document_request(
+        4,
+        "tua:/builtins/Image.setFilter.tua",
+    ));
+
+    let document = response_with_id(server.output(), 4)["result"]
+        .as_str()
+        .expect("builtin document should be returned");
+
+    assert!(document.contains("function Image:setFilter"));
+    assert_eq!(range_text(document, &method["range"]), "setFilter");
+}
+
+#[test]
 fn definition_recovers_when_an_unrelated_line_is_incomplete() {
     let uri = "file:///tmp/recovered-definition.tua";
     let source = r#"type Player = { hp: number }
@@ -3214,6 +3248,17 @@ fn definition_request(id: u64, uri: &str, source: &str, needle: &str, offset: us
                 "uri": uri
             },
             "position": lsp_position_with_offset(source, needle, offset)
+        }
+    })
+}
+
+fn builtin_document_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/builtinDocument",
+        "params": {
+            "uri": uri
         }
     })
 }

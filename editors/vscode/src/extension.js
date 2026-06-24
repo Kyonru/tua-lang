@@ -10,6 +10,7 @@ let client;
 async function activate(context) {
   const outputChannel = vscode.window.createOutputChannel("tua");
   context.subscriptions.push(outputChannel);
+  context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
 
   const serverCommand = configuredServerPath(context);
   const cwd = workspaceCwd();
@@ -64,6 +65,23 @@ async function activate(context) {
     showServerStartupWarning(serverCommand, error);
     client = undefined;
   }
+}
+
+function registerBuiltinDocumentProvider(outputChannel) {
+  return vscode.workspace.registerTextDocumentContentProvider("tua", {
+    async provideTextDocumentContent(uri) {
+      if (!client) {
+        return "";
+      }
+
+      try {
+        return (await client.sendRequest("tua/builtinDocument", { uri: uri.toString() })) || "";
+      } catch (error) {
+        outputChannel.appendLine(`Failed to load tua builtin document: ${formatError(error)}`);
+        return "";
+      }
+    },
+  });
 }
 
 async function deactivate() {
