@@ -1,5 +1,52 @@
 use super::*;
 use crate::Fixture;
+use std::env;
+use std::fs;
+use std::path::Path;
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after Unix epoch")
+            .as_nanos();
+        let path = env::temp_dir().join(format!(
+            "tua-analysis-cache-{name}-{}-{unique}",
+            process::id()
+        ));
+
+        fs::create_dir_all(&path).expect("failed to create temp project");
+
+        Self { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn write(&self, path: &str, source: &str) -> PathBuf {
+        let path = self.path.join(path);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("failed to create parent directory");
+        }
+
+        fs::write(&path, source).expect("failed to write file");
+        path
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
 
 #[test]
 fn snapshot_prefers_open_document_over_file_contents() {
@@ -121,4 +168,142 @@ fn snapshot_keeps_project_inputs() {
     assert_eq!(snapshot.config().source, PathBuf::from("game"));
     assert_eq!(snapshot.source_roots(), &[PathBuf::from("game")]);
     assert!(!snapshot.builtin_catalogs().love);
+}
+
+#[test]
+fn cache_reuses_unedited_files_across_snapshots() {
+    let main = PathBuf::from("src/main.tua");
+    let other = PathBuf::from("src/other.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&main, "local main: number = 1\n");
+    host.set_file(&other, "local other: number = 2\n");
+
+    let first = host.snapshot();
+    assert!(first.parse(&main).is_some());
+    assert!(first.parse(&other).is_some());
+    assert_eq!(host.cache_stats().parse_misses, 2);
+    assert_eq!(host.cache_stats().parse_hits, 0);
+
+    let second = host.snapshot();
+    assert!(second.parse(&main).is_some());
+    assert!(second.parse(&other).is_some());
+    assert_eq!(host.cache_stats().parse_misses, 2);
+    assert_eq!(host.cache_stats().parse_hits, 2);
+}
+
+#[test]
+fn editing_one_file_does_not_reparse_unrelated_files() {
+    let main = PathBuf::from("src/main.tua");
+    let other = PathBuf::from("src/other.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&main, "local main: number = 1\n");
+    host.set_file(&other, "local other: number = 2\n");
+    host.snapshot();
+
+    host.set_file(&main, "local main: number = 3\n");
+    host.snapshot();
+
+    let stats = host.cache_stats();
+
+    assert_eq!(stats.parse_misses, 3);
+    assert_eq!(stats.parse_hits, 1);
+    assert_eq!(stats.invalidations, 1);
+}
+
+#[test]
+fn changing_exported_module_invalidates_known_importers() {
+    let temp = TempProject::new("module-dependency");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    let main = temp.write(
+        "src/main.tua",
+        r#"
+local Player = require("player")
+return Player.new()
+"#,
+    );
+    let player = temp.write(
+        "src/player.tua",
+        r#"
+local M = {}
+function M.new()
+  return { hp = 100 }
+end
+return M
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&main, fs::read_to_string(&main).expect("main should read"));
+    host.set_file(
+        &player,
+        fs::read_to_string(&player).expect("player should read"),
+    );
+    host.snapshot();
+
+    fs::write(
+        &player,
+        r#"
+local M = {}
+function M.new()
+  return { hp = 200 }
+end
+return M
+"#,
+    )
+    .expect("player should update");
+    host.set_file(
+        &player,
+        fs::read_to_string(&player).expect("player should read"),
+    );
+
+    let after_update = host.cache_stats();
+    assert_eq!(after_update.invalidations, 2);
+    assert_eq!(after_update.dependent_invalidations, 1);
+
+    host.snapshot();
+
+    let after_snapshot = host.cache_stats();
+    assert_eq!(after_snapshot.parse_misses, 4);
+}
+
+#[test]
+fn cache_stores_derived_query_products() {
+    let path = PathBuf::from("src/module.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &path,
+        r#"
+type Player = { hp: number }
+
+local M = {}
+
+function M.new(): Player
+  return { hp = 100 }
+end
+
+return M
+"#,
+    );
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot.type_environment(&path).is_some());
+    assert!(snapshot.module_exports(&path).is_some());
+    assert!(snapshot
+        .symbol_index(&path)
+        .iter()
+        .any(|symbol| symbol.name == "Player"));
+    assert!(snapshot.require_edges(&path).is_empty());
+
+    let stats = host.cache_stats();
+    assert_eq!(stats.type_environment_misses, 1);
+    assert_eq!(stats.diagnostics_misses, 1);
+    assert_eq!(stats.module_export_misses, 1);
+    assert_eq!(stats.require_edge_misses, 1);
+    assert_eq!(stats.symbol_index_misses, 1);
 }

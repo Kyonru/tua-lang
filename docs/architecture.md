@@ -127,11 +127,42 @@ assert_eq!(
 );
 ```
 
+### Query Cache Example
+
+The analysis cache is intentionally file-granular for now. It is not yet a full
+incremental query database, but it gives the LSP and future IDE queries a stable
+place to reuse expensive per-file work.
+
+```rust
+use tua_core::AnalysisHost;
+
+let mut host = AnalysisHost::new();
+
+host.set_file("src/main.tua", r#"local value: number = 1"#);
+host.set_file("src/player.tua", "return { hp = 100 }");
+
+// First snapshot parses files and builds derived per-file query products:
+// type environments, diagnostics, module exports, require edges, and symbols.
+let first = host.snapshot();
+assert!(first.parse("src/main.tua").is_some());
+
+// The second snapshot reuses unchanged files instead of reparsing them.
+let _second = host.snapshot();
+assert!(host.cache_stats().parse_hits > 0);
+
+// Editing a file invalidates that file. When require edges resolve to
+// project-backed files, editing an exported module also invalidates known
+// importers through the cached dependency graph. Unrelated files stay reusable.
+host.set_file("src/player.tua", "return { hp = 200 }");
+let _third = host.snapshot();
+assert!(host.cache_stats().invalidations > 0);
+```
+
 ## Gap Matrix
 
 | rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
 | --- | --- | --- | --- | --- |
-| `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | Partial LSP analysis snapshot plus VFS and project model inputs. | Partial | 53, 56 |
+| `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | `AnalysisHost`/`AnalysisSnapshot`, VFS, project model inputs, and a file-granular query cache. | Partial | 53, 56 |
 | `vfs`, `vfs-notify` | Tracks files, changes, paths, and file watching. | Core VFS plus LSP watched-file handling and CLI source discovery. | Partial | 54 |
 | `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
 | `parser` | Parses token streams into syntax. | `tua-core::parser`, full_moon-based Lua parsing, Tua syntax extraction. | Existing | 57 |
