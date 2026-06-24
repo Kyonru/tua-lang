@@ -14,7 +14,8 @@ use crate::source_text::{dotted_chain_at_position, line_at};
 use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
-    assists_parsed_source, build_type_environment,
+    assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
+    call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
     complete_tua_source, definition_parsed_source, document_highlights_parsed_source,
     document_symbols_parsed_source, emit_lua, exported_field_for_fields,
@@ -26,7 +27,9 @@ use crate::{
     reference_kind_for_rename, references_to_definition_parsed_source,
     rename_target_for_definition, require_bindings_for_parsed_source,
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
-    signature_help_tua_source, type_alias_definition_count, Assist, AssistRange, Completion,
+    signature_help_tua_source, type_alias_definition_count, Assist, AssistRange,
+    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyIncomingCall,
+    CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolTarget, Completion,
     CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
     FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
@@ -75,6 +78,8 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
+    call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
+    call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }
 
 #[derive(Clone, Debug)]
@@ -319,6 +324,22 @@ impl AnalysisHost {
             &module_graph,
             vfs.source_roots(),
         );
+        let call_hierarchy_symbols = files
+            .iter()
+            .filter_map(|(path, file)| {
+                let parsed = file.parsed.as_ref().ok()?;
+
+                Some((path.clone(), call_hierarchy_symbols_parsed_source(parsed)))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let call_hierarchy_calls = files
+            .iter()
+            .filter_map(|(path, file)| {
+                let parsed = file.parsed.as_ref().ok()?;
+
+                Some((path.clone(), call_hierarchy_calls_parsed_source(parsed)))
+            })
+            .collect::<BTreeMap<_, _>>();
 
         AnalysisSnapshot {
             config: self.config.clone(),
@@ -329,6 +350,8 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
+            call_hierarchy_symbols,
+            call_hierarchy_calls,
         }
     }
 
@@ -593,6 +616,106 @@ impl AnalysisSnapshot {
         folding_ranges_source(&file.source, &type_alias_spans)
     }
 
+    pub fn prepare_call_hierarchy(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Vec<CallHierarchySymbol> {
+        let path = normalize_path(path.as_ref());
+        let Some(file) = self.file(&path) else {
+            return Vec::new();
+        };
+        let Ok(parsed) = &file.parsed else {
+            return Vec::new();
+        };
+
+        if let Some(symbol) = call_hierarchy_prepare_parsed_source(parsed, position) {
+            return vec![symbol];
+        }
+
+        self.call_hierarchy_calls
+            .get(&path)
+            .into_iter()
+            .flatten()
+            .find(|call| contains_position(call.span, position))
+            .and_then(|call| self.resolve_call_hierarchy_target(&path, call))
+            .map(|symbol| vec![symbol])
+            .unwrap_or_default()
+    }
+
+    pub fn call_hierarchy_incoming(
+        &self,
+        path: impl AsRef<Path>,
+        selection_range: SourceSpan,
+    ) -> Vec<CallHierarchyIncomingCall> {
+        let Some(target) = self.call_hierarchy_symbol_for_identity(path.as_ref(), selection_range)
+        else {
+            return Vec::new();
+        };
+        let mut calls = Vec::new();
+
+        for (path, file_calls) in &self.call_hierarchy_calls {
+            for call in file_calls {
+                let Some(callee) = self.resolve_call_hierarchy_target(path, call) else {
+                    continue;
+                };
+
+                if !same_call_hierarchy_symbol(&callee, &target) {
+                    continue;
+                }
+
+                let Some(caller) = call
+                    .caller
+                    .as_ref()
+                    .and_then(|definition| self.call_hierarchy_symbol_for_definition(definition))
+                else {
+                    continue;
+                };
+
+                push_incoming_call(&mut calls, caller, call.span);
+            }
+        }
+
+        sort_incoming_calls(&mut calls);
+        calls
+    }
+
+    pub fn call_hierarchy_outgoing(
+        &self,
+        path: impl AsRef<Path>,
+        selection_range: SourceSpan,
+    ) -> Vec<CallHierarchyOutgoingCall> {
+        let Some(caller) = self.call_hierarchy_symbol_for_identity(path.as_ref(), selection_range)
+        else {
+            return Vec::new();
+        };
+        let mut calls = Vec::new();
+
+        for call in self
+            .call_hierarchy_calls
+            .get(&caller.path)
+            .into_iter()
+            .flatten()
+        {
+            if !call
+                .caller
+                .as_ref()
+                .is_some_and(|definition| definition_matches_call_symbol(definition, &caller))
+            {
+                continue;
+            }
+
+            let Some(callee) = self.resolve_call_hierarchy_target(&caller.path, call) else {
+                continue;
+            };
+
+            push_outgoing_call(&mut calls, callee, call.span);
+        }
+
+        sort_outgoing_calls(&mut calls);
+        calls
+    }
+
     pub fn assists(
         &self,
         path: impl AsRef<Path>,
@@ -815,6 +938,207 @@ impl AnalysisSnapshot {
 
     pub fn importable_symbols(&self, prefix: &str) -> Vec<&SymbolIndexEntry> {
         self.symbol_index.importable_symbols(prefix)
+    }
+
+    fn call_hierarchy_symbol_for_identity(
+        &self,
+        path: &Path,
+        selection_range: SourceSpan,
+    ) -> Option<CallHierarchySymbol> {
+        let path = normalize_path(path);
+
+        self.call_hierarchy_symbols
+            .get(&path)?
+            .iter()
+            .find(|symbol| symbol.path == path && symbol.selection_range == selection_range)
+            .cloned()
+    }
+
+    fn call_hierarchy_symbol_for_definition(
+        &self,
+        definition: &Definition,
+    ) -> Option<CallHierarchySymbol> {
+        self.call_hierarchy_symbols
+            .get(&normalize_path(&definition.path))?
+            .iter()
+            .find(|symbol| definition_matches_call_symbol(definition, symbol))
+            .cloned()
+    }
+
+    fn resolve_call_hierarchy_target(
+        &self,
+        current_path: &Path,
+        call: &CallHierarchyCallSite,
+    ) -> Option<CallHierarchySymbol> {
+        match &call.target {
+            CallHierarchyCallTarget::Name(name) => {
+                self.resolve_local_call_symbol(current_path, name, call.span.start)
+            }
+            CallHierarchyCallTarget::Field(parts) => self
+                .resolve_required_module_call_symbol(current_path, parts)
+                .or_else(|| self.resolve_qualified_call_symbol(current_path, parts)),
+            CallHierarchyCallTarget::Method { receiver, method } => {
+                let receiver_type = self.receiver_type_name(current_path, receiver, call)?;
+
+                self.resolve_method_call_symbol(current_path, &receiver_type, method)
+            }
+        }
+    }
+
+    fn resolve_local_call_symbol(
+        &self,
+        path: &Path,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<CallHierarchySymbol> {
+        self.call_hierarchy_symbols
+            .get(&normalize_path(path))?
+            .iter()
+            .filter(|symbol| call_symbol_targets_name(symbol, name))
+            .filter(|symbol| position_key(symbol.selection_range.start) <= position_key(position))
+            .max_by_key(|symbol| call_hierarchy_symbol_key(symbol))
+            .cloned()
+    }
+
+    fn resolve_qualified_call_symbol(
+        &self,
+        path: &Path,
+        parts: &[String],
+    ) -> Option<CallHierarchySymbol> {
+        self.call_hierarchy_symbols
+            .get(&normalize_path(path))?
+            .iter()
+            .find(|symbol| symbol.target == CallHierarchySymbolTarget::Qualified(parts.to_vec()))
+            .cloned()
+    }
+
+    fn resolve_required_module_call_symbol(
+        &self,
+        current_path: &Path,
+        parts: &[String],
+    ) -> Option<CallHierarchySymbol> {
+        let (receiver, fields) = parts.split_first()?;
+        let field = fields.first()?;
+        let file = self.file(current_path)?;
+        let binding = file
+            .hir
+            .as_ref()?
+            .require_bindings
+            .iter()
+            .find(|binding| binding.alias == *receiver)?;
+        let resolution = self
+            .module_graph
+            .resolve_require(current_path, &binding.module)?;
+        let (RequireResolution::Resolved { path }
+        | RequireResolution::Duplicate { selected: path, .. }) = resolution
+        else {
+            return None;
+        };
+
+        self.exported_call_symbol(path, field)
+    }
+
+    fn exported_call_symbol(&self, module_path: &Path, field: &str) -> Option<CallHierarchySymbol> {
+        let path = normalize_path(module_path);
+        let symbols = self.call_hierarchy_symbols.get(&path)?;
+
+        if let Some(symbol) = symbols
+            .iter()
+            .find(|symbol| symbol.target == CallHierarchySymbolTarget::Export(field.to_owned()))
+        {
+            return Some(symbol.clone());
+        }
+
+        let export = self.module_graph.export(&path, field)?;
+
+        symbols
+            .iter()
+            .find(|symbol| symbol.selection_range == export.definition_span)
+            .or_else(|| {
+                symbols
+                    .iter()
+                    .find(|symbol| call_symbol_targets_name(symbol, &export.public_name))
+            })
+            .cloned()
+    }
+
+    fn receiver_type_name(
+        &self,
+        path: &Path,
+        receiver: &str,
+        call: &CallHierarchyCallSite,
+    ) -> Option<String> {
+        let parsed = self.file(path)?.parsed.as_ref().ok()?;
+        let local = parsed
+            .local_annotations
+            .iter()
+            .filter(|annotation| annotation.name == receiver)
+            .filter(|annotation| {
+                annotation
+                    .name_span
+                    .or(annotation.span)
+                    .is_some_and(|span| position_key(span.start) <= position_key(call.span.start))
+            })
+            .max_by_key(|annotation| {
+                annotation
+                    .name_span
+                    .or(annotation.span)
+                    .map(|span| position_key(span.start))
+                    .unwrap_or((0, 0))
+            })
+            .and_then(|annotation| type_name_from_tua_type(&annotation.ty));
+
+        if local.is_some() {
+            return local;
+        }
+
+        let caller = call.caller.as_ref()?;
+
+        parsed
+            .function_annotations
+            .iter()
+            .find(|function| function.name_span == Some(caller.span))
+            .and_then(|function| {
+                function
+                    .parameters
+                    .iter()
+                    .find(|parameter| parameter.name == receiver)
+                    .and_then(|parameter| type_name_from_tua_type(&parameter.ty))
+            })
+    }
+
+    fn resolve_method_call_symbol(
+        &self,
+        current_path: &Path,
+        receiver_type: &str,
+        method: &str,
+    ) -> Option<CallHierarchySymbol> {
+        let current_path = normalize_path(current_path);
+        let mut matches = self
+            .call_hierarchy_symbols
+            .values()
+            .flatten()
+            .filter(|symbol| {
+                symbol.target
+                    == CallHierarchySymbolTarget::Method {
+                        receiver: receiver_type.to_owned(),
+                        method: method.to_owned(),
+                    }
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let same_file = matches
+            .iter()
+            .filter(|symbol| symbol.path == current_path)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if same_file.len() == 1 {
+            return same_file.into_iter().next();
+        }
+
+        (matches.len() == 1).then(|| matches.remove(0))
     }
 
     fn module_hover(&self, parsed: &ParsedSource, position: SourcePosition) -> Option<Hover> {
@@ -1583,6 +1907,122 @@ fn source_without_incomplete_field_access_lines(source: &str) -> String {
     }
 
     recovered
+}
+
+fn push_incoming_call(
+    calls: &mut Vec<CallHierarchyIncomingCall>,
+    from: CallHierarchySymbol,
+    from_range: SourceSpan,
+) {
+    if let Some(existing) = calls
+        .iter_mut()
+        .find(|call| same_call_hierarchy_symbol(&call.from, &from))
+    {
+        existing.from_ranges.push(from_range);
+        return;
+    }
+
+    calls.push(CallHierarchyIncomingCall {
+        from,
+        from_ranges: vec![from_range],
+    });
+}
+
+fn push_outgoing_call(
+    calls: &mut Vec<CallHierarchyOutgoingCall>,
+    to: CallHierarchySymbol,
+    from_range: SourceSpan,
+) {
+    if let Some(existing) = calls
+        .iter_mut()
+        .find(|call| same_call_hierarchy_symbol(&call.to, &to))
+    {
+        existing.from_ranges.push(from_range);
+        return;
+    }
+
+    calls.push(CallHierarchyOutgoingCall {
+        to,
+        from_ranges: vec![from_range],
+    });
+}
+
+fn sort_incoming_calls(calls: &mut [CallHierarchyIncomingCall]) {
+    for call in calls.iter_mut() {
+        sort_source_ranges(&mut call.from_ranges);
+    }
+
+    calls.sort_by_key(|call| call_hierarchy_symbol_key(&call.from));
+}
+
+fn sort_outgoing_calls(calls: &mut [CallHierarchyOutgoingCall]) {
+    for call in calls.iter_mut() {
+        sort_source_ranges(&mut call.from_ranges);
+    }
+
+    calls.sort_by_key(|call| call_hierarchy_symbol_key(&call.to));
+}
+
+fn sort_source_ranges(ranges: &mut [SourceSpan]) {
+    ranges.sort_by_key(source_span_key);
+}
+
+fn source_span_key(span: &SourceSpan) -> (usize, usize, usize, usize) {
+    (
+        span.start.line,
+        span.start.column,
+        span.end.line,
+        span.end.column,
+    )
+}
+
+fn same_call_hierarchy_symbol(left: &CallHierarchySymbol, right: &CallHierarchySymbol) -> bool {
+    left.path == right.path && left.selection_range == right.selection_range
+}
+
+fn definition_matches_call_symbol(definition: &Definition, symbol: &CallHierarchySymbol) -> bool {
+    definition.path == symbol.path && definition.span == symbol.selection_range
+}
+
+fn call_symbol_targets_name(symbol: &CallHierarchySymbol, name: &str) -> bool {
+    match &symbol.target {
+        CallHierarchySymbolTarget::Local(candidate) => candidate == name,
+        CallHierarchySymbolTarget::Qualified(parts) => {
+            parts.len() == 1 && parts.first().is_some_and(|candidate| candidate == name)
+        }
+        CallHierarchySymbolTarget::Method { .. } | CallHierarchySymbolTarget::Export(_) => false,
+    }
+}
+
+fn type_name_from_tua_type(ty: &TuaType) -> Option<String> {
+    match ty {
+        TuaType::Named(name) if name == "any" => None,
+        TuaType::Named(name) => Some(name.clone()),
+        TuaType::Union(types) => {
+            let names = types
+                .iter()
+                .filter_map(type_name_from_tua_type)
+                .filter(|name| name != "nil")
+                .collect::<BTreeSet<_>>();
+
+            (names.len() == 1)
+                .then(|| names.into_iter().next())
+                .flatten()
+        }
+        TuaType::Table(_) => None,
+    }
+}
+
+fn call_hierarchy_symbol_key(
+    symbol: &CallHierarchySymbol,
+) -> (PathBuf, usize, usize, usize, usize) {
+    (
+        symbol.path.clone(),
+        symbol.selection_range.start.line,
+        symbol.selection_range.start.column,
+        symbol.selection_range.end.line,
+        symbol.selection_range.end.column,
+    )
 }
 
 impl AnalysisQueryCache {

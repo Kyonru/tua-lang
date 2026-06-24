@@ -44,8 +44,9 @@ pub use analysis::{AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCa
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
-    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyExport, CallHierarchySymbol,
-    CallHierarchySymbolKind, CallHierarchySymbolTarget,
+    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyExport, CallHierarchyIncomingCall,
+    CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolKind,
+    CallHierarchySymbolTarget,
 };
 pub use check::{
     check_parsed_source, check_parsed_source_with_asset_roots_and_diagnostics_config,

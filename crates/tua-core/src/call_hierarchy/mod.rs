@@ -54,6 +54,18 @@ pub struct CallHierarchyExport {
     pub span: SourceSpan,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CallHierarchyIncomingCall {
+    pub from: CallHierarchySymbol,
+    pub from_ranges: Vec<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CallHierarchyOutgoingCall {
+    pub to: CallHierarchySymbol,
+    pub from_ranges: Vec<SourceSpan>,
+}
+
 pub fn call_hierarchy_prepare_parsed_source(
     parsed: &ParsedSource,
     position: crate::SourcePosition,
