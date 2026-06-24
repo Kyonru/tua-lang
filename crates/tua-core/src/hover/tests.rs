@@ -429,6 +429,34 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_self_index_constructor_instance_methods() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:new(balance)
+  local instance = { balance = balance }
+  return setmetatable(instance, self)
+end
+
+function Account:withdraw(amount)
+end
+
+local account = Account:new(100)
+account:withdraw(10)
+"#;
+    let hover = hover_tua_source(
+        "src/account.tua",
+        source,
+        position_at(source, "withdraw(10)"),
+    )
+    .expect("hover should not fail")
+    .expect("constructor instance method should hover");
+
+    assert_eq!(hover.contents, "(field) withdraw: function(any, any): any");
+}
+
+#[test]
 fn unknown_symbols_do_not_hover() {
     let source = "local result = missing\n";
     let position = position_at(source, "missing");

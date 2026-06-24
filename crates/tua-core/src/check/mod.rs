@@ -375,9 +375,10 @@ impl<'a> Checker<'a> {
         let Some((root, field, is_method)) = function_declaration_table_field(function) else {
             return;
         };
+        let is_constructor = is_method && function_body_returns_setmetatable_self(function.body());
         let ty = function_type_from_body_with_receiver(function.body(), is_method);
 
-        self.record_known_table_field_type(&root, &field, ty, false);
+        self.record_known_table_field_type(&root, &field, ty, false, is_constructor);
     }
 
     fn record_table_field_assignment_type(
@@ -403,6 +404,7 @@ impl<'a> Checker<'a> {
             field,
             widen_inferred_local_type(ty),
             is_self_index,
+            false,
         );
         true
     }
@@ -413,6 +415,7 @@ impl<'a> Checker<'a> {
         field: &str,
         ty: Type,
         is_self_index: bool,
+        is_constructor: bool,
     ) {
         let Some(mut root_ty) = self.infer_named_value(root) else {
             return;
@@ -423,6 +426,10 @@ impl<'a> Checker<'a> {
 
         if is_self_index {
             table.mark_self_index();
+        }
+
+        if is_constructor {
+            table.mark_constructor_method(field);
         }
 
         table.insert(field.to_owned(), TableField::required(ty));
@@ -595,6 +602,10 @@ impl<'a> Checker<'a> {
             Callable::Any => vec![Type::Any],
             Callable::Function(function) => {
                 self.check_call_arguments(function_call, &function);
+
+                if let Some(ty) = self.constructor_call_return_type(function_call) {
+                    return vec![ty];
+                }
 
                 function.return_types_or_any().to_vec()
             }
@@ -774,6 +785,17 @@ impl<'a> Checker<'a> {
         let item = lua_type_field_item(self.environment, &receiver_type, method)?;
 
         external_function_type_from_lua_item(item)
+    }
+
+    fn constructor_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        let (method, receiver_parts) = parts.split_last()?;
+        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+        let Type::Table(table) = resolve_aliases(&receiver_type, self.environment, 0) else {
+            return None;
+        };
+
+        (table.has_self_index() && table.is_constructor_method(method)).then_some(receiver_type)
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
@@ -1533,6 +1555,20 @@ fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_recei
     }
 
     Type::Function(function)
+}
+
+fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
+    let Some(LastStmt::Return(return_stmt)) = body.block().last_stmt() else {
+        return false;
+    };
+    let Some(Expression::FunctionCall(function_call)) = return_stmt.returns().iter().next() else {
+        return false;
+    };
+    let Some((_, meta)) = setmetatable_arguments(function_call) else {
+        return false;
+    };
+
+    expression_is_name(meta, "self")
 }
 
 fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {

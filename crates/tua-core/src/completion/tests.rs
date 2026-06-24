@@ -1002,6 +1002,36 @@ account:
     assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
 }
 
+#[test]
+fn completes_self_index_constructor_instance_methods() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:new(balance)
+  local instance = { balance = balance }
+  return setmetatable(instance, self)
+end
+
+function Account:withdraw(amount)
+end
+
+local account = Account:new(100)
+
+account:
+"#;
+    let completions = complete_tua_source(
+        "src/account.tua",
+        source,
+        position_after(source, "account:"),
+    )
+    .expect("constructor instance completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"withdraw".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
+}
+
 fn complete_at(needle: &str) -> Result<Vec<Completion>, Vec<Diagnostic>> {
     complete_tua_source("src/main.tua", SOURCE, position_after(SOURCE, needle))
 }

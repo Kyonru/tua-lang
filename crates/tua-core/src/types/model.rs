@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -162,6 +162,7 @@ pub struct TableShape {
     fields: BTreeMap<String, TableField>,
     metatable: Option<Box<MetatableFacts>>,
     self_index: bool,
+    constructor_methods: BTreeSet<String>,
 }
 
 impl TableShape {
@@ -170,6 +171,7 @@ impl TableShape {
             fields: BTreeMap::new(),
             metatable: None,
             self_index: false,
+            constructor_methods: BTreeSet::new(),
         }
     }
 
@@ -196,6 +198,10 @@ impl TableShape {
     }
 
     pub fn semantic_field(&self, name: &str) -> Option<&TableField> {
+        if is_metamethod_field(name) {
+            return None;
+        }
+
         self.field(name)
             .or_else(|| self.metatable.as_ref()?.implied_field(name))
     }
@@ -207,7 +213,12 @@ impl TableShape {
     }
 
     pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
-        let mut fields = self.fields.clone();
+        let mut fields = self
+            .fields
+            .iter()
+            .filter(|(name, _)| !is_metamethod_field(name))
+            .map(|(name, field)| (name.clone(), field.clone()))
+            .collect::<BTreeMap<_, _>>();
 
         if let Some(facts) = &self.metatable {
             if let IndexFallback::Table(index_table) = &facts.index {
@@ -245,6 +256,14 @@ impl TableShape {
 
     pub fn has_self_index(&self) -> bool {
         self.self_index
+    }
+
+    pub fn mark_constructor_method(&mut self, name: impl Into<String>) {
+        self.constructor_methods.insert(name.into());
+    }
+
+    pub fn is_constructor_method(&self, name: &str) -> bool {
+        self.constructor_methods.contains(name)
     }
 }
 

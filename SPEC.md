@@ -190,6 +190,8 @@ Supported v1 facts:
 - simple `__index` table/function fallbacks may expose known string keys;
 - self-index class tables such as `Account.__index = Account` may expose
   methods on instances created with `setmetatable({}, Account)`;
+- constructor methods that visibly return `setmetatable(instance, self)`, such
+  as `Account:new(...)`, may infer an Account-like instance result;
 - `__newindex` keeps unknown assignment paths permissive;
 - `__add` may preserve a vector-like left operand shape;
 - `tostring(value)` is treated as returning `string`.

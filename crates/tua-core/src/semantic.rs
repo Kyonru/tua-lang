@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use full_moon::ast::{
-    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, Prefix, Suffix,
+    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix,
     TableConstructor, Var,
 };
 use full_moon::node::Node;
@@ -125,6 +125,10 @@ impl<'a> SemanticModel<'a> {
         }
 
         if let Some(Type::Function(function)) = self.type_of_field_chain(parts, position) {
+            if let Some(ty) = self.constructor_call_return_type(parts, position) {
+                return vec![ty];
+            }
+
             return function.return_types_or_any().to_vec();
         }
 
@@ -387,11 +391,28 @@ impl<'a> SemanticModel<'a> {
                     }
 
                     let ty = function_type_from_body_with_receiver(function.body(), is_method);
+                    if is_method && function_body_returns_setmetatable_self(function.body()) {
+                        table.mark_constructor_method(&field);
+                    }
                     table.insert(field, TableField::required(ty));
                 }
                 _ => {}
             }
         }
+    }
+
+    fn constructor_call_return_type(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let (method, receiver_parts) = parts.split_last()?;
+        let receiver_type = self.type_of_field_chain(receiver_parts, position)?;
+        let Type::Table(table) = resolve_aliases(self.environment, &receiver_type, 0) else {
+            return None;
+        };
+
+        (table.has_self_index() && table.is_constructor_method(method)).then_some(receiver_type)
     }
 
     fn alias_map(&self) -> BTreeMap<String, Type> {
@@ -862,6 +883,20 @@ fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_recei
     }
 
     Type::Function(function)
+}
+
+fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
+    let Some(LastStmt::Return(return_stmt)) = body.block().last_stmt() else {
+        return false;
+    };
+    let Some(Expression::FunctionCall(function_call)) = return_stmt.returns().iter().next() else {
+        return false;
+    };
+    let Some((_, meta)) = setmetatable_arguments(function_call) else {
+        return false;
+    };
+
+    expression_is_name(meta, "self")
 }
 
 pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {

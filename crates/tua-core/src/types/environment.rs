@@ -1967,9 +1967,10 @@ fn infer_function_declaration_type(
     let Some((root, field, is_method)) = function_declaration_table_field(function) else {
         return;
     };
+    let is_constructor = is_method && function_body_returns_setmetatable_self(function.body());
     let ty = function_type_from_body_with_receiver(function.body(), is_method);
 
-    insert_table_field_type(locals, &root, &field, ty, false);
+    insert_table_field_type(locals, &root, &field, ty, false, is_constructor);
 }
 
 fn infer_table_field_assignment_type(
@@ -1999,7 +2000,7 @@ fn infer_table_field_assignment_type(
         return true;
     };
 
-    insert_table_field_type(locals, root, field, ty, is_self_index);
+    insert_table_field_type(locals, root, field, ty, is_self_index, false);
     true
 }
 
@@ -2009,6 +2010,7 @@ fn insert_table_field_type(
     field: &str,
     ty: Type,
     is_self_index: bool,
+    is_constructor: bool,
 ) {
     let Some(Type::Table(mut table)) = locals.get(root).cloned() else {
         return;
@@ -2016,6 +2018,10 @@ fn insert_table_field_type(
 
     if is_self_index {
         table.mark_self_index();
+    }
+
+    if is_constructor {
+        table.mark_constructor_method(field);
     }
 
     table.insert(field.to_owned(), TableField::required(ty));
@@ -2300,6 +2306,12 @@ fn infer_function_call_return_types(
             if let Some(receiver_type) =
                 infer_field_chain_type(parsed, aliases, locals, receiver_parts)
             {
+                if let Some(ty) =
+                    constructor_call_return_type_from_map(aliases, &receiver_type, method)
+                {
+                    return vec![ty];
+                }
+
                 let returns = love_object_method_return_types(aliases, &receiver_type, method);
 
                 if !returns.is_empty() {
@@ -2312,6 +2324,18 @@ fn infer_function_call_return_types(
     infer_field_chain_type(parsed, aliases, locals, &parts)
         .map(|ty| function_return_types(&ty))
         .unwrap_or_default()
+}
+
+fn constructor_call_return_type_from_map(
+    aliases: &BTreeMap<String, Type>,
+    receiver_type: &Type,
+    method: &str,
+) -> Option<Type> {
+    let Type::Table(table) = resolve_aliases_from_map(aliases, receiver_type, 0) else {
+        return None;
+    };
+
+    (table.has_self_index() && table.is_constructor_method(method)).then(|| receiver_type.clone())
 }
 
 fn setmetatable_return_type(
@@ -2701,6 +2725,20 @@ fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_recei
     }
 
     Type::Function(function)
+}
+
+fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
+    let Some(LastStmt::Return(return_stmt)) = body.block().last_stmt() else {
+        return false;
+    };
+    let Some(Expression::FunctionCall(function_call)) = return_stmt.returns().iter().next() else {
+        return false;
+    };
+    let Some((_, meta)) = setmetatable_arguments(function_call) else {
+        return false;
+    };
+
+    expression_is_name(meta, "self")
 }
 
 fn index_fields_from_expression(expression: &Expression) -> Vec<(String, TableField)> {

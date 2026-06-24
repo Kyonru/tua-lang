@@ -526,6 +526,30 @@ account:withdraw(10)
 }
 
 #[test]
+fn accepts_self_index_constructor_returning_setmetatable_self() {
+    check_tua_source(
+        "src/account.tua",
+        r#"
+local Account = {}
+Account.__index = Account
+
+function Account:new(balance)
+  local instance = { balance = balance }
+  return setmetatable(instance, self)
+end
+
+function Account:withdraw(amount)
+  self.balance = self.balance - amount
+end
+
+local account = Account:new(100)
+account:withdraw(10)
+"#,
+    )
+    .expect("constructor methods returning setmetatable(instance, self) should infer instances");
+}
+
+#[test]
 fn rejects_love_method_argument_count_mismatch() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
