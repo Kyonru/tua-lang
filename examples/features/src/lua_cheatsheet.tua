@@ -340,6 +340,9 @@ local methodCallFour = lookupObject:y(4)
 -- Tua models visible __add, __sub, __mul, __div, __eq, __lt, __le, __len,
 -- __call, __index, __newindex, and __tostring facts when setmetatable is
 -- statically visible.
+-- Feature: typed __newindex checks.
+-- The literal key contract below means vectorA.label must be string, while
+-- other dynamic keys remain permissive.
 type MetaVector = {
   x: number,
   y: number,
@@ -392,7 +395,7 @@ local vectorMetatable = {
 
     return nil
   end,
-  __newindex = function(tableValue, key, value)
+  __newindex = function(tableValue, key: "label", value: string)
     rawset(tableValue, key, value)
   end,
 }
@@ -411,7 +414,7 @@ local vectorIsLessOrEqual = vectorA <= vectorB
 local vectorLengthValue = #vectorA
 local vectorScaled = vectorA(2)
 local vectorText = tostring(vectorSum)
-vectorA.label = "uses __newindex"
+vectorA.label = "checked through typed __newindex"
 local vectorMissingLength = vectorA.length
 
 -- Feature: modules and require interop.

@@ -609,6 +609,107 @@ local scaled = vector("large")
 }
 
 #[test]
+fn rejects_static_newindex_function_value_mismatch_for_literal_key() {
+    let diagnostics = check_tua_source(
+        "src/newindex.tua",
+        r#"
+local meta = {
+  __newindex = function(t, key: "label", value: string)
+  end,
+}
+
+local obj = {}
+setmetatable(obj, meta)
+
+obj.label = 123
+"#,
+    )
+    .expect_err("visible __newindex function should check matching literal key assignments");
+
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
+fn accepts_static_newindex_function_matching_value_type() {
+    check_tua_source(
+        "src/newindex.tua",
+        r#"
+local meta = {
+  __newindex = function(t, key: "label", value: string)
+  end,
+}
+
+local obj = {}
+setmetatable(obj, meta)
+
+obj.label = "ready"
+"#,
+    )
+    .expect("visible __newindex function should accept matching literal key assignments");
+}
+
+#[test]
+fn rejects_static_newindex_table_value_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/newindex.tua",
+        r#"
+local meta = {
+  __newindex = {
+    label = string,
+  },
+}
+
+local obj = {}
+setmetatable(obj, meta)
+
+obj.label = 123
+"#,
+    )
+    .expect_err("visible __newindex table should check matching field assignments");
+
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
+fn accepts_static_newindex_table_matching_value_type() {
+    check_tua_source(
+        "src/newindex.tua",
+        r#"
+local meta = {
+  __newindex = {
+    label = string,
+  },
+}
+
+local obj = {}
+setmetatable(obj, meta)
+
+obj.label = "ready"
+"#,
+    )
+    .expect("visible __newindex table should accept matching field assignments");
+}
+
+#[test]
+fn unknown_newindex_keys_remain_permissive() {
+    check_tua_source(
+        "src/newindex.tua",
+        r#"
+local meta = {
+  __newindex = function(t, key: "label", value: string)
+  end,
+}
+
+local obj = {}
+setmetatable(obj, meta)
+
+obj.count = 123
+"#,
+    )
+    .expect("unknown __newindex keys should remain gradual");
+}
+
+#[test]
 fn accepts_self_index_class_style_metatable_methods() {
     check_tua_source(
         "src/account.tua",

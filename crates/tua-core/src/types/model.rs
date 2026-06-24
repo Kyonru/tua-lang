@@ -428,6 +428,35 @@ pub enum NewIndexRule {
     Unknown,
 }
 
+impl NewIndexRule {
+    pub fn assignment_type_for_key(&self, key: &str) -> Option<Type> {
+        match self {
+            NewIndexRule::Table(table) => table.field(key).map(|field| field.ty.clone()),
+            NewIndexRule::Function(function) => {
+                let key_type = function.parameters.get(1)?;
+                let value_type = function.parameters.get(2)?;
+
+                if newindex_key_accepts(key_type, key) {
+                    Some(value_type.clone())
+                } else {
+                    None
+                }
+            }
+            NewIndexRule::None | NewIndexRule::Unknown => None,
+        }
+    }
+}
+
+fn newindex_key_accepts(ty: &Type, key: &str) -> bool {
+    match ty {
+        Type::Any => false,
+        Type::Primitive(PrimitiveType::String) => true,
+        Type::StringLiteral(value) => value == key,
+        Type::Union(types) => types.iter().any(|ty| newindex_key_accepts(ty, key)),
+        _ => false,
+    }
+}
+
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

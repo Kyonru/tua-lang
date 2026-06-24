@@ -196,7 +196,10 @@ Supported v1 facts:
   methods on instances created with `setmetatable({}, Account)`;
 - constructor methods that visibly return `setmetatable(instance, self)`, such
   as `Account:new(...)`, may infer an Account-like instance result;
-- `__newindex` keeps unknown assignment paths permissive;
+- `__newindex` may check simple assignment contracts when either
+  `__newindex = function(t, key: "label", value: string) ... end` or
+  `__newindex = { label = string }` is visible. Unknown keys remain
+  permissive;
 - visible arithmetic metamethods `__add`, `__sub`, `__mul`, and `__div` may
   provide operator result types;
 - visible comparison metamethods `__eq`, `__lt`, and `__le` may provide

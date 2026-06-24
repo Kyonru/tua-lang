@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Return,
     Suffix, TableConstructor, Var,
@@ -402,6 +403,13 @@ impl<'a> Checker<'a> {
             return true;
         };
 
+        if self
+            .infer_named_value(root)
+            .is_some_and(|root_type| self.field_assignment_uses_newindex(&root_type, field))
+        {
+            return true;
+        }
+
         self.record_known_table_field_type(
             root,
             field,
@@ -410,6 +418,17 @@ impl<'a> Checker<'a> {
             false,
         );
         true
+    }
+
+    fn field_assignment_uses_newindex(&self, root_type: &Type, field: &str) -> bool {
+        let Type::Table(table) = resolve_aliases(root_type, self.environment, 0) else {
+            return false;
+        };
+
+        table.field(field).is_none()
+            && table
+                .metatable_facts()
+                .is_some_and(|facts| facts.newindex.assignment_type_for_key(field).is_some())
     }
 
     fn record_known_table_field_type(
@@ -548,7 +567,12 @@ impl<'a> Checker<'a> {
         for field in table.fields() {
             if let Field::NameKey { key, value, .. } = field {
                 let key_text = token_text(key);
-                let ty = self.infer_expression(value).unwrap_or(Type::Any);
+                let ty = if key_text == "__newindex" {
+                    self.infer_newindex_expression(value)
+                } else {
+                    self.infer_expression(value)
+                }
+                .unwrap_or(Type::Any);
 
                 if key_text == "__index" {
                     fields.extend(index_fields_from_expression(value));
@@ -559,6 +583,24 @@ impl<'a> Checker<'a> {
         }
 
         Type::table(fields)
+    }
+
+    fn infer_newindex_expression(&mut self, expression: &Expression) -> Option<Type> {
+        match expression {
+            Expression::TableConstructor(table) => {
+                Some(Type::table(table.fields().iter().filter_map(|field| {
+                    let Field::NameKey { key, value, .. } = field else {
+                        return None;
+                    };
+
+                    Some((
+                        token_text(key),
+                        TableField::required(type_literal_expression(value)?),
+                    ))
+                })))
+            }
+            _ => self.infer_expression(expression),
+        }
     }
 
     fn infer_var_value(&mut self, var: &Var) -> Option<Type> {
@@ -933,10 +975,22 @@ impl<'a> Checker<'a> {
         match var {
             Var::Name(name) => self.infer_named_assignment_target(&token_text(name)),
             Var::Expression(expression) => {
-                self.resolve_field_chain_type(&plain_field_chain_from_var_expression(expression)?)
+                let parts = plain_field_chain_from_var_expression(expression)?;
+
+                self.resolve_field_chain_type(&parts)
+                    .or_else(|| self.resolve_newindex_assignment_type(&parts))
             }
             _ => None,
         }
+    }
+
+    fn resolve_newindex_assignment_type(&self, parts: &[String]) -> Option<Type> {
+        let (field, receiver_parts) = parts.split_last()?;
+        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+
+        self.resolve_metatable_facts(&receiver_type)?
+            .newindex
+            .assignment_type_for_key(field)
     }
 
     fn infer_named_assignment_target(&self, name: &str) -> Option<Type> {
@@ -1592,13 +1646,58 @@ fn is_method_call(function_call: &FunctionCall) -> bool {
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
-    let parameter_count = body
+    let parameters = function_parameter_types(body);
+    let return_type = body
+        .return_type()
+        .and_then(|specifier| type_from_type_info(specifier.type_info()))
+        .unwrap_or(Type::Any);
+
+    Type::function(parameters, return_type)
+}
+
+fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {
+    let parameters = body
         .parameters()
         .iter()
-        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
-        .count();
+        .filter_map(|parameter| match parameter {
+            ast::Parameter::Name(name) => Some((name.start_position()?, name.end_position()?)),
+            ast::Parameter::Ellipsis(_) => None,
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let specifiers = body
+        .type_specifiers()
+        .filter_map(|specifier| {
+            let specifier = specifier?;
+            Some((
+                specifier.start_position()?,
+                type_from_type_info(specifier.type_info())?,
+            ))
+        })
+        .collect::<Vec<_>>();
 
-    Type::function(vec![Type::Any; parameter_count], Type::Any)
+    parameters
+        .iter()
+        .enumerate()
+        .map(|(index, (_, parameter_end))| {
+            let next_parameter_start = parameters.get(index + 1).map(|(start, _)| *start);
+
+            specifiers
+                .iter()
+                .find_map(|(specifier_start, ty)| {
+                    if specifier_start >= parameter_end
+                        && next_parameter_start
+                            .map(|next_start| specifier_start < &next_start)
+                            .unwrap_or(true)
+                    {
+                        Some(ty.clone())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(Type::Any)
+        })
+        .collect()
 }
 
 fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_receiver: bool) -> Type {
@@ -1732,6 +1831,48 @@ fn is_quoted_string_literal(value: &str) -> bool {
 
     (value.len() >= 2 && value.starts_with('"') && value.ends_with('"'))
         || (value.len() >= 2 && value.starts_with('\'') && value.ends_with('\''))
+}
+
+fn type_literal_expression(expression: &Expression) -> Option<Type> {
+    match expression {
+        Expression::Var(Var::Name(name)) => type_from_type_label(&token_text(name)),
+        Expression::String(value) => Some(Type::string_literal(unquote_string(&value.to_string()))),
+        _ => None,
+    }
+}
+
+fn type_from_type_label(label: &str) -> Option<Type> {
+    let label = label.trim();
+
+    if is_quoted_string_literal(label) {
+        return Some(Type::string_literal(unquote_string(label)));
+    }
+
+    match label {
+        "number" => Some(Type::number()),
+        "string" => Some(Type::string()),
+        "boolean" => Some(Type::boolean()),
+        "nil" => Some(Type::nil()),
+        "any" => Some(Type::Any),
+        _ => None,
+    }
+}
+
+fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
+    match type_info {
+        TypeInfo::Basic(token) => type_from_type_label(&token_text(token)),
+        TypeInfo::String(token) => Some(Type::string_literal(unquote_string(&token_text(token)))),
+        TypeInfo::Optional { base, .. } => {
+            Some(Type::union([type_from_type_info(base)?, Type::nil()]))
+        }
+        TypeInfo::Union(union) => union
+            .types()
+            .iter()
+            .map(type_from_type_info)
+            .collect::<Option<Vec<_>>>()
+            .map(Type::union),
+        _ => type_from_type_label(&type_info.to_string()),
+    }
 }
 
 fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callable> {
@@ -1914,10 +2055,16 @@ fn type_with_string_literals_erased(ty: &Type) -> Type {
         ),
         Type::Table(table) => {
             let mut erased = crate::TableShape::from_fields(table.fields().map(|(name, field)| {
+                let ty = if is_metamethod_field_name(name) {
+                    field.ty.clone()
+                } else {
+                    type_with_string_literals_erased(&field.ty)
+                };
+
                 (
                     name.to_owned(),
                     crate::TableField {
-                        ty: type_with_string_literals_erased(&field.ty),
+                        ty,
                         optional: field.optional,
                     },
                 )
@@ -1949,6 +2096,10 @@ fn type_with_string_literals_erased(ty: &Type) -> Type {
 
 fn widen_inferred_local_type(ty: Type) -> Type {
     type_with_string_literals_erased(&ty)
+}
+
+fn is_metamethod_field_name(name: &str) -> bool {
+    name.starts_with("__")
 }
 
 fn type_contains_string_literal(ty: &Type) -> bool {

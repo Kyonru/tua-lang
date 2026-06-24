@@ -205,6 +205,28 @@ fn extracts_metatable_facts_from_table_shape() {
 }
 
 #[test]
+fn newindex_rules_resolve_assignment_types_for_known_keys() {
+    let table_rule = NewIndexRule::Table(TableShape::from_fields([(
+        "label",
+        TableField::required(Type::string()),
+    )]));
+    let function_rule = NewIndexRule::Function(FunctionType::new(
+        [Type::Any, Type::string_literal("label"), Type::string()],
+        Type::nil(),
+    ));
+
+    assert_eq!(
+        table_rule.assignment_type_for_key("label"),
+        Some(Type::string())
+    );
+    assert_eq!(
+        function_rule.assignment_type_for_key("label"),
+        Some(Type::string())
+    );
+    assert_eq!(function_rule.assignment_type_for_key("count"), None);
+}
+
+#[test]
 fn attaches_metatable_facts_without_polluting_base_fields() {
     let base = Type::table([
         ("x", TableField::required(Type::number())),

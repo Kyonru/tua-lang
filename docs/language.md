@@ -364,7 +364,9 @@ subset understands:
   methods declared with `function Account:withdraw(amount)`;
 - constructor methods such as `Account:new(...)` when their body visibly
   returns `setmetatable(instance, self)`;
-- `__newindex` as an assignment-compatible dynamic boundary;
+- `__newindex` assignment contracts for simple visible forms such as
+  `__newindex = function(t, key: "label", value: string) ... end` and
+  `__newindex = { label = string }`, while unknown keys stay permissive;
 - visible arithmetic metamethods `__add`, `__sub`, `__mul`, and `__div`;
 - visible comparison metamethods `__eq`, `__lt`, and `__le`;
 - visible `__len` for `#value`;
