@@ -9,6 +9,7 @@ local enemyFromLuaDocModule: LuaDocTypes.Enemy = nil
 
 local a = enemyFromLuaDocModule
 
+local str = "hello"
 
 return {
   playerFromTuaModule = playerFromTuaModule,

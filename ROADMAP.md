@@ -1290,6 +1290,53 @@ Acceptance:
 - Diagnostics for formatting lints include ranges that can be pinned in editor
   UI and resolved through the current diagnostics path.
 
+### 70.10 `feat(luadoc): expand LuaLS/LuaCATS annotation compatibility`
+
+Scope:
+
+- Expand beyond the initial LuaHelper/LuaLS annotation subset from commits 33
+  and 34 using <https://luals.github.io/wiki/annotations/> as the primary
+  compatibility reference.
+- Preserve string literal types and literal unions instead of lowering them to
+  plain `string`, so annotations like `"static" | "stream"` and
+  `'friendly' | 'mad'` can power precise diagnostics and completions.
+- Support optional shorthand such as `number?` as `number | nil`.
+- Parse and lower additional LuaCATS type forms where they help common Lua and
+  LOVE libraries:
+  - arrays such as `Image[]`;
+  - tuples such as `[number, number]`;
+  - dictionaries such as `{ [string]: Source }`;
+  - key-value tables such as `table<string, Image>`;
+  - function types such as `fun(path: string): Image`.
+- Parse useful LuaLS annotation tags not covered by the first subset:
+  - `---@enum`
+  - `---@meta`
+  - `---@module`
+  - `---@diagnostic`
+  - `---@cast`
+  - `---@as`
+  - `---@deprecated`
+  - `---@nodiscard`
+- Keep unsupported or partially supported annotation forms non-fatal. They may
+  preserve docs and spans without affecting types until a later commit.
+- Add examples under `examples/features` with comments showing the supported
+  LuaLS/LuaCATS forms.
+
+Acceptance:
+
+- LuaLS-style annotations from representative Lua and LOVE libraries produce
+  useful hover, completion, signature help, and diagnostics.
+- Literal unions complete valid string values and reject invalid values when the
+  expected type is known.
+- Optional shorthand, arrays, dictionaries, key-value tables, and function types
+  round-trip through the typed annotation model with source spans.
+- Meta/module annotations can describe definition-only Lua files and simulated
+  require bindings without executing project code.
+- Malformed or unsupported annotations remain controlled by the existing
+  `doc_annotations` diagnostic setting.
+- Examples and docs describe the supported subset honestly, including any
+  LuaLS forms intentionally left shallow.
+
 ## Phase 13: LOVE Domain Extensions
 
 This phase explores Tua's identity as a LOVE-focused Lua language. The goal is

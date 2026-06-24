@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, Prefix, Suffix,
     TableConstructor, Var,
@@ -9,8 +11,9 @@ use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{
     required_module_export_type_for_fields, required_module_exports_for_receiver, ModuleExports,
 };
+use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
 use crate::types::{FunctionType, PrimitiveType, TableField, Type, TypeEnvironment, TypedFunction};
-use crate::{ParsedSource, SourcePosition, SourceSpan, TypedParameter};
+use crate::{ParsedSource, SourcePosition, SourceSpan, TuaType, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -216,6 +219,32 @@ impl<'a> SemanticModel<'a> {
             return None;
         }
 
+        if let Some(base) = self.type_of_name_without_narrowing(name, position, depth) {
+            let aliases = self.alias_map();
+            if let Some(narrowed) =
+                narrowed_type_at_position(self.parsed, &aliases, name, position, |lookup_name| {
+                    self.type_of_name_without_narrowing(lookup_name, position, depth + 1)
+                })
+            {
+                return Some(narrowed);
+            }
+
+            return Some(base);
+        }
+
+        None
+    }
+
+    fn type_of_name_without_narrowing(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
+            return None;
+        }
+
         self.environment
             .local(name)
             .cloned()
@@ -240,6 +269,14 @@ impl<'a> SemanticModel<'a> {
                     )
                 })
             })
+            .or_else(|| self.parameter_type_at_position(name, position))
+    }
+
+    fn alias_map(&self) -> BTreeMap<String, Type> {
+        self.environment
+            .aliases()
+            .map(|(name, ty)| (name.to_owned(), ty.clone()))
+            .collect()
     }
 
     fn type_of_expression_return_at_depth(
@@ -323,6 +360,25 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<LocalAssignmentValue<'a>> {
         local_assignment_value_in_block(self.parsed.ast.nodes(), name, position)
+    }
+
+    fn parameter_type_at_position(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        self.parsed
+            .function_annotations
+            .iter()
+            .filter_map(|function| {
+                let span = function.span?;
+
+                contains_position(span, position).then_some(function)
+            })
+            .filter_map(|function| {
+                function
+                    .parameters
+                    .iter()
+                    .find(|parameter| parameter.name == name)
+            })
+            .next_back()
+            .map(|parameter| type_from_tua_type(&parameter.ty))
     }
 }
 
@@ -422,6 +478,32 @@ fn collect_local_assignment_values<'a>(
         }
 
         match stmt {
+            ast::Stmt::Assignment(assignment) => {
+                let expressions = assignment.expressions().iter().collect::<Vec<_>>();
+
+                for (index, variable) in assignment.variables().iter().enumerate() {
+                    let Some(span) = node_span(variable) else {
+                        continue;
+                    };
+
+                    if directly_assigned_name(variable).as_deref() != Some(name)
+                        || !starts_before_or_at(span.start, position)
+                    {
+                        continue;
+                    }
+
+                    let (expression, return_index) =
+                        assignment_expression_for_local(&expressions, index)
+                            .map(|(expression, return_index)| (Some(expression), return_index))
+                            .unwrap_or((None, 0));
+
+                    candidates.push(LocalAssignmentValue {
+                        span,
+                        expression,
+                        return_index,
+                    });
+                }
+            }
             ast::Stmt::LocalAssignment(local) => {
                 let expressions = local.expressions().iter().collect::<Vec<_>>();
 
@@ -522,6 +604,30 @@ fn assignment_expression_for_local<'a>(
         .last()
         .copied()
         .map(|expression| (expression, index - fixed_expression_count))
+}
+
+fn type_from_tua_type(ty: &TuaType) -> Type {
+    match ty {
+        TuaType::Named(name) => Type::named(name.clone()),
+        TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
+        TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
+            (
+                field.name.clone(),
+                TableField {
+                    ty: type_from_tua_type(&field.ty),
+                    optional: field.optional,
+                },
+            )
+        })),
+    }
+}
+
+fn contains_position(span: SourceSpan, position: SourcePosition) -> bool {
+    let start = position_key(span.start);
+    let end = position_key(span.end);
+    let position = position_key(position);
+
+    start <= position && position < end
 }
 
 pub(crate) fn plain_field_chain_from_var_expression(

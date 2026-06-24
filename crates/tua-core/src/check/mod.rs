@@ -10,6 +10,7 @@ use full_moon::node::Node;
 use crate::config::DiagnosticsConfig;
 use crate::lint::lint_parsed_source;
 use crate::module_index::required_module_export_type_for_fields;
+use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeContext, TypeEnvironment,
@@ -125,7 +126,16 @@ impl<'a> Checker<'a> {
     }
 
     fn check_block(&mut self, block: &ast::Block, current_return: Option<&[Type]>) {
-        self.scoped_locals.push(BTreeMap::new());
+        self.check_block_with_locals(block, current_return, BTreeMap::new());
+    }
+
+    fn check_block_with_locals(
+        &mut self,
+        block: &ast::Block,
+        current_return: Option<&[Type]>,
+        locals: BTreeMap<String, Type>,
+    ) {
+        self.scoped_locals.push(locals);
 
         for stmt in block.stmts() {
             self.check_stmt(stmt, current_return);
@@ -148,11 +158,18 @@ impl<'a> Checker<'a> {
             ast::Stmt::Do(block) => self.check_block(block.block(), current_return),
             ast::Stmt::If(if_stmt) => {
                 self.check_condition_expression(if_stmt.condition());
-                self.check_block(if_stmt.block(), current_return);
+                let narrowed_locals = self.narrowed_locals_for_condition(if_stmt.condition());
+                self.check_block_with_locals(if_stmt.block(), current_return, narrowed_locals);
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
                         self.check_condition_expression(else_if.condition());
-                        self.check_block(else_if.block(), current_return);
+                        let narrowed_locals =
+                            self.narrowed_locals_for_condition(else_if.condition());
+                        self.check_block_with_locals(
+                            else_if.block(),
+                            current_return,
+                            narrowed_locals,
+                        );
                     }
                 }
                 if let Some(else_block) = if_stmt.else_block() {
@@ -298,11 +315,38 @@ impl<'a> Checker<'a> {
 
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
         for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
+            let source = self.infer_expression(expression);
             let Some(target) = self.infer_var_assignment_target(variable) else {
                 continue;
             };
 
-            self.check_expression_assignable(expression, &target);
+            if let Some(source) = &source {
+                self.check_type_assignable(expression, source, &target);
+            }
+
+            self.record_assignment_type(variable, source);
+        }
+    }
+
+    fn record_assignment_type(&mut self, variable: &Var, ty: Option<Type>) {
+        let Some(name) = directly_assigned_name(variable) else {
+            return;
+        };
+
+        match ty {
+            Some(ty) => self.insert_scoped_local(name, ty),
+            None => self.clear_scoped_local(&name),
+        }
+    }
+
+    fn clear_scoped_local(&mut self, name: &str) {
+        if let Some(scope) = self
+            .scoped_locals
+            .iter_mut()
+            .rev()
+            .find(|scope| scope.contains_key(name))
+        {
+            scope.remove(name);
         }
     }
 
@@ -691,12 +735,22 @@ impl<'a> Checker<'a> {
 
     fn infer_var_assignment_target(&self, var: &Var) -> Option<Type> {
         match var {
-            Var::Name(name) => self.environment.local(&token_text(name)).cloned(),
+            Var::Name(name) => self.infer_named_assignment_target(&token_text(name)),
             Var::Expression(expression) => {
                 self.resolve_field_chain_type(&plain_field_chain_from_var_expression(expression)?)
             }
             _ => None,
         }
+    }
+
+    fn infer_named_assignment_target(&self, name: &str) -> Option<Type> {
+        self.environment.local(name).cloned().or_else(|| {
+            self.scoped_locals
+                .iter()
+                .rev()
+                .skip(1)
+                .find_map(|locals| locals.get(name).cloned())
+        })
     }
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
@@ -757,6 +811,16 @@ impl<'a> Checker<'a> {
             &resolve_aliases(left, self.environment, 0),
             &resolve_aliases(right, self.environment, 0),
         )
+    }
+
+    fn narrowed_locals_for_condition(&self, condition: &Expression) -> BTreeMap<String, Type> {
+        let aliases = self
+            .environment
+            .aliases()
+            .map(|(name, ty)| (name.to_owned(), ty.clone()))
+            .collect::<BTreeMap<_, _>>();
+
+        narrowed_locals_for_condition(condition, &aliases, |name| self.infer_named_value(name))
     }
 
     fn infer_binary_operator_type(

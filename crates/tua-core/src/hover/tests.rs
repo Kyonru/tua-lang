@@ -82,6 +82,51 @@ end
 }
 
 #[test]
+fn hovers_flow_sensitive_narrowed_types_inside_guards() {
+    let source = r#"local function read(value: number | nil, tagged: string | number)
+  if value ~= nil then
+    local copy = value
+  end
+
+  if type(tagged) == "string" then
+    local label = tagged
+  end
+end
+"#;
+
+    assert_hover_in_source(
+        source,
+        "local copy = value",
+        "local copy = ".len(),
+        "parameter value: number",
+    );
+    assert_hover_in_source(
+        source,
+        "local label = tagged",
+        "local label = ".len(),
+        "parameter tagged: string",
+    );
+}
+
+#[test]
+fn hover_uses_assigned_type_after_mutation_in_narrowed_block() {
+    let source = r#"local function read(value: number | nil)
+  if value ~= nil then
+    value = nil
+    local copy = value
+  end
+end
+"#;
+
+    assert_hover_in_source(
+        source,
+        "local copy = value",
+        "local copy = ".len(),
+        "parameter value: number | nil",
+    );
+}
+
+#[test]
 fn parameter_hover_follows_definition_identity() {
     let source = r#"local value: number = 1
 

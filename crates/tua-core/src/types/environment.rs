@@ -7,6 +7,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::module_index::required_module_export_type_for_fields;
+use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, LuaDocAnnotation, LuaDocAnnotationKind,
     LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
@@ -1367,6 +1368,16 @@ fn collect_function_return_types(
 
     for stmt in block.stmts() {
         match stmt {
+            ast::Stmt::Assignment(assignment) => {
+                infer_assignment_types(
+                    assignment,
+                    parsed,
+                    aliases,
+                    function_types,
+                    "",
+                    &mut scoped_locals,
+                );
+            }
             ast::Stmt::LocalAssignment(local) => {
                 infer_local_assignment_types(
                     local,
@@ -1613,11 +1624,13 @@ fn collect_return_types_in_block(
                 returns,
             ),
             ast::Stmt::If(if_stmt) => {
+                let branch_locals =
+                    locals_with_condition_narrowing(if_stmt.condition(), aliases, &scoped_locals);
                 collect_return_types_in_block(
                     if_stmt.block(),
                     parsed,
                     aliases,
-                    &scoped_locals,
+                    &branch_locals,
                     function_types,
                     current_function,
                     returns,
@@ -1625,11 +1638,16 @@ fn collect_return_types_in_block(
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
+                        let branch_locals = locals_with_condition_narrowing(
+                            else_if.condition(),
+                            aliases,
+                            &scoped_locals,
+                        );
                         collect_return_types_in_block(
                             else_if.block(),
                             parsed,
                             aliases,
-                            &scoped_locals,
+                            &branch_locals,
                             function_types,
                             current_function,
                             returns,
@@ -1852,6 +1870,48 @@ fn infer_local_assignment_types(
 
         locals.insert(token_text(name), ty);
     }
+}
+
+fn infer_assignment_types(
+    assignment: &ast::Assignment,
+    parsed: &ParsedSource,
+    aliases: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+    locals: &mut BTreeMap<String, Type>,
+) {
+    for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
+        let Some(name) = directly_assigned_name(variable) else {
+            continue;
+        };
+        let Some(ty) = infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ) else {
+            locals.remove(&name);
+            continue;
+        };
+
+        locals.insert(name, ty);
+    }
+}
+
+fn locals_with_condition_narrowing(
+    condition: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+) -> BTreeMap<String, Type> {
+    let mut scoped = locals.clone();
+
+    scoped.extend(narrowed_locals_for_condition(condition, aliases, |name| {
+        locals.get(name).cloned()
+    }));
+
+    scoped
 }
 
 fn infer_expression_type(

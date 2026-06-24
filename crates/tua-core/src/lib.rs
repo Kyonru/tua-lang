@@ -21,6 +21,7 @@ mod lua;
 pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
+mod narrowing;
 pub mod parser;
 mod project;
 pub mod project_model;

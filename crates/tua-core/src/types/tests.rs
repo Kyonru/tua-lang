@@ -196,6 +196,46 @@ end
 }
 
 #[test]
+fn infers_function_return_types_with_flow_sensitive_narrowing() {
+    let parsed = parse_tua_source(
+        "src/narrowing.tua",
+        r#"
+local function fromOptional(value: number | nil)
+  if value ~= nil then
+    return value
+  end
+
+  return 0
+end
+
+local function fromTypeGuard(value: string | number)
+  if type(value) == "string" then
+    return value
+  end
+
+  return ""
+end
+"#,
+    )
+    .expect("typed source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("type environment should infer narrowed returns");
+
+    assert_eq!(
+        environment
+            .function("fromOptional")
+            .and_then(|function| function.return_type.clone()),
+        Some(Type::number())
+    );
+    assert_eq!(
+        environment
+            .function("fromTypeGuard")
+            .and_then(|function| function.return_type.clone()),
+        Some(Type::string())
+    );
+}
+
+#[test]
 fn infers_love_method_function_returns_from_inferred_locals() {
     let parsed = parse_tua_source(
         "src/love_returns.tua",

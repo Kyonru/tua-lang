@@ -514,6 +514,59 @@ end
     .expect("comparisons through any should stay permissive");
 }
 
+#[test]
+fn accepts_flow_sensitive_narrowing_inside_simple_guards() {
+    check_tua_source(
+        "src/narrowing.tua",
+        r#"
+local function from_optional(value: number | nil): number
+  if value ~= nil then
+    return value
+  end
+
+  return 0
+end
+
+local function nil_branch(value: number | nil): nil
+  if value == nil then
+    return value
+  end
+
+  return nil
+end
+
+local function from_type_guard(value: string | number): string
+  if type(value) == "string" then
+    return value
+  end
+
+  return ""
+end
+"#,
+    )
+    .expect("simple guard narrowing should type-check");
+}
+
+#[test]
+fn mutation_inside_guard_clears_narrowed_assignment_target() {
+    let diagnostics = check_tua_source(
+        "src/narrowing_mutation.tua",
+        r#"
+local function mutated(value: number | nil): number
+  if value ~= nil then
+    value = nil
+    return value
+  end
+
+  return 0
+end
+"#,
+    )
+    .expect_err("mutation should clear the non-nil narrowing");
+
+    assert_single_mismatch(&diagnostics, "expected number, found nil");
+}
+
 fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));

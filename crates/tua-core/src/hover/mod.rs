@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -6,6 +7,7 @@ use crate::module_index::{
     required_module_export_for_fields, required_module_for_receiver, resolve_required_module,
 };
 use crate::module_link::require_module_at_position;
+use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
@@ -168,7 +170,20 @@ impl<'a> HoverResolver<'a> {
         hover_span: SourceSpan,
     ) -> Option<Hover> {
         let parameter = self.parameter_at_position(name, position)?;
-        let ty = type_from_tua_type(&parameter.ty);
+        let base = type_from_tua_type(&parameter.ty);
+        let aliases = self
+            .environment
+            .aliases()
+            .map(|(name, ty)| (name.to_owned(), ty.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let ty = narrowed_type_at_position(self.parsed, &aliases, name, position, |lookup_name| {
+            if lookup_name == name {
+                Some(base.clone())
+            } else {
+                self.semantic.type_of_name(lookup_name, position)
+            }
+        })
+        .unwrap_or(base);
 
         Some(Hover {
             contents: format!("parameter {name}: {ty}"),
