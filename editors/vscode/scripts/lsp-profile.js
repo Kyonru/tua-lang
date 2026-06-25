@@ -176,6 +176,8 @@ function printReport(root, timings, stats) {
 
   console.log(
     `cache parse h/m ${stats.parse.hits}/${stats.parse.misses}, ` +
+      `hir h/m ${stats.hir.hits}/${stats.hir.misses}, ` +
+      `scope h/m ${stats.scope.hits}/${stats.scope.misses}, ` +
       `types h/m ${stats.typeEnvironment.hits}/${stats.typeEnvironment.misses}, ` +
       `diagnostics h/m ${stats.diagnostics.hits}/${stats.diagnostics.misses}, ` +
       `symbols h/m ${stats.symbolIndex.hits}/${stats.symbolIndex.misses}, ` +

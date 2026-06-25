@@ -8,7 +8,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::hir::{lower_parsed_source, HirSymbol, HirSymbolKind};
+use crate::hir::{lower_parsed_source, HirModule, HirSymbol, HirSymbolKind};
 use crate::module_index::resolve_required_module;
 use crate::module_link::require_module_at_position;
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
@@ -58,13 +58,22 @@ pub fn definition_parsed_source(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Result<Option<Definition>, Vec<Diagnostic>> {
-    let resolver = DefinitionResolver { parsed };
+    definition_parsed_source_with_hir(parsed, None, position)
+}
+
+pub fn definition_parsed_source_with_hir(
+    parsed: &ParsedSource,
+    hir: Option<&HirModule>,
+    position: SourcePosition,
+) -> Result<Option<Definition>, Vec<Diagnostic>> {
+    let resolver = DefinitionResolver { parsed, hir };
 
     Ok(resolver.definition(position))
 }
 
 struct DefinitionResolver<'a> {
     parsed: &'a ParsedSource,
+    hir: Option<&'a HirModule>,
 }
 
 impl<'a> DefinitionResolver<'a> {
@@ -110,15 +119,36 @@ impl<'a> DefinitionResolver<'a> {
     }
 
     fn value_definition(&self, name: &str, position: SourcePosition) -> Option<Definition> {
+        if let Some(hir) = self.hir {
+            return self.value_definition_from_hir(hir, name, position);
+        }
+
         let hir = lower_parsed_source(self.parsed);
 
+        self.value_definition_from_hir(&hir, name, position)
+    }
+
+    fn value_definition_from_hir(
+        &self,
+        hir: &HirModule,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Definition> {
         hir.definition_for_value(name, position)
             .and_then(|symbol| definition_from_hir_symbol(&self.parsed.path, symbol))
     }
 
     fn alias_definition(&self, name: &str) -> Option<Definition> {
+        if let Some(hir) = self.hir {
+            return self.alias_definition_from_hir(hir, name);
+        }
+
         let hir = lower_parsed_source(self.parsed);
 
+        self.alias_definition_from_hir(&hir, name)
+    }
+
+    fn alias_definition_from_hir(&self, hir: &HirModule, name: &str) -> Option<Definition> {
         hir.definition_for_type_alias(name)
             .and_then(|symbol| definition_from_hir_symbol(&self.parsed.path, symbol))
     }

@@ -1710,6 +1710,8 @@ Acceptance:
 
 ### 70.17 `perf(core): reuse cached semantic artifacts for definitions and references`
 
+Status: done.
+
 Scope:
 
 - Remove repeated `lower_parsed_source` and scope construction in definition/reference hot paths by threading cached `HirModule` and `ScopeMap` from `analysis` snapshots into request handlers.
@@ -1724,6 +1726,8 @@ Acceptance:
 - New/updated metrics show fewer repeated `analysis.lower.hir` and `analysis.lower.scope` hits on repeated queries.
 
 ### 70.18 `perf(core): cache definition->scope resolution for local declarations`
+
+Status: done, folded into 70.17.
 
 Scope:
 

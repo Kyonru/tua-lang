@@ -4,12 +4,12 @@ use full_moon::ast;
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
-use crate::hir::HirExportValue;
+use crate::hir::{HirExportValue, HirModule};
 use crate::source_text::{byte_for_column, line_at};
 use crate::{
-    definition_parsed_source, lower_parsed_source, parse_tua_source, scope_map_parsed_source,
-    Definition, DefinitionKind, Diagnostic, ParsedSource, ScopeDeclarationKind, SourcePosition,
-    SourceSpan,
+    definition_parsed_source, definition_parsed_source_with_hir, lower_parsed_source,
+    parse_tua_source, scope_map_parsed_source, Definition, DefinitionKind, Diagnostic,
+    ParsedSource, ScopeDeclarationKind, ScopeMap, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,11 +57,29 @@ pub fn references_to_definition_parsed_source(
     target: &Definition,
     include_declaration: bool,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    references_to_definition_parsed_source_with_artifacts(
+        parsed,
+        target,
+        include_declaration,
+        None,
+        None,
+    )
+}
+
+pub fn references_to_definition_parsed_source_with_artifacts(
+    parsed: &ParsedSource,
+    target: &Definition,
+    include_declaration: bool,
+    hir: Option<&HirModule>,
+    scope: Option<&ScopeMap>,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     if target.kind == DefinitionKind::Builtin {
         return Ok(Vec::new());
     }
 
-    if let Some(references) = scope_references_to_definition(parsed, target, include_declaration) {
+    if let Some(references) =
+        scope_references_to_definition(parsed, target, include_declaration, hir, scope)
+    {
         return Ok(references);
     }
 
@@ -69,7 +87,7 @@ pub fn references_to_definition_parsed_source(
         .ast
         .tokens()
         .filter(|token| is_identifier(token))
-        .filter_map(|token| reference_for_token(parsed, token, target).transpose())
+        .filter_map(|token| reference_for_token(parsed, token, target, hir).transpose())
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
     if include_declaration
@@ -104,13 +122,45 @@ fn scope_references_to_definition(
     parsed: &ParsedSource,
     target: &Definition,
     include_declaration: bool,
+    hir: Option<&HirModule>,
+    scope: Option<&ScopeMap>,
 ) -> Option<Vec<Reference>> {
     if target.path != parsed.path {
         return None;
     }
 
     let expected_kind = scope_kind_for_definition(target.kind)?;
+    if let Some(scope) = scope {
+        return scope_references_to_definition_with_scope(
+            parsed,
+            target,
+            include_declaration,
+            hir,
+            scope,
+            expected_kind,
+        );
+    }
+
     let scope = scope_map_parsed_source(parsed);
+
+    scope_references_to_definition_with_scope(
+        parsed,
+        target,
+        include_declaration,
+        hir,
+        &scope,
+        expected_kind,
+    )
+}
+
+fn scope_references_to_definition_with_scope(
+    parsed: &ParsedSource,
+    target: &Definition,
+    include_declaration: bool,
+    hir: Option<&HirModule>,
+    scope: &ScopeMap,
+    expected_kind: ScopeDeclarationKind,
+) -> Option<Vec<Reference>> {
     let declaration = scope.declarations().iter().find(|declaration| {
         declaration.name_span == target.span && declaration.kind == expected_kind
     })?;
@@ -124,7 +174,7 @@ fn scope_references_to_definition(
         })
         .collect::<Vec<_>>();
 
-    references.extend(export_key_references(parsed, target));
+    references.extend(export_key_references(parsed, target, hir));
     references.sort_by_key(|reference| position_key(reference.span.start));
     references.dedup_by_key(|reference| {
         (
@@ -140,8 +190,25 @@ fn scope_references_to_definition(
     Some(references)
 }
 
-fn export_key_references(parsed: &ParsedSource, target: &Definition) -> Vec<Reference> {
+fn export_key_references(
+    parsed: &ParsedSource,
+    target: &Definition,
+    hir: Option<&HirModule>,
+) -> Vec<Reference> {
+    if let Some(hir) = hir {
+        return export_key_references_with_hir(parsed, target, hir);
+    }
+
     let hir = lower_parsed_source(parsed);
+
+    export_key_references_with_hir(parsed, target, &hir)
+}
+
+fn export_key_references_with_hir(
+    parsed: &ParsedSource,
+    target: &Definition,
+    hir: &HirModule,
+) -> Vec<Reference> {
     let Some(hir_symbol) = hir
         .symbols()
         .iter()
@@ -244,12 +311,28 @@ pub fn global_references_to_definition_parsed_source(
     name: &str,
     include_declaration: bool,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    global_references_to_definition_parsed_source_with_hir(
+        parsed,
+        target,
+        name,
+        include_declaration,
+        None,
+    )
+}
+
+pub fn global_references_to_definition_parsed_source_with_hir(
+    parsed: &ParsedSource,
+    target: &Definition,
+    name: &str,
+    include_declaration: bool,
+    hir: Option<&HirModule>,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     let mut references = parsed
         .ast
         .tokens()
         .filter(|token| is_identifier(token))
         .filter(|token| token_text(token) == name)
-        .filter_map(|token| global_reference_for_token(parsed, token, target).transpose())
+        .filter_map(|token| global_reference_for_token(parsed, token, target, hir).transpose())
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
     if !include_declaration {
@@ -277,13 +360,29 @@ pub fn global_type_alias_references_to_definition_parsed_source(
     name: &str,
     include_declaration: bool,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
+    global_type_alias_references_to_definition_parsed_source_with_hir(
+        parsed,
+        target,
+        name,
+        include_declaration,
+        None,
+    )
+}
+
+pub fn global_type_alias_references_to_definition_parsed_source_with_hir(
+    parsed: &ParsedSource,
+    target: &Definition,
+    name: &str,
+    include_declaration: bool,
+    hir: Option<&HirModule>,
+) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     let mut references = parsed
         .ast
         .tokens()
         .filter(|token| is_identifier(token))
         .filter(|token| token_text(token) == name)
         .filter_map(|token| {
-            global_type_alias_reference_for_token(parsed, token, target).transpose()
+            global_type_alias_reference_for_token(parsed, token, target, hir).transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -310,11 +409,12 @@ fn reference_for_token(
     parsed: &ParsedSource,
     token: &TokenReference,
     target: &Definition,
+    hir: Option<&HirModule>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let Some(span) = node_span(token) else {
         return Ok(None);
     };
-    let Some(definition) = definition_parsed_source(parsed, span.start)? else {
+    let Some(definition) = definition_parsed_source_with_hir(parsed, hir, span.start)? else {
         return Ok(None);
     };
 
@@ -329,11 +429,12 @@ fn global_reference_for_token(
     parsed: &ParsedSource,
     token: &TokenReference,
     target: &Definition,
+    hir: Option<&HirModule>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let Some(span) = node_span(token) else {
         return Ok(None);
     };
-    let definition = definition_parsed_source(parsed, span.start)?;
+    let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
 
     if definition
         .as_ref()
@@ -353,11 +454,12 @@ fn global_type_alias_reference_for_token(
     parsed: &ParsedSource,
     token: &TokenReference,
     target: &Definition,
+    hir: Option<&HirModule>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let Some(span) = node_span(token) else {
         return Ok(None);
     };
-    let definition = definition_parsed_source(parsed, span.start)?;
+    let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
 
     if definition.as_ref().is_some_and(|definition| {
         definition.kind == DefinitionKind::TypeAlias && same_definition(definition, target)

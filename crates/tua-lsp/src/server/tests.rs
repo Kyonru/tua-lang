@@ -997,6 +997,8 @@ player.hp = player.hp - 1
 
     assert!(stats["parse"]["misses"].as_u64().unwrap_or(0) >= 1);
     assert!(stats["parse"]["hits"].as_u64().unwrap_or(0) >= 1);
+    assert!(stats["hir"]["hits"].is_number());
+    assert!(stats["scope"]["hits"].is_number());
     assert!(stats["symbolIndex"]["hits"].is_number());
     assert!(stats["invalidations"].is_number());
 }

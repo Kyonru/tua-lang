@@ -43,7 +43,8 @@ pub mod vfs;
 pub mod workspace_symbol;
 
 pub use analysis::{
-    AnalysisCacheStats, AnalysisHost, AnalysisSnapshot, AnalysisSourceKind, BuiltinCatalogs,
+    AnalysisCacheStats, AnalysisHost, AnalysisSemanticFile, AnalysisSnapshot, AnalysisSourceKind,
+    BuiltinCatalogs,
 };
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
@@ -68,7 +69,10 @@ pub use config::{
     ConfigParseError, DiagnosticsConfig, EmitConfig, InitResult, LoadedConfig, ProjectConfig,
     CONFIG_FILE, DEFAULT_CONFIG_TEXT,
 };
-pub use definition::{definition_parsed_source, definition_tua_source, Definition, DefinitionKind};
+pub use definition::{
+    definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,
+    DefinitionKind,
+};
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };
@@ -126,10 +130,12 @@ pub use project_model::{
 };
 pub use references::{
     global_function_definition_count, global_function_name_for_definition,
-    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
-    global_type_alias_references_to_definition_parsed_source, references_parsed_source,
-    references_to_definition_parsed_source, references_tua_source, type_alias_definition_count,
-    Reference, ReferenceKind,
+    global_references_to_definition_parsed_source,
+    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
+    global_type_alias_references_to_definition_parsed_source,
+    global_type_alias_references_to_definition_parsed_source_with_hir, references_parsed_source,
+    references_to_definition_parsed_source, references_to_definition_parsed_source_with_artifacts,
+    references_tua_source, type_alias_definition_count, Reference, ReferenceKind,
 };
 pub use rename::{
     is_valid_rename_identifier, prepare_rename_parsed_source, prepare_rename_tua_source,

@@ -19,14 +19,14 @@ use crate::{
     assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
-    complete_tua_source, definition_parsed_source, document_highlights_parsed_source,
+    complete_tua_source, definition_parsed_source_with_hir, document_highlights_parsed_source,
     document_symbols_parsed_source, emit_lua_with_mode, exported_field_for_fields,
     global_function_definition_count, global_function_name_for_definition,
-    global_references_to_definition_parsed_source, global_type_alias_name_for_definition,
-    global_type_alias_references_to_definition_parsed_source, hover_parsed_source,
+    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
+    global_type_alias_references_to_definition_parsed_source_with_hir, hover_parsed_source,
     infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
     lower_parsed_source, module_links_tua_source, parse_lua_source, parse_tua_source,
-    reference_kind_for_rename, references_to_definition_parsed_source,
+    reference_kind_for_rename, references_to_definition_parsed_source_with_artifacts,
     rename_target_for_definition, require_bindings_for_parsed_source,
     semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
     signature_help_tua_source, type_alias_definition_count, Assist, AssistRange,
@@ -84,6 +84,13 @@ pub struct AnalysisSnapshot {
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct AnalysisSemanticFile<'a> {
+    pub parsed: &'a ParsedSource,
+    pub hir: Option<&'a HirModule>,
+    pub scope: Option<&'a ScopeMap>,
+}
+
 #[derive(Clone, Debug)]
 struct AnalysisFile {
     source: String,
@@ -103,6 +110,10 @@ struct AnalysisFile {
 pub struct AnalysisCacheStats {
     pub parse_hits: usize,
     pub parse_misses: usize,
+    pub hir_hits: usize,
+    pub hir_misses: usize,
+    pub scope_hits: usize,
+    pub scope_misses: usize,
     pub type_environment_hits: usize,
     pub type_environment_misses: usize,
     pub diagnostics_hits: usize,
@@ -405,6 +416,17 @@ impl AnalysisSnapshot {
         self.file(path.as_ref()).map(|file| file.source.as_str())
     }
 
+    pub fn semantic_file(&self, path: impl AsRef<Path>) -> Option<AnalysisSemanticFile<'_>> {
+        let file = self.file(path.as_ref())?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        Some(AnalysisSemanticFile {
+            parsed,
+            hir: file.hir.as_ref(),
+            scope: file.scope.as_ref(),
+        })
+    }
+
     pub fn parse(&self, path: impl AsRef<Path>) -> Option<Result<&ParsedSource, &[Diagnostic]>> {
         self.file(path.as_ref())
             .map(|file| file.parsed.as_ref().map_err(Vec::as_slice))
@@ -522,12 +544,12 @@ impl AnalysisSnapshot {
         let file = self.file(path)?;
 
         match &file.parsed {
-            Ok(parsed) => self.definition_parsed_snapshot(parsed, position),
+            Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir.as_ref(), position),
             Err(_) => {
                 let recovered = source_without_incomplete_field_access_lines(&file.source);
                 let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
 
-                self.definition_parsed_snapshot(&parsed, position)
+                self.definition_parsed_snapshot(&parsed, None, position)
             }
         }
     }
@@ -535,6 +557,7 @@ impl AnalysisSnapshot {
     fn definition_parsed_snapshot(
         &self,
         parsed: &ParsedSource,
+        hir: Option<&HirModule>,
         position: SourcePosition,
     ) -> Option<Definition> {
         if let Some(definition) = self.module_definition(parsed, position) {
@@ -545,7 +568,9 @@ impl AnalysisSnapshot {
             return None;
         }
 
-        definition_parsed_source(parsed, position).ok().flatten()
+        definition_parsed_source_with_hir(parsed, hir, position)
+            .ok()
+            .flatten()
     }
 
     pub fn resolve_completion(
@@ -798,21 +823,28 @@ impl AnalysisSnapshot {
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
-            let Ok(mut file_references) =
-                references_to_definition_parsed_source(parsed, &target, include_declaration)
-            else {
+            let Ok(mut file_references) = references_to_definition_parsed_source_with_artifacts(
+                parsed,
+                &target,
+                include_declaration,
+                file.hir.as_ref(),
+                file.scope.as_ref(),
+            ) else {
                 continue;
             };
 
             references.append(&mut file_references);
 
             if let Some(global_name) = global_name.as_deref() {
-                let Ok(mut global_references) = global_references_to_definition_parsed_source(
-                    parsed,
-                    &target,
-                    global_name,
-                    include_declaration,
-                ) else {
+                let Ok(mut global_references) =
+                    global_references_to_definition_parsed_source_with_hir(
+                        parsed,
+                        &target,
+                        global_name,
+                        include_declaration,
+                        file.hir.as_ref(),
+                    )
+                else {
                     continue;
                 };
 
@@ -821,11 +853,12 @@ impl AnalysisSnapshot {
 
             if let Some(alias_name) = alias_name.as_deref() {
                 let Ok(mut alias_references) =
-                    global_type_alias_references_to_definition_parsed_source(
+                    global_type_alias_references_to_definition_parsed_source_with_hir(
                         parsed,
                         &target,
                         alias_name,
                         include_declaration,
+                        file.hir.as_ref(),
                     )
                 else {
                     continue;
@@ -2249,6 +2282,8 @@ impl AnalysisQueryCache {
 
     fn record_hit(&mut self) {
         self.stats.parse_hits += 1;
+        self.stats.hir_hits += 1;
+        self.stats.scope_hits += 1;
         self.stats.type_environment_hits += 1;
         self.stats.diagnostics_hits += 1;
         self.stats.module_export_hits += 1;
@@ -2258,6 +2293,8 @@ impl AnalysisQueryCache {
 
     fn record_miss(&mut self) {
         self.stats.parse_misses += 1;
+        self.stats.hir_misses += 1;
+        self.stats.scope_misses += 1;
         self.stats.type_environment_misses += 1;
         self.stats.diagnostics_misses += 1;
         self.stats.module_export_misses += 1;

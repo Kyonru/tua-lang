@@ -388,6 +388,11 @@ return M
 
     assert!(snapshot.type_environment(&path).is_some());
     assert!(snapshot.scope_map(&path).is_some());
+    let semantic_file = snapshot
+        .semantic_file(&path)
+        .expect("semantic file should include parsed source");
+    assert!(semantic_file.hir.is_some());
+    assert!(semantic_file.scope.is_some());
     assert!(snapshot.module_exports(&path).is_some());
     assert!(snapshot
         .symbol_index_for_path(&path)
@@ -396,6 +401,8 @@ return M
     assert!(snapshot.require_edges(&path).is_empty());
 
     let stats = host.cache_stats();
+    assert_eq!(stats.hir_misses, 1);
+    assert_eq!(stats.scope_misses, 1);
     assert_eq!(stats.type_environment_misses, 1);
     assert_eq!(stats.diagnostics_misses, 1);
     assert_eq!(stats.module_export_misses, 1);

@@ -428,6 +428,14 @@ impl LspServer {
                 "hits": stats.parse_hits,
                 "misses": stats.parse_misses
             },
+            "hir": {
+                "hits": stats.hir_hits,
+                "misses": stats.hir_misses
+            },
+            "scope": {
+                "hits": stats.scope_hits,
+                "misses": stats.scope_misses
+            },
             "typeEnvironment": {
                 "hits": stats.type_environment_hits,
                 "misses": stats.type_environment_misses
