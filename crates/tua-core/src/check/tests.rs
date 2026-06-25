@@ -460,6 +460,61 @@ lookupObject:y(2)
 }
 
 #[test]
+fn accepts_array_index_and_loop_variable_inference() {
+    check_tua_source(
+        "src/loops.tua",
+        r#"
+local numbers = { 1, 2, 3 }
+local first: number = numbers[1]
+
+for i = 1, #numbers do
+  local indexed: number = numbers[i]
+end
+
+for _, value in ipairs(numbers) do
+  local doubled: number = value + 1
+end
+"#,
+    )
+    .expect("array indexes and numeric/ipairs loop variables should infer number");
+}
+
+#[test]
+fn accepts_pairs_loop_variable_inference_for_record_tables() {
+    check_tua_source(
+        "src/pairs.tua",
+        r#"
+local player = { name = "Ada", score = 10 }
+local score: number = player["score"]
+
+for key, value in pairs(player) do
+  local known_key: "name" | "score" = key
+  local known_value: string | number = value
+end
+"#,
+    )
+    .expect("pairs over record-like tables should infer key and value unions");
+}
+
+#[test]
+fn rejects_mismatched_ipairs_loop_value_type() {
+    let diagnostics = check_tua_source(
+        "src/loops.tua",
+        r#"
+local words = { "a", "b" }
+
+for _, value in ipairs(words) do
+  local bad: number = value
+end
+"#,
+    )
+    .expect_err("ipairs value should keep the array element type");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));
+}
+
+#[test]
 fn accepts_static_metatable_operator_and_index_patterns() {
     check_tua_source(
         "src/vector.tua",

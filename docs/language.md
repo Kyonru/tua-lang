@@ -93,6 +93,8 @@ Useful static facts include:
 - inferred returns for simple unannotated functions;
 - multiple returns where known Lua or LOVE functions provide them;
 - table-shape fields and optional fields;
+- array-like table literals, string-key table indexing, and simple loop
+  variables from numeric `for`, `ipairs`, and `pairs`;
 - module exports from simple `return { name = value }` tables;
 - types exported through required `.tua` modules;
 - selected LuaDoc/LuaLS-style annotations from interop files;

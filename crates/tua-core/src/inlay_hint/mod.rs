@@ -74,7 +74,7 @@ impl<'a> InlayHintCollector<'a> {
             ast::Stmt::Do(block) => self.collect_block(block.block()),
             ast::Stmt::FunctionCall(function_call) => self.collect_function_call(function_call),
             ast::Stmt::FunctionDeclaration(function) => self.collect_block(function.body().block()),
-            ast::Stmt::GenericFor(for_stmt) => self.collect_block(for_stmt.block()),
+            ast::Stmt::GenericFor(for_stmt) => self.collect_generic_for(for_stmt),
             ast::Stmt::If(if_stmt) => {
                 self.collect_block(if_stmt.block());
 
@@ -90,7 +90,7 @@ impl<'a> InlayHintCollector<'a> {
             }
             ast::Stmt::LocalAssignment(local) => self.collect_local_assignment(local),
             ast::Stmt::LocalFunction(function) => self.collect_block(function.body().block()),
-            ast::Stmt::NumericFor(for_stmt) => self.collect_block(for_stmt.block()),
+            ast::Stmt::NumericFor(for_stmt) => self.collect_numeric_for(for_stmt),
             ast::Stmt::Repeat(repeat) => self.collect_block(repeat.block()),
             ast::Stmt::While(while_stmt) => self.collect_block(while_stmt.block()),
             _ => {}
@@ -134,6 +134,46 @@ impl<'a> InlayHintCollector<'a> {
                 });
             }
         }
+    }
+
+    fn collect_generic_for(&mut self, for_stmt: &ast::GenericFor) {
+        for expression in for_stmt.expressions() {
+            self.collect_expression(expression);
+        }
+
+        for name in for_stmt.names() {
+            let position = node_start(name);
+            let Some(ty) = self.semantic.type_of_name(&token_text(name), position) else {
+                continue;
+            };
+
+            if should_hint_type(&ty) {
+                self.hints.push(InlayHint {
+                    position: node_end(name),
+                    label: format!(": {ty}"),
+                    kind: InlayHintKind::Type,
+                });
+            }
+        }
+
+        self.collect_block(for_stmt.block());
+    }
+
+    fn collect_numeric_for(&mut self, for_stmt: &ast::NumericFor) {
+        self.collect_expression(for_stmt.start());
+        self.collect_expression(for_stmt.end());
+
+        if let Some(step) = for_stmt.step() {
+            self.collect_expression(step);
+        }
+
+        self.hints.push(InlayHint {
+            position: node_end(for_stmt.index_variable()),
+            label: ": number".to_owned(),
+            kind: InlayHintKind::Type,
+        });
+
+        self.collect_block(for_stmt.block());
     }
 
     fn collect_expression(&mut self, expression: &Expression) {
@@ -258,6 +298,10 @@ fn node_end(node: &impl Node) -> SourcePosition {
 
 fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
+}
+
+fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
+    token.to_string().trim().to_owned()
 }
 
 #[cfg(test)]

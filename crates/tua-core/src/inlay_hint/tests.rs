@@ -62,6 +62,38 @@ local lookupObject = {
 }
 
 #[test]
+fn hints_loop_variable_types_from_numeric_ipairs_and_pairs_loops() {
+    let source = r#"
+local numbers = { 1, 2, 3 }
+local player = { name = "Ada", score = 10 }
+
+for i = 1, #numbers do
+  local indexed = numbers[i]
+end
+
+for _, value in ipairs(numbers) do
+  local doubled = value + 1
+end
+
+for key, value in pairs(player) do
+  local seen = value
+end
+"#;
+    let hints = inlay_hints_tua_source("src/loops.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(type_hints.contains(&": number[]"));
+    assert!(type_hints.contains(&": { name: string, score: number }"));
+    assert!(type_hints.contains(&": number"));
+    assert!(type_hints.contains(&": \"name\" | \"score\""));
+    assert!(type_hints.contains(&": string | number"));
+}
+
+#[test]
 fn skips_annotated_unknown_and_any_local_type_hints() {
     let hints = inlay_hints();
 

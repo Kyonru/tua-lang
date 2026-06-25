@@ -24,8 +24,9 @@ make build-features
 - `src/compound.tua` covers `+=`, `-=`, `*=`, `/=`, and `%=` lowering for
   locals and field chains.
 - `src/inference.tua` covers local type inlay hints, inferred function return
-  hovers, parameter-name hints, field-chain inference from annotated locals, and
-  the permissive `any` boundary.
+  hovers, parameter-name hints, field-chain inference from annotated locals,
+  array/index inference, numeric and generic loop variable inference, and the
+  permissive `any` boundary.
 - `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
   interop, and cross-file go to definition for required module exports.
 - `src/require_graph.tua` covers snapshot-indexed require edges and export

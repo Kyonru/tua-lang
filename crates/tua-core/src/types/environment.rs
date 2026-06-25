@@ -2198,30 +2198,63 @@ fn infer_expression_return_type(
         },
         Expression::TableConstructor(table) => {
             let mut fields = Vec::new();
+            let mut array_items = Vec::new();
 
             for field in table.fields() {
-                let Field::NameKey { key, value, .. } = field else {
-                    continue;
-                };
-                let key_text = token_text(key);
-                let ty = infer_expression_type(
-                    parsed,
-                    value,
-                    aliases,
-                    locals,
-                    function_types,
-                    current_function,
-                )
-                .unwrap_or(Type::Any);
+                match field {
+                    Field::ExpressionKey { key, value, .. } => {
+                        let ty = infer_expression_type(
+                            parsed,
+                            value,
+                            aliases,
+                            locals,
+                            function_types,
+                            current_function,
+                        )
+                        .unwrap_or(Type::Any);
 
-                if key_text == "__index" {
-                    fields.extend(index_fields_from_expression(value));
+                        if let Some(key) = string_literal_expression(key) {
+                            fields.push((key, TableField::required(ty)));
+                        } else if expression_is_number(key) {
+                            array_items.push(ty);
+                        }
+                    }
+                    Field::NameKey { key, value, .. } => {
+                        let key_text = token_text(key);
+                        let ty = infer_expression_type(
+                            parsed,
+                            value,
+                            aliases,
+                            locals,
+                            function_types,
+                            current_function,
+                        )
+                        .unwrap_or(Type::Any);
+
+                        if key_text == "__index" {
+                            fields.extend(index_fields_from_expression(value));
+                        }
+
+                        fields.push((key_text, TableField::required(ty)));
+                    }
+                    Field::NoKey(value) => {
+                        array_items.push(
+                            infer_expression_type(
+                                parsed,
+                                value,
+                                aliases,
+                                locals,
+                                function_types,
+                                current_function,
+                            )
+                            .unwrap_or(Type::Any),
+                        );
+                    }
+                    _ => {}
                 }
-
-                fields.push((key_text, TableField::required(ty)));
             }
 
-            Some(Type::table(fields))
+            Some(table_or_array_type(fields, array_items))
         }
         Expression::Parentheses { expression, .. } => infer_expression_return_type(
             parsed,
@@ -2242,7 +2275,14 @@ fn infer_expression_return_type(
             return_index,
         ),
         Expression::Function(function) => Some(function_type_from_body(function.body())),
-        Expression::Var(var) => infer_var_type(parsed, var, aliases, locals, function_types),
+        Expression::Var(var) => infer_var_type(
+            parsed,
+            var,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
         _ => None,
     }
 }
@@ -2292,6 +2332,7 @@ fn infer_var_type(
     aliases: &BTreeMap<String, Type>,
     locals: &BTreeMap<String, Type>,
     function_types: &BTreeMap<String, Type>,
+    current_function: &str,
 ) -> Option<Type> {
     match var {
         Var::Name(name) => {
@@ -2303,10 +2344,74 @@ fn infer_var_type(
                 .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
         }
         Var::Expression(expression) => {
-            infer_field_chain_type(parsed, aliases, locals, &plain_field_chain(expression)?)
+            if let Some(parts) = plain_field_chain(expression) {
+                if let Some(ty) = infer_field_chain_type(parsed, aliases, locals, &parts) {
+                    return Some(ty);
+                }
+            }
+
+            infer_var_expression_type(
+                parsed,
+                expression,
+                aliases,
+                locals,
+                function_types,
+                current_function,
+            )
         }
         _ => None,
     }
+}
+
+fn infer_var_expression_type(
+    parsed: &ParsedSource,
+    expression: &ast::VarExpression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+) -> Option<Type> {
+    let mut current = match expression.prefix() {
+        Prefix::Name(name) => {
+            let name = token_text(name);
+
+            locals
+                .get(&name)
+                .or_else(|| function_types.get(&name))
+                .map(|ty| resolve_aliases_from_map(aliases, ty, 0))?
+        }
+        Prefix::Expression(expression) => infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        )?,
+        _ => return None,
+    };
+
+    for suffix in expression.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => {
+                current = resolve_table_field_type_from_map(aliases, &current, &token_text(name))?;
+            }
+            Suffix::Index(Index::Brackets { expression, .. }) => {
+                let key = index_key_type(
+                    parsed,
+                    expression,
+                    aliases,
+                    locals,
+                    function_types,
+                    current_function,
+                )?;
+                current = resolve_index_type_from_map(aliases, &current, &key)?;
+            }
+            _ => return None,
+        }
+    }
+
+    Some(current)
 }
 
 fn infer_function_call_return_types(
@@ -2762,6 +2867,121 @@ fn resolve_table_field_type_from_map(
     }
 }
 
+fn resolve_index_type_from_map(
+    aliases: &BTreeMap<String, Type>,
+    collection: &Type,
+    key: &Type,
+) -> Option<Type> {
+    match resolve_aliases_from_map(aliases, collection, 0) {
+        Type::Array(item) => is_number_like(key).then_some(*item),
+        Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
+        Type::Dictionary {
+            key: dict_key,
+            value,
+        } => key_accepts_index(&dict_key, key).then_some(*value),
+        Type::Table(table) => match key {
+            Type::StringLiteral(value) => table
+                .semantic_field(value)
+                .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
+            Type::Primitive(crate::PrimitiveType::String) => union_types_optional(
+                table
+                    .semantic_fields()
+                    .into_values()
+                    .map(|field| resolve_aliases_from_map(aliases, &field.ty, 0)),
+            ),
+            _ => None,
+        },
+        Type::Union(types) => union_types_optional(
+            types
+                .iter()
+                .filter_map(|ty| resolve_index_type_from_map(aliases, ty, key)),
+        ),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_) => None,
+    }
+}
+
+fn index_key_type(
+    parsed: &ParsedSource,
+    expression: &Expression,
+    aliases: &BTreeMap<String, Type>,
+    locals: &BTreeMap<String, Type>,
+    function_types: &BTreeMap<String, Type>,
+    current_function: &str,
+) -> Option<Type> {
+    match expression {
+        Expression::Number(_) => Some(Type::number()),
+        Expression::String(value) => Some(Type::string_literal(unquote_string(&value.to_string()))),
+        _ => infer_expression_type(
+            parsed,
+            expression,
+            aliases,
+            locals,
+            function_types,
+            current_function,
+        ),
+    }
+}
+
+fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>) -> Type {
+    let table = (!fields.is_empty()).then(|| Type::table(fields));
+    let array = (!array_items.is_empty()).then(|| Type::array(union_types(array_items)));
+
+    match (table, array) {
+        (Some(table), Some(array)) => Type::union([table, array]),
+        (Some(table), None) => table,
+        (None, Some(array)) => array,
+        (None, None) => Type::empty_table(),
+    }
+}
+
+fn union_types(types: Vec<Type>) -> Type {
+    let mut unique = Vec::new();
+    for ty in types {
+        if !unique.contains(&ty) {
+            unique.push(ty);
+        }
+    }
+
+    match unique.len() {
+        0 => Type::Any,
+        1 => unique.into_iter().next().unwrap_or(Type::Any),
+        _ => Type::union(unique),
+    }
+}
+
+fn union_types_optional(types: impl IntoIterator<Item = Type>) -> Option<Type> {
+    let types = types.into_iter().collect::<Vec<_>>();
+
+    (!types.is_empty()).then(|| union_types(types))
+}
+
+fn is_number_like(ty: &Type) -> bool {
+    matches!(ty, Type::Primitive(crate::PrimitiveType::Number))
+}
+
+fn key_accepts_index(expected: &Type, actual: &Type) -> bool {
+    match (expected, actual) {
+        (Type::Any, _) | (_, Type::Any) => true,
+        (
+            Type::Primitive(crate::PrimitiveType::String),
+            Type::Primitive(crate::PrimitiveType::String),
+        )
+        | (Type::Primitive(crate::PrimitiveType::String), Type::StringLiteral(_))
+        | (
+            Type::Primitive(crate::PrimitiveType::Number),
+            Type::Primitive(crate::PrimitiveType::Number),
+        ) => true,
+        (Type::StringLiteral(expected), Type::StringLiteral(actual)) => expected == actual,
+        (Type::Union(types), actual) => types.iter().any(|ty| key_accepts_index(ty, actual)),
+        (expected, Type::Union(types)) => types.iter().any(|ty| key_accepts_index(expected, ty)),
+        _ => false,
+    }
+}
+
 fn resolve_metatable_facts_from_map(
     aliases: &BTreeMap<String, Type>,
     ty: &Type,
@@ -3007,6 +3227,10 @@ fn string_literal_expression(expression: &Expression) -> Option<String> {
         Expression::String(value) => Some(value.to_string().trim_matches(['"', '\'']).to_owned()),
         _ => None,
     }
+}
+
+fn expression_is_number(expression: &Expression) -> bool {
+    matches!(expression, Expression::Number(_))
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {

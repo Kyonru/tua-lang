@@ -57,6 +57,35 @@ local inferredTable = {
   enabled = true,
 }
 
+-- Feature: array and index inference.
+-- Hover/inlay should infer `scores` as number[] and `firstScore` as number.
+local scores = { 10, 20, 30 }
+local firstScore = scores[1]
+
+-- Feature: record string-key indexing.
+-- Bracket access with a known string key keeps the field value type.
+local scoreRecord = { name = "Ada", score = 10 }
+local scoreFromRecord = scoreRecord["score"]
+
+-- Feature: numeric loop variable and indexed array access.
+-- The loop index is number, and scores[index] keeps the array element type.
+for index = 1, #scores do
+  local scoreFromLoop = scores[index]
+end
+
+-- Feature: ipairs loop variable inference.
+-- `value` is inferred from the array element type.
+for _, value in ipairs(scores) do
+  local doubledScore = value + 1
+end
+
+-- Feature: pairs loop variable inference.
+-- Keys and values are inferred from known record fields when the table is static.
+for key, value in pairs(scoreRecord) do
+  local knownKey: "name" | "score" = key
+  local knownValue: string | number = value
+end
+
 local inferredPlayer = makePlayer("Inferred")
 local typedPlayer: Player = makeTypedPlayer("Typed")
 local inferredHp = typedPlayer.hp
@@ -81,6 +110,10 @@ return {
   inferredBoolean = inferredBoolean,
   inferredNil = inferredNil,
   inferredTable = inferredTable,
+  scores = scores,
+  firstScore = firstScore,
+  scoreRecord = scoreRecord,
+  scoreFromRecord = scoreFromRecord,
   inferredPlayer = inferredPlayer,
   typedPlayer = typedPlayer,
   inferredHp = inferredHp,

@@ -209,8 +209,8 @@ for key, value in pairs(stats) do
   dynamicValue.lastStatKey = key
 end
 
--- Feature: break in loops.
-local firstLargeNumber = nil
+-- Feature: break in loops with an optional local that is filled later.
+local firstLargeNumber: number | nil = nil
 for _, value in ipairs({ 1, 3, 8, 13 }) do
   if value > 5 then
     firstLargeNumber = value

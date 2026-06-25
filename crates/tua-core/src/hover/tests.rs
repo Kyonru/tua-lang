@@ -441,6 +441,72 @@ local method = lookupObject.y
 }
 
 #[test]
+fn hovers_array_index_and_loop_variable_types() {
+    let source = r#"
+local numbers = { 1, 2, 3 }
+local first = numbers[1]
+
+for i = 1, #numbers do
+  local loopIndex = i
+  local indexed = numbers[i]
+end
+
+for _, value in ipairs(numbers) do
+  local doubled = value + 1
+end
+"#;
+
+    let first = hover_tua_source("src/loops.tua", source, position_at(source, "first ="))
+        .expect("hover should not fail")
+        .expect("indexed array local should hover");
+    let indexed = hover_tua_source("src/loops.tua", source, position_at(source, "indexed ="))
+        .expect("hover should not fail")
+        .expect("loop-indexed array local should hover");
+    let index = hover_tua_source("src/loops.tua", source, position_at(source, "loopIndex ="))
+        .expect("hover should not fail")
+        .expect("numeric loop variable should hover");
+    let value = hover_tua_source("src/loops.tua", source, position_at(source, "doubled ="))
+        .expect("hover should not fail")
+        .expect("ipairs value should hover");
+
+    assert_eq!(first.contents, "local first: number");
+    assert_eq!(indexed.contents, "local indexed: number");
+    assert_eq!(index.contents, "local loopIndex: number");
+    assert_eq!(value.contents, "local doubled: number");
+}
+
+#[test]
+fn hovers_record_index_and_pairs_variable_types() {
+    let source = r#"
+local player = { name = "Ada", score = 10 }
+local score = player["score"]
+
+for key, value in pairs(player) do
+  local knownKey = key
+  local seen = value
+end
+"#;
+
+    let score = hover_tua_source(
+        "src/pairs.tua",
+        source,
+        position_at(source, "score = player"),
+    )
+    .expect("hover should not fail")
+    .expect("record index local should hover");
+    let key = hover_tua_source("src/pairs.tua", source, position_at(source, "knownKey ="))
+        .expect("hover should not fail")
+        .expect("pairs key should hover");
+    let value = hover_tua_source("src/pairs.tua", source, position_at(source, "seen ="))
+        .expect("hover should not fail")
+        .expect("pairs value should hover");
+
+    assert_eq!(score.contents, "local score: number");
+    assert_eq!(key.contents, "local knownKey: \"name\" | \"score\"");
+    assert_eq!(value.contents, "local seen: string | number");
+}
+
+#[test]
 fn hovers_self_index_class_style_metatable_methods() {
     let source = r#"
 local Account = {}

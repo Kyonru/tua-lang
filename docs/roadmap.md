@@ -26,6 +26,7 @@ rust-analyzer gap matrix.
 Current future work is now more about precision and domain depth:
 
 - flow-sensitive type narrowing and richer LuaLS/LuaCATS annotation support;
+- deeper table, array, index, and loop-variable inference;
 - more LuaHelper parity fixtures and stub coverage;
 - larger refactor support where the shared model can prove edits are safe.
 

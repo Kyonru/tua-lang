@@ -321,6 +321,7 @@ impl<'a> SemanticModel<'a> {
                     )
                 })
             })
+            .or_else(|| self.loop_variable_type_at_position(name, position, depth + 1))
             .or_else(|| self.parameter_type_at_position(name, position))?;
 
         Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
@@ -528,22 +529,46 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
         depth: usize,
     ) -> Type {
-        Type::table(table.fields().iter().filter_map(|field| match field {
-            Field::NameKey { key, value, .. } => {
-                let key_text = token_text(key);
-                let ty = if key_text == "__index" {
-                    index_type_from_expression(value).or_else(|| {
-                        self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
-                    })
-                } else {
-                    self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
-                }
-                .unwrap_or(Type::Any);
+        let mut fields = Vec::new();
+        let mut array_items = Vec::new();
 
-                Some((key_text, TableField::required(ty)))
+        for field in table.fields() {
+            match field {
+                Field::ExpressionKey { key, value, .. } => {
+                    let ty = self
+                        .type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                        .unwrap_or(Type::Any);
+
+                    if let Some(key) = string_literal_expression(key) {
+                        fields.push((key, TableField::required(ty)));
+                    } else if expression_is_number(key) {
+                        array_items.push(ty);
+                    }
+                }
+                Field::NameKey { key, value, .. } => {
+                    let key_text = token_text(key);
+                    let ty = if key_text == "__index" {
+                        index_type_from_expression(value).or_else(|| {
+                            self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                        })
+                    } else {
+                        self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                    }
+                    .unwrap_or(Type::Any);
+
+                    fields.push((key_text, TableField::required(ty)));
+                }
+                Field::NoKey(value) => {
+                    array_items.push(
+                        self.type_of_expression_return_at_depth(value, position, 0, depth + 1)
+                            .unwrap_or(Type::Any),
+                    );
+                }
+                _ => {}
             }
-            _ => None,
-        }))
+        }
+
+        table_or_array_type(fields, array_items)
     }
 
     fn collect_expression_types_in_block(
@@ -719,11 +744,62 @@ impl<'a> SemanticModel<'a> {
 
         match var {
             Var::Name(name) => self.type_of_name_at_depth(&token_text(name), position, depth + 1),
-            Var::Expression(expression) => self.type_of_field_chain(
-                &plain_field_chain_from_var_expression(expression)?,
-                position,
-            ),
+            Var::Expression(expression) => {
+                self.type_of_var_expression_at_depth(expression, position, depth + 1)
+            }
             _ => None,
+        }
+    }
+
+    fn type_of_var_expression_at_depth(
+        &self,
+        expression: &ast::VarExpression,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        if depth >= MAX_SEMANTIC_INFERENCE_DEPTH {
+            return None;
+        }
+
+        let mut current = match expression.prefix() {
+            Prefix::Name(name) => {
+                self.type_of_name_at_depth(&token_text(name), position, depth + 1)?
+            }
+            Prefix::Expression(expression) => {
+                self.type_of_expression_return_at_depth(expression, position, 0, depth + 1)?
+            }
+            _ => return None,
+        };
+
+        for suffix in expression.suffixes() {
+            match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    current =
+                        resolve_table_field_type(self.environment, &current, &token_text(name))?;
+                }
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let key = self.index_key_type(expression, position, depth + 1)?;
+                    current = resolve_index_type(self.environment, &current, &key)?;
+                }
+                _ => return None,
+            }
+        }
+
+        Some(current)
+    }
+
+    fn index_key_type(
+        &self,
+        expression: &Expression,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        match expression {
+            Expression::Number(_) => Some(Type::number()),
+            Expression::String(value) => {
+                Some(Type::string_literal(unquote_string(&value.to_string())))
+            }
+            _ => self.type_of_expression_return_at_depth(expression, position, 0, depth + 1),
         }
     }
 
@@ -752,6 +828,177 @@ impl<'a> SemanticModel<'a> {
             })
             .next_back()
             .map(|parameter| type_from_tua_type(&parameter.ty))
+    }
+
+    fn loop_variable_type_at_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Option<Type> {
+        let mut candidates = Vec::new();
+
+        self.collect_loop_variable_types_in_block(
+            self.parsed.ast.nodes(),
+            name,
+            position,
+            depth,
+            &mut candidates,
+        );
+
+        candidates
+            .into_iter()
+            .max_by_key(|(span, _)| position_key(span.start))
+            .map(|(_, ty)| ty)
+    }
+
+    fn collect_loop_variable_types_in_block(
+        &self,
+        block: &'a ast::Block,
+        name: &str,
+        position: SourcePosition,
+        depth: usize,
+        candidates: &mut Vec<(SourceSpan, Type)>,
+    ) {
+        for stmt in block.stmts() {
+            let Some(stmt_span) = node_span(stmt) else {
+                continue;
+            };
+            if !contains_position(stmt_span, position) {
+                continue;
+            }
+
+            match stmt {
+                ast::Stmt::GenericFor(for_stmt) => {
+                    if let Some(block_span) = node_span(for_stmt.block()) {
+                        if contains_position(stmt_span, position) {
+                            let types = self.generic_for_variable_types(for_stmt, position, depth);
+                            for (loop_name, ty) in for_stmt.names().into_iter().zip(types) {
+                                if token_text(loop_name) == name {
+                                    candidates.push((block_span, ty));
+                                }
+                            }
+                        }
+                    }
+                    self.collect_loop_variable_types_in_block(
+                        for_stmt.block(),
+                        name,
+                        position,
+                        depth + 1,
+                        candidates,
+                    );
+                }
+                ast::Stmt::NumericFor(for_stmt) => {
+                    if token_text(for_stmt.index_variable()) == name
+                        && contains_position(stmt_span, position)
+                    {
+                        candidates.push((stmt_span, Type::number()));
+                    }
+                    self.collect_loop_variable_types_in_block(
+                        for_stmt.block(),
+                        name,
+                        position,
+                        depth + 1,
+                        candidates,
+                    );
+                }
+                ast::Stmt::Do(block) => self.collect_loop_variable_types_in_block(
+                    block.block(),
+                    name,
+                    position,
+                    depth + 1,
+                    candidates,
+                ),
+                ast::Stmt::FunctionDeclaration(function) => self
+                    .collect_loop_variable_types_in_block(
+                        function.body().block(),
+                        name,
+                        position,
+                        depth + 1,
+                        candidates,
+                    ),
+                ast::Stmt::If(if_stmt) => {
+                    self.collect_loop_variable_types_in_block(
+                        if_stmt.block(),
+                        name,
+                        position,
+                        depth + 1,
+                        candidates,
+                    );
+                    if let Some(else_ifs) = if_stmt.else_if() {
+                        for else_if in else_ifs {
+                            self.collect_loop_variable_types_in_block(
+                                else_if.block(),
+                                name,
+                                position,
+                                depth + 1,
+                                candidates,
+                            );
+                        }
+                    }
+                    if let Some(else_block) = if_stmt.else_block() {
+                        self.collect_loop_variable_types_in_block(
+                            else_block,
+                            name,
+                            position,
+                            depth + 1,
+                            candidates,
+                        );
+                    }
+                }
+                ast::Stmt::LocalFunction(function) => self.collect_loop_variable_types_in_block(
+                    function.body().block(),
+                    name,
+                    position,
+                    depth + 1,
+                    candidates,
+                ),
+                ast::Stmt::Repeat(repeat) => self.collect_loop_variable_types_in_block(
+                    repeat.block(),
+                    name,
+                    position,
+                    depth + 1,
+                    candidates,
+                ),
+                ast::Stmt::While(while_stmt) => self.collect_loop_variable_types_in_block(
+                    while_stmt.block(),
+                    name,
+                    position,
+                    depth + 1,
+                    candidates,
+                ),
+                _ => {}
+            }
+        }
+    }
+
+    fn generic_for_variable_types(
+        &self,
+        for_stmt: &ast::GenericFor,
+        position: SourcePosition,
+        depth: usize,
+    ) -> Vec<Type> {
+        let Some(Expression::FunctionCall(function_call)) = for_stmt.expressions().iter().next()
+        else {
+            return vec![Type::Any; for_stmt.names().into_iter().count()];
+        };
+        let Some((iterator, value_expression)) = iterator_call(function_call) else {
+            return vec![Type::Any; for_stmt.names().into_iter().count()];
+        };
+        let value_type = self
+            .type_of_expression_return_at_depth(value_expression, position, 0, depth + 1)
+            .unwrap_or(Type::Any);
+
+        match iterator.as_str() {
+            "ipairs" => vec![
+                Type::number(),
+                array_element_type(self.environment, &value_type).unwrap_or(Type::Any),
+            ],
+            "pairs" => pair_key_value_types(self.environment, &value_type)
+                .map(|(key, value)| vec![key, value])
+                .unwrap_or_else(|| vec![Type::Any, Type::Any]),
+            _ => vec![Type::Any; for_stmt.names().into_iter().count()],
+        }
     }
 }
 
@@ -799,6 +1046,147 @@ pub(crate) fn resolve_table_field_type(
             }
         }
         _ => None,
+    }
+}
+
+pub(crate) fn resolve_index_type(
+    environment: &TypeEnvironment,
+    collection: &Type,
+    key: &Type,
+) -> Option<Type> {
+    match resolve_aliases(environment, collection, 0) {
+        Type::Array(item) => is_number_like(key).then_some(*item),
+        Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
+        Type::Dictionary {
+            key: dict_key,
+            value,
+        } => key_accepts_index(&dict_key, key).then_some(*value),
+        Type::Table(table) => match key {
+            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.ty.clone()),
+            Type::Primitive(PrimitiveType::String) => {
+                union_types_optional(table.semantic_fields().into_values().map(|field| field.ty))
+            }
+            _ => None,
+        },
+        Type::Union(types) => union_types_optional(
+            types
+                .iter()
+                .filter_map(|ty| resolve_index_type(environment, ty, key)),
+        ),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_) => None,
+    }
+}
+
+fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Array(item) => Some(*item),
+        Type::Tuple(items) => Some(union_types(items)),
+        Type::Union(types) => union_types_optional(
+            types
+                .iter()
+                .filter_map(|ty| array_element_type(environment, ty)),
+        ),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Dictionary { .. }
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Table(_) => None,
+    }
+}
+
+fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Type, Type)> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Array(item) => Some((Type::number(), *item)),
+        Type::Tuple(items) => Some((Type::number(), union_types(items))),
+        Type::Dictionary { key, value } => Some((*key, *value)),
+        Type::Table(table) => {
+            let fields = table.semantic_fields();
+            let keys = fields
+                .keys()
+                .cloned()
+                .map(Type::string_literal)
+                .collect::<Vec<_>>();
+            let values = fields
+                .into_values()
+                .map(|field| field.ty)
+                .collect::<Vec<_>>();
+
+            Some((union_types(keys), union_types(values)))
+        }
+        Type::Union(types) => {
+            let pairs = types
+                .iter()
+                .filter_map(|ty| pair_key_value_types(environment, ty))
+                .collect::<Vec<_>>();
+            let keys = pairs.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+            let values = pairs
+                .into_iter()
+                .map(|(_, value)| value)
+                .collect::<Vec<_>>();
+
+            Some((union_types(keys), union_types(values)))
+        }
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_) => None,
+    }
+}
+
+fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>) -> Type {
+    let table = (!fields.is_empty()).then(|| Type::table(fields));
+    let array = (!array_items.is_empty()).then(|| Type::array(union_types(array_items)));
+
+    match (table, array) {
+        (Some(table), Some(array)) => Type::union([table, array]),
+        (Some(table), None) => table,
+        (None, Some(array)) => array,
+        (None, None) => Type::empty_table(),
+    }
+}
+
+fn union_types(types: Vec<Type>) -> Type {
+    let mut unique = Vec::new();
+    for ty in types {
+        if !unique.contains(&ty) {
+            unique.push(ty);
+        }
+    }
+
+    match unique.len() {
+        0 => Type::Any,
+        1 => unique.into_iter().next().unwrap_or(Type::Any),
+        _ => Type::union(unique),
+    }
+}
+
+fn union_types_optional(types: impl IntoIterator<Item = Type>) -> Option<Type> {
+    let types = types.into_iter().collect::<Vec<_>>();
+
+    (!types.is_empty()).then(|| union_types(types))
+}
+
+fn is_number_like(ty: &Type) -> bool {
+    matches!(ty, Type::Primitive(PrimitiveType::Number))
+}
+
+fn key_accepts_index(expected: &Type, actual: &Type) -> bool {
+    match (expected, actual) {
+        (Type::Any, _) | (_, Type::Any) => true,
+        (Type::Primitive(PrimitiveType::String), Type::Primitive(PrimitiveType::String))
+        | (Type::Primitive(PrimitiveType::String), Type::StringLiteral(_))
+        | (Type::Primitive(PrimitiveType::Number), Type::Primitive(PrimitiveType::Number)) => true,
+        (Type::StringLiteral(expected), Type::StringLiteral(actual)) => expected == actual,
+        (Type::Union(types), actual) => types.iter().any(|ty| key_accepts_index(ty, actual)),
+        (expected, Type::Union(types)) => types.iter().any(|ty| key_accepts_index(expected, ty)),
+        _ => false,
     }
 }
 
@@ -1088,6 +1476,23 @@ fn string_literal_expression(expression: &Expression) -> Option<String> {
         Expression::String(value) => Some(unquote_string(&value.to_string())),
         _ => None,
     }
+}
+
+fn expression_is_number(expression: &Expression) -> bool {
+    matches!(expression, Expression::Number(_))
+}
+
+fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((token_text(name), arguments.iter().next()?))
 }
 
 fn unquote_string(value: &str) -> String {

@@ -178,7 +178,7 @@ impl<'a> Checker<'a> {
                     self.check_block(else_block, current_return);
                 }
             }
-            ast::Stmt::GenericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
+            ast::Stmt::GenericFor(for_stmt) => self.check_generic_for(for_stmt, current_return),
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
                 let return_types = self.function_return_types(&name);
@@ -199,7 +199,7 @@ impl<'a> Checker<'a> {
                 self.check_block(function.body().block(), return_types.as_deref());
                 self.scoped_locals.pop();
             }
-            ast::Stmt::NumericFor(for_stmt) => self.check_block(for_stmt.block(), current_return),
+            ast::Stmt::NumericFor(for_stmt) => self.check_numeric_for(for_stmt, current_return),
             ast::Stmt::Repeat(repeat) => {
                 self.check_condition_expression(repeat.until());
                 self.check_block(repeat.block(), current_return);
@@ -238,6 +238,40 @@ impl<'a> Checker<'a> {
             }
             _ => {}
         }
+    }
+
+    fn check_generic_for(&mut self, for_stmt: &ast::GenericFor, current_return: Option<&[Type]>) {
+        for expression in for_stmt.expressions() {
+            if let Expression::FunctionCall(function_call) = expression {
+                self.check_function_call(function_call);
+            } else {
+                self.infer_expression(expression);
+            }
+        }
+
+        let locals = for_stmt
+            .names()
+            .into_iter()
+            .zip(self.generic_for_variable_types(for_stmt))
+            .map(|(name, ty)| (token_text(name), ty))
+            .collect::<BTreeMap<_, _>>();
+
+        self.check_block_with_locals(for_stmt.block(), current_return, locals);
+    }
+
+    fn check_numeric_for(&mut self, for_stmt: &ast::NumericFor, current_return: Option<&[Type]>) {
+        self.infer_expression(for_stmt.start());
+        self.infer_expression(for_stmt.end());
+
+        if let Some(step) = for_stmt.step() {
+            self.infer_expression(step);
+        }
+
+        self.check_block_with_locals(
+            for_stmt.block(),
+            current_return,
+            BTreeMap::from([(token_text(for_stmt.index_variable()), Type::number())]),
+        );
     }
 
     fn check_equality_comparison(
@@ -563,26 +597,42 @@ impl<'a> Checker<'a> {
 
     fn infer_table_constructor(&mut self, table: &TableConstructor) -> Type {
         let mut fields = Vec::new();
+        let mut array_items = Vec::new();
 
         for field in table.fields() {
-            if let Field::NameKey { key, value, .. } = field {
-                let key_text = token_text(key);
-                let ty = if key_text == "__newindex" {
-                    self.infer_newindex_expression(value)
-                } else {
-                    self.infer_expression(value)
-                }
-                .unwrap_or(Type::Any);
+            match field {
+                Field::ExpressionKey { key, value, .. } => {
+                    let ty = self.infer_expression(value).unwrap_or(Type::Any);
 
-                if key_text == "__index" {
-                    fields.extend(index_fields_from_expression(value));
+                    if let Some(key) = string_literal_expression(key) {
+                        fields.push((key, TableField::required(ty)));
+                    } else if expression_is_number(key) {
+                        array_items.push(ty);
+                    }
                 }
+                Field::NameKey { key, value, .. } => {
+                    let key_text = token_text(key);
+                    let ty = if key_text == "__newindex" {
+                        self.infer_newindex_expression(value)
+                    } else {
+                        self.infer_expression(value)
+                    }
+                    .unwrap_or(Type::Any);
 
-                fields.push((key_text, TableField::required(ty)));
+                    if key_text == "__index" {
+                        fields.extend(index_fields_from_expression(value));
+                    }
+
+                    fields.push((key_text, TableField::required(ty)));
+                }
+                Field::NoKey(value) => {
+                    array_items.push(self.infer_expression(value).unwrap_or(Type::Any));
+                }
+                _ => {}
             }
         }
 
-        Type::table(fields)
+        table_or_array_type(fields, array_items)
     }
 
     fn infer_newindex_expression(&mut self, expression: &Expression) -> Option<Type> {
@@ -607,9 +657,48 @@ impl<'a> Checker<'a> {
         match var {
             Var::Name(name) => self.infer_named_value(&token_text(name)),
             Var::Expression(expression) => {
-                self.resolve_field_chain_type(&plain_field_chain_from_var_expression(expression)?)
+                if let Some(parts) = plain_field_chain_from_var_expression(expression) {
+                    if let Some(ty) = self.resolve_field_chain_type(&parts) {
+                        return Some(ty);
+                    }
+                }
+
+                self.infer_var_expression(expression)
             }
             _ => None,
+        }
+    }
+
+    fn infer_var_expression(&mut self, expression: &ast::VarExpression) -> Option<Type> {
+        let mut current = match expression.prefix() {
+            Prefix::Name(name) => self.infer_named_value(&token_text(name))?,
+            Prefix::Expression(expression) => self.infer_expression(expression)?,
+            _ => return None,
+        };
+
+        for suffix in expression.suffixes() {
+            match suffix {
+                Suffix::Index(Index::Dot { name, .. }) => {
+                    current = self.resolve_table_field_type(&current, &token_text(name))?;
+                }
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    let key = self.index_key_type(expression)?;
+                    current = resolve_index_type(self.environment, &current, &key)?;
+                }
+                _ => return None,
+            }
+        }
+
+        Some(current)
+    }
+
+    fn index_key_type(&mut self, expression: &Expression) -> Option<Type> {
+        match expression {
+            Expression::Number(_) => Some(Type::number()),
+            Expression::String(value) => {
+                Some(Type::string_literal(unquote_string(&value.to_string())))
+            }
+            _ => self.infer_expression(expression),
         }
     }
 
@@ -846,6 +935,28 @@ impl<'a> Checker<'a> {
         };
 
         (table.has_self_index() && table.is_constructor_method(method)).then_some(receiver_type)
+    }
+
+    fn generic_for_variable_types(&mut self, for_stmt: &ast::GenericFor) -> Vec<Type> {
+        let Some(Expression::FunctionCall(function_call)) = for_stmt.expressions().iter().next()
+        else {
+            return vec![Type::Any; for_stmt.names().into_iter().count()];
+        };
+        let Some((iterator, value_expression)) = iterator_call(function_call) else {
+            return vec![Type::Any; for_stmt.names().into_iter().count()];
+        };
+        let value_type = self.infer_expression(value_expression).unwrap_or(Type::Any);
+
+        match iterator.as_str() {
+            "ipairs" => vec![
+                Type::number(),
+                array_element_type(self.environment, &value_type).unwrap_or(Type::Any),
+            ],
+            "pairs" => pair_key_value_types(self.environment, &value_type)
+                .map(|(key, value)| vec![key, value])
+                .unwrap_or_else(|| vec![Type::Any, Type::Any]),
+            _ => vec![Type::Any; for_stmt.names().into_iter().count()],
+        }
     }
 
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
@@ -1639,6 +1750,10 @@ fn string_literal_expression(expression: &Expression) -> Option<String> {
     }
 }
 
+fn expression_is_number(expression: &Expression) -> bool {
+    matches!(expression, Expression::Number(_))
+}
+
 fn is_method_call(function_call: &FunctionCall) -> bool {
     function_call
         .suffixes()
@@ -1943,6 +2058,166 @@ fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Ty
             .unwrap_or_else(|| ty.clone()),
         _ => ty.clone(),
     }
+}
+
+fn resolve_index_type(
+    environment: &TypeEnvironment,
+    collection: &Type,
+    key: &Type,
+) -> Option<Type> {
+    match resolve_aliases(collection, environment, 0) {
+        Type::Array(item) => is_number_like(key).then_some(*item),
+        Type::Tuple(items) => is_number_like(key).then(|| union_types(items)),
+        Type::Dictionary {
+            key: dict_key,
+            value,
+        } => key_accepts_index(&dict_key, key).then_some(*value),
+        Type::Table(table) => match key {
+            Type::StringLiteral(value) => table.semantic_field(value).map(|field| field.ty.clone()),
+            Type::Primitive(crate::PrimitiveType::String) => {
+                union_types_optional(table.semantic_fields().into_values().map(|field| field.ty))
+            }
+            _ => None,
+        },
+        Type::Union(types) => union_types_optional(
+            types
+                .iter()
+                .filter_map(|ty| resolve_index_type(environment, ty, key)),
+        ),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_) => None,
+    }
+}
+
+fn array_element_type(environment: &TypeEnvironment, ty: &Type) -> Option<Type> {
+    match resolve_aliases(ty, environment, 0) {
+        Type::Array(item) => Some(*item),
+        Type::Tuple(items) => Some(union_types(items)),
+        Type::Union(types) => union_types_optional(
+            types
+                .iter()
+                .filter_map(|ty| array_element_type(environment, ty)),
+        ),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Dictionary { .. }
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Table(_) => None,
+    }
+}
+
+fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Type, Type)> {
+    match resolve_aliases(ty, environment, 0) {
+        Type::Array(item) => Some((Type::number(), *item)),
+        Type::Tuple(items) => Some((Type::number(), union_types(items))),
+        Type::Dictionary { key, value } => Some((*key, *value)),
+        Type::Table(table) => {
+            let fields = table.semantic_fields();
+            let keys = fields
+                .keys()
+                .cloned()
+                .map(Type::string_literal)
+                .collect::<Vec<_>>();
+            let values = fields
+                .into_values()
+                .map(|field| field.ty)
+                .collect::<Vec<_>>();
+
+            Some((union_types(keys), union_types(values)))
+        }
+        Type::Union(types) => {
+            let pairs = types
+                .iter()
+                .filter_map(|ty| pair_key_value_types(environment, ty))
+                .collect::<Vec<_>>();
+            let keys = pairs.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+            let values = pairs
+                .into_iter()
+                .map(|(_, value)| value)
+                .collect::<Vec<_>>();
+
+            Some((union_types(keys), union_types(values)))
+        }
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_) => None,
+    }
+}
+
+fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>) -> Type {
+    let table = (!fields.is_empty()).then(|| Type::table(fields));
+    let array = (!array_items.is_empty()).then(|| Type::array(union_types(array_items)));
+
+    match (table, array) {
+        (Some(table), Some(array)) => Type::union([table, array]),
+        (Some(table), None) => table,
+        (None, Some(array)) => array,
+        (None, None) => Type::empty_table(),
+    }
+}
+
+fn union_types(types: Vec<Type>) -> Type {
+    let mut unique = Vec::new();
+    for ty in types {
+        if !unique.contains(&ty) {
+            unique.push(ty);
+        }
+    }
+
+    match unique.len() {
+        0 => Type::Any,
+        1 => unique.into_iter().next().unwrap_or(Type::Any),
+        _ => Type::union(unique),
+    }
+}
+
+fn union_types_optional(types: impl IntoIterator<Item = Type>) -> Option<Type> {
+    let types = types.into_iter().collect::<Vec<_>>();
+
+    (!types.is_empty()).then(|| union_types(types))
+}
+
+fn is_number_like(ty: &Type) -> bool {
+    matches!(ty, Type::Primitive(crate::PrimitiveType::Number))
+}
+
+fn key_accepts_index(expected: &Type, actual: &Type) -> bool {
+    match (expected, actual) {
+        (Type::Any, _) | (_, Type::Any) => true,
+        (
+            Type::Primitive(crate::PrimitiveType::String),
+            Type::Primitive(crate::PrimitiveType::String),
+        )
+        | (Type::Primitive(crate::PrimitiveType::String), Type::StringLiteral(_))
+        | (
+            Type::Primitive(crate::PrimitiveType::Number),
+            Type::Primitive(crate::PrimitiveType::Number),
+        ) => true,
+        (Type::StringLiteral(expected), Type::StringLiteral(actual)) => expected == actual,
+        (Type::Union(types), actual) => types.iter().any(|ty| key_accepts_index(ty, actual)),
+        (expected, Type::Union(types)) => types.iter().any(|ty| key_accepts_index(expected, ty)),
+        _ => false,
+    }
+}
+
+fn iterator_call(function_call: &FunctionCall) -> Option<(String, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((token_text(name), arguments.iter().next()?))
 }
 
 fn argument_count_diagnostic(

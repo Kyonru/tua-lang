@@ -315,7 +315,10 @@ The checker must:
 - check annotated local declarations;
 - check assignments to known typed variables and table fields;
 - infer primitive literal types for `number`, `string`, `boolean`, and `nil`;
-- infer simple table literals when an annotation supplies the expected shape;
+- infer simple record-like and array-like table literals;
+- infer bracket indexing for known arrays and string-keyed table fields;
+- infer simple numeric, `ipairs`, and `pairs` loop variable types when the
+  iterated value is statically known;
 - allow `any` to flow to and from all types;
 - preserve permissive behavior for unannotated dynamic Lua code.
 

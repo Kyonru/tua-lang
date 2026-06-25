@@ -1485,6 +1485,8 @@ Acceptance:
 
 ### 70.11 `feat(types): support practical metatable typing for method lookup and operators`
 
+Status: done.
+
 Scope:
 
 - Add conservative static metatable support for common Lua patterns used in the
@@ -1526,6 +1528,8 @@ Acceptance:
   stable diagnostics and non-regressive behavior for existing features.
 
 ### 70.12 `feat(types): infer loop variable, table, and array types`
+
+Status: done.
 
 Scope:
 
