@@ -339,10 +339,17 @@ impl LspServer {
     fn hover_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let hover = snapshot.hover(&request.path, position)?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.hover.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let hover = {
+            let _profile = tua_core::profile::span("lsp.hover.query");
+
+            snapshot.hover(&request.path, position)?
+        };
 
         Some(lsp_hover_from_core(hover))
     }
@@ -354,10 +361,17 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let completions = snapshot.completion(&request.path, position);
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.completion.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let completions = {
+            let _profile = tua_core::profile::span("lsp.completion.query");
+
+            snapshot.completion(&request.path, position)
+        };
 
         Value::Array(
             completions
@@ -376,17 +390,24 @@ impl LspServer {
         };
 
         let path = path_from_uri(&data.uri);
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let completion = snapshot.resolve_completion(
-            &path,
-            data.position,
-            &data.label,
-            data.kind,
-            data.module_path.as_deref(),
-            data.source_module.as_deref(),
-        );
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.completion.resolve.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let completion = {
+            let _profile = tua_core::profile::span("lsp.completion.resolve.query");
+
+            snapshot.resolve_completion(
+                &path,
+                data.position,
+                &data.label,
+                data.kind,
+                data.module_path.as_deref(),
+                data.source_module.as_deref(),
+            )
+        };
 
         lsp_resolved_completion_item(item, completion)
     }
@@ -394,10 +415,17 @@ impl LspServer {
     fn signature_help_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let help = snapshot.signature_help(&request.path, position)?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.signature_help.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let help = {
+            let _profile = tua_core::profile::span("lsp.signature_help.query");
+
+            snapshot.signature_help(&request.path, position)?
+        };
 
         Some(lsp_signature_help_from_core(help))
     }
@@ -722,10 +750,17 @@ impl LspServer {
             return json!([]);
         };
         let range = request.params.get("range").and_then(lsp_source_range);
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let hints = snapshot.inlay_hints(&request.path);
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.inlay_hints.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let hints = {
+            let _profile = tua_core::profile::span("lsp.inlay_hints.query");
+
+            snapshot.inlay_hints(&request.path)
+        };
 
         Value::Array(
             hints

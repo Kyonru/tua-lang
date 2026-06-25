@@ -126,6 +126,12 @@ resolution paths. A LOVE method return type, signature, or completion should be
 visible to hover, completion, signature help, diagnostics, and inlay hints
 through the same resolver.
 
+Performance-sensitive IDE features should reuse snapshot semantic facts rather
+than rebuilding type environments in each feature. Completion, completion
+resolve, hover, signature help, and inlay hints should prefer cached
+project-aware environments and only fall back to standalone helpers for
+parse-recovery or test-style source inputs.
+
 ## Adding A Core Query
 
 1. Define the core result type near the domain that owns the behavior.

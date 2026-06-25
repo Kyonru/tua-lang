@@ -45,8 +45,16 @@ async function profileProject(root) {
 
   for (let round = 0; round < repeat; round += 1) {
     for (const item of requests) {
+      const params = item.fromCompletion
+        ? await completionResolveParams(client, item.fromCompletion)
+        : item.params;
+
+      if (!params) {
+        continue;
+      }
+
       const started = process.hrtime.bigint();
-      await client.request(item.method, item.params);
+      await client.request(item.method, params);
       const elapsedMs = Number(process.hrtime.bigint() - started) / 1_000_000;
 
       timings.push({ label: item.label, elapsedMs });
@@ -67,10 +75,60 @@ async function profileProject(root) {
   }
 }
 
+async function completionResolveParams(client, source) {
+  const response = await client.request("textDocument/completion", source.params);
+  const items = completionItems(response);
+
+  for (const label of source.preferredLabels || []) {
+    const item = items.find((item) => item.label === label && item.data);
+
+    if (item) {
+      return item;
+    }
+  }
+
+  return (
+    items.find((item) => item.data) ||
+    items[0] ||
+    syntheticCompletionItem(source)
+  );
+}
+
+function syntheticCompletionItem(source) {
+  const label = (source.preferredLabels || [])[0];
+
+  if (!label) {
+    return null;
+  }
+
+  return {
+    label,
+    data: {
+      uri: source.params.textDocument.uri,
+      label,
+      kind: "field",
+      position: source.params.position,
+    },
+  };
+}
+
+function completionItems(response) {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (response && Array.isArray(response.items)) {
+    return response.items;
+  }
+
+  return [];
+}
+
 function requestPlan(main, files) {
   const workspaceQuery = path.basename(main.path, path.extname(main.path));
   const hoverNeedle = firstNeedle(main.text, ["makePlayer", "createWorld", "player", "Player"]);
   const completionNeedle = firstNeedle(main.text, ["player.", "Player.", "World.", "world."]);
+  const signatureNeedle = firstNeedle(main.text, ["setFilter(", "makePlayer(", "createWorld(", "spawnEnemy("]);
   const definitionNeedle = firstNeedle(main.text, ["require(\"", "Player.", "World."]);
   const referencesNeedle = firstNeedle(main.text, ["makePlayer", "createWorld", "player", "Player"]);
   const rangeEnd = main.text.split("\n").length + 1;
@@ -120,12 +178,33 @@ function requestPlan(main, files) {
   }
 
   if (completionNeedle) {
+    const completionParams = {
+      textDocument: { uri: main.uri },
+      position: positionAfter(main.text, completionNeedle),
+    };
+
     plan.push({
       label: "completion",
       method: "textDocument/completion",
+      params: completionParams,
+    });
+    plan.push({
+      label: "completionResolve",
+      method: "completionItem/resolve",
+      fromCompletion: {
+        params: completionParams,
+        preferredLabels: ["setFilter", "makePlayer", "createWorld", "spawnEnemy", "hp"],
+      },
+    });
+  }
+
+  if (signatureNeedle) {
+    plan.push({
+      label: "signatureHelp",
+      method: "textDocument/signatureHelp",
       params: {
         textDocument: { uri: main.uri },
-        position: positionAfter(main.text, completionNeedle),
+        position: positionAfter(main.text, signatureNeedle),
       },
     });
   }

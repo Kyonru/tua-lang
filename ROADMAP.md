@@ -1796,6 +1796,32 @@ Acceptance:
 - Developers can attribute query-time cost to cache-miss vs cache-hit components.
 - Reference/lookup performance claims are repeatable and validated in CI-like local benchmarking runs.
 
+### 70.22.5 `perf(ide): cache semantic facts for fast editor queries`
+
+Status: done.
+
+Scope:
+
+- Add snapshot-owned semantic facts for cached project-aware type environments
+  and inlay results.
+- Route hover, completion, completion resolve, signature help, and inlay hints
+  through cached semantic facts where possible.
+- Cache repeated completion requests within a snapshot so completion resolve and
+  repeated editor requests do not rebuild the same item list.
+- Add profiling spans for hover, completion, completion resolve, signature help,
+  inlay hints, receiver resolution, module-export completion, LOVE field
+  completion, and semantic fact construction.
+- Extend the LSP profiling fixture to measure `completionItem/resolve` and
+  `textDocument/signatureHelp`.
+
+Acceptance:
+
+- Repeated completion and completion resolve share cached snapshot results.
+- Hover, inlay hints, completion, and signature help agree on inferred LOVE
+  object types through one project-aware semantic environment.
+- Existing parse-recovery behavior for incomplete completion input remains
+  permissive.
+
 ### 70.23 `feat(ide): compact inferred structural type presentation`
 
 Scope:

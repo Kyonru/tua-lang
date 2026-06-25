@@ -6,7 +6,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::semantic::SemanticModel;
-use crate::types::{build_type_environment, Type};
+use crate::types::{build_type_environment, Type, TypeEnvironment};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,8 +33,19 @@ pub fn inlay_hints_tua_source(
 
 pub fn inlay_hints_parsed_source(parsed: &ParsedSource) -> Result<Vec<InlayHint>, Vec<Diagnostic>> {
     let environment = build_type_environment(parsed)?;
+
+    Ok(inlay_hints_parsed_source_with_environment(
+        parsed,
+        &environment,
+    ))
+}
+
+pub(crate) fn inlay_hints_parsed_source_with_environment(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<InlayHint> {
     let mut collector = InlayHintCollector {
-        semantic: SemanticModel::new(parsed, &environment),
+        semantic: SemanticModel::new(parsed, environment),
         hints: Vec::new(),
     };
 
@@ -43,7 +54,7 @@ pub fn inlay_hints_parsed_source(parsed: &ParsedSource) -> Result<Vec<InlayHint>
         .hints
         .sort_by_key(|hint| position_key(hint.position));
 
-    Ok(collector.hints)
+    collector.hints
 }
 
 struct InlayHintCollector<'a> {

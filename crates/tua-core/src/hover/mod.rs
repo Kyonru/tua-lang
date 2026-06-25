@@ -41,13 +41,26 @@ pub fn hover_parsed_source(
     position: SourcePosition,
 ) -> Result<Option<Hover>, Vec<Diagnostic>> {
     let environment = build_type_environment(parsed)?;
+
+    Ok(hover_parsed_source_with_environment(
+        parsed,
+        position,
+        &environment,
+    ))
+}
+
+pub(crate) fn hover_parsed_source_with_environment(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+) -> Option<Hover> {
     let resolver = HoverResolver {
         parsed,
-        environment: &environment,
-        semantic: SemanticModel::new(parsed, &environment),
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
     };
 
-    Ok(resolver.hover(position))
+    resolver.hover(position)
 }
 
 struct HoverResolver<'a> {

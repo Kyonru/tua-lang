@@ -5,10 +5,14 @@ use std::path::{Path, PathBuf};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
-use crate::completion::complete_field_access_in_source_with_environment;
+use crate::completion::{
+    complete_field_access_in_source_with_environment, complete_parsed_source_with_environment,
+};
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
+use crate::hover::hover_parsed_source_with_environment;
 use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
+use crate::inlay_hint::inlay_hints_parsed_source_with_environment;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_link::require_module_at_position;
 use crate::profile;
@@ -16,6 +20,7 @@ use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
+use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
@@ -85,6 +90,8 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
+    semantic_facts: OnceCell<BTreeMap<PathBuf, AnalysisSemanticFacts>>,
+    completion_cache: RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>,
     reverse_reference_index: OnceCell<ReverseReferenceIndex>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
@@ -110,6 +117,12 @@ struct AnalysisFile {
     require_edges: Vec<ModuleLink>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
+}
+
+#[derive(Clone, Debug)]
+struct AnalysisSemanticFacts {
+    environment: TypeEnvironment,
+    inlay_hints: OnceCell<Vec<InlayHint>>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -165,6 +178,13 @@ struct ReferenceIndexKey {
 }
 
 type ModuleExportCandidates = BTreeMap<String, BTreeSet<String>>;
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct CompletionRequestKey {
+    path: PathBuf,
+    line: usize,
+    column: usize,
+}
 
 impl AnalysisHost {
     pub fn new() -> Self {
@@ -404,6 +424,8 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
+            semantic_facts: OnceCell::new(),
+            completion_cache: RefCell::new(BTreeMap::new()),
             reverse_reference_index: OnceCell::new(),
             call_hierarchy_symbols,
             call_hierarchy_calls,
@@ -486,6 +508,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
+        let _profile = profile::span("analysis.query.hover");
         let path = path.as_ref();
         let file = self.file(path)?;
 
@@ -521,27 +544,38 @@ impl AnalysisSnapshot {
             return Some(hover);
         }
 
-        hover_parsed_source(parsed, position)
-            .ok()
-            .flatten()
+        self.semantic_facts_for_parsed(parsed)
+            .and_then(|facts| {
+                hover_parsed_source_with_environment(parsed, position, &facts.environment)
+            })
+            .or_else(|| hover_parsed_source(parsed, position).ok().flatten())
             .or_else(|| self.project_symbol_hover(parsed, position))
     }
 
     pub fn completion(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Completion> {
+        let _profile = profile::span("analysis.query.completion");
         let path = path.as_ref();
+        let key = completion_request_key(path, position);
+
+        if let Some(completions) = self.completion_cache.borrow().get(&key).cloned() {
+            return completions;
+        }
+
         let Some(file) = self.file(path) else {
             return Vec::new();
         };
 
-        match &file.parsed {
+        let completions = match &file.parsed {
             Ok(parsed) => {
                 let completions = self.project_completions(parsed, &file.source, position);
 
                 if !completions.is_empty() {
-                    return completions;
+                    completions
+                } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
+                    complete_parsed_source_with_environment(parsed, position, &facts.environment)
+                } else {
+                    complete_parsed_source(parsed, position).unwrap_or_default()
                 }
-
-                complete_parsed_source(parsed, position).unwrap_or_default()
             }
             Err(_) => {
                 let recovered = source_without_incomplete_field_access_lines(&file.source);
@@ -550,13 +584,21 @@ impl AnalysisSnapshot {
                     let completions = self.project_completions(&parsed, &file.source, position);
 
                     if !completions.is_empty() {
-                        return completions;
+                        completions
+                    } else {
+                        complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
                     }
+                } else {
+                    complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
                 }
-
-                complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
             }
-        }
+        };
+
+        self.completion_cache
+            .borrow_mut()
+            .insert(key, completions.clone());
+
+        completions
     }
 
     pub fn definition(
@@ -607,6 +649,7 @@ impl AnalysisSnapshot {
         module_path: Option<&Path>,
         source_module: Option<&str>,
     ) -> Option<Completion> {
+        let _profile = profile::span("analysis.query.completion.resolve");
         self.completion(path, position)
             .into_iter()
             .find(|completion| {
@@ -624,13 +667,25 @@ impl AnalysisSnapshot {
         path: impl AsRef<Path>,
         position: SourcePosition,
     ) -> Option<SignatureHelp> {
+        let _profile = profile::span("analysis.query.signature_help");
         let path = path.as_ref();
         let file = self.file(path)?;
 
         match &file.parsed {
-            Ok(parsed) => signature_help_parsed_source(parsed, position)
-                .ok()
-                .flatten(),
+            Ok(parsed) => self
+                .semantic_facts_for_parsed(parsed)
+                .and_then(|facts| {
+                    signature_help_parsed_source_with_environment(
+                        parsed,
+                        position,
+                        &facts.environment,
+                    )
+                })
+                .or_else(|| {
+                    signature_help_parsed_source(parsed, position)
+                        .ok()
+                        .flatten()
+                }),
             Err(_) => signature_help_tua_source(path, file.source.clone(), position)
                 .ok()
                 .flatten(),
@@ -1329,10 +1384,25 @@ impl AnalysisSnapshot {
     }
 
     pub fn inlay_hints(&self, path: impl AsRef<Path>) -> Vec<InlayHint> {
-        self.file(path.as_ref())
-            .and_then(|file| file.parsed.as_ref().ok())
-            .and_then(|parsed| inlay_hints_parsed_source(parsed).ok())
-            .unwrap_or_default()
+        let _profile = profile::span("analysis.query.inlay_hints");
+        let Some(file) = self.file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let Ok(parsed) = &file.parsed else {
+            return Vec::new();
+        };
+        let Some(facts) = self.semantic_facts_for_parsed(parsed) else {
+            return inlay_hints_parsed_source(parsed).unwrap_or_default();
+        };
+
+        facts
+            .inlay_hints
+            .get_or_init(|| {
+                let _profile = profile::span("analysis.semantic.inlay_hints");
+
+                inlay_hints_parsed_source_with_environment(parsed, &facts.environment)
+            })
+            .clone()
     }
 
     pub fn semantic_tokens(&self, path: impl AsRef<Path>) -> Vec<SemanticToken> {
@@ -1824,7 +1894,7 @@ impl AnalysisSnapshot {
         }
 
         let current_part = chain.parts.first()?;
-        let environment = self.project_type_environment(parsed);
+        let environment = self.semantic_environment(parsed)?;
         let semantic = SemanticModel::new(parsed, &environment);
         let ty = semantic.type_of_name(&current_part.text, position)?;
 
@@ -1883,7 +1953,19 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
-        let environment = self.project_type_environment(parsed);
+        let environment = self.semantic_environment(parsed).unwrap_or_else(|| {
+            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+            environment.with_local_types(self.project_local_annotation_types(parsed))
+        });
+        let _profile = profile::span("analysis.completion.render");
+
+        let module_completions = self.project_module_field_completions(parsed, source, position);
+
+        if !module_completions.is_empty() {
+            return module_completions;
+        }
+
         let field_completions = complete_field_access_in_source_with_environment(
             source,
             parsed,
@@ -1898,16 +1980,57 @@ impl AnalysisSnapshot {
         self.project_table_literal_completions(parsed, source, position)
     }
 
-    fn project_type_environment(&self, parsed: &ParsedSource) -> TypeEnvironment {
-        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+    fn semantic_facts_for_parsed(&self, parsed: &ParsedSource) -> Option<&AnalysisSemanticFacts> {
+        self.semantic_facts().get(&normalize_path(&parsed.path))
+    }
 
-        environment.with_local_types(self.project_local_annotation_types(parsed))
+    fn semantic_environment(&self, parsed: &ParsedSource) -> Option<TypeEnvironment> {
+        self.semantic_facts_for_parsed(parsed)
+            .map(|facts| facts.environment.clone())
+    }
+
+    fn semantic_facts(&self) -> &BTreeMap<PathBuf, AnalysisSemanticFacts> {
+        self.semantic_facts.get_or_init(|| {
+            let _profile = profile::span("analysis.semantic.facts");
+
+            self.files
+                .iter()
+                .filter_map(|(path, file)| {
+                    let parsed = file.parsed.as_ref().ok()?;
+                    let environment = self.project_type_environment_for_file(file, parsed)?;
+
+                    Some((
+                        path.clone(),
+                        AnalysisSemanticFacts {
+                            environment,
+                            inlay_hints: OnceCell::new(),
+                        },
+                    ))
+                })
+                .collect()
+        })
+    }
+
+    fn project_type_environment_for_file(
+        &self,
+        file: &AnalysisFile,
+        parsed: &ParsedSource,
+    ) -> Option<TypeEnvironment> {
+        let _profile = profile::span("analysis.semantic.environment");
+        let environment = file.environment.clone().or_else(|| {
+            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+            Some(environment)
+        })?;
+
+        Some(environment.with_local_types(self.project_local_annotation_types(parsed)))
     }
 
     fn project_local_annotation_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
         parsed
             .local_annotations
             .iter()
+            .filter(|annotation| tua_type_uses_qualified_name(&annotation.ty))
             .filter_map(|annotation| {
                 self.project_type_from_tua_type(parsed, &annotation.ty)
                     .map(|ty| (annotation.name.clone(), ty))
@@ -2045,6 +2168,9 @@ impl AnalysisSnapshot {
         else {
             return Vec::new();
         };
+        let ty = self
+            .type_database
+            .resolve_type(&self.module_graph, &parsed.path, &ty);
         let mut fields = BTreeMap::new();
 
         collect_type_fields(&ty, &mut fields);
@@ -2088,6 +2214,103 @@ impl AnalysisSnapshot {
         let ty = self.project_type_from_tua_type(parsed, &annotation.ty)?;
 
         Some((ty, prefix))
+    }
+
+    fn project_module_field_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let _profile = profile::span("analysis.completion.module_exports");
+        let Some(crate::completion::context::CompletionContext::FieldAccess {
+            receiver_parts,
+            prefix,
+            ..
+        }) = crate::completion::context::completion_context(source, position)
+        else {
+            return Vec::new();
+        };
+        let Some((receiver, fields)) = receiver_parts.split_first() else {
+            return Vec::new();
+        };
+        let Some(module_path) = self.indexed_required_module_path(parsed, receiver) else {
+            return Vec::new();
+        };
+
+        if fields.is_empty() {
+            let Some(module) = self.module_graph.module(module_path) else {
+                return Vec::new();
+            };
+
+            return module
+                .exports
+                .iter()
+                .filter(|entry| entry.public_name.starts_with(&prefix))
+                .map(|entry| Completion {
+                    label: entry.public_name.clone(),
+                    kind: completion_kind_for_type(&entry.field.ty),
+                    detail: Some(format!("field: {}", entry.field.ty)),
+                    documentation: entry.field.documentation.clone(),
+                    insert_text: None,
+                    is_snippet: false,
+                    module_path: Some(module_path.to_path_buf()),
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect();
+        }
+
+        let Some(entry) = self.module_graph.export(module_path, &fields[0]) else {
+            return Vec::new();
+        };
+        let mut current = entry.field.ty.clone();
+
+        for field in fields.iter().skip(1) {
+            current = match current {
+                Type::Table(table) => match table.semantic_field(field) {
+                    Some(field) => field.ty.clone(),
+                    None => return Vec::new(),
+                },
+                Type::Union(types) => {
+                    let mut resolved = Vec::new();
+
+                    for ty in types {
+                        if let Type::Table(table) = ty {
+                            if let Some(field) = table.semantic_field(field) {
+                                resolved.push(field.ty.clone());
+                            }
+                        }
+                    }
+
+                    if resolved.is_empty() {
+                        return Vec::new();
+                    }
+
+                    Type::union(resolved)
+                }
+                _ => return Vec::new(),
+            };
+        }
+        let mut field_types = BTreeMap::new();
+
+        collect_type_fields(&current, &mut field_types);
+
+        field_types
+            .into_iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, ty)| Completion {
+                kind: completion_kind_for_type(&ty),
+                detail: Some(format!("field: {ty}")),
+                label: name,
+                documentation: entry.field.documentation.clone(),
+                insert_text: None,
+                is_snippet: false,
+                module_path: Some(module_path.to_path_buf()),
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect()
     }
 
     fn project_aware_diagnostics(
@@ -2492,7 +2715,8 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         Type::Table(table) => {
             fields.extend(
                 table
-                    .fields()
+                    .semantic_fields()
+                    .into_iter()
                     .map(|(name, field)| (name.to_owned(), field.ty.clone())),
             );
         }
@@ -2509,6 +2733,21 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => {}
+    }
+}
+
+fn completion_kind_for_type(ty: &Type) -> CompletionKind {
+    match ty {
+        Type::Function(_) => CompletionKind::Function,
+        _ => CompletionKind::Field,
+    }
+}
+
+fn completion_request_key(path: &Path, position: SourcePosition) -> CompletionRequestKey {
+    CompletionRequestKey {
+        path: normalize_path(path),
+        line: position.line,
+        column: position.column,
     }
 }
 

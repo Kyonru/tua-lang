@@ -666,6 +666,72 @@ return {
 }
 
 #[test]
+fn snapshot_caches_completion_and_shares_inferred_love_facts() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local function loadPlayerImage()
+  return image "assets/player.png"
+end
+
+local <|hover|>player = loadPlayerImage()
+player:<|complete|>setFilter(<|signature|>"nearest")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("inferred LOVE local should hover");
+
+    assert_eq!(hover.contents, "local player: Image");
+    assert_eq!(snapshot.completion_cache.borrow().len(), 0);
+
+    let completions = snapshot.completion("src/main.tua", fixture.position("complete"));
+    let labels = completions
+        .iter()
+        .map(|completion| completion.label.clone())
+        .collect::<Vec<_>>();
+
+    assert!(labels.contains(&"setFilter".to_owned()));
+    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .completion("src/main.tua", fixture.position("complete"))
+            .iter()
+            .map(|completion| completion.label.clone())
+            .collect::<Vec<_>>(),
+        labels
+    );
+    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+    assert!(snapshot
+        .resolve_completion(
+            "src/main.tua",
+            fixture.position("complete"),
+            "setFilter",
+            Some(CompletionKind::Function),
+            None,
+            None,
+        )
+        .is_some());
+    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+
+    let hints = snapshot.inlay_hints("src/main.tua");
+
+    assert!(hints.iter().any(|hint| hint.label == ": Image"));
+
+    let signature = snapshot
+        .signature_help("src/main.tua", fixture.position("signature"))
+        .expect("LOVE method signature should resolve");
+
+    assert!(signature.signatures[0].label.contains("setFilter"));
+}
+
+#[test]
 fn snapshot_hovers_parseable_lua_doc_project_locals_as_class_shapes() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

@@ -111,8 +111,9 @@ make profile-lsp
 The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
 `benchmarks/lsp/large`, reports average, p95, min, and max latency per LSP
 request, and prints analysis cache hit/miss counters from the server. The
-lookup profile includes `definition`, `references`, `prepareRename`, and
-`rename` so navigation and rename regressions are visible in one run.
+profile includes `completion`, `completionResolve`, `signatureHelp`,
+`definition`, `references`, `prepareRename`, and `rename` so autocomplete,
+inference, navigation, and rename regressions are visible in one run.
 
 Useful knobs:
 
@@ -133,6 +134,9 @@ TUA_PROFILE=1 tua lsp
 
 Current lookup regression targets from the checked-in fixtures are intentionally
 small: `references`, `prepareRename`, and `rename` should stay in the low
-single-digit millisecond range on the large fixture after warmup. If a change
+single-digit millisecond range on the large fixture after warmup. Completion,
+completion resolve, signature help, hover, and inlay hints should reuse cached
+semantic facts instead of rebuilding type environments per request. If a change
 pushes those rows noticeably higher, rerun with `TUA_PROFILE=1` and inspect the
-`analysis.query.*`, `analysis.references.*`, and `lsp.*` spans before merging.
+`analysis.query.*`, `analysis.semantic.*`, `analysis.completion.*`,
+`analysis.references.*`, and `lsp.*` spans before merging.

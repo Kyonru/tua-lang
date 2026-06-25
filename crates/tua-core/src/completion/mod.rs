@@ -7,6 +7,7 @@ use self::symbol::lua_symbols_before_position;
 use crate::asset;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
+use crate::profile;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
@@ -87,19 +88,38 @@ pub fn complete_tua_source(
         Ok(parsed) => parsed,
         Err(_) => return Ok(complete_lossy_source(&path, &source, context)),
     };
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
 
-    Ok(complete_parsed_source_with_context(&parsed, context))
+    Ok(complete_parsed_source_with_context(
+        &parsed,
+        context,
+        &environment,
+    ))
 }
 
 pub fn complete_parsed_source(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Result<Vec<Completion>, Vec<Diagnostic>> {
+    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+    Ok(complete_parsed_source_with_environment(
+        parsed,
+        position,
+        &environment,
+    ))
+}
+
+pub(crate) fn complete_parsed_source_with_environment(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+) -> Vec<Completion> {
     let Some(context) = completion_context(&parsed.source, position) else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
 
-    Ok(complete_parsed_source_with_context(parsed, context))
+    complete_parsed_source_with_context(parsed, context, environment)
 }
 
 pub(crate) fn complete_field_access_in_source_with_environment(
@@ -133,6 +153,7 @@ pub(crate) fn complete_field_access_in_source_with_environment(
 fn complete_parsed_source_with_context(
     parsed: &ParsedSource,
     context: CompletionContext,
+    environment: &TypeEnvironment,
 ) -> Vec<Completion> {
     match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
@@ -140,7 +161,7 @@ fn complete_parsed_source_with_context(
             complete_documentation_snippet(parsed, position)
         }
         CompletionContext::TypeAnnotation { prefix } => {
-            complete_type_names(parsed, prefix.as_str())
+            complete_type_names(environment, prefix.as_str())
         }
         CompletionContext::FieldAccess {
             receiver_parts,
@@ -156,10 +177,9 @@ fn complete_parsed_source_with_context(
                 return module_fields;
             }
 
-            let environment = build_completion_environment(parsed);
             let fields = complete_fields(
                 parsed,
-                &environment,
+                environment,
                 &receiver_parts,
                 prefix.as_str(),
                 position,
@@ -184,6 +204,7 @@ fn complete_parsed_source_with_context(
             position,
         } => complete_string_argument_values(
             parsed,
+            environment,
             &callee_parts,
             active_parameter,
             prefix.as_str(),
@@ -245,14 +266,14 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
     .collect()
 }
 
-fn complete_type_names(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
+fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {
     let mut completions = BTreeMap::new();
 
     for completion in complete_builtin_types(prefix) {
         completions.insert(completion.label.clone(), completion);
     }
 
-    for completion in complete_type_aliases(parsed, prefix) {
+    for completion in complete_type_aliases(environment, prefix) {
         completions.insert(completion.label.clone(), completion);
     }
 
@@ -278,9 +299,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
         .collect()
 }
 
-fn complete_type_aliases(parsed: &ParsedSource, prefix: &str) -> Vec<Completion> {
-    let (environment, _) = build_type_environment_with_diagnostics(parsed);
-
+fn complete_type_aliases(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {
     environment
         .aliases()
         .filter(|(name, _)| name.starts_with(prefix))
@@ -699,6 +718,7 @@ fn complete_fields(
     separator: FieldAccessSeparator,
     separator_span: crate::SourceSpan,
 ) -> Vec<Completion> {
+    let _profile = profile::span("analysis.completion.receiver");
     let semantic = SemanticModel::new(parsed, environment);
     let Some(receiver_type) = semantic.type_of_field_chain(receiver_parts, position) else {
         return Vec::new();
@@ -728,34 +748,39 @@ fn complete_fields(
         );
     }
 
-    collect_love_object_fields(
-        parsed,
-        environment,
-        &receiver_type,
-        prefix,
-        separator,
-        separator_span,
-        &mut completions,
-    );
+    {
+        let _profile = profile::span("analysis.completion.love_fields");
+
+        collect_love_object_fields(
+            parsed,
+            environment,
+            &receiver_type,
+            prefix,
+            separator,
+            separator_span,
+            &mut completions,
+        );
+    }
 
     completions.into_values().collect()
 }
 
 fn complete_string_argument_values(
     parsed: &ParsedSource,
+    environment: &TypeEnvironment,
     callee_parts: &[String],
     active_parameter: usize,
     prefix: &str,
     position: SourcePosition,
 ) -> Vec<Completion> {
-    let environment = build_completion_environment(parsed);
-    let semantic = SemanticModel::new(parsed, &environment);
+    let _profile = profile::span("analysis.completion.string_argument");
+    let semantic = SemanticModel::new(parsed, environment);
     if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
         let Some(parameter) = function.parameters.get(active_parameter) else {
             return Vec::new();
         };
 
-        let parameter = resolve_aliases(&environment, parameter, 0);
+        let parameter = resolve_aliases(environment, parameter, 0);
 
         return complete_lua_enum_values(&parameter.to_string(), prefix);
     }
@@ -1050,12 +1075,6 @@ fn completion_kind_from_lua_item(kind: LuaItemKind) -> CompletionKind {
         LuaItemKind::Module => CompletionKind::Module,
         LuaItemKind::Value => CompletionKind::Value,
     }
-}
-
-fn build_completion_environment(parsed: &ParsedSource) -> TypeEnvironment {
-    let (environment, _) = build_type_environment_with_diagnostics(parsed);
-
-    environment
 }
 
 fn parse_completion_source(

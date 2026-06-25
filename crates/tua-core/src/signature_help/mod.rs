@@ -47,30 +47,55 @@ pub fn signature_help_tua_source(
             return lua_signature_help(&context).map(Some).ok_or(diagnostics);
         }
     };
+    let (environment, diagnostics) = build_type_environment_with_diagnostics(&parsed);
 
-    Ok(signature_help_parsed_source_with_context(&parsed, context))
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+
+    Ok(signature_help_parsed_source_with_context(
+        &parsed,
+        context,
+        &environment,
+    ))
 }
 
 pub fn signature_help_parsed_source(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Result<Option<SignatureHelp>, Vec<Diagnostic>> {
-    let Some(context) = call_context(&parsed.source, position) else {
-        return Ok(None);
-    };
+    let (environment, diagnostics) = build_type_environment_with_diagnostics(parsed);
 
-    Ok(signature_help_parsed_source_with_context(parsed, context))
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+
+    Ok(signature_help_parsed_source_with_environment(
+        parsed,
+        position,
+        &environment,
+    ))
+}
+
+pub(crate) fn signature_help_parsed_source_with_environment(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+) -> Option<SignatureHelp> {
+    let context = call_context(&parsed.source, position)?;
+
+    signature_help_parsed_source_with_context(parsed, context, environment)
 }
 
 fn signature_help_parsed_source_with_context(
     parsed: &ParsedSource,
     context: CallContext,
+    environment: &TypeEnvironment,
 ) -> Option<SignatureHelp> {
-    let (environment, _) = build_type_environment_with_diagnostics(parsed);
     let resolver = SignatureResolver {
         parsed,
-        environment: &environment,
-        semantic: SemanticModel::new(parsed, &environment),
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
     };
     let mut signature = resolver.signature_for_context(&context)?;
     if context.is_method_call {

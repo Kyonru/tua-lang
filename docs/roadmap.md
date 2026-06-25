@@ -19,6 +19,8 @@ The recent roadmap focus landed the Phase 12 architecture spine:
 - stronger project modeling for require graphs, source roots, and exports;
 - shared IDE routing for navigation, symbols, call hierarchy, selection ranges,
   folding ranges, and profiling.
+- cached semantic facts for autocomplete, hover, signature help, and inlay hints
+  so inferred types are reused across fast editor queries.
 
 See [Architecture](architecture.md) for the contributor guide and Phase 12
 rust-analyzer gap matrix.
