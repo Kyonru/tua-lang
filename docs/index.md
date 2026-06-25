@@ -81,6 +81,8 @@ player.hp = player.hp - 10
 - [Language Server](lsp.md) - editor features and capability notes.
 - [LSP Parity Matrix](lsp-parity.md) - Tua, LuaHelper, and rust-analyzer gap
   tracking.
+- [LuaHelper Code Matrix](luahelper-code-matrix.md) - LuaHelper check,
+  warning, annotation, and quick-fix parity inventory.
 - [Lua Interop](lua-interop.md) - requiring Lua from Tua and Tua from Lua.
 - [Examples](examples.md) - bundled projects and verification commands.
 - [Roadmap](roadmap.md) - implementation status and planned parity work.

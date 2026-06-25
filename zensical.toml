@@ -27,6 +27,7 @@ nav = [
     { "CLI" = "cli.md" },
     { "Language Server" = "lsp.md" },
     { "LSP Parity Matrix" = "lsp-parity.md" },
+    { "LuaHelper Code Matrix" = "luahelper-code-matrix.md" },
   ] },
   { "Project" = [
     { "Roadmap" = "roadmap.md" },

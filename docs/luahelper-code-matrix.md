@@ -1,0 +1,165 @@
+# LuaHelper Code Matrix
+
+This matrix maps LuaHelper check identifiers, warning settings, and annotation
+tags to Tua's current core and LSP behavior. It is an implementation inventory,
+not a promise that Tua will clone LuaHelper one-for-one.
+
+LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stable
+`TLxxxx` diagnostic codes. The rows below map behavior, not code names.
+
+## Sources
+
+| Key | Source |
+| --- | --- |
+| `LH-ERR` | [`luahelper-lsp/langserver/check/common/err_info.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/common/err_info.go) |
+| `LH-WARN` | [`luahelper-vscode/package.json`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-vscode/package.json) |
+| `LH-ANN` | [`luahelper-lsp/langserver/check/annotation/annotatelexer/annotate_token.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/annotation/annotatelexer/annotate_token.go) |
+| `LH-ANN-INFO` | [`luahelper-lsp/langserver/check/common/annotate_info.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/common/annotate_info.go) |
+
+## Status Legend
+
+- **implemented**: Tua core reports/checks it and `tua-lsp` surfaces it.
+- **core-only**: core behavior exists, but no editor-specific feature is mapped.
+- **lsp-only**: editor behavior exists, but there is no matching core diagnostic.
+- **partial**: some common cases work, but LuaHelper has broader behavior.
+- **missing**: not implemented yet and mapped to a roadmap item.
+- **out of scope**: intentionally not planned for Tua's LuaJIT/LOVE focus.
+
+## Diagnostic And Check Codes
+
+| LuaHelper code/tag | Source | Tua core checker/lint | `tua-lsp` editor surface | State | Commit / migration notes |
+| --- | --- | --- | --- | --- | --- |
+| `CheckErrorSyntax = 1` | `LH-ERR` | `TL0001` parse diagnostics. | Published diagnostics. | implemented | Landed in parser phases 7-8. |
+| `CheckErrorNoDefine = 2` | `LH-ERR`, `luahelper.Warn.CheckNoDefine` in `LH-WARN` | `TL4004` undefined variables when `undefined_variables` is enabled. | Published diagnostics; respects config/global allow-list. | implemented | Phase 36. |
+| `CheckErrorCycleDefine = 3` | `LH-ERR`, `luahelper.Warn.CheckAfterDefine` in `LH-WARN` | `TL4020` require cycles and `TL4007` use-before-local where provable. | Published diagnostics after project indexing/watched changes. | partial | Load-order/global-cycle proof remains narrower; see 59, 60, 62. |
+| `CheckErrorLocalNoUse = 4` | `LH-ERR`, `luahelper.Warn.CheckLocalNoUse` in `LH-WARN` | `TL4005` unused locals. | Published diagnostics and remove-unused-local quick fix. | implemented | Phases 36 and 44. |
+| `CheckErrorTableDuplicateKey = 5` | `LH-ERR`, `luahelper.Warn.CheckTableDuplicateKey` in `LH-WARN` | `TL4001` duplicate literal table keys. | Published diagnostics and duplicate-key rename quick fix. | implemented | Phases 36, 44. |
+| `CheckErrorNoFile = 6` | `LH-ERR`, `luahelper.Warn.CheckReferNoFile` in `LH-WARN` | `TL4002` missing require, `TL4010` bad require, `TL2004` missing LOVE asset. | Diagnostics, document links for resolved requires, create-missing-require quick fix. | implemented | Phases 37, 44, 48.6, 59. |
+| `CheckErrorAssignParamNum = 7` | `LH-ERR`, `luahelper.Warn.CheckAssignParamNum` in `LH-WARN` | No dedicated multiple-assignment arity diagnostic. | No LSP diagnostic. | missing | Owner: lint/types. Planned in 70.24. |
+| `CheckErrorLocalParamNum = 8` | `LH-ERR`, `luahelper.Warn.CheckLocalDefineParamNum` in `LH-WARN` | No dedicated local-declaration arity diagnostic. | No LSP diagnostic. | missing | Owner: lint/types. Planned in 70.24. |
+| `CheckErrorGotoLabel = 9` | `LH-ERR`, `luahelper.Warn.CheckGotoLable` in `LH-WARN` | No `goto` support goal for Lua 5.1/LuaJIT output. | No LSP diagnostic. | out of scope | Tua targets LuaJIT/LOVE and does not plan Lua 5.2+ `goto` analysis in v1. |
+| `CheckErrorCallParam = 10` | `LH-ERR`, `luahelper.Warn.CheckFuncParam` in `LH-WARN` | `TL1004` / `TL4009` wrong argument count. | Diagnostics plus signature help for known calls. | implemented | Phases 16, 37, 41. |
+| `CheckErrorImportVar = 11` | `LH-ERR`, `luahelper.Warn.CheckImportModuleVar` in `LH-WARN` | Required-module fields and exports are checked for `require(...)`; custom `import(...)` is not special-cased. | Hover/completion/definition/references for indexed `require` exports. | partial | Owner: project model/module graph if custom import aliases become configurable; otherwise `import(...)` remains ordinary Lua. See 55, 59, 61. |
+| `CheckErrorNotIfVar = 12` | `LH-ERR`, `luahelper.Warn.CheckIfNotVar` in `LH-WARN` | Some impossible comparisons and flow-sensitive narrowing exist; no dedicated "used after negative guard" diagnostic. | Hover/checking use narrowed facts in supported guards. | partial | Owner: type flow. Planned expansion in 62. |
+| `CheckErrorDuplicateParam = 13` | `LH-ERR`, `luahelper.Warn.CheckFunctionDuplicateParam` in `LH-WARN` | `TL4008` duplicate function parameters. | Published diagnostics. | implemented | Phase 37. |
+| `CheckErrorDuplicateExp = 14` | `LH-ERR`, `luahelper.Warn.CheckBinaryExpressionDuplicate` in `LH-WARN` | `TL4013` duplicate binary operands. | Published diagnostics. | implemented | Phase 37. |
+| `CheckErrorOrAlwaysTrue = 15` | `LH-ERR`, `luahelper.Warn.CheckErrorOrAlwaysTrue` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
+| `CheckErrorAndAlwaysFalse = 16` | `LH-ERR`, `luahelper.Warn.CheckErrorAndAlwaysFalse` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
+| `CheckErrorNoUseAssign = 17` | `LH-ERR`, `luahelper.Warn.CheckNoUseAssign` in `LH-WARN` | `TL4005` unused locals and `TL4003` self-assignment cover adjacent cases; no exact "only assigned" diagnostic. | Remove-unused-local and remove-self-assignment quick fixes. | partial | Owner: lint/scope. Planned in 70.24. |
+| `CheckErrorAnnotate = 18` | `LH-ERR`, `luahelper.Warn.CheckAnnotateType` in `LH-WARN` | `TL0003` malformed doc annotations when `doc_annotations` is enabled. | Diagnostics, annotation completions, hover/signature docs for supported tags. | implemented | Phases 33, 34, 38, 40, 41, 70.10. |
+| `CheckErrorDuplicateIf = 19` | `LH-ERR`, `luahelper.Warn.CheckDuplicateIf` in `LH-WARN` | `TL4012` duplicate `if`/`elseif` conditions. | Published diagnostics. | implemented | Phase 37. |
+| `CheckErrorSelfAssign = 20` | `LH-ERR`, `luahelper.Warn.CheckSelfAssign` in `LH-WARN` | `TL4003` self-assignment. | Published diagnostics and remove-self-assignment quick fix. | implemented | Phases 36, 44. |
+| `CheckErrorFloatEq = 21` | `LH-ERR`, `luahelper.Warn.CheckFloatEq` in `LH-WARN` | `TL4014` float equality. | Published diagnostics. | implemented | Phase 37. |
+| `CheckErrorClassField = 22` | `LH-ERR` | Table-shape field checks exist for known Tua/LuaDoc types; LuaHelper class-field behavior is broader. | Completion/hover/definition for known fields. | partial | Owner: LuaDoc types/metatable facts. Planned in 70.10, 70.11, 70.13. |
+| `CheckErrorConstAssign = 23` | `LH-ERR` | `TL4015` const assignment when const metadata is known. | Published diagnostics. | implemented | Phase 37. |
+| `CheckErrorCallParamType = 24` | `LH-ERR` | `TL1003` / `TL4016` function argument type mismatch. | Diagnostics plus signature help/completions for literals such as LOVE modes. | implemented | Phases 15, 16, 37, 41, 48.5. |
+| `CheckErrorFuncRetErr = 25` | `LH-ERR` | `TL1003` / `TL4017` function return type mismatch. | Published diagnostics; hover/inlay use inferred returns. | implemented | Phases 16, 37, 61. |
+| `CheckErrorAssignType = 26` | `LH-ERR` | Annotated locals, known assignments, and known table fields check via `TL1003`; dynamic inferred-variable type changes are still permissive. | Published diagnostics when core can prove the mismatch. | partial | Owner: type database/flow. Planned in 61, 62, 70.24. |
+| `CheckErrorBinopType = 27` | `LH-ERR` | Some comparisons/arithmetic paths are checked; no complete binary-operator type diagnostic. | Hover can infer selected operator results such as metatable operators. | partial | Owner: types/lint. Planned in 70.24. |
+| `CheckErrorLocFuncNotCall = 28` | `LH-ERR` | Local functions can be unused locals, but Tua does not distinguish "function never called" from "binding never read". | Remove-unused-local quick fix where applicable. | partial | Owner: lint/scope. Planned in 70.24 if a separate diagnostic proves useful. |
+| `CheckErrorEnumValue = 29` | `LH-ERR` | Tua enum sugar rejects duplicate enum members; LuaDoc `---@enum` is currently shallow metadata. | Diagnostics for Tua enum syntax; completions from literal unions. | partial | Owner: LuaDoc annotation lowering. Planned in 70.10. |
+
+## LuaHelper Warning Settings
+
+LuaHelper exposes many check constants through VS Code settings. Tua's closest
+equivalent is `[diagnostics]` in `tua.toml` plus `tua.diagnostics.*` editor
+overrides.
+
+| LuaHelper setting | Maps to | Tua config / LSP setting | State |
+| --- | --- | --- | --- |
+| `luahelper.Warn.AllEnable` | Global warning master toggle. | No single master toggle; individual `[diagnostics]` keys are explicit. | intentionally divergent |
+| `luahelper.Warn.CheckSyntax` | `CheckErrorSyntax`. | Always-on syntax diagnostics. | implemented |
+| `luahelper.Warn.CheckNoDefine` | `CheckErrorNoDefine`. | `undefined_variables` / `tua.diagnostics.undefinedVariables`. | implemented |
+| `luahelper.Warn.CheckAfterDefine` | `CheckErrorCycleDefine`. | `use_before_definition`, `missing_requires`, require-cycle diagnostics. | partial |
+| `luahelper.Warn.CheckLocalNoUse` | `CheckErrorLocalNoUse`. | `unused_locals` / `tua.diagnostics.unusedLocals`. | implemented |
+| `luahelper.Warn.CheckTableDuplicateKey` | `CheckErrorTableDuplicateKey`. | `duplicate_keys` / `tua.diagnostics.duplicateKeys`. | implemented |
+| `luahelper.Warn.CheckReferNoFile` | `CheckErrorNoFile`. | `missing_requires`, `bad_requires`, asset diagnostics. | implemented |
+| `luahelper.Warn.CheckAssignParamNum` | `CheckErrorAssignParamNum`. | Planned assignment arity diagnostics. | missing, 70.24 |
+| `luahelper.Warn.CheckLocalDefineParamNum` | `CheckErrorLocalParamNum`. | Planned local arity diagnostics. | missing, 70.24 |
+| `luahelper.Warn.CheckGotoLable` | `CheckErrorGotoLabel`. | No Tua setting. | out of scope |
+| `luahelper.Warn.CheckFuncParam` | `CheckErrorCallParam`. | `wrong_argument_count` / `tua.diagnostics.wrongArgumentCount`. | implemented |
+| `luahelper.Warn.CheckImportModuleVar` | `CheckErrorImportVar`. | Require graph and module export indexing. | partial |
+| `luahelper.Warn.CheckIfNotVar` | `CheckErrorNotIfVar`. | Flow-sensitive narrowing diagnostics. | partial, 62 |
+| `luahelper.Warn.CheckFunctionDuplicateParam` | `CheckErrorDuplicateParam`. | `duplicate_parameters` / `tua.diagnostics.duplicateParameters`. | implemented |
+| `luahelper.Warn.CheckBinaryExpressionDuplicate` | `CheckErrorDuplicateExp`. | `duplicate_binary_operands` / `tua.diagnostics.duplicateBinaryOperands`. | implemented |
+| `luahelper.Warn.CheckErrorOrAlwaysTrue` | `CheckErrorOrAlwaysTrue`. | `impossible_boolean_expressions`. | partial |
+| `luahelper.Warn.CheckErrorAndAlwaysFalse` | `CheckErrorAndAlwaysFalse`. | `impossible_boolean_expressions`. | partial |
+| `luahelper.Warn.CheckNoUseAssign` | `CheckErrorNoUseAssign`. | Adjacent unused/self-assignment lints; exact diagnostic planned. | partial, 70.24 |
+| `luahelper.Warn.CheckAnnotateType` | `CheckErrorAnnotate`. | `doc_annotations` / `tua.diagnostics.docAnnotations`. | implemented |
+| `luahelper.Warn.CheckDuplicateIf` | `CheckErrorDuplicateIf`. | `duplicate_if_conditions` / `tua.diagnostics.duplicateIfConditions`. | implemented |
+| `luahelper.Warn.CheckSelfAssign` | `CheckErrorSelfAssign`. | `self_assignments` / `tua.diagnostics.selfAssignments`. | implemented |
+| `luahelper.Warn.CheckFloatEq` | `CheckErrorFloatEq`. | `float_equality` / `tua.diagnostics.floatEquality`. | implemented |
+
+## Annotation And Documentation Tags
+
+LuaHelper's annotation lexer recognizes the tags and keywords below. Tua also
+parses several LuaLS/LuaCATS tags that LuaHelper's lexer does not name directly;
+those live in [Lua Interop](lua-interop.md).
+
+| LuaHelper tag/type keyword | Source | Tua core behavior | `tua-lsp` editor surface | State | Commit / migration notes |
+| --- | --- | --- | --- | --- | --- |
+| `---@class` | `LH-ANN`, `LH-ANN-INFO` | Parses and lowers class/table shape aliases. | Hover, completion, signature docs, semantic tokens. | implemented | Phases 33, 34, 40, 47. |
+| `---@field` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower fields including optional fields and literal unions. | Field completion/hover/definition where shape is known. | implemented | Phases 33, 34, 70.10. |
+| `---@alias` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower aliases, literal unions, arrays, dictionaries, function types. | Hover/completion/semantic tokens. | implemented | Phases 33, 34, 70.10. |
+| `---@type` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower local/global type docs where statically attachable. | Hover/inlay/diagnostics where attached. | implemented | Phases 33, 34. |
+| `---@param` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower function parameter types and docs. | Signature help and parameter documentation. | implemented | Phases 33, 34, 41. |
+| `---@return` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower single and multi-return annotation data. | Hover/signature help for known functions. | implemented | Phases 33, 34, 41, 61. |
+| `---@generic` | `LH-ANN`, `LH-ANN-INFO` | Parsed and preserved with spans; no full generic solver. | Semantic/annotation awareness only. | partial | Owner: types. Generics remain deferred; 70.10 tracks shallow compatibility. |
+| `---@overload` | `LH-ANN`, `LH-ANN-INFO` | Not parsed/lowered as overload signatures. | No overload signature help. | missing | Owner: parser/types/signature. Planned in 70.25. |
+| `---@vararg` | `LH-ANN`, `LH-ANN-INFO` | Not modeled as typed varargs. | No vararg-specific signature help. | missing | Owner: parser/types/signature. Planned in 70.25. |
+| `---@enum start` / `---@enum end` | `LH-ANN`, `LH-ANN-INFO` | Tua has enum sugar and shallow `---@enum`; LuaHelper block enum semantics are not fully lowered. | Literal-union completions work when lowered from Tua/LuaCATS aliases. | partial | Owner: LuaDoc lowering. Planned in 70.10. |
+| `const` modifier | `LH-ANN` | Const metadata can drive `TL4015` where known. | Published diagnostics. | implemented | Phase 37. |
+| `public` / `protected` / `private` | `LH-ANN` | Visibility can be parsed where present but does not enforce access rules. | May appear as metadata; no access diagnostics. | intentionally shallow | Tua avoids object-visibility semantics for v1 unless a LOVE/library use case proves it. |
+| `fun(...)` type | `LH-ANN` | Function type forms are parsed/lowered. | Hover/signature help where attached. | implemented | Phases 13, 70.10. |
+| `table<...>` type | `LH-ANN` | Key-value table forms are parsed/lowered to table/container types. | Hover/completion where shape is known. | implemented | Phase 70.10. |
+| `identifier` type keyword | `LH-ANN` | No first-class identifier pseudo-type. | No special editor behavior. | missing | Owner: LuaDoc compatibility. Planned decision in 70.25; likely only if common stubs need it. |
+
+## Code Actions And Quick Fix Families
+
+The fetched LuaHelper tree does not expose a dedicated LSP code-action or quick
+fix source file by that name. Its VS Code package contributes formatter and
+debugger commands, while diagnostics are driven by the check constants above.
+
+Tua currently has conservative code actions for:
+
+- create missing require target (`TL4002` / related missing-require diagnostics);
+- add missing local annotation from inferred type;
+- remove unused local (`TL4005`);
+- rename duplicate table key (`TL4001`);
+- remove self-assignment (`TL4003`);
+- remove trailing whitespace (`TL4021`).
+
+Any future LuaHelper-style quick fix should be added through the analysis
+snapshot assist framework from roadmap 66, with exact workspace-edit tests.
+
+## Core-Only And LSP-Only Rows
+
+This inventory currently does not identify a LuaHelper `CheckError*` row that is
+implemented in Tua core but unavailable through `tua-lsp`: diagnostics flow
+through the shared snapshot before publication.
+
+It also does not identify a LuaHelper diagnostic/code row that is implemented
+only in `tua-lsp` without core support. Tua has LSP-only presentation features
+such as semantic tokens and document symbols, but those are protocol features,
+not LuaHelper diagnostic codes.
+
+## Missing Rows By Owner
+
+| Owner | Missing/partial LuaHelper rows | Follow-up |
+| --- | --- | --- |
+| `lint/types` | assignment arity, local declaration arity, exact no-use assignment, broader binary operator type checks, function-read-vs-called distinction | 70.24 |
+| `parser/types/signature` | `---@overload`, `---@vararg`, `identifier` annotation decision | 70.25 |
+| `types/flow` | negative-guard use diagnostics and broader boolean identities | 62 |
+| `project-model/module` | non-`require` custom import helper modeling | Optional future config work after 55/59/61; ordinary `import(...)` stays dynamic until configured. |
+| `types/lua-doc` | LuaHelper enum blocks and class-field precision | 70.10, 70.11, 70.13 |
+
+## Maintenance Rules
+
+- Add a row when Tua implements a new LuaHelper-equivalent diagnostic, annotation,
+  quick fix, or editor feature.
+- Move a row to **implemented** only when both core behavior and LSP surfacing
+  have tests.
+- Keep source links pinned to LuaHelper files or docs that actually define the
+  behavior.
+- Prefer a Tua-specific non-goal over a vague "missing" row when LuaHelper
+  behavior does not fit LuaJIT/LOVE source-to-source tooling.

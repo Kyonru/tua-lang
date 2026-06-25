@@ -7,6 +7,11 @@ the Tua column describes checked-in behavior, not planned behavior.
 Roadmap numbers refer to the [roadmap](roadmap.md), which points at the
 canonical root `ROADMAP.md`.
 
+For diagnostic-code-level LuaHelper parity, see the
+[LuaHelper code matrix](luahelper-code-matrix.md). That page maps LuaHelper
+`CheckError*` constants, warning settings, annotation tags, and quick-fix
+families to Tua `TLxxxx` diagnostics and LSP surfaces.
+
 ## Status Legend
 
 - **Supported**: implemented and covered by current core or LSP tests.
@@ -62,7 +67,7 @@ canonical root `ROADMAP.md`.
 | Feature | Current Tua behavior | Expected direction | Roadmap |
 | --- | --- | --- | --- |
 | Deeper analysis precision | A smaller snapshot/database exists, but some precision work still falls back to conservative dynamic results. | Keep moving semantic facts into shared snapshot queries instead of feature-specific paths. | 62, 70.10 |
-| LuaHelper parity fixtures | Coverage exists through focused tests, but not a dedicated LuaHelper parity suite. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 52 |
+| LuaHelper parity fixtures and code inventory | Coverage exists through focused tests, and the checked-in LuaHelper code matrix inventories current diagnostic/tag parity. | Add representative fixtures for annotations, builtin stubs, watched-file reindexing, references, completion resolve, signature docs, and lints. | 49, 52, 70.16 |
 | Flow-sensitive narrowing | Equality and obvious mismatches are checked, but control-flow typing is shallow. | Narrow unions and known values through branches where static proof is reliable. | 62 |
 | Rich project edge cases | Project roots, require paths, ignored paths, and targets are modeled. | Add more duplicate-candidate, cycle, generated-source, and multi-root regression coverage as real projects expose gaps. | 55, 59 |
 | Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
@@ -85,5 +90,7 @@ canonical root `ROADMAP.md`.
 - Move a row only when implementation and tests have landed.
 - Keep the Tua column factual and tied to checked-in behavior.
 - Every planned gap should name a roadmap item.
+- Keep diagnostic-level LuaHelper parity claims synchronized with
+  [LuaHelper Code Matrix](luahelper-code-matrix.md).
 - If a LuaHelper behavior is rejected, move it to **Intentionally Out Of
   Scope** with a short reason.

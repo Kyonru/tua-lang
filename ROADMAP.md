@@ -1668,6 +1668,8 @@ Acceptance:
 
 ### 70.16 `docs(lsp): inventory LuaHelper codes and map missing Tua/LSP support`
 
+Status: done.
+
 Scope:
 
 - Collect LuaHelper diagnostic/code identifiers in use across the language server
@@ -1784,6 +1786,10 @@ Acceptance:
 - Developers can attribute query-time cost to cache-miss vs cache-hit components.
 - Reference/lookup performance claims are repeatable and validated in CI-like local benchmarking runs.
 
+### 70.23 `feat(ide): compact inferred structural type presentation`
+
+Scope:
+
 - Improve the default presentation of inferred types in hover and inlay text:
   inferred primitives and named types remain fully visible, while inferred structural
   table/function/union shapes are compacted.
@@ -1809,6 +1815,54 @@ Acceptance:
   instead of silently dropping detail.
 - Rendering changes only affect presentation and do not alter inference, checking,
   or emitted Lua.
+
+### 70.24 `feat(lint): close LuaHelper assignment and operator diagnostic gaps`
+
+Scope:
+
+- Add focused lint/type checks for LuaHelper parity rows tracked in
+  `docs/luahelper-code-matrix.md`:
+  - assignment arity (`CheckErrorAssignParamNum`);
+  - local declaration arity (`CheckErrorLocalParamNum`);
+  - exact no-use assignment when a local is only assigned and never otherwise read;
+  - broader binary operator type mismatch checks (`CheckErrorBinopType`);
+  - optional distinction between unused local functions and local functions that
+    are referenced but never called.
+- Reuse the shared scope map and type resolver instead of adding one-off AST walks.
+- Keep diagnostics configurable under `[diagnostics]`.
+
+Acceptance:
+
+- Fixture tests cover each mapped LuaHelper gap with stable `TL40xx` or `TL10xx`
+  diagnostics.
+- Existing dynamic or `any`-typed Lua remains permissive when static proof is not
+  available.
+- The LuaHelper code matrix is updated from missing/partial to the new support
+  state for each landed check.
+
+### 70.25 `feat(luadoc): model LuaHelper overload, vararg, and identifier annotations`
+
+Scope:
+
+- Extend LuaDoc/LuaHelper annotation compatibility for rows tracked in
+  `docs/luahelper-code-matrix.md`:
+  - `---@overload`;
+  - `---@vararg`;
+  - the `identifier` annotation keyword, if representative fixtures show a useful
+    static meaning for Tua.
+- Feed supported overload and vararg signatures into hover, completion resolve,
+  signature help, and call diagnostics.
+- Decide explicitly whether `identifier` stays unsupported, becomes an alias for
+  `string`, or becomes a narrow literal/name-like type.
+
+Acceptance:
+
+- Parser and type-environment fixtures cover supported forms with source spans.
+- Signature help can choose and display overloads where the call target is known.
+- Unsupported annotation forms remain non-fatal and controlled by
+  `doc_annotations`.
+- The LuaHelper code matrix records any intentionally unsupported form as a
+  non-goal with the reason.
 
 ## Phase 13: LOVE Domain Extensions
 
