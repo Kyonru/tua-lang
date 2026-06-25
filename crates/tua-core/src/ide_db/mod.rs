@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::hir::{HirModule, HirSymbolId, HirSymbolKind};
@@ -196,6 +197,25 @@ impl SymbolIndex {
         });
 
         symbols
+    }
+
+    pub fn names_for_kind(&self, kind: SymbolIndexKind) -> BTreeSet<String> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.kind == kind)
+            .map(|entry| entry.name.clone())
+            .collect()
+    }
+
+    pub fn export_names_for_module_path(&self, path: impl AsRef<Path>) -> BTreeSet<String> {
+        let path = normalize_path(path.as_ref());
+
+        self.entries
+            .iter()
+            .filter(|entry| entry.kind == SymbolIndexKind::Export)
+            .filter(|entry| entry.module_path == path)
+            .map(|entry| entry.name.clone())
+            .collect()
     }
 }
 

@@ -142,13 +142,32 @@ function requestPlan(main, files) {
   }
 
   if (referencesNeedle) {
+    const renamePosition = positionAt(main.text, referencesNeedle);
+
     plan.push({
       label: "references",
       method: "textDocument/references",
       params: {
         textDocument: { uri: main.uri },
-        position: positionAt(main.text, referencesNeedle),
+        position: renamePosition,
         context: { includeDeclaration: true },
+      },
+    });
+    plan.push({
+      label: "prepareRename",
+      method: "textDocument/prepareRename",
+      params: {
+        textDocument: { uri: main.uri },
+        position: renamePosition,
+      },
+    });
+    plan.push({
+      label: "rename",
+      method: "textDocument/rename",
+      params: {
+        textDocument: { uri: main.uri },
+        position: renamePosition,
+        newName: "__tuaProfileRename",
       },
     });
   }

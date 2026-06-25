@@ -1764,6 +1764,8 @@ Acceptance:
 
 ### 70.21 `feat(lsp): prefilter global references via symbol index`
 
+Status: done.
+
 Scope:
 
 - Before token scanning fallback paths, query `SymbolIndex` for probable name matches and module-export candidates.
@@ -1777,6 +1779,8 @@ Acceptance:
 - Existing module/alias/global reference tests still pass unchanged.
 
 ### 70.22 `chore(perf): add profiling/bench coverage for lookup hot paths`
+
+Status: done.
 
 Scope:
 

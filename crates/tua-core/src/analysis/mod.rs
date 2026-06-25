@@ -8,7 +8,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use crate::completion::complete_field_access_in_source_with_environment;
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
-use crate::ide_db::SymbolIndexEntry;
+use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_link::require_module_at_position;
 use crate::profile;
@@ -163,6 +163,8 @@ struct ReferenceIndexKey {
     end_column: usize,
     kind: u8,
 }
+
+type ModuleExportCandidates = BTreeMap<String, BTreeSet<String>>;
 
 impl AnalysisHost {
     pub fn new() -> Self {
@@ -562,6 +564,7 @@ impl AnalysisSnapshot {
         path: impl AsRef<Path>,
         position: SourcePosition,
     ) -> Option<Definition> {
+        let _profile = profile::span("analysis.query.definition");
         let path = path.as_ref();
         let file = self.file(path)?;
 
@@ -827,22 +830,28 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         include_declaration: bool,
     ) -> Vec<Reference> {
+        let _profile = profile::span("analysis.query.references");
         let path = path.as_ref();
         let Some(target) = self.definition(path, position) else {
             return Vec::new();
         };
 
-        if let Some(references) = self
-            .reverse_reference_index()
-            .references(&target, include_declaration)
         {
-            return references;
+            let _profile = profile::span("analysis.references.reverse_index.lookup");
+
+            if let Some(references) = self
+                .reverse_reference_index()
+                .references(&target, include_declaration)
+            {
+                return references;
+            }
         }
 
         self.references_by_scan(&target, include_declaration)
     }
 
     fn references_by_scan(&self, target: &Definition, include_declaration: bool) -> Vec<Reference> {
+        let _profile = profile::span("analysis.references.fallback_scan");
         let global_name = self
             .file(&target.path)
             .and_then(|file| file.parsed.as_ref().ok())
@@ -908,8 +917,10 @@ impl AnalysisSnapshot {
     }
 
     fn build_reverse_reference_index(&self) -> ReverseReferenceIndex {
+        let _profile = profile::span("analysis.references.index.build");
         let global_functions = self.global_function_definitions();
         let global_aliases = self.global_type_alias_definitions();
+        let type_alias_names = self.symbol_index.names_for_kind(SymbolIndexKind::TypeAlias);
         let mut index = ReverseReferenceIndex::default();
 
         for file in self.files.values() {
@@ -926,7 +937,16 @@ impl AnalysisSnapshot {
                 self.index_hir_declarations(parsed, hir, &mut index);
             }
 
-            self.index_token_references(parsed, &global_aliases, &mut index);
+            let module_export_candidates =
+                self.module_export_candidates_for_file(parsed, file.hir.as_ref());
+
+            self.index_token_references(
+                parsed,
+                &global_aliases,
+                &type_alias_names,
+                &module_export_candidates,
+                &mut index,
+            );
         }
 
         index.finish();
@@ -1066,6 +1086,8 @@ impl AnalysisSnapshot {
         &self,
         parsed: &ParsedSource,
         global_aliases: &BTreeMap<String, Vec<Definition>>,
+        type_alias_names: &BTreeSet<String>,
+        module_export_candidates: &ModuleExportCandidates,
         index: &mut ReverseReferenceIndex,
     ) {
         for token in parsed
@@ -1076,9 +1098,16 @@ impl AnalysisSnapshot {
             let Some(span) = token_span(token) else {
                 continue;
             };
+            let name = token_text(token);
             let is_type_reference = is_type_reference_position(parsed, span.start);
 
-            if !is_type_reference && !is_dotted_field_reference(parsed, span.start) {
+            if is_type_reference && !type_alias_names.contains(&name) {
+                continue;
+            }
+
+            if !is_type_reference
+                && !is_module_export_candidate(parsed, span.start, module_export_candidates)
+            {
                 continue;
             }
 
@@ -1154,6 +1183,32 @@ impl AnalysisSnapshot {
         })
     }
 
+    fn module_export_candidates_for_file(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+    ) -> ModuleExportCandidates {
+        let Some(hir) = hir else {
+            return ModuleExportCandidates::new();
+        };
+        let mut candidates = ModuleExportCandidates::new();
+
+        for binding in &hir.require_bindings {
+            let Some(path) = self.resolved_module_path(&parsed.path, &binding.module) else {
+                continue;
+            };
+            let names = self.symbol_index.export_names_for_module_path(path);
+
+            if names.is_empty() {
+                continue;
+            }
+
+            candidates.insert(binding.alias.clone(), names);
+        }
+
+        candidates
+    }
+
     fn global_function_definitions(&self) -> BTreeMap<String, Vec<Definition>> {
         let mut definitions: BTreeMap<String, Vec<Definition>> = BTreeMap::new();
 
@@ -1213,6 +1268,7 @@ impl AnalysisSnapshot {
         path: impl AsRef<Path>,
         position: SourcePosition,
     ) -> Option<RenameTarget> {
+        let _profile = profile::span("analysis.query.prepare_rename");
         let path = path.as_ref();
         let target = self.definition(path, position)?;
         let target_parsed = self.file(&target.path)?.parsed.as_ref().ok()?;
@@ -1239,6 +1295,7 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         new_name: &str,
     ) -> Option<RenameEdit> {
+        let _profile = profile::span("analysis.query.rename");
         let path = path.as_ref();
 
         if !is_valid_rename_identifier(new_name) {
@@ -2329,8 +2386,29 @@ fn token_text(token: &TokenReference) -> String {
     token.to_string().trim().to_owned()
 }
 
-fn is_dotted_field_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {
-    dotted_chain_at_position(&parsed.source, position).is_some_and(|chain| chain.cursor_index > 0)
+fn is_module_export_candidate(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    candidates: &ModuleExportCandidates,
+) -> bool {
+    let Some(chain) = dotted_chain_at_position(&parsed.source, position) else {
+        return false;
+    };
+
+    if chain.cursor_index == 0 {
+        return false;
+    }
+
+    let Some(root) = chain.parts.first() else {
+        return false;
+    };
+    let Some(member) = chain.parts.get(1) else {
+        return false;
+    };
+
+    candidates
+        .get(&root.text)
+        .is_some_and(|names| names.contains(&member.text))
 }
 
 fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -> bool {

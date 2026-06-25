@@ -185,3 +185,51 @@ return { makeEnemy = makeEnemy }
     );
     assert!(imports.iter().all(|entry| entry.export.is_some()));
 }
+
+#[test]
+fn exact_candidate_sets_are_available_for_reference_indexing() {
+    let parsed = parse_tua_source(
+        "src/player.tua",
+        r#"
+type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 100 }
+end
+
+return { makePlayer = makePlayer }
+"#,
+    )
+    .expect("source should parse");
+    let hir = lower_parsed_source(&parsed);
+    let exports = infer_module_exports(&parsed).expect("exports should infer");
+    let graph = ModuleGraph::build(
+        [ModuleGraphInput {
+            path: &parsed.path,
+            parsed: Some(&parsed),
+            hir: Some(&hir),
+            exports: Some(&exports),
+            source_kind: AnalysisSourceKind::Tua,
+        }],
+        ModuleGraphOptions {
+            source_roots: vec![PathBuf::from("src")],
+            output_roots: Vec::new(),
+            extension: "tua".to_owned(),
+        },
+    );
+    let index = SymbolIndex::build(
+        [(&parsed.path, Some(&hir))],
+        &graph,
+        &[PathBuf::from("src")],
+    );
+
+    assert!(index
+        .names_for_kind(SymbolIndexKind::TypeAlias)
+        .contains("Player"));
+    assert!(index
+        .export_names_for_module_path("src/player.tua")
+        .contains("makePlayer"));
+    assert!(index
+        .export_names_for_module_path("src/missing.tua")
+        .is_empty());
+}

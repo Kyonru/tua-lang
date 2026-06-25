@@ -405,10 +405,17 @@ impl LspServer {
     fn definition_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let definition = snapshot.definition(&request.path, position)?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.definition.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let definition = {
+            let _profile = tua_core::profile::span("lsp.definition.query");
+
+            snapshot.definition(&request.path, position)?
+        };
 
         Some(lsp_location_from_core(definition))
     }
@@ -658,10 +665,17 @@ impl LspServer {
             .and_then(|context| context.get("includeDeclaration"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let references = snapshot.references(&request.path, position, include_declaration);
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.references.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let references = {
+            let _profile = tua_core::profile::span("lsp.references.query");
+
+            snapshot.references(&request.path, position, include_declaration)
+        };
 
         Value::Array(references.into_iter().map(lsp_reference_location).collect())
     }
@@ -669,10 +683,17 @@ impl LspServer {
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let target = snapshot.prepare_rename(&request.path, position)?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.prepare_rename.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let target = {
+            let _profile = tua_core::profile::span("lsp.prepare_rename.query");
+
+            snapshot.prepare_rename(&request.path, position)?
+        };
 
         Some(lsp_prepare_rename_from_core(target))
     }
@@ -681,10 +702,17 @@ impl LspServer {
         let request = self.document_request(message)?;
         let position = request.position()?;
         let new_name = request.params.get("newName")?.as_str()?;
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let edit = snapshot.rename(&request.path, position, new_name)?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.rename.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let edit = {
+            let _profile = tua_core::profile::span("lsp.rename.query");
+
+            snapshot.rename(&request.path, position, new_name)?
+        };
 
         Some(lsp_workspace_edit(edit))
     }

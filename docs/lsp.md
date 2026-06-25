@@ -110,7 +110,9 @@ make profile-lsp
 
 The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
 `benchmarks/lsp/large`, reports average, p95, min, and max latency per LSP
-request, and prints analysis cache hit/miss counters from the server.
+request, and prints analysis cache hit/miss counters from the server. The
+lookup profile includes `definition`, `references`, `prepareRename`, and
+`rename` so navigation and rename regressions are visible in one run.
 
 Useful knobs:
 
@@ -128,3 +130,9 @@ session with:
 ```bash
 TUA_PROFILE=1 tua lsp
 ```
+
+Current lookup regression targets from the checked-in fixtures are intentionally
+small: `references`, `prepareRename`, and `rename` should stay in the low
+single-digit millisecond range on the large fixture after warmup. If a change
+pushes those rows noticeably higher, rerun with `TUA_PROFILE=1` and inspect the
+`analysis.query.*`, `analysis.references.*`, and `lsp.*` spans before merging.
