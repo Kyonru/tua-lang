@@ -132,6 +132,13 @@ resolve, hover, signature help, and inlay hints should prefer cached
 project-aware environments and only fall back to standalone helpers for
 parse-recovery or test-style source inputs.
 
+`AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
+requests against unchanged inputs should reuse the warm snapshot, including
+shared lazy indexes such as semantic facts, completion lists, definition lookup
+results, and reverse references. Any file, open-document, config, builtin, root,
+or asset-root change increments the revision and forces the next snapshot to
+rebuild from the file-granular cache.
+
 ## Adding A Core Query
 
 1. Define the core result type near the domain that owns the behavior.
@@ -268,9 +275,12 @@ host.set_file("src/player.tua", "return { hp = 100 }");
 let first = host.snapshot();
 assert!(first.parse("src/main.tua").is_some());
 
-// The second snapshot reuses unchanged files instead of reparsing them.
+let stats_after_first = host.cache_stats();
+
+// The second snapshot reuses the same revision-cached snapshot. It does not
+// need to walk files or bump per-file cache counters at all.
 let _second = host.snapshot();
-assert!(host.cache_stats().parse_hits > 0);
+assert_eq!(host.cache_stats(), stats_after_first);
 
 // Editing a file invalidates that file. When require edges resolve to
 // project-backed files, editing an exported module also invalidates known

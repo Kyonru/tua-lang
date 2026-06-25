@@ -112,8 +112,10 @@ The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
 `benchmarks/lsp/large`, reports average, p95, min, and max latency per LSP
 request, and prints analysis cache hit/miss counters from the server. The
 profile includes `completion`, `completionResolve`, `signatureHelp`,
-`definition`, `references`, `prepareRename`, and `rename` so autocomplete,
-inference, navigation, and rename regressions are visible in one run.
+`definition`, `definitionAgain`, `references`, `prepareRename`, and `rename`
+so autocomplete, inference, navigation, and rename regressions are visible in
+one run. `definitionAgain` repeats the same go-to-definition request
+immediately so warm-snapshot regressions are easy to spot.
 
 Useful knobs:
 
@@ -133,10 +135,11 @@ TUA_PROFILE=1 tua lsp
 ```
 
 Current lookup regression targets from the checked-in fixtures are intentionally
-small: `references`, `prepareRename`, and `rename` should stay in the low
-single-digit millisecond range on the large fixture after warmup. Completion,
-completion resolve, signature help, hover, and inlay hints should reuse cached
-semantic facts instead of rebuilding type environments per request. If a change
-pushes those rows noticeably higher, rerun with `TUA_PROFILE=1` and inspect the
-`analysis.query.*`, `analysis.semantic.*`, `analysis.completion.*`,
-`analysis.references.*`, and `lsp.*` spans before merging.
+small: `definitionAgain`, `references`, `prepareRename`, and `rename` should
+stay in the low single-digit millisecond range on the large fixture after
+warmup. Completion, completion resolve, signature help, hover, and inlay hints
+should reuse cached semantic facts instead of rebuilding type environments per
+request. If a change pushes those rows noticeably higher, rerun with
+`TUA_PROFILE=1` and inspect the `analysis.query.*`, `analysis.semantic.*`,
+`analysis.completion.*`, `analysis.references.*`, and `lsp.*` spans before
+merging.

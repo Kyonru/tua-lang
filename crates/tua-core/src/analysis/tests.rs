@@ -150,6 +150,65 @@ local typed: Pl<|complete|> = nil
 }
 
 #[test]
+fn snapshot_reuses_cached_project_artifacts_until_revision_changes() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, "local value: number = 1\n");
+
+    let first_revision = host.revision();
+    let _first = host.snapshot();
+    let stats_after_first = host.cache_stats();
+    let _second = host.snapshot();
+
+    assert_eq!(host.revision(), first_revision);
+    assert_eq!(host.cache_stats(), stats_after_first);
+
+    host.open_document(&path, "local value: number = 2\n");
+    assert!(host.revision() > first_revision);
+
+    let _third = host.snapshot();
+    assert!(host.cache_stats().invalidations > stats_after_first.invalidations);
+}
+
+#[test]
+fn snapshot_clones_share_warmed_definition_cache() {
+    let fixture = Fixture::parse(
+        r#"type <|alias_def|>Player<|/alias_def|> = { hp: number }
+local player: <|alias_ref|>Player = { hp = 10 }
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, fixture.source("src/main.tua"));
+
+    let snapshot = host.snapshot();
+    assert!(snapshot.definition_cache.borrow().is_empty());
+
+    let definition = snapshot
+        .definition(&path, fixture.position("alias_ref"))
+        .expect("alias definition should resolve");
+    assert_eq!(definition.span, fixture.range("alias_def"));
+    assert_eq!(snapshot.definition_cache.borrow().len(), 1);
+
+    let warm_snapshot = host.snapshot();
+
+    assert!(Rc::ptr_eq(
+        &snapshot.definition_cache,
+        &warm_snapshot.definition_cache
+    ));
+    assert_eq!(warm_snapshot.definition_cache.borrow().len(), 1);
+
+    let repeated = warm_snapshot
+        .definition(&path, fixture.position("alias_ref"))
+        .expect("cached alias definition should resolve");
+
+    assert_eq!(repeated.span, fixture.range("alias_def"));
+    assert_eq!(warm_snapshot.definition_cache.borrow().len(), 1);
+}
+
+#[test]
 fn snapshot_keeps_project_inputs() {
     let mut host = AnalysisHost::with_config(ProjectConfig {
         source: PathBuf::from("game"),
@@ -279,11 +338,14 @@ fn cache_reuses_unedited_files_across_snapshots() {
     assert_eq!(host.cache_stats().parse_misses, 2);
     assert_eq!(host.cache_stats().parse_hits, 0);
 
+    let stats_after_first = host.cache_stats();
     let second = host.snapshot();
     assert!(second.parse(&main).is_some());
     assert!(second.parse(&other).is_some());
-    assert_eq!(host.cache_stats().parse_misses, 2);
-    assert_eq!(host.cache_stats().parse_hits, 2);
+
+    // A warm host snapshot is memoized by revision, so unchanged snapshots do
+    // not need to touch the per-file query cache at all.
+    assert_eq!(host.cache_stats(), stats_after_first);
 }
 
 #[test]

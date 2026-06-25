@@ -21,6 +21,8 @@ The recent roadmap focus landed the Phase 12 architecture spine:
   folding ranges, and profiling.
 - cached semantic facts for autocomplete, hover, signature help, and inlay hints
   so inferred types are reused across fast editor queries.
+- warm snapshot reuse for repeated navigation requests, including a dedicated
+  `definitionAgain` profiling row for cmd+click-style latency checks.
 
 See [Architecture](architecture.md) for the contributor guide and Phase 12
 rust-analyzer gap matrix.

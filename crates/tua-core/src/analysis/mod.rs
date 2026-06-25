@@ -1,6 +1,7 @@
 use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
@@ -78,6 +79,8 @@ pub struct AnalysisHost {
     asset_roots: Vec<PathBuf>,
     builtin_catalogs: BuiltinCatalogs,
     cache: RefCell<AnalysisQueryCache>,
+    snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
+    revision: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -90,9 +93,10 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
-    semantic_facts: OnceCell<BTreeMap<PathBuf, AnalysisSemanticFacts>>,
-    completion_cache: RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>,
-    reverse_reference_index: OnceCell<ReverseReferenceIndex>,
+    semantic_facts: Rc<OnceCell<BTreeMap<PathBuf, AnalysisSemanticFacts>>>,
+    completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    reverse_reference_index: Rc<OnceCell<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }
@@ -162,6 +166,12 @@ struct CachedAnalysisFile {
     file: AnalysisFile,
 }
 
+#[derive(Clone, Debug)]
+struct CachedAnalysisSnapshot {
+    revision: u64,
+    snapshot: AnalysisSnapshot,
+}
+
 #[derive(Clone, Debug, Default)]
 struct ReverseReferenceIndex {
     references: BTreeMap<ReferenceIndexKey, Vec<Reference>>,
@@ -181,6 +191,13 @@ type ModuleExportCandidates = BTreeMap<String, BTreeSet<String>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct CompletionRequestKey {
+    path: PathBuf,
+    line: usize,
+    column: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct DefinitionRequestKey {
     path: PathBuf,
     line: usize,
     column: usize,
@@ -209,6 +226,7 @@ impl AnalysisHost {
 
         self.config = config;
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn source_roots(&self) -> &[PathBuf] {
@@ -224,6 +242,7 @@ impl AnalysisHost {
 
         self.vfs.set_source_roots(roots);
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn set_output_roots(&mut self, roots: impl IntoIterator<Item = PathBuf>) {
@@ -235,6 +254,7 @@ impl AnalysisHost {
 
         self.vfs.set_output_roots(roots);
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn asset_roots(&self) -> &[PathBuf] {
@@ -250,6 +270,7 @@ impl AnalysisHost {
 
         self.asset_roots = roots;
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn set_ignored_paths(&mut self, patterns: impl IntoIterator<Item = String>) {
@@ -261,6 +282,7 @@ impl AnalysisHost {
 
         self.vfs.set_ignored_paths(patterns);
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
@@ -268,8 +290,13 @@ impl AnalysisHost {
     }
 
     pub fn set_builtin_catalogs(&mut self, catalogs: BuiltinCatalogs) {
+        if self.builtin_catalogs == catalogs {
+            return;
+        }
+
         self.builtin_catalogs = catalogs;
         self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
     }
 
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
@@ -278,6 +305,7 @@ impl AnalysisHost {
 
         self.cache.borrow_mut().invalidate_file(&path);
         self.vfs.set_disk_file(path, source, vfs_source_kind(kind));
+        self.bump_revision();
     }
 
     pub fn set_file_with_kind(
@@ -290,11 +318,13 @@ impl AnalysisHost {
 
         self.cache.borrow_mut().invalidate_file(&path);
         self.vfs.set_disk_file(path, source, vfs_source_kind(kind));
+        self.bump_revision();
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
         self.cache.borrow_mut().invalidate_file(path.as_ref());
         self.vfs.remove_file(path);
+        self.bump_revision();
     }
 
     pub fn open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
@@ -303,6 +333,7 @@ impl AnalysisHost {
 
         self.cache.borrow_mut().invalidate_file(&path);
         self.vfs.open_file(path, source, vfs_source_kind(kind));
+        self.bump_revision();
     }
 
     pub fn open_document_with_kind(
@@ -315,6 +346,7 @@ impl AnalysisHost {
 
         self.cache.borrow_mut().invalidate_file(&path);
         self.vfs.open_file(path, source, vfs_source_kind(kind));
+        self.bump_revision();
     }
 
     pub fn update_open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
@@ -324,35 +356,43 @@ impl AnalysisHost {
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
         self.cache.borrow_mut().invalidate_file(path.as_ref());
         self.vfs.close_file(path);
+        self.bump_revision();
     }
 
     pub fn snapshot(&self) -> AnalysisSnapshot {
         let _profile = profile::span("analysis.snapshot");
+        if let Some(cached) = self.snapshot_cache.borrow().as_ref() {
+            if cached.revision == self.revision {
+                return cached.snapshot.clone();
+            }
+        }
+
         let vfs = self.vfs.snapshot();
         let source_roots = vfs.source_roots().to_vec();
         let live_paths = vfs
             .files()
             .map(|file| file.path().to_path_buf())
             .collect::<BTreeSet<_>>();
-        let mut cache = self.cache.borrow_mut();
+        let files = {
+            let mut cache = self.cache.borrow_mut();
 
-        cache.retain_paths(&live_paths);
+            cache.retain_paths(&live_paths);
 
-        let files = vfs
-            .files()
-            .map(|file| {
-                let analysis_file = cache.cached_file(
-                    file.path(),
-                    file.source(),
-                    analysis_source_kind(file.kind()),
-                    &self.config,
-                    &source_roots,
-                    &self.asset_roots,
-                );
+            vfs.files()
+                .map(|file| {
+                    let analysis_file = cache.cached_file(
+                        file.path(),
+                        file.source(),
+                        analysis_source_kind(file.kind()),
+                        &self.config,
+                        &source_roots,
+                        &self.asset_roots,
+                    );
 
-                (file.path().to_path_buf(), analysis_file)
-            })
-            .collect::<BTreeMap<_, _>>();
+                    (file.path().to_path_buf(), analysis_file)
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
         let module_graph = {
             let _profile = profile::span("analysis.index.module_graph");
 
@@ -415,7 +455,7 @@ impl AnalysisHost {
             (symbols, calls)
         };
 
-        AnalysisSnapshot {
+        let snapshot = AnalysisSnapshot {
             config: self.config.clone(),
             vfs,
             asset_roots: self.asset_roots.clone(),
@@ -424,16 +464,34 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
-            semantic_facts: OnceCell::new(),
-            completion_cache: RefCell::new(BTreeMap::new()),
-            reverse_reference_index: OnceCell::new(),
+            semantic_facts: Rc::new(OnceCell::new()),
+            completion_cache: Rc::new(RefCell::new(BTreeMap::new())),
+            definition_cache: Rc::new(RefCell::new(BTreeMap::new())),
+            reverse_reference_index: Rc::new(OnceCell::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
-        }
+        };
+
+        self.snapshot_cache
+            .borrow_mut()
+            .replace(CachedAnalysisSnapshot {
+                revision: self.revision,
+                snapshot: snapshot.clone(),
+            });
+
+        snapshot
     }
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
         self.cache.borrow().stats.clone()
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.saturating_add(1);
     }
 }
 
@@ -608,9 +666,15 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let _profile = profile::span("analysis.query.definition");
         let path = path.as_ref();
+        let key = definition_request_key(path, position);
+
+        if let Some(definition) = self.definition_cache.borrow().get(&key).cloned() {
+            return definition;
+        }
+
         let file = self.file(path)?;
 
-        match &file.parsed {
+        let definition = match &file.parsed {
             Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir.as_ref(), position),
             Err(_) => {
                 let recovered = source_without_incomplete_field_access_lines(&file.source);
@@ -618,7 +682,13 @@ impl AnalysisSnapshot {
 
                 self.definition_parsed_snapshot(&parsed, None, position)
             }
-        }
+        };
+
+        self.definition_cache
+            .borrow_mut()
+            .insert(key, definition.clone());
+
+        definition
     }
 
     fn definition_parsed_snapshot(
@@ -2745,6 +2815,14 @@ fn completion_kind_for_type(ty: &Type) -> CompletionKind {
 
 fn completion_request_key(path: &Path, position: SourcePosition) -> CompletionRequestKey {
     CompletionRequestKey {
+        path: normalize_path(path),
+        line: position.line,
+        column: position.column,
+    }
+}
+
+fn definition_request_key(path: &Path, position: SourcePosition) -> DefinitionRequestKey {
+    DefinitionRequestKey {
         path: normalize_path(path),
         line: position.line,
         column: position.column,

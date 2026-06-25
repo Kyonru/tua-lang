@@ -1822,6 +1822,31 @@ Acceptance:
 - Existing parse-recovery behavior for incomplete completion input remains
   permissive.
 
+### 70.22.6 `perf(ide): reuse warm snapshots for repeated navigation`
+
+Status: done.
+
+Scope:
+
+- Memoize the latest `AnalysisSnapshot` by host revision so repeated LSP
+  requests against unchanged inputs reuse the same module graph, type database,
+  symbol index, call hierarchy maps, and lazy request caches.
+- Share snapshot-owned lazy caches across cloned snapshots for semantic facts,
+  completion lists, definition lookup results, and reverse-reference indexes.
+- Add an exact-position definition cache so repeated cmd+click/go-to-definition
+  requests do not recompute the same result inside a warm snapshot.
+- Extend the LSP profiling fixture with `definitionAgain`, an immediate repeat
+  of the same `textDocument/definition` request.
+
+Acceptance:
+
+- A second `host.snapshot()` with no revision change does not walk the per-file
+  cache or change cache hit/miss counters.
+- Definition cache entries survive cloned warm snapshots until an input edit or
+  config/root/catalog change bumps the host revision.
+- `make profile-lsp` reports both cold `definition` and warm
+  `definitionAgain` rows for navigation regression checks.
+
 ### 70.23 `feat(ide): compact inferred structural type presentation`
 
 Scope:

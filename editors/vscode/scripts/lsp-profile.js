@@ -210,13 +210,20 @@ function requestPlan(main, files) {
   }
 
   if (definitionNeedle) {
+    const definitionParams = {
+      textDocument: { uri: main.uri },
+      position: positionAfter(main.text, definitionNeedle),
+    };
+
     plan.push({
       label: "definition",
       method: "textDocument/definition",
-      params: {
-        textDocument: { uri: main.uri },
-        position: positionAfter(main.text, definitionNeedle),
-      },
+      params: definitionParams,
+    });
+    plan.push({
+      label: "definitionAgain",
+      method: "textDocument/definition",
+      params: definitionParams,
     });
   }
 
