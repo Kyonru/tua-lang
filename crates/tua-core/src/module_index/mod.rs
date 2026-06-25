@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
     self, Expression, Field, FunctionArgs, Index, LastStmt, Prefix, Suffix, TableConstructor, Var,
 };
@@ -850,13 +851,75 @@ fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
-    let parameter_count = body
+    let parameters = function_parameter_types(body);
+    let return_type = body
+        .return_type()
+        .and_then(|specifier| type_from_type_info(specifier.type_info()))
+        .unwrap_or(Type::Any);
+
+    Type::function(parameters, return_type)
+}
+
+fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {
+    let parameters = body
         .parameters()
         .iter()
-        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
-        .count();
+        .filter_map(|parameter| match parameter {
+            ast::Parameter::Name(name) => Some((name.start_position()?, name.end_position()?)),
+            ast::Parameter::Ellipsis(_) => None,
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let specifiers = body
+        .type_specifiers()
+        .filter_map(|specifier| {
+            let specifier = specifier?;
+            Some((
+                specifier.start_position()?,
+                type_from_type_info(specifier.type_info())?,
+            ))
+        })
+        .collect::<Vec<_>>();
 
-    Type::function(vec![Type::Any; parameter_count], Type::Any)
+    parameters
+        .iter()
+        .enumerate()
+        .map(|(index, (_, parameter_end))| {
+            let next_parameter_start = parameters.get(index + 1).map(|(start, _)| *start);
+
+            specifiers
+                .iter()
+                .find_map(|(specifier_start, ty)| {
+                    if specifier_start >= parameter_end
+                        && next_parameter_start
+                            .map(|next_start| specifier_start < &next_start)
+                            .unwrap_or(true)
+                    {
+                        Some(ty.clone())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(Type::Any)
+        })
+        .collect()
+}
+
+fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
+    match type_info {
+        TypeInfo::Basic(token) => Some(Type::named(token_text(token))),
+        TypeInfo::String(token) => Some(Type::string_literal(unquote_string(&token_text(token)))),
+        TypeInfo::Optional { base, .. } => {
+            Some(Type::union([type_from_type_info(base)?, Type::nil()]))
+        }
+        TypeInfo::Union(union) => union
+            .types()
+            .iter()
+            .map(type_from_type_info)
+            .collect::<Option<Vec<_>>>()
+            .map(Type::union),
+        _ => Some(Type::named(type_info.to_string())),
+    }
 }
 
 fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {

@@ -1698,9 +1698,83 @@ Acceptance:
 - The phase parity commit list references this matrix when claiming LuaHelper parity
   progress.
 
-### 70.17 `feat(hover): collapse inferred structural types with explicit expansion`
+### 70.17 `perf(core): reuse cached semantic artifacts for definitions and references`
 
 Scope:
+
+- Remove repeated `lower_parsed_source` and scope construction in definition/reference hot paths by threading cached `HirModule` and `ScopeMap` from `analysis` snapshots into request handlers.
+- Ensure `definition`, `prepare_rename`, and `rename` paths resolve local/value/type alias definitions through cached semantic data before falling back to reparsing/mining.
+- Add a dedicated helper on `AnalysisSnapshot` that returns the parsed file plus cached `hir/scope` bundle for in-process queries.
+- Keep parse-error recovery behavior unchanged for unsynchronized documents.
+
+Acceptance:
+
+- Definition and reference request handlers avoid rebuilding HIR and scope data for unchanged snapshots.
+- Regression suite for `definition`, `references`, `prepareRename`, and `rename` remains behaviorally identical.
+- New/updated metrics show fewer repeated `analysis.lower.hir` and `analysis.lower.scope` hits on repeated queries.
+
+### 70.18 `perf(core): cache definition->scope resolution for local declarations`
+
+Scope:
+
+- Refactor `scope_references_to_definition` to use pre-built `ScopeMap` from file cache where available, instead of rebuilding per call.
+- Ensure `scope_references_to_definition` can be called with an optional fast path that reads precomputed `ScopeMap` and only falls back to rebuild for legacy/unavailable cached inputs.
+- Preserve declaration-kind-specific behavior for `Local`, `Function`, and `Parameter` symbols.
+- Avoid changing semantics for table-field/global/module-export fallbacks.
+
+Acceptance:
+
+- Local/reference lookups for symbol IDs do not allocate a new scope map in the common cached path.
+- Result ordering/deduplication remains stable for existing `references` and `references`-adjacent tests.
+- No regressions in `scope_references_to_symbol` coverage.
+
+### 70.20 `feat(lsp): add project-wide reverse reference index`
+
+Scope:
+
+- Extend snapshot indexing to build `definition_id -> Vec<Reference>` reverse edges during snapshot creation.
+- Use stable identity keys derived from path + declaration span / symbol ID to support O(1)/sublinear `textDocument/references` collection.
+- Keep handling for:
+  - declaration inclusion toggle;
+  - module/type alias/global alias fallback paths;
+  - exported-name and shadowing edge cases.
+- Integrate invalidation hooks so edited files and importer chains refresh only affected buckets.
+
+Acceptance:
+
+- `AnalysisHost::references` for local and global symbols no longer linearly scans every file in the project.
+- Reference ordering and dedup remain deterministic and stable.
+- No duplicate/missing references for existing cases in `tua-lsp` reference tests.
+
+### 70.21 `feat(lsp): prefilter global references via symbol index`
+
+Scope:
+
+- Before token scanning fallback paths, query `SymbolIndex` for probable name matches and module-export candidates.
+- Restrict cross-file scan candidates to files that could contain a declaration/export for the target symbol.
+- Preserve current behavior for globals, aliases, exports, and unresolved references.
+- Ensure `references` still returns declaration when `include_declaration = true`.
+
+Acceptance:
+
+- Global/reference lookups reduce the number of scanned files on realistic multi-module projects.
+- Existing module/alias/global reference tests still pass unchanged.
+
+### 70.22 `chore(perf): add profiling/bench coverage for lookup hot paths`
+
+Scope:
+
+- Add `TUA_PROFILE`-targeted spans around definition/reference query stages in `analysis` and LSP adapters.
+- Add focused benchmark or micro-test harness for:
+  - repeated `definition` at same position,
+  - repeated `textDocument/references`,
+  - rename prepare/readiness sequence.
+- Record baseline and regression targets in project notes so future changes can be compared.
+
+Acceptance:
+
+- Developers can attribute query-time cost to cache-miss vs cache-hit components.
+- Reference/lookup performance claims are repeatable and validated in CI-like local benchmarking runs.
 
 - Improve the default presentation of inferred types in hover and inlay text:
   inferred primitives and named types remain fully visible, while inferred structural

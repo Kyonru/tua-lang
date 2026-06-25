@@ -220,6 +220,64 @@ fn resolves_parameter_table_field_to_type_shape_field() {
 }
 
 #[test]
+fn resolves_self_index_instance_method_to_prototype_method() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount)
+  self.balance = self.balance + amount
+end
+
+function Account:withdraw(amount)
+  self.balance = self.balance - amount
+end
+
+local account = setmetatable({ name = "checking", balance = 50 }, Account)
+account:deposit(25)
+account:withdraw(10)
+"#;
+
+    assert_definition_in_source(
+        source,
+        "deposit(25)",
+        0,
+        DefinitionKind::Function,
+        "Account:deposit",
+    );
+    assert_definition_in_source(
+        source,
+        "withdraw(10)",
+        0,
+        DefinitionKind::Function,
+        "Account:withdraw",
+    );
+}
+
+#[test]
+fn resolves_self_index_instance_dot_call_to_prototype_method() {
+    let source = r#"
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount)
+  self.balance = self.balance + amount
+end
+
+local account = setmetatable({ balance = 50 }, Account)
+account.deposit(account, 25)
+"#;
+
+    assert_definition_in_source(
+        source,
+        "deposit(account",
+        0,
+        DefinitionKind::Function,
+        "Account:deposit",
+    );
+}
+
+#[test]
 fn unknown_symbols_and_any_fields_have_no_definition() {
     assert_no_definition("missing.value", 0);
     assert_no_definition("payload.value", "payload.".len());

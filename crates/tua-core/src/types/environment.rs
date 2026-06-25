@@ -2858,7 +2858,12 @@ fn assignment_expression_for_local<'a>(
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
-    Type::function(function_parameter_types(body), Type::Any)
+    let return_type = body
+        .return_type()
+        .and_then(|specifier| type_from_type_info(specifier.type_info()))
+        .unwrap_or(Type::Any);
+
+    Type::function(function_parameter_types(body), return_type)
 }
 
 fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {

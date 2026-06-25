@@ -2179,6 +2179,27 @@ test(false)
 }
 
 #[test]
+fn definition_returns_self_index_instance_method_location() {
+    let uri = "file:///tmp/metatable-method-definition.tua";
+    let source = r#"local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount)
+  self.balance = self.balance + amount
+end
+
+local account = setmetatable({ name = "checking", balance = 50 }, Account)
+account:deposit(25)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "deposit(25)", 0),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "Account:deposit");
+}
+
+#[test]
 fn definition_returns_virtual_love_builtin_locations() {
     let uri = "file:///tmp/love-builtin-definition.tua";
     let source = r#"local player = love.graphics.newImage("assets/player.png")

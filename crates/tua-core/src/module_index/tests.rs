@@ -40,6 +40,31 @@ return {
 }
 
 #[test]
+fn infers_typed_anonymous_function_exports_from_returned_tua_table() {
+    let parsed = parse_tua_source(
+        "src/audio.tua",
+        r#"
+return {
+  play = function(source:string, volume:number): boolean
+    return true
+  end,
+}
+"#,
+    )
+    .expect("Tua source should parse");
+
+    let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+    assert_eq!(
+        exports.field("play"),
+        Some(&Type::function(
+            [Type::string(), Type::number()],
+            Type::boolean()
+        ))
+    );
+}
+
+#[test]
 fn infers_exports_from_returned_tua_module_table() {
     let parsed = parse_tua_source(
         "src/score.tua",

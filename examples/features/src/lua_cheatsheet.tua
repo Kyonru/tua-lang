@@ -318,6 +318,8 @@ function Account:withdraw(amount: number): number
 end
 
 local account = setmetatable({ name = "checking", balance = 50 }, Account)
+-- Feature: metatable method navigation.
+-- Go to definition on deposit/withdraw jumps back to the Account methods.
 account:deposit(25)
 account:withdraw(10)
 
@@ -326,7 +328,7 @@ account:withdraw(10)
 -- explicit self and colon-call forms use the same field type.
 local lookupObject = {
   count = 0,
-  y = function(self: {count: number, y: function(self: any, amount:number)}, amount: number)
+  y = function(self:any, amount:number)
     self.count = self.count + amount
 
     return self.count

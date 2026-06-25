@@ -41,7 +41,7 @@ fn hints_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {
   count = 0,
-  y = function(self, amount)
+  y = function(self:any, amount:number)
     self.count = self.count + amount
 
     return self.count
@@ -57,7 +57,7 @@ local lookupObject = {
 
     assert_eq!(
         type_hints,
-        vec![": { count: number, y: function(any, any): any }"]
+        vec![": { count: number, y: function(any, number): any }"]
     );
 }
 

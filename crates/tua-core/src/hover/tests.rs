@@ -410,7 +410,7 @@ fn hovers_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {
   count = 0,
-  y = function(self, amount)
+  y = function(self:any, amount:number)
     self.count = self.count + amount
 
     return self.count
@@ -432,9 +432,12 @@ local method = lookupObject.y
 
     assert_eq!(
         object_hover.contents,
-        "local lookupObject: { count: number, y: function(any, any): any }"
+        "local lookupObject: { count: number, y: function(any, number): any }"
     );
-    assert_eq!(field_hover.contents, "(field) y: function(any, any): any");
+    assert_eq!(
+        field_hover.contents,
+        "(field) y: function(any, number): any"
+    );
 }
 
 #[test]

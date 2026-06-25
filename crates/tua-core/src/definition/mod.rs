@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::{
-    self, Expression, Field, FunctionArgs, Index, LastStmt, Prefix, Suffix, TableConstructor, Var,
+    self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix,
+    TableConstructor, Var,
 };
 use full_moon::node::Node;
 
@@ -90,6 +91,10 @@ impl<'a> DefinitionResolver<'a> {
             if let Some(definition) = self.field_definition(&parts, position) {
                 return Some(definition);
             }
+
+            if let Some(definition) = self.metatable_field_definition(&parts, position) {
+                return Some(definition);
+            }
         }
 
         if self.is_type_reference(position) {
@@ -157,6 +162,94 @@ impl<'a> DefinitionResolver<'a> {
         }
 
         None
+    }
+
+    fn metatable_field_definition(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let (field, receiver_parts) = parts.split_last()?;
+        let [receiver] = receiver_parts else {
+            return None;
+        };
+
+        let index = ModuleDefinitionIndex::new(self.parsed);
+        let prototype = self
+            .setmetatable_prototype_for_receiver(receiver, position)
+            .filter(|prototype| index.has_self_index(prototype))?;
+
+        index.table_member(&prototype, field)
+    }
+
+    fn setmetatable_prototype_for_receiver(
+        &self,
+        receiver: &str,
+        position: SourcePosition,
+    ) -> Option<String> {
+        let mut candidates = Vec::new();
+
+        for stmt in self.parsed.ast.nodes().stmts() {
+            let Some(stmt_span) = node_span(stmt) else {
+                continue;
+            };
+            if !starts_before_or_at(stmt_span, position) {
+                continue;
+            }
+
+            match stmt {
+                ast::Stmt::LocalAssignment(local) => {
+                    for (name, expression) in local.names().iter().zip(local.expressions()) {
+                        if token_text(name) != receiver {
+                            continue;
+                        }
+                        let Some(prototype) = setmetatable_prototype_from_expression(expression)
+                        else {
+                            continue;
+                        };
+
+                        candidates.push((stmt_span.start, prototype));
+                    }
+                }
+                ast::Stmt::Assignment(assignment) => {
+                    for (variable, expression) in
+                        assignment.variables().iter().zip(assignment.expressions())
+                    {
+                        let Var::Name(name) = variable else {
+                            continue;
+                        };
+                        if token_text(name) != receiver {
+                            continue;
+                        }
+                        let Some(prototype) = setmetatable_prototype_from_expression(expression)
+                        else {
+                            continue;
+                        };
+
+                        candidates.push((stmt_span.start, prototype));
+                    }
+                }
+                ast::Stmt::FunctionCall(function_call) => {
+                    let Some((target, meta)) = setmetatable_arguments(function_call) else {
+                        continue;
+                    };
+                    if !expression_is_name(target, receiver) {
+                        continue;
+                    }
+                    let Some(prototype) = expression_name(meta) else {
+                        continue;
+                    };
+
+                    candidates.push((stmt_span.start, prototype));
+                }
+                _ => {}
+            }
+        }
+
+        candidates
+            .into_iter()
+            .max_by_key(|(position, _)| position_key(*position))
+            .map(|(_, prototype)| prototype)
     }
 
     fn value_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
@@ -552,6 +645,7 @@ struct ModuleDefinitionIndex<'a> {
     parsed: &'a ParsedSource,
     values: BTreeMap<String, Definition>,
     table_members: BTreeMap<(String, String), Definition>,
+    self_index_tables: BTreeSet<String>,
     local_tables: BTreeMap<String, BTreeMap<String, SourceSpan>>,
     local_types: BTreeMap<String, Type>,
 }
@@ -562,6 +656,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
             parsed,
             values: BTreeMap::new(),
             table_members: BTreeMap::new(),
+            self_index_tables: BTreeSet::new(),
             local_tables: BTreeMap::new(),
             local_types: BTreeMap::new(),
         };
@@ -599,9 +694,9 @@ impl<'a> ModuleDefinitionIndex<'a> {
                 kind: DefinitionKind::Function,
             };
 
-            if let Some((table, field)) = name.split_once('.') {
+            if let Some((table, field)) = function_name_table_field(name) {
                 self.table_members
-                    .entry((table.trim().to_owned(), field.trim().to_owned()))
+                    .entry((table, field))
                     .or_insert(definition);
             } else {
                 self.values.entry(name.clone()).or_insert(definition);
@@ -613,12 +708,20 @@ impl<'a> ModuleDefinitionIndex<'a> {
         for stmt in self.parsed.ast.nodes().stmts() {
             match stmt {
                 ast::Stmt::Assignment(assignment) => {
-                    for variable in assignment.variables() {
+                    for (variable, expression) in
+                        assignment.variables().iter().zip(assignment.expressions())
+                    {
                         let Some(parts) = chain_parts_from_var(variable) else {
                             continue;
                         };
 
                         if let [table, field] = parts.as_slice() {
+                            if field.text == "__index"
+                                && expression_is_name(expression, &table.text)
+                            {
+                                self.self_index_tables.insert(table.text.clone());
+                            }
+
                             self.table_members
                                 .entry((table.text.clone(), field.text.clone()))
                                 .or_insert(Definition {
@@ -659,12 +762,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
                     }
                 }
                 ast::Stmt::FunctionDeclaration(function) => {
-                    let parts = function
-                        .name()
-                        .to_string()
-                        .split('.')
-                        .map(|part| part.trim().to_owned())
-                        .collect::<Vec<_>>();
+                    let name = function.name().to_string();
                     let Some(span) = node_span(function.name()) else {
                         continue;
                     };
@@ -674,13 +772,13 @@ impl<'a> ModuleDefinitionIndex<'a> {
                         kind: DefinitionKind::Function,
                     };
 
-                    if let [table, field] = parts.as_slice() {
+                    if let Some((table, field)) = function_name_table_field(&name) {
                         self.table_members
-                            .entry((table.clone(), field.clone()))
+                            .entry((table, field))
                             .or_insert(definition);
                     } else {
                         self.values
-                            .entry(function.name().to_string())
+                            .entry(name.trim().to_owned())
                             .or_insert(definition);
                     }
                 }
@@ -697,6 +795,10 @@ impl<'a> ModuleDefinitionIndex<'a> {
         self.table_members
             .get(&(table.to_owned(), field.to_owned()))
             .cloned()
+    }
+
+    fn has_self_index(&self, table: &str) -> bool {
+        self.self_index_tables.contains(table)
     }
 
     fn local_table_field(&self, local: &str, field: &str) -> Option<SourceSpan> {
@@ -812,6 +914,60 @@ fn table_field_spans(table: &TableConstructor) -> BTreeMap<String, SourceSpan> {
             Some((token_text(key), node_span(key)?))
         })
         .collect()
+}
+
+fn function_name_table_field(name: &str) -> Option<(String, String)> {
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => colon.max(dot),
+        (Some(colon), None) => colon,
+        (None, Some(dot)) => dot,
+        (None, None) => return None,
+    };
+    let owner = name[..separator].trim();
+    let field = name[separator + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty()).then(|| (owner.to_owned(), field.to_owned()))
+}
+
+fn setmetatable_prototype_from_expression(expression: &Expression) -> Option<String> {
+    let Expression::FunctionCall(function_call) = expression else {
+        return None;
+    };
+
+    let (_, meta) = setmetatable_arguments(function_call)?;
+
+    expression_name(meta)
+}
+
+fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, &Expression)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    if token_text(name) != "setmetatable" {
+        return None;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    Some((arguments.iter().next()?, arguments.iter().nth(1)?))
+}
+
+fn expression_name(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::Var(Var::Name(name)) => Some(token_text(name)),
+        _ => None,
+    }
+}
+
+fn expression_is_name(expression: &Expression, expected: &str) -> bool {
+    matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
 }
 
 fn node_span(node: &impl Node) -> Option<SourceSpan> {
