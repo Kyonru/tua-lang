@@ -11,11 +11,14 @@ use full_moon::visitors::Visitor;
 
 use crate::config::DiagnosticsConfig;
 use crate::module_index::resolve_required_module;
+use crate::semantic::SemanticModel;
+use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
 
 pub(crate) fn lint_parsed_source(
     parsed: &ParsedSource,
     config: &DiagnosticsConfig,
+    environment: &TypeEnvironment,
 ) -> Vec<Diagnostic> {
     if !config.duplicate_keys
         && !config.missing_requires
@@ -37,6 +40,8 @@ pub(crate) fn lint_parsed_source(
         let mut visitor = LintVisitor {
             parsed,
             config,
+            semantic: SemanticModel::new(parsed, environment),
+            type_context: environment.to_type_context(),
             diagnostics: Vec::new(),
         };
 
@@ -60,6 +65,8 @@ fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
         || config.unused_locals
         || config.unused_parameters
         || config.use_before_definition
+        || config.unused_assignments
+        || config.uncalled_local_functions
 }
 
 fn correctness_lints_enabled(config: &DiagnosticsConfig) -> bool {
@@ -70,16 +77,25 @@ fn correctness_lints_enabled(config: &DiagnosticsConfig) -> bool {
         || config.duplicate_binary_operands
         || config.float_equality
         || config.const_assignments
+        || config.assignment_arity
+        || config.local_declaration_arity
+        || config.binary_operator_type_mismatches
 }
 
 struct LintVisitor<'a> {
     parsed: &'a ParsedSource,
     config: &'a DiagnosticsConfig,
+    semantic: SemanticModel<'a>,
+    type_context: TypeContext,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl Visitor for LintVisitor<'_> {
     fn visit_assignment(&mut self, assignment: &full_moon::ast::Assignment) {
+        if self.config.assignment_arity {
+            self.check_assignment_arity(assignment);
+        }
+
         if self.config.self_assignments {
             for (variable, expression) in
                 assignment.variables().iter().zip(assignment.expressions())
@@ -115,6 +131,31 @@ impl Visitor for LintVisitor<'_> {
                     &name,
                 ));
             }
+        }
+    }
+
+    fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+        if !self.config.local_declaration_arity {
+            return;
+        }
+
+        let local_count = local.names().into_iter().count();
+
+        if local_count == 0 || local.expressions().is_empty() {
+            return;
+        }
+
+        let Some(value_count) = self.expression_list_value_count(local.expressions()) else {
+            return;
+        };
+
+        if local_count != value_count {
+            self.diagnostics.push(local_declaration_arity_diagnostic(
+                &self.parsed.path,
+                node_position(local),
+                local_count,
+                value_count,
+            ));
         }
     }
 
@@ -214,7 +255,7 @@ impl Visitor for LintVisitor<'_> {
 
     fn visit_expression(&mut self, expression: &Expression) {
         if let Expression::BinaryOperator { lhs, binop, rhs } = expression {
-            self.check_binary_expression(lhs, binop, rhs);
+            self.check_binary_expression(expression, lhs, binop, rhs);
         }
 
         if self.config.impossible_boolean_expressions {
@@ -234,7 +275,68 @@ impl Visitor for LintVisitor<'_> {
 }
 
 impl LintVisitor<'_> {
-    fn check_binary_expression(&mut self, lhs: &Expression, binop: &ast::BinOp, rhs: &Expression) {
+    fn check_assignment_arity(&mut self, assignment: &ast::Assignment) {
+        let target_count = assignment.variables().into_iter().count();
+
+        if target_count == 0 {
+            return;
+        }
+
+        let Some(value_count) = self.expression_list_value_count(assignment.expressions()) else {
+            return;
+        };
+
+        if target_count != value_count {
+            self.diagnostics.push(assignment_arity_diagnostic(
+                &self.parsed.path,
+                node_position(assignment),
+                target_count,
+                value_count,
+            ));
+        }
+    }
+
+    fn expression_list_value_count<'a>(
+        &self,
+        expressions: impl IntoIterator<Item = &'a Expression>,
+    ) -> Option<usize> {
+        let expressions = expressions.into_iter().collect::<Vec<_>>();
+
+        if expressions.is_empty() {
+            return Some(0);
+        }
+
+        let fixed_prefix = expressions.len().saturating_sub(1);
+        let last = expressions.last()?;
+
+        if expression_is_varargs(last) {
+            return None;
+        }
+
+        if let Expression::FunctionCall(function_call) = last {
+            let returns = self.function_call_return_count(function_call)?;
+
+            return Some(fixed_prefix + returns);
+        }
+
+        Some(fixed_prefix + 1)
+    }
+
+    fn function_call_return_count(&self, function_call: &FunctionCall) -> Option<usize> {
+        let name = simple_function_call_name(function_call)?;
+
+        self.semantic
+            .type_of_name(&name, node_position(function_call))
+            .and_then(|ty| callable_return_count(&ty, &self.type_context))
+    }
+
+    fn check_binary_expression(
+        &mut self,
+        expression: &Expression,
+        lhs: &Expression,
+        binop: &ast::BinOp,
+        rhs: &Expression,
+    ) {
         if self.config.impossible_boolean_expressions {
             self.check_impossible_boolean_expression(lhs, binop, rhs);
         }
@@ -261,6 +363,56 @@ impl LintVisitor<'_> {
                 node_position(binop),
             ));
         }
+
+        if self.config.binary_operator_type_mismatches {
+            self.check_binary_operator_type(expression, lhs, binop, rhs);
+        }
+    }
+
+    fn check_binary_operator_type(
+        &mut self,
+        expression: &Expression,
+        lhs: &Expression,
+        binop: &ast::BinOp,
+        rhs: &Expression,
+    ) {
+        if !is_type_checked_binary_operator(binop) {
+            return;
+        }
+
+        let Some(left) = self
+            .semantic
+            .type_of_expression_return(lhs, node_position(lhs), 0)
+        else {
+            return;
+        };
+        let Some(right) = self
+            .semantic
+            .type_of_expression_return(rhs, node_position(rhs), 0)
+        else {
+            return;
+        };
+
+        if type_is_dynamic(&left, &self.type_context) || type_is_dynamic(&right, &self.type_context)
+        {
+            return;
+        }
+
+        if self
+            .semantic
+            .type_of_expression_return(expression, node_position(expression), 0)
+            .is_some()
+        {
+            return;
+        }
+
+        self.diagnostics.push(binary_operator_type_diagnostic(
+            &self.parsed.path,
+            node_position(binop),
+            &binop_label(binop),
+            &left,
+            &right,
+        ));
     }
 
     fn check_impossible_boolean_expression(
@@ -315,11 +467,14 @@ struct Declaration {
     position: SourcePosition,
     kind: DeclarationKind,
     used: bool,
+    called: bool,
+    assignment_positions: Vec<SourcePosition>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DeclarationKind {
     Local,
+    LocalFunction,
     Parameter,
 }
 
@@ -479,6 +634,10 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 if self.resolve_local(&name_text).is_none() {
                     self.known_globals.insert(name_text);
+                } else if let Some(id) = self.resolve_local(&name_text) {
+                    self.declarations[id]
+                        .assignment_positions
+                        .push(token_position(name));
                 }
             }
             Var::Expression(expression) => self.analyze_var_expression_base(expression),
@@ -504,7 +663,7 @@ impl<'a> SymbolAnalyzer<'a> {
         self.declare(
             token_text(function.name()),
             token_position(function.name()),
-            DeclarationKind::Local,
+            DeclarationKind::LocalFunction,
         );
         self.analyze_function_body(function.body());
     }
@@ -606,6 +765,7 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn analyze_function_call(&mut self, function_call: &FunctionCall) {
+        self.mark_direct_local_function_call(function_call);
         self.analyze_prefix(function_call.prefix());
         self.analyze_suffixes(function_call.suffixes());
     }
@@ -665,8 +825,8 @@ impl<'a> SymbolAnalyzer<'a> {
             return;
         };
 
-        for declaration_id in scope.declarations {
-            let declaration = &self.declarations[declaration_id];
+        for declaration_id in &scope.declarations {
+            let declaration = &self.declarations[*declaration_id];
 
             if declaration.used || should_ignore_unused(&declaration.name) {
                 continue;
@@ -674,6 +834,13 @@ impl<'a> SymbolAnalyzer<'a> {
 
             match declaration.kind {
                 DeclarationKind::Local if self.config.unused_locals => {
+                    self.diagnostics.push(unused_local_diagnostic(
+                        &self.parsed.path,
+                        declaration.position,
+                        &declaration.name,
+                    ));
+                }
+                DeclarationKind::LocalFunction if self.config.unused_locals => {
                     self.diagnostics.push(unused_local_diagnostic(
                         &self.parsed.path,
                         declaration.position,
@@ -690,6 +857,44 @@ impl<'a> SymbolAnalyzer<'a> {
                 _ => {}
             }
         }
+
+        for declaration_id in &scope.declarations {
+            let declaration = &self.declarations[*declaration_id];
+
+            if declaration.used || should_ignore_unused(&declaration.name) {
+                continue;
+            }
+
+            if self.config.unused_assignments {
+                for position in &declaration.assignment_positions {
+                    self.diagnostics.push(unused_assignment_diagnostic(
+                        &self.parsed.path,
+                        *position,
+                        &declaration.name,
+                    ));
+                }
+            }
+        }
+
+        for declaration_id in &scope.declarations {
+            let declaration = &self.declarations[*declaration_id];
+
+            if declaration.kind != DeclarationKind::LocalFunction
+                || !declaration.used
+                || declaration.called
+                || should_ignore_unused(&declaration.name)
+            {
+                continue;
+            }
+
+            if self.config.uncalled_local_functions {
+                self.diagnostics.push(uncalled_local_function_diagnostic(
+                    &self.parsed.path,
+                    declaration.position,
+                    &declaration.name,
+                ));
+            }
+        }
     }
 
     fn declare(&mut self, name: String, position: SourcePosition, kind: DeclarationKind) {
@@ -702,6 +907,8 @@ impl<'a> SymbolAnalyzer<'a> {
                 position,
                 kind,
                 used: false,
+                called: false,
+                assignment_positions: Vec::new(),
             });
             scope.bindings.insert(name, id);
             scope.declarations.push(id);
@@ -737,6 +944,24 @@ impl<'a> SymbolAnalyzer<'a> {
                 name,
             ));
         }
+    }
+
+    fn mark_direct_local_function_call(&mut self, function_call: &FunctionCall) {
+        if !self.config.uncalled_local_functions {
+            return;
+        }
+
+        let Prefix::Name(name) = function_call.prefix() else {
+            return;
+        };
+        let Some(Suffix::Call(_)) = function_call.suffixes().next() else {
+            return;
+        };
+        let Some(id) = self.resolve_local(&token_text(name)) else {
+            return;
+        };
+
+        self.declarations[id].called = true;
     }
 
     fn resolve_local(&self, name: &str) -> Option<usize> {
@@ -846,6 +1071,29 @@ fn require_module_literal(function_call: &FunctionCall) -> Option<(String, Sourc
         FunctionArgs::TableConstructor(_) => None,
         _ => None,
     }
+}
+
+fn simple_function_call_name(function_call: &FunctionCall) -> Option<String> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    matches!(function_call.suffixes().next(), Some(Suffix::Call(_))).then(|| token_text(name))
+}
+
+fn callable_return_count(ty: &Type, context: &TypeContext) -> Option<usize> {
+    match ty {
+        Type::Function(function) => Some(function.return_types_or_any().len()),
+        Type::Alias(name) => context
+            .alias(name)
+            .and_then(|ty| callable_return_count(ty, context)),
+        Type::Any => None,
+        _ => None,
+    }
+}
+
+fn expression_is_varargs(expression: &Expression) -> bool {
+    matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "...")
 }
 
 fn plain_field_chain_from_expression(expression: &Expression) -> Option<Vec<String>> {
@@ -1082,6 +1330,81 @@ fn const_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str
         format!("assignment to const-like name `{name}`"),
     )
     .with_code(DiagnosticCode::LINT_CONST_ASSIGNMENT)
+}
+
+fn assignment_arity_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    targets: usize,
+    values: usize,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("assignment count mismatch: {targets} target(s), {values} value(s)"),
+    )
+    .with_code(DiagnosticCode::LINT_ASSIGNMENT_ARITY)
+}
+
+fn local_declaration_arity_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    locals: usize,
+    values: usize,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("local declaration count mismatch: {locals} local(s), {values} value(s)"),
+    )
+    .with_code(DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY)
+}
+
+fn unused_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("assignment to local `{name}` is never read"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_ASSIGNMENT)
+}
+
+fn binary_operator_type_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    operator: &str,
+    left: &Type,
+    right: &Type,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("operator `{operator}` cannot be applied to {left} and {right}"),
+    )
+    .with_code(DiagnosticCode::LINT_BINARY_OPERATOR_TYPE)
+}
+
+fn uncalled_local_function_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("local function `{name}` is referenced but never directly called"),
+    )
+    .with_code(DiagnosticCode::LINT_UNCALLED_LOCAL_FUNCTION)
 }
 
 fn formatting_lints(parsed: &ParsedSource) -> Vec<Diagnostic> {
@@ -1577,6 +1900,53 @@ fn is_float_literal(expression: &Expression) -> bool {
 
 fn is_equality_operator(binop: &ast::BinOp) -> bool {
     matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_))
+}
+
+fn is_type_checked_binary_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::Caret(_)
+            | ast::BinOp::GreaterThan(_)
+            | ast::BinOp::GreaterThanEqual(_)
+            | ast::BinOp::LessThan(_)
+            | ast::BinOp::LessThanEqual(_)
+            | ast::BinOp::Minus(_)
+            | ast::BinOp::Percent(_)
+            | ast::BinOp::Plus(_)
+            | ast::BinOp::Slash(_)
+            | ast::BinOp::Star(_)
+            | ast::BinOp::TwoDots(_)
+    )
+}
+
+fn type_is_dynamic(ty: &Type, context: &TypeContext) -> bool {
+    match ty {
+        Type::Any => true,
+        Type::Alias(name) => context
+            .alias(name)
+            .map(|ty| type_is_dynamic(ty, context))
+            .unwrap_or(true),
+        Type::Union(types) => types.iter().any(|ty| type_is_dynamic(ty, context)),
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .any(|ty| type_is_dynamic(ty, context))
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(|ty| type_is_dynamic(ty, context))
+        }
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_is_dynamic(&field.ty, context)),
+        Type::Array(item) => type_is_dynamic(item, context),
+        Type::Tuple(items) => items.iter().any(|ty| type_is_dynamic(ty, context)),
+        Type::Dictionary { key, value } => {
+            type_is_dynamic(key, context) || type_is_dynamic(value, context)
+        }
+        Type::Primitive(_) | Type::StringLiteral(_) => false,
+    }
 }
 
 fn is_suspicious_duplicate_operand_operator(binop: &ast::BinOp) -> bool {

@@ -1,0 +1,49 @@
+-- Feature: LuaHelper parity lints.
+-- These examples are valid Lua/Tua and compile normally. When the matching
+-- [diagnostics] toggles are enabled, they demonstrate warnings for assignment
+-- arity, local declaration arity, no-use assignments, binary operator type
+-- mismatches, and local functions that are referenced but never directly called.
+
+local function twoValues()
+  return 1, 2
+end
+
+-- Feature: assignment_arity.
+-- With assignment_arity enabled, this warns because the known function returns
+-- two values but the assignment has one target.
+local assignmentTarget = 0
+assignmentTarget = twoValues()
+
+-- Feature: local_declaration_arity.
+-- With local_declaration_arity enabled, this warns because there are two locals
+-- but only one initializer value.
+local localArityA, localArityB = 1
+
+-- Feature: unused_assignments.
+-- With unused_assignments enabled, this warns because reassignedOnly is assigned
+-- after declaration and never read.
+local reassignedOnly = 1
+reassignedOnly = 2
+
+-- Feature: binary_operator_type_mismatches.
+-- With binary_operator_type_mismatches enabled, this warns because + requires
+-- numeric operands unless a static metatable operator is known.
+local badBinaryOperand = 1 + "hp"
+
+-- Feature: uncalled_local_functions.
+-- With uncalled_local_functions enabled, this warns because the local function
+-- is referenced as a value but never directly called.
+local function referencedCallback()
+  return "callback"
+end
+
+local callbackValue = referencedCallback
+
+return {
+  twoValues = twoValues,
+  assignmentTarget = assignmentTarget,
+  localArityA = localArityA,
+  localArityB = localArityB,
+  badBinaryOperand = badBinaryOperand,
+  callbackValue = callbackValue,
+}

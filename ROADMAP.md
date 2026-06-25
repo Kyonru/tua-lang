@@ -1879,6 +1879,8 @@ Acceptance:
 
 ### 70.24 `feat(lint): close LuaHelper assignment and operator diagnostic gaps`
 
+Status: done.
+
 Scope:
 
 - Add focused lint/type checks for LuaHelper parity rows tracked in
@@ -2148,3 +2150,134 @@ Acceptance:
 - Each hook states required Tua metadata and whether it needs compiler, LSP, or
   editor support.
 - No Feather dependency is added to the core crates in this commit.
+
+## Phase 14: Autocomplete Intelligence
+
+### 77. `feat(completion): switch to compiler-first candidate generation`
+
+Scope:
+
+- Replace any fallback-heavy or string-only completion behavior with a compiler-driven
+  generation pipeline:
+  - AST context at cursor;
+  - scope and symbol visibility;
+  - type-at-cursor and expected return-type hints;
+  - active imports and module graph state.
+- Keep TensorFlow out of the core completion generation path; this phase is focused on
+  correctness and speed through existing language semantics.
+- Ensure completions are emitted as compiler-validated candidates first:
+  - local declarations and parameters,
+  - exports and module fields,
+  - LOVE API surfaces from configured catalog data,
+  - table fields inferred from table shapes when stable.
+- Preserve existing ordering behavior as a stable fallback only after adding an explicit
+  ranking stage.
+
+Acceptance:
+
+- For `player.` completions, the default list is derived from accessible compiler facts.
+- Completion candidates are reproducible across identical snapshot state.
+- No generated completion can reference out-of-scope symbols.
+
+### 77.1 `feat(completion): add ranking features from local context + project usage`
+
+Scope:
+
+- Add a ranking layer that scores existing compiler candidates with low-latency signals:
+  - same-file symbol co-occurrence;
+  - file-local call-site frequencies;
+  - project-level member usage counts (for example `play()`, `stop()`, `pause()` after `sprite.`);
+  - recency and proximity within the current file;
+  - declaration quality signals (type precision, documentation availability).
+- Add deterministic tie-breakers so ranking is stable between runs.
+- Do not reorder by ranking when the compiler confidence is `any`.
+
+Acceptance:
+
+- Ranking can reorder raw candidate lists (for example prioritize `velocity` over
+  unrelated table keys in `player.` contexts).
+- The ranking model degrades safely to alphabetical/score-insensitive behavior.
+- Existing completion test fixtures remain stable unless explicitly updated for ranking.
+
+### 77.2 `feat(completion): optional contextual sequence ranking engine`
+
+Scope:
+
+- Add a minimal pluggable ranking interface that can call into an external local or
+  remote service for score hints while still returning compiler candidates.
+- Initial implementation can be local-only (frequency/context heuristics) and must run
+  without network calls.
+- Define the protocol:
+  - input: normalized file/context snapshot + candidate list;
+  - output: per-candidate confidence score + optional rationale token list;
+  - fallback: zero-score on timeout/error.
+- Keep response budget strict so completion latency stays predictable under cold-cache
+  conditions.
+
+Acceptance:
+
+- Ranking calls never block completion on external failure.
+- External ranking can be disabled by config and defaults off.
+- A hard timeout or error returns original compiler ordering with no user-visible failure.
+
+### 77.3 `feat(completion): add project-adaptive learning surface`
+
+Scope:
+
+- Persist anonymous, privacy-safe usage statistics over project history:
+  - function names after member access,
+  - call patterns (`obj.method(...)`);
+  - assignment RHS suggestion outcomes.
+- Use those statistics as additional ranking features in the ranking layer.
+- Add expiry/eviction policy and file-scope filtering so stale signals do not dominate.
+- Ensure no source content is sent off-device; ranking stores only symbol frequencies
+  and structural context hashes.
+
+Acceptance:
+
+- Project-specific top candidates improve after repeated usage patterns.
+- Signals refresh when symbols are renamed, removed, or become out-of-scope.
+- Ranking statistics can be reset per workspace.
+
+### 77.4 `feat(completion): optional LLM-assisted multi-token completion`
+
+Scope:
+
+- Add a separate, opt-in completion lane for multi-token suggestions after strong local
+  confidence and low ambiguity:
+  - assignment RHS completion;
+  - expression-tail completions;
+  - method-chain endings.
+- Preserve compiler candidate mode as the primary path for token-level completions.
+- Ensure LLM output is validated/trimmed against current file parse state before
+  insertion.
+- Require explicit config + policy gate for any model integration.
+
+Acceptance:
+
+- LLM suggestions are only offered when local confidence is low or user enables the
+  advanced path.
+- Invalid or unparsable LLM insertions are rejected or downgraded.
+- Core completion remains usable with no network dependency.
+
+### 77.5 `feat(completion): add benchmark and telemetry plan`
+
+Scope:
+
+- Add baseline measurements for:
+  - completion suggestion latency (p50/p95/p99),
+  - ranking overhead,
+  - cache hit rates for completion context,
+  - optional model lane fallback frequency.
+- Add fixture-driven regression checks for ranking order in representative contexts.
+- Add a short internal doc describing:
+  - expected latency target per editor request profile,
+  - ranking diagnostics,
+  - known failure modes and feature flags.
+
+Acceptance:
+
+- Completion p95 latency improves or remains stable on a fixed medium project.
+- Ranking layer overhead is bounded and reportable in profiler output.
+- The roadmap includes at least one explicit metric where Phase 14 success is considered
+  achieved.

@@ -93,7 +93,7 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
     checker.check_block(parsed.ast.nodes(), None);
     checker
         .diagnostics
-        .extend(lint_parsed_source(parsed, diagnostics_config));
+        .extend(lint_parsed_source(parsed, diagnostics_config, &environment));
 
     if diagnostics_config.doc_annotations {
         checker

@@ -176,6 +176,46 @@
           "default": null,
           "description": "Report function return type mismatches."
         },
+        "tua.diagnostics.assignmentArity": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report multiple assignments where the proven value count does not match the target count."
+        },
+        "tua.diagnostics.localDeclarationArity": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report local declarations where the proven initializer count does not match the local count."
+        },
+        "tua.diagnostics.unusedAssignments": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report assignments to locals that are never read afterwards."
+        },
+        "tua.diagnostics.binaryOperatorTypeMismatches": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report binary operators used with statically incompatible operand types."
+        },
+        "tua.diagnostics.uncalledLocalFunctions": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Report local functions that are referenced but never called."
+        },
         "tua.diagnostics.formattingLints": {
           "type": [
             "boolean",

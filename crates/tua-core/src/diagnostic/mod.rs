@@ -75,6 +75,11 @@ impl DiagnosticCode {
     pub const LINT_FORMAT_TOKEN_SPACING: Self = Self(4024);
     pub const LINT_INLINE_IGNORE_INVALID: Self = Self(4025);
     pub const LINT_INLINE_IGNORE_UNUSED: Self = Self(4026);
+    pub const LINT_ASSIGNMENT_ARITY: Self = Self(4027);
+    pub const LINT_LOCAL_DECLARATION_ARITY: Self = Self(4028);
+    pub const LINT_UNUSED_ASSIGNMENT: Self = Self(4029);
+    pub const LINT_BINARY_OPERATOR_TYPE: Self = Self(4030);
+    pub const LINT_UNCALLED_LOCAL_FUNCTION: Self = Self(4031);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {
@@ -144,6 +149,11 @@ impl DiagnosticCode {
                 | Self::LINT_FORMAT_TOKEN_SPACING
                 | Self::LINT_INLINE_IGNORE_INVALID
                 | Self::LINT_INLINE_IGNORE_UNUSED
+                | Self::LINT_ASSIGNMENT_ARITY
+                | Self::LINT_LOCAL_DECLARATION_ARITY
+                | Self::LINT_UNUSED_ASSIGNMENT
+                | Self::LINT_BINARY_OPERATOR_TYPE
+                | Self::LINT_UNCALLED_LOCAL_FUNCTION
         )
     }
 }

@@ -81,6 +81,11 @@ float_equality = true
 const_assignments = true
 parameter_type_mismatches = true
 return_type_mismatches = true
+assignment_arity = true
+local_declaration_arity = true
+unused_assignments = true
+binary_operator_type_mismatches = true
+uncalled_local_functions = true
 formatting_lints = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
@@ -120,6 +125,11 @@ globals = ["Game", "World"]
                 const_assignments: true,
                 parameter_type_mismatches: true,
                 return_type_mismatches: true,
+                assignment_arity: true,
+                local_declaration_arity: true,
+                unused_assignments: true,
+                binary_operator_type_mismatches: true,
+                uncalled_local_functions: true,
                 formatting_lints: true,
                 inline_ignores: true,
                 inline_ignore_scopes: vec![
@@ -186,6 +196,11 @@ duplicate_keys = true
     assert!(!config.diagnostics.const_assignments);
     assert!(!config.diagnostics.parameter_type_mismatches);
     assert!(!config.diagnostics.return_type_mismatches);
+    assert!(!config.diagnostics.assignment_arity);
+    assert!(!config.diagnostics.local_declaration_arity);
+    assert!(!config.diagnostics.unused_assignments);
+    assert!(!config.diagnostics.binary_operator_type_mismatches);
+    assert!(!config.diagnostics.uncalled_local_functions);
     assert!(!config.diagnostics.formatting_lints);
     assert!(!config.diagnostics.inline_ignores);
     assert_eq!(

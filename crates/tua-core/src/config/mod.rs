@@ -37,6 +37,11 @@ float_equality = false
 const_assignments = false
 parameter_type_mismatches = false
 return_type_mismatches = false
+assignment_arity = false
+local_declaration_arity = false
+unused_assignments = false
+binary_operator_type_mismatches = false
+uncalled_local_functions = false
 formatting_lints = false
 inline_ignores = false
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\"]
@@ -128,6 +133,11 @@ pub struct DiagnosticsConfig {
     pub const_assignments: bool,
     pub parameter_type_mismatches: bool,
     pub return_type_mismatches: bool,
+    pub assignment_arity: bool,
+    pub local_declaration_arity: bool,
+    pub unused_assignments: bool,
+    pub binary_operator_type_mismatches: bool,
+    pub uncalled_local_functions: bool,
     pub formatting_lints: bool,
     pub inline_ignores: bool,
     pub inline_ignore_scopes: Vec<String>,
@@ -156,6 +166,11 @@ impl Default for DiagnosticsConfig {
             const_assignments: false,
             parameter_type_mismatches: false,
             return_type_mismatches: false,
+            assignment_arity: false,
+            local_declaration_arity: false,
+            unused_assignments: false,
+            binary_operator_type_mismatches: false,
+            uncalled_local_functions: false,
             formatting_lints: false,
             inline_ignores: false,
             inline_ignore_scopes: vec![
@@ -435,6 +450,22 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 }
                 "return_type_mismatches" => {
                     config.diagnostics.return_type_mismatches = parse_bool(line_number, value)?
+                }
+                "assignment_arity" => {
+                    config.diagnostics.assignment_arity = parse_bool(line_number, value)?
+                }
+                "local_declaration_arity" => {
+                    config.diagnostics.local_declaration_arity = parse_bool(line_number, value)?
+                }
+                "unused_assignments" => {
+                    config.diagnostics.unused_assignments = parse_bool(line_number, value)?
+                }
+                "binary_operator_type_mismatches" => {
+                    config.diagnostics.binary_operator_type_mismatches =
+                        parse_bool(line_number, value)?
+                }
+                "uncalled_local_functions" => {
+                    config.diagnostics.uncalled_local_functions = parse_bool(line_number, value)?
                 }
                 "formatting_lints" => {
                     config.diagnostics.formatting_lints = parse_bool(line_number, value)?

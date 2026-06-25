@@ -52,6 +52,10 @@ make build-features
   arrays, tuples, dictionaries, function types, and shallow metadata tags.
 - `src/inline_ignores.tua` demonstrates opt-in line-targeted diagnostic
   suppression comments such as `tua-ignore-next-line` and `tua-ignore-line`.
+- `src/luahelper_lints.tua` demonstrates opt-in LuaHelper parity diagnostics
+  for assignment/local declaration arity, unused assignments, binary operator
+  type mismatches, and local functions that are referenced but never directly
+  called.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`.
 - `src/navigation.tua` is a compact same-file sample for go to definition,

@@ -32,6 +32,11 @@ pub(super) struct DiagnosticOverrides {
     pub(super) const_assignments: Option<bool>,
     pub(super) parameter_type_mismatches: Option<bool>,
     pub(super) return_type_mismatches: Option<bool>,
+    pub(super) assignment_arity: Option<bool>,
+    pub(super) local_declaration_arity: Option<bool>,
+    pub(super) unused_assignments: Option<bool>,
+    pub(super) binary_operator_type_mismatches: Option<bool>,
+    pub(super) uncalled_local_functions: Option<bool>,
     pub(super) formatting_lints: Option<bool>,
     pub(super) inline_ignores: Option<bool>,
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
@@ -181,6 +186,23 @@ impl DiagnosticOverrides {
                 "return_type_mismatches",
                 "returnTypeMismatches",
             ),
+            assignment_arity: bool_setting(settings, "assignment_arity", "assignmentArity"),
+            local_declaration_arity: bool_setting(
+                settings,
+                "local_declaration_arity",
+                "localDeclarationArity",
+            ),
+            unused_assignments: bool_setting(settings, "unused_assignments", "unusedAssignments"),
+            binary_operator_type_mismatches: bool_setting(
+                settings,
+                "binary_operator_type_mismatches",
+                "binaryOperatorTypeMismatches",
+            ),
+            uncalled_local_functions: bool_setting(
+                settings,
+                "uncalled_local_functions",
+                "uncalledLocalFunctions",
+            ),
             formatting_lints: bool_setting(settings, "formatting_lints", "formattingLints"),
             inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
             inline_ignore_scopes: string_array_value(
@@ -242,6 +264,20 @@ impl DiagnosticOverrides {
         apply_bool(
             self.return_type_mismatches,
             &mut diagnostics.return_type_mismatches,
+        );
+        apply_bool(self.assignment_arity, &mut diagnostics.assignment_arity);
+        apply_bool(
+            self.local_declaration_arity,
+            &mut diagnostics.local_declaration_arity,
+        );
+        apply_bool(self.unused_assignments, &mut diagnostics.unused_assignments);
+        apply_bool(
+            self.binary_operator_type_mismatches,
+            &mut diagnostics.binary_operator_type_mismatches,
+        );
+        apply_bool(
+            self.uncalled_local_functions,
+            &mut diagnostics.uncalled_local_functions,
         );
         apply_bool(self.formatting_lints, &mut diagnostics.formatting_lints);
         apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);

@@ -35,8 +35,8 @@ LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stabl
 | `CheckErrorLocalNoUse = 4` | `LH-ERR`, `luahelper.Warn.CheckLocalNoUse` in `LH-WARN` | `TL4005` unused locals. | Published diagnostics and remove-unused-local quick fix. | implemented | Phases 36 and 44. |
 | `CheckErrorTableDuplicateKey = 5` | `LH-ERR`, `luahelper.Warn.CheckTableDuplicateKey` in `LH-WARN` | `TL4001` duplicate literal table keys. | Published diagnostics and duplicate-key rename quick fix. | implemented | Phases 36, 44. |
 | `CheckErrorNoFile = 6` | `LH-ERR`, `luahelper.Warn.CheckReferNoFile` in `LH-WARN` | `TL4002` missing require, `TL4010` bad require, `TL2004` missing LOVE asset. | Diagnostics, document links for resolved requires, create-missing-require quick fix. | implemented | Phases 37, 44, 48.6, 59. |
-| `CheckErrorAssignParamNum = 7` | `LH-ERR`, `luahelper.Warn.CheckAssignParamNum` in `LH-WARN` | No dedicated multiple-assignment arity diagnostic. | No LSP diagnostic. | missing | Owner: lint/types. Planned in 70.24. |
-| `CheckErrorLocalParamNum = 8` | `LH-ERR`, `luahelper.Warn.CheckLocalDefineParamNum` in `LH-WARN` | No dedicated local-declaration arity diagnostic. | No LSP diagnostic. | missing | Owner: lint/types. Planned in 70.24. |
+| `CheckErrorAssignParamNum = 7` | `LH-ERR`, `luahelper.Warn.CheckAssignParamNum` in `LH-WARN` | `TL4027` assignment arity when `assignment_arity` is enabled and value count is statically known. | Published diagnostics; unknown multi-return and vararg sources stay permissive. | implemented | Phase 70.24. |
+| `CheckErrorLocalParamNum = 8` | `LH-ERR`, `luahelper.Warn.CheckLocalDefineParamNum` in `LH-WARN` | `TL4028` local declaration arity when `local_declaration_arity` is enabled and initializer count is statically known. | Published diagnostics. | implemented | Phase 70.24. |
 | `CheckErrorGotoLabel = 9` | `LH-ERR`, `luahelper.Warn.CheckGotoLable` in `LH-WARN` | No `goto` support goal for Lua 5.1/LuaJIT output. | No LSP diagnostic. | out of scope | Tua targets LuaJIT/LOVE and does not plan Lua 5.2+ `goto` analysis in v1. |
 | `CheckErrorCallParam = 10` | `LH-ERR`, `luahelper.Warn.CheckFuncParam` in `LH-WARN` | `TL1004` / `TL4009` wrong argument count. | Diagnostics plus signature help for known calls. | implemented | Phases 16, 37, 41. |
 | `CheckErrorImportVar = 11` | `LH-ERR`, `luahelper.Warn.CheckImportModuleVar` in `LH-WARN` | Required-module fields and exports are checked for `require(...)`; custom `import(...)` is not special-cased. | Hover/completion/definition/references for indexed `require` exports. | partial | Owner: project model/module graph if custom import aliases become configurable; otherwise `import(...)` remains ordinary Lua. See 55, 59, 61. |
@@ -45,7 +45,7 @@ LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stabl
 | `CheckErrorDuplicateExp = 14` | `LH-ERR`, `luahelper.Warn.CheckBinaryExpressionDuplicate` in `LH-WARN` | `TL4013` duplicate binary operands. | Published diagnostics. | implemented | Phase 37. |
 | `CheckErrorOrAlwaysTrue = 15` | `LH-ERR`, `luahelper.Warn.CheckErrorOrAlwaysTrue` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
 | `CheckErrorAndAlwaysFalse = 16` | `LH-ERR`, `luahelper.Warn.CheckErrorAndAlwaysFalse` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
-| `CheckErrorNoUseAssign = 17` | `LH-ERR`, `luahelper.Warn.CheckNoUseAssign` in `LH-WARN` | `TL4005` unused locals and `TL4003` self-assignment cover adjacent cases; no exact "only assigned" diagnostic. | Remove-unused-local and remove-self-assignment quick fixes. | partial | Owner: lint/scope. Planned in 70.24. |
+| `CheckErrorNoUseAssign = 17` | `LH-ERR`, `luahelper.Warn.CheckNoUseAssign` in `LH-WARN` | `TL4029` unused assignments when `unused_assignments` is enabled; `TL4005` and `TL4003` still cover adjacent declaration/self-assignment cases. | Published diagnostics; remove-unused-local and remove-self-assignment quick fixes remain separate. | implemented | Phase 70.24. |
 | `CheckErrorAnnotate = 18` | `LH-ERR`, `luahelper.Warn.CheckAnnotateType` in `LH-WARN` | `TL0003` malformed doc annotations when `doc_annotations` is enabled. | Diagnostics, annotation completions, hover/signature docs for supported tags. | implemented | Phases 33, 34, 38, 40, 41, 70.10. |
 | `CheckErrorDuplicateIf = 19` | `LH-ERR`, `luahelper.Warn.CheckDuplicateIf` in `LH-WARN` | `TL4012` duplicate `if`/`elseif` conditions. | Published diagnostics. | implemented | Phase 37. |
 | `CheckErrorSelfAssign = 20` | `LH-ERR`, `luahelper.Warn.CheckSelfAssign` in `LH-WARN` | `TL4003` self-assignment. | Published diagnostics and remove-self-assignment quick fix. | implemented | Phases 36, 44. |
@@ -54,9 +54,9 @@ LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stabl
 | `CheckErrorConstAssign = 23` | `LH-ERR` | `TL4015` const assignment when const metadata is known. | Published diagnostics. | implemented | Phase 37. |
 | `CheckErrorCallParamType = 24` | `LH-ERR` | `TL1003` / `TL4016` function argument type mismatch. | Diagnostics plus signature help/completions for literals such as LOVE modes. | implemented | Phases 15, 16, 37, 41, 48.5. |
 | `CheckErrorFuncRetErr = 25` | `LH-ERR` | `TL1003` / `TL4017` function return type mismatch. | Published diagnostics; hover/inlay use inferred returns. | implemented | Phases 16, 37, 61. |
-| `CheckErrorAssignType = 26` | `LH-ERR` | Annotated locals, known assignments, and known table fields check via `TL1003`; dynamic inferred-variable type changes are still permissive. | Published diagnostics when core can prove the mismatch. | partial | Owner: type database/flow. Planned in 61, 62, 70.24. |
-| `CheckErrorBinopType = 27` | `LH-ERR` | Some comparisons/arithmetic paths are checked; no complete binary-operator type diagnostic. | Hover can infer selected operator results such as metatable operators. | partial | Owner: types/lint. Planned in 70.24. |
-| `CheckErrorLocFuncNotCall = 28` | `LH-ERR` | Local functions can be unused locals, but Tua does not distinguish "function never called" from "binding never read". | Remove-unused-local quick fix where applicable. | partial | Owner: lint/scope. Planned in 70.24 if a separate diagnostic proves useful. |
+| `CheckErrorAssignType = 26` | `LH-ERR` | Annotated locals, known assignments, and known table fields check via `TL1003`; dynamic inferred-variable type changes are still permissive. | Published diagnostics when core can prove the mismatch. | partial | Owner: type database/flow. Planned in 61 and 62. |
+| `CheckErrorBinopType = 27` | `LH-ERR` | `TL4030` binary operator type mismatch when `binary_operator_type_mismatches` is enabled and both operand types are statically known. | Published diagnostics; dynamic/`any` operands remain permissive. | implemented | Phase 70.24. |
+| `CheckErrorLocFuncNotCall = 28` | `LH-ERR` | `TL4031` local function referenced but never directly called when `uncalled_local_functions` is enabled. | Published diagnostics. | implemented | Phase 70.24. |
 | `CheckErrorEnumValue = 29` | `LH-ERR` | Tua enum sugar rejects duplicate enum members; LuaDoc `---@enum` is currently shallow metadata. | Diagnostics for Tua enum syntax; completions from literal unions. | partial | Owner: LuaDoc annotation lowering. Planned in 70.10. |
 
 ## LuaHelper Warning Settings
@@ -74,8 +74,8 @@ overrides.
 | `luahelper.Warn.CheckLocalNoUse` | `CheckErrorLocalNoUse`. | `unused_locals` / `tua.diagnostics.unusedLocals`. | implemented |
 | `luahelper.Warn.CheckTableDuplicateKey` | `CheckErrorTableDuplicateKey`. | `duplicate_keys` / `tua.diagnostics.duplicateKeys`. | implemented |
 | `luahelper.Warn.CheckReferNoFile` | `CheckErrorNoFile`. | `missing_requires`, `bad_requires`, asset diagnostics. | implemented |
-| `luahelper.Warn.CheckAssignParamNum` | `CheckErrorAssignParamNum`. | Planned assignment arity diagnostics. | missing, 70.24 |
-| `luahelper.Warn.CheckLocalDefineParamNum` | `CheckErrorLocalParamNum`. | Planned local arity diagnostics. | missing, 70.24 |
+| `luahelper.Warn.CheckAssignParamNum` | `CheckErrorAssignParamNum`. | `assignment_arity` / `tua.diagnostics.assignmentArity`. | implemented |
+| `luahelper.Warn.CheckLocalDefineParamNum` | `CheckErrorLocalParamNum`. | `local_declaration_arity` / `tua.diagnostics.localDeclarationArity`. | implemented |
 | `luahelper.Warn.CheckGotoLable` | `CheckErrorGotoLabel`. | No Tua setting. | out of scope |
 | `luahelper.Warn.CheckFuncParam` | `CheckErrorCallParam`. | `wrong_argument_count` / `tua.diagnostics.wrongArgumentCount`. | implemented |
 | `luahelper.Warn.CheckImportModuleVar` | `CheckErrorImportVar`. | Require graph and module export indexing. | partial |
@@ -84,7 +84,7 @@ overrides.
 | `luahelper.Warn.CheckBinaryExpressionDuplicate` | `CheckErrorDuplicateExp`. | `duplicate_binary_operands` / `tua.diagnostics.duplicateBinaryOperands`. | implemented |
 | `luahelper.Warn.CheckErrorOrAlwaysTrue` | `CheckErrorOrAlwaysTrue`. | `impossible_boolean_expressions`. | partial |
 | `luahelper.Warn.CheckErrorAndAlwaysFalse` | `CheckErrorAndAlwaysFalse`. | `impossible_boolean_expressions`. | partial |
-| `luahelper.Warn.CheckNoUseAssign` | `CheckErrorNoUseAssign`. | Adjacent unused/self-assignment lints; exact diagnostic planned. | partial, 70.24 |
+| `luahelper.Warn.CheckNoUseAssign` | `CheckErrorNoUseAssign`. | `unused_assignments` / `tua.diagnostics.unusedAssignments`. | implemented |
 | `luahelper.Warn.CheckAnnotateType` | `CheckErrorAnnotate`. | `doc_annotations` / `tua.diagnostics.docAnnotations`. | implemented |
 | `luahelper.Warn.CheckDuplicateIf` | `CheckErrorDuplicateIf`. | `duplicate_if_conditions` / `tua.diagnostics.duplicateIfConditions`. | implemented |
 | `luahelper.Warn.CheckSelfAssign` | `CheckErrorSelfAssign`. | `self_assignments` / `tua.diagnostics.selfAssignments`. | implemented |
@@ -147,7 +147,7 @@ not LuaHelper diagnostic codes.
 
 | Owner | Missing/partial LuaHelper rows | Follow-up |
 | --- | --- | --- |
-| `lint/types` | assignment arity, local declaration arity, exact no-use assignment, broader binary operator type checks, function-read-vs-called distinction | 70.24 |
+| `lint/types` | broader inferred assignment-type changes beyond annotated/known assignments | 61, 62 |
 | `parser/types/signature` | `---@overload`, `---@vararg`, `identifier` annotation decision | 70.25 |
 | `types/flow` | negative-guard use diagnostics and broader boolean identities | 62 |
 | `project-model/module` | non-`require` custom import helper modeling | Optional future config work after 55/59/61; ordinary `import(...)` stays dynamic until configured. |

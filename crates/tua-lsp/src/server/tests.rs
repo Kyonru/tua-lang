@@ -1164,6 +1164,60 @@ fn did_change_configuration_can_enable_formatting_lints() {
 }
 
 #[test]
+fn did_change_configuration_can_enable_luahelper_parity_lints() {
+    let temp = TempProject::new("configuration-luahelper-parity-lints");
+    let source = r#"
+local function pair()
+  return 1, 2
+end
+
+local a, b = 1
+a = pair()
+
+local assigned = 1
+assigned = 2
+
+local bad = 1 + "hp"
+
+local function callback()
+end
+
+print(callback)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "assignmentArity": true,
+            "localDeclarationArity": true,
+            "unusedAssignments": true,
+            "binaryOperatorTypeMismatches": true,
+            "uncalledLocalFunctions": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+    let codes = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic["code"].as_str().unwrap_or_default())
+        .collect::<Vec<_>>();
+
+    assert!(codes.contains(&"TL4027"));
+    assert!(codes.contains(&"TL4028"));
+    assert!(codes.contains(&"TL4029"));
+    assert!(codes.contains(&"TL4030"));
+    assert!(codes.contains(&"TL4031"));
+}
+
+#[test]
 fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003

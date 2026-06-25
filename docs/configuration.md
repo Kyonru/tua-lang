@@ -33,6 +33,11 @@ float_equality = false
 const_assignments = false
 parameter_type_mismatches = false
 return_type_mismatches = false
+assignment_arity = false
+local_declaration_arity = false
+unused_assignments = false
+binary_operator_type_mismatches = false
+uncalled_local_functions = false
 formatting_lints = false
 inline_ignores = false
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
@@ -98,6 +103,11 @@ float_equality = true
 const_assignments = true
 parameter_type_mismatches = true
 return_type_mismatches = true
+assignment_arity = true
+local_declaration_arity = true
+unused_assignments = true
+binary_operator_type_mismatches = true
+uncalled_local_functions = true
 formatting_lints = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
@@ -165,6 +175,28 @@ annotation_mode = "luacats"
 
 `return_type_mismatches`
 : Reports known function return type mismatches through the lint pipeline.
+
+`assignment_arity`
+: Reports multiple assignments where Tua can prove the number of values does not
+  match the number of targets. Unknown multi-return calls and varargs remain
+  permissive.
+
+`local_declaration_arity`
+: Reports local declarations where Tua can prove the initializer count does not
+  match the number of declared locals.
+
+`unused_assignments`
+: Reports assignments to locals that are never otherwise read. This complements
+  `unused_locals`, which reports the declaration itself.
+
+`binary_operator_type_mismatches`
+: Reports binary operators used with statically incompatible operand types, such
+  as `1 + "hp"`. Dynamic or `any` operands remain permissive.
+
+`uncalled_local_functions`
+: Reports local functions that are referenced as values but never directly
+  called. Indirect callback patterns can stay quiet by leaving this opt-in lint
+  disabled.
 
 `formatting_lints`
 : Reports conservative Lua/Tua formatting consistency issues. The baseline is

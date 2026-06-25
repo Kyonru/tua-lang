@@ -561,6 +561,146 @@ _G.DynamicGlobal()
     .expect("known globals and dynamic module fields should not warn");
 }
 
+#[test]
+fn reports_assignment_and_local_declaration_arity_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function pair()
+  return 1, 2
+end
+
+local a, b = 1
+local c = 1, 2
+
+a, b = pair()
+c = pair()
+"#,
+        &DiagnosticsConfig {
+            assignment_arity: true,
+            local_declaration_arity: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("arity lints should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY),
+        2
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_ASSIGNMENT_ARITY),
+        1
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.message.contains("2 target(s), 1 value(s)")
+            || diagnostic.message.contains("2 local(s), 1 value(s)")
+    }));
+}
+
+#[test]
+fn arity_lints_skip_dynamic_multivalue_sources() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local a, b = dynamic()
+a, b = dynamic()
+"#,
+        &DiagnosticsConfig {
+            assignment_arity: true,
+            local_declaration_arity: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("unknown function return arity should remain permissive");
+}
+
+#[test]
+fn reports_unused_assignments_when_local_is_never_read() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local unused = 1
+unused = 2
+
+local used = 1
+used = 2
+print(used)
+"#,
+        &DiagnosticsConfig {
+            unused_assignments: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("unused assignment lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNUSED_ASSIGNMENT),
+        1
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("assignment to local `unused` is never read"));
+}
+
+#[test]
+fn reports_binary_operator_type_mismatches_when_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local badMath = 1 + "hp"
+local badCompare = true < 2
+local okConcat = "hp" .. 10
+local unknown = dynamic + 1
+"#,
+        &DiagnosticsConfig {
+            binary_operator_type_mismatches: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("binary operator type lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_BINARY_OPERATOR_TYPE),
+        2
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("operator `+` cannot be applied to number and string")
+    }));
+}
+
+#[test]
+fn reports_referenced_local_functions_that_are_never_directly_called() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function callback()
+end
+
+local function called()
+end
+
+print(callback)
+called()
+"#,
+        &DiagnosticsConfig {
+            uncalled_local_functions: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("uncalled local function lint should report diagnostics");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNCALLED_LOCAL_FUNCTION),
+        1
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("local function `callback` is referenced but never directly called"));
+}
+
 fn count_code(diagnostics: &[crate::Diagnostic], code: DiagnosticCode) -> usize {
     diagnostics
         .iter()
