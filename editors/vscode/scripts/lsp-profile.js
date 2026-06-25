@@ -72,6 +72,7 @@ function requestPlan(main, files) {
   const hoverNeedle = firstNeedle(main.text, ["makePlayer", "createWorld", "player", "Player"]);
   const completionNeedle = firstNeedle(main.text, ["player.", "Player.", "World.", "world."]);
   const definitionNeedle = firstNeedle(main.text, ["require(\"", "Player.", "World."]);
+  const referencesNeedle = firstNeedle(main.text, ["makePlayer", "createWorld", "player", "Player"]);
   const rangeEnd = main.text.split("\n").length + 1;
   const plan = [
     {
@@ -136,6 +137,18 @@ function requestPlan(main, files) {
       params: {
         textDocument: { uri: main.uri },
         position: positionAfter(main.text, definitionNeedle),
+      },
+    });
+  }
+
+  if (referencesNeedle) {
+    plan.push({
+      label: "references",
+      method: "textDocument/references",
+      params: {
+        textDocument: { uri: main.uri },
+        position: positionAt(main.text, referencesNeedle),
+        context: { includeDeclaration: true },
       },
     });
   }

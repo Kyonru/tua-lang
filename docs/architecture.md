@@ -81,8 +81,9 @@ Most feature requests should follow the same path:
 3. The snapshot reads normalized files through the VFS and project model.
 4. Cached per-file queries parse source, extract typed source models, lower HIR,
    build scopes, collect diagnostics, collect exports, and resolve type data.
-5. Project queries build require edges, module exports, symbol indexes, and
-   project-aware type information from indexed files.
+5. Project queries build require edges, module exports, symbol indexes,
+   project-aware type information, and lazy reverse-reference indexes from
+   indexed files.
 6. IDE queries such as hover, completion, definition, references, rename,
    inlay hints, semantic tokens, document symbols, call hierarchy, and code
    actions read from the snapshot instead of rereading files or rebuilding
@@ -129,8 +130,8 @@ through the same resolver.
 
 1. Define the core result type near the domain that owns the behavior.
 2. Add a snapshot method when the query depends on project state or open files.
-3. Reuse HIR, scope maps, the module graph, the symbol index, and the type
-   database before adding a syntax walk.
+3. Reuse HIR, scope maps, the module graph, the symbol index, the
+   reverse-reference index, and the type database before adding a syntax walk.
 4. Return `any` or `None` consistently for dynamic Lua that cannot be proven.
 5. Add focused core tests, preferably with the fixture DSL when the query needs
    multiple files, cursor markers, or expected diagnostics.
@@ -494,7 +495,7 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, project type database, and Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, workspace symbol scans, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65 |
+| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, workspace symbol scans, lazy reverse-reference index, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65, 70.20 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |

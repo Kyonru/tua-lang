@@ -1,18 +1,22 @@
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use full_moon::node::Node;
+use full_moon::tokenizer::{TokenReference, TokenType};
+
 use crate::completion::complete_field_access_in_source_with_environment;
 use crate::folding_range::folding_ranges_source;
-use crate::hir::{HirModule, HirRequireBinding};
+use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
 use crate::ide_db::SymbolIndexEntry;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_link::require_module_at_position;
 use crate::profile;
+use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
-use crate::source_text::{dotted_chain_at_position, line_at};
+use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::types::build_type_environment_with_diagnostics;
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
@@ -35,9 +39,10 @@ use crate::{
     CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
     FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
-    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, RenameEdit, RenameTarget,
-    RequireResolution, ScopeMap, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
-    SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, WorkspaceSymbol,
+    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
+    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticToken, SignatureHelp,
+    SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment,
+    WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -80,6 +85,7 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
+    reverse_reference_index: OnceCell<ReverseReferenceIndex>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }
@@ -141,6 +147,21 @@ struct CachedAnalysisFile {
     source: String,
     kind: AnalysisSourceKind,
     file: AnalysisFile,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ReverseReferenceIndex {
+    references: BTreeMap<ReferenceIndexKey, Vec<Reference>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct ReferenceIndexKey {
+    path: PathBuf,
+    start_line: usize,
+    start_column: usize,
+    end_line: usize,
+    end_column: usize,
+    kind: u8,
 }
 
 impl AnalysisHost {
@@ -381,6 +402,7 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
+            reverse_reference_index: OnceCell::new(),
             call_hierarchy_symbols,
             call_hierarchy_calls,
         }
@@ -809,14 +831,26 @@ impl AnalysisSnapshot {
         let Some(target) = self.definition(path, position) else {
             return Vec::new();
         };
+
+        if let Some(references) = self
+            .reverse_reference_index()
+            .references(&target, include_declaration)
+        {
+            return references;
+        }
+
+        self.references_by_scan(&target, include_declaration)
+    }
+
+    fn references_by_scan(&self, target: &Definition, include_declaration: bool) -> Vec<Reference> {
         let global_name = self
             .file(&target.path)
             .and_then(|file| file.parsed.as_ref().ok())
-            .and_then(|parsed| global_function_name_for_definition(parsed, &target));
+            .and_then(|parsed| global_function_name_for_definition(parsed, target));
         let alias_name = self
             .file(&target.path)
             .and_then(|file| file.parsed.as_ref().ok())
-            .and_then(|parsed| global_type_alias_name_for_definition(parsed, &target));
+            .and_then(|parsed| global_type_alias_name_for_definition(parsed, target));
         let mut references = Vec::new();
 
         for file in self.files.values() {
@@ -825,7 +859,7 @@ impl AnalysisSnapshot {
             };
             let Ok(mut file_references) = references_to_definition_parsed_source_with_artifacts(
                 parsed,
-                &target,
+                target,
                 include_declaration,
                 file.hir.as_ref(),
                 file.scope.as_ref(),
@@ -839,7 +873,7 @@ impl AnalysisSnapshot {
                 let Ok(mut global_references) =
                     global_references_to_definition_parsed_source_with_hir(
                         parsed,
-                        &target,
+                        target,
                         global_name,
                         include_declaration,
                         file.hir.as_ref(),
@@ -855,7 +889,7 @@ impl AnalysisSnapshot {
                 let Ok(mut alias_references) =
                     global_type_alias_references_to_definition_parsed_source_with_hir(
                         parsed,
-                        &target,
+                        target,
                         alias_name,
                         include_declaration,
                         file.hir.as_ref(),
@@ -871,6 +905,307 @@ impl AnalysisSnapshot {
         references.sort_by_key(reference_key);
         references.dedup_by_key(|reference| reference_key(reference));
         references
+    }
+
+    fn build_reverse_reference_index(&self) -> ReverseReferenceIndex {
+        let global_functions = self.global_function_definitions();
+        let global_aliases = self.global_type_alias_definitions();
+        let mut index = ReverseReferenceIndex::default();
+
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+
+            if let Some(scope) = file.scope.as_ref() {
+                self.index_scope_references(parsed, file.hir.as_ref(), scope, &mut index);
+                self.index_global_function_references(parsed, scope, &global_functions, &mut index);
+            }
+
+            if let Some(hir) = file.hir.as_ref() {
+                self.index_hir_declarations(parsed, hir, &mut index);
+            }
+
+            self.index_token_references(parsed, &global_aliases, &mut index);
+        }
+
+        index.finish();
+        index
+    }
+
+    fn reverse_reference_index(&self) -> &ReverseReferenceIndex {
+        self.reverse_reference_index.get_or_init(|| {
+            let _profile = profile::span("analysis.index.references");
+
+            self.build_reverse_reference_index()
+        })
+    }
+
+    fn index_scope_references(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        scope: &ScopeMap,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        for declaration in scope.declarations() {
+            let Some(definition_kind) = definition_kind_for_scope_declaration(&declaration.kind)
+            else {
+                continue;
+            };
+            let definition = Definition {
+                path: parsed.path.clone(),
+                span: declaration.name_span,
+                kind: definition_kind,
+            };
+
+            for reference in scope.references_to_symbol(declaration.id, true) {
+                index.insert(
+                    &definition,
+                    Reference {
+                        path: parsed.path.clone(),
+                        span: reference.span,
+                        kind: reference_kind_for_definition(definition.kind),
+                    },
+                );
+            }
+
+            if let Some(hir) = hir {
+                self.index_export_key_references(parsed, hir, &definition, index);
+            }
+        }
+    }
+
+    fn index_hir_declarations(
+        &self,
+        parsed: &ParsedSource,
+        hir: &HirModule,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        for symbol in hir.symbols() {
+            let Some(definition_kind) = definition_kind_for_hir_symbol(symbol.kind) else {
+                continue;
+            };
+            let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);
+
+            if definition.kind != definition_kind {
+                continue;
+            }
+
+            index.insert(
+                &definition,
+                Reference {
+                    path: parsed.path.clone(),
+                    span: symbol.name_span,
+                    kind: reference_kind_for_definition(definition.kind),
+                },
+            );
+        }
+    }
+
+    fn index_export_key_references(
+        &self,
+        parsed: &ParsedSource,
+        hir: &HirModule,
+        definition: &Definition,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        let Some(symbol) = hir
+            .symbols()
+            .iter()
+            .find(|symbol| symbol.name_span == definition.span)
+        else {
+            return;
+        };
+
+        for export in &hir.exports {
+            if export.value != HirExportValue::Symbol(symbol.id) {
+                continue;
+            }
+
+            index.insert(
+                definition,
+                Reference {
+                    path: parsed.path.clone(),
+                    span: export.name_span,
+                    kind: reference_kind_for_definition(definition.kind),
+                },
+            );
+        }
+    }
+
+    fn index_global_function_references(
+        &self,
+        parsed: &ParsedSource,
+        scope: &ScopeMap,
+        global_functions: &BTreeMap<String, Vec<Definition>>,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        for reference in scope.references() {
+            if !is_project_global_reference(&reference.resolution) {
+                continue;
+            }
+            let Some(definitions) = global_functions.get(&reference.name) else {
+                continue;
+            };
+
+            for definition in definitions {
+                index.insert(
+                    definition,
+                    Reference {
+                        path: parsed.path.clone(),
+                        span: reference.span,
+                        kind: ReferenceKind::Function,
+                    },
+                );
+            }
+        }
+    }
+
+    fn index_token_references(
+        &self,
+        parsed: &ParsedSource,
+        global_aliases: &BTreeMap<String, Vec<Definition>>,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        for token in parsed
+            .ast
+            .tokens()
+            .filter(|token| is_identifier_token(token))
+        {
+            let Some(span) = token_span(token) else {
+                continue;
+            };
+            let is_type_reference = is_type_reference_position(parsed, span.start);
+
+            if !is_type_reference && !is_dotted_field_reference(parsed, span.start) {
+                continue;
+            }
+
+            if is_type_reference {
+                self.index_type_alias_token_reference(parsed, token, span, global_aliases, index);
+                continue;
+            }
+
+            if let Some(definition) = self.module_export_definition_at_position(parsed, span.start)
+            {
+                index.insert(
+                    &definition,
+                    Reference {
+                        path: parsed.path.clone(),
+                        span,
+                        kind: reference_kind_for_definition(definition.kind),
+                    },
+                );
+            }
+        }
+    }
+
+    fn index_type_alias_token_reference(
+        &self,
+        parsed: &ParsedSource,
+        token: &TokenReference,
+        span: SourceSpan,
+        global_aliases: &BTreeMap<String, Vec<Definition>>,
+        index: &mut ReverseReferenceIndex,
+    ) {
+        let name = token_text(token);
+        let Some(definitions) = global_aliases.get(&name) else {
+            return;
+        };
+
+        for definition in definitions {
+            index.insert(
+                definition,
+                Reference {
+                    path: parsed.path.clone(),
+                    span,
+                    kind: ReferenceKind::TypeAlias,
+                },
+            );
+        }
+    }
+
+    fn module_export_definition_at_position(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index == 0 {
+            return None;
+        }
+
+        let root = chain.parts.first()?;
+        let binding = self.require_binding(parsed, &root.text, position)?;
+        let path = self.resolved_module_path(&parsed.path, &binding.module)?;
+        let public_name = chain.parts.get(1)?.text.as_str();
+        let entry = self.module_graph.export(path, public_name)?;
+
+        Some(Definition {
+            path: path.to_path_buf(),
+            span: entry.definition_span,
+            kind: if matches!(entry.field.ty, Type::Function(_)) {
+                DefinitionKind::Function
+            } else {
+                DefinitionKind::TableField
+            },
+        })
+    }
+
+    fn global_function_definitions(&self) -> BTreeMap<String, Vec<Definition>> {
+        let mut definitions: BTreeMap<String, Vec<Definition>> = BTreeMap::new();
+
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            let Some(hir) = file.hir.as_ref() else {
+                continue;
+            };
+
+            for symbol in hir.symbols() {
+                if symbol.kind != HirSymbolKind::Function {
+                    continue;
+                }
+                let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);
+                let Some(name) = global_function_name_for_definition(parsed, &definition) else {
+                    continue;
+                };
+
+                definitions.entry(name).or_default().push(definition);
+            }
+        }
+
+        definitions
+    }
+
+    fn global_type_alias_definitions(&self) -> BTreeMap<String, Vec<Definition>> {
+        let mut definitions: BTreeMap<String, Vec<Definition>> = BTreeMap::new();
+
+        for file in self.files.values() {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            let Some(hir) = file.hir.as_ref() else {
+                continue;
+            };
+
+            for symbol in hir.symbols() {
+                if symbol.kind != HirSymbolKind::TypeAlias {
+                    continue;
+                }
+                let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);
+                let Some(name) = global_type_alias_name_for_definition(parsed, &definition) else {
+                    continue;
+                };
+
+                definitions.entry(name).or_default().push(definition);
+            }
+        }
+
+        definitions
     }
 
     pub fn prepare_rename(
@@ -1861,6 +2196,161 @@ fn text_edit_key(edit: &TextEdit) -> (PathBuf, usize, usize, usize, usize) {
         edit.span.end.line,
         edit.span.end.column,
     )
+}
+
+impl ReverseReferenceIndex {
+    fn insert(&mut self, definition: &Definition, reference: Reference) {
+        let Some(key) = ReferenceIndexKey::from_definition(definition) else {
+            return;
+        };
+
+        self.references.entry(key).or_default().push(reference);
+    }
+
+    fn references(
+        &self,
+        definition: &Definition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        let key = ReferenceIndexKey::from_definition(definition)?;
+        let mut references = self.references.get(&key)?.clone();
+
+        if !include_declaration {
+            let declaration_kind = reference_kind_for_definition(definition.kind);
+
+            references.retain(|reference| {
+                reference.span != definition.span || reference.kind != declaration_kind
+            });
+        }
+
+        sort_and_dedup_references(&mut references);
+        Some(references)
+    }
+
+    fn finish(&mut self) {
+        for references in self.references.values_mut() {
+            sort_and_dedup_references(references);
+        }
+    }
+}
+
+impl ReferenceIndexKey {
+    fn from_definition(definition: &Definition) -> Option<Self> {
+        if definition.kind == DefinitionKind::Builtin {
+            return None;
+        }
+
+        Some(Self {
+            path: definition.path.clone(),
+            start_line: definition.span.start.line,
+            start_column: definition.span.start.column,
+            end_line: definition.span.end.line,
+            end_column: definition.span.end.column,
+            kind: definition_kind_key(definition.kind),
+        })
+    }
+}
+
+fn sort_and_dedup_references(references: &mut Vec<Reference>) {
+    references.sort_by_key(reference_key);
+    references.dedup_by_key(|reference| reference_key(reference));
+}
+
+fn definition_kind_key(kind: DefinitionKind) -> u8 {
+    match kind {
+        DefinitionKind::Module => 0,
+        DefinitionKind::Builtin => 1,
+        DefinitionKind::TypeAlias => 2,
+        DefinitionKind::Local => 3,
+        DefinitionKind::Function => 4,
+        DefinitionKind::Parameter => 5,
+        DefinitionKind::TableField => 6,
+    }
+}
+
+fn reference_kind_for_definition(kind: DefinitionKind) -> ReferenceKind {
+    match kind {
+        DefinitionKind::Module => ReferenceKind::Module,
+        DefinitionKind::Builtin => ReferenceKind::Function,
+        DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
+        DefinitionKind::Local => ReferenceKind::Local,
+        DefinitionKind::Function => ReferenceKind::Function,
+        DefinitionKind::Parameter => ReferenceKind::Parameter,
+        DefinitionKind::TableField => ReferenceKind::TableField,
+    }
+}
+
+fn definition_kind_for_scope_declaration(kind: &ScopeDeclarationKind) -> Option<DefinitionKind> {
+    match kind {
+        ScopeDeclarationKind::Local => Some(DefinitionKind::Local),
+        ScopeDeclarationKind::Parameter => Some(DefinitionKind::Parameter),
+        ScopeDeclarationKind::Function => Some(DefinitionKind::Function),
+        ScopeDeclarationKind::ModuleAlias { .. } | ScopeDeclarationKind::TableField => None,
+    }
+}
+
+fn definition_kind_for_hir_symbol(kind: HirSymbolKind) -> Option<DefinitionKind> {
+    match kind {
+        HirSymbolKind::TypeAlias => Some(DefinitionKind::TypeAlias),
+        HirSymbolKind::TableField => None,
+        HirSymbolKind::Local => Some(DefinitionKind::Local),
+        HirSymbolKind::Function => Some(DefinitionKind::Function),
+        HirSymbolKind::Parameter => Some(DefinitionKind::Parameter),
+    }
+}
+
+fn definition_from_hir_symbol_for_index(path: &Path, symbol: &HirSymbol) -> Definition {
+    Definition {
+        path: path.to_path_buf(),
+        span: symbol.name_span,
+        kind: definition_kind_for_hir_symbol(symbol.kind).unwrap_or(DefinitionKind::Local),
+    }
+}
+
+fn is_project_global_reference(resolution: &ScopeResolution) -> bool {
+    match resolution {
+        ScopeResolution::Unresolved => true,
+        ScopeResolution::Global(global) => global.kind == ScopeGlobalKind::Assigned,
+        ScopeResolution::Symbol(_) => false,
+    }
+}
+
+fn is_identifier_token(token: &TokenReference) -> bool {
+    matches!(token.token().token_type(), TokenType::Identifier { .. })
+}
+
+fn token_span(token: &TokenReference) -> Option<SourceSpan> {
+    token
+        .range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
+}
+
+fn token_text(token: &TokenReference) -> String {
+    token.to_string().trim().to_owned()
+}
+
+fn is_dotted_field_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {
+    dotted_chain_at_position(&parsed.source, position).is_some_and(|chain| chain.cursor_index > 0)
+}
+
+fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -> bool {
+    let Some(line) = line_at(&parsed.source, position.line) else {
+        return false;
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let prefix = &line[..cursor];
+    let Some(marker_index) = prefix.rfind([':', '|', '=']) else {
+        return false;
+    };
+    let marker = prefix.as_bytes()[marker_index];
+    let before_marker = &prefix[..marker_index];
+
+    match marker {
+        b':' => true,
+        b'|' => before_marker.contains(':') || before_marker.contains("type "),
+        b'=' => before_marker.contains("type "),
+        _ => false,
+    }
 }
 
 fn unknown_type_name(message: &str) -> Option<&str> {

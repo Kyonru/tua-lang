@@ -1744,9 +1744,11 @@ Acceptance:
 
 ### 70.20 `feat(lsp): add project-wide reverse reference index`
 
+Status: done.
+
 Scope:
 
-- Extend snapshot indexing to build `definition_id -> Vec<Reference>` reverse edges during snapshot creation.
+- Extend snapshot indexing with a snapshot-owned lazy `definition_id -> Vec<Reference>` reverse edge index, so non-reference requests do not pay the indexing cost.
 - Use stable identity keys derived from path + declaration span / symbol ID to support O(1)/sublinear `textDocument/references` collection.
 - Keep handling for:
   - declaration inclusion toggle;

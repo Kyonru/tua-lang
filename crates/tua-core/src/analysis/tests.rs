@@ -411,6 +411,51 @@ return M
 }
 
 #[test]
+fn reverse_reference_index_collects_local_and_project_global_references() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local <|local_def|>value = 1
+local other = value
+-- file: src/globals.tua
+function <|global_def|>greet(name: string): string
+  return name
+end
+
+local own = greet("Local")
+-- file: src/use.tua
+local message = greet("Ada")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let local_target = snapshot
+        .definition("src/main.tua", fixture.position("local_def"))
+        .expect("local definition should resolve");
+    let global_target = snapshot
+        .definition("src/globals.tua", fixture.position("global_def"))
+        .expect("global function definition should resolve");
+    let local_references = snapshot
+        .reverse_reference_index()
+        .references(&local_target, true)
+        .expect("local references should be indexed");
+    let global_references = snapshot
+        .reverse_reference_index()
+        .references(&global_target, true)
+        .expect("global references should be indexed");
+
+    assert_eq!(local_references.len(), 2);
+    assert!(global_references
+        .iter()
+        .any(|reference| reference.path == Path::new("src/use.tua")));
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
