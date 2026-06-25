@@ -1059,6 +1059,45 @@ account:
     assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
 }
 
+#[test]
+fn completes_metatable_index_chain_inherited_methods() {
+    let source = r#"
+local Base = {}
+Base.__index = Base
+
+function Base:describe(): string
+  return "base"
+end
+
+local Mid = {}
+Mid.__index = Mid
+setmetatable(Mid, { __index = Base })
+
+function Mid:level(): number
+  return 2
+end
+
+local Leaf = {}
+Leaf.__index = Leaf
+setmetatable(Leaf, { __index = Mid })
+
+local leaf = setmetatable({ name = "sprout" }, Leaf)
+
+leaf:
+"#;
+    let completions = complete_tua_source(
+        "src/inheritance.tua",
+        source,
+        position_after(source, "leaf:"),
+    )
+    .expect("inherited method completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"describe".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"level".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"__index".to_owned()), "{labels:?}");
+}
+
 fn complete_at(needle: &str) -> Result<Vec<Completion>, Vec<Diagnostic>> {
     complete_tua_source("src/main.tua", SOURCE, position_after(SOURCE, needle))
 }

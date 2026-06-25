@@ -1564,6 +1564,8 @@ Acceptance:
 
 ### 70.13 `feat(types): inherit table shapes across metatable chains and typed callable objects`
 
+Status: done.
+
 Scope:
 
 - Extend metatable typing to prototype-style inheritance where shape flows through

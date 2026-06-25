@@ -590,6 +590,51 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_metatable_index_chain_inherited_methods() {
+    let source = r#"
+local Base = {}
+Base.__index = Base
+
+function Base:describe(): string
+  return "base"
+end
+
+local Mid = {}
+Mid.__index = Mid
+setmetatable(Mid, { __index = Base })
+
+function Mid:level(): number
+  return 2
+end
+
+local Leaf = {}
+Leaf.__index = Leaf
+setmetatable(Leaf, { __index = Mid })
+
+local leaf = setmetatable({ name = "sprout" }, Leaf)
+local description = leaf:describe()
+local level = leaf:level()
+"#;
+    let description = hover_tua_source(
+        "src/inheritance.tua",
+        source,
+        position_at(source, "description ="),
+    )
+    .expect("hover should not fail")
+    .expect("inherited method return should hover");
+    let level = hover_tua_source(
+        "src/inheritance.tua",
+        source,
+        position_at(source, "level ="),
+    )
+    .expect("hover should not fail")
+    .expect("inherited mid method return should hover");
+
+    assert_eq!(description.contents, "local description: string");
+    assert_eq!(level.contents, "local level: number");
+}
+
+#[test]
 fn hovers_static_metamethod_operator_and_call_results() {
     let source = r#"
 type Vector = {

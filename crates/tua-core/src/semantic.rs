@@ -990,11 +990,16 @@ impl<'a> SemanticModel<'a> {
             .unwrap_or(Type::Any);
 
         match iterator.as_str() {
-            "ipairs" => vec![
-                Type::number(),
-                array_element_type(self.environment, &value_type).unwrap_or(Type::Any),
-            ],
-            "pairs" => pair_key_value_types(self.environment, &value_type)
+            "ipairs" => iterator_metamethod_pair_types(self.environment, &value_type, "__ipairs")
+                .map(|(key, value)| vec![key, value])
+                .unwrap_or_else(|| {
+                    vec![
+                        Type::number(),
+                        array_element_type(self.environment, &value_type).unwrap_or(Type::Any),
+                    ]
+                }),
+            "pairs" => iterator_metamethod_pair_types(self.environment, &value_type, "__pairs")
+                .or_else(|| pair_key_value_types(self.environment, &value_type))
                 .map(|(key, value)| vec![key, value])
                 .unwrap_or_else(|| vec![Type::Any, Type::Any]),
             _ => vec![Type::Any; for_stmt.names().into_iter().count()],
@@ -1137,6 +1142,52 @@ fn pair_key_value_types(environment: &TypeEnvironment, ty: &Type) -> Option<(Typ
         | Type::Function(_)
         | Type::Primitive(_)
         | Type::StringLiteral(_) => None,
+    }
+}
+
+fn iterator_metamethod_pair_types(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    name: &str,
+) -> Option<(Type, Type)> {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Table(table) => table
+            .metatable_facts()
+            .and_then(|facts| facts.metamethod(name))
+            .and_then(pair_types_from_iterator_function),
+        Type::Union(types) => {
+            let pairs = types
+                .iter()
+                .filter_map(|ty| iterator_metamethod_pair_types(environment, ty, name))
+                .collect::<Vec<_>>();
+            let keys = pairs.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+            let values = pairs
+                .into_iter()
+                .map(|(_, value)| value)
+                .collect::<Vec<_>>();
+
+            (!keys.is_empty()).then(|| (union_types(keys), union_types(values)))
+        }
+        Type::Any
+        | Type::Alias(_)
+        | Type::Array(_)
+        | Type::Dictionary { .. }
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Tuple(_) => None,
+    }
+}
+
+fn pair_types_from_iterator_function(function: &FunctionType) -> Option<(Type, Type)> {
+    let returns = function.return_types_or_any();
+
+    match returns {
+        [Type::Tuple(items)] if items.len() >= 2 => {
+            Some((items.first()?.clone(), items.get(1)?.clone()))
+        }
+        [key, value, ..] => Some((key.clone(), value.clone())),
+        _ => None,
     }
 }
 

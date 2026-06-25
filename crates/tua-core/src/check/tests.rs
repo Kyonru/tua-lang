@@ -807,6 +807,102 @@ account:withdraw(10)
 }
 
 #[test]
+fn accepts_metatable_index_chain_inherited_methods() {
+    check_tua_source(
+        "src/inheritance.tua",
+        r#"
+local Base = {}
+Base.__index = Base
+
+function Base:describe(): string
+  return "base"
+end
+
+local Mid = {}
+Mid.__index = Mid
+setmetatable(Mid, { __index = Base })
+
+function Mid:level(): number
+  return 2
+end
+
+local Leaf = {}
+Leaf.__index = Leaf
+setmetatable(Leaf, { __index = Mid })
+
+local leaf = setmetatable({ name = "sprout" }, Leaf)
+local description: string = leaf:describe()
+local descriptionTwo: string = leaf.describe(leaf)
+local level: number = leaf:level()
+"#,
+    )
+    .expect("prototype-style metatable chains should expose inherited methods");
+}
+
+#[test]
+fn accepts_callable_tables_with_static_call_metamethods() {
+    check_tua_source(
+        "src/callable.tua",
+        r#"
+type Product = {
+  name: string,
+}
+
+local function makeProduct(factory, name: string): Product
+  return { name = name }
+end
+
+local ConstructorLike = {}
+setmetatable(ConstructorLike, {
+  __call = makeProduct,
+})
+
+local product: Product = ConstructorLike("widget")
+"#,
+    )
+    .expect("tables with visible __call metamethods should be callable");
+}
+
+#[test]
+fn accepts_typed_pairs_and_ipairs_metamethod_loop_variables() {
+    check_tua_source(
+        "src/iterators.tua",
+        r#"
+---@param value any
+---@return ["name" | "score", number]
+local function iterPairs(value)
+end
+
+---@param value any
+---@return [number, string]
+local function iterIpairs(value)
+end
+
+local typedMap = {}
+setmetatable(typedMap, {
+  __pairs = iterPairs,
+})
+
+local typedArray = {}
+setmetatable(typedArray, {
+  __ipairs = iterIpairs,
+})
+
+for key, value in pairs(typedMap) do
+  local checkedKey: "name" | "score" = key
+  local checkedPairValue: number = value
+end
+
+for index, value in ipairs(typedArray) do
+  local checkedIndex: number = index
+  local checkedArrayValue: string = value
+end
+"#,
+    )
+    .expect("typed iterator metamethods should feed generic for loop variables");
+}
+
+#[test]
 fn checks_typed_colon_method_arguments_and_self_fields() {
     check_tua_source(
         "src/account.tua",

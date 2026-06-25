@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+const MAX_METATABLE_FIELD_DEPTH: usize = 16;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Primitive(PrimitiveType),
@@ -198,12 +200,19 @@ impl TableShape {
     }
 
     pub fn semantic_field(&self, name: &str) -> Option<&TableField> {
+        self.semantic_field_at_depth(name, 0)
+    }
+
+    fn semantic_field_at_depth(&self, name: &str, depth: usize) -> Option<&TableField> {
         if is_metamethod_field(name) {
             return None;
         }
 
-        self.field(name)
-            .or_else(|| self.metatable.as_ref()?.implied_field(name))
+        self.field(name).or_else(|| {
+            self.metatable
+                .as_ref()?
+                .implied_field_at_depth(name, depth + 1)
+        })
     }
 
     pub fn fields(&self) -> impl Iterator<Item = (&str, &TableField)> {
@@ -213,6 +222,10 @@ impl TableShape {
     }
 
     pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
+        self.semantic_fields_at_depth(0)
+    }
+
+    fn semantic_fields_at_depth(&self, depth: usize) -> BTreeMap<String, TableField> {
         let mut fields = self
             .fields
             .iter()
@@ -221,16 +234,8 @@ impl TableShape {
             .collect::<BTreeMap<_, _>>();
 
         if let Some(facts) = &self.metatable {
-            if let IndexFallback::Table(index_table) = &facts.index {
-                for (name, field) in index_table.fields() {
-                    if is_metamethod_field(name) {
-                        continue;
-                    }
-
-                    fields
-                        .entry(name.to_owned())
-                        .or_insert_with(|| field.clone());
-                }
+            for (name, field) in facts.implied_fields_at_depth(depth + 1) {
+                fields.entry(name).or_insert(field);
             }
         }
 
@@ -309,6 +314,8 @@ pub struct MetatableFacts {
     pub le: Option<FunctionType>,
     pub len: Option<FunctionType>,
     pub call: Option<FunctionType>,
+    pub pairs: Option<FunctionType>,
+    pub ipairs: Option<FunctionType>,
     pub tostring: Option<FunctionType>,
     pub fields: TableShape,
 }
@@ -352,6 +359,8 @@ impl MetatableFacts {
             le: function_field(table, "__le"),
             len: function_field(table, "__len"),
             call: function_field(table, "__call"),
+            pairs: function_field(table, "__pairs"),
+            ipairs: function_field(table, "__ipairs"),
             tostring: function_field(table, "__tostring"),
             fields: table.clone(),
         }
@@ -368,6 +377,8 @@ impl MetatableFacts {
             "__le" => self.le.as_ref(),
             "__len" => self.len.as_ref(),
             "__call" => self.call.as_ref(),
+            "__pairs" => self.pairs.as_ref(),
+            "__ipairs" => self.ipairs.as_ref(),
             "__tostring" => self.tostring.as_ref(),
             _ => None,
         }
@@ -388,13 +399,34 @@ impl MetatableFacts {
     }
 
     pub fn implied_field(&self, name: &str) -> Option<&TableField> {
+        self.implied_field_at_depth(name, 0)
+    }
+
+    fn implied_field_at_depth(&self, name: &str, depth: usize) -> Option<&TableField> {
+        if depth >= MAX_METATABLE_FIELD_DEPTH {
+            return None;
+        }
+
         if is_metamethod_field(name) {
             return None;
         }
 
         match &self.index {
-            IndexFallback::Table(table) => table.field(name),
+            IndexFallback::Table(table) => table.semantic_field_at_depth(name, depth + 1),
             _ => None,
+        }
+    }
+
+    fn implied_fields_at_depth(&self, depth: usize) -> BTreeMap<String, TableField> {
+        if depth >= MAX_METATABLE_FIELD_DEPTH {
+            return BTreeMap::new();
+        }
+
+        match &self.index {
+            IndexFallback::Table(table) => table.semantic_fields_at_depth(depth + 1),
+            IndexFallback::None | IndexFallback::Function(_) | IndexFallback::Unknown => {
+                BTreeMap::new()
+            }
         }
     }
 }

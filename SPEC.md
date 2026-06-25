@@ -195,6 +195,9 @@ Supported v1 facts:
 - simple `__index` table/function fallbacks may expose known string keys;
 - self-index class tables such as `Account.__index = Account` may expose
   methods on instances created with `setmetatable({}, Account)`;
+- static prototype chains such as `setmetatable(Sub, { __index = Base })` may
+  expose inherited fields and methods through later instances when each link is
+  visible;
 - constructor methods that visibly return `setmetatable(instance, self)`, such
   as `Account:new(...)`, may infer an Account-like instance result;
 - `__newindex` may check simple assignment contracts when either
@@ -208,10 +211,13 @@ Supported v1 facts:
 - visible `__len` may provide the result type for `#value`;
 - visible `__call` may make a table callable, with the table receiver treated
   as the hidden first metamethod argument;
+- visible `__pairs` and `__ipairs` functions may type generic loop variables
+  when their return type is a tuple-like key/value pair, for example
+  `---@return [string, number]`;
 - `tostring(value)` is treated as returning `string`.
 
-Dynamic metatable mutation, computed `__index` chains, and unknown
-`setmetatable` inputs remain gradual.
+Dynamic metatable mutation, computed `__index` chains, runtime iterator
+triples, and unknown `setmetatable` inputs remain gradual.
 
 ### Function Annotations
 
@@ -319,6 +325,8 @@ The checker must:
 - infer bracket indexing for known arrays and string-keyed table fields;
 - infer simple numeric, `ipairs`, and `pairs` loop variable types when the
   iterated value is statically known;
+- use visible `__pairs` and `__ipairs` tuple return facts for generic loop
+  variables when a metatable is statically known;
 - allow `any` to flow to and from all types;
 - preserve permissive behavior for unannotated dynamic Lua code.
 

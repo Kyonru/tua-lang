@@ -95,6 +95,8 @@ Useful static facts include:
 - table-shape fields and optional fields;
 - array-like table literals, string-key table indexing, and simple loop
   variables from numeric `for`, `ipairs`, and `pairs`;
+- static prototype-style metatable inheritance and typed `__pairs`/`__ipairs`
+  iterator facts where visible;
 - module exports from simple `return { name = value }` tables;
 - types exported through required `.tua` modules;
 - selected LuaDoc/LuaLS-style annotations from interop files;
@@ -366,6 +368,8 @@ inference for:
 - table/function `__index` facts when simple string keys are visible;
 - self-index class tables such as `Account.__index = Account`, including
   methods declared with `function Account:withdraw(amount)`;
+- prototype-style inheritance chains such as
+  `setmetatable(Sub, { __index = Base })` when each link is statically visible;
 - constructor methods such as `Account:new(...)` when their body visibly
   returns `setmetatable(instance, self)`;
 - `__newindex` assignment contracts for simple visible forms such as
@@ -376,11 +380,13 @@ inference for:
 - visible `__len` for `#value`;
 - visible `__call`, with the table receiver treated as the hidden first
   metamethod argument;
+- visible `__pairs` and `__ipairs`, when the function return type is a
+  tuple-like key/value pair such as `---@return [string, number]`;
 - `tostring(value)` as `string`, including values with `__tostring`.
 
 Dynamic metatable construction remains gradual. If the base table, metatable,
-computed key, or later mutation cannot be seen statically, Tua falls back to
-permissive behavior instead of guessing.
+computed key, runtime iterator triple, or later mutation cannot be seen
+statically, Tua falls back to permissive behavior instead of guessing.
 
 ## Compound Assignment
 

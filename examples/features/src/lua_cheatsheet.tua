@@ -323,6 +323,22 @@ local account = setmetatable({ name = "checking", balance = 50 }, Account)
 account:deposit(25)
 account:withdraw(10)
 
+-- Feature: prototype-style metatable inheritance.
+-- Static setmetatable(Sub, { __index = Base }) links let inherited methods
+-- flow through later instances for hover, completion, and call checking.
+local AuditedAccount = {}
+AuditedAccount.__index = AuditedAccount
+setmetatable(AuditedAccount, { __index = Account })
+
+function AuditedAccount:audit(): string
+  return "balance checked"
+end
+
+local auditedAccount = setmetatable({ name = "audit", balance = 10 }, AuditedAccount)
+local inheritedDeposit = auditedAccount:deposit(5)
+local explicitInheritedDeposit = auditedAccount.deposit(auditedAccount, 5)
+local auditText = auditedAccount:audit()
+
 -- Feature: method-call lookup equivalences.
 -- Hover lookupObject to see y inferred as a function-valued field; both
 -- explicit self and colon-call forms use the same field type.
@@ -423,6 +439,34 @@ vectorA.label = "checked through typed __newindex"
 -- Hover vectorA.length to see number even though length is supplied by
 -- the metatable rather than the original table literal.
 local vectorMissingLength = vectorA.length
+
+-- Feature: typed iterator metamethod hooks.
+-- When __pairs or __ipairs points to a visible function with a tuple return
+-- type, Tua can infer the key/value variables inside the generic for loop.
+---@param value any
+---@return ["speed" | "power", number]
+local function iterateStats(value)
+end
+
+---@param value any
+---@return [number, string]
+local function iterateLabels(value)
+end
+
+local statBag = {}
+setmetatable(statBag, { __pairs = iterateStats })
+
+for statKey, statValue in pairs(statBag) do
+  dynamicValue.lastStatKey = statKey
+  dynamicValue.lastStatValue = statValue
+end
+
+local labelList = {}
+setmetatable(labelList, { __ipairs = iterateLabels })
+
+for labelIndex, labelValue in ipairs(labelList) do
+  dynamicValue.lastLabel = labelIndex .. ":" .. labelValue
+end
 
 -- Feature: modules and require interop.
 local Legacy = require("legacy")

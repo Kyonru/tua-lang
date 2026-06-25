@@ -94,6 +94,46 @@ end
 }
 
 #[test]
+fn hints_loop_variable_types_from_iterator_metamethods() {
+    let source = r#"
+---@param value any
+---@return ["name" | "score", number]
+local function iterPairs(value)
+end
+
+---@param value any
+---@return [number, string]
+local function iterIpairs(value)
+end
+
+local typedMap = {}
+setmetatable(typedMap, { __pairs = iterPairs })
+
+local typedArray = {}
+setmetatable(typedArray, { __ipairs = iterIpairs })
+
+for key, value in pairs(typedMap) do
+  local seenKey = key
+  local seenValue = value
+end
+
+for index, value in ipairs(typedArray) do
+  local seenIndex = index
+  local seenItem = value
+end
+"#;
+    let hints = inlay_hints_tua_source("src/iterators.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+    assert!(type_hints.contains(&": \"name\" | \"score\""));
+    assert!(type_hints.contains(&": number"));
+    assert!(type_hints.contains(&": string"));
+}
+
+#[test]
 fn skips_annotated_unknown_and_any_local_type_hints() {
     let hints = inlay_hints();
 

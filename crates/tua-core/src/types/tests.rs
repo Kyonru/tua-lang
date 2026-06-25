@@ -315,6 +315,47 @@ fn semantic_fields_include_index_fields_but_hide_metamethods() {
 }
 
 #[test]
+fn semantic_fields_follow_metatable_index_chains() {
+    let base = TableShape::from_fields([(
+        "describe",
+        TableField::required(Type::function([], Type::string())),
+    )]);
+    let mid_meta = Type::table([("__index", TableField::required(Type::Table(base)))]);
+    let mid = TableShape::from_fields([("level", TableField::required(Type::number()))])
+        .with_metatable_facts(MetatableFacts::from_type(&mid_meta));
+    let leaf_meta = Type::table([("__index", TableField::required(Type::Table(mid)))]);
+    let leaf = TableShape::new().with_metatable_facts(MetatableFacts::from_type(&leaf_meta));
+    let fields = leaf.semantic_fields();
+
+    assert!(fields.contains_key("describe"), "{fields:?}");
+    assert!(fields.contains_key("level"), "{fields:?}");
+    assert_eq!(
+        leaf.semantic_field("describe").map(|field| &field.ty),
+        Some(&Type::function([], Type::string()))
+    );
+}
+
+#[test]
+fn metatable_facts_extract_iterator_metamethods() {
+    let pairs = FunctionType::new_returns([Type::Any], [Type::string(), Type::number()]);
+    let ipairs = FunctionType::new_returns([Type::Any], [Type::number(), Type::string()]);
+    let meta = Type::table([
+        (
+            "__pairs",
+            TableField::required(Type::Function(pairs.clone())),
+        ),
+        (
+            "__ipairs",
+            TableField::required(Type::Function(ipairs.clone())),
+        ),
+    ]);
+    let facts = MetatableFacts::from_type(&meta);
+
+    assert_eq!(facts.pairs, Some(pairs));
+    assert_eq!(facts.ipairs, Some(ipairs));
+}
+
+#[test]
 fn builds_per_file_type_environment_from_aliases_and_annotations() {
     let parsed = parse_tua_source(
         "src/player.tua",

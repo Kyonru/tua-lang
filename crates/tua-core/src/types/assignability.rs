@@ -113,7 +113,7 @@ impl TypeContext {
 
     fn is_table_assignable(&self, source: &TableShape, target: &TableShape, depth: usize) -> bool {
         target.fields().all(|(name, target_field)| {
-            let Some(source_field) = source.field(name) else {
+            let Some(source_field) = source.semantic_field(name) else {
                 return target_field.optional;
             };
 
