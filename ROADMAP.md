@@ -1600,6 +1600,8 @@ Acceptance:
 
 ### 70.14 `feat(diagnostics): add inline lint/error suppression comments`
 
+Status: done.
+
 Scope:
 
 - Add inline, line-targeted suppression comments for diagnostics, analogous to

@@ -440,6 +440,84 @@ player.setFilter("nearest")
 }
 
 #[test]
+fn inline_ignores_are_disabled_by_default() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+-- tua-ignore-next-line TL1003
+local hp: number = "full"
+"#,
+        &crate::DiagnosticsConfig::default(),
+    )
+    .expect_err("disabled inline ignore should not suppress diagnostics");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));
+}
+
+#[test]
+fn inline_ignores_suppress_matching_type_diagnostics() {
+    let mut config = crate::DiagnosticsConfig {
+        inline_ignores: true,
+        ..crate::DiagnosticsConfig::default()
+    };
+
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+-- tua-ignore-next-line TL1003
+local hp: number = "full"
+"#,
+        &config,
+    )
+    .expect("enabled inline ignore should suppress matching diagnostic");
+
+    config
+        .inline_ignore_scopes
+        .push("tua-ignore-file".to_owned());
+
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+-- tua-ignore-file TL1003
+local hp: number = "full"
+"#,
+        &config,
+    )
+    .expect("configured file-scope inline ignore should suppress matching diagnostic");
+}
+
+#[test]
+fn inline_ignores_report_unused_and_invalid_comments() {
+    let config = crate::DiagnosticsConfig {
+        inline_ignores: true,
+        ..crate::DiagnosticsConfig::default()
+    };
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+-- tua-ignore-next-line TL1003
+local ok: number = 1
+
+-- tua-ignore-next-line TL9999
+local hp: number = "full"
+"#,
+        &config,
+    )
+    .expect_err("unused and invalid inline ignores should be reported");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_INVALID)));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn accepts_table_field_dot_and_colon_method_call_equivalence() {
     check_tua_source(
         "src/methods.tua",

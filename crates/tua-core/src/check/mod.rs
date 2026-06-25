@@ -9,6 +9,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::config::DiagnosticsConfig;
+use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
@@ -26,6 +27,8 @@ pub fn check_tua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<(), Vec<Diagnostic>> {
+    let path = path.as_ref();
+    let source = source.into();
     let parsed = parse_tua_source(path, source)?;
 
     check_parsed_source(&parsed)
@@ -36,7 +39,11 @@ pub fn check_tua_source_with_diagnostics_config(
     source: impl Into<String>,
     diagnostics_config: &DiagnosticsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    let parsed = parse_tua_source(path, source)?;
+    let path = path.as_ref();
+    let source = source.into();
+    let parsed = parse_tua_source(path, source.clone()).map_err(|diagnostics| {
+        apply_inline_ignores(path, &source, diagnostics, diagnostics_config)
+    })?;
 
     check_parsed_source_with_diagnostics_config(&parsed, diagnostics_config)
 }
@@ -47,7 +54,11 @@ pub fn check_tua_source_with_asset_roots_and_diagnostics_config(
     asset_roots: &[PathBuf],
     diagnostics_config: &DiagnosticsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    let parsed = parse_tua_source(path, source)?;
+    let path = path.as_ref();
+    let source = source.into();
+    let parsed = parse_tua_source(path, source.clone()).map_err(|diagnostics| {
+        apply_inline_ignores(path, &source, diagnostics, diagnostics_config)
+    })?;
 
     check_parsed_source_with_asset_roots_and_diagnostics_config(
         &parsed,
@@ -89,6 +100,13 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
             .diagnostics
             .extend(parsed.lua_doc_diagnostics.iter().cloned());
     }
+
+    checker.diagnostics = apply_inline_ignores(
+        &parsed.path,
+        &parsed.source,
+        checker.diagnostics,
+        diagnostics_config,
+    );
 
     if checker.diagnostics.is_empty() {
         Ok(())

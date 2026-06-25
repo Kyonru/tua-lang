@@ -6,6 +6,7 @@ use crate::completion::complete_field_access_in_source_with_environment;
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirModule, HirRequireBinding};
 use crate::ide_db::SymbolIndexEntry;
+use crate::inline_ignore::apply_inline_ignores;
 use crate::module_link::require_module_at_position;
 use crate::profile;
 use crate::scope_map_parsed_source;
@@ -427,7 +428,15 @@ impl AnalysisSnapshot {
                 .cloned(),
         );
 
-        self.project_aware_diagnostics(path.as_ref(), deduplicate_diagnostics(diagnostics))
+        let diagnostics =
+            self.project_aware_diagnostics(path.as_ref(), deduplicate_diagnostics(diagnostics));
+
+        apply_inline_ignores(
+            path.as_ref(),
+            &file.source,
+            diagnostics,
+            &self.config.diagnostics,
+        )
     }
 
     pub fn hover(&self, path: impl AsRef<Path>, position: SourcePosition) -> Option<Hover> {
@@ -2290,12 +2299,15 @@ fn build_analysis_file(
     };
     let mut diagnostics = {
         let _profile = profile::span_for_path("analysis.check", path);
+        let mut diagnostics_config = config.diagnostics.clone();
+
+        diagnostics_config.inline_ignores = false;
 
         match &parsed {
             Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
                 parsed,
                 analysis_asset_roots(source_roots, asset_roots),
-                &config.diagnostics,
+                &diagnostics_config,
             )
             .err()
             .unwrap_or_default(),

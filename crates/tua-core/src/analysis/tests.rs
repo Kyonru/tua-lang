@@ -236,6 +236,35 @@ fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
 }
 
 #[test]
+fn pipeline_diagnostics_apply_inline_ignores_from_project_config() {
+    let mut config = ProjectConfig::default();
+
+    config.diagnostics.inline_ignores = true;
+
+    let mut host = AnalysisHost::with_config(config);
+
+    host.set_file(
+        "src/main.tua",
+        r#"
+-- tua-ignore-next-line TL1003
+local value: number = "legacy"
+
+-- tua-ignore-next-line TL4018
+local clean = true
+"#,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+
+    assert!(!diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)));
+}
+
+#[test]
 fn cache_reuses_unedited_files_across_snapshots() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");

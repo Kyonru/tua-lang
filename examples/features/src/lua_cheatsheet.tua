@@ -344,7 +344,7 @@ local auditText = auditedAccount:audit()
 -- explicit self and colon-call forms use the same field type.
 local lookupObject = {
   count = 0,
-  y = function(self:any, amount:number)
+  y = function(self, amount)
     self.count = self.count + amount
 
     return self.count
@@ -393,6 +393,10 @@ local function vectorLength(value: MetaVector): number
   return value.length
 end
 
+local function setVectorLabel(tableValue: MetaVector, key: "label", value: string)
+  rawset(tableValue, key, value)
+end
+
 local vectorA = { x = 10, y = 20 }
 local vectorB = { x = 5, y = 15 }
 local vectorMetatable = {
@@ -415,9 +419,7 @@ local vectorMetatable = {
 
     return nil
   end,
-  __newindex = function(tableValue, key: "label", value: string)
-    rawset(tableValue, key, value)
-  end,
+  __newindex = setVectorLabel,
 }
 
 setmetatable(vectorA, vectorMetatable)

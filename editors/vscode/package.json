@@ -184,6 +184,34 @@
           "default": null,
           "description": "Report conservative Lua/Tua formatting consistency issues such as trailing whitespace, indentation, keyword spacing, and simple token spacing."
         },
+        "tua.diagnostics.inlineIgnores": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Enable line-targeted diagnostic suppression comments such as -- tua-ignore-next-line TL4018."
+        },
+        "tua.diagnostics.inlineIgnoreScopes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed inline diagnostic suppression directives. Defaults to tua-ignore-line and tua-ignore-next-line."
+        },
+        "tua.diagnostics.inlineIgnoreMaxPerFile": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "description": "Maximum inline diagnostic suppression comments per file. 0 means unlimited."
+        },
         "tua.diagnostics.globals": {
           "type": [
             "array",

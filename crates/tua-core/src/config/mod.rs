@@ -38,6 +38,9 @@ const_assignments = false
 parameter_type_mismatches = false
 return_type_mismatches = false
 formatting_lints = false
+inline_ignores = false
+inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\"]
+inline_ignore_max_per_file = 0
 globals = []
 ";
 
@@ -105,7 +108,7 @@ impl AnnotationMode {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiagnosticsConfig {
     pub duplicate_keys: bool,
     pub missing_requires: bool,
@@ -126,7 +129,43 @@ pub struct DiagnosticsConfig {
     pub parameter_type_mismatches: bool,
     pub return_type_mismatches: bool,
     pub formatting_lints: bool,
+    pub inline_ignores: bool,
+    pub inline_ignore_scopes: Vec<String>,
+    pub inline_ignore_max_per_file: usize,
     pub globals: Vec<String>,
+}
+
+impl Default for DiagnosticsConfig {
+    fn default() -> Self {
+        Self {
+            duplicate_keys: false,
+            missing_requires: false,
+            self_assignments: false,
+            doc_annotations: false,
+            undefined_variables: false,
+            unused_locals: false,
+            unused_parameters: false,
+            use_before_definition: false,
+            duplicate_parameters: false,
+            wrong_argument_count: false,
+            bad_requires: false,
+            impossible_boolean_expressions: false,
+            duplicate_if_conditions: false,
+            duplicate_binary_operands: false,
+            float_equality: false,
+            const_assignments: false,
+            parameter_type_mismatches: false,
+            return_type_mismatches: false,
+            formatting_lints: false,
+            inline_ignores: false,
+            inline_ignore_scopes: vec![
+                "tua-ignore-line".to_owned(),
+                "tua-ignore-next-line".to_owned(),
+            ],
+            inline_ignore_max_per_file: 0,
+            globals: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -400,6 +439,16 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                 "formatting_lints" => {
                     config.diagnostics.formatting_lints = parse_bool(line_number, value)?
                 }
+                "inline_ignores" => {
+                    config.diagnostics.inline_ignores = parse_bool(line_number, value)?
+                }
+                "inline_ignore_scopes" => {
+                    config.diagnostics.inline_ignore_scopes =
+                        parse_string_array(line_number, value)?
+                }
+                "inline_ignore_max_per_file" => {
+                    config.diagnostics.inline_ignore_max_per_file = parse_usize(line_number, value)?
+                }
                 "globals" => config.diagnostics.globals = parse_string_array(line_number, value)?,
                 "" => {
                     return Err(ConfigParseError::new(line_number, "missing config key"));
@@ -498,6 +547,12 @@ fn parse_bool(line: usize, value: &str) -> Result<bool, ConfigParseError> {
         "false" => Ok(false),
         _ => Err(ConfigParseError::new(line, "expected boolean value")),
     }
+}
+
+fn parse_usize(line: usize, value: &str) -> Result<usize, ConfigParseError> {
+    value
+        .parse()
+        .map_err(|_| ConfigParseError::new(line, "expected non-negative integer value"))
 }
 
 fn parse_string_array(line: usize, value: &str) -> Result<Vec<String>, ConfigParseError> {

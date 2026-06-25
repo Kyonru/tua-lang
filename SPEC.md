@@ -566,6 +566,27 @@ Suggested diagnostic code ranges:
 - `TL3000`-`TL3999`: project configuration errors;
 - `TL4000`-`TL4999`: lint and style guidance diagnostics.
 
+Inline diagnostic suppression is opt-in through project configuration. When
+enabled, the compiler and language server recognize:
+
+```lua
+-- tua-ignore-next-line TL4018
+player.setFilter("nearest")
+
+local legacy: number = "soon" -- tua-ignore-line TL1003
+```
+
+`tua-ignore-line` targets diagnostics on the same line.
+`tua-ignore-next-line` targets diagnostics on the following line.
+`tua-ignore-file` may be enabled for migration-heavy files through
+configuration, but should not be enabled by default.
+
+Suppression comments may list exact codes such as `TL1003` or category groups
+such as `TL1000`, `TL4000`, `type`, or `lint`. With no code, a suppression
+matches all non-syntax diagnostics in its target scope. Invalid codes and
+unused suppressions should produce warnings. Suppression comments must never
+change type inference, lowering, emitted Lua, or runtime behavior.
+
 ## Non-Goals For v1
 
 tua v1 does not include:

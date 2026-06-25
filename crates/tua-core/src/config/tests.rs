@@ -82,6 +82,9 @@ const_assignments = true
 parameter_type_mismatches = true
 return_type_mismatches = true
 formatting_lints = true
+inline_ignores = true
+inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
+inline_ignore_max_per_file = 4
 globals = ["Game", "World"]
 "#,
     )
@@ -118,6 +121,13 @@ globals = ["Game", "World"]
                 parameter_type_mismatches: true,
                 return_type_mismatches: true,
                 formatting_lints: true,
+                inline_ignores: true,
+                inline_ignore_scopes: vec![
+                    "tua-ignore-line".to_owned(),
+                    "tua-ignore-next-line".to_owned(),
+                    "tua-ignore-file".to_owned(),
+                ],
+                inline_ignore_max_per_file: 4,
                 globals: vec!["Game".to_owned(), "World".to_owned()],
             },
         }
@@ -177,6 +187,15 @@ duplicate_keys = true
     assert!(!config.diagnostics.parameter_type_mismatches);
     assert!(!config.diagnostics.return_type_mismatches);
     assert!(!config.diagnostics.formatting_lints);
+    assert!(!config.diagnostics.inline_ignores);
+    assert_eq!(
+        config.diagnostics.inline_ignore_scopes,
+        vec![
+            "tua-ignore-line".to_owned(),
+            "tua-ignore-next-line".to_owned()
+        ]
+    );
+    assert_eq!(config.diagnostics.inline_ignore_max_per_file, 0);
     assert!(config.diagnostics.globals.is_empty());
 }
 

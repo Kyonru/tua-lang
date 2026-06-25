@@ -15,6 +15,8 @@ The VS Code extension starts this server and surfaces editor features for
 - Diagnostics on open, change, save, and watched-file updates.
 - Optional formatting consistency diagnostics can be enabled through
   `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
+- Optional inline diagnostic suppressions can be enabled through
+  `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
   locals where possible.
@@ -50,6 +52,22 @@ player:setFilter("nearest")
 
 This mirrors Lua/LOVE runtime behavior: `:` passes the receiver as `self`, while
 `.` does not.
+
+## Inline Suppressions
+
+When enabled, the LSP applies the same line-targeted suppression comments as
+`tua check`:
+
+```tua
+-- tua-ignore-next-line TL4018
+player.setFilter("nearest")
+
+local legacy: number = "soon" -- tua-ignore-line TL1003
+```
+
+Invalid diagnostic codes and suppressions that do not match any diagnostic still
+publish warnings. Suppression comments do not change hover, completion, inferred
+types, or emitted Lua.
 
 ## Design Notes
 

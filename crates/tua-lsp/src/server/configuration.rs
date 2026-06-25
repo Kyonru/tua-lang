@@ -33,6 +33,9 @@ pub(super) struct DiagnosticOverrides {
     pub(super) parameter_type_mismatches: Option<bool>,
     pub(super) return_type_mismatches: Option<bool>,
     pub(super) formatting_lints: Option<bool>,
+    pub(super) inline_ignores: Option<bool>,
+    pub(super) inline_ignore_scopes: Option<Vec<String>>,
+    pub(super) inline_ignore_max_per_file: Option<usize>,
     pub(super) globals: Option<Vec<String>>,
 }
 
@@ -179,6 +182,17 @@ impl DiagnosticOverrides {
                 "returnTypeMismatches",
             ),
             formatting_lints: bool_setting(settings, "formatting_lints", "formattingLints"),
+            inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
+            inline_ignore_scopes: string_array_value(
+                settings
+                    .get("inlineIgnoreScopes")
+                    .or_else(|| settings.get("inline_ignore_scopes")),
+            ),
+            inline_ignore_max_per_file: usize_setting(
+                settings,
+                "inline_ignore_max_per_file",
+                "inlineIgnoreMaxPerFile",
+            ),
             globals: string_array_value(settings.get("globals")),
         }
     }
@@ -230,6 +244,15 @@ impl DiagnosticOverrides {
             &mut diagnostics.return_type_mismatches,
         );
         apply_bool(self.formatting_lints, &mut diagnostics.formatting_lints);
+        apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);
+
+        if let Some(scopes) = &self.inline_ignore_scopes {
+            diagnostics.inline_ignore_scopes = scopes.clone();
+        }
+
+        if let Some(max_per_file) = self.inline_ignore_max_per_file {
+            diagnostics.inline_ignore_max_per_file = max_per_file;
+        }
 
         if let Some(globals) = &self.globals {
             diagnostics.globals = globals.clone();
@@ -316,6 +339,18 @@ fn bool_setting(
         .get(camel_case)
         .or_else(|| settings.get(snake_case))
         .and_then(Value::as_bool)
+}
+
+fn usize_setting(
+    settings: &serde_json::Map<String, Value>,
+    snake_case: &str,
+    camel_case: &str,
+) -> Option<usize> {
+    settings
+        .get(camel_case)
+        .or_else(|| settings.get(snake_case))
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
 }
 
 fn string_array_setting(settings: &Value, names: &[&str]) -> Vec<String> {

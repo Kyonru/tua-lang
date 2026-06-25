@@ -17,6 +17,7 @@ pub mod hir;
 pub mod hover;
 pub mod ide_db;
 pub mod inlay_hint;
+mod inline_ignore;
 mod lint;
 mod love_api;
 mod lua;

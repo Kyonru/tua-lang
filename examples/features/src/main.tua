@@ -12,6 +12,7 @@ local LuaCheatsheet = require("lua_cheatsheet")
 local FormattingLints = require("formatting_lints")
 local LuaCatsEmit = require("luacats_emit")
 local LuaLSAnnotations = require("luals_annotations")
+local InlineIgnores = require("inline_ignores")
 
 return {
   types = Types,
@@ -28,4 +29,5 @@ return {
   formatting_lints = FormattingLints,
   luacats_emit = LuaCatsEmit,
   luals_annotations = LuaLSAnnotations,
+  inline_ignores = InlineIgnores,
 }

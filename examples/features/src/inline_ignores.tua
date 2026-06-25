@@ -1,0 +1,22 @@
+-- Feature: inline diagnostic suppression comments are opt-in in tua.toml.
+-- They are intended for migration lines where the diagnostic is understood.
+
+local function legacyNumber(): number
+  -- Feature: suppress a known type mismatch on the immediately following line.
+  -- tua-ignore-next-line TL1003
+  local value: number = "legacy save data"
+
+  return 1
+end
+
+local function legacyLabel(): string
+  -- Feature: suppress a known type mismatch on the same line.
+  local label: string = 404 -- tua-ignore-line TL1003
+
+  return label
+end
+
+return {
+  legacyNumber = legacyNumber,
+  legacyLabel = legacyLabel,
+}

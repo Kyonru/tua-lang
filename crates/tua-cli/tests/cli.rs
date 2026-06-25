@@ -301,6 +301,51 @@ local hp: number = "full"
 }
 
 #[test]
+fn check_applies_enabled_inline_ignores() {
+    let temp = TempDir::new("check-inline-ignores");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[diagnostics]
+inline_ignores = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+-- tua-ignore-next-line TL1003
+local hp: number = "full"
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("checked 1 file(s)"));
+}
+
+#[test]
 fn build_compiles_nested_source_tree_to_matching_output_tree() {
     let temp = TempDir::new("build-nested");
 

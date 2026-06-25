@@ -1162,6 +1162,33 @@ fn did_change_configuration_can_enable_formatting_lints() {
 }
 
 #[test]
+fn did_change_configuration_can_enable_inline_ignores() {
+    let temp = TempProject::new("configuration-inline-ignores");
+    let source = r#"-- tua-ignore-next-line TL1003
+local value: number = "legacy"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 1);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "inlineIgnores": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics.len(), 0, "{diagnostics:?}");
+}
+
+#[test]
 fn did_change_configuration_null_diagnostics_defer_to_project_config() {
     let temp = TempProject::new("configuration-diagnostic-precedence");
     let source = "local unused = 1\n";

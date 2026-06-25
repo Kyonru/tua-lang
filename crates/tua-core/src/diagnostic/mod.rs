@@ -73,6 +73,8 @@ impl DiagnosticCode {
     pub const LINT_FORMAT_INDENTATION: Self = Self(4022);
     pub const LINT_FORMAT_KEYWORD_SPACING: Self = Self(4023);
     pub const LINT_FORMAT_TOKEN_SPACING: Self = Self(4024);
+    pub const LINT_INLINE_IGNORE_INVALID: Self = Self(4025);
+    pub const LINT_INLINE_IGNORE_UNUSED: Self = Self(4026);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=4999).contains(&number) {
@@ -95,6 +97,54 @@ impl DiagnosticCode {
             4000..=4999 => DiagnosticCategory::Lint,
             _ => unreachable!("diagnostic codes are validated at construction"),
         }
+    }
+
+    pub fn is_known(self) -> bool {
+        matches!(
+            self,
+            Self::SYNTAX_PARSE
+                | Self::SYNTAX_COMPOUND_ASSIGNMENT
+                | Self::SYNTAX_DOC_ANNOTATION
+                | Self::TYPE_UNKNOWN_NAME
+                | Self::TYPE_DUPLICATE_ALIAS
+                | Self::TYPE_MISMATCH
+                | Self::TYPE_ARGUMENT_COUNT
+                | Self::TYPE_IMPOSSIBLE_COMPARISON
+                | Self::TYPE_DOC_CONFLICT
+                | Self::LOWERING_COMPOUND_ASSIGNMENT
+                | Self::EMIT_IO
+                | Self::EMIT_OUTPUT_COLLISION
+                | Self::ASSET_MISSING
+                | Self::ASSET_UNSUPPORTED_EXTENSION
+                | Self::CONFIG_PARSE
+                | Self::CONFIG_IO
+                | Self::LINT_DUPLICATE_TABLE_KEY
+                | Self::LINT_MISSING_REQUIRE
+                | Self::LINT_SELF_ASSIGNMENT
+                | Self::LINT_UNDEFINED_VARIABLE
+                | Self::LINT_UNUSED_LOCAL
+                | Self::LINT_UNUSED_PARAMETER
+                | Self::LINT_USE_BEFORE_DEFINITION
+                | Self::LINT_DUPLICATE_PARAMETER
+                | Self::LINT_WRONG_ARGUMENT_COUNT
+                | Self::LINT_BAD_REQUIRE
+                | Self::LINT_IMPOSSIBLE_BOOLEAN
+                | Self::LINT_DUPLICATE_IF_CONDITION
+                | Self::LINT_DUPLICATE_BINARY_OPERAND
+                | Self::LINT_FLOAT_EQUALITY
+                | Self::LINT_CONST_ASSIGNMENT
+                | Self::LINT_PARAMETER_TYPE_MISMATCH
+                | Self::LINT_RETURN_TYPE_MISMATCH
+                | Self::LINT_DOT_METHOD_CALL
+                | Self::LINT_DUPLICATE_REQUIRE_CANDIDATE
+                | Self::LINT_REQUIRE_CYCLE
+                | Self::LINT_FORMAT_TRAILING_WHITESPACE
+                | Self::LINT_FORMAT_INDENTATION
+                | Self::LINT_FORMAT_KEYWORD_SPACING
+                | Self::LINT_FORMAT_TOKEN_SPACING
+                | Self::LINT_INLINE_IGNORE_INVALID
+                | Self::LINT_INLINE_IGNORE_UNUSED
+        )
     }
 }
 
