@@ -2059,6 +2059,8 @@ Acceptance:
 
 ### 73. `feat(vectors): add LOVE-friendly Vec2 support`
 
+Status: done.
+
 Scope:
 
 - Add built-in `Vec2` type support for common LOVE game code.
@@ -2069,6 +2071,12 @@ Scope:
   - plain table output for the first version.
 - Add completion, hover, and signature help for supported vector fields and
   operations.
+
+Decision:
+
+- v1 emits plain Lua table literals for `vec2(x, y)`: `{ x = x, y = y }`.
+- Vector math libraries, generated runtime modules, and operator-rich vector
+  semantics are deferred until a later domain-extension pass.
 
 Acceptance:
 

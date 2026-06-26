@@ -14,7 +14,7 @@ use crate::parser::{
     LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
-use crate::{asset, lua, Diagnostic, DiagnosticCode};
+use crate::{asset, lua, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::TypeContext;
@@ -182,6 +182,11 @@ pub(crate) fn build_type_environment_with_diagnostics(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            vector::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
     let mut alias_docs = BTreeMap::new();
@@ -223,6 +228,10 @@ pub(crate) fn build_type_environment_with_diagnostics(
             alias_docs.insert(alias.name.clone(), documentation.clone());
         }
     }
+
+    aliases
+        .entry(vector::TYPE_NAME.to_owned())
+        .or_insert_with(vector::vec2_type);
 
     for local in &parsed.local_annotations {
         let ty = resolve_tua_type(
@@ -2627,7 +2636,10 @@ fn infer_function_call_return_types(
             .get(name)
             .or_else(|| locals.get(name))
             .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
-            .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())));
+            .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
+            .or_else(|| {
+                vector::is_constructor(name).then(|| Type::Function(vector::constructor_type()))
+            });
 
         return function_type
             .map(|ty| function_return_types(aliases, &ty))

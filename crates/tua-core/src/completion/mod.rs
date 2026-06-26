@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
-use crate::asset;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::profile;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::{asset, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -271,11 +271,11 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
 fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {
     let mut completions = BTreeMap::new();
 
-    for completion in complete_builtin_types(prefix) {
+    for completion in complete_type_aliases(environment, prefix) {
         completions.insert(completion.label.clone(), completion);
     }
 
-    for completion in complete_type_aliases(environment, prefix) {
+    for completion in complete_builtin_types(prefix) {
         completions.insert(completion.label.clone(), completion);
     }
 
@@ -286,6 +286,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
     ["any", "boolean", "nil", "number", "string"]
         .into_iter()
         .chain(asset::builtin_type_names().iter().copied())
+        .chain(vector::builtin_type_names().iter().copied())
         .filter(|primitive| primitive.starts_with(prefix))
         .map(|primitive| Completion {
             label: primitive.to_owned(),

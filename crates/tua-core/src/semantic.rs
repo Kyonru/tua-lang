@@ -16,7 +16,7 @@ use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
 use crate::types::{
     FunctionType, MetatableFacts, PrimitiveType, TableField, Type, TypeEnvironment, TypedFunction,
 };
-use crate::{ParsedSource, SourcePosition, SourceSpan, TuaType, TypedParameter};
+use crate::{vector, ParsedSource, SourcePosition, SourceSpan, TuaType, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -138,6 +138,10 @@ impl<'a> SemanticModel<'a> {
                 return vec![kind.return_type()];
             }
 
+            if vector::is_constructor(root) {
+                return vector::constructor_type().return_types_or_any().to_vec();
+            }
+
             if let Some(returns) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_return_types(self.environment, &ty))
@@ -201,6 +205,10 @@ impl<'a> SemanticModel<'a> {
 
             if let Some(kind) = asset::loader_kind(root) {
                 return Some(typed_function_from_asset_loader(kind));
+            }
+
+            if vector::is_constructor(root) {
+                return Some(typed_function_from_vector_constructor());
             }
 
             if let Some(function) = self
@@ -1791,6 +1799,33 @@ fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
         return_type: Some(return_type.clone()),
         return_types: vec![return_type],
         documentation: Some(kind.documentation().to_owned()),
+        overloads: Vec::new(),
+    }
+}
+
+fn typed_function_from_vector_constructor() -> TypedFunction {
+    let return_type = Type::alias(vector::TYPE_NAME);
+
+    TypedFunction {
+        name: Some(vector::CONSTRUCTOR_NAME.to_owned()),
+        parameters: vec![
+            TypedParameter {
+                name: "x".to_owned(),
+                ty: Type::number(),
+                documentation: None,
+            },
+            TypedParameter {
+                name: "y".to_owned(),
+                ty: Type::number(),
+                documentation: None,
+            },
+        ],
+        parameter_count: 2,
+        has_varargs: false,
+        vararg_type: None,
+        return_type: Some(return_type.clone()),
+        return_types: vec![return_type],
+        documentation: Some(vector::documentation().to_owned()),
         overloads: Vec::new(),
     }
 }

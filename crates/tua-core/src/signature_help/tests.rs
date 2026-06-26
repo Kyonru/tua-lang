@@ -220,6 +220,19 @@ fn returns_love_asset_loader_signatures() {
 }
 
 #[test]
+fn returns_builtin_vec2_constructor_signature() {
+    let help = signature_at("local position = vec2(100, \n", "vec2(100, ")
+        .expect("vec2 constructor should have signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function vec2(x: number, y: number): Vec2"
+    );
+    assert_eq!(parameter_labels(&help), vec!["x: number", "y: number"]);
+    assert_eq!(help.active_parameter, 1);
+}
+
+#[test]
 fn returns_love_object_method_signature_from_inferred_asset_loader_return() {
     let source = r#"
 local function loadPlayerImage()

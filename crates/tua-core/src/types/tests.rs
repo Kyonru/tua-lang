@@ -772,7 +772,7 @@ fn unknown_type_names_inside_table_shapes_produce_type_diagnostics() {
         "src/player.tua",
         r#"
 type Player = {
-  pos: Vec2,
+  pos: MissingVec,
 }
 "#,
     )
@@ -782,7 +782,7 @@ type Player = {
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_UNKNOWN_NAME));
-    assert!(diagnostics[0].message.contains("unknown type `Vec2`"));
+    assert!(diagnostics[0].message.contains("unknown type `MissingVec`"));
 }
 
 #[test]

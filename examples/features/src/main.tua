@@ -5,6 +5,7 @@ local Inference = require("inference")
 local Modules = require("modules")
 local Navigation = require("navigation")
 local Assets = require("assets")
+local Vectors = require("vectors")
 local RequireGraph = require("require_graph")
 local Scopes = require("scopes")
 local ProjectTypes = require("project_types")
@@ -23,6 +24,7 @@ return {
   modules = Modules,
   navigation = Navigation,
   assets = Assets,
+  vectors = Vectors,
   require_graph = RequireGraph,
   scopes = Scopes,
   project_types = ProjectTypes,

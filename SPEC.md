@@ -84,9 +84,35 @@ v1 supports these primitive type names:
 - `nil`
 - `any`
 - string literal types such as `"static"` and `"stream"`
+- built-in `Vec2` for common LOVE position and velocity values
 
 `any` is the gradual escape hatch. Values of type `any` may be assigned to or
 from any other type without a type error.
+
+### Built-In Vec2
+
+`Vec2` is a built-in table-shaped type:
+
+```tua
+local position: Vec2 = vec2(100, 200)
+local x: number = position.x
+local y: number = position.y
+```
+
+The constructor has signature `function vec2(x: number, y: number): Vec2`.
+`position.x` and `position.y` complete and hover as `number`.
+
+Emitted Lua uses plain tables in v1:
+
+```lua
+local position = { x = 100, y = 200 }
+local x = position.x
+local y = position.y
+```
+
+`Vec2` does not require a generated runtime module or external vector library in
+v1. Operator-rich vector math can be layered later through explicit libraries or
+domain extensions.
 
 ### Type Aliases
 

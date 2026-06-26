@@ -21,6 +21,8 @@ leaving the normal Lua and LOVE workflow.
   simple call checks.
 - LOVE asset helpers such as `image "assets/player.png"` and
   `sound "assets/jump.wav"` with static path validation.
+- Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
+  emitted as plain Lua tables.
 - CLI commands for init, check, build, watch, and LSP.
 - A language server with diagnostics, hover, completion, signature help,
   document highlights, definition, references, rename, document symbols,

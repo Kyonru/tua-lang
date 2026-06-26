@@ -247,6 +247,7 @@ Tua also includes small typed LOVE asset loader helpers:
 ```tua
 local player: Image = image "assets/player.png"
 local jump: Source = sound "assets/jump.wav"
+local position: Vec2 = vec2(100, 200)
 ```
 
 They emit plain LOVE calls in generated Lua:
@@ -254,10 +255,15 @@ They emit plain LOVE calls in generated Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local position = { x = 100, y = 200 }
 ```
 
 Values inferred as `Image` or `Source` expose common LOVE object methods in
 completion, such as `player:getWidth()` or `jump:play()`.
+
+`Vec2` is a built-in table-shaped type for position and velocity values. The
+`vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits
+plain Lua tables instead of requiring a runtime vector dependency.
 
 Use colon-call syntax for LOVE object methods:
 

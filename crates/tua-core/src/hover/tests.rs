@@ -838,6 +838,30 @@ local jump = sound "assets/jump.wav"
 }
 
 #[test]
+fn hovers_builtin_vec2_constructor_local_and_fields() {
+    let source = r#"
+local position = vec2(100, 200)
+local x = position.x
+"#;
+    let constructor = hover_tua_source("src/main.tua", source, position_at(source, "vec2"))
+        .expect("hover should not fail")
+        .expect("vec2 constructor should hover");
+    let position = hover_tua_source("src/main.tua", source, position_at(source, "position ="))
+        .expect("hover should not fail")
+        .expect("inferred Vec2 local should hover");
+    let x = hover_tua_source("src/main.tua", source, position_at(source, "x\n"))
+        .expect("hover should not fail")
+        .expect("Vec2 field should hover");
+
+    assert_eq!(
+        constructor.contents,
+        "function vec2(x: number, y: number): Vec2"
+    );
+    assert_eq!(position.contents, "local position: Vec2");
+    assert_eq!(x.contents, "(field) x: number");
+}
+
+#[test]
 fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
     let source = r#"
 local function loadPlayerImage()

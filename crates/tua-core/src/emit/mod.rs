@@ -6,8 +6,8 @@ use full_moon::ast::{self, Expression, Field, LastStmt, Var};
 use full_moon::tokenizer::TokenReference;
 
 use crate::{
-    asset, infer_module_exports, parse_tua_source, AnnotationMode, Diagnostic, DiagnosticCode,
-    ParsedSource, TuaType, Type,
+    asset, infer_module_exports, parse_tua_source, vector, AnnotationMode, Diagnostic,
+    DiagnosticCode, ParsedSource, TuaType, Type,
 };
 
 pub fn emit_tua_source(
@@ -41,7 +41,7 @@ pub fn emit_lua_with_mode(
 
     if diagnostics.is_empty() {
         let output = normalize_emitted_lua(ast.to_string());
-        let output = lower_asset_loader_calls_text(&output);
+        let output = lower_builtin_calls_text(&output);
         let output = lower_compound_assignments_text(&output);
 
         Ok(match annotation_mode {
@@ -808,7 +808,7 @@ fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
     .find_map(|(sugar, binary)| input.strip_prefix(sugar).map(|rhs| (binary, rhs)))
 }
 
-fn lower_asset_loader_calls_text(output: &str) -> String {
+fn lower_builtin_calls_text(output: &str) -> String {
     let mut lowered = String::with_capacity(output.len());
     let mut index = 0;
 
@@ -846,6 +846,18 @@ fn lower_asset_loader_calls_text(output: &str) -> String {
                 }
             }
 
+            if can_start_builtin_call(output, index) && vector::is_constructor(name) {
+                let argument_start = skip_whitespace(output, index + identifier_end);
+
+                if let Some((replacement, end)) =
+                    lower_vec2_constructor_call(output, argument_start)
+                {
+                    lowered.push_str(&replacement);
+                    index = end;
+                    continue;
+                }
+            }
+
             lowered.push_str(name);
             index += identifier_end;
             continue;
@@ -861,6 +873,25 @@ fn lower_asset_loader_calls_text(output: &str) -> String {
     }
 
     lowered
+}
+
+fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {
+    if !output[argument_start..].starts_with('(') {
+        return None;
+    }
+
+    let close = find_matching_paren(output, argument_start)?;
+    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
+
+    let [x, y] = arguments.as_slice() else {
+        return None;
+    };
+
+    if x.is_empty() || y.is_empty() {
+        return None;
+    }
+
+    Some((format!("{{ x = {x}, y = {y} }}"), close + 1))
 }
 
 fn lower_asset_loader_call(
@@ -892,11 +923,86 @@ fn lower_asset_loader_call(
 }
 
 fn can_start_asset_loader(output: &str, index: usize) -> bool {
+    can_start_builtin_call(output, index)
+}
+
+fn can_start_builtin_call(output: &str, index: usize) -> bool {
     let Some(previous) = previous_char(output, index) else {
         return true;
     };
 
     !is_identifier_part(previous) && previous != '.' && previous != ':'
+}
+
+fn find_matching_paren(output: &str, open: usize) -> Option<usize> {
+    if !output[open..].starts_with('(') {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut index = open;
+
+    while index < output.len() {
+        if let Some(end) = consume_string_literal(output, index) {
+            index = end;
+            continue;
+        }
+
+        let character = output[index..]
+            .chars()
+            .next()
+            .expect("index should stay on a valid string boundary");
+
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.checked_sub(1)?;
+
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+
+        index += character.len_utf8();
+    }
+
+    None
+}
+
+fn split_top_level_arguments(input: &str) -> Option<Vec<&str>> {
+    let mut arguments = Vec::new();
+    let mut start = 0;
+    let mut depth = 0usize;
+    let mut index = 0;
+
+    while index < input.len() {
+        if let Some(end) = consume_string_literal(input, index) {
+            index = end;
+            continue;
+        }
+
+        let character = input[index..]
+            .chars()
+            .next()
+            .expect("index should stay on a valid string boundary");
+
+        match character {
+            '(' | '{' | '[' => depth += 1,
+            ')' | '}' | ']' => depth = depth.checked_sub(1)?,
+            ',' if depth == 0 => {
+                arguments.push(input[start..index].trim());
+                start = index + character.len_utf8();
+            }
+            _ => {}
+        }
+
+        index += character.len_utf8();
+    }
+
+    arguments.push(input[start..].trim());
+    Some(arguments)
 }
 
 fn previous_char(output: &str, index: usize) -> Option<char> {

@@ -53,6 +53,32 @@ local jump: Source = sound "assets/jump.wav"
 }
 
 #[test]
+fn accepts_builtin_vec2_constructor_initializers() {
+    check_tua_source(
+        "src/vector.tua",
+        r#"
+local position: Vec2 = vec2(100, 200)
+local x: number = position.x
+local y: number = position.y
+"#,
+    )
+    .expect("built-in Vec2 constructor should produce Vec2");
+}
+
+#[test]
+fn rejects_builtin_vec2_constructor_argument_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/vector.tua",
+        r#"
+local position = vec2("100", 200)
+"#,
+    )
+    .expect_err("invalid Vec2 constructor argument should be reported");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn rejects_love_asset_loader_initializer_mismatch() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

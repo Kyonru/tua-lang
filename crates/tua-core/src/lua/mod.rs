@@ -1,4 +1,4 @@
-use crate::{asset, love_api};
+use crate::{asset, love_api, vector};
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
@@ -30,6 +30,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
     TOP_LEVEL
         .iter()
         .chain(ASSET_LOADERS.iter())
+        .chain(VECTOR_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
         .collect()
@@ -86,6 +87,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
         return TOP_LEVEL
             .iter()
             .chain(ASSET_LOADERS.iter())
+            .chain(VECTOR_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
     }
@@ -147,6 +149,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
     TOP_LEVEL
         .iter()
         .chain(ASSET_LOADERS.iter())
+        .chain(VECTOR_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
         .chain(IMAGE_ITEMS.iter())
@@ -631,6 +634,17 @@ const ASSET_LOADERS: &[LuaItem] = &[
     asset_item(asset::AssetLoaderKind::Image),
     asset_item(asset::AssetLoaderKind::Sound),
 ];
+
+const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];
+
+const fn vector_item() -> LuaItem {
+    LuaItem {
+        label: vector::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: vector::detail(),
+        documentation: vector::documentation(),
+    }
+}
 
 const CANVAS_ITEMS: &[LuaItem] = &[
     item(

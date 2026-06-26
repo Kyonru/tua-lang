@@ -39,6 +39,7 @@ pub mod signature_help;
 mod source_text;
 pub mod type_database;
 pub mod types;
+mod vector;
 pub mod vfs;
 pub mod workspace_symbol;
 

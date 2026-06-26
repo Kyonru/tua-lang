@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
+use crate::vector;
 use crate::vfs::normalize_path;
 use crate::{
     AnalysisSourceKind, ModuleExportField, ScopeDeclarationKind, ScopeMap, Type, TypeEnvironment,
@@ -448,6 +449,7 @@ fn origin_for_source_kind(kind: AnalysisSourceKind) -> ProjectTypeOrigin {
 fn builtin_type(name: &str) -> Option<Type> {
     match name {
         "number" | "string" | "boolean" | "nil" | "any" => Some(Type::named(name)),
+        vector::TYPE_NAME => Some(vector::vec2_type()),
         _ => None,
     }
 }

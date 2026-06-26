@@ -48,6 +48,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and modifiers. | Core semantic classes are present; deep dynamic Lua remains limited. | 47 |
 | Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
 | LOVE asset helpers | `image "..."` and `sound "..."` infer `Image`/`Source`, emit ordinary LOVE calls, and validate obvious paths/extensions. | Tua-specific LOVE-focused workflow. | 48.6 |
+| LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, and plain-table Lua emission for `x`/`y` vectors. | Operator-rich vector libraries remain future domain-extension work. | 73 |
 | Workspace folders and watchers | Workspace folders, folder changes, watched files, and `tua.toml` changes affect diagnostics and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
 
 ## Protocol Surface Supported But Shallow

@@ -1,0 +1,28 @@
+-- Feature: built-in LOVE-friendly Vec2 type.
+-- `Vec2` is available without declaring a local alias.
+local position: Vec2 = vec2(100, 200)
+local velocity = vec2(12, -4)
+
+-- Feature: Vec2 fields are typed as numbers.
+-- Completion after `position.` should offer `x` and `y`, and hover should show
+-- both fields as number.
+local nextX: number = position.x + velocity.x
+local nextY: number = position.y + velocity.y
+
+-- Feature: vec2 emits plain Lua tables.
+-- Generated Lua lowers vec2(a, b) to `{ x = a, y = b }`, so there is no runtime
+-- vector module dependency in this first version.
+local function move(point: Vec2, delta: Vec2): Vec2
+  return vec2(point.x + delta.x, point.y + delta.y)
+end
+
+local moved = move(position, velocity)
+
+return {
+  position = position,
+  velocity = velocity,
+  nextX = nextX,
+  nextY = nextY,
+  move = move,
+  moved = moved,
+}

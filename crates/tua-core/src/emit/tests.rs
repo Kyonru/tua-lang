@@ -407,6 +407,25 @@ local ui = love.graphics.newImage("assets/ui.png")
 }
 
 #[test]
+fn snapshot_lowers_builtin_vec2_constructor_calls_to_plain_tables() {
+    let emitted = emit_tua_source(
+        "src/vector.tua",
+        r#"
+local position: Vec2 = vec2(100, 200)
+local offset = vec2(player.x + 4, math.max(0, player.y))
+"#,
+    )
+    .expect("Vec2 constructor calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local position = { x = 100, y = 200 }
+local offset = { x = player.x + 4, y = math.max(0, player.y) }
+"#
+    );
+}
+
+#[test]
 fn snapshot_does_not_lower_love_asset_loader_names_in_strings_or_comments() {
     let emitted = emit_tua_source(
         "src/assets.tua",

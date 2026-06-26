@@ -172,17 +172,20 @@ Tua also includes small source-level helpers for common asset loading:
 ```tua
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local position: Vec2 = vec2(100, 200)
 
 player:setFilter("nearest")
 jump:play()
 ```
 
-These helpers are not a new runtime abstraction. They lower to ordinary LOVE
-calls and infer LOVE object types for editor tooling:
+These helpers are not a new runtime abstraction. Asset helpers lower to
+ordinary LOVE calls and infer LOVE object types for editor tooling. `vec2(x, y)`
+lowers to a plain Lua table with numeric `x` and `y` fields:
 
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local position = { x = 100, y = 200 }
 
 player:setFilter("nearest")
 jump:play()
@@ -299,7 +302,7 @@ end
 Tua checks known argument counts, known argument types, and annotated return
 types.
 
-## LOVE Asset Helpers And Methods
+## LOVE Asset And Vector Helpers
 
 Tua includes built-in LOVE knowledge for common game code. Asset loader helpers
 infer LOVE object types and emit ordinary LOVE API calls:
@@ -307,6 +310,7 @@ infer LOVE object types and emit ordinary LOVE API calls:
 ```tua
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local position: Vec2 = vec2(100, 200)
 ```
 
 Emitted Lua:
@@ -314,6 +318,7 @@ Emitted Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local position = { x = 100, y = 200 }
 ```
 
 Values inferred as LOVE objects expose method completions, hover, and signature
@@ -324,6 +329,12 @@ player:setFilter("nearest")
 local width = player:getWidth()
 jump:play()
 ```
+
+`Vec2` is a built-in table-shaped type for common position and velocity code.
+The constructor has signature `function vec2(x: number, y: number): Vec2`.
+Fields `position.x` and `position.y` complete and hover as `number`. In v1,
+`Vec2` does not imply a runtime vector library or overloaded vector operators;
+it is emitted as a normal Lua table.
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
 passes `self` only for colon calls. When Tua knows the receiver is a LOVE object,

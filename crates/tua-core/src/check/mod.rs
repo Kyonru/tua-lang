@@ -18,7 +18,7 @@ use crate::types::{
     build_type_environment, FunctionType, MetatableFacts, TableField, Type, TypeContext,
     TypeEnvironment, TypedFunction,
 };
-use crate::{asset, lua};
+use crate::{asset, lua, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -925,6 +925,10 @@ impl<'a> Checker<'a> {
 
             if let Some(kind) = asset::loader_kind(root) {
                 return Some(Callable::Function(kind.function_type()));
+            }
+
+            if vector::is_constructor(root) {
+                return Some(Callable::Function(vector::constructor_type()));
             }
         }
 

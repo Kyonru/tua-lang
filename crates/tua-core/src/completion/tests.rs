@@ -122,6 +122,52 @@ fn completes_love_builtin_type_names() {
 }
 
 #[test]
+fn completes_builtin_vec2_type_name_constructor_and_fields() {
+    let type_source = "local position: Ve\n";
+    let type_completions = complete_tua_source(
+        "src/main.tua",
+        type_source,
+        position_after(type_source, "Ve"),
+    )
+    .expect("Vec2 type completion should succeed");
+    let constructor_source = "local position = ve\n";
+    let constructor_completions = complete_tua_source(
+        "src/main.tua",
+        constructor_source,
+        position_after(constructor_source, "ve"),
+    )
+    .expect("vec2 constructor completion should succeed");
+    let field_source = r#"
+local position = vec2(100, 200)
+position.
+"#;
+    let field_completions = complete_tua_source(
+        "src/main.tua",
+        field_source,
+        position_after(field_source, "position."),
+    )
+    .expect("Vec2 field completion should succeed");
+
+    assert_eq!(labels(&type_completions), vec!["Vec2".to_owned()]);
+    assert_eq!(type_completions[0].kind, CompletionKind::TypeAlias);
+    assert_eq!(type_completions[0].detail.as_deref(), Some("built-in type"));
+    assert_eq!(labels(&constructor_completions), vec!["vec2".to_owned()]);
+    assert_eq!(constructor_completions[0].kind, CompletionKind::Function);
+    assert_eq!(
+        constructor_completions[0].detail.as_deref(),
+        Some("function vec2(x: number, y: number): Vec2")
+    );
+    assert_eq!(
+        labels(&field_completions),
+        vec!["x".to_owned(), "y".to_owned()]
+    );
+    assert_eq!(
+        field_completions[0].detail.as_deref(),
+        Some("field: number")
+    );
+}
+
+#[test]
 fn generates_function_documentation_snippet_from_tua_signature() {
     let source = r#"type Player = { hp: number }
 ---

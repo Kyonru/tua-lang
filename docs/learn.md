@@ -181,6 +181,7 @@ Tua includes a built-in LOVE API catalog and small asset loader helpers:
 ```tua
 local playerImage = image "assets/player.png"
 local jumpSound = sound "assets/jump.wav"
+local position: Vec2 = vec2(100, 200)
 
 playerImage:setFilter("nearest")
 jumpSound:play()
@@ -191,6 +192,7 @@ These lower to ordinary LOVE calls:
 ```lua
 local playerImage = love.graphics.newImage("assets/player.png")
 local jumpSound = love.audio.newSource("assets/jump.wav", "static")
+local position = { x = 100, y = 200 }
 
 playerImage:setFilter("nearest")
 jumpSound:play()
@@ -200,7 +202,11 @@ Because Tua knows `playerImage` is an `Image` and `jumpSound` is a `Source`, the
 editor can show LOVE method completions, hovers, and signature help. Tua can
 also warn about obvious missing or unsupported asset paths.
 
-## 7. Prefer `:` For LOVE Methods
+`Vec2` is built in for common LOVE position and velocity code. The editor can
+complete and hover `position.x` and `position.y` as `number`, and emitted Lua is
+just a normal table.
+
+## 8. Prefer `:` For LOVE Methods
 
 LOVE object methods usually need Lua's colon-call syntax so `self` is passed:
 
@@ -217,7 +223,7 @@ playerImage.setFilter("nearest")
 When Tua knows the receiver is a LOVE object, it warns about the dot call and
 editor completions prefer colon-call snippets.
 
-## 8. Let Dynamic Lua Stay Dynamic
+## 9. Let Dynamic Lua Stay Dynamic
 
 Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
