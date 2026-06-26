@@ -75,11 +75,13 @@ make build-features
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as
   `image "assets/player.png"` and `sound "assets/jump.wav"`, plus LOVE object
   method completion/signature behavior such as preferring `player:setFilter()`
-  over `player.setFilter()`.
+  over `player.setFilter()`. Hover the asset strings to see metadata, and edit
+  inside the strings to try asset-path completion.
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.
-- `src/assets/` contains placeholder files used by static asset validation.
+- `src/assets/` contains placeholder files used by static asset validation,
+  asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping `require`
   calls unchanged in emitted Lua.
 - `src/legacy.lua` is intentionally plain Lua. Builds copy it unchanged into

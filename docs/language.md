@@ -335,6 +335,14 @@ local width = player:getWidth()
 jump:play()
 ```
 
+Asset loader string paths also participate in editor tooling. In a configured
+project, completion inside `image "..."` and `sound "..."` suggests supported
+project asset paths. Hovering an asset path shows the asset kind, relative path,
+inferred LOVE type, validation status, extension, and cheap metadata when Tua
+can read it without running game code. Today that optional binary metadata is
+conservative; for example, valid PNG headers can provide dimensions, while audio
+duration is left unknown.
+
 `Vec2` is a built-in table-shaped type for common position and velocity code.
 The constructor has signature `function vec2(x: number, y: number): Vec2`.
 Fields `position.x` and `position.y` complete and hover as `number`. Tua also

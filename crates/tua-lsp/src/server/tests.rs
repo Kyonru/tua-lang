@@ -448,6 +448,45 @@ local player = image "assets/player.png"
 }
 
 #[test]
+fn hover_and_completion_surface_love_asset_metadata() {
+    let temp = TempProject::new("asset-metadata");
+    let source = r#"
+local player = image "assets/player.png"
+local next = image "assets/p"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/assets/player.png", "placeholder");
+    temp.write("src/assets/jump.wav", "placeholder");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "player.png"));
+    server.send(completion_request(3, &uri, source, "assets/p"));
+
+    assert_hover_contains(server.output(), 2, "asset `assets/player.png`");
+    assert_hover_contains(server.output(), 2, "LOVE type: Image");
+    assert_hover_contains(server.output(), 2, "status: valid");
+    assert_completion_labels(server.output(), 3, ["assets/player.png"]);
+
+    let completion = response_with_id(server.output(), 3)["result"][0].clone();
+
+    server.send(completion_resolve_request(4, completion));
+
+    let resolved = &response_with_id(server.output(), 4)["result"];
+
+    assert_eq!(resolved["detail"], "image asset path -> Image");
+    assert!(resolved["documentation"]["value"]
+        .as_str()
+        .expect("asset completion docs should be markdown")
+        .contains("Supported image asset"));
+}
+
+#[test]
 fn did_open_publishes_impossible_comparison_warnings() {
     let uri = "file:///tmp/comparison.tua";
     let source = r#"local function recursive(a: string)

@@ -2,7 +2,9 @@ use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::{Completion, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit};
+use crate::{
+    AssetMetadata, Completion, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct PluginRegistry {
@@ -119,6 +121,7 @@ pub struct PluginContext<'a> {
     pub path: &'a Path,
     pub source: &'a str,
     pub parsed: Option<&'a ParsedSource>,
+    pub assets: &'a [AssetMetadata],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -127,6 +130,7 @@ pub struct PluginCompletionContext<'a> {
     pub source: &'a str,
     pub parsed: Option<&'a ParsedSource>,
     pub position: SourcePosition,
+    pub assets: &'a [AssetMetadata],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -135,6 +139,7 @@ pub struct PluginHoverContext<'a> {
     pub source: &'a str,
     pub parsed: Option<&'a ParsedSource>,
     pub position: SourcePosition,
+    pub assets: &'a [AssetMetadata],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

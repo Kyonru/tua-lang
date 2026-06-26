@@ -1,5 +1,8 @@
 use super::*;
-use crate::{CompletionKind, DiagnosticCode, DiagnosticSeverity, SourcePosition, SourceSpan};
+use crate::{
+    AssetLoaderKind, AssetMetadata, AssetValidationStatus, CompletionKind, DiagnosticCode,
+    DiagnosticSeverity, SourcePosition, SourceSpan,
+};
 
 #[derive(Debug)]
 struct TestPlugin;
@@ -17,15 +20,23 @@ impl TuaPlugin for TestPlugin {
     }
 
     fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
-        if context.source.contains("plugin_problem") {
-            vec![Diagnostic::new(
-                context.path,
-                1,
-                1,
-                DiagnosticSeverity::Warning,
-                "test plugin diagnostic",
-            )
-            .with_code(DiagnosticCode::PLUGIN_DIAGNOSTIC)]
+        if context.source.contains("plugin_problem")
+            || (context.source.contains("plugin_asset")
+                && context
+                    .assets
+                    .iter()
+                    .any(|asset| asset.relative_path == "assets/player.png"))
+        {
+            let message = if context.source.contains("plugin_asset") {
+                "test plugin saw asset metadata"
+            } else {
+                "test plugin diagnostic"
+            };
+
+            vec![
+                Diagnostic::new(context.path, 1, 1, DiagnosticSeverity::Warning, message)
+                    .with_code(DiagnosticCode::PLUGIN_DIAGNOSTIC),
+            ]
         } else {
             Vec::new()
         }
@@ -96,17 +107,51 @@ fn registry_collects_plugin_contributions() {
         path,
         source: "plugin_problem()",
         parsed: None,
+        assets: &[],
     });
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::PLUGIN_DIAGNOSTIC));
     assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Warning);
 
+    let asset_metadata = [AssetMetadata {
+        kind: AssetLoaderKind::Image,
+        relative_path: "assets/player.png".to_owned(),
+        extension: Some("png".to_owned()),
+        span: SourceSpan {
+            start: SourcePosition {
+                line: 1,
+                column: 22,
+            },
+            end: SourcePosition {
+                line: 1,
+                column: 41,
+            },
+        },
+        inferred_love_type: "Image",
+        status: AssetValidationStatus::Valid,
+        dimensions: None,
+        duration_seconds: None,
+    }];
+    let asset_diagnostics = registry.diagnostics(PluginContext {
+        path,
+        source: "plugin_asset()",
+        parsed: None,
+        assets: &asset_metadata,
+    });
+
+    assert_eq!(asset_diagnostics.len(), 1);
+    assert_eq!(
+        asset_diagnostics[0].message,
+        "test plugin saw asset metadata"
+    );
+
     let completions = registry.completions(PluginCompletionContext {
         path,
         source: "",
         parsed: None,
         position: SourcePosition { line: 1, column: 1 },
+        assets: &[],
     });
 
     assert_eq!(completions[0].label, "pluginItem");
@@ -116,6 +161,7 @@ fn registry_collects_plugin_contributions() {
         source: "",
         parsed: None,
         position: SourcePosition { line: 1, column: 1 },
+        assets: &[],
     });
 
     assert_eq!(hovers[0].contents, "plugin hover");
@@ -124,6 +170,7 @@ fn registry_collects_plugin_contributions() {
         path,
         source: "plugin_lower",
         parsed: None,
+        assets: &[],
     });
 
     assert_eq!(

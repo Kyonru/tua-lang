@@ -6,6 +6,7 @@ use std::rc::Rc;
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
+use crate::asset::{self, AssetMetadata};
 use crate::completion::{
     complete_field_access_in_source_with_environment, complete_parsed_source_with_environment,
 };
@@ -125,6 +126,7 @@ struct AnalysisFile {
     diagnostics: Vec<Diagnostic>,
     exports: Option<ModuleExports>,
     require_edges: Vec<ModuleLink>,
+    assets: Vec<AssetMetadata>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
 }
@@ -614,7 +616,18 @@ impl AnalysisSnapshot {
         let file = self.file(path)?;
 
         match &file.parsed {
-            Ok(parsed) => self.hover_parsed_snapshot(parsed, position),
+            Ok(parsed) => {
+                if let Some(asset) = asset::asset_at_position(&file.assets, position) {
+                    return Some(Hover {
+                        contents: asset.hover_markdown(),
+                        span: Some(asset.span),
+                        documentation: None,
+                        context: Vec::new(),
+                    });
+                }
+
+                self.hover_parsed_snapshot(parsed, position)
+            }
             Err(_) => {
                 let recovered = source_without_incomplete_field_access_lines(&file.source);
                 let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
@@ -1534,6 +1547,10 @@ impl AnalysisSnapshot {
         self.files.get(&normalize_path(path))
     }
 
+    fn effective_asset_roots(&self) -> &[PathBuf] {
+        analysis_asset_roots(self.source_roots(), &self.asset_roots)
+    }
+
     pub fn type_environment(&self, path: impl AsRef<Path>) -> Option<&TypeEnvironment> {
         self.file(path.as_ref())?.environment.as_ref()
     }
@@ -2073,6 +2090,12 @@ impl AnalysisSnapshot {
         });
         let _profile = profile::span("analysis.completion.render");
 
+        let asset_completions = self.project_asset_path_completions(source, position);
+
+        if !asset_completions.is_empty() {
+            return asset_completions;
+        }
+
         let module_completions = self.project_module_field_completions(parsed, source, position);
 
         if !module_completions.is_empty() {
@@ -2091,6 +2114,55 @@ impl AnalysisSnapshot {
         }
 
         self.project_table_literal_completions(parsed, source, position)
+    }
+
+    fn project_asset_path_completions(
+        &self,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let Some(crate::completion::context::CompletionContext::StringArgument {
+            callee_parts,
+            active_parameter,
+            prefix,
+            ..
+        }) = crate::completion::context::completion_context(source, position)
+        else {
+            return Vec::new();
+        };
+
+        if active_parameter != 0 || callee_parts.len() != 1 {
+            return Vec::new();
+        }
+
+        let Some(kind) = asset::loader_kind(&callee_parts[0]) else {
+            return Vec::new();
+        };
+
+        asset::complete_asset_paths(self.effective_asset_roots(), kind, &prefix)
+            .into_iter()
+            .map(|candidate| Completion {
+                label: candidate.path.clone(),
+                kind: CompletionKind::Value,
+                detail: Some(format!(
+                    "{} asset path -> {}",
+                    candidate.kind.asset_label(),
+                    candidate.kind.return_type_name()
+                )),
+                documentation: candidate.extension.map(|extension| {
+                    format!(
+                        "Supported {} asset with .{} extension.",
+                        kind.asset_label(),
+                        extension
+                    )
+                }),
+                insert_text: Some(candidate.path),
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect()
     }
 
     fn semantic_facts_for_parsed(&self, parsed: &ParsedSource) -> Option<&AnalysisSemanticFacts> {
@@ -3307,6 +3379,20 @@ fn build_analysis_file(
             }
         }
     }
+    let assets = {
+        let _profile = profile::span_for_path("analysis.assets.metadata", path);
+
+        parsed
+            .as_ref()
+            .ok()
+            .map(|parsed| {
+                asset::collect_asset_metadata(
+                    parsed,
+                    analysis_asset_roots(context.source_roots, context.asset_roots),
+                )
+            })
+            .unwrap_or_default()
+    };
     if !context.plugin_registry.is_empty() {
         let _profile = profile::span_for_path("analysis.plugins.diagnostics", path);
         let parsed = parsed.as_ref().ok();
@@ -3315,6 +3401,7 @@ fn build_analysis_file(
             path,
             source: &source,
             parsed,
+            assets: &assets,
         }));
     }
     let diagnostics = deduplicate_diagnostics(diagnostics);
@@ -3348,6 +3435,7 @@ fn build_analysis_file(
         diagnostics,
         exports,
         require_edges,
+        assets,
         symbols,
     }
 }

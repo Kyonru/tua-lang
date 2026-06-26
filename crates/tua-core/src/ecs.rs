@@ -549,6 +549,7 @@ ecs.system(world, { Position, Missing }, function() end)
             path: Path::new("src/ecs.tua"),
             source,
             parsed: None,
+            assets: &[],
         });
 
         assert_eq!(diagnostics.len(), 3);

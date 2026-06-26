@@ -230,11 +230,18 @@ fn string_argument_context(
         return None;
     }
 
-    let prefix = string_prefix_at(line, cursor)?;
+    let (prefix, quote_start) = string_prefix_at(line, cursor)?;
     let cursor = byte_offset_for_position(source, position)?;
-    let open = active_call_open(source, cursor)?;
-    let callee_parts = callee_parts_before(source, open)?;
-    let active_parameter = active_parameter_index(source, open + 1, cursor);
+    let (callee_parts, active_parameter) = if let Some(open) = active_call_open(source, cursor) {
+        (
+            callee_parts_before(source, open)?,
+            active_parameter_index(source, open + 1, cursor),
+        )
+    } else {
+        let callee = callee_parts_before(line, quote_start)?;
+
+        (callee, 0)
+    };
 
     Some(CompletionContext::StringArgument {
         callee_parts,
@@ -378,7 +385,7 @@ fn is_inside_string(line: &str, cursor: usize) -> bool {
     quote.is_some()
 }
 
-fn string_prefix_at(line: &str, cursor: usize) -> Option<String> {
+fn string_prefix_at(line: &str, cursor: usize) -> Option<(String, usize)> {
     let mut quote = None;
     let mut escaped = false;
     let cursor = cursor.min(line.len());
@@ -403,7 +410,7 @@ fn string_prefix_at(line: &str, cursor: usize) -> Option<String> {
 
     let (_, start) = quote?;
 
-    Some(line[start + 1..cursor].to_owned())
+    Some((line[start + 1..cursor].to_owned(), start))
 }
 
 fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<usize> {

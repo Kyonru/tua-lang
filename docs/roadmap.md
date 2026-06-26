@@ -46,7 +46,8 @@ After that, Phase 13 explores LOVE domain extensions:
 - opt-in tiny-ecs-shaped ECS domain support through the built-in plugin
   registry path;
 - a prototype sprite/animation DSL;
-- richer asset validation and editor metadata;
+- richer asset validation and editor metadata, with the first shared metadata
+  slice now powering asset hovers and path completion;
 - optional Feather/tooling integration hooks.
 
 ## Working Rule

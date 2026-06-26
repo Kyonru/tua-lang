@@ -1,13 +1,18 @@
+-- Feature: typed LOVE asset loader helpers.
+-- Hover the string path to see asset metadata: kind, LOVE type, validation
+-- status, extension, and any cheap metadata Tua can read.
 local function loadPlayerImage()
   return image "assets/player.png"
 end
 
+-- Feature: sound assets infer Source and validate against supported extensions.
 local function loadJumpSound()
   return sound "assets/jump.wav"
 end
 
 local player = loadPlayerImage()
 
+-- Feature: inferred LOVE object return values keep method return types.
 local a, b = player:getDimensions()
 
 local function azul()
@@ -17,9 +22,14 @@ end
 
 local c = azul()
 
+-- Feature: string-literal enum completions for LOVE API parameters.
 player:setFilter("nearest")
+
+-- Feature: asset path completions are available inside image/sound strings.
+local anotherPlayer = image "assets/player.png"
 
 return {
   loadPlayerImage = loadPlayerImage,
   loadJumpSound = loadJumpSound,
+  anotherPlayer = anotherPlayer,
 }

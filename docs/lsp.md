@@ -26,7 +26,11 @@ The VS Code extension starts this server and surfaces editor features for
   locals where possible.
 - Completion for type aliases, local symbols, table fields, Lua builtins,
   generated LOVE API items, LuaDoc tags/types/snippets, require paths,
-  required-module fields, and auto-import candidates.
+  required-module fields, asset paths in LOVE asset-loader strings, and
+  auto-import candidates.
+- Asset path hovers show kind, relative path, inferred LOVE type, validation
+  status, extension, and optional cheap metadata such as PNG dimensions when
+  available.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
 - Completion item resolve for documentation/details.

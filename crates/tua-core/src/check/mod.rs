@@ -13,7 +13,7 @@ use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
-use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
+use crate::parser::{parse_tua_source, ParsedSource, SourcePosition, SourceSpan};
 use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
     MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
@@ -842,58 +842,32 @@ impl<'a> Checker<'a> {
         let Some(asset_call) = asset_loader_call(function_call) else {
             return;
         };
+        let span = node_span(function_call).unwrap_or(SourceSpan {
+            start: node_position(function_call),
+            end: node_position(function_call),
+        });
+        let metadata =
+            asset::validate_asset(asset_call.kind, &asset_call.path, span, &self.asset_roots);
 
-        if let Some(extension) = Path::new(&asset_call.path)
-            .extension()
-            .and_then(|extension| extension.to_str())
-        {
-            let extension = extension.to_ascii_lowercase();
-
-            if !asset_call
-                .kind
-                .supported_extensions()
-                .contains(&extension.as_str())
-            {
+        match metadata.status {
+            asset::AssetValidationStatus::UnsupportedExtension => {
                 self.push_asset_diagnostic(unsupported_asset_extension_diagnostic(
                     &self.parsed.path,
                     function_call,
                     asset_call.kind,
                     &asset_call.path,
                 ));
-                return;
             }
-        } else {
-            self.push_asset_diagnostic(unsupported_asset_extension_diagnostic(
-                &self.parsed.path,
-                function_call,
-                asset_call.kind,
-                &asset_call.path,
-            ));
-            return;
+            asset::AssetValidationStatus::Missing => {
+                self.push_asset_diagnostic(missing_asset_diagnostic(
+                    &self.parsed.path,
+                    function_call,
+                    asset_call.kind,
+                    &asset_call.path,
+                ));
+            }
+            asset::AssetValidationStatus::Valid | asset::AssetValidationStatus::Unchecked => {}
         }
-
-        if !self.asset_exists(&asset_call.path) {
-            self.push_asset_diagnostic(missing_asset_diagnostic(
-                &self.parsed.path,
-                function_call,
-                asset_call.kind,
-                &asset_call.path,
-            ));
-        }
-    }
-
-    fn asset_exists(&self, asset_path: &str) -> bool {
-        let path = Path::new(asset_path);
-
-        if path.is_absolute() {
-            return path.exists();
-        }
-
-        if self.asset_roots.is_empty() {
-            return true;
-        }
-
-        self.asset_roots.iter().any(|root| root.join(path).exists())
     }
 
     fn push_asset_diagnostic(&mut self, diagnostic: Diagnostic) {
@@ -2727,6 +2701,11 @@ fn node_position(node: &impl Node) -> SourcePosition {
     node.range()
         .map(|(start, _)| SourcePosition::from_full_moon(start))
         .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {

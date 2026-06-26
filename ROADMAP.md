@@ -2130,6 +2130,12 @@ Acceptance:
 
 ### 75. `feat(assets): add richer LOVE asset metadata`
 
+Status: done for the first metadata slice. Tua now records asset kind, relative
+path, extension, source span, inferred LOVE type, validation status, and cheap
+PNG dimensions when available. Hover, asset-path completion, diagnostics, and
+plugin contexts read the shared metadata. Richer binary metadata such as audio
+duration remains future work.
+
 Scope:
 
 - Extend asset validation beyond path and extension checks.

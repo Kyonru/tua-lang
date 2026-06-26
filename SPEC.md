@@ -455,6 +455,20 @@ local jump = love.audio.newSource("assets/jump.wav", "static")
 obvious missing or unsupported asset paths when the project file exists on disk
 and should stay permissive when a path cannot be proven statically.
 
+The compiler should collect reusable asset metadata for these calls:
+
+- asset kind;
+- relative path;
+- extension;
+- source span for the asset literal;
+- inferred LOVE type;
+- validation status;
+- optional cheap metadata such as PNG dimensions when available.
+
+The language server uses this metadata for asset-path completion and asset
+literal hover. Binary parsing must stay conservative and optional; Tua must not
+run game code to discover assets.
+
 ### LOVE Object Method Calls
 
 LOVE object methods usually expect Lua's colon-call syntax so `self` is passed

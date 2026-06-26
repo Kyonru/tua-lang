@@ -33,7 +33,7 @@ impl TempProject {
         &self.path
     }
 
-    fn write(&self, path: &str, source: &str) -> PathBuf {
+    fn write(&self, path: &str, source: impl AsRef<[u8]>) -> PathBuf {
         let path = self.path.join(path);
 
         if let Some(parent) = path.parent() {
@@ -332,6 +332,45 @@ fn pipeline_diagnostics_use_configured_asset_roots() {
     );
 
     assert!(host.snapshot().pipeline_diagnostics(&path).is_empty());
+}
+
+#[test]
+fn snapshot_surfaces_love_asset_metadata_in_hover_and_completion() {
+    let temp = TempProject::new("asset-metadata");
+    let source = r#"local player = image "assets/<|hover|>player.png"
+local next = image "assets/p<|complete|>"
+"#;
+    let fixture = Fixture::parse(&format!("-- file: {}\n{source}", "src/main.tua"));
+
+    temp.write("assets/player.png", png_header(64, 32));
+    temp.write("assets/jump.wav", b"placeholder");
+
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("asset literal should hover");
+    let completions = snapshot.completion("src/main.tua", fixture.position("complete"));
+
+    assert!(hover.contents.contains("asset `assets/player.png`"));
+    assert!(hover.contents.contains("LOVE type: Image"));
+    assert!(hover.contents.contains("status: valid"));
+    assert!(hover.contents.contains("dimensions: 64x32"));
+    assert_eq!(
+        completion_labels(&completions),
+        vec!["assets/player.png".to_owned()]
+    );
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("image asset path -> Image")
+    );
 }
 
 #[test]
@@ -1092,4 +1131,18 @@ type Enemy = { hp: number }
         .workspace_symbols("Player")
         .iter()
         .any(|symbol| symbol.name == "Player"));
+}
+
+fn png_header(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+
+    bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+    bytes.extend_from_slice(&13u32.to_be_bytes());
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+    bytes.extend_from_slice(&0u32.to_be_bytes());
+
+    bytes
 }

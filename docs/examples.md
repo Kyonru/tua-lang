@@ -14,7 +14,8 @@ make lsp-features-smoke
 Use this when changing language-server behavior.
 
 The feature tour includes placeholder assets under `src/assets/` so static LOVE
-asset validation can run without depending on real art or audio files.
+asset validation, asset-path completion, and asset metadata hovers can run
+without depending on real art or audio files.
 
 ## `examples/love-minimal`
 

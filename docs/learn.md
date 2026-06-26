@@ -201,7 +201,11 @@ jumpSound:play()
 
 Because Tua knows `playerImage` is an `Image` and `jumpSound` is a `Source`, the
 editor can show LOVE method completions, hovers, and signature help. Tua can
-also warn about obvious missing or unsupported asset paths.
+also warn about obvious missing or unsupported asset paths. Inside asset loader
+strings, completion suggests supported project files such as
+`assets/player.png`, and hovering an asset string shows the inferred LOVE type,
+validation status, extension, and optional cheap metadata such as PNG dimensions
+when available.
 
 `Vec2` is built in for common LOVE position and velocity code. The editor can
 complete and hover `position.x` and `position.y` as `number`, and emitted Lua is
