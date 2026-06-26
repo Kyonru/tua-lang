@@ -22,6 +22,7 @@ nav = [
   { "Language" = [
     { "Overview" = "language.md" },
     { "Lua Interop" = "lua-interop.md" },
+    { "Domain Plugins" = "plugins.md" },
   ] },
   { "Tooling" = [
     { "CLI" = "cli.md" },

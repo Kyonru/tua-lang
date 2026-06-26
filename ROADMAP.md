@@ -1938,6 +1938,8 @@ conservative, and tooling-aware.
 
 ### 71. `docs(plugins): design domain extension model`
 
+Status: done.
+
 Scope:
 
 - Write a design document for Tua domain plugins.

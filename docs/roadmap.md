@@ -38,7 +38,8 @@ Current future work is now more about precision and domain depth:
 
 After that, Phase 13 explores LOVE domain extensions:
 
-- a conservative plugin architecture for domain declarations and tooling;
+- a conservative plugin architecture for domain declarations and tooling,
+  starting with the [Domain Plugins](plugins.md) design;
 - built-in vector ergonomics;
 - a prototype sprite/animation DSL;
 - richer asset validation and editor metadata;

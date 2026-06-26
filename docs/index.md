@@ -76,6 +76,8 @@ player.hp = player.hp - 10
 - [Learn](learn.md) - guided language path from Lua to typed Tua and LOVE.
 - [Language](language.md) - overview, type surface, interop, LOVE helpers, and
   emission behavior.
+- [Domain Plugins](plugins.md) - design boundaries for future LOVE-focused
+  domain extensions.
 - [Configuration](configuration.md) - `tua.toml` options and diagnostics.
 - [CLI](cli.md) - command reference.
 - [Language Server](lsp.md) - editor features and capability notes.
