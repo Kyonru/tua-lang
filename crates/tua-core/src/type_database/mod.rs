@@ -471,18 +471,22 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 .collect(),
             parameter_count: function.parameters.len(),
             has_varargs: false,
+            vararg_type: None,
             return_type: Some((*function.return_type).clone()),
             return_types: function.return_types_or_any().to_vec(),
             documentation: field.documentation.clone(),
+            overloads: Vec::new(),
         },
         _ => TypedFunction {
             name: Some(name.to_owned()),
             parameters: Vec::new(),
             parameter_count: 0,
             has_varargs: true,
+            vararg_type: Some(Type::Any),
             return_type: Some(field.ty.clone()),
             return_types: vec![field.ty.clone()],
             documentation: field.documentation.clone(),
+            overloads: Vec::new(),
         },
     }
 }

@@ -874,6 +874,12 @@ fn lua_doc_semantic_tokens(parsed: &ParsedSource) -> Vec<SemanticToken> {
             crate::LuaDocAnnotationKind::As(annotation) => {
                 tokens.extend(type_tokens_in_span(&parsed.source, annotation.type_span));
             }
+            crate::LuaDocAnnotationKind::Overload(annotation) => {
+                tokens.extend(type_tokens_in_span(&parsed.source, annotation.type_span));
+            }
+            crate::LuaDocAnnotationKind::Vararg(annotation) => {
+                tokens.extend(type_tokens_in_span(&parsed.source, annotation.type_span));
+            }
             crate::LuaDocAnnotationKind::Enum(annotation) => {
                 if let Some(span) = annotation.name_span {
                     tokens.push(semantic_token(span, SemanticTokenKind::TypeAlias, true));

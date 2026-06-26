@@ -1787,9 +1787,11 @@ fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
         }],
         parameter_count: 1,
         has_varargs: false,
+        vararg_type: None,
         return_type: Some(return_type.clone()),
         return_types: vec![return_type],
         documentation: Some(kind.documentation().to_owned()),
+        overloads: Vec::new(),
     }
 }
 
@@ -1812,9 +1814,11 @@ fn typed_function_from_function_type(
             .collect(),
         parameter_count: 0,
         has_varargs: false,
+        vararg_type: None,
         return_type: return_types.first().cloned(),
         return_types,
         documentation: None,
+        overloads: Vec::new(),
     }
 }
 
@@ -1831,9 +1835,11 @@ fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {
         parameters,
         parameter_count: 0,
         has_varargs: false,
+        vararg_type: None,
         return_type: return_types.first().cloned(),
         return_types,
         documentation: Some(item.documentation.to_owned()),
+        overloads: Vec::new(),
     })
 }
 

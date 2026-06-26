@@ -88,6 +88,65 @@ damage(player,
 }
 
 #[test]
+fn returns_lua_doc_overload_signatures_and_selects_active_overload() {
+    let source = r#"---@overload fun(path: string): Image single image
+---@overload fun(path: string, mode: "stream"): Source streaming source
+---@param path string default path
+---@return Image default image
+local function load(path)
+  return image(path)
+end
+
+load("assets/player.png",
+"#;
+    let help = signature_at(source, "load(\"assets/player.png\",")
+        .expect("overloaded function should have signature help");
+
+    assert_eq!(help.signatures.len(), 3);
+    assert_eq!(
+        help.signatures[0].label,
+        "function load(path: string): Image"
+    );
+    assert_eq!(
+        help.signatures[1].label,
+        "function load(path: string): Image"
+    );
+    assert_eq!(
+        help.signatures[2].label,
+        "function load(path: string, mode: \"stream\"): Source"
+    );
+    assert_eq!(help.active_signature, 2);
+    assert_eq!(help.active_parameter, 1);
+    assert_eq!(
+        help.signatures[2].documentation.as_deref(),
+        Some("streaming source")
+    );
+}
+
+#[test]
+fn returns_typed_lua_doc_vararg_signature() {
+    let source = r#"---@param message string message text
+---@vararg identifier extra labels
+local function log(message, ...)
+end
+
+log("hello",
+"#;
+    let help =
+        signature_at(source, "log(\"hello\",").expect("vararg function should have signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function log(message: string, ...: string): any"
+    );
+    assert_eq!(
+        parameter_labels(&help),
+        vec!["message: string", "...: string"]
+    );
+    assert_eq!(help.active_parameter, 1);
+}
+
+#[test]
 fn returns_lua_and_love_builtin_signatures() {
     let lua =
         signature_at("local value = math.sin(\n", "math.sin(").expect("math.sin should have help");

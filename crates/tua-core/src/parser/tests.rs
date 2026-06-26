@@ -666,6 +666,51 @@ fn parses_lua_doc_luacats_type_forms() {
 }
 
 #[test]
+fn parses_lua_doc_overload_vararg_and_identifier_type() {
+    let parsed = parse_lua_source(
+        "src/lua_doc.lua",
+        r#"---@overload fun(path: identifier): Image path overload
+---@vararg identifier extra names
+local function load(path, ...)
+end
+"#,
+    )
+    .expect("LuaDoc overload and vararg annotations should parse");
+
+    assert_eq!(parsed.lua_doc_annotations.len(), 2);
+
+    let LuaDocAnnotationKind::Overload(overload) = &parsed.lua_doc_annotations[0].kind else {
+        panic!("first annotation should be overload");
+    };
+    let TuaType::Function {
+        parameters,
+        returns,
+    } = &overload.ty
+    else {
+        panic!("overload should parse as a function type");
+    };
+    assert_eq!(parameters.len(), 1);
+    assert_eq!(parameters[0].name.as_deref(), Some("path"));
+    assert_eq!(parameters[0].ty, TuaType::Named("string".to_owned()));
+    assert_eq!(returns, &vec![TuaType::Named("Image".to_owned())]);
+    assert_eq!(
+        parsed.lua_doc_annotations[0].documentation.as_deref(),
+        Some("path overload")
+    );
+    assert_eq!(overload.type_span.start.line, 1);
+
+    let LuaDocAnnotationKind::Vararg(vararg) = &parsed.lua_doc_annotations[1].kind else {
+        panic!("second annotation should be vararg");
+    };
+    assert_eq!(vararg.ty, TuaType::Named("string".to_owned()));
+    assert_eq!(
+        parsed.lua_doc_annotations[1].documentation.as_deref(),
+        Some("extra names")
+    );
+    assert_eq!(vararg.type_span.start.line, 2);
+}
+
+#[test]
 fn parses_additional_luals_annotation_tags() {
     let parsed = parse_lua_source(
         "src/lua_doc.lua",

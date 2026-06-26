@@ -765,6 +765,16 @@ impl<'a> Checker<'a> {
 
                 function.return_types_or_any().to_vec()
             }
+            Callable::TypedFunction(function) => {
+                let return_types =
+                    self.check_typed_function_call_arguments(function_call, &function);
+
+                if let Some(ty) = self.constructor_call_return_type(function_call) {
+                    return vec![ty];
+                }
+
+                return_types
+            }
             Callable::ExternalFunction(function) => {
                 self.check_external_call_arguments(function_call, &function);
 
@@ -1010,6 +1020,100 @@ impl<'a> Checker<'a> {
                     }
                 }
             }
+        }
+    }
+
+    fn check_typed_function_call_arguments(
+        &mut self,
+        function_call: &FunctionCall,
+        function: &TypedFunction,
+    ) -> Vec<Type> {
+        let arguments = self.call_arguments_for_function(function_call);
+        let argument_types = self.infer_call_argument_types(&arguments);
+        let candidates = typed_call_candidates(function);
+
+        for candidate in &candidates {
+            if typed_call_candidate_matches(self, &argument_types, candidate) {
+                return candidate.return_types.clone();
+            }
+        }
+
+        let best_candidate = candidates
+            .iter()
+            .find(|candidate| {
+                expected_typed_argument_count(candidate, argument_types.len()).is_none()
+            })
+            .or_else(|| candidates.first());
+
+        if let Some(candidate) = best_candidate {
+            self.report_typed_call_mismatch(function_call, &arguments, &argument_types, candidate);
+
+            return candidate.return_types.clone();
+        }
+
+        vec![Type::Any]
+    }
+
+    fn infer_call_argument_types(&mut self, arguments: &[CallArgument<'_>]) -> Vec<Option<Type>> {
+        arguments
+            .iter()
+            .map(|argument| match argument {
+                CallArgument::Expression(argument) => self.infer_expression(argument),
+                CallArgument::Inferred(argument_type) => Some(argument_type.clone()),
+            })
+            .collect()
+    }
+
+    fn report_typed_call_mismatch(
+        &mut self,
+        function_call: &FunctionCall,
+        arguments: &[CallArgument<'_>],
+        argument_types: &[Option<Type>],
+        candidate: &TypedCallCandidate,
+    ) {
+        if let Some(expected) = expected_typed_argument_count(candidate, argument_types.len()) {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                expected,
+                argument_types.len(),
+            ));
+            return;
+        }
+
+        for (index, argument_type) in argument_types.iter().enumerate() {
+            let Some(argument_type) = argument_type else {
+                continue;
+            };
+            let Some(parameter_type) = typed_call_parameter_type(candidate, index) else {
+                continue;
+            };
+
+            if self.context.is_assignable(argument_type, parameter_type) {
+                continue;
+            }
+
+            let display_type = self.display_type_for_mismatch(parameter_type);
+
+            match arguments.get(index) {
+                Some(CallArgument::Expression(argument)) => {
+                    self.diagnostics.push(mismatch_diagnostic(
+                        &self.parsed.path,
+                        *argument,
+                        &display_type,
+                        argument_type,
+                    ));
+                }
+                Some(CallArgument::Inferred(_)) | None => {
+                    self.diagnostics.push(mismatch_diagnostic(
+                        &self.parsed.path,
+                        function_call,
+                        &display_type,
+                        argument_type,
+                    ));
+                }
+            }
+            return;
         }
     }
 
@@ -1324,6 +1428,7 @@ impl<'a> Checker<'a> {
 enum Callable {
     Any,
     Function(FunctionType),
+    TypedFunction(Box<TypedFunction>),
     ExternalFunction(ExternalFunctionType),
 }
 
@@ -1365,20 +1470,109 @@ struct ExternalParameter {
     optional: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TypedCallCandidate {
+    parameters: Vec<Type>,
+    has_varargs: bool,
+    vararg_type: Option<Type>,
+    return_types: Vec<Type>,
+}
+
 impl Callable {
     fn from_typed_function(function: &TypedFunction) -> Self {
-        if function.has_fully_annotated_parameters() {
-            Self::Function(FunctionType::new_returns(
-                function
-                    .parameters
-                    .iter()
-                    .map(|parameter| parameter.ty.clone()),
-                function.return_types_or_any(),
-            ))
+        if !function.overloads.is_empty()
+            || function.has_fully_annotated_parameters()
+            || function.vararg_type.is_some()
+        {
+            Self::TypedFunction(Box::new(function.clone()))
         } else {
             Self::Any
         }
     }
+}
+
+fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
+    let mut candidates = function
+        .overloads
+        .iter()
+        .map(|overload| TypedCallCandidate {
+            parameters: overload
+                .parameters
+                .iter()
+                .map(|parameter| parameter.ty.clone())
+                .collect(),
+            has_varargs: overload.has_varargs,
+            vararg_type: overload.vararg_type.clone(),
+            return_types: overload.return_types_or_any(),
+        })
+        .collect::<Vec<_>>();
+
+    let primary_has_typed_parameters = function
+        .parameters
+        .iter()
+        .any(|parameter| parameter.ty != Type::Any)
+        || function.vararg_type.is_some();
+
+    if function.overloads.is_empty()
+        || function.has_varargs
+        || (function.has_fully_annotated_parameters() && primary_has_typed_parameters)
+    {
+        candidates.push(TypedCallCandidate {
+            parameters: function
+                .parameters
+                .iter()
+                .map(|parameter| parameter.ty.clone())
+                .collect(),
+            has_varargs: function.has_varargs,
+            vararg_type: function.vararg_type.clone(),
+            return_types: function.return_types_or_any(),
+        });
+    }
+
+    candidates
+}
+
+fn typed_call_candidate_matches(
+    checker: &Checker<'_>,
+    argument_types: &[Option<Type>],
+    candidate: &TypedCallCandidate,
+) -> bool {
+    if expected_typed_argument_count(candidate, argument_types.len()).is_some() {
+        return false;
+    }
+
+    argument_types
+        .iter()
+        .enumerate()
+        .all(|(index, argument_type)| {
+            let Some(argument_type) = argument_type else {
+                return true;
+            };
+            let Some(parameter_type) = typed_call_parameter_type(candidate, index) else {
+                return true;
+            };
+
+            checker.context.is_assignable(argument_type, parameter_type)
+        })
+}
+
+fn expected_typed_argument_count(candidate: &TypedCallCandidate, actual: usize) -> Option<usize> {
+    if actual < candidate.parameters.len() {
+        return Some(candidate.parameters.len());
+    }
+
+    if !candidate.has_varargs && actual > candidate.parameters.len() {
+        return Some(candidate.parameters.len());
+    }
+
+    None
+}
+
+fn typed_call_parameter_type(candidate: &TypedCallCandidate, index: usize) -> Option<&Type> {
+    candidate
+        .parameters
+        .get(index)
+        .or(candidate.vararg_type.as_ref())
 }
 
 fn infer_symbol_type(symbol: &str) -> Option<Type> {

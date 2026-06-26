@@ -245,9 +245,11 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         ("class", "class annotation"),
         ("field", "field annotation"),
         ("generic", "generic annotation"),
+        ("overload", "function overload annotation"),
         ("param", "function parameter annotation"),
         ("return", "function return annotation"),
         ("type", "type annotation"),
+        ("vararg", "function vararg annotation"),
         ("version", "version annotation"),
     ]
     .into_iter()

@@ -35,7 +35,7 @@ make build-features
   aliases as scoped symbols.
 - `src/project_types.tua` covers the project-aware type database: aliases
   resolved through `require` aliases and LuaDoc-provided types from `.lua`
-  files.
+  files, including LuaDoc overload and typed-vararg examples.
 - `src/lua_cheatsheet.tua` is an extensive Lua-in-Tua cheatsheet based on the
   referenced Lua cheatsheet. It covers comments, primitives, tables, operators,
   shorthand function calls, lookups, control flow, functions, closures,
@@ -57,7 +57,9 @@ make build-features
   type mismatches, and local functions that are referenced but never directly
   called.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
-  `src/project_types.tua`.
+  `src/project_types.tua`; it demonstrates `---@class`, `---@field`,
+  literal-union aliases, `---@overload`, `---@vararg`, and the LuaHelper
+  `identifier` keyword.
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as

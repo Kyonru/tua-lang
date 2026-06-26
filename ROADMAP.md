@@ -1905,6 +1905,8 @@ Acceptance:
 
 ### 70.25 `feat(luadoc): model LuaHelper overload, vararg, and identifier annotations`
 
+Status: done.
+
 Scope:
 
 - Extend LuaDoc/LuaHelper annotation compatibility for rows tracked in

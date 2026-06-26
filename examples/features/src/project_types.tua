@@ -9,9 +9,19 @@ local enemyFromLuaDocModule: LuaDocTypes.Enemy = nil
 
 local a = enemyFromLuaDocModule
 
+-- Feature: LuaDoc overloads from a required Lua module power call checking and
+-- signature help in Tua.
+local loadedImage = LuaDocTypes.loadAsset("assets/player.png")
+local loadedSource = LuaDocTypes.loadAsset("assets/jump.wav", "stream")
+
+-- Feature: `---@vararg identifier` accepts extra string-like name arguments.
+LuaDocTypes.logLabels("spawned", "enemy", "wave")
+
 local str = "hello"
 
 return {
   playerFromTuaModule = playerFromTuaModule,
   enemyFromLuaDocModule = enemyFromLuaDocModule,
+  loadedImage = loadedImage,
+  loadedSource = loadedSource,
 }

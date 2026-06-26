@@ -6,7 +6,7 @@ use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
     build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
-    TypedParameter,
+    TypedFunctionOverload, TypedParameter,
 };
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
@@ -97,21 +97,26 @@ fn signature_help_parsed_source_with_context(
         environment,
         semantic: SemanticModel::new(parsed, environment),
     };
-    let mut signature = resolver.signature_for_context(&context)?;
+    let mut signatures = resolver.signatures_for_context(&context)?;
     if context.is_method_call {
         let receiver_type = resolver.method_receiver_type(&context);
-        strip_method_receiver(
-            &mut signature,
-            &context,
-            receiver_type.as_ref(),
-            resolver.environment,
-        );
+        for signature in &mut signatures {
+            strip_method_receiver(
+                signature,
+                &context,
+                receiver_type.as_ref(),
+                resolver.environment,
+            );
+        }
     }
-    let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
+    let active_signature =
+        active_signature_for_argument_count(&signatures, context.active_parameter);
+    let active_parameter =
+        active_parameter_for_signature(context.active_parameter, &signatures[active_signature]);
 
     Some(SignatureHelp {
-        signatures: vec![signature],
-        active_signature: 0,
+        signatures,
+        active_signature,
         active_parameter,
     })
 }
@@ -123,8 +128,8 @@ struct SignatureResolver<'a> {
 }
 
 impl<'a> SignatureResolver<'a> {
-    fn signature_for_context(&self, context: &CallContext) -> Option<SignatureInformation> {
-        self.signature_for_parts(context)
+    fn signatures_for_context(&self, context: &CallContext) -> Option<Vec<SignatureInformation>> {
+        self.signatures_for_parts(context)
     }
 
     fn method_receiver_type(&self, context: &CallContext) -> Option<Type> {
@@ -138,14 +143,14 @@ impl<'a> SignatureResolver<'a> {
         )
     }
 
-    fn signature_for_parts(&self, context: &CallContext) -> Option<SignatureInformation> {
+    fn signatures_for_parts(&self, context: &CallContext) -> Option<Vec<SignatureInformation>> {
         let parts = &context.callee_parts;
         let position = context.position;
         let (root, fields) = parts.split_first()?;
         let qualified_name = parts.join(".");
 
         if let Some(function) = self.environment.function(&qualified_name) {
-            return Some(signature_from_typed_function(
+            return Some(signatures_from_typed_function(
                 function,
                 Some(&qualified_name),
             ));
@@ -153,15 +158,16 @@ impl<'a> SignatureResolver<'a> {
 
         if fields.is_empty() {
             if let Some(ty) = self.environment.local(root) {
-                return signature_from_type(root, ty, self.environment);
+                return signature_from_type(root, ty, self.environment)
+                    .map(|signature| vec![signature]);
             }
 
             if let Some(function) = self.environment.function(root) {
-                return Some(signature_from_typed_function(function, Some(root)));
+                return Some(signatures_from_typed_function(function, Some(root)));
             }
         } else if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
             if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment) {
-                return Some(signature);
+                return Some(vec![signature]);
             }
         }
 
@@ -175,7 +181,7 @@ impl<'a> SignatureResolver<'a> {
                     }
                     apply_parameter_documentation(&mut signature, export.parameter_documentation);
 
-                    return Some(signature);
+                    return Some(vec![signature]);
                 }
             }
 
@@ -183,7 +189,7 @@ impl<'a> SignatureResolver<'a> {
                 .semantic
                 .lua_function_item_for_call_parts(parts, position)
             {
-                return signature_from_lua_item(item);
+                return signature_from_lua_item(item).map(|signature| vec![signature]);
             }
 
             if self.environment.local(root).is_some() {
@@ -192,12 +198,12 @@ impl<'a> SignatureResolver<'a> {
         }
 
         if let Some(signature) = lua_signature_for_parts(parts) {
-            return Some(signature);
+            return Some(vec![signature]);
         }
 
         self.semantic
             .typed_function_for_call_parts(parts, position)
-            .map(|function| signature_from_typed_function(&function, Some(&qualified_name)))
+            .map(|function| signatures_from_typed_function(&function, Some(&qualified_name)))
     }
 }
 
@@ -376,9 +382,9 @@ fn signature_from_typed_function(
         .collect::<Vec<_>>();
 
     if function.has_varargs {
-        parameter_labels.push("...".to_owned());
+        parameter_labels.push(typed_vararg_label(function.vararg_type.as_ref()));
         parameters.push(ParameterInformation {
-            label: "...".to_owned(),
+            label: typed_vararg_label(function.vararg_type.as_ref()),
             documentation: None,
         });
     }
@@ -394,12 +400,84 @@ fn signature_from_typed_function(
     )
 }
 
+fn signatures_from_typed_function(
+    function: &TypedFunction,
+    name: Option<&str>,
+) -> Vec<SignatureInformation> {
+    let mut signatures = Vec::new();
+    let name = name.or(function.name.as_deref()).unwrap_or("<anonymous>");
+
+    if should_show_primary_typed_signature(function) {
+        signatures.push(signature_from_typed_function(function, Some(name)));
+    }
+
+    signatures.extend(
+        function
+            .overloads
+            .iter()
+            .map(|overload| signature_from_typed_overload(name, overload)),
+    );
+
+    signatures
+}
+
+fn should_show_primary_typed_signature(function: &TypedFunction) -> bool {
+    function.overloads.is_empty()
+        || function
+            .parameters
+            .iter()
+            .any(|parameter| parameter.ty != Type::Any)
+        || function.vararg_type.is_some()
+}
+
+fn signature_from_typed_overload(
+    name: &str,
+    overload: &TypedFunctionOverload,
+) -> SignatureInformation {
+    let mut parameter_labels = overload
+        .parameters
+        .iter()
+        .map(typed_parameter_label)
+        .collect::<Vec<_>>();
+    let mut parameters = overload
+        .parameters
+        .iter()
+        .map(|parameter| ParameterInformation {
+            label: typed_parameter_label(parameter),
+            documentation: parameter.documentation.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if overload.has_varargs {
+        parameter_labels.push(typed_vararg_label(overload.vararg_type.as_ref()));
+        parameters.push(ParameterInformation {
+            label: typed_vararg_label(overload.vararg_type.as_ref()),
+            documentation: None,
+        });
+    }
+
+    signature_from_parameter_information(
+        parameters,
+        format!(
+            "function {name}({}): {}",
+            parameter_labels.join(", "),
+            format_type_list(&overload.return_types_or_any())
+        ),
+        overload.documentation.clone(),
+    )
+}
+
 fn typed_parameter_label(parameter: &TypedParameter) -> String {
     if parameter.name.is_empty() {
         parameter.ty.to_string()
     } else {
         format!("{}: {}", parameter.name, parameter.ty)
     }
+}
+
+fn typed_vararg_label(ty: Option<&Type>) -> String {
+    ty.map(|ty| format!("...: {ty}"))
+        .unwrap_or_else(|| "...".to_owned())
 }
 
 fn strip_method_receiver(
@@ -608,6 +686,16 @@ fn active_parameter_for_signature(active: usize, signature: &SignatureInformatio
         .len()
         .checked_sub(1)
         .map(|last| active.min(last))
+        .unwrap_or(0)
+}
+
+fn active_signature_for_argument_count(
+    signatures: &[SignatureInformation],
+    active_parameter: usize,
+) -> usize {
+    signatures
+        .iter()
+        .position(|signature| active_parameter < signature.parameters.len())
         .unwrap_or(0)
 }
 

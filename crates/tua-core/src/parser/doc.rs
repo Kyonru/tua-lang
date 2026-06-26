@@ -5,9 +5,10 @@ use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 use super::model::{
     FunctionTypeParameter, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs,
     LuaDocCast, LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField,
-    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocParam,
-    LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
-    LuaDocVersion, SourcePosition, SourceSpan, TableFieldType, TuaType,
+    LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard,
+    LuaDocOverload, LuaDocParam, LuaDocParseOptions, LuaDocParseResult, LuaDocReturn,
+    LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVararg, LuaDocVersion, SourcePosition,
+    SourceSpan, TableFieldType, TuaType,
 };
 
 pub fn parse_lua_doc_annotations(
@@ -130,6 +131,8 @@ impl LuaDocParser<'_> {
             "diagnostic" => parse_diagnostic(line, line_number, cursor),
             "cast" => parse_cast(line, line_number, cursor),
             "as" => parse_as(line, line_number, cursor),
+            "overload" => parse_overload(line, line_number, cursor),
+            "vararg" => parse_vararg(line, line_number, cursor),
             "deprecated" => Ok((
                 LuaDocAnnotationKind::Deprecated(LuaDocDeprecated),
                 documentation_from(line, cursor),
@@ -480,6 +483,37 @@ fn parse_as(
     ))
 }
 
+fn parse_overload(
+    line: &str,
+    line_number: usize,
+    cursor: usize,
+) -> Result<(LuaDocAnnotationKind, Option<String>), String> {
+    let (ty, type_span, cursor) =
+        required_type(line, line_number, cursor, "overload function type")?;
+
+    if !matches!(ty, TuaType::Function { .. }) {
+        return Err("expected overload function type".to_owned());
+    }
+
+    Ok((
+        LuaDocAnnotationKind::Overload(LuaDocOverload { ty, type_span }),
+        documentation_from(line, cursor),
+    ))
+}
+
+fn parse_vararg(
+    line: &str,
+    line_number: usize,
+    cursor: usize,
+) -> Result<(LuaDocAnnotationKind, Option<String>), String> {
+    let (ty, type_span, cursor) = required_type(line, line_number, cursor, "vararg type")?;
+
+    Ok((
+        LuaDocAnnotationKind::Vararg(LuaDocVararg { ty, type_span }),
+        documentation_from(line, cursor),
+    ))
+}
+
 fn required_token(
     line: &str,
     line_number: usize,
@@ -692,6 +726,10 @@ fn parse_type_text(text: &str) -> TuaType {
 
     if let Some(function) = parse_function_type_text(text) {
         return function;
+    }
+
+    if text == "identifier" {
+        return TuaType::Named("string".to_owned());
     }
 
     if let Some((key, value)) = parse_table_generic_type_text(text) {
@@ -995,6 +1033,8 @@ fn is_supported_tag(tag: &str) -> bool {
             | "diagnostic"
             | "cast"
             | "as"
+            | "overload"
+            | "vararg"
             | "deprecated"
             | "nodiscard"
     )

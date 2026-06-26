@@ -272,6 +272,8 @@ pub enum LuaDocAnnotationKind {
     Diagnostic(LuaDocDiagnostic),
     Cast(LuaDocCast),
     As(LuaDocAs),
+    Overload(LuaDocOverload),
+    Vararg(LuaDocVararg),
     Deprecated(LuaDocDeprecated),
     NoDiscard(LuaDocNoDiscard),
 }
@@ -379,6 +381,18 @@ pub struct LuaDocCast {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LuaDocAs {
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocOverload {
+    pub ty: TuaType,
+    pub type_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LuaDocVararg {
     pub ty: TuaType,
     pub type_span: SourceSpan,
 }

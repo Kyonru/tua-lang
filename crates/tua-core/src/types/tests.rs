@@ -635,6 +635,46 @@ local Enemy = {}
 }
 
 #[test]
+fn lowers_lua_doc_overload_vararg_and_identifier_annotations() {
+    let parsed = parse_lua_source(
+        "src/load.lua",
+        r#"---@param first identifier first path
+---@vararg identifier extra paths
+---@overload fun(path: identifier): Image single image
+---@overload fun(path: identifier, kind: "stream"): Source streaming source
+---@return Image primary image
+local function load(first, ...)
+  return nil
+end
+"#,
+    )
+    .expect("Lua source with overload annotations should parse");
+    let environment =
+        build_type_environment(&parsed).expect("LuaDoc overload annotations should lower");
+    let load = environment
+        .function("load")
+        .expect("documented function should lower");
+
+    assert_eq!(load.parameters[0].name, "first");
+    assert_eq!(load.parameters[0].ty, Type::string());
+    assert!(load.has_varargs);
+    assert_eq!(load.vararg_type, Some(Type::string()));
+    assert_eq!(load.return_types, vec![Type::alias("Image")]);
+    assert_eq!(load.overloads.len(), 2);
+    assert_eq!(load.overloads[0].parameters[0].ty, Type::string());
+    assert_eq!(load.overloads[0].return_types, vec![Type::alias("Image")]);
+    assert_eq!(
+        load.overloads[0].documentation.as_deref(),
+        Some("single image")
+    );
+    assert_eq!(
+        load.overloads[1].parameters[1].ty,
+        Type::string_literal("stream")
+    );
+    assert_eq!(load.overloads[1].return_types, vec![Type::alias("Source")]);
+}
+
+#[test]
 fn reports_conflicts_between_tua_and_lua_doc_annotations() {
     let parsed = parse_tua_source(
         "src/conflict.tua",

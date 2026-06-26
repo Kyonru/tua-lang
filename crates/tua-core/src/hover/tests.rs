@@ -239,6 +239,26 @@ damage({ hp = 10 })
 }
 
 #[test]
+fn hovers_lua_doc_overload_signatures() {
+    let source = r#"---@overload fun(path: string): Image
+---@overload fun(path: string, mode: "stream"): Source
+local function load(path, mode)
+  return nil
+end
+
+load("assets/player.png")
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "load(\""))
+        .expect("hover should succeed")
+        .expect("overloaded function should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function load(path: string): Image\nfunction load(path: string, mode: \"stream\"): Source"
+    );
+}
+
+#[test]
 fn hovers_inferred_function_return_type_on_definition_and_call() {
     let source = r#"function test(a: boolean)
   return ""

@@ -727,6 +727,7 @@ fn lua_doc_param_annotations<'a>(
 
 fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
     match ty {
+        crate::TuaType::Named(name) if name == "identifier" => Type::string(),
         crate::TuaType::Named(name) => Type::named(name),
         crate::TuaType::StringLiteral(value) => Type::string_literal(value),
         crate::TuaType::Union(types) => Type::union(types.iter().map(type_from_lua_doc_type)),

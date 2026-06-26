@@ -105,14 +105,14 @@ those live in [Lua Interop](lua-interop.md).
 | `---@param` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower function parameter types and docs. | Signature help and parameter documentation. | implemented | Phases 33, 34, 41. |
 | `---@return` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower single and multi-return annotation data. | Hover/signature help for known functions. | implemented | Phases 33, 34, 41, 61. |
 | `---@generic` | `LH-ANN`, `LH-ANN-INFO` | Parsed and preserved with spans; no full generic solver. | Semantic/annotation awareness only. | partial | Owner: types. Generics remain deferred; 70.10 tracks shallow compatibility. |
-| `---@overload` | `LH-ANN`, `LH-ANN-INFO` | Not parsed/lowered as overload signatures. | No overload signature help. | missing | Owner: parser/types/signature. Planned in 70.25. |
-| `---@vararg` | `LH-ANN`, `LH-ANN-INFO` | Not modeled as typed varargs. | No vararg-specific signature help. | missing | Owner: parser/types/signature. Planned in 70.25. |
+| `---@overload` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower overload function signatures attached to known functions. | Signature help lists overloads, selects by argument position, and call diagnostics check matching overloads. | implemented | Phase 70.25. |
+| `---@vararg` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower typed varargs for annotated `...` functions. | Signature help shows `...: T`; call diagnostics check extra arguments. | implemented | Phase 70.25. |
 | `---@enum start` / `---@enum end` | `LH-ANN`, `LH-ANN-INFO` | Tua has enum sugar and shallow `---@enum`; LuaHelper block enum semantics are not fully lowered. | Literal-union completions work when lowered from Tua/LuaCATS aliases. | partial | Owner: LuaDoc lowering. Planned in 70.10. |
 | `const` modifier | `LH-ANN` | Const metadata can drive `TL4015` where known. | Published diagnostics. | implemented | Phase 37. |
 | `public` / `protected` / `private` | `LH-ANN` | Visibility can be parsed where present but does not enforce access rules. | May appear as metadata; no access diagnostics. | intentionally shallow | Tua avoids object-visibility semantics for v1 unless a LOVE/library use case proves it. |
 | `fun(...)` type | `LH-ANN` | Function type forms are parsed/lowered. | Hover/signature help where attached. | implemented | Phases 13, 70.10. |
 | `table<...>` type | `LH-ANN` | Key-value table forms are parsed/lowered to table/container types. | Hover/completion where shape is known. | implemented | Phase 70.10. |
-| `identifier` type keyword | `LH-ANN` | No first-class identifier pseudo-type. | No special editor behavior. | missing | Owner: LuaDoc compatibility. Planned decision in 70.25; likely only if common stubs need it. |
+| `identifier` type keyword | `LH-ANN` | Treated as `string` in LuaDoc type positions; Tua does not model a separate name-like type. | Hover/signature/checking display and enforce it as `string`. | intentionally shallow | Phase 70.25. This keeps common LuaHelper stubs useful without adding a new erased primitive. |
 
 ## Code Actions And Quick Fix Families
 
@@ -148,7 +148,6 @@ not LuaHelper diagnostic codes.
 | Owner | Missing/partial LuaHelper rows | Follow-up |
 | --- | --- | --- |
 | `lint/types` | broader inferred assignment-type changes beyond annotated/known assignments | 61, 62 |
-| `parser/types/signature` | `---@overload`, `---@vararg`, `identifier` annotation decision | 70.25 |
 | `types/flow` | negative-guard use diagnostics and broader boolean identities | 62 |
 | `project-model/module` | non-`require` custom import helper modeling | Optional future config work after 55/59/61; ordinary `import(...)` stays dynamic until configured. |
 | `types/lua-doc` | LuaHelper enum blocks and class-field precision | 70.10, 70.11, 70.13 |

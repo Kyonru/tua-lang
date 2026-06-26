@@ -45,6 +45,25 @@ fn completes_lua_doc_annotation_tags_after_marker() {
         completions[0].detail.as_deref(),
         Some("function parameter annotation")
     );
+
+    let overload = complete_tua_source(
+        "src/main.tua",
+        "---@o",
+        crate::SourcePosition { line: 1, column: 6 },
+    )
+    .expect("overload annotation completion should succeed");
+    assert_eq!(labels(&overload), vec!["overload".to_owned()]);
+
+    let vararg = complete_tua_source(
+        "src/main.tua",
+        "---@v",
+        crate::SourcePosition { line: 1, column: 6 },
+    )
+    .expect("vararg annotation completion should succeed");
+    assert_eq!(
+        labels(&vararg),
+        vec!["vararg".to_owned(), "version".to_owned()]
+    );
 }
 
 #[test]

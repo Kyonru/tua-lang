@@ -78,6 +78,8 @@ Supported tags include:
 - `---@type`
 - `---@param`
 - `---@return`
+- `---@overload`
+- `---@vararg`
 - `---@generic`
 - `---@version`
 - `---@enum`
@@ -97,7 +99,14 @@ Supported type forms include primitive names, aliases, unions, string literal
 types such as `"static" | "stream"`, optional shorthand such as `number?`,
 arrays such as `Image[]`, tuples such as `[number, number]`, dictionaries such
 as `{ [string]: Source }`, key-value tables such as `table<string, Image>`, and
-function types such as `fun(path: string): Image`.
+function types such as `fun(path: string): Image`. The LuaHelper `identifier`
+type keyword is treated as `string`; Tua does not currently model it as a
+separate name-like type.
+
+`---@overload` entries add extra call signatures for a known function. Signature
+help can show and select those overloads, and call diagnostics use the matching
+overload when Tua can prove one applies. `---@vararg T` types extra `...`
+arguments for annotated vararg functions.
 
 Some LuaLS tags are currently preserved as metadata with spans and docs but do
 not change type checking yet. This includes `---@meta`, `---@module`,
@@ -138,6 +147,30 @@ end
 When called from Tua, `"static"` and `"stream"` are accepted, other literal
 strings are rejected, and the editor can complete valid values inside string
 arguments.
+
+Overloads are useful for Lua libraries that accept a few distinct call shapes:
+
+```lua
+---@overload fun(path: string): Image
+---@overload fun(path: string, mode: "stream"): Source
+local function loadAsset(path, mode)
+  if mode == "stream" then
+    return love.audio.newSource(path, mode)
+  end
+
+  return love.graphics.newImage(path)
+end
+```
+
+Typed varargs keep flexible Lua functions checked without making them rigid:
+
+```lua
+---@param message string
+---@vararg identifier
+local function log(message, ...)
+  print(message, ...)
+end
+```
 
 Malformed annotation diagnostics are controlled by `doc_annotations` in
 `tua.toml`.

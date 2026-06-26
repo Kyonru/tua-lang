@@ -15,11 +15,11 @@ pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionTypeParameter,
     LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
     LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
-    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocParam,
+    LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
-    LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage, ParsedSource,
-    RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
-    TypedSourceModel,
+    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage,
+    ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
+    TypeAliasKind, TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 

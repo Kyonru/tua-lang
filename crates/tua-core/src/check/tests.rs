@@ -383,6 +383,71 @@ load("dynamic")
 }
 
 #[test]
+fn checks_lua_doc_overload_arguments() {
+    check_tua_source(
+        "src/load.tua",
+        r#"
+---@overload fun(path: string): Image
+---@overload fun(path: string, mode: "stream"): Source
+local function load(path, mode)
+  return nil
+end
+
+load("assets/player.png")
+load("assets/jump.wav", "stream")
+"#,
+    )
+    .expect("matching overload calls should be accepted");
+
+    let diagnostics = check_tua_source(
+        "src/load.tua",
+        r#"
+---@overload fun(path: string): Image
+---@overload fun(path: string, mode: "stream"): Source
+local function load(path, mode)
+  return nil
+end
+
+load("assets/jump.wav", "static")
+"#,
+    )
+    .expect_err("non-matching overload call should be rejected");
+
+    assert_single_mismatch(&diagnostics, r#"expected "stream", found "static""#);
+}
+
+#[test]
+fn checks_lua_doc_typed_varargs() {
+    check_tua_source(
+        "src/log.tua",
+        r#"
+---@param message string
+---@vararg identifier
+local function log(message, ...)
+end
+
+log("hello", "one", "two")
+"#,
+    )
+    .expect("string varargs should be accepted");
+
+    let diagnostics = check_tua_source(
+        "src/log.tua",
+        r#"
+---@param message string
+---@vararg identifier
+local function log(message, ...)
+end
+
+log("hello", 10)
+"#,
+    )
+    .expect_err("non-string vararg should be rejected");
+
+    assert_single_mismatch(&diagnostics, "expected string, found number");
+}
+
+#[test]
 fn checks_tua_literal_union_and_enum_arguments() {
     let diagnostics = check_tua_source(
         "src/mode.tua",

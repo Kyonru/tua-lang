@@ -10,8 +10,8 @@ use full_moon::node::Node;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{
-    FunctionAnnotation as ParsedFunctionAnnotation, LuaDocAnnotation, LuaDocAnnotationKind,
-    LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
+    FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
+    LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::{asset, lua, Diagnostic, DiagnosticCode};
@@ -98,9 +98,11 @@ pub struct TypedFunction {
     pub parameters: Vec<TypedParameter>,
     pub parameter_count: usize,
     pub has_varargs: bool,
+    pub vararg_type: Option<Type>,
     pub return_type: Option<Type>,
     pub return_types: Vec<Type>,
     pub documentation: Option<String>,
+    pub overloads: Vec<TypedFunctionOverload>,
 }
 
 impl TypedFunction {
@@ -127,6 +129,25 @@ impl TypedFunction {
                 self.return_types_or_any(),
             )
         })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypedFunctionOverload {
+    pub parameters: Vec<TypedParameter>,
+    pub has_varargs: bool,
+    pub vararg_type: Option<Type>,
+    pub return_types: Vec<Type>,
+    pub documentation: Option<String>,
+}
+
+impl TypedFunctionOverload {
+    pub fn return_types_or_any(&self) -> Vec<Type> {
+        if self.return_types.is_empty() {
+            return vec![Type::Any];
+        }
+
+        self.return_types.clone()
     }
 }
 
@@ -327,9 +348,11 @@ fn resolve_function_annotation(
         parameters,
         parameter_count,
         has_varargs: function.has_varargs,
+        vararg_type: None,
         return_type,
         return_types,
         documentation: None,
+        overloads: Vec::new(),
     }
 }
 
@@ -725,7 +748,10 @@ fn lua_doc_function_for_code_line(
     if !group.annotations.iter().any(|annotation| {
         matches!(
             annotation.kind,
-            LuaDocAnnotationKind::Param(_) | LuaDocAnnotationKind::Return(_)
+            LuaDocAnnotationKind::Param(_)
+                | LuaDocAnnotationKind::Return(_)
+                | LuaDocAnnotationKind::Overload(_)
+                | LuaDocAnnotationKind::Vararg(_)
         )
     }) {
         return None;
@@ -781,15 +807,30 @@ fn lua_doc_function_for_code_line(
         })
         .unwrap_or_default();
     let return_type = return_types.first().cloned();
+    let vararg_type = group
+        .annotations
+        .iter()
+        .find_map(|annotation| match &annotation.kind {
+            LuaDocAnnotationKind::Vararg(vararg) => Some(resolve_tua_type(
+                &parsed.path,
+                &vararg.ty,
+                Some(vararg.type_span),
+                alias_names,
+                diagnostics,
+            )),
+            _ => None,
+        });
 
     Some(TypedFunction {
         name: Some(name),
         parameter_count: parameters.len(),
         parameters,
-        has_varargs: false,
+        has_varargs: vararg_type.is_some(),
+        vararg_type: None,
         return_type,
         return_types,
         documentation: lua_doc_documentation(&group.annotations),
+        overloads: lua_doc_overloads(parsed, &group.annotations, alias_names, diagnostics),
     })
 }
 
@@ -966,8 +1007,18 @@ pub(crate) fn typed_function_from_lua_doc_body(
             .map(|ty| (*annotation, ty)),
         _ => None,
     });
+    let vararg_annotation = docs.iter().find_map(|annotation| match &annotation.kind {
+        LuaDocAnnotationKind::Vararg(vararg) => Some((*annotation, vararg)),
+        _ => None,
+    });
 
-    if param_annotations.is_empty() && return_annotation.is_none() {
+    if param_annotations.is_empty()
+        && return_annotation.is_none()
+        && vararg_annotation.is_none()
+        && !docs
+            .iter()
+            .any(|annotation| matches!(annotation.kind, LuaDocAnnotationKind::Overload(_)))
+    {
         return None;
     }
 
@@ -980,6 +1031,15 @@ pub(crate) fn typed_function_from_lua_doc_body(
         .parameters()
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
+    let vararg_type = vararg_annotation.map(|(_, vararg)| {
+        resolve_tua_type(
+            &parsed.path,
+            &vararg.ty,
+            Some(vararg.type_span),
+            alias_names,
+            diagnostics,
+        )
+    });
     let parameters = body
         .parameters()
         .iter()
@@ -1026,9 +1086,11 @@ pub(crate) fn typed_function_from_lua_doc_body(
         parameters,
         parameter_count,
         has_varargs,
+        vararg_type,
         return_type,
         return_types,
         documentation,
+        overloads: lua_doc_overloads(parsed, docs, alias_names, diagnostics),
     })
 }
 
@@ -1044,6 +1106,90 @@ fn lua_doc_param_annotations<'a>(
             _ => None,
         })
         .collect()
+}
+
+fn lua_doc_overloads(
+    parsed: &ParsedSource,
+    docs: &[&LuaDocAnnotation],
+    alias_names: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<TypedFunctionOverload> {
+    docs.iter()
+        .filter_map(|annotation| match &annotation.kind {
+            LuaDocAnnotationKind::Overload(overload) => overload_from_tua_type(
+                parsed,
+                &overload.ty,
+                Some(overload.type_span),
+                annotation.documentation.clone(),
+                alias_names,
+                diagnostics,
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+fn overload_from_tua_type(
+    parsed: &ParsedSource,
+    ty: &TuaType,
+    span: Option<SourceSpan>,
+    documentation: Option<String>,
+    alias_names: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<TypedFunctionOverload> {
+    let TuaType::Function {
+        parameters,
+        returns,
+    } = ty
+    else {
+        return None;
+    };
+    let mut has_varargs = false;
+    let mut vararg_type = None;
+    let mut typed_parameters = Vec::new();
+
+    for parameter in parameters {
+        if function_type_parameter_is_vararg(parameter) {
+            has_varargs = true;
+            vararg_type = Some(resolve_tua_type(
+                &parsed.path,
+                &parameter.ty,
+                span,
+                alias_names,
+                diagnostics,
+            ));
+            continue;
+        }
+
+        let ty = resolve_tua_type(&parsed.path, &parameter.ty, span, alias_names, diagnostics);
+        typed_parameters.push(TypedParameter {
+            name: parameter.name.clone().unwrap_or_default(),
+            ty: if parameter.optional {
+                Type::union([ty, Type::nil()])
+            } else {
+                ty
+            },
+            documentation: None,
+        });
+    }
+
+    let return_types = returns
+        .iter()
+        .map(|ty| resolve_tua_type(&parsed.path, ty, span, alias_names, diagnostics))
+        .collect();
+
+    Some(TypedFunctionOverload {
+        parameters: typed_parameters,
+        has_varargs,
+        vararg_type,
+        return_types,
+        documentation,
+    })
+}
+
+fn function_type_parameter_is_vararg(parameter: &FunctionTypeParameter) -> bool {
+    parameter.name.as_deref() == Some("...")
+        || matches!(&parameter.ty, TuaType::Named(name) if name == "...")
 }
 
 fn resolve_lua_doc_return_type(
@@ -1114,7 +1260,9 @@ fn merge_doc_function(
         return;
     };
 
-    if existing.parameter_count != function.parameter_count {
+    let has_primary_parameters = !function.parameters.is_empty() || function.has_varargs;
+
+    if has_primary_parameters && existing.parameter_count != function.parameter_count {
         push_doc_conflict(
             state.diagnostics,
             doc_conflict_diagnostic(
@@ -1155,6 +1303,25 @@ fn merge_doc_function(
 
         if existing_parameter.documentation.is_none() {
             existing_parameter.documentation = parameter.documentation;
+        }
+    }
+
+    if function.has_varargs {
+        existing.has_varargs = true;
+    }
+
+    if existing.vararg_type.is_none() {
+        existing.vararg_type = function.vararg_type;
+    } else if let Some(vararg_type) = function.vararg_type {
+        if existing.vararg_type.as_ref() != Some(&vararg_type) {
+            push_doc_conflict(
+                state.diagnostics,
+                doc_conflict_diagnostic(
+                    &parsed.path,
+                    span,
+                    format!("conflicting annotations for `{name}` vararg type"),
+                ),
+            );
         }
     }
 
@@ -1200,6 +1367,12 @@ fn merge_doc_function(
 
     if existing.documentation.is_none() {
         existing.documentation = function.documentation;
+    }
+
+    for overload in function.overloads {
+        if !existing.overloads.contains(&overload) {
+            existing.overloads.push(overload);
+        }
     }
 }
 
@@ -3349,6 +3522,7 @@ fn resolve_named_type(
         "boolean" => Type::boolean(),
         "nil" => Type::nil(),
         "any" => Type::Any,
+        "identifier" => Type::string(),
         _ if alias_names.contains(name) => Type::alias(name),
         _ => {
             diagnostics.push(type_diagnostic(

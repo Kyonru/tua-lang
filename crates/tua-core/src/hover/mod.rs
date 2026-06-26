@@ -12,6 +12,7 @@ use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
     build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
+    TypedFunctionOverload,
 };
 use crate::{
     definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
@@ -399,13 +400,71 @@ fn format_function_signature(function: &TypedFunction) -> String {
         .collect::<Vec<_>>();
 
     if function.has_varargs {
-        parameters.push("...".to_owned());
+        parameters.push(
+            function
+                .vararg_type
+                .as_ref()
+                .map(|ty| format!("...: {ty}"))
+                .unwrap_or_else(|| "...".to_owned()),
+        );
+    }
+
+    let mut signatures = Vec::new();
+
+    if should_show_primary_typed_signature(function) {
+        signatures.push(format!(
+            "function {name}({}): {}",
+            parameters.join(", "),
+            format_type_list(&function.return_types_or_any())
+        ));
+    }
+
+    signatures.extend(
+        function
+            .overloads
+            .iter()
+            .map(|overload| format_function_overload_signature(name, overload)),
+    );
+
+    signatures.join("\n")
+}
+
+fn should_show_primary_typed_signature(function: &TypedFunction) -> bool {
+    function.overloads.is_empty()
+        || function
+            .parameters
+            .iter()
+            .any(|parameter| parameter.ty != Type::Any)
+        || function.vararg_type.is_some()
+}
+
+fn format_function_overload_signature(name: &str, overload: &TypedFunctionOverload) -> String {
+    let mut parameters = overload
+        .parameters
+        .iter()
+        .map(|parameter| {
+            if parameter.name.is_empty() {
+                parameter.ty.to_string()
+            } else {
+                format!("{}: {}", parameter.name, parameter.ty)
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if overload.has_varargs {
+        parameters.push(
+            overload
+                .vararg_type
+                .as_ref()
+                .map(|ty| format!("...: {ty}"))
+                .unwrap_or_else(|| "...".to_owned()),
+        );
     }
 
     format!(
         "function {name}({}): {}",
         parameters.join(", "),
-        format_type_list(&function.return_types_or_any())
+        format_type_list(&overload.return_types_or_any())
     )
 }
 

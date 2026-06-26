@@ -27,12 +27,12 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Stdio language server | `tua lsp` and `tua lsp --stdio` serve JSON-RPC over stdio. | Standard editor integration shape. | Landed before 30 |
 | Incremental document sync | Open, change, save, and close notifications update diagnostics and open-document state. | Basic live diagnostics behavior. | 22, 31 |
 | Diagnostics for `.tua` | Parser, checker, asset, and lint diagnostics publish for open `.tua` documents. | Comparable base diagnostic loop, with fewer Lua-specific checks than LuaHelper. | 36, 37, 48.6 |
-| LuaDoc annotation parsing | Parses `---@class`, `---@field`, `---@alias`, `---@type`, `---@param`, `---@return`, `---@generic`, and `---@version`. | LuaHelper has a broader annotation ecosystem, but the core tags exist. | 33 |
+| LuaDoc annotation parsing | Parses/lower core LuaDoc tags plus practical LuaLS/LuaHelper forms such as literal unions, `---@overload`, `---@vararg`, and shallow metadata tags. | LuaHelper has a broader annotation ecosystem, but the common interop tags exist. | 33, 70.10, 70.25 |
 | Annotation-backed type environment | Supported annotations can provide aliases, function types, locals, docs, and simple module exports. | LuaHelper supports more patterns and library stubs. | 34 |
 | Hover | Shows aliases, locals, parameters, functions, table fields, Lua builtins, LOVE items, require literals, module bindings, annotation docs, and inferred returns. | Mature tools attach richer docs and more precise project context. | 40 |
 | Completion | Completes aliases, locals, fields, Lua builtins, LOVE items, LuaDoc tags/types/snippets, require paths, required-module fields, and auto-import candidates. | LuaHelper has deeper dynamic Lua/project completions. | 38, 45 |
 | Completion resolve | Completion items can resolve documentation/details from stable item data. | Mature tools use deeper incremental databases, but resolve is no longer just eager payload reuse. | 39 |
-| Signature help | Shows known function signatures, Lua/LOVE builtins, required-module functions, active parameters, and supported parameter docs. | Comparable shape, shallower type inference. | 41 |
+| Signature help | Shows known function signatures, Lua/LOVE builtins, required-module functions, LuaDoc overloads, typed varargs, active parameters, and supported parameter docs. | Comparable shape, shallower type inference. | 41, 70.25 |
 | Go to definition | Resolves aliases, locals, functions, parameters, typed table fields, require literals, LOVE virtual stubs, and required-module exports. | Mature tools support more dynamic module patterns. | 22, 31 |
 | Document links | Resolved `require("...")` literals become module links. | Comparable Lua module navigation. | 31 |
 | Document symbols | Type aliases, functions, annotated locals, parameters, table fields, and simple returned exports appear in file outline. | Comparable file outline basics. | 23 |
@@ -55,7 +55,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Feature | Tua today | Gap | Roadmap |
 | --- | --- | --- | --- |
 | Analysis architecture | Shared analysis host/snapshot, VFS overlays, project model, HIR-like modules, module graph, scope maps, project type database, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
-| LuaDoc coverage | Core tags are parsed and lowered. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49 |
+| LuaDoc coverage | Common interop tags are parsed/lowered, including overload and vararg signatures. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49, 70.25 |
 | Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 61, 62 |
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |

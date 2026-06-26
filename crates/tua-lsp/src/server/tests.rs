@@ -1873,6 +1873,39 @@ damage(player,
 }
 
 #[test]
+fn signature_help_returns_lua_doc_overloads() {
+    let uri = "file:///tmp/signature-help-overload.tua";
+    let source = r#"---@overload fun(path: string): Image
+---@overload fun(path: string, mode: "stream"): Source
+local function load(path, mode)
+  return nil
+end
+
+load("assets/jump.wav",
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "load(\"assets/jump.wav\","),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function load(path: string): Image"
+    );
+    assert_eq!(
+        response["result"]["signatures"][1]["label"],
+        "function load(path: string, mode: \"stream\"): Source"
+    );
+    assert_eq!(response["result"]["activeSignature"], 1);
+    assert_eq!(response["result"]["activeParameter"], 1);
+}
+
+#[test]
 fn signature_help_returns_lua_and_required_module_signatures() {
     let temp = TempProject::new("signature-help-modules");
     let source = r#"local Player = require("player")
