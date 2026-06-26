@@ -229,6 +229,7 @@ fn parse_matcher(token: &str) -> Result<IgnoreMatcher, String> {
             return Ok(IgnoreMatcher::Category(DiagnosticCategory::ProjectConfig));
         }
         "lint" | "style" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Lint)),
+        "plugin" | "plugins" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Plugin)),
         _ => {}
     }
 
@@ -262,6 +263,7 @@ fn group_category(number: u16) -> Option<DiagnosticCategory> {
         2000 => Some(DiagnosticCategory::LoweringEmission),
         3000 => Some(DiagnosticCategory::ProjectConfig),
         4000 => Some(DiagnosticCategory::Lint),
+        5000 => Some(DiagnosticCategory::Plugin),
         _ => None,
     }
 }
@@ -352,6 +354,7 @@ fn format_matcher(matcher: &IgnoreMatcher) -> String {
             DiagnosticCategory::LoweringEmission => "lowering/emission".to_owned(),
             DiagnosticCategory::ProjectConfig => "project config".to_owned(),
             DiagnosticCategory::Lint => "lint".to_owned(),
+            DiagnosticCategory::Plugin => "plugin".to_owned(),
         },
     }
 }

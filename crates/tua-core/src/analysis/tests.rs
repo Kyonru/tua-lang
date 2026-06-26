@@ -1,5 +1,8 @@
 use super::*;
-use crate::{DiagnosticCode, Fixture};
+use crate::{
+    DiagnosticCode, DiagnosticSeverity, Fixture, PluginContext, PluginDeclaration,
+    PluginDeclarationKind, PluginRegistry, TuaPlugin,
+};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -48,6 +51,37 @@ impl Drop for TempProject {
     }
 }
 
+#[derive(Debug)]
+struct AnalysisTestPlugin;
+
+impl TuaPlugin for AnalysisTestPlugin {
+    fn name(&self) -> &'static str {
+        "tua.analysis-test"
+    }
+
+    fn declarations(&self) -> Vec<PluginDeclaration> {
+        vec![PluginDeclaration::new(
+            "testdecl",
+            PluginDeclarationKind::TopLevelDeclaration,
+        )]
+    }
+
+    fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
+        if context.source.contains("plugin_problem") {
+            vec![Diagnostic::new(
+                context.path,
+                1,
+                1,
+                DiagnosticSeverity::Warning,
+                "analysis test plugin diagnostic",
+            )
+            .with_code(DiagnosticCode::PLUGIN_DIAGNOSTIC)]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
 #[test]
 fn snapshot_prefers_open_document_over_file_contents() {
     let path = PathBuf::from("src/main.tua");
@@ -64,6 +98,36 @@ fn snapshot_prefers_open_document_over_file_contents() {
         Some("local value: number = \"open\"\n")
     );
     assert_eq!(snapshot.diagnostics(&path).len(), 1);
+}
+
+#[test]
+fn plugin_registry_is_inert_until_registered_and_flows_into_diagnostics() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, "plugin_problem()\n");
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot.plugin_registry().is_empty());
+    assert!(!snapshot
+        .diagnostics(&path)
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::PLUGIN_DIAGNOSTIC)));
+
+    host.set_plugin_registry(PluginRegistry::new().with_plugin(AnalysisTestPlugin));
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics(&path);
+
+    assert_eq!(
+        snapshot.plugin_registry().declarations()[0].keyword,
+        "testdecl"
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::PLUGIN_DIAGNOSTIC)
+            && diagnostic.message == "analysis test plugin diagnostic"
+    }));
 }
 
 #[test]

@@ -13,6 +13,8 @@ fn reserves_spec_code_ranges() {
         (3999, DiagnosticCategory::ProjectConfig),
         (4000, DiagnosticCategory::Lint),
         (4999, DiagnosticCategory::Lint),
+        (5000, DiagnosticCategory::Plugin),
+        (5999, DiagnosticCategory::Plugin),
     ];
 
     for (number, category) in cases {
@@ -23,7 +25,7 @@ fn reserves_spec_code_ranges() {
     }
 
     assert_eq!(DiagnosticCode::new(0), None);
-    assert_eq!(DiagnosticCode::new(5000), None);
+    assert_eq!(DiagnosticCode::new(6000), None);
 }
 
 #[test]

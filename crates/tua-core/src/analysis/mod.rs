@@ -16,6 +16,7 @@ use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
 use crate::inlay_hint::inlay_hints_parsed_source_with_environment;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_link::require_module_at_position;
+use crate::plugin::{PluginContext, PluginRegistry};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
@@ -78,6 +79,7 @@ pub struct AnalysisHost {
     vfs: VirtualFileSystem,
     asset_roots: Vec<PathBuf>,
     builtin_catalogs: BuiltinCatalogs,
+    plugin_registry: PluginRegistry,
     cache: RefCell<AnalysisQueryCache>,
     snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
     revision: u64,
@@ -90,6 +92,7 @@ pub struct AnalysisSnapshot {
     asset_roots: Vec<PathBuf>,
     files: BTreeMap<PathBuf, AnalysisFile>,
     builtin_catalogs: BuiltinCatalogs,
+    plugin_registry: PluginRegistry,
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
@@ -127,6 +130,14 @@ struct AnalysisFile {
 struct AnalysisSemanticFacts {
     environment: TypeEnvironment,
     inlay_hints: OnceCell<Vec<InlayHint>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AnalysisBuildContext<'a> {
+    config: &'a ProjectConfig,
+    source_roots: &'a [PathBuf],
+    asset_roots: &'a [PathBuf],
+    plugin_registry: &'a PluginRegistry,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -299,6 +310,16 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    pub fn plugin_registry(&self) -> &PluginRegistry {
+        &self.plugin_registry
+    }
+
+    pub fn set_plugin_registry(&mut self, registry: PluginRegistry) {
+        self.plugin_registry = registry;
+        self.cache.borrow_mut().invalidate_all();
+        self.bump_revision();
+    }
+
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
         let kind = infer_source_kind(&path, &self.config);
@@ -384,9 +405,12 @@ impl AnalysisHost {
                         file.path(),
                         file.source(),
                         analysis_source_kind(file.kind()),
-                        &self.config,
-                        &source_roots,
-                        &self.asset_roots,
+                        AnalysisBuildContext {
+                            config: &self.config,
+                            source_roots: &source_roots,
+                            asset_roots: &self.asset_roots,
+                            plugin_registry: &self.plugin_registry,
+                        },
                     );
 
                     (file.path().to_path_buf(), analysis_file)
@@ -461,6 +485,7 @@ impl AnalysisHost {
             asset_roots: self.asset_roots.clone(),
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
+            plugin_registry: self.plugin_registry.clone(),
             module_graph,
             type_database,
             symbol_index,
@@ -510,6 +535,10 @@ impl AnalysisSnapshot {
 
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
         &self.builtin_catalogs
+    }
+
+    pub fn plugin_registry(&self) -> &PluginRegistry {
+        &self.plugin_registry
     }
 
     pub fn is_open_document(&self, path: impl AsRef<Path>) -> bool {
@@ -3034,9 +3063,7 @@ impl AnalysisQueryCache {
         path: &Path,
         source: &str,
         kind: AnalysisSourceKind,
-        config: &ProjectConfig,
-        source_roots: &[PathBuf],
-        asset_roots: &[PathBuf],
+        context: AnalysisBuildContext<'_>,
     ) -> AnalysisFile {
         let path = normalize_path(path);
 
@@ -3051,14 +3078,7 @@ impl AnalysisQueryCache {
 
         self.record_miss();
 
-        let file = build_analysis_file(
-            &path,
-            source.to_owned(),
-            kind,
-            config,
-            source_roots,
-            asset_roots,
-        );
+        let file = build_analysis_file(&path, source.to_owned(), kind, context);
         self.update_dependencies(&path, &file.require_edges);
         self.files.insert(
             path,
@@ -3192,9 +3212,7 @@ fn build_analysis_file(
     path: &Path,
     source: String,
     kind: AnalysisSourceKind,
-    config: &ProjectConfig,
-    source_roots: &[PathBuf],
-    asset_roots: &[PathBuf],
+    context: AnalysisBuildContext<'_>,
 ) -> AnalysisFile {
     let parsed = {
         let _profile = profile::span_for_path("analysis.parse", path);
@@ -3221,14 +3239,14 @@ fn build_analysis_file(
     };
     let mut diagnostics = {
         let _profile = profile::span_for_path("analysis.check", path);
-        let mut diagnostics_config = config.diagnostics.clone();
+        let mut diagnostics_config = context.config.diagnostics.clone();
 
         diagnostics_config.inline_ignores = false;
 
         match &parsed {
             Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
                 parsed,
-                analysis_asset_roots(source_roots, asset_roots),
+                analysis_asset_roots(context.source_roots, context.asset_roots),
                 &diagnostics_config,
             )
             .err()
@@ -3241,11 +3259,21 @@ fn build_analysis_file(
             let _profile = profile::span_for_path("analysis.emit.check", path);
 
             if let Err(mut emit_diagnostics) =
-                emit_lua_with_mode(parsed, config.emit.annotation_mode)
+                emit_lua_with_mode(parsed, context.config.emit.annotation_mode)
             {
                 diagnostics.append(&mut emit_diagnostics);
             }
         }
+    }
+    if !context.plugin_registry.is_empty() {
+        let _profile = profile::span_for_path("analysis.plugins.diagnostics", path);
+        let parsed = parsed.as_ref().ok();
+
+        diagnostics.extend(context.plugin_registry.diagnostics(PluginContext {
+            path,
+            source: &source,
+            parsed,
+        }));
     }
     let diagnostics = deduplicate_diagnostics(diagnostics);
     let exports = {
@@ -3264,7 +3292,7 @@ fn build_analysis_file(
         parsed
             .as_ref()
             .ok()
-            .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), source_roots))
+            .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), context.source_roots))
             .unwrap_or_default()
     };
 

@@ -5,9 +5,27 @@ is not a general macro system. The goal is to let Tua understand small,
 tooling-friendly domains such as assets, sprites, animation, vectors, and editor
 metadata while keeping normal Lua/Tua semantics predictable.
 
-This page defines the intended v1 boundaries for future implementation work.
-Nothing here should be treated as a promise that third-party executable plugins
-are available today.
+This page defines the intended v1 boundaries and the current registry shape.
+Third-party executable plugins are not available today.
+
+## Current Implementation
+
+Tua currently has an experimental Rust-only plugin registry in `tua-core`.
+`AnalysisHost` owns an optional `PluginRegistry`; the default registry is empty,
+so ordinary projects behave exactly as before.
+
+Registered Rust plugins can currently contribute:
+
+- declaration metadata;
+- diagnostics through the normal analysis snapshot pipeline;
+- completion items;
+- hover snippets;
+- structured lowering requests.
+
+Only diagnostics are wired into the default analysis pipeline today. The other
+contribution types are exposed by the registry so future built-in domain plugins
+can route them through completion, hover, and emission without inventing another
+plugin API. Plugin diagnostics use the reserved `TL5000`-`TL5999` range.
 
 ## Goals
 
@@ -328,9 +346,9 @@ before the request.
 
 ## V1 Recommendation
 
-The first implementation should be:
+The recommended implementation path is:
 
-1. A Rust-only plugin registry in `tua-core`.
+1. A Rust-only plugin registry in `tua-core`. Status: done.
 2. One built-in asset validation plugin.
 3. One small experimental declaration plugin, such as a sprite metadata parser,
    behind an explicit config flag.

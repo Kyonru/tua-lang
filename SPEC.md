@@ -593,7 +593,8 @@ Suggested diagnostic code ranges:
 - `TL1000`-`TL1999`: type errors;
 - `TL2000`-`TL2999`: lowering and emission errors;
 - `TL3000`-`TL3999`: project configuration errors;
-- `TL4000`-`TL4999`: lint and style guidance diagnostics.
+- `TL4000`-`TL4999`: lint and style guidance diagnostics;
+- `TL5000`-`TL5999`: built-in domain plugin diagnostics.
 
 Inline diagnostic suppression is opt-in through project configuration. When
 enabled, the compiler and language server recognize:

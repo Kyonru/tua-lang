@@ -26,6 +26,7 @@ pub mod module_index;
 pub mod module_link;
 mod narrowing;
 pub mod parser;
+pub mod plugin;
 pub mod profile;
 mod project;
 pub mod project_model;
@@ -123,6 +124,11 @@ pub use parser::{
     LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource,
     ParameterAnnotation, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
     TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
+};
+pub use plugin::{
+    PluginCompletionContext, PluginContext, PluginDeclaration, PluginDeclarationKind, PluginHover,
+    PluginHoverContext, PluginLoweringOperation, PluginLoweringRequest, PluginLoweringValue,
+    PluginRegistry, TuaPlugin,
 };
 pub use project::project_description;
 pub use project_model::{

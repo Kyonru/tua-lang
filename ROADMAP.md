@@ -1968,6 +1968,8 @@ Acceptance:
 
 ### 72. `feat(plugins): add experimental plugin registry`
 
+Status: done.
+
 Scope:
 
 - Add a plugin registry in `tua-core`.

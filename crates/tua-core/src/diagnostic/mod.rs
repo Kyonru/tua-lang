@@ -27,6 +27,7 @@ pub enum DiagnosticCategory {
     LoweringEmission,
     ProjectConfig,
     Lint,
+    Plugin,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,9 +81,10 @@ impl DiagnosticCode {
     pub const LINT_UNUSED_ASSIGNMENT: Self = Self(4029);
     pub const LINT_BINARY_OPERATOR_TYPE: Self = Self(4030);
     pub const LINT_UNCALLED_LOCAL_FUNCTION: Self = Self(4031);
+    pub const PLUGIN_DIAGNOSTIC: Self = Self(5001);
 
     pub fn new(number: u16) -> Option<Self> {
-        if (1..=4999).contains(&number) {
+        if (1..=5999).contains(&number) {
             Some(Self(number))
         } else {
             None
@@ -100,6 +102,7 @@ impl DiagnosticCode {
             2000..=2999 => DiagnosticCategory::LoweringEmission,
             3000..=3999 => DiagnosticCategory::ProjectConfig,
             4000..=4999 => DiagnosticCategory::Lint,
+            5000..=5999 => DiagnosticCategory::Plugin,
             _ => unreachable!("diagnostic codes are validated at construction"),
         }
     }
@@ -154,6 +157,7 @@ impl DiagnosticCode {
                 | Self::LINT_UNUSED_ASSIGNMENT
                 | Self::LINT_BINARY_OPERATOR_TYPE
                 | Self::LINT_UNCALLED_LOCAL_FUNCTION
+                | Self::PLUGIN_DIAGNOSTIC
         )
     }
 }
