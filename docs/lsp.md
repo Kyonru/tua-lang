@@ -17,6 +17,8 @@ The VS Code extension starts this server and surfaces editor features for
   `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
 - Optional inline diagnostic suppressions can be enabled through
   `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
+- Optional LuaJIT shape guidance can be enabled through `tua.jit.enabled` or
+  `[jit].enabled`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
   locals where possible.
@@ -68,6 +70,18 @@ local legacy: number = "soon" -- tua-ignore-line TL1003
 Invalid diagnostic codes and suppressions that do not match any diagnostic still
 publish warnings. Suppression comments do not change hover, completion, inferred
 types, or emitted Lua.
+
+## LuaJIT Guidance
+
+When enabled, the LSP publishes conservative LuaJIT-friendly guidance from the
+same diagnostic pipeline as `tua check`:
+
+- `TL4032`: a local variable changes clear concrete type.
+- `TL4033`: a known table shape gains a late field or changes a field type.
+- `TL4034`: a loop writes through a dynamic table key.
+
+These diagnostics are disabled by default. `any` and unknown dynamic values
+stay permissive, and the guidance never changes emitted Lua.
 
 ## Design Notes
 

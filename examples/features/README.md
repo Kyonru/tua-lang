@@ -56,6 +56,10 @@ make build-features
   for assignment/local declaration arity, unused assignments, binary operator
   type mismatches, and local functions that are referenced but never directly
   called.
+- `src/luajit.tua` demonstrates opt-in LuaJIT guidance comments for variable
+  type drift, table-shape drift, hot-loop dynamic writes, and the `any` escape
+  hatch. The feature is disabled by default, so the example remains buildable
+  without warnings.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`; it demonstrates `---@class`, `---@field`,
   literal-union aliases, `---@overload`, `---@vararg`, and the LuaHelper

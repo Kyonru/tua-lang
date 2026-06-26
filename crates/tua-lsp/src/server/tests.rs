@@ -1218,6 +1218,35 @@ print(callback)
 }
 
 #[test]
+fn did_change_configuration_can_enable_jit_guidance() {
+    let temp = TempProject::new("configuration-jit-guidance");
+    let source = r#"
+local value = 1
+value = "shape drift"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "jit": {
+            "enabled": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL4032");
+}
+
+#[test]
 fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003

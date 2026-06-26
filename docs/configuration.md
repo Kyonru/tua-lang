@@ -14,6 +14,12 @@ emit_maps = true
 [emit]
 annotation_mode = "off"
 
+[jit]
+enabled = false
+variable_type_drift = true
+table_shape_drift = true
+hot_loop_hints = true
+
 [diagnostics]
 duplicate_keys = false
 missing_requires = false
@@ -78,6 +84,36 @@ LuaCATS output includes:
 - `---@type` for annotated locals.
 - `---@param` and `---@return` for function signatures.
 - `---@field` for stable table/object fields.
+
+## LuaJIT Guidance
+
+LuaJIT guidance is opt-in and diagnostic-only. It encourages stable local and
+table shapes for LOVE projects that care about desktop LuaJIT behavior, but it
+does not rewrite code, add runtime checks, or change emitted Lua.
+
+```toml
+[jit]
+enabled = true
+variable_type_drift = true
+table_shape_drift = true
+hot_loop_hints = true
+```
+
+`enabled`
+: Enables the LuaJIT guidance pass. The default is `false`.
+
+`variable_type_drift`
+: Reports clear local value-type drift such as assigning a `string` into a
+  local previously inferred as `number`. Values annotated or inferred as `any`
+  remain an intentional dynamic escape hatch.
+
+`table_shape_drift`
+: Reports clear table-shape drift such as adding late fields to a known table
+  constructor or changing a known field from one concrete type to another.
+
+`hot_loop_hints`
+: Reports dynamic table-key writes inside loops when Tua can see the pattern.
+  These are hints for reviewing hot code paths, not proof that a loop is slow.
 
 ## Diagnostics
 
@@ -270,6 +306,7 @@ Supported editor settings:
 - `tua.diagnostics.globals`: replaces the configured global allow-list.
 - `tua.fileAssociations`: maps glob patterns to `lua` or `tua` so extra file
   extensions can be indexed.
+- `tua.jit.enabled`: overrides `[jit].enabled` for opt-in LuaJIT guidance.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`.

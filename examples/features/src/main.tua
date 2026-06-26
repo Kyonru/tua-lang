@@ -15,6 +15,7 @@ local LuaCatsEmit = require("luacats_emit")
 local LuaLSAnnotations = require("luals_annotations")
 local InlineIgnores = require("inline_ignores")
 local LuaHelperLints = require("luahelper_lints")
+local LuaJit = require("luajit")
 
 return {
   types = Types,
@@ -34,4 +35,5 @@ return {
   luals_annotations = LuaLSAnnotations,
   inline_ignores = InlineIgnores,
   luahelper_lints = LuaHelperLints,
+  luajit = LuaJit,
 }

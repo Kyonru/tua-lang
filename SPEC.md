@@ -596,6 +596,16 @@ Suggested diagnostic code ranges:
 - `TL4000`-`TL4999`: lint and style guidance diagnostics;
 - `TL5000`-`TL5999`: built-in domain plugin diagnostics.
 
+LuaJIT-oriented guidance uses the lint/style range and is disabled by default.
+The initial codes are:
+
+- `TL4032`: variable value type drift in opt-in JIT guidance mode;
+- `TL4033`: known table-shape or field-type drift in opt-in JIT guidance mode;
+- `TL4034`: dynamic table-key writes inside loops in opt-in JIT guidance mode.
+
+These diagnostics are advisory. They must not change type inference, lowering,
+emitted Lua, or runtime behavior.
+
 Inline diagnostic suppression is opt-in through project configuration. When
 enabled, the compiler and language server recognize:
 

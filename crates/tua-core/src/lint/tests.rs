@@ -1,6 +1,7 @@
 use crate::{
-    check_tua_source, check_tua_source_with_diagnostics_config, DiagnosticCode, DiagnosticSeverity,
-    DiagnosticsConfig,
+    check::check_parsed_source_with_asset_roots_diagnostics_and_jit_config, check_tua_source,
+    check_tua_source_with_diagnostics_config, parse_tua_source, DiagnosticCode, DiagnosticSeverity,
+    DiagnosticsConfig, JitConfig,
 };
 
 #[test]
@@ -701,11 +702,142 @@ called()
         .contains("local function `callback` is referenced but never directly called"));
 }
 
+#[test]
+fn jit_lints_are_disabled_by_default() {
+    check_tua_source(
+        "src/main.tua",
+        r#"
+local value = 1
+value = "shape drift"
+
+local player = { hp = 10 }
+player.name = "late"
+
+for i = 1, 3 do
+  player[i] = i
+end
+"#,
+    )
+    .expect("JIT guidance should be opt-in");
+}
+
+#[test]
+fn reports_jit_type_and_table_shape_drift_when_enabled() {
+    let diagnostics = check_jit_source(
+        r#"
+local value = 1
+value = "shape drift"
+
+local player = { hp = 10 }
+player.name = "late"
+player.hp = "wrong"
+
+local dynamic: any = 1
+dynamic = "allowed"
+"#,
+        JitConfig {
+            enabled: true,
+            ..JitConfig::default()
+        },
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_JIT_TYPE_DRIFT),
+        1
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_JIT_TABLE_SHAPE_DRIFT),
+        2
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("LuaJIT shape drift for `value`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("late field insertion `player.name`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .contains("table field type drift for `player.hp`")
+    }));
+}
+
+#[test]
+fn reports_jit_dynamic_table_writes_inside_loops_when_enabled() {
+    let diagnostics = check_jit_source(
+        r#"
+local values = {}
+
+for i = 1, 3 do
+  values[i] = i
+  values.fixed = i
+end
+"#,
+        JitConfig {
+            enabled: true,
+            ..JitConfig::default()
+        },
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_JIT_HOT_LOOP_DYNAMIC_KEY),
+        1
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.severity == DiagnosticSeverity::Hint
+            && diagnostic
+                .message
+                .contains("hot loop uses a dynamic table write")
+    }));
+}
+
+#[test]
+fn jit_sub_rules_can_be_disabled_individually() {
+    let diagnostics = check_jit_source(
+        r#"
+local value = 1
+value = "shape drift"
+
+local player = { hp = 10 }
+player.name = "late"
+
+for i = 1, 3 do
+  player[i] = i
+end
+"#,
+        JitConfig {
+            enabled: true,
+            variable_type_drift: false,
+            table_shape_drift: false,
+            hot_loop_hints: false,
+        },
+    );
+
+    assert!(diagnostics.is_empty());
+}
+
 fn count_code(diagnostics: &[crate::Diagnostic], code: DiagnosticCode) -> usize {
     diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.code == Some(code))
         .count()
+}
+
+fn check_jit_source(source: &str, jit_config: JitConfig) -> Vec<crate::Diagnostic> {
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+
+    check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+        &parsed,
+        &[std::path::PathBuf::from("src")],
+        &DiagnosticsConfig::default(),
+        &jit_config,
+    )
+    .err()
+    .unwrap_or_default()
 }
 
 struct TempProject {

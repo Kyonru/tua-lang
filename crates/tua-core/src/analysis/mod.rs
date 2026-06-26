@@ -29,7 +29,7 @@ use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
-    check_parsed_source_with_asset_roots_and_diagnostics_config, complete_parsed_source,
+    check::check_parsed_source_with_asset_roots_diagnostics_and_jit_config, complete_parsed_source,
     complete_tua_source, definition_parsed_source_with_hir, document_highlights_parsed_source,
     document_symbols_parsed_source, emit_lua_with_mode, exported_field_for_fields,
     global_function_definition_count, global_function_name_for_definition,
@@ -3244,10 +3244,11 @@ fn build_analysis_file(
         diagnostics_config.inline_ignores = false;
 
         match &parsed {
-            Ok(parsed) => check_parsed_source_with_asset_roots_and_diagnostics_config(
+            Ok(parsed) => check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
                 parsed,
                 analysis_asset_roots(context.source_roots, context.asset_roots),
                 &diagnostics_config,
+                &context.config.jit,
             )
             .err()
             .unwrap_or_default(),

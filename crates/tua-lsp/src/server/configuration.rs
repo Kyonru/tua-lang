@@ -1,11 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use tua_core::{DiagnosticsConfig, ModulePathSeparator, ProjectFileAssociation, VfsSourceKind};
+use tua_core::{
+    DiagnosticsConfig, JitConfig, ModulePathSeparator, ProjectConfig, ProjectFileAssociation,
+    VfsSourceKind,
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct WorkspaceSettings {
     pub(super) diagnostics: DiagnosticOverrides,
+    pub(super) jit: JitOverrides,
     pub(super) file_associations: Vec<FileAssociation>,
     pub(super) ignored_paths: Vec<String>,
     pub(super) require_path_separator: RequirePathSeparator,
@@ -42,6 +46,11 @@ pub(super) struct DiagnosticOverrides {
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
     pub(super) globals: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct JitOverrides {
+    pub(super) enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,6 +95,7 @@ impl WorkspaceSettings {
 
         Self {
             diagnostics: DiagnosticOverrides::from_settings(settings.get("diagnostics")),
+            jit: JitOverrides::from_settings(settings.get("jit")),
             file_associations: file_associations_from_settings(settings),
             ignored_paths: string_array_setting(settings, &["ignoredPaths", "ignored_paths"]),
             require_path_separator: require_path_separator_from_settings(settings),
@@ -95,6 +105,13 @@ impl WorkspaceSettings {
 
     pub(super) fn diagnostics_config(&self, mut project: DiagnosticsConfig) -> DiagnosticsConfig {
         self.diagnostics.apply(&mut project);
+        project
+    }
+
+    pub(super) fn apply_project_config(&self, mut project: ProjectConfig) -> ProjectConfig {
+        project.diagnostics = self.diagnostics_config(project.diagnostics);
+        self.jit.apply(&mut project.jit);
+
         project
     }
 
@@ -293,6 +310,22 @@ impl DiagnosticOverrides {
         if let Some(globals) = &self.globals {
             diagnostics.globals = globals.clone();
         }
+    }
+}
+
+impl JitOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+
+        Self {
+            enabled: bool_setting(settings, "enabled", "enabled"),
+        }
+    }
+
+    fn apply(&self, jit: &mut JitConfig) {
+        apply_bool(self.enabled, &mut jit.enabled);
     }
 }
 

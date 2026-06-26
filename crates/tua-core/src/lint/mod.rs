@@ -9,7 +9,7 @@ use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
-use crate::config::DiagnosticsConfig;
+use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::module_index::resolve_required_module;
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
@@ -18,6 +18,7 @@ use crate::{lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, S
 pub(crate) fn lint_parsed_source(
     parsed: &ParsedSource,
     config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
     environment: &TypeEnvironment,
 ) -> Vec<Diagnostic> {
     if !config.duplicate_keys
@@ -26,6 +27,7 @@ pub(crate) fn lint_parsed_source(
         && !config.formatting_lints
         && !symbol_lints_enabled(config)
         && !correctness_lints_enabled(config)
+        && !jit_config.enabled
     {
         return Vec::new();
     }
@@ -55,6 +57,10 @@ pub(crate) fn lint_parsed_source(
 
     if symbol_lints_enabled(config) {
         diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze());
+    }
+
+    if jit_config.enabled {
+        diagnostics.extend(JitAnalyzer::new(parsed, jit_config, environment).analyze());
     }
 
     diagnostics
@@ -982,6 +988,345 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 }
 
+struct JitAnalyzer<'a> {
+    parsed: &'a ParsedSource,
+    config: &'a JitConfig,
+    semantic: SemanticModel<'a>,
+    type_context: TypeContext,
+    diagnostics: Vec<Diagnostic>,
+    loop_depth: usize,
+}
+
+impl<'a> JitAnalyzer<'a> {
+    fn new(
+        parsed: &'a ParsedSource,
+        config: &'a JitConfig,
+        environment: &'a TypeEnvironment,
+    ) -> Self {
+        Self {
+            parsed,
+            config,
+            semantic: SemanticModel::new(parsed, environment),
+            type_context: environment.to_type_context(),
+            diagnostics: Vec::new(),
+            loop_depth: 0,
+        }
+    }
+
+    fn analyze(mut self) -> Vec<Diagnostic> {
+        self.analyze_block(self.parsed.ast.nodes());
+        self.diagnostics
+    }
+
+    fn analyze_block(&mut self, block: &ast::Block) {
+        for stmt in block.stmts() {
+            self.analyze_stmt(stmt);
+        }
+
+        if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
+            for expression in return_stmt.returns() {
+                self.analyze_expression(expression);
+            }
+        }
+    }
+
+    fn analyze_stmt(&mut self, stmt: &ast::Stmt) {
+        match stmt {
+            ast::Stmt::Assignment(assignment) => self.analyze_assignment(assignment),
+            ast::Stmt::FunctionCall(function_call) => self.analyze_function_call(function_call),
+            ast::Stmt::LocalAssignment(local) => {
+                for expression in local.expressions() {
+                    self.analyze_expression(expression);
+                }
+            }
+            ast::Stmt::LocalFunction(function) => self.analyze_function_body(function.body()),
+            ast::Stmt::FunctionDeclaration(function) => {
+                self.analyze_function_body(function.body());
+            }
+            ast::Stmt::Do(block) => self.analyze_block(block.block()),
+            ast::Stmt::If(if_stmt) => {
+                self.analyze_expression(if_stmt.condition());
+                self.analyze_block(if_stmt.block());
+
+                if let Some(else_ifs) = if_stmt.else_if() {
+                    for else_if in else_ifs {
+                        self.analyze_expression(else_if.condition());
+                        self.analyze_block(else_if.block());
+                    }
+                }
+
+                if let Some(else_block) = if_stmt.else_block() {
+                    self.analyze_block(else_block);
+                }
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                for expression in for_stmt.expressions() {
+                    self.analyze_expression(expression);
+                }
+
+                self.with_loop(|this| this.analyze_block(for_stmt.block()));
+            }
+            ast::Stmt::NumericFor(for_stmt) => {
+                self.analyze_expression(for_stmt.start());
+                self.analyze_expression(for_stmt.end());
+
+                if let Some(step) = for_stmt.step() {
+                    self.analyze_expression(step);
+                }
+
+                self.with_loop(|this| this.analyze_block(for_stmt.block()));
+            }
+            ast::Stmt::Repeat(repeat) => {
+                self.with_loop(|this| this.analyze_block(repeat.block()));
+                self.analyze_expression(repeat.until());
+            }
+            ast::Stmt::While(while_stmt) => {
+                self.analyze_expression(while_stmt.condition());
+                self.with_loop(|this| this.analyze_block(while_stmt.block()));
+            }
+            _ => {}
+        }
+    }
+
+    fn with_loop(&mut self, f: impl FnOnce(&mut Self)) {
+        self.loop_depth += 1;
+        f(self);
+        self.loop_depth = self.loop_depth.saturating_sub(1);
+    }
+
+    fn analyze_function_body(&mut self, body: &ast::FunctionBody) {
+        self.analyze_block(body.block());
+    }
+
+    fn analyze_assignment(&mut self, assignment: &ast::Assignment) {
+        for expression in assignment.expressions() {
+            self.analyze_expression(expression);
+        }
+
+        let expressions = assignment.expressions().iter().collect::<Vec<_>>();
+
+        for (index, variable) in assignment.variables().iter().enumerate() {
+            if self.config.hot_loop_hints && self.loop_depth > 0 {
+                self.check_hot_loop_dynamic_key(variable);
+            }
+
+            let Some(expression) = expressions.get(index).copied() else {
+                continue;
+            };
+
+            if self.config.variable_type_drift {
+                self.check_variable_type_drift(variable, expression);
+            }
+
+            if self.config.table_shape_drift {
+                self.check_table_shape_drift(variable, expression);
+            }
+        }
+    }
+
+    fn analyze_expression(&mut self, expression: &Expression) {
+        match expression {
+            Expression::BinaryOperator { lhs, rhs, .. } => {
+                self.analyze_expression(lhs);
+                self.analyze_expression(rhs);
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => self.analyze_expression(expression),
+            Expression::UnaryOperator { expression, .. } => self.analyze_expression(expression),
+            Expression::Function(function) => self.analyze_function_body(function.body()),
+            Expression::FunctionCall(function_call) => self.analyze_function_call(function_call),
+            Expression::TableConstructor(table) => {
+                for field in table.fields() {
+                    match field {
+                        Field::ExpressionKey { key, value, .. } => {
+                            self.analyze_expression(key);
+                            self.analyze_expression(value);
+                        }
+                        Field::NameKey { value, .. } => self.analyze_expression(value),
+                        Field::NoKey(expression) => self.analyze_expression(expression),
+                        _ => {}
+                    }
+                }
+            }
+            Expression::Var(var) => self.analyze_var(var),
+            _ => {}
+        }
+    }
+
+    fn analyze_var(&mut self, var: &Var) {
+        if let Var::Expression(expression) = var {
+            self.analyze_prefix(expression.prefix());
+            self.analyze_suffixes(expression.suffixes());
+        }
+    }
+
+    fn analyze_function_call(&mut self, function_call: &FunctionCall) {
+        self.analyze_prefix(function_call.prefix());
+        self.analyze_suffixes(function_call.suffixes());
+    }
+
+    fn analyze_prefix(&mut self, prefix: &Prefix) {
+        if let Prefix::Expression(expression) = prefix {
+            self.analyze_expression(expression);
+        }
+    }
+
+    fn analyze_suffixes<'b>(&mut self, suffixes: impl Iterator<Item = &'b Suffix>) {
+        for suffix in suffixes {
+            match suffix {
+                Suffix::Call(call) => self.analyze_call(call),
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    self.analyze_expression(expression);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn analyze_call(&mut self, call: &Call) {
+        match call {
+            Call::AnonymousCall(args) => self.analyze_function_args(args),
+            Call::MethodCall(method) => self.analyze_function_args(method.args()),
+            _ => {}
+        }
+    }
+
+    fn analyze_function_args(&mut self, args: &FunctionArgs) {
+        match args {
+            FunctionArgs::Parentheses { arguments, .. } => {
+                for argument in arguments {
+                    self.analyze_expression(argument);
+                }
+            }
+            FunctionArgs::TableConstructor(table) => {
+                for field in table.fields() {
+                    match field {
+                        Field::ExpressionKey { key, value, .. } => {
+                            self.analyze_expression(key);
+                            self.analyze_expression(value);
+                        }
+                        Field::NameKey { value, .. } => self.analyze_expression(value),
+                        Field::NoKey(expression) => self.analyze_expression(expression),
+                        _ => {}
+                    }
+                }
+            }
+            FunctionArgs::String(_) => {}
+            _ => {}
+        }
+    }
+
+    fn check_variable_type_drift(&mut self, variable: &Var, expression: &Expression) {
+        let Some(name) = assigned_local_name(variable) else {
+            return;
+        };
+        let position = node_position(variable);
+        let Some(previous_type) = self.previous_name_type(&name, position) else {
+            return;
+        };
+        let Some(next_type) =
+            self.semantic
+                .type_of_expression_return(expression, node_position(expression), 0)
+        else {
+            return;
+        };
+
+        if !jit_types_are_stable(&previous_type, &next_type, &self.type_context) {
+            self.diagnostics.push(jit_type_drift_diagnostic(
+                &self.parsed.path,
+                position,
+                &name,
+                &previous_type,
+                &next_type,
+            ));
+        }
+    }
+
+    fn check_table_shape_drift(&mut self, variable: &Var, expression: &Expression) {
+        let Some(parts) = plain_field_chain_from_var(variable) else {
+            return;
+        };
+
+        if parts.len() < 2 {
+            return;
+        }
+
+        let position = node_position(variable);
+        let Some(field) = parts.last() else {
+            return;
+        };
+        let receiver_parts = &parts[..parts.len() - 1];
+        let Some(receiver_type) = self.previous_field_chain_type(receiver_parts, position) else {
+            return;
+        };
+        let receiver_type = resolve_alias_for_jit(&receiver_type, &self.type_context);
+        let Type::Table(table) = receiver_type else {
+            return;
+        };
+        let Some(next_type) =
+            self.semantic
+                .type_of_expression_return(expression, node_position(expression), 0)
+        else {
+            return;
+        };
+
+        match table.semantic_field(field) {
+            Some(existing_field) => {
+                if type_is_dynamic(&existing_field.ty, &self.type_context)
+                    || type_is_dynamic(&next_type, &self.type_context)
+                {
+                    return;
+                }
+
+                if !jit_types_are_stable(&existing_field.ty, &next_type, &self.type_context) {
+                    self.diagnostics.push(jit_table_field_type_drift_diagnostic(
+                        &self.parsed.path,
+                        position,
+                        &parts.join("."),
+                        &existing_field.ty,
+                        &next_type,
+                    ));
+                }
+            }
+            None => {
+                if type_is_dynamic(&next_type, &self.type_context) {
+                    return;
+                }
+
+                self.diagnostics.push(jit_table_shape_drift_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &parts.join("."),
+                ));
+            }
+        }
+    }
+
+    fn check_hot_loop_dynamic_key(&mut self, variable: &Var) {
+        if !var_has_dynamic_bracket_index(variable) {
+            return;
+        }
+
+        self.diagnostics.push(jit_hot_loop_dynamic_key_diagnostic(
+            &self.parsed.path,
+            node_position(variable),
+        ));
+    }
+
+    fn previous_name_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        self.semantic.type_of_name(name, position_before(position))
+    }
+
+    fn previous_field_chain_type(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<Type> {
+        self.semantic
+            .type_of_field_chain(parts, position_before(position))
+    }
+}
+
 fn future_locals_for_block(block: &ast::Block) -> BTreeMap<String, SourcePosition> {
     let mut locals = BTreeMap::new();
 
@@ -1070,6 +1415,99 @@ fn require_module_literal(function_call: &FunctionCall) -> Option<(String, Sourc
         FunctionArgs::String(token) => Some((string_literal_value(token)?, token_position(token))),
         FunctionArgs::TableConstructor(_) => None,
         _ => None,
+    }
+}
+
+fn assigned_local_name(variable: &Var) -> Option<String> {
+    match variable {
+        Var::Name(name) => Some(token_text(name)),
+        _ => None,
+    }
+}
+
+fn position_before(position: SourcePosition) -> SourcePosition {
+    if position.column > 1 {
+        SourcePosition {
+            line: position.line,
+            column: position.column - 1,
+        }
+    } else if position.line > 1 {
+        SourcePosition {
+            line: position.line - 1,
+            column: usize::MAX,
+        }
+    } else {
+        position
+    }
+}
+
+fn var_has_dynamic_bracket_index(variable: &Var) -> bool {
+    let Var::Expression(expression) = variable else {
+        return false;
+    };
+
+    expression.suffixes().any(|suffix| {
+        matches!(
+            suffix,
+            Suffix::Index(Index::Brackets { expression, .. })
+                if literal_table_key(expression).is_none()
+        )
+    })
+}
+
+fn jit_types_are_stable(previous: &Type, next: &Type, context: &TypeContext) -> bool {
+    if type_is_dynamic(previous, context) || type_is_dynamic(next, context) {
+        return true;
+    }
+
+    let previous = resolve_alias_for_jit(previous, context);
+    let next = resolve_alias_for_jit(next, context);
+
+    match (&previous, &next) {
+        (Type::Union(types), _) => types
+            .iter()
+            .any(|ty| jit_types_are_stable(ty, &next, context)),
+        (_, Type::Union(types)) => types
+            .iter()
+            .all(|ty| jit_types_are_stable(&previous, ty, context)),
+        (Type::StringLiteral(_), Type::StringLiteral(_))
+        | (Type::StringLiteral(_), Type::Primitive(crate::PrimitiveType::String))
+        | (Type::Primitive(crate::PrimitiveType::String), Type::StringLiteral(_)) => true,
+        (Type::Primitive(left), Type::Primitive(right)) => left == right,
+        (Type::Table(_), Type::Table(_)) => true,
+        (Type::Function(_), Type::Function(_)) => true,
+        (Type::Array(left), Type::Array(right)) => jit_types_are_stable(left, right, context),
+        (Type::Tuple(left), Type::Tuple(right)) => {
+            left.len() == right.len()
+                && left
+                    .iter()
+                    .zip(right)
+                    .all(|(left, right)| jit_types_are_stable(left, right, context))
+        }
+        (
+            Type::Dictionary {
+                key: left_key,
+                value: left_value,
+            },
+            Type::Dictionary {
+                key: right_key,
+                value: right_value,
+            },
+        ) => {
+            jit_types_are_stable(left_key, right_key, context)
+                && jit_types_are_stable(left_value, right_value, context)
+        }
+        _ => false,
+    }
+}
+
+fn resolve_alias_for_jit(ty: &Type, context: &TypeContext) -> Type {
+    match ty {
+        Type::Alias(name) => context
+            .alias(name)
+            .map(|ty| resolve_alias_for_jit(ty, context))
+            .unwrap_or_else(|| ty.clone()),
+        _ => ty.clone(),
     }
 }
 
@@ -1405,6 +1843,70 @@ fn uncalled_local_function_diagnostic(
         format!("local function `{name}` is referenced but never directly called"),
     )
     .with_code(DiagnosticCode::LINT_UNCALLED_LOCAL_FUNCTION)
+}
+
+fn jit_type_drift_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    previous: &Type,
+    next: &Type,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "LuaJIT shape drift for `{name}`: previously inferred {previous}, now assigned {next}"
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_JIT_TYPE_DRIFT)
+}
+
+fn jit_table_shape_drift_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    field: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("LuaJIT table shape drift: late field insertion `{field}`"),
+    )
+    .with_code(DiagnosticCode::LINT_JIT_TABLE_SHAPE_DRIFT)
+}
+
+fn jit_table_field_type_drift_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    field: &str,
+    previous: &Type,
+    next: &Type,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "LuaJIT table field type drift for `{field}`: expected {previous}, assigned {next}"
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_JIT_TABLE_SHAPE_DRIFT)
+}
+
+fn jit_hot_loop_dynamic_key_diagnostic(path: &Path, position: SourcePosition) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Hint,
+        "LuaJIT hot loop uses a dynamic table write; consider a stable literal field or pre-shaped table",
+    )
+    .with_code(DiagnosticCode::LINT_JIT_HOT_LOOP_DYNAMIC_KEY)
 }
 
 fn formatting_lints(parsed: &ParsedSource) -> Vec<Diagnostic> {

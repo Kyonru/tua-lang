@@ -359,6 +359,29 @@ fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
 }
 
 #[test]
+fn pipeline_diagnostics_run_jit_guidance_from_project_config() {
+    let path = PathBuf::from("src/main.tua");
+    let mut config = ProjectConfig::default();
+
+    config.jit.enabled = true;
+
+    let mut host = AnalysisHost::with_config(config);
+    host.set_file(
+        &path,
+        r#"
+local value = 1
+value = "shape drift"
+"#,
+    );
+
+    let diagnostics = host.snapshot().diagnostics(&path);
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_JIT_TYPE_DRIFT)));
+}
+
+#[test]
 fn pipeline_diagnostics_apply_inline_ignores_from_project_config() {
     let mut config = ProjectConfig::default();
 

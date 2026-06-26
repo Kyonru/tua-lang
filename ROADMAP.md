@@ -1992,6 +1992,8 @@ Acceptance:
 
 ### 73. `feat(luajit): add JIT-friendly typing and optimization-oriented constraints`
 
+Status: done.
+
 Scope:
 
 - Add a JIT-oriented opt-in mode (`[jit]` or `[performance]` section in

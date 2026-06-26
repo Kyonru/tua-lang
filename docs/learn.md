@@ -225,7 +225,31 @@ playerImage.setFilter("nearest")
 When Tua knows the receiver is a LOVE object, it warns about the dot call and
 editor completions prefer colon-call snippets.
 
-## 9. Let Dynamic Lua Stay Dynamic
+## 9. Enable LuaJIT Guidance When It Helps
+
+For hot LOVE code, you can opt into LuaJIT-friendly shape guidance:
+
+```toml
+[jit]
+enabled = true
+```
+
+This adds advisory diagnostics for clear local type drift, late table-shape
+changes, and dynamic table writes inside loops. It is intentionally conservative
+and never changes emitted Lua:
+
+```tua
+local value = 1
+value = "later" -- TL4032 when JIT guidance is enabled
+
+local player = { hp = 10 }
+player.name = "late field" -- TL4033 when JIT guidance is enabled
+```
+
+Use this for code paths where stable shapes matter. Leave it off for migration
+work, prototyping, or runtime-shaped Lua.
+
+## 10. Let Dynamic Lua Stay Dynamic
 
 Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
@@ -239,7 +263,7 @@ Use `any` deliberately when a value is runtime-shaped, third-party, or
 metatable-heavy. Add annotations later if that code becomes important to the
 editor or checker.
 
-## 9. Build And Inspect The Output
+## 11. Build And Inspect The Output
 
 The normal loop is:
 
@@ -257,7 +281,7 @@ cargo run -p tua-cli -- build
 
 That makes the output folder a runnable LOVE distribution folder.
 
-## 10. Try The Examples
+## 12. Try The Examples
 
 The feature tour is the best place to see language and editor behavior in one
 project:

@@ -81,6 +81,9 @@ impl DiagnosticCode {
     pub const LINT_UNUSED_ASSIGNMENT: Self = Self(4029);
     pub const LINT_BINARY_OPERATOR_TYPE: Self = Self(4030);
     pub const LINT_UNCALLED_LOCAL_FUNCTION: Self = Self(4031);
+    pub const LINT_JIT_TYPE_DRIFT: Self = Self(4032);
+    pub const LINT_JIT_TABLE_SHAPE_DRIFT: Self = Self(4033);
+    pub const LINT_JIT_HOT_LOOP_DYNAMIC_KEY: Self = Self(4034);
     pub const PLUGIN_DIAGNOSTIC: Self = Self(5001);
 
     pub fn new(number: u16) -> Option<Self> {
@@ -157,6 +160,9 @@ impl DiagnosticCode {
                 | Self::LINT_UNUSED_ASSIGNMENT
                 | Self::LINT_BINARY_OPERATOR_TYPE
                 | Self::LINT_UNCALLED_LOCAL_FUNCTION
+                | Self::LINT_JIT_TYPE_DRIFT
+                | Self::LINT_JIT_TABLE_SHAPE_DRIFT
+                | Self::LINT_JIT_HOT_LOOP_DYNAMIC_KEY
                 | Self::PLUGIN_DIAGNOSTIC
         )
     }

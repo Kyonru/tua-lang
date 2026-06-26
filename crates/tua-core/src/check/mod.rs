@@ -8,7 +8,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::config::DiagnosticsConfig;
+use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::module_index::required_module_export_type_for_fields;
@@ -87,13 +87,30 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
     asset_roots: &[PathBuf],
     diagnostics_config: &DiagnosticsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
+    check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+        parsed,
+        asset_roots,
+        diagnostics_config,
+        &JitConfig::default(),
+    )
+}
+
+pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+    parsed: &ParsedSource,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
+) -> Result<(), Vec<Diagnostic>> {
     let environment = build_type_environment(parsed)?;
     let mut checker = Checker::new(parsed, &environment, asset_roots);
 
     checker.check_block(parsed.ast.nodes(), None);
-    checker
-        .diagnostics
-        .extend(lint_parsed_source(parsed, diagnostics_config, &environment));
+    checker.diagnostics.extend(lint_parsed_source(
+        parsed,
+        diagnostics_config,
+        jit_config,
+        &environment,
+    ));
 
     if diagnostics_config.doc_annotations {
         checker

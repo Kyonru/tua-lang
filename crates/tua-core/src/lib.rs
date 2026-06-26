@@ -68,8 +68,8 @@ pub use code_action::{
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,
-    ConfigParseError, DiagnosticsConfig, EmitConfig, InitResult, LoadedConfig, ProjectConfig,
-    CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+    ConfigParseError, DiagnosticsConfig, EmitConfig, InitResult, JitConfig, LoadedConfig,
+    ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
 };
 pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,

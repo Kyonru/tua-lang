@@ -263,6 +263,14 @@
           },
           "description": "Additional global names accepted by diagnostics."
         },
+        "tua.jit.enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Enable opt-in LuaJIT shape guidance diagnostics (TL4032-TL4034). Null inherits [jit].enabled from tua.toml."
+        },
         "tua.fileAssociations": {
           "type": "object",
           "default": {},

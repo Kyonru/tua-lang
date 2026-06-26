@@ -45,6 +45,7 @@ fn default_config_matches_spec() {
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Off,
             },
+            jit: JitConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     );
@@ -61,6 +62,12 @@ extension = "tl"
 emit_maps = false
 [emit]
 annotation_mode = "luacats"
+
+[jit]
+enabled = true
+variable_type_drift = false
+table_shape_drift = true
+hot_loop_hints = false
 
 [diagnostics]
 duplicate_keys = true
@@ -105,6 +112,12 @@ globals = ["Game", "World"]
             emit_maps: false,
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Luacats,
+            },
+            jit: JitConfig {
+                enabled: true,
+                variable_type_drift: false,
+                table_shape_drift: true,
+                hot_loop_hints: false,
             },
             diagnostics: DiagnosticsConfig {
                 duplicate_keys: true,
@@ -165,6 +178,7 @@ emit_maps = false
             annotation_mode: AnnotationMode::Off,
         }
     );
+    assert_eq!(config.jit, JitConfig::default());
     assert_eq!(config.diagnostics, DiagnosticsConfig::default());
 }
 
@@ -212,6 +226,23 @@ duplicate_keys = true
     );
     assert_eq!(config.diagnostics.inline_ignore_max_per_file, 0);
     assert!(config.diagnostics.globals.is_empty());
+}
+
+#[test]
+fn parses_jit_section_with_partial_defaults() {
+    let config = parse_config(
+        r#"
+[jit]
+enabled = true
+table_shape_drift = false
+"#,
+    )
+    .expect("config should parse");
+
+    assert!(config.jit.enabled);
+    assert!(config.jit.variable_type_drift);
+    assert!(!config.jit.table_shape_drift);
+    assert!(config.jit.hot_loop_hints);
 }
 
 #[test]

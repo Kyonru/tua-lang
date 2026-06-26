@@ -27,6 +27,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Stdio language server | `tua lsp` and `tua lsp --stdio` serve JSON-RPC over stdio. | Standard editor integration shape. | Landed before 30 |
 | Incremental document sync | Open, change, save, and close notifications update diagnostics and open-document state. | Basic live diagnostics behavior. | 22, 31 |
 | Diagnostics for `.tua` | Parser, checker, asset, and lint diagnostics publish for open `.tua` documents. | Comparable base diagnostic loop, with fewer Lua-specific checks than LuaHelper. | 36, 37, 48.6 |
+| LuaJIT guidance diagnostics | Opt-in `[jit]` / `tua.jit.enabled` diagnostics report clear local type drift, table-shape drift, and dynamic table-key writes in loops. | Tua-specific LOVE/LuaJIT guidance rather than a general optimizer or profiler. | 73 |
 | LuaDoc annotation parsing | Parses/lower core LuaDoc tags plus practical LuaLS/LuaHelper forms such as literal unions, `---@overload`, `---@vararg`, and shallow metadata tags. | LuaHelper has a broader annotation ecosystem, but the common interop tags exist. | 33, 70.10, 70.25 |
 | Annotation-backed type environment | Supported annotations can provide aliases, function types, locals, docs, and simple module exports. | LuaHelper supports more patterns and library stubs. | 34 |
 | Hover | Shows aliases, locals, parameters, functions, table fields, Lua builtins, LOVE items, require literals, module bindings, annotation docs, and inferred returns. | Mature tools attach richer docs and more precise project context. | 40 |

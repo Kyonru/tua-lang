@@ -311,10 +311,8 @@ impl AnalysisHost {
         self.core.set_asset_roots(asset_roots);
 
         if let Some(workspace) = model.primary_workspace() {
-            let mut config = workspace.config().clone();
-
-            config.diagnostics = settings.diagnostics_config(config.diagnostics);
-            self.core.set_config(config);
+            self.core
+                .set_config(settings.apply_project_config(workspace.config().clone()));
         }
     }
 

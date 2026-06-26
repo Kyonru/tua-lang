@@ -18,6 +18,12 @@ emit_maps = true
 [emit]
 annotation_mode = \"off\"
 
+[jit]
+enabled = false
+variable_type_drift = true
+table_shape_drift = true
+hot_loop_hints = true
+
 [diagnostics]
 duplicate_keys = false
 missing_requires = false
@@ -57,6 +63,7 @@ pub struct ProjectConfig {
     pub extension: String,
     pub emit_maps: bool,
     pub emit: EmitConfig,
+    pub jit: JitConfig,
     pub diagnostics: DiagnosticsConfig,
 }
 
@@ -69,6 +76,7 @@ impl Default for ProjectConfig {
             extension: "tua".to_owned(),
             emit_maps: true,
             emit: EmitConfig::default(),
+            jit: JitConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     }
@@ -109,6 +117,25 @@ impl AnnotationMode {
         match self {
             Self::Off => "off",
             Self::Luacats => "luacats",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JitConfig {
+    pub enabled: bool,
+    pub variable_type_drift: bool,
+    pub table_shape_drift: bool,
+    pub hot_loop_hints: bool,
+}
+
+impl Default for JitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            variable_type_drift: true,
+            table_shape_drift: true,
+            hot_loop_hints: true,
         }
     }
 }
@@ -397,6 +424,25 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                     ));
                 }
             },
+            ConfigSection::Jit => match key {
+                "enabled" => config.jit.enabled = parse_bool(line_number, value)?,
+                "variable_type_drift" => {
+                    config.jit.variable_type_drift = parse_bool(line_number, value)?
+                }
+                "table_shape_drift" => {
+                    config.jit.table_shape_drift = parse_bool(line_number, value)?
+                }
+                "hot_loop_hints" => config.jit.hot_loop_hints = parse_bool(line_number, value)?,
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown jit config key `{other}`"),
+                    ));
+                }
+            },
             ConfigSection::Diagnostics => match key {
                 "duplicate_keys" => {
                     config.diagnostics.duplicate_keys = parse_bool(line_number, value)?
@@ -501,6 +547,7 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
 enum ConfigSection {
     Root,
     Emit,
+    Jit,
     Diagnostics,
 }
 
@@ -524,6 +571,7 @@ fn parse_section_header(
 
     match section.trim() {
         "emit" => Ok(Some(ConfigSection::Emit)),
+        "jit" => Ok(Some(ConfigSection::Jit)),
         "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),
         "" => Err(ConfigParseError::new(line_number, "missing section name")),
         other => Err(ConfigParseError::new(
