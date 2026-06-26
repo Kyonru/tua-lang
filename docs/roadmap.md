@@ -40,8 +40,8 @@ After that, Phase 13 explores LOVE domain extensions:
 
 - a conservative plugin architecture for domain declarations and tooling,
   starting with the [Domain Plugins](plugins.md) design;
-- built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)` plain-table
-  emission;
+- built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)`
+  BrineVector-backed emission;
 - a prototype sprite/animation DSL;
 - richer asset validation and editor metadata;
 - optional Feather/tooling integration hooks.

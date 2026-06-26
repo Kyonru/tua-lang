@@ -2074,9 +2074,13 @@ Scope:
 
 Decision:
 
-- v1 emits plain Lua table literals for `vec2(x, y)`: `{ x = x, y = y }`.
-- Vector math libraries, generated runtime modules, and operator-rich vector
-  semantics are deferred until a later domain-extension pass.
+- v1 lowers `vec2(x, y)` to a cached BrineVector constructor:
+  `local __tua_vec2 = require("brinevector")`.
+- `tua build` writes the bundled `brinevector.lua` runtime into the output
+  directory when generated Lua needs it, unless the project already provides
+  one.
+- BrineVector gives LuaJIT/LOVE desktop builds an FFI-accelerated vector path
+  and falls back to table vectors where JIT/FFI is not appropriate.
 
 Acceptance:
 

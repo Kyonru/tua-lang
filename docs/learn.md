@@ -192,7 +192,8 @@ These lower to ordinary LOVE calls:
 ```lua
 local playerImage = love.graphics.newImage("assets/player.png")
 local jumpSound = love.audio.newSource("assets/jump.wav", "static")
-local position = { x = 100, y = 200 }
+local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
 
 playerImage:setFilter("nearest")
 jumpSound:play()
@@ -204,7 +205,8 @@ also warn about obvious missing or unsupported asset paths.
 
 `Vec2` is built in for common LOVE position and velocity code. The editor can
 complete and hover `position.x` and `position.y` as `number`, and emitted Lua is
-just a normal table.
+backed by bundled BrineVector. BrineVector uses LuaJIT/FFI for fast desktop
+LOVE builds and falls back to table vectors where JIT/FFI is not the right fit.
 
 ## 8. Prefer `:` For LOVE Methods
 

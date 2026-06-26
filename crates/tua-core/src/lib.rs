@@ -178,3 +178,7 @@ pub use workspace_symbol::{
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub fn brinevector_runtime_source() -> &'static str {
+    vector::runtime_source()
+}

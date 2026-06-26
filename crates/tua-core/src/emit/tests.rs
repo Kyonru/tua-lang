@@ -407,7 +407,7 @@ local ui = love.graphics.newImage("assets/ui.png")
 }
 
 #[test]
-fn snapshot_lowers_builtin_vec2_constructor_calls_to_plain_tables() {
+fn snapshot_lowers_builtin_vec2_constructor_calls_to_brinevector() {
     let emitted = emit_tua_source(
         "src/vector.tua",
         r#"
@@ -419,8 +419,9 @@ local offset = vec2(player.x + 4, math.max(0, player.y))
 
     assert_eq!(
         emitted,
-        r#"local position = { x = 100, y = 200 }
-local offset = { x = player.x + 4, y = math.max(0, player.y) }
+        r#"local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
+local offset = __tua_vec2(player.x + 4, math.max(0, player.y))
 "#
     );
 }

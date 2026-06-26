@@ -157,14 +157,17 @@ position.
         constructor_completions[0].detail.as_deref(),
         Some("function vec2(x: number, y: number): Vec2")
     );
-    assert_eq!(
-        labels(&field_completions),
-        vec!["x".to_owned(), "y".to_owned()]
-    );
-    assert_eq!(
-        field_completions[0].detail.as_deref(),
-        Some("field: number")
-    );
+    let field_labels = labels(&field_completions);
+    assert!(field_labels.contains(&"x".to_owned()));
+    assert!(field_labels.contains(&"y".to_owned()));
+    assert!(field_labels.contains(&"length".to_owned()));
+    assert!(field_labels.contains(&"normalized".to_owned()));
+    assert!(field_labels.contains(&"dot".to_owned()));
+    let x = field_completions
+        .iter()
+        .find(|completion| completion.label == "x")
+        .expect("x should complete");
+    assert_eq!(x.detail.as_deref(), Some("field: number"));
 }
 
 #[test]

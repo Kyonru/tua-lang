@@ -178,18 +178,22 @@ player:setFilter("nearest")
 jump:play()
 ```
 
-These helpers are not a new runtime abstraction. Asset helpers lower to
-ordinary LOVE calls and infer LOVE object types for editor tooling. `vec2(x, y)`
-lowers to a plain Lua table with numeric `x` and `y` fields:
+Asset helpers lower to ordinary LOVE calls and infer LOVE object types for
+editor tooling. `vec2(x, y)` lowers to a cached BrineVector constructor:
 
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
-local position = { x = 100, y = 200 }
+local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
 
 player:setFilter("nearest")
 jump:play()
 ```
+
+When generated Lua needs `brinevector`, `tua build` writes a bundled
+`brinevector.lua` into the output directory unless the project already provides
+one.
 
 ## Boundaries
 
@@ -318,7 +322,8 @@ Emitted Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
-local position = { x = 100, y = 200 }
+local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
 ```
 
 Values inferred as LOVE objects expose method completions, hover, and signature
@@ -332,9 +337,11 @@ jump:play()
 
 `Vec2` is a built-in table-shaped type for common position and velocity code.
 The constructor has signature `function vec2(x: number, y: number): Vec2`.
-Fields `position.x` and `position.y` complete and hover as `number`. In v1,
-`Vec2` does not imply a runtime vector library or overloaded vector operators;
-it is emitted as a normal Lua table.
+Fields `position.x` and `position.y` complete and hover as `number`. Tua also
+models common BrineVector properties and operations such as `length`,
+`normalized`, `dot`, `rotated`, and vector arithmetic. BrineVector uses
+LuaJIT/FFI when appropriate and falls back to table vectors on platforms where
+that is a better runtime choice.
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
 passes `self` only for colon calls. When Tua knows the receiver is a LOVE object,

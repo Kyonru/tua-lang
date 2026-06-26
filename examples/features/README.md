@@ -67,8 +67,8 @@ make build-features
   method completion/signature behavior such as preferring `player:setFilter()`
   over `player.setFilter()`.
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
-  `vec2(x, y)` constructor, `x`/`y` field completion and hover, and plain-table
-  Lua emission.
+  `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
+  BrineVector properties/operators, and bundled BrineVector Lua emission.
 - `src/assets/` contains placeholder files used by static asset validation.
 - `src/main.tua` ties the feature modules together while keeping `require`
   calls unchanged in emitted Lua.

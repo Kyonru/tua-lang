@@ -609,6 +609,72 @@ fn build_copies_non_tua_files_without_compiling_them() {
 }
 
 #[test]
+fn build_writes_brinevector_runtime_when_vec2_is_used() {
+    let temp = TempDir::new("build-vec2-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local position: Vec2 = vec2(100, 200)\nreturn { position = position }\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime = fs::read_to_string(temp.path().join("build/brinevector.lua"))
+        .expect("failed to read BrineVector runtime");
+
+    assert!(stdout.contains("built 2 file(s)"));
+    assert!(emitted.contains(r#"local __tua_vec2 = require("brinevector")"#));
+    assert!(emitted.contains("local position = __tua_vec2(100, 200)"));
+    assert!(runtime.contains("BrineVector: a luajit ffi-accelerated vector library"));
+}
+
+#[test]
+fn build_does_not_overwrite_project_brinevector_runtime() {
+    let temp = TempDir::new("build-custom-vec2-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local position = vec2(100, 200)\nreturn { position = position }\n",
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/brinevector.lua"),
+        "return function(x, y) return { x = x, y = y, custom = true } end\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let runtime = fs::read_to_string(temp.path().join("build/brinevector.lua"))
+        .expect("failed to read custom runtime");
+
+    assert_eq!(
+        runtime,
+        "return function(x, y) return { x = x, y = y, custom = true } end\n"
+    );
+}
+
+#[test]
 fn build_excludes_output_directory_when_source_is_project_root() {
     let temp = TempDir::new("build-root-excludes-dist");
 

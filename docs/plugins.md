@@ -79,7 +79,7 @@ Use Rust built-ins for:
 - LOVE asset validation;
 - sprite/animation experiments;
 - richer typed vector helpers if they need parser or lowering support beyond
-  the built-in `Vec2`/`vec2(x, y)` plain-table helper;
+  the built-in `Vec2`/`vec2(x, y)` BrineVector-backed helper;
 - features that must be fast and deterministic in the LSP.
 
 Tradeoff: users cannot author plugins without changing Tua itself.

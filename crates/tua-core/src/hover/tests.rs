@@ -842,6 +842,8 @@ fn hovers_builtin_vec2_constructor_local_and_fields() {
     let source = r#"
 local position = vec2(100, 200)
 local x = position.x
+local speed = position.length
+local direction = position.normalized
 "#;
     let constructor = hover_tua_source("src/main.tua", source, position_at(source, "vec2"))
         .expect("hover should not fail")
@@ -852,6 +854,12 @@ local x = position.x
     let x = hover_tua_source("src/main.tua", source, position_at(source, "x\n"))
         .expect("hover should not fail")
         .expect("Vec2 field should hover");
+    let speed = hover_tua_source("src/main.tua", source, position_at(source, "length"))
+        .expect("hover should not fail")
+        .expect("Vec2 length should hover");
+    let direction = hover_tua_source("src/main.tua", source, position_at(source, "normalized"))
+        .expect("hover should not fail")
+        .expect("Vec2 normalized should hover");
 
     assert_eq!(
         constructor.contents,
@@ -859,6 +867,8 @@ local x = position.x
     );
     assert_eq!(position.contents, "local position: Vec2");
     assert_eq!(x.contents, "(field) x: number");
+    assert_eq!(speed.contents, "(field) length: number");
+    assert_eq!(direction.contents, "(field) normalized: Vec2");
 }
 
 #[test]

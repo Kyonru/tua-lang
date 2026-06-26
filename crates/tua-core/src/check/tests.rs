@@ -66,6 +66,23 @@ local y: number = position.y
 }
 
 #[test]
+fn accepts_builtin_vec2_brinevector_operations() {
+    check_tua_source(
+        "src/vector.tua",
+        r#"
+local position: Vec2 = vec2(100, 200)
+local velocity = vec2(12, -4)
+local moved: Vec2 = position + velocity
+local scaled: Vec2 = velocity * 2
+local speed: number = velocity.length
+local direction: Vec2 = velocity.normalized
+local distanceSquared: number = position:dot(velocity)
+"#,
+    )
+    .expect("built-in Vec2 should model common BrineVector operations");
+}
+
+#[test]
 fn rejects_builtin_vec2_constructor_argument_mismatch() {
     let diagnostics = check_tua_source(
         "src/vector.tua",

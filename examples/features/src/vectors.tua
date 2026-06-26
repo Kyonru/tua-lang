@@ -9,12 +9,19 @@ local velocity = vec2(12, -4)
 local nextX: number = position.x + velocity.x
 local nextY: number = position.y + velocity.y
 
--- Feature: vec2 emits plain Lua tables.
--- Generated Lua lowers vec2(a, b) to `{ x = a, y = b }`, so there is no runtime
--- vector module dependency in this first version.
+-- Feature: vec2 emits BrineVector-backed Lua.
+-- Generated Lua lowers vec2(a, b) to a cached `require("brinevector")`
+-- constructor. `tua build` writes brinevector.lua into the output folder when
+-- needed.
 local function move(point: Vec2, delta: Vec2): Vec2
   return vec2(point.x + delta.x, point.y + delta.y)
 end
+
+-- Feature: BrineVector properties and operators are modeled conservatively.
+local speed: number = velocity.length
+local direction: Vec2 = velocity.normalized
+local movedByOperator: Vec2 = position + velocity
+local distanceSquared: number = position:dot(velocity)
 
 local moved = move(position, velocity)
 
@@ -23,6 +30,10 @@ return {
   velocity = velocity,
   nextX = nextX,
   nextY = nextY,
+  speed = speed,
+  direction = direction,
+  movedByOperator = movedByOperator,
+  distanceSquared = distanceSquared,
   move = move,
   moved = moved,
 }

@@ -102,17 +102,20 @@ local y: number = position.y
 The constructor has signature `function vec2(x: number, y: number): Vec2`.
 `position.x` and `position.y` complete and hover as `number`.
 
-Emitted Lua uses plain tables in v1:
+Emitted Lua uses a cached BrineVector constructor in v1:
 
 ```lua
-local position = { x = 100, y = 200 }
+local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
 local x = position.x
 local y = position.y
 ```
 
-`Vec2` does not require a generated runtime module or external vector library in
-v1. Operator-rich vector math can be layered later through explicit libraries or
-domain extensions.
+`tua build` writes a bundled `brinevector.lua` runtime into the output directory
+when emitted Lua needs it, unless the project already provides a
+`brinevector.lua` file. BrineVector is designed for LOVE/LuaJIT: it uses FFI
+when JIT is available and falls back to standard Lua tables where that is the
+better runtime choice.
 
 ### Type Aliases
 

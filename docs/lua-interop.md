@@ -255,7 +255,8 @@ They emit plain LOVE calls in generated Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
-local position = { x = 100, y = 200 }
+local __tua_vec2 = require("brinevector")
+local position = __tua_vec2(100, 200)
 ```
 
 Values inferred as `Image` or `Source` expose common LOVE object methods in
@@ -263,7 +264,8 @@ completion, such as `player:getWidth()` or `jump:play()`.
 
 `Vec2` is a built-in table-shaped type for position and velocity values. The
 `vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits
-plain Lua tables instead of requiring a runtime vector dependency.
+BrineVector-backed Lua. `tua build` bundles `brinevector.lua` into the output
+folder when needed, unless the project already provides that module.
 
 Use colon-call syntax for LOVE object methods:
 

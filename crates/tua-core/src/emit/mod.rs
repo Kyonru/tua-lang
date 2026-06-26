@@ -811,6 +811,7 @@ fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
 fn lower_builtin_calls_text(output: &str) -> String {
     let mut lowered = String::with_capacity(output.len());
     let mut index = 0;
+    let mut requires_brinevector = false;
 
     while index < output.len() {
         let rest = &output[index..];
@@ -852,6 +853,7 @@ fn lower_builtin_calls_text(output: &str) -> String {
                 if let Some((replacement, end)) =
                     lower_vec2_constructor_call(output, argument_start)
                 {
+                    requires_brinevector = true;
                     lowered.push_str(&replacement);
                     index = end;
                     continue;
@@ -870,6 +872,15 @@ fn lower_builtin_calls_text(output: &str) -> String {
 
         lowered.push(character);
         index += character.len_utf8();
+    }
+
+    if requires_brinevector {
+        return format!(
+            "local {} = require(\"{}\")\n{}",
+            vector::EMITTED_CONSTRUCTOR_LOCAL,
+            vector::RUNTIME_MODULE,
+            lowered
+        );
     }
 
     lowered
@@ -891,7 +902,10 @@ fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(S
         return None;
     }
 
-    Some((format!("{{ x = {x}, y = {y} }}"), close + 1))
+    Some((
+        format!("{}({x}, {y})", vector::EMITTED_CONSTRUCTOR_LOCAL),
+        close + 1,
+    ))
 }
 
 fn lower_asset_loader_call(
