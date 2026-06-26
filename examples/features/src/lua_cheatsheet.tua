@@ -381,6 +381,16 @@ local function combineVector(left: MetaVector, right: MetaVector): MetaVector
   }
 end
 
+
+local outside_function: MetaVector = {
+  x = 1,
+  y = 2,
+  length = 3
+}
+
+
+print(outside_function.x)
+
 local function compareVector(left: MetaVector, right: MetaVector): boolean
   return true
 end

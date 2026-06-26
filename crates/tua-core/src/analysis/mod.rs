@@ -34,7 +34,7 @@ use crate::{
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
     complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
-    document_highlights_parsed_source, document_symbols_parsed_source, emit_lua_with_mode,
+    document_highlights_parsed_source, document_symbols_parsed_source_with_hir, emit_lua_with_mode,
     exported_field_for_fields, global_function_definition_count,
     global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
     global_type_alias_name_for_definition,
@@ -51,9 +51,9 @@ use crate::{
     FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
     ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
     ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
-    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticToken, SignatureHelp,
-    SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment,
-    WorkspaceSymbol,
+    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex, SemanticToken,
+    SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type,
+    TypeEnvironment, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -85,6 +85,7 @@ pub struct AnalysisHost {
     builtin_catalogs: BuiltinCatalogs,
     plugin_registry: PluginRegistry,
     cache: RefCell<AnalysisQueryCache>,
+    last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
     snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
     revision: u64,
 }
@@ -100,6 +101,7 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
+    last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
     semantic_facts: Rc<OnceCell<BTreeMap<PathBuf, AnalysisSemanticFacts>>>,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
@@ -134,7 +136,23 @@ struct AnalysisFile {
 #[derive(Clone, Debug)]
 struct AnalysisSemanticFacts {
     environment: TypeEnvironment,
+    semantic_index: SemanticIndex,
     inlay_hints: OnceCell<Vec<InlayHint>>,
+}
+
+#[derive(Clone, Debug)]
+struct LastGoodAnalysisFile {
+    parsed: ParsedSource,
+    hir: Option<HirModule>,
+    environment: Option<TypeEnvironment>,
+}
+
+#[derive(Clone, Debug)]
+struct RecoveredSemanticFacts {
+    parsed: ParsedSource,
+    hir: Option<HirModule>,
+    environment: TypeEnvironment,
+    semantic_index: SemanticIndex,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -241,7 +259,7 @@ impl AnalysisHost {
         }
 
         self.config = config;
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -257,7 +275,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_source_roots(roots);
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -269,7 +287,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_output_roots(roots);
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -285,7 +303,7 @@ impl AnalysisHost {
         }
 
         self.asset_roots = roots;
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -297,7 +315,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_ignored_paths(patterns);
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -311,7 +329,7 @@ impl AnalysisHost {
         }
 
         self.builtin_catalogs = catalogs;
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -321,7 +339,7 @@ impl AnalysisHost {
 
     pub fn set_plugin_registry(&mut self, registry: PluginRegistry) {
         self.plugin_registry = registry;
-        self.cache.borrow_mut().invalidate_all();
+        self.invalidate_all_analysis();
         self.bump_revision();
     }
 
@@ -359,6 +377,9 @@ impl AnalysisHost {
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
         self.cache.borrow_mut().invalidate_file(path.as_ref());
+        self.last_good_files
+            .borrow_mut()
+            .remove(&normalize_path(path.as_ref()));
         self.vfs.remove_file(path);
         self.bump_revision();
     }
@@ -494,6 +515,7 @@ impl AnalysisHost {
 
             (symbols, calls)
         };
+        self.refresh_last_good_files(&files);
 
         let snapshot = AnalysisSnapshot {
             config: self.config.clone(),
@@ -505,6 +527,7 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
+            last_good_files: self.last_good_files.borrow().clone(),
             semantic_facts: Rc::new(OnceCell::new()),
             completion_cache: Rc::new(RefCell::new(BTreeMap::new())),
             definition_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -533,6 +556,32 @@ impl AnalysisHost {
 
     fn bump_revision(&mut self) {
         self.revision = self.revision.saturating_add(1);
+    }
+
+    fn invalidate_all_analysis(&mut self) {
+        self.cache.borrow_mut().invalidate_all();
+        self.last_good_files.borrow_mut().clear();
+    }
+
+    fn refresh_last_good_files(&self, files: &BTreeMap<PathBuf, AnalysisFile>) {
+        let mut last_good_files = self.last_good_files.borrow_mut();
+
+        last_good_files.retain(|path, _| files.contains_key(path));
+
+        for (path, file) in files {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+
+            last_good_files.insert(
+                path.clone(),
+                LastGoodAnalysisFile {
+                    parsed: parsed.clone(),
+                    hir: file.hir.clone(),
+                    environment: file.environment.clone(),
+                },
+            );
+        }
     }
 }
 
@@ -629,10 +678,13 @@ impl AnalysisSnapshot {
                 self.hover_parsed_snapshot(parsed, position)
             }
             Err(_) => {
-                let recovered = source_without_incomplete_field_access_lines(&file.source);
-                let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
+                let facts = self.recovered_semantic_facts(path, file)?;
 
-                self.hover_parsed_snapshot(&parsed, position)
+                self.hover_parsed_snapshot_with_environment(
+                    &facts.parsed,
+                    position,
+                    Some(&facts.environment),
+                )
             }
         }
     }
@@ -641,6 +693,15 @@ impl AnalysisSnapshot {
         &self,
         parsed: &ParsedSource,
         position: SourcePosition,
+    ) -> Option<Hover> {
+        self.hover_parsed_snapshot_with_environment(parsed, position, None)
+    }
+
+    fn hover_parsed_snapshot_with_environment(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+        recovered_environment: Option<&TypeEnvironment>,
     ) -> Option<Hover> {
         if let Some(hover) = self.project_type_hover(parsed, position) {
             return Some(hover);
@@ -658,9 +719,14 @@ impl AnalysisSnapshot {
             return Some(hover);
         }
 
-        self.semantic_facts_for_parsed(parsed)
-            .and_then(|facts| {
-                hover_parsed_source_with_environment(parsed, position, &facts.environment)
+        recovered_environment
+            .and_then(|environment| {
+                hover_parsed_source_with_environment(parsed, position, environment)
+            })
+            .or_else(|| {
+                self.semantic_facts_for_parsed(parsed).and_then(|facts| {
+                    hover_parsed_source_with_environment(parsed, position, &facts.environment)
+                })
             })
             .or_else(|| hover_parsed_source(parsed, position).ok().flatten())
             .or_else(|| self.project_symbol_hover(parsed, position))
@@ -692,10 +758,13 @@ impl AnalysisSnapshot {
                 }
             }
             Err(_) => {
-                let recovered = source_without_incomplete_field_access_lines(&file.source);
-
-                if let Ok(parsed) = parse_analysis_source(path, recovered, file.kind) {
-                    let completions = self.project_completions(&parsed, &file.source, position);
+                if let Some(facts) = self.recovered_semantic_facts(path, file) {
+                    let completions = self.project_completions_with_environment(
+                        &facts.parsed,
+                        &file.source,
+                        position,
+                        &facts.environment,
+                    );
 
                     if !completions.is_empty() {
                         completions
@@ -733,16 +802,35 @@ impl AnalysisSnapshot {
         let definition = match &file.parsed {
             Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir.as_ref(), position),
             Err(_) => {
-                let recovered = source_without_incomplete_field_access_lines(&file.source);
-                let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
+                let facts = self.recovered_semantic_facts(path, file)?;
 
-                self.definition_parsed_snapshot(&parsed, None, position)
+                self.definition_parsed_snapshot_with_index(
+                    &facts.parsed,
+                    facts.hir.as_ref(),
+                    position,
+                    Some(&facts.semantic_index),
+                )
             }
         };
 
-        self.definition_cache
-            .borrow_mut()
-            .insert(key, definition.clone());
+        let mut cache = self.definition_cache.borrow_mut();
+
+        if let Some(span) = definition_lookup_span(&file.source, position) {
+            for column in span.start.column..=span.end.column {
+                cache.insert(
+                    definition_request_key(
+                        path,
+                        SourcePosition {
+                            line: span.start.line,
+                            column,
+                        },
+                    ),
+                    definition.clone(),
+                );
+            }
+        } else {
+            cache.insert(key, definition.clone());
+        }
 
         definition
     }
@@ -753,12 +841,33 @@ impl AnalysisSnapshot {
         hir: Option<&HirModule>,
         position: SourcePosition,
     ) -> Option<Definition> {
+        self.definition_parsed_snapshot_with_index(parsed, hir, position, None)
+    }
+
+    fn definition_parsed_snapshot_with_index(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        position: SourcePosition,
+        recovered_index: Option<&SemanticIndex>,
+    ) -> Option<Definition> {
         if let Some(definition) = self.module_definition(parsed, position) {
             return Some(definition);
         }
 
         if self.is_module_reference(parsed, position) {
             return None;
+        }
+
+        if let Some(definition) = recovered_index.and_then(|index| index.definition_at(position)) {
+            return Some(definition);
+        }
+
+        if let Some(definition) = self
+            .semantic_facts_for_parsed(parsed)
+            .and_then(|facts| facts.semantic_index.definition_at(position))
+        {
+            return Some(definition);
         }
 
         definition_parsed_source_with_hir(parsed, hir, position)
@@ -812,9 +921,20 @@ impl AnalysisSnapshot {
                         .ok()
                         .flatten()
                 }),
-            Err(_) => signature_help_tua_source(path, file.source.clone(), position)
-                .ok()
-                .flatten(),
+            Err(_) => self
+                .recovered_semantic_facts(path, file)
+                .and_then(|facts| {
+                    signature_help_parsed_source_with_environment(
+                        &facts.parsed,
+                        position,
+                        &facts.environment,
+                    )
+                })
+                .or_else(|| {
+                    signature_help_tua_source(path, file.source.clone(), position)
+                        .ok()
+                        .flatten()
+                }),
         }
     }
 
@@ -837,8 +957,12 @@ impl AnalysisSnapshot {
 
     pub fn document_symbols(&self, path: impl AsRef<Path>) -> Vec<DocumentSymbol> {
         self.file(path.as_ref())
-            .and_then(|file| file.parsed.as_ref().ok())
-            .map(document_symbols_parsed_source)
+            .and_then(|file| {
+                Some(document_symbols_parsed_source_with_hir(
+                    file.parsed.as_ref().ok()?,
+                    file.hir.as_ref()?,
+                ))
+            })
             .unwrap_or_default()
     }
 
@@ -1514,8 +1638,19 @@ impl AnalysisSnapshot {
         let Some(file) = self.file(path.as_ref()) else {
             return Vec::new();
         };
-        let Ok(parsed) = &file.parsed else {
-            return Vec::new();
+        let parsed = match &file.parsed {
+            Ok(parsed) => parsed,
+            Err(_) => {
+                return self
+                    .recovered_semantic_facts(path.as_ref(), file)
+                    .map(|facts| {
+                        inlay_hints_parsed_source_with_environment(
+                            &facts.parsed,
+                            &facts.environment,
+                        )
+                    })
+                    .unwrap_or_default();
+            }
         };
         let Some(facts) = self.semantic_facts_for_parsed(parsed) else {
             return inlay_hints_parsed_source(parsed).unwrap_or_default();
@@ -2088,6 +2223,17 @@ impl AnalysisSnapshot {
 
             environment.with_local_types(self.project_local_annotation_types(parsed))
         });
+
+        self.project_completions_with_environment(parsed, source, position, &environment)
+    }
+
+    fn project_completions_with_environment(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+        environment: &TypeEnvironment,
+    ) -> Vec<Completion> {
         let _profile = profile::span("analysis.completion.render");
 
         let asset_completions = self.project_asset_path_completions(source, position);
@@ -2106,7 +2252,7 @@ impl AnalysisSnapshot {
             source,
             parsed,
             position,
-            &environment,
+            environment,
         );
 
         if !field_completions.is_empty() {
@@ -2174,6 +2320,52 @@ impl AnalysisSnapshot {
             .map(|facts| facts.environment.clone())
     }
 
+    fn recovered_semantic_facts(
+        &self,
+        path: &Path,
+        file: &AnalysisFile,
+    ) -> Option<RecoveredSemanticFacts> {
+        self.recovered_current_semantic_facts(path, file)
+            .or_else(|| self.last_good_semantic_facts(path))
+    }
+
+    fn recovered_current_semantic_facts(
+        &self,
+        path: &Path,
+        file: &AnalysisFile,
+    ) -> Option<RecoveredSemanticFacts> {
+        let recovered = source_without_incomplete_field_access_lines(&file.source);
+        let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
+        let hir = Some(lower_parsed_source(&parsed));
+        let environment =
+            self.recovered_project_type_environment_for_parsed(&parsed, file.environment.clone());
+        let semantic_index = SemanticIndex::build(&parsed, hir.as_ref(), &environment);
+
+        Some(RecoveredSemanticFacts {
+            parsed,
+            hir,
+            environment,
+            semantic_index,
+        })
+    }
+
+    fn last_good_semantic_facts(&self, path: &Path) -> Option<RecoveredSemanticFacts> {
+        let last_good = self.last_good_files.get(&normalize_path(path))?.clone();
+        let environment = self.recovered_project_type_environment_for_parsed(
+            &last_good.parsed,
+            last_good.environment,
+        );
+        let semantic_index =
+            SemanticIndex::build(&last_good.parsed, last_good.hir.as_ref(), &environment);
+
+        Some(RecoveredSemanticFacts {
+            parsed: last_good.parsed,
+            hir: last_good.hir,
+            environment,
+            semantic_index,
+        })
+    }
+
     fn semantic_facts(&self) -> &BTreeMap<PathBuf, AnalysisSemanticFacts> {
         self.semantic_facts.get_or_init(|| {
             let _profile = profile::span("analysis.semantic.facts");
@@ -2187,6 +2379,11 @@ impl AnalysisSnapshot {
                     Some((
                         path.clone(),
                         AnalysisSemanticFacts {
+                            semantic_index: SemanticIndex::build(
+                                parsed,
+                                file.hir.as_ref(),
+                                &environment,
+                            ),
                             environment,
                             inlay_hints: OnceCell::new(),
                         },
@@ -2202,7 +2399,15 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
     ) -> Option<TypeEnvironment> {
         let _profile = profile::span("analysis.semantic.environment");
-        let environment = file.environment.clone().or_else(|| {
+        self.project_type_environment_for_parsed(parsed, file.environment.clone())
+    }
+
+    fn project_type_environment_for_parsed(
+        &self,
+        parsed: &ParsedSource,
+        base_environment: Option<TypeEnvironment>,
+    ) -> Option<TypeEnvironment> {
+        let environment = base_environment.or_else(|| {
             let (environment, diagnostics) = if self.config.ecs.enabled {
                 build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases())
             } else {
@@ -2222,6 +2427,28 @@ impl AnalysisSnapshot {
             )
         } else {
             Some(environment)
+        }
+    }
+
+    fn recovered_project_type_environment_for_parsed(
+        &self,
+        parsed: &ParsedSource,
+        base_environment: Option<TypeEnvironment>,
+    ) -> TypeEnvironment {
+        let (fallback, _) = if self.config.ecs.enabled {
+            build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases())
+        } else {
+            build_type_environment_with_diagnostics(parsed)
+        };
+        let environment = base_environment.unwrap_or(fallback);
+        let environment = environment.with_local_types(self.project_local_annotation_types(parsed));
+
+        if self.config.ecs.enabled {
+            environment
+                .with_alias_types(crate::ecs::builtin_aliases())
+                .with_local_types(crate::ecs::builtin_locals())
+        } else {
+            environment
         }
     }
 
@@ -2956,6 +3183,12 @@ fn definition_request_key(path: &Path, position: SourcePosition) -> DefinitionRe
         line: position.line,
         column: position.column,
     }
+}
+
+fn definition_lookup_span(source: &str, position: SourcePosition) -> Option<SourceSpan> {
+    let chain = dotted_chain_at_position(source, position)?;
+
+    chain.parts.get(chain.cursor_index).map(|part| part.span)
 }
 
 fn identifier_prefix_before(source: &str, position: SourcePosition) -> Option<String> {

@@ -93,15 +93,15 @@ impl<'a> DefinitionResolver<'a> {
                 return Some(definition);
             }
 
-            if let Some(definition) = self.builtin_definition(&parts, position) {
-                return Some(definition);
-            }
-
             if let Some(definition) = self.field_definition(&parts, position) {
                 return Some(definition);
             }
 
             if let Some(definition) = self.metatable_field_definition(&parts, position) {
+                return Some(definition);
+            }
+
+            if let Some(definition) = self.builtin_definition(&parts, position) {
                 return Some(definition);
             }
         }

@@ -220,6 +220,33 @@ fn resolves_parameter_table_field_to_type_shape_field() {
 }
 
 #[test]
+fn resolves_typed_parameter_field_inside_table_constructor() {
+    let source = r#"
+type MetaVector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local function combineVector(left: MetaVector, right: MetaVector): MetaVector
+  return {
+    x = left.x + right.x,
+    y = left.y + right.y,
+    length = left.length + right.length,
+  }
+end
+"#;
+
+    assert_definition_in_source(
+        source,
+        "right.y",
+        "right.".len(),
+        DefinitionKind::TableField,
+        "y",
+    );
+}
+
+#[test]
 fn resolves_self_index_instance_method_to_prototype_method() {
     let source = r#"
 local Account = {}

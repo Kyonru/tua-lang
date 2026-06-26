@@ -36,6 +36,7 @@ pub mod rename;
 pub mod scope;
 pub mod selection_range;
 mod semantic;
+pub mod semantic_index;
 pub mod semantic_token;
 pub mod signature_help;
 mod source_text;
@@ -85,7 +86,8 @@ pub use document_highlight::{
     DocumentHighlightKind,
 };
 pub use document_symbol::{
-    document_symbols_parsed_source, document_symbols_tua_source, DocumentSymbol, DocumentSymbolKind,
+    document_symbols_parsed_source, document_symbols_parsed_source_with_hir,
+    document_symbols_tua_source, DocumentSymbol, DocumentSymbolKind,
 };
 pub use emit::{emit_lua, emit_lua_with_mode, emit_tua_source, emit_tua_source_with_mode};
 #[cfg(any(test, feature = "test-fixture"))]
@@ -160,6 +162,7 @@ pub use scope::{
 pub use selection_range::{
     selection_ranges_parsed_source, selection_ranges_tua_source, SelectionRange,
 };
+pub use semantic_index::{DefinitionTarget, SemanticIndex};
 pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,
     SemanticTokenModifier,

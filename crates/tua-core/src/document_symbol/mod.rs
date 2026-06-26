@@ -34,13 +34,21 @@ pub fn document_symbols_tua_source(
 
 pub fn document_symbols_parsed_source(parsed: &ParsedSource) -> Vec<DocumentSymbol> {
     let hir = lower_parsed_source(parsed);
+
+    document_symbols_parsed_source_with_hir(parsed, &hir)
+}
+
+pub fn document_symbols_parsed_source_with_hir(
+    parsed: &ParsedSource,
+    hir: &HirModule,
+) -> Vec<DocumentSymbol> {
     let mut symbols = Vec::new();
 
-    symbols.extend(type_alias_symbols(parsed, &hir));
-    symbols.extend(function_symbols(parsed, &hir));
-    symbols.extend(local_symbols(parsed, &hir));
+    symbols.extend(type_alias_symbols(parsed, hir));
+    symbols.extend(function_symbols(parsed, hir));
+    symbols.extend(local_symbols(parsed, hir));
 
-    if let Some(exports) = module_exports_symbol(&hir) {
+    if let Some(exports) = module_exports_symbol(hir) {
         symbols.push(exports);
     }
 

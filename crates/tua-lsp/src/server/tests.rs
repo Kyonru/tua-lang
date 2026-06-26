@@ -1588,6 +1588,82 @@ local field = player.hp
 }
 
 #[test]
+fn completion_survives_incomplete_colon_after_valid_open() {
+    let uri = "file:///tmp/recovered-completion.tua";
+    let valid = r#"type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): number
+  self.balance = self.balance + amount
+
+  return self.balance
+end
+
+local account = setmetatable({ balance = 50 }, Account)
+"#;
+    let invalid = format!("{valid}account:\n");
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, valid));
+    server.send(did_change(uri, &invalid, 2));
+    server.send(completion_request(3, uri, &invalid, "account:"));
+
+    completion_with_label(server.output(), 3, "deposit");
+}
+
+#[test]
+fn definition_resolves_metatable_method_and_self_field_through_semantic_index() {
+    let uri = "file:///tmp/metatable-definition.tua";
+    let source = r#"type Account = {
+  name: string,
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:new(name, balance)
+  local instance = {
+    name = name,
+    balance = balance,
+  }
+
+  return setmetatable(instance, self)
+end
+
+function Account:deposit(amount: number): number
+  self.balance = self.balance + amount
+
+  return self.balance
+end
+
+local account = setmetatable({ name = "checking", balance = 50 }, Account)
+account:deposit(25)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "deposit(25)", 0),
+        definition_request(3, uri, source, "self.balance", "self.".len()),
+        definition_request(4, uri, source, "self.balance", "self.".len()),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "Account:deposit");
+    assert_definition_text(&output, 3, uri, source, "balance");
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["range"]["start"]["line"],
+        json!(2)
+    );
+    assert_eq!(
+        response_with_id(&output, 3)["result"],
+        response_with_id(&output, 4)["result"]
+    );
+}
+
+#[test]
 fn completion_returns_lua_doc_tags_types_and_snippets() {
     let uri = "file:///tmp/doc-completion.tua";
     let source = r#"type Player = { hp: number }

@@ -8,11 +8,10 @@ use full_moon::ast::{
 use full_moon::node::Node;
 use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
 
-use crate::definition_parsed_source;
 use crate::hir::{lower_parsed_source, HirSymbolKind};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
 use crate::source_text::{byte_for_column, line_at};
-use crate::{parse_tua_source, DefinitionKind, Diagnostic};
+use crate::{parse_tua_source, Diagnostic};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticToken {
@@ -105,17 +104,11 @@ fn semantic_token_for_identifier(
         });
     }
 
-    if let Ok(Some(definition)) = definition_parsed_source(parsed, span.start) {
-        let kind = if definition.kind == DefinitionKind::Builtin && is_known_global(&text) {
-            SemanticTokenKind::Global
-        } else {
-            semantic_kind_for_definition(definition.kind)
-        };
-
+    if is_type_reference(&parsed.source, span.start) {
         return Some(SemanticToken {
             span,
-            kind,
-            modifiers: Vec::new(),
+            kind: SemanticTokenKind::TypeAlias,
+            modifiers: semantic_modifiers_for_name(&text, false),
         });
     }
 
@@ -140,18 +133,6 @@ fn semantic_token_for_identifier(
         kind: SemanticTokenKind::UnresolvedReference,
         modifiers: semantic_modifiers_for_name(&text, false),
     })
-}
-
-fn semantic_kind_for_definition(kind: DefinitionKind) -> SemanticTokenKind {
-    match kind {
-        DefinitionKind::Module => SemanticTokenKind::Module,
-        DefinitionKind::Builtin => SemanticTokenKind::Function,
-        DefinitionKind::TypeAlias => SemanticTokenKind::TypeAlias,
-        DefinitionKind::Local => SemanticTokenKind::Variable,
-        DefinitionKind::Function => SemanticTokenKind::Function,
-        DefinitionKind::Parameter => SemanticTokenKind::Parameter,
-        DefinitionKind::TableField => SemanticTokenKind::Property,
-    }
 }
 
 fn lossy_semantic_tokens(source: &str) -> Vec<SemanticToken> {
@@ -595,9 +576,17 @@ fn collect_block_declarations(block: &ast::Block, index: &mut DeclarationIndex) 
 fn collect_stmt_declarations(stmt: &ast::Stmt, index: &mut DeclarationIndex) {
     match stmt {
         ast::Stmt::Assignment(assignment) => {
+            for variable in assignment.variables() {
+                collect_var_properties(variable, index);
+            }
+
             for expression in assignment.expressions() {
                 collect_expression_properties(expression, index);
             }
+        }
+        ast::Stmt::CompoundAssignment(assignment) => {
+            collect_var_properties(assignment.lhs(), index);
+            collect_expression_properties(assignment.rhs(), index);
         }
         ast::Stmt::Do(block) => collect_block_declarations(block.block(), index),
         ast::Stmt::FunctionCall(function_call) => {

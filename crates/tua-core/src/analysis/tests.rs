@@ -254,7 +254,8 @@ local player: <|alias_ref|>Player = { hp = 10 }
         .definition(&path, fixture.position("alias_ref"))
         .expect("alias definition should resolve");
     assert_eq!(definition.span, fixture.range("alias_def"));
-    assert_eq!(snapshot.definition_cache.borrow().len(), 1);
+    let cache_len = snapshot.definition_cache.borrow().len();
+    assert!(cache_len > 0);
 
     let warm_snapshot = host.snapshot();
 
@@ -262,14 +263,14 @@ local player: <|alias_ref|>Player = { hp = 10 }
         &snapshot.definition_cache,
         &warm_snapshot.definition_cache
     ));
-    assert_eq!(warm_snapshot.definition_cache.borrow().len(), 1);
+    assert_eq!(warm_snapshot.definition_cache.borrow().len(), cache_len);
 
     let repeated = warm_snapshot
         .definition(&path, fixture.position("alias_ref"))
         .expect("cached alias definition should resolve");
 
     assert_eq!(repeated.span, fixture.range("alias_def"));
-    assert_eq!(warm_snapshot.definition_cache.borrow().len(), 1);
+    assert_eq!(warm_snapshot.definition_cache.borrow().len(), cache_len);
 }
 
 #[test]
@@ -1016,6 +1017,140 @@ player:<|complete|>setFilter(<|signature|>"nearest")
         .expect("LOVE method signature should resolve");
 
     assert!(signature.signatures[0].label.contains("setFilter"));
+}
+
+#[test]
+fn snapshot_definition_cache_covers_the_whole_identifier_token() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type MetaVector = {
+  x: number,
+  y: number,
+  length: number,
+}
+
+local function combineVector(left: MetaVector, right: MetaVector): MetaVector
+  return {
+    x = left.x + right.x,
+    y = left.y + right.y,
+    length = left.length + right.<|lookup|>length,
+  }
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let first_position = fixture.position("lookup");
+    let second_position = SourcePosition {
+        line: first_position.line,
+        column: first_position.column + 4,
+    };
+    let first = snapshot
+        .definition("src/main.tua", first_position)
+        .expect("field definition should resolve");
+    let cache_len = snapshot.definition_cache.borrow().len();
+    let second = snapshot
+        .definition("src/main.tua", second_position)
+        .expect("field definition should resolve from token cache");
+
+    assert_eq!(first, second);
+    assert_eq!(first.kind, DefinitionKind::TableField);
+    assert_eq!(
+        snapshot.definition_cache.borrow().len(),
+        cache_len,
+        "lookup inside the same identifier should reuse the warmed cache"
+    );
+}
+
+#[test]
+fn snapshot_definition_resolves_colon_self_field_to_type_shape_field() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Account = {
+  name: string,
+  <|field_def|>balance<|/field_def|>: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:new(name, balance)
+  local instance = {
+    name = name,
+    balance = balance,
+  }
+
+  return setmetatable(instance, self)
+end
+
+function Account:deposit(amount: number): number
+  self.<|field_ref|>balance = self.balance + amount
+
+  return self.balance
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let first = snapshot
+        .definition("src/main.tua", fixture.position("field_ref"))
+        .expect("self field definition should resolve through synthetic receiver");
+    let cache_len = snapshot.definition_cache.borrow().len();
+    let second = snapshot
+        .definition("src/main.tua", fixture.position("field_ref"))
+        .expect("repeated self field definition should stay cached");
+
+    assert_eq!(first, second);
+    assert_eq!(first.kind, DefinitionKind::TableField);
+    assert_eq!(first.span, fixture.range("field_def"));
+    assert_eq!(snapshot.definition_cache.borrow().len(), cache_len);
+}
+
+#[test]
+fn snapshot_completion_uses_recovered_semantics_after_incomplete_colon() {
+    let valid = r#"type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): number
+  self.balance = self.balance + amount
+
+  return self.balance
+end
+
+local account = setmetatable({ balance = 50 }, Account)
+"#;
+    let invalid = Fixture::parse(&format!("{valid}account:<|complete|>\n"));
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, invalid.source("src/main.tua"));
+
+    let completions = host
+        .snapshot()
+        .completion(&path, invalid.position("complete"));
+
+    assert!(
+        completion_labels(&completions)
+            .iter()
+            .any(|label| label == "deposit"),
+        "incomplete colon access should preserve metatable method completion"
+    );
 }
 
 #[test]
