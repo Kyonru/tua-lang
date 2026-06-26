@@ -1247,6 +1247,36 @@ value = "shape drift"
 }
 
 #[test]
+fn did_change_configuration_can_enable_ecs_domain_support() {
+    let temp = TempProject::new("configuration-ecs-domain");
+    let source = r#"local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, Position, { x = 1 })
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "ecs": {
+            "enabled": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL5002");
+}
+
+#[test]
 fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003

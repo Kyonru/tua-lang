@@ -43,6 +43,8 @@ After that, Phase 13 explores LOVE domain extensions:
 - built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)`
   BrineVector-backed emission;
 - opt-in LuaJIT guidance for stable local/table shapes in hot LOVE code;
+- opt-in tiny-ecs-shaped ECS domain support through the built-in plugin
+  registry path;
 - a prototype sprite/animation DSL;
 - richer asset validation and editor metadata;
 - optional Feather/tooling integration hooks.

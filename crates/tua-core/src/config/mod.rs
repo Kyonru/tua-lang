@@ -24,6 +24,10 @@ variable_type_drift = true
 table_shape_drift = true
 hot_loop_hints = true
 
+[ecs]
+enabled = false
+backend = \"tiny-ecs\"
+
 [diagnostics]
 duplicate_keys = false
 missing_requires = false
@@ -64,6 +68,7 @@ pub struct ProjectConfig {
     pub emit_maps: bool,
     pub emit: EmitConfig,
     pub jit: JitConfig,
+    pub ecs: EcsConfig,
     pub diagnostics: DiagnosticsConfig,
 }
 
@@ -77,6 +82,7 @@ impl Default for ProjectConfig {
             emit_maps: true,
             emit: EmitConfig::default(),
             jit: JitConfig::default(),
+            ecs: EcsConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     }
@@ -136,6 +142,21 @@ impl Default for JitConfig {
             variable_type_drift: true,
             table_shape_drift: true,
             hot_loop_hints: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EcsConfig {
+    pub enabled: bool,
+    pub backend: String,
+}
+
+impl Default for EcsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            backend: "tiny-ecs".to_owned(),
         }
     }
 }
@@ -443,6 +464,19 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                     ));
                 }
             },
+            ConfigSection::Ecs => match key {
+                "enabled" => config.ecs.enabled = parse_bool(line_number, value)?,
+                "backend" => config.ecs.backend = parse_string(line_number, value)?,
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown ecs config key `{other}`"),
+                    ));
+                }
+            },
             ConfigSection::Diagnostics => match key {
                 "duplicate_keys" => {
                     config.diagnostics.duplicate_keys = parse_bool(line_number, value)?
@@ -548,6 +582,7 @@ enum ConfigSection {
     Root,
     Emit,
     Jit,
+    Ecs,
     Diagnostics,
 }
 
@@ -572,6 +607,7 @@ fn parse_section_header(
     match section.trim() {
         "emit" => Ok(Some(ConfigSection::Emit)),
         "jit" => Ok(Some(ConfigSection::Jit)),
+        "ecs" => Ok(Some(ConfigSection::Ecs)),
         "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),
         "" => Err(ConfigParseError::new(line_number, "missing section name")),
         other => Err(ConfigParseError::new(

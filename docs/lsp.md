@@ -19,6 +19,8 @@ The VS Code extension starts this server and surfaces editor features for
   `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
 - Optional LuaJIT shape guidance can be enabled through `tua.jit.enabled` or
   `[jit].enabled`.
+- Optional ECS domain support can be enabled through `tua.ecs.enabled` or
+  `[ecs].enabled`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
   locals where possible.
@@ -82,6 +84,18 @@ same diagnostic pipeline as `tua check`:
 
 These diagnostics are disabled by default. `any` and unknown dynamic values
 stay permissive, and the guidance never changes emitted Lua.
+
+## ECS Domain Support
+
+When enabled, the language server adds a tiny-ecs-shaped static surface:
+
+- completion, hover, and signature help for `ecs.world`, `ecs.component`,
+  `ecs.system`, and world methods such as `world:add` and `world:query`;
+- `TL5002` diagnostics for clear component value mismatches;
+- `TL5003` diagnostics for empty or unknown component query lists.
+
+This support is editor/checker metadata. Runtime code still uses ordinary Lua
+modules such as a tiny-ecs adapter required by the project.
 
 ## Design Notes
 

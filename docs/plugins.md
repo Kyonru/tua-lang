@@ -27,6 +27,13 @@ contribution types are exposed by the registry so future built-in domain plugins
 can route them through completion, hover, and emission without inventing another
 plugin API. Plugin diagnostics use the reserved `TL5000`-`TL5999` range.
 
+The first built-in consumer is the opt-in ECS plugin. When `[ecs].enabled =
+true`, `AnalysisHost` adds the Rust `tua.ecs` plugin to the effective registry.
+That plugin contributes ECS declaration metadata and diagnostics, while the
+typed `ecs` API surface is provided through the shared type environment so
+completion, hover, and signature help use the same semantic path as other Tua
+builtins.
+
 ## Goals
 
 Domain plugins should make game code easier to validate, complete, inspect, and

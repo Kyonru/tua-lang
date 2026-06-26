@@ -46,6 +46,7 @@ fn default_config_matches_spec() {
                 annotation_mode: AnnotationMode::Off,
             },
             jit: JitConfig::default(),
+            ecs: EcsConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
         }
     );
@@ -68,6 +69,10 @@ enabled = true
 variable_type_drift = false
 table_shape_drift = true
 hot_loop_hints = false
+
+[ecs]
+enabled = true
+backend = "tiny-ecs"
 
 [diagnostics]
 duplicate_keys = true
@@ -118,6 +123,10 @@ globals = ["Game", "World"]
                 variable_type_drift: false,
                 table_shape_drift: true,
                 hot_loop_hints: false,
+            },
+            ecs: EcsConfig {
+                enabled: true,
+                backend: "tiny-ecs".to_owned(),
             },
             diagnostics: DiagnosticsConfig {
                 duplicate_keys: true,
@@ -243,6 +252,20 @@ table_shape_drift = false
     assert!(config.jit.variable_type_drift);
     assert!(!config.jit.table_shape_drift);
     assert!(config.jit.hot_loop_hints);
+}
+
+#[test]
+fn parses_ecs_section_with_partial_defaults() {
+    let config = parse_config(
+        r#"
+[ecs]
+enabled = true
+"#,
+    )
+    .expect("config should parse");
+
+    assert!(config.ecs.enabled);
+    assert_eq!(config.ecs.backend, "tiny-ecs");
 }
 
 #[test]

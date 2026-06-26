@@ -1,7 +1,7 @@
 use crate::{
-    check::check_parsed_source_with_asset_roots_diagnostics_and_jit_config, check_tua_source,
+    check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config, check_tua_source,
     check_tua_source_with_diagnostics_config, parse_tua_source, DiagnosticCode, DiagnosticSeverity,
-    DiagnosticsConfig, JitConfig,
+    DiagnosticsConfig, EcsConfig, JitConfig,
 };
 
 #[test]
@@ -830,11 +830,12 @@ fn count_code(diagnostics: &[crate::Diagnostic], code: DiagnosticCode) -> usize 
 fn check_jit_source(source: &str, jit_config: JitConfig) -> Vec<crate::Diagnostic> {
     let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
 
-    check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
         &parsed,
         &[std::path::PathBuf::from("src")],
         &DiagnosticsConfig::default(),
         &jit_config,
+        &EcsConfig::default(),
     )
     .err()
     .unwrap_or_default()

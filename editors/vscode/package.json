@@ -271,6 +271,14 @@
           "default": null,
           "description": "Enable opt-in LuaJIT shape guidance diagnostics (TL4032-TL4034). Null inherits [jit].enabled from tua.toml."
         },
+        "tua.ecs.enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ecs APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
+        },
         "tua.fileAssociations": {
           "type": "object",
           "default": {},

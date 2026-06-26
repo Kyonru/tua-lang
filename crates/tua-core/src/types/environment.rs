@@ -90,6 +90,17 @@ impl TypeEnvironment {
 
         self
     }
+
+    pub(crate) fn with_alias_types(
+        mut self,
+        aliases: impl IntoIterator<Item = (String, Type)>,
+    ) -> Self {
+        for (name, ty) in aliases {
+            self.aliases.entry(name).or_insert(ty);
+        }
+
+        self
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -171,6 +182,14 @@ pub fn build_type_environment(parsed: &ParsedSource) -> Result<TypeEnvironment, 
 pub(crate) fn build_type_environment_with_diagnostics(
     parsed: &ParsedSource,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
+    build_type_environment_with_builtin_aliases(parsed, [])
+}
+
+pub(crate) fn build_type_environment_with_builtin_aliases(
+    parsed: &ParsedSource,
+    builtin_aliases: impl IntoIterator<Item = (String, Type)>,
+) -> (TypeEnvironment, Vec<Diagnostic>) {
+    let builtin_aliases = builtin_aliases.into_iter().collect::<Vec<_>>();
     let mut diagnostics = Vec::new();
     let alias_names = collect_alias_names(parsed, &mut diagnostics);
     let doc_aliases = lua_doc_alias_declarations(parsed, &alias_names, &mut diagnostics);
@@ -187,6 +206,7 @@ pub(crate) fn build_type_environment_with_diagnostics(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
     let mut alias_docs = BTreeMap::new();
@@ -232,6 +252,9 @@ pub(crate) fn build_type_environment_with_diagnostics(
     aliases
         .entry(vector::TYPE_NAME.to_owned())
         .or_insert_with(vector::vec2_type);
+    for (name, ty) in builtin_aliases {
+        aliases.entry(name).or_insert(ty);
+    }
 
     for local in &parsed.local_annotations {
         let ty = resolve_tua_type(

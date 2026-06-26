@@ -382,6 +382,98 @@ value = "shape drift"
 }
 
 #[test]
+fn ecs_domain_support_is_disabled_by_default() {
+    let path = PathBuf::from("src/ecs.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, "ecs.\n");
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot.plugin_registry().is_empty());
+    assert!(
+        completion_labels(&snapshot.completion(&path, SourcePosition { line: 1, column: 5 }))
+            .is_empty()
+    );
+}
+
+#[test]
+fn ecs_domain_support_flows_through_plugin_and_semantic_surfaces() {
+    let path = PathBuf::from("src/ecs.tua");
+    let completion_path = PathBuf::from("src/ecs_completion.tua");
+    let mut config = ProjectConfig::default();
+
+    config.ecs.enabled = true;
+
+    let mut host = AnalysisHost::with_config(config);
+    host.set_file(
+        &path,
+        r#"local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, Position, { x = 1, y = "slow" })
+ecs.system(world, { Position, Missing }, function() end)
+"#,
+    );
+    host.set_file(
+        &completion_path,
+        r#"local world = ecs.world()
+local api = ecs.w
+local call = world.a
+"#,
+    );
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics(&path);
+    let ecs_labels = completion_labels(&snapshot.completion(
+        &completion_path,
+        SourcePosition {
+            line: 2,
+            column: 18,
+        },
+    ));
+    let world_labels = completion_labels(&snapshot.completion(
+        &completion_path,
+        SourcePosition {
+            line: 3,
+            column: 21,
+        },
+    ));
+    let hover = snapshot
+        .hover(&path, SourcePosition { line: 2, column: 7 })
+        .expect("world local should hover");
+    let signature = snapshot
+        .signature_help(
+            &path,
+            SourcePosition {
+                line: 4,
+                column: 11,
+            },
+        )
+        .expect("world:add should have signature help");
+
+    assert!(snapshot
+        .plugin_registry()
+        .declarations()
+        .iter()
+        .any(|declaration| declaration.keyword == "ecs"));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::PLUGIN_ECS_COMPONENT_VALUE)
+            && diagnostic.message.contains("expected number")
+    }));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::PLUGIN_ECS_QUERY)));
+    assert!(ecs_labels.contains(&"world".to_owned()));
+    assert!(world_labels.contains(&"add".to_owned()));
+    assert_eq!(hover.contents, "local world: EcsWorld");
+    assert_eq!(
+        signature.signatures[0].label,
+        "function world:add(EcsEntityId, EcsComponent, {  }): nil"
+    );
+}
+
+#[test]
 fn pipeline_diagnostics_apply_inline_ignores_from_project_config() {
     let mut config = ProjectConfig::default();
 
@@ -408,6 +500,13 @@ local clean = true
     assert!(diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)));
+}
+
+fn completion_labels(completions: &[Completion]) -> Vec<String> {
+    completions
+        .iter()
+        .map(|completion| completion.label.clone())
+        .collect()
 }
 
 #[test]

@@ -24,16 +24,19 @@ use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
 use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
-use crate::types::build_type_environment_with_diagnostics;
+use crate::types::{
+    build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
+};
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
-    check::check_parsed_source_with_asset_roots_diagnostics_and_jit_config, complete_parsed_source,
-    complete_tua_source, definition_parsed_source_with_hir, document_highlights_parsed_source,
-    document_symbols_parsed_source, emit_lua_with_mode, exported_field_for_fields,
-    global_function_definition_count, global_function_name_for_definition,
-    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
+    check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
+    complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
+    document_highlights_parsed_source, document_symbols_parsed_source, emit_lua_with_mode,
+    exported_field_for_fields, global_function_definition_count,
+    global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
+    global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source_with_hir, hover_parsed_source,
     infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
     lower_parsed_source, module_links_tua_source, parse_lua_source, parse_tua_source,
@@ -320,6 +323,16 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    fn effective_plugin_registry(&self) -> PluginRegistry {
+        let mut registry = self.plugin_registry.clone();
+
+        if self.config.ecs.enabled {
+            registry.register(crate::ecs::EcsPlugin);
+        }
+
+        registry
+    }
+
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
         let kind = infer_source_kind(&path, &self.config);
@@ -390,6 +403,7 @@ impl AnalysisHost {
 
         let vfs = self.vfs.snapshot();
         let source_roots = vfs.source_roots().to_vec();
+        let plugin_registry = self.effective_plugin_registry();
         let live_paths = vfs
             .files()
             .map(|file| file.path().to_path_buf())
@@ -409,7 +423,7 @@ impl AnalysisHost {
                             config: &self.config,
                             source_roots: &source_roots,
                             asset_roots: &self.asset_roots,
-                            plugin_registry: &self.plugin_registry,
+                            plugin_registry: &plugin_registry,
                         },
                     );
 
@@ -485,7 +499,7 @@ impl AnalysisHost {
             asset_roots: self.asset_roots.clone(),
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
-            plugin_registry: self.plugin_registry.clone(),
+            plugin_registry,
             module_graph,
             type_database,
             symbol_index,
@@ -2117,12 +2131,26 @@ impl AnalysisSnapshot {
     ) -> Option<TypeEnvironment> {
         let _profile = profile::span("analysis.semantic.environment");
         let environment = file.environment.clone().or_else(|| {
-            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+            let (environment, diagnostics) = if self.config.ecs.enabled {
+                build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases())
+            } else {
+                build_type_environment_with_diagnostics(parsed)
+            };
 
-            Some(environment)
+            diagnostics.is_empty().then_some(environment)
         })?;
 
-        Some(environment.with_local_types(self.project_local_annotation_types(parsed)))
+        let environment = environment.with_local_types(self.project_local_annotation_types(parsed));
+
+        if self.config.ecs.enabled {
+            Some(
+                environment
+                    .with_alias_types(crate::ecs::builtin_aliases())
+                    .with_local_types(crate::ecs::builtin_locals()),
+            )
+        } else {
+            Some(environment)
+        }
     }
 
     fn project_local_annotation_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
@@ -3232,10 +3260,22 @@ fn build_analysis_file(
     let environment = {
         let _profile = profile::span_for_path("analysis.types.environment", path);
 
-        parsed
-            .as_ref()
-            .ok()
-            .and_then(|parsed| build_type_environment(parsed).ok())
+        parsed.as_ref().ok().and_then(|parsed| {
+            if context.config.ecs.enabled {
+                let (environment, diagnostics) = build_type_environment_with_builtin_aliases(
+                    parsed,
+                    crate::ecs::builtin_aliases(),
+                );
+
+                if diagnostics.is_empty() {
+                    Some(environment.with_local_types(crate::ecs::builtin_locals()))
+                } else {
+                    None
+                }
+            } else {
+                build_type_environment(parsed).ok()
+            }
+        })
     };
     let mut diagnostics = {
         let _profile = profile::span_for_path("analysis.check", path);
@@ -3244,11 +3284,12 @@ fn build_analysis_file(
         diagnostics_config.inline_ignores = false;
 
         match &parsed {
-            Ok(parsed) => check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+            Ok(parsed) => check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
                 parsed,
                 analysis_asset_roots(context.source_roots, context.asset_roots),
                 &diagnostics_config,
                 &context.config.jit,
+                &context.config.ecs,
             )
             .err()
             .unwrap_or_default(),

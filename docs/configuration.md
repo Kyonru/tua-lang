@@ -20,6 +20,10 @@ variable_type_drift = true
 table_shape_drift = true
 hot_loop_hints = true
 
+[ecs]
+enabled = false
+backend = "tiny-ecs"
+
 [diagnostics]
 duplicate_keys = false
 missing_requires = false
@@ -67,7 +71,7 @@ globals = []
 
 `emit_maps`
 : Reserved for source-map-style output. Current emitted Lua stays readable even
-  without runtime metadata.
+without runtime metadata.
 
 ## Emit
 
@@ -104,16 +108,54 @@ hot_loop_hints = true
 
 `variable_type_drift`
 : Reports clear local value-type drift such as assigning a `string` into a
-  local previously inferred as `number`. Values annotated or inferred as `any`
-  remain an intentional dynamic escape hatch.
+local previously inferred as `number`. Values annotated or inferred as `any`
+remain an intentional dynamic escape hatch.
 
 `table_shape_drift`
 : Reports clear table-shape drift such as adding late fields to a known table
-  constructor or changing a known field from one concrete type to another.
+constructor or changing a known field from one concrete type to another.
 
 `hot_loop_hints`
 : Reports dynamic table-key writes inside loops when Tua can see the pattern.
-  These are hints for reviewing hot code paths, not proof that a loop is slow.
+These are hints for reviewing hot code paths, not proof that a loop is slow.
+
+## ECS Domain Support
+
+ECS support is opt-in and currently shaped around tiny-ecs-compatible Lua
+projects:
+
+```toml
+[ecs]
+enabled = true
+backend = "tiny-ecs"
+```
+
+`enabled`
+: Enables the built-in ECS domain plugin, the typed `ecs` helper module, and ECS
+diagnostics. The default is `false`.
+
+`backend`
+: Names the intended runtime adapter. The first supported profile is
+`tiny-ecs`; Tua still emits ordinary Lua and does not vendor or execute an ECS
+runtime.
+
+When enabled, Tua recognizes:
+
+- `ecs.world(): EcsWorld`;
+- `ecs.component(name, schema): EcsComponent`;
+- `ecs.system(world, components, update): EcsSystem`;
+- world methods such as `world:create()`, `world:add(...)`, and
+  `world:query(...)`.
+
+The initial diagnostics cover clear, static patterns:
+
+- mismatched or missing fields in one-line `world:add(entity, Component, { ... })`
+  calls;
+- unknown components in one-line `ecs.system(world, { ... }, ...)` or
+  `world:query({ ... })` calls;
+- empty component query lists.
+
+Dynamic ECS construction remains permissive.
 
 ## Diagnostics
 
@@ -159,18 +201,18 @@ annotation_mode = "luacats"
 
 `missing_requires`
 : Reports `require("module")` calls that Tua cannot resolve from the current
-  project layout.
+project layout.
 
 `self_assignments`
 : Reports assignments such as `player.hp = player.hp`.
 
 `doc_annotations`
 : Reports malformed supported LuaHelper/LuaLS-style doc annotations such as
-  `---@param` without a parameter type.
+`---@param` without a parameter type.
 
 `undefined_variables`
 : Reports variable reads that are not known locals, parameters, configured
-  globals, Lua builtins, LOVE globals, or known module exports.
+globals, Lua builtins, LOVE globals, or known module exports.
 
 `unused_locals`
 : Reports local bindings that are never read.
@@ -180,7 +222,7 @@ annotation_mode = "luacats"
 
 `use_before_definition`
 : Reports local reads before the local declaration when Tua can prove the
-  ordering.
+ordering.
 
 `duplicate_parameters`
 : Reports repeated parameter names in a function declaration.
@@ -214,38 +256,38 @@ annotation_mode = "luacats"
 
 `assignment_arity`
 : Reports multiple assignments where Tua can prove the number of values does not
-  match the number of targets. Unknown multi-return calls and varargs remain
-  permissive.
+match the number of targets. Unknown multi-return calls and varargs remain
+permissive.
 
 `local_declaration_arity`
 : Reports local declarations where Tua can prove the initializer count does not
-  match the number of declared locals.
+match the number of declared locals.
 
 `unused_assignments`
 : Reports assignments to locals that are never otherwise read. This complements
-  `unused_locals`, which reports the declaration itself.
+`unused_locals`, which reports the declaration itself.
 
 `binary_operator_type_mismatches`
 : Reports binary operators used with statically incompatible operand types, such
-  as `1 + "hp"`. Dynamic or `any` operands remain permissive.
+as `1 + "hp"`. Dynamic or `any` operands remain permissive.
 
 `uncalled_local_functions`
 : Reports local functions that are referenced as values but never directly
-  called. Indirect callback patterns can stay quiet by leaving this opt-in lint
-  disabled.
+called. Indirect callback patterns can stay quiet by leaving this opt-in lint
+disabled.
 
 `formatting_lints`
 : Reports conservative Lua/Tua formatting consistency issues. The baseline is
-  intentionally small and opt-in: trailing whitespace, tabs or odd-space
-  indentation, obvious spacing around `then`/`do`, comma spacing,
-  parenthesis/bracket padding, and assignment-style token spacing. These lints
-  help mixed `.lua` and `.tua` code stay readable across contributors without
-  rewriting files or enforcing a full formatter.
+intentionally small and opt-in: trailing whitespace, tabs or odd-space
+indentation, obvious spacing around `then`/`do`, comma spacing,
+parenthesis/bracket padding, and assignment-style token spacing. These lints
+help mixed `.lua` and `.tua` code stay readable across contributors without
+rewriting files or enforcing a full formatter.
 
 `inline_ignores`
 : Enables diagnostic suppression comments. This is disabled by default so
-  ordinary diagnostics stay visible unless a project explicitly chooses gradual
-  migration comments.
+ordinary diagnostics stay visible unless a project explicitly chooses gradual
+migration comments.
 
 Supported comments are:
 
@@ -268,15 +310,15 @@ warnings, and suppression never changes type inference or emitted Lua.
 
 `inline_ignore_scopes`
 : Lists the suppression directives accepted by this project. The default allows
-  only line-targeted suppressions.
+only line-targeted suppressions.
 
 `inline_ignore_max_per_file`
 : Limits the number of accepted suppression comments per file. `0` means
-  unlimited.
+unlimited.
 
 `globals`
 : Adds project-specific global names that should be accepted by diagnostics and
-  linting.
+linting.
 
 ## Workspace Resolution
 
@@ -307,6 +349,7 @@ Supported editor settings:
 - `tua.fileAssociations`: maps glob patterns to `lua` or `tua` so extra file
   extensions can be indexed.
 - `tua.jit.enabled`: overrides `[jit].enabled` for opt-in LuaJIT guidance.
+- `tua.ecs.enabled`: overrides `[ecs].enabled` for opt-in ECS domain support.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`.

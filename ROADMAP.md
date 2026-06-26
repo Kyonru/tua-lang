@@ -2030,6 +2030,8 @@ Acceptance:
 
 ### 74. `feat(ecs): explore default ECS domain support with tiny-ecs integration`
 
+Status: done for the first ECS slice. Code-action suggestions are deferred.
+
 Scope:
 
 - Add an experimental ECS domain extension under `tua-core` that models

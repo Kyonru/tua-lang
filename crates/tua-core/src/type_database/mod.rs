@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::ecs;
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
 use crate::vector;
 use crate::vfs::normalize_path;
@@ -450,6 +451,9 @@ fn builtin_type(name: &str) -> Option<Type> {
     match name {
         "number" | "string" | "boolean" | "nil" | "any" => Some(Type::named(name)),
         vector::TYPE_NAME => Some(vector::vec2_type()),
+        name if ecs::builtin_type_names().contains(&name) => ecs::builtin_aliases()
+            .into_iter()
+            .find_map(|(alias, ty)| (alias == name).then_some(ty)),
         _ => None,
     }
 }

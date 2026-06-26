@@ -208,7 +208,31 @@ complete and hover `position.x` and `position.y` as `number`, and emitted Lua is
 backed by bundled BrineVector. BrineVector uses LuaJIT/FFI for fast desktop
 LOVE builds and falls back to table vectors where JIT/FFI is not the right fit.
 
-## 8. Prefer `:` For LOVE Methods
+## 8. Add ECS Metadata When You Use ECS
+
+If your LOVE game uses tiny-ecs or a compatible adapter, opt into ECS tooling:
+
+```toml
+[ecs]
+enabled = true
+```
+
+Then bind `ecs` to your runtime module in normal Lua style:
+
+```tua
+local ecs = require("tiny_ecs_adapter")
+
+local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local player = world:create()
+
+world:add(player, Position, { x = 120, y = 80 })
+```
+
+Tua can complete and hover the ECS API, show signatures for world methods, and
+diagnose clear component/query mistakes. Dynamic ECS patterns stay permissive.
+
+## 9. Prefer `:` For LOVE Methods
 
 LOVE object methods usually need Lua's colon-call syntax so `self` is passed:
 
@@ -225,7 +249,7 @@ playerImage.setFilter("nearest")
 When Tua knows the receiver is a LOVE object, it warns about the dot call and
 editor completions prefer colon-call snippets.
 
-## 9. Enable LuaJIT Guidance When It Helps
+## 10. Enable LuaJIT Guidance When It Helps
 
 For hot LOVE code, you can opt into LuaJIT-friendly shape guidance:
 
@@ -249,7 +273,7 @@ player.name = "late field" -- TL4033 when JIT guidance is enabled
 Use this for code paths where stable shapes matter. Leave it off for migration
 work, prototyping, or runtime-shaped Lua.
 
-## 10. Let Dynamic Lua Stay Dynamic
+## 11. Let Dynamic Lua Stay Dynamic
 
 Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
@@ -263,7 +287,7 @@ Use `any` deliberately when a value is runtime-shaped, third-party, or
 metatable-heavy. Add annotations later if that code becomes important to the
 editor or checker.
 
-## 11. Build And Inspect The Output
+## 12. Build And Inspect The Output
 
 The normal loop is:
 
@@ -281,7 +305,7 @@ cargo run -p tua-cli -- build
 
 That makes the output folder a runnable LOVE distribution folder.
 
-## 12. Try The Examples
+## 13. Try The Examples
 
 The feature tour is the best place to see language and editor behavior in one
 project:

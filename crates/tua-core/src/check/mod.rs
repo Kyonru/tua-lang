@@ -8,15 +8,15 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
-use crate::config::{DiagnosticsConfig, JitConfig};
+use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition};
 use crate::types::{
-    build_type_environment, FunctionType, MetatableFacts, TableField, Type, TypeContext,
-    TypeEnvironment, TypedFunction,
+    build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
+    MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, lua, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -87,21 +87,34 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
     asset_roots: &[PathBuf],
     diagnostics_config: &DiagnosticsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
         parsed,
         asset_roots,
         diagnostics_config,
         &JitConfig::default(),
+        &EcsConfig::default(),
     )
 }
 
-pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_and_jit_config(
+pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
     parsed: &ParsedSource,
     asset_roots: &[PathBuf],
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
+    ecs_config: &EcsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    let environment = build_type_environment(parsed)?;
+    let environment = if ecs_config.enabled {
+        let (environment, diagnostics) =
+            build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
+
+        if diagnostics.is_empty() {
+            environment.with_local_types(crate::ecs::builtin_locals())
+        } else {
+            return Err(diagnostics);
+        }
+    } else {
+        build_type_environment(parsed)?
+    };
     let mut checker = Checker::new(parsed, &environment, asset_roots);
 
     checker.check_block(parsed.ast.nodes(), None);

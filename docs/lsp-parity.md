@@ -50,6 +50,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
 | LOVE asset helpers | `image "..."` and `sound "..."` infer `Image`/`Source`, emit ordinary LOVE calls, and validate obvious paths/extensions. | Tua-specific LOVE-focused workflow. | 48.6 |
 | LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, BrineVector-backed emission, and bundled runtime output. | Deeper vector-library-specific docs and richer overload presentation can still improve. | 73 |
+| ECS domain helper | Opt-in `[ecs]` / `tua.ecs.enabled` support adds typed `ecs` APIs, component/query diagnostics, and a tiny-ecs-compatible reference adapter. | Tua models clear static ECS patterns and leaves dynamic runtime composition permissive. | 74 |
 | Workspace folders and watchers | Workspace folders, folder changes, watched files, and `tua.toml` changes affect diagnostics and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
 
 ## Protocol Surface Supported But Shallow

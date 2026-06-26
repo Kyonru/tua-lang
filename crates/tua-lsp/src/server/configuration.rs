@@ -2,14 +2,15 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tua_core::{
-    DiagnosticsConfig, JitConfig, ModulePathSeparator, ProjectConfig, ProjectFileAssociation,
-    VfsSourceKind,
+    DiagnosticsConfig, EcsConfig, JitConfig, ModulePathSeparator, ProjectConfig,
+    ProjectFileAssociation, VfsSourceKind,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct WorkspaceSettings {
     pub(super) diagnostics: DiagnosticOverrides,
     pub(super) jit: JitOverrides,
+    pub(super) ecs: EcsOverrides,
     pub(super) file_associations: Vec<FileAssociation>,
     pub(super) ignored_paths: Vec<String>,
     pub(super) require_path_separator: RequirePathSeparator,
@@ -50,6 +51,11 @@ pub(super) struct DiagnosticOverrides {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct JitOverrides {
+    pub(super) enabled: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct EcsOverrides {
     pub(super) enabled: Option<bool>,
 }
 
@@ -96,6 +102,7 @@ impl WorkspaceSettings {
         Self {
             diagnostics: DiagnosticOverrides::from_settings(settings.get("diagnostics")),
             jit: JitOverrides::from_settings(settings.get("jit")),
+            ecs: EcsOverrides::from_settings(settings.get("ecs")),
             file_associations: file_associations_from_settings(settings),
             ignored_paths: string_array_setting(settings, &["ignoredPaths", "ignored_paths"]),
             require_path_separator: require_path_separator_from_settings(settings),
@@ -111,6 +118,7 @@ impl WorkspaceSettings {
     pub(super) fn apply_project_config(&self, mut project: ProjectConfig) -> ProjectConfig {
         project.diagnostics = self.diagnostics_config(project.diagnostics);
         self.jit.apply(&mut project.jit);
+        self.ecs.apply(&mut project.ecs);
 
         project
     }
@@ -326,6 +334,22 @@ impl JitOverrides {
 
     fn apply(&self, jit: &mut JitConfig) {
         apply_bool(self.enabled, &mut jit.enabled);
+    }
+}
+
+impl EcsOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+
+        Self {
+            enabled: bool_setting(settings, "enabled", "enabled"),
+        }
+    }
+
+    fn apply(&self, ecs: &mut EcsConfig) {
+        apply_bool(self.enabled, &mut ecs.enabled);
     }
 }
 

@@ -606,6 +606,15 @@ The initial codes are:
 These diagnostics are advisory. They must not change type inference, lowering,
 emitted Lua, or runtime behavior.
 
+Built-in domain plugin diagnostics use the plugin range. The initial ECS plugin
+codes are:
+
+- `TL5002`: ECS component value does not match a declared component schema;
+- `TL5003`: ECS system/query component usage is invalid or unresolved.
+
+Domain plugin diagnostics are opt-in through their project configuration and
+must not execute project runtime code.
+
 Inline diagnostic suppression is opt-in through project configuration. When
 enabled, the compiler and language server recognize:
 

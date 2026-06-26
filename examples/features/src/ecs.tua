@@ -1,0 +1,39 @@
+-- Feature: opt-in ECS domain support.
+-- Enable this with [ecs].enabled = true. The first profile is intentionally
+-- tiny-ecs-shaped: ordinary Lua tables at runtime, type-aware editor support
+-- for worlds, entities, components, and system/query calls.
+
+local ecs = require("tiny_ecs_adapter")
+
+-- Feature: typed component schemas use simple string type names.
+-- The ECS plugin checks one-line schemas and matching world:add values.
+local Position = ecs.component("Position", { x = "number", y = "number" })
+local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
+local Sprite = ecs.component("Sprite", { image = "Image" })
+
+-- Feature: ECS API hover/signature help.
+-- Hover world to see EcsWorld. Type world:a to complete add.
+local world = ecs.world()
+local player = world:create()
+
+world:add(player, Position, { x = 120, y = 80 })
+world:add(player, Velocity, { x = 30, y = 0 })
+world:add(player, Sprite, { image = image "assets/player.png" })
+
+-- Feature: typed query/system component lists.
+-- Unknown components or empty lists produce ECS plugin diagnostics.
+local movingSprites = world:query({ Position, Velocity, Sprite })
+local movementSystem = ecs.system(world, { Position, Velocity }, function()
+  local count = movingSprites:count()
+
+  return count
+end)
+
+return {
+  Position = Position,
+  Velocity = Velocity,
+  Sprite = Sprite,
+  world = world,
+  player = player,
+  movementSystem = movementSystem,
+}
