@@ -156,6 +156,37 @@ fn hints_parameter_names_for_known_calls() {
 }
 
 #[test]
+fn hints_colon_method_parameters_from_self_index_prototype() {
+    let source = r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): number
+  self.balance = self.balance + amount
+
+  return self.balance
+end
+
+local account = setmetatable({ balance = 50 }, Account)
+account:deposit(25)
+"#;
+    let hints = inlay_hints_tua_source("src/account.tua", source).expect("source should parse");
+    let parameter_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Parameter)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(parameter_hints.contains(&"amount:"));
+    assert!(!parameter_hints.contains(&"self:"));
+    assert_hint_position(&hints, "amount:", 16, "account:deposit(".len() + 1);
+}
+
+#[test]
 fn hints_love_asset_loader_local_types() {
     let source = r#"
 local player = image "assets/player.png"

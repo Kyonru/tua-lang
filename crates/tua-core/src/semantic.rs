@@ -222,6 +222,10 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
+        if let Some(function) = self.prototype_typed_function_for_call_parts(parts, position) {
+            return Some(function);
+        }
+
         if let Some(Type::Function(function)) = self.type_of_field_chain(parts, position) {
             return Some(typed_function_from_function_type(
                 Some(qualified_name),
@@ -478,6 +482,123 @@ impl<'a> SemanticModel<'a> {
         };
 
         (table.has_self_index() && table.is_constructor_method(method)).then_some(receiver_type)
+    }
+
+    fn prototype_typed_function_for_call_parts(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<TypedFunction> {
+        let (method, receiver_parts) = parts.split_last()?;
+        let [receiver] = receiver_parts else {
+            return None;
+        };
+        let prototype = self
+            .setmetatable_prototype_for_receiver(receiver, position)
+            .filter(|prototype| self.prototype_has_self_index(prototype, position))?;
+
+        self.environment
+            .function(&format!("{prototype}:{method}"))
+            .or_else(|| self.environment.function(&format!("{prototype}.{method}")))
+            .cloned()
+    }
+
+    fn setmetatable_prototype_for_receiver(
+        &self,
+        receiver: &str,
+        position: SourcePosition,
+    ) -> Option<String> {
+        let mut candidates = Vec::new();
+
+        for stmt in self.parsed.ast.nodes().stmts() {
+            let Some(stmt_span) = node_span(stmt) else {
+                continue;
+            };
+            if !starts_before_or_at(stmt_span.start, position) {
+                continue;
+            }
+
+            match stmt {
+                ast::Stmt::LocalAssignment(local) => {
+                    for (name, expression) in local.names().iter().zip(local.expressions()) {
+                        if token_text(name) != receiver {
+                            continue;
+                        }
+                        let Some(prototype) = setmetatable_prototype_from_expression(expression)
+                        else {
+                            continue;
+                        };
+
+                        candidates.push((stmt_span.start, prototype));
+                    }
+                }
+                ast::Stmt::Assignment(assignment) => {
+                    for (variable, expression) in
+                        assignment.variables().iter().zip(assignment.expressions())
+                    {
+                        let Var::Name(name) = variable else {
+                            continue;
+                        };
+                        if token_text(name) != receiver {
+                            continue;
+                        }
+                        let Some(prototype) = setmetatable_prototype_from_expression(expression)
+                        else {
+                            continue;
+                        };
+
+                        candidates.push((stmt_span.start, prototype));
+                    }
+                }
+                ast::Stmt::FunctionCall(function_call) => {
+                    let Some((target, meta)) = setmetatable_arguments(function_call) else {
+                        continue;
+                    };
+                    if !expression_is_name(target, receiver) {
+                        continue;
+                    }
+                    let Some(prototype) = expression_name(meta) else {
+                        continue;
+                    };
+
+                    candidates.push((stmt_span.start, prototype));
+                }
+                _ => {}
+            }
+        }
+
+        candidates
+            .into_iter()
+            .max_by_key(|(position, _)| position_key(*position))
+            .map(|(_, prototype)| prototype)
+    }
+
+    fn prototype_has_self_index(&self, prototype: &str, position: SourcePosition) -> bool {
+        for stmt in self.parsed.ast.nodes().stmts() {
+            let Some(stmt_span) = node_span(stmt) else {
+                continue;
+            };
+            if !starts_before_or_at(stmt_span.start, position) {
+                continue;
+            }
+            let ast::Stmt::Assignment(assignment) = stmt else {
+                continue;
+            };
+
+            for (variable, expression) in assignment.variables().iter().zip(assignment.expressions())
+            {
+                let Some(parts) = plain_field_chain_from_var(variable) else {
+                    continue;
+                };
+                if parts.as_slice() == [prototype, "__index"]
+                    && expression_is_name(expression, prototype)
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     fn alias_map(&self) -> BTreeMap<String, Type> {
@@ -1601,6 +1722,22 @@ fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
 
 fn expression_is_name(expression: &Expression, expected: &str) -> bool {
     matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
+}
+
+fn expression_name(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::Var(Var::Name(name)) => Some(token_text(name)),
+        _ => None,
+    }
+}
+
+fn setmetatable_prototype_from_expression(expression: &Expression) -> Option<String> {
+    let Expression::FunctionCall(function_call) = expression else {
+        return None;
+    };
+    let (_, meta) = setmetatable_arguments(function_call)?;
+
+    expression_name(meta)
 }
 
 fn function_declaration_table_field(

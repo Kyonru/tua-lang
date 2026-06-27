@@ -3,16 +3,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use tua_core::{
-    build_type_environment, infer_module_exports, parse_lua_source, parse_tua_source,
     require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
     CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, Completion, Diagnostic,
-    DocumentHighlight, DocumentSymbol, FoldingRange, InlayHint, ModuleExports, ModuleLink,
-    ParsedSource, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit,
-    RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
-    TypeEnvironment, VfsSourceKind, WorkspaceSymbol,
+    DocumentHighlight, DocumentSymbol, FoldingRange, InlayHint, ModuleLink, ProjectModel,
+    ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, VfsSourceKind, WorkspaceSymbol,
 };
 
 use super::auto_import::{
@@ -25,15 +23,11 @@ use super::uri::path_from_uri;
 pub(super) struct AnalysisHost {
     core: CoreAnalysisHost,
     documents: HashMap<String, OpenDocument>,
-    files: HashMap<PathBuf, CachedFile>,
-    next_revision: u64,
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct AnalysisSnapshot {
     core: CoreAnalysisSnapshot,
-    documents: HashMap<String, OpenDocument>,
-    files: HashMap<PathBuf, CachedFile>,
     workspace_folders: Vec<PathBuf>,
     settings: WorkspaceSettings,
 }
@@ -77,15 +71,6 @@ struct OpenDocument {
     source: String,
 }
 
-#[derive(Clone, Debug)]
-struct CachedFile {
-    #[cfg_attr(not(test), allow(dead_code))]
-    revision: u64,
-    parsed: Result<ParsedSource, Vec<Diagnostic>>,
-    environment: Option<TypeEnvironment>,
-    exports: Option<ModuleExports>,
-}
-
 impl AnalysisHost {
     pub(super) fn snapshot(
         &self,
@@ -94,8 +79,6 @@ impl AnalysisHost {
     ) -> AnalysisSnapshot {
         AnalysisSnapshot {
             core: self.core.snapshot(),
-            documents: self.documents.clone(),
-            files: self.files.clone(),
             workspace_folders: workspace_folders.to_vec(),
             settings: settings.clone(),
         }
@@ -144,7 +127,6 @@ impl AnalysisHost {
 
     pub(super) fn close_document(&mut self, uri: &str) {
         if let Some(document) = self.documents.remove(uri) {
-            self.files.remove(&document.path);
             self.core.remove_file(&document.path);
         }
     }
@@ -153,7 +135,6 @@ impl AnalysisHost {
         let path = path_from_uri(uri);
 
         self.documents.remove(uri);
-        self.files.remove(&path);
         self.core.remove_file(&path);
     }
 
@@ -175,7 +156,7 @@ impl AnalysisHost {
         }
 
         if settings.is_ignored(&path, roots) {
-            self.files.remove(&path);
+            self.core.remove_file(&path);
             return;
         }
 
@@ -224,11 +205,6 @@ impl AnalysisHost {
             .collect::<BTreeSet<_>>();
         let model = project_model_for_roots(roots, settings).ok();
 
-        self.files.retain(|path, _| {
-            (open_paths.contains(path) && !settings.is_ignored(path, roots))
-                || !project_contains_path(model.as_ref(), path)
-        });
-
         let Some(model) = model else {
             return;
         };
@@ -257,25 +233,17 @@ impl AnalysisHost {
     ) -> Option<SourceKind> {
         self.sync_core_project_inputs(roots, settings);
         if settings.is_ignored(&path, roots) {
-            self.files.remove(&path);
             self.core.remove_file(&path);
             return None;
         }
 
         let Some(kind) = source_kind_for_path(&path, roots, settings) else {
-            self.files.remove(&path);
             self.core.remove_file(&path);
             return None;
         };
 
-        self.next_revision += 1;
-        let core_source = source.clone();
-        self.files.insert(
-            path.clone(),
-            CachedFile::new(path.clone(), source, self.next_revision, kind),
-        );
         self.core
-            .set_file_with_kind(path, core_source, core_source_kind(kind));
+            .set_file_with_kind(path, source, core_source_kind(kind));
 
         Some(kind)
     }
@@ -317,10 +285,8 @@ impl AnalysisHost {
     }
 
     #[cfg(test)]
-    fn cache_revision_for_uri(&self, uri: &str) -> Option<u64> {
-        let path = path_from_uri(uri);
-
-        self.files.get(&path).map(|file| file.revision)
+    fn core_revision(&self) -> u64 {
+        self.core.revision()
     }
 }
 
@@ -329,12 +295,10 @@ impl AnalysisSnapshot {
         let path = path_from_uri(uri);
 
         if self.core.source(&path).is_some() {
-            return self.core.pipeline_diagnostics(&path);
+            return self.core.fresh_diagnostics(&path);
         }
 
-        self.file(&path)
-            .map(CachedFile::diagnostics)
-            .unwrap_or_default()
+        Vec::new()
     }
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
@@ -605,19 +569,6 @@ impl AnalysisSnapshot {
             })
             .collect()
     }
-
-    fn file(&self, path: &Path) -> Option<&CachedFile> {
-        if self.settings.is_ignored(path, &self.workspace_folders) {
-            return None;
-        }
-
-        self.files.get(path).or_else(|| {
-            self.documents
-                .values()
-                .find(|document| document.path == path)
-                .and_then(|document| self.files.get(&document.path))
-        })
-    }
 }
 
 fn call_hierarchy_item_from_symbol(symbol: &CallHierarchySymbol) -> CallHierarchyItem {
@@ -648,52 +599,6 @@ fn call_hierarchy_outgoing_from_core(
     CallHierarchyOutgoingCall {
         to: call_hierarchy_item_from_symbol(&call.to),
         from_ranges: call.from_ranges,
-    }
-}
-
-impl CachedFile {
-    fn new(path: PathBuf, source: String, revision: u64, kind: SourceKind) -> Self {
-        let parsed = parse_source(&path, source.clone(), kind);
-        let environment = parsed
-            .as_ref()
-            .ok()
-            .and_then(|parsed| build_type_environment(parsed).ok());
-        let exports = parsed.as_ref().ok().and_then(infer_module_exports);
-
-        Self {
-            revision,
-            parsed,
-            environment,
-            exports,
-        }
-    }
-
-    fn diagnostics(&self) -> Vec<Diagnostic> {
-        match &self.parsed {
-            Ok(_) => Vec::new(),
-            Err(diagnostics) => diagnostics.clone(),
-        }
-    }
-
-    #[allow(dead_code)]
-    fn environment(&self) -> Option<&TypeEnvironment> {
-        self.environment.as_ref()
-    }
-
-    #[allow(dead_code)]
-    fn exports(&self) -> Option<&ModuleExports> {
-        self.exports.as_ref()
-    }
-}
-
-fn parse_source(
-    path: &Path,
-    source: String,
-    kind: SourceKind,
-) -> Result<ParsedSource, Vec<Diagnostic>> {
-    match kind {
-        SourceKind::Lua => parse_lua_source(path, source),
-        SourceKind::Tua => parse_tua_source(path, source),
     }
 }
 
@@ -807,23 +712,19 @@ mod tests {
         host.open_document(player_uri, "local hp: number = 1\n", &roots, &settings);
         host.open_document(enemy_uri, "local hp: number = 2\n", &roots, &settings);
 
-        let player_before = host
-            .cache_revision_for_uri(player_uri)
-            .expect("player should be cached");
-        let enemy_before = host
-            .cache_revision_for_uri(enemy_uri)
-            .expect("enemy should be cached");
+        let before = host.core_revision();
+        let snapshot = host.snapshot(&roots, &settings);
+
+        assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
+        assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
 
         host.update_document(player_uri, "local hp: number = 3\n", &roots, &settings);
 
-        let player_after = host
-            .cache_revision_for_uri(player_uri)
-            .expect("player should stay cached");
-        let enemy_after = host
-            .cache_revision_for_uri(enemy_uri)
-            .expect("enemy should stay cached");
+        let after = host.core_revision();
+        let snapshot = host.snapshot(&roots, &settings);
 
-        assert!(player_after > player_before);
-        assert_eq!(enemy_after, enemy_before);
+        assert!(after > before);
+        assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
+        assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
     }
 }

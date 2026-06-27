@@ -1,6 +1,8 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
@@ -13,6 +15,18 @@ use crate::project_model::ProjectModel;
 use crate::semantic::resolve_aliases;
 use crate::types::{build_type_environment, TableField, Type, TypeEnvironment, TypedFunction};
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
+
+thread_local! {
+    static REQUIRED_MODULE_EXPORT_CACHE: RefCell<BTreeMap<PathBuf, CachedRequiredModuleExports>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+#[derive(Clone, Debug)]
+struct CachedRequiredModuleExports {
+    modified: Option<SystemTime>,
+    len: Option<u64>,
+    exports: Option<ModuleExports>,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModuleExports {
@@ -73,10 +87,8 @@ pub fn required_module_exports_for_receiver(
     receiver: &str,
 ) -> Option<ModuleExports> {
     let required = required_module_for_receiver(parsed, receiver)?;
-    let source = fs::read_to_string(&required.path).ok()?;
-    let parsed = parse_module_source(&required.path, source).ok()?;
 
-    infer_module_exports(&parsed)
+    required_module_exports_for_path(&required.path)
 }
 
 pub fn required_module_export_type_for_fields(
@@ -165,7 +177,23 @@ fn export_table_field_type(ty: &Type, field: &str) -> Option<Type> {
 }
 
 pub fn infer_module_exports(parsed: &ParsedSource) -> Option<ModuleExports> {
-    let mut inferer = ExportInferer::new(parsed);
+    let environment = build_type_environment(parsed).ok();
+
+    infer_module_exports_with_optional_environment(parsed, environment.as_ref())
+}
+
+pub fn infer_module_exports_with_environment(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Option<ModuleExports> {
+    infer_module_exports_with_optional_environment(parsed, Some(environment))
+}
+
+pub(crate) fn infer_module_exports_with_optional_environment(
+    parsed: &ParsedSource,
+    environment: Option<&TypeEnvironment>,
+) -> Option<ModuleExports> {
+    let mut inferer = ExportInferer::new(parsed, environment);
 
     inferer.collect_top_level();
     inferer.exports()
@@ -179,6 +207,43 @@ fn parse_module_source(
         Some("lua") => parse_lua_source(path, source),
         _ => parse_tua_source(path, source),
     }
+}
+
+fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
+    let path = path.to_path_buf();
+    let metadata = fs::metadata(&path).ok();
+    let modified = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok());
+    let len = metadata.as_ref().map(fs::Metadata::len);
+
+    if let Some(cached) = REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
+        cache
+            .borrow()
+            .get(&path)
+            .filter(|cached| cached.modified == modified && cached.len == len)
+            .cloned()
+    }) {
+        return cached.exports;
+    }
+
+    let exports = fs::read_to_string(&path)
+        .ok()
+        .and_then(|source| parse_module_source(&path, source).ok())
+        .and_then(|parsed| infer_module_exports(&parsed));
+
+    REQUIRED_MODULE_EXPORT_CACHE.with(|cache| {
+        cache.borrow_mut().insert(
+            path,
+            CachedRequiredModuleExports {
+                modified,
+                len,
+                exports: exports.clone(),
+            },
+        );
+    });
+
+    exports
 }
 
 fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
@@ -229,7 +294,7 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
 
 struct ExportInferer<'a> {
     parsed: &'a ParsedSource,
-    environment: Option<TypeEnvironment>,
+    environment: Option<&'a TypeEnvironment>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
     function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
@@ -238,10 +303,10 @@ struct ExportInferer<'a> {
 }
 
 impl<'a> ExportInferer<'a> {
-    fn new(parsed: &'a ParsedSource) -> Self {
+    fn new(parsed: &'a ParsedSource, environment: Option<&'a TypeEnvironment>) -> Self {
         Self {
             parsed,
-            environment: build_type_environment(parsed).ok(),
+            environment,
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
             function_parameter_docs: BTreeMap::new(),

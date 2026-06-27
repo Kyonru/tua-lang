@@ -299,9 +299,9 @@ account:withdraw(
 
     assert_eq!(
         help.signatures[0].label,
-        "function account:withdraw(number): number"
+        "function account:withdraw(amount: number): number"
     );
-    assert_eq!(parameter_labels(&help), vec!["number"]);
+    assert_eq!(parameter_labels(&help), vec!["amount: number"]);
     assert_eq!(help.active_parameter, 0);
 }
 

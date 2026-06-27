@@ -165,10 +165,6 @@ impl<'a> SignatureResolver<'a> {
             if let Some(function) = self.environment.function(root) {
                 return Some(signatures_from_typed_function(function, Some(root)));
             }
-        } else if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
-            if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment) {
-                return Some(vec![signature]);
-            }
         }
 
         if !fields.is_empty() {
@@ -190,6 +186,23 @@ impl<'a> SignatureResolver<'a> {
                 .lua_function_item_for_call_parts(parts, position)
             {
                 return signature_from_lua_item(item).map(|signature| vec![signature]);
+            }
+
+            if let Some(function) = self
+                .semantic
+                .typed_function_for_call_parts(parts, position)
+            {
+                return Some(signatures_from_typed_function(
+                    &function,
+                    Some(&qualified_name),
+                ));
+            }
+
+            if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
+                if let Some(signature) = signature_from_type(&qualified_name, &ty, self.environment)
+                {
+                    return Some(vec![signature]);
+                }
             }
 
             if self.environment.local(root).is_some() {

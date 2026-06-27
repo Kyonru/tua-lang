@@ -227,8 +227,9 @@ impl<'a> InlayHintCollector<'a> {
             return;
         };
         let arguments = parenthesized_arguments(function_call).unwrap_or_default();
+        let parameters = call_visible_parameters(function_call, &function.parameters);
 
-        for (argument, parameter) in arguments.iter().zip(&function.parameters) {
+        for (argument, parameter) in arguments.iter().zip(parameters) {
             self.collect_expression(argument);
 
             if !parameter.name.is_empty() {
@@ -240,7 +241,7 @@ impl<'a> InlayHintCollector<'a> {
             }
         }
 
-        for argument in arguments.iter().skip(function.parameters.len()) {
+        for argument in arguments.iter().skip(parameters.len()) {
             self.collect_expression(argument);
         }
     }
@@ -281,6 +282,31 @@ fn should_hint_type(ty: &Type) -> bool {
     !matches!(ty, Type::Any)
 }
 
+fn call_visible_parameters<'a>(
+    function_call: &FunctionCall,
+    parameters: &'a [crate::TypedParameter],
+) -> &'a [crate::TypedParameter] {
+    if is_method_call(function_call)
+        && parameters
+            .first()
+            .is_some_and(is_synthetic_method_receiver)
+    {
+        &parameters[1..]
+    } else {
+        parameters
+    }
+}
+
+fn is_synthetic_method_receiver(parameter: &crate::TypedParameter) -> bool {
+    parameter.name == "self" || (parameter.name.is_empty() && parameter.ty == Type::Any)
+}
+
+fn is_method_call(function_call: &FunctionCall) -> bool {
+    function_call
+        .suffixes()
+        .any(|suffix| matches!(suffix, Suffix::Call(Call::MethodCall(_))))
+}
+
 fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expression>> {
     let call = function_call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
@@ -291,6 +317,10 @@ fn parenthesized_arguments(function_call: &FunctionCall) -> Option<Vec<&Expressi
         Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
             Some(arguments.iter().collect())
         }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
+            _ => None,
+        },
         _ => None,
     }
 }

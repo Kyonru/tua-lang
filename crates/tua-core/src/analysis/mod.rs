@@ -16,6 +16,7 @@ use crate::hover::hover_parsed_source_with_environment;
 use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
 use crate::inlay_hint::inlay_hints_parsed_source_with_environment;
 use crate::inline_ignore::apply_inline_ignores;
+use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::require_module_at_position;
 use crate::plugin::{PluginContext, PluginRegistry};
 use crate::profile;
@@ -39,13 +40,12 @@ use crate::{
     global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
     global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source_with_hir, hover_parsed_source,
-    infer_module_exports, inlay_hints_parsed_source, is_valid_rename_identifier,
-    lower_parsed_source, module_links_tua_source, parse_lua_source, parse_tua_source,
-    reference_kind_for_rename, references_to_definition_parsed_source_with_artifacts,
-    rename_target_for_definition, require_bindings_for_parsed_source,
-    semantic_tokens_parsed_source, semantic_tokens_tua_source, signature_help_parsed_source,
-    signature_help_tua_source, type_alias_definition_count, Assist, AssistRange,
-    CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyIncomingCall,
+    inlay_hints_parsed_source, is_valid_rename_identifier, lower_parsed_source,
+    module_links_tua_source, parse_lua_source, parse_tua_source, reference_kind_for_rename,
+    references_to_definition_parsed_source_with_artifacts, rename_target_for_definition,
+    require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
+    signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count, Assist,
+    AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyIncomingCall,
     CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolTarget, Completion,
     CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
     FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
@@ -77,6 +77,12 @@ pub enum AnalysisSourceKind {
     Lua,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnalysisWarmPriority {
+    High,
+    Low,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct AnalysisHost {
     config: ProjectConfig,
@@ -102,7 +108,7 @@ pub struct AnalysisSnapshot {
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
     last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
-    semantic_facts: Rc<OnceCell<BTreeMap<PathBuf, AnalysisSemanticFacts>>>,
+    semantic_facts: Rc<RefCell<BTreeMap<PathBuf, Rc<AnalysisSemanticFacts>>>>,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     reverse_reference_index: Rc<OnceCell<ReverseReferenceIndex>>,
@@ -528,7 +534,7 @@ impl AnalysisHost {
             type_database,
             symbol_index,
             last_good_files: self.last_good_files.borrow().clone(),
-            semantic_facts: Rc::new(OnceCell::new()),
+            semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
             completion_cache: Rc::new(RefCell::new(BTreeMap::new())),
             definition_cache: Rc::new(RefCell::new(BTreeMap::new())),
             reverse_reference_index: Rc::new(OnceCell::new()),
@@ -544,6 +550,10 @@ impl AnalysisHost {
             });
 
         snapshot
+    }
+
+    pub fn warm_file(&self, path: impl AsRef<Path>, _priority: AnalysisWarmPriority) -> bool {
+        self.snapshot().semantic_index(path).is_some()
     }
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
@@ -631,6 +641,21 @@ impl AnalysisSnapshot {
     }
 
     pub fn diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        self.pipeline_diagnostics(path)
+    }
+
+    pub fn fast_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        let Some(file) = self.file(path.as_ref()) else {
+            return Vec::new();
+        };
+
+        match &file.parsed {
+            Ok(_) => Vec::new(),
+            Err(diagnostics) => diagnostics.clone(),
+        }
+    }
+
+    pub fn fresh_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
         self.pipeline_diagnostics(path)
     }
 
@@ -1690,6 +1715,14 @@ impl AnalysisSnapshot {
         self.file(path.as_ref())?.environment.as_ref()
     }
 
+    pub fn semantic_index(&self, path: impl AsRef<Path>) -> Option<SemanticIndex> {
+        let file = self.file(path.as_ref())?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        self.semantic_facts_for_parsed(parsed)
+            .map(|facts| facts.semantic_index.clone())
+    }
+
     pub fn scope_map(&self, path: impl AsRef<Path>) -> Option<&ScopeMap> {
         self.file(path.as_ref())?.scope.as_ref()
     }
@@ -2248,12 +2281,8 @@ impl AnalysisSnapshot {
             return module_completions;
         }
 
-        let field_completions = complete_field_access_in_source_with_environment(
-            source,
-            parsed,
-            position,
-            environment,
-        );
+        let field_completions =
+            complete_field_access_in_source_with_environment(source, parsed, position, environment);
 
         if !field_completions.is_empty() {
             return field_completions;
@@ -2311,8 +2340,30 @@ impl AnalysisSnapshot {
             .collect()
     }
 
-    fn semantic_facts_for_parsed(&self, parsed: &ParsedSource) -> Option<&AnalysisSemanticFacts> {
-        self.semantic_facts().get(&normalize_path(&parsed.path))
+    fn semantic_facts_for_parsed(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Option<Rc<AnalysisSemanticFacts>> {
+        let path = normalize_path(&parsed.path);
+
+        if let Some(facts) = self.semantic_facts.borrow().get(&path).cloned() {
+            return Some(facts);
+        }
+
+        let file = self.file(&path)?;
+        let _profile = profile::span_for_path("analysis.semantic.facts.file", &path);
+        let environment = self.project_type_environment_for_file(file, parsed)?;
+        let facts = Rc::new(AnalysisSemanticFacts {
+            semantic_index: SemanticIndex::build(parsed, file.hir.as_ref(), &environment),
+            environment,
+            inlay_hints: OnceCell::new(),
+        });
+
+        self.semantic_facts
+            .borrow_mut()
+            .insert(path, Rc::clone(&facts));
+
+        Some(facts)
     }
 
     fn semantic_environment(&self, parsed: &ParsedSource) -> Option<TypeEnvironment> {
@@ -2363,33 +2414,6 @@ impl AnalysisSnapshot {
             hir: last_good.hir,
             environment,
             semantic_index,
-        })
-    }
-
-    fn semantic_facts(&self) -> &BTreeMap<PathBuf, AnalysisSemanticFacts> {
-        self.semantic_facts.get_or_init(|| {
-            let _profile = profile::span("analysis.semantic.facts");
-
-            self.files
-                .iter()
-                .filter_map(|(path, file)| {
-                    let parsed = file.parsed.as_ref().ok()?;
-                    let environment = self.project_type_environment_for_file(file, parsed)?;
-
-                    Some((
-                        path.clone(),
-                        AnalysisSemanticFacts {
-                            semantic_index: SemanticIndex::build(
-                                parsed,
-                                file.hir.as_ref(),
-                                &environment,
-                            ),
-                            environment,
-                            inlay_hints: OnceCell::new(),
-                        },
-                    ))
-                })
-                .collect()
         })
     }
 
@@ -3641,7 +3665,9 @@ fn build_analysis_file(
     let exports = {
         let _profile = profile::span_for_path("analysis.index.exports", path);
 
-        parsed.as_ref().ok().and_then(infer_module_exports)
+        parsed.as_ref().ok().and_then(|parsed| {
+            infer_module_exports_with_optional_environment(parsed, environment.as_ref())
+        })
     };
     let require_edges = {
         let _profile = profile::span_for_path("analysis.index.requires", path);

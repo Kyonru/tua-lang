@@ -274,6 +274,54 @@ local player: <|alias_ref|>Player = { hp = 10 }
 }
 
 #[test]
+fn snapshot_warms_semantic_facts_per_requested_file() {
+    let main = PathBuf::from("src/main.tua");
+    let other = PathBuf::from("src/other.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &main,
+        r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+local hp = player.hp
+"#,
+    );
+    host.set_file(
+        &other,
+        r#"type Enemy = { hp: number }
+local enemy: Enemy = { hp = 5 }
+local hp = enemy.hp
+"#,
+    );
+
+    let snapshot = host.snapshot();
+    assert!(snapshot.semantic_facts.borrow().is_empty());
+
+    let main_index = snapshot
+        .semantic_index(&main)
+        .expect("main semantic index should warm");
+    assert!(main_index.cache_len() > 0);
+    assert_eq!(snapshot.semantic_facts.borrow().len(), 1);
+    assert!(snapshot
+        .semantic_facts
+        .borrow()
+        .contains_key(&normalize_path(&main)));
+    assert!(!snapshot
+        .semantic_facts
+        .borrow()
+        .contains_key(&normalize_path(&other)));
+
+    assert!(host.warm_file(&other, AnalysisWarmPriority::High));
+    let warmed = host.snapshot();
+
+    assert_eq!(warmed.semantic_facts.borrow().len(), 2);
+    assert!(warmed
+        .semantic_facts
+        .borrow()
+        .contains_key(&normalize_path(&other)));
+}
+
+#[test]
 fn snapshot_keeps_project_inputs() {
     let mut host = AnalysisHost::with_config(ProjectConfig {
         source: PathBuf::from("game"),

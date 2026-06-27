@@ -48,7 +48,7 @@ pub mod workspace_symbol;
 
 pub use analysis::{
     AnalysisCacheStats, AnalysisHost, AnalysisSemanticFile, AnalysisSnapshot, AnalysisSourceKind,
-    BuiltinCatalogs,
+    AnalysisWarmPriority, BuiltinCatalogs,
 };
 pub use asset::{AssetLoaderKind, AssetMetadata, AssetValidationStatus};
 pub use call_hierarchy::{
@@ -111,10 +111,10 @@ pub use module_graph::{
 };
 pub use module_index::{
     exported_field_for_fields, exported_type_for_fields, infer_module_exports,
-    require_bindings_for_parsed_source, required_module_export_for_fields,
-    required_module_export_type_for_fields, required_module_exports_for_receiver,
-    required_module_for_receiver, resolve_required_module, ModuleExportField, ModuleExports,
-    RequireBinding, RequiredModule,
+    infer_module_exports_with_environment, require_bindings_for_parsed_source,
+    required_module_export_for_fields, required_module_export_type_for_fields,
+    required_module_exports_for_receiver, required_module_for_receiver, resolve_required_module,
+    ModuleExportField, ModuleExports, RequireBinding, RequiredModule,
 };
 pub use module_link::{module_links_tua_source, ModuleLink};
 pub use parser::{
