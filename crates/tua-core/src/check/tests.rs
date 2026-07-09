@@ -45,6 +45,14 @@ fn accepts_typed_love_asset_loader_initializers() {
         r#"
 local player: Image = image "assets/player.png"
 local jump: Source = sound "assets/jump.wav"
+local theme: Source = music "assets/theme.ogg"
+local mainFont: Font = font("assets/ui.ttf", 18)
+local wave: Shader = shader "assets/wave.glsl"
+local data: ImageData = imageData "assets/player.png"
+local target: Canvas = canvas(320, 180)
+local frame: Quad = quad(0, 0, 16, 16, 64, 64)
+local batch: SpriteBatch = spriteBatch(player, 128)
+local sparks: ParticleSystem = particles(player, 64)
 "#,
         &[],
         &crate::DiagnosticsConfig::default(),
@@ -116,11 +124,18 @@ fn accepts_existing_love_asset_loader_paths() {
     let source = r#"
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local mainFont = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local data = imageData "assets/player.png"
 "#;
 
     temp.write("src/assets.tua", source);
     temp.write("assets/player.png", "");
     temp.write("assets/jump.wav", "");
+    temp.write("assets/theme.ogg", "");
+    temp.write("assets/ui.ttf", "");
+    temp.write("assets/wave.glsl", "");
 
     check_tua_source(temp.path.join("src/assets.tua"), source)
         .expect("existing supported assets should check");

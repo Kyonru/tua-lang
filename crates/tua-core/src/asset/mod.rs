@@ -14,6 +14,14 @@ use crate::{ParsedSource, SourcePosition, SourceSpan};
 pub enum AssetLoaderKind {
     Image,
     Sound,
+    Music,
+    Font,
+    Shader,
+    ImageData,
+    Canvas,
+    Quad,
+    SpriteBatch,
+    Particles,
 }
 
 impl AssetLoaderKind {
@@ -21,6 +29,14 @@ impl AssetLoaderKind {
         match self {
             Self::Image => "image",
             Self::Sound => "sound",
+            Self::Music => "music",
+            Self::Font => "font",
+            Self::Shader => "shader",
+            Self::ImageData => "imageData",
+            Self::Canvas => "canvas",
+            Self::Quad => "quad",
+            Self::SpriteBatch => "spriteBatch",
+            Self::Particles => "particles",
         }
     }
 
@@ -28,38 +44,132 @@ impl AssetLoaderKind {
         match self {
             Self::Image => "love.graphics.newImage",
             Self::Sound => "love.audio.newSource",
+            Self::Music => "love.audio.newSource",
+            Self::Font => "love.graphics.newFont",
+            Self::Shader => "love.graphics.newShader",
+            Self::ImageData => "love.image.newImageData",
+            Self::Canvas => "love.graphics.newCanvas",
+            Self::Quad => "love.graphics.newQuad",
+            Self::SpriteBatch => "love.graphics.newSpriteBatch",
+            Self::Particles => "love.graphics.newParticleSystem",
         }
     }
 
-    pub(crate) fn emitted_call(self, path_literal: &str) -> String {
+    pub(crate) fn emitted_call(self, arguments: &[String]) -> Option<String> {
+        if arguments.len() < self.required_argument_count() {
+            return None;
+        }
+
         match self {
-            Self::Image => format!("{}({path_literal})", self.emitted_callee()),
-            Self::Sound => format!("{}({path_literal}, \"static\")", self.emitted_callee()),
+            Self::Sound => Some(format!(
+                "{}({}, \"static\")",
+                self.emitted_callee(),
+                arguments.first()?
+            )),
+            Self::Music => Some(format!(
+                "{}({}, \"stream\")",
+                self.emitted_callee(),
+                arguments.first()?
+            )),
+            _ => Some(format!(
+                "{}({})",
+                self.emitted_callee(),
+                arguments.join(", ")
+            )),
         }
     }
 
     pub(crate) fn return_type(self) -> Type {
         match self {
             Self::Image => Type::alias("Image"),
-            Self::Sound => Type::alias("Source"),
+            Self::Sound | Self::Music => Type::alias("Source"),
+            Self::Font => Type::alias("Font"),
+            Self::Shader => Type::alias("Shader"),
+            Self::ImageData => Type::alias("ImageData"),
+            Self::Canvas => Type::alias("Canvas"),
+            Self::Quad => Type::alias("Quad"),
+            Self::SpriteBatch => Type::alias("SpriteBatch"),
+            Self::Particles => Type::alias("ParticleSystem"),
         }
     }
 
     pub const fn return_type_name(self) -> &'static str {
         match self {
             Self::Image => "Image",
-            Self::Sound => "Source",
+            Self::Sound | Self::Music => "Source",
+            Self::Font => "Font",
+            Self::Shader => "Shader",
+            Self::ImageData => "ImageData",
+            Self::Canvas => "Canvas",
+            Self::Quad => "Quad",
+            Self::SpriteBatch => "SpriteBatch",
+            Self::Particles => "ParticleSystem",
         }
     }
 
     pub(crate) fn function_type(self) -> FunctionType {
-        FunctionType::new([Type::string()], self.return_type())
+        FunctionType::new(self.parameter_types(), self.return_type())
+    }
+
+    pub(crate) fn parameter_types(self) -> Vec<Type> {
+        match self {
+            Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData => {
+                vec![Type::string()]
+            }
+            Self::Font => vec![Type::string(), Type::number()],
+            Self::Canvas => vec![Type::number(), Type::number()],
+            Self::Quad => vec![
+                Type::number(),
+                Type::number(),
+                Type::number(),
+                Type::number(),
+                Type::number(),
+                Type::number(),
+            ],
+            Self::SpriteBatch | Self::Particles => vec![Type::alias("Image"), Type::number()],
+        }
+    }
+
+    pub(crate) const fn parameter_names(self) -> &'static [&'static str] {
+        match self {
+            Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData => &["path"],
+            Self::Font => &["path", "size"],
+            Self::Canvas => &["width", "height"],
+            Self::Quad => &["x", "y", "width", "height", "sw", "sh"],
+            Self::SpriteBatch => &["image", "size"],
+            Self::Particles => &["image", "count"],
+        }
+    }
+
+    pub(crate) const fn required_argument_count(self) -> usize {
+        match self {
+            Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData => 1,
+            Self::Font | Self::Canvas | Self::SpriteBatch | Self::Particles => 2,
+            Self::Quad => 6,
+        }
+    }
+
+    pub(crate) const fn supports_string_sugar(self) -> bool {
+        matches!(
+            self,
+            Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData
+        )
     }
 
     pub(crate) const fn detail(self) -> &'static str {
         match self {
             Self::Image => "function image(path: string): Image",
             Self::Sound => "function sound(path: string): Source",
+            Self::Music => "function music(path: string): Source",
+            Self::Font => "function font(path: string, size: number): Font",
+            Self::Shader => "function shader(path: string): Shader",
+            Self::ImageData => "function imageData(path: string): ImageData",
+            Self::Canvas => "function canvas(width: number, height: number): Canvas",
+            Self::Quad => {
+                "function quad(x: number, y: number, width: number, height: number, sw: number, sh: number): Quad"
+            }
+            Self::SpriteBatch => "function spriteBatch(image: Image, size: number): SpriteBatch",
+            Self::Particles => "function particles(image: Image, count: number): ParticleSystem",
         }
     }
 
@@ -71,13 +181,38 @@ impl AssetLoaderKind {
             Self::Sound => {
                 "Loads a static sound asset. Emits love.audio.newSource(path, \"static\") in generated Lua."
             }
+            Self::Music => {
+                "Loads a streaming music asset. Emits love.audio.newSource(path, \"stream\") in generated Lua."
+            }
+            Self::Font => "Loads a font asset. Emits love.graphics.newFont(path, size) in generated Lua.",
+            Self::Shader => {
+                "Loads a shader asset. Emits love.graphics.newShader(path) in generated Lua."
+            }
+            Self::ImageData => {
+                "Loads image data. Emits love.image.newImageData(path) in generated Lua."
+            }
+            Self::Canvas => {
+                "Creates a canvas. Emits love.graphics.newCanvas(width, height) in generated Lua."
+            }
+            Self::Quad => "Creates a quad. Emits love.graphics.newQuad(...) in generated Lua.",
+            Self::SpriteBatch => {
+                "Creates a sprite batch. Emits love.graphics.newSpriteBatch(image, size) in generated Lua."
+            }
+            Self::Particles => {
+                "Creates a particle system. Emits love.graphics.newParticleSystem(image, count) in generated Lua."
+            }
         }
     }
 
     pub const fn supported_extensions(self) -> &'static [&'static str] {
         match self {
-            Self::Image => &["bmp", "exr", "hdr", "jpeg", "jpg", "pic", "png", "tga"],
-            Self::Sound => &["flac", "mp3", "ogg", "wav"],
+            Self::Image | Self::ImageData => {
+                &["bmp", "exr", "hdr", "jpeg", "jpg", "pic", "png", "tga"]
+            }
+            Self::Sound | Self::Music => &["flac", "mp3", "ogg", "wav"],
+            Self::Font => &["otf", "ttf"],
+            Self::Shader => &["frag", "fs", "glsl", "vert", "vs"],
+            Self::Canvas | Self::Quad | Self::SpriteBatch | Self::Particles => &[],
         }
     }
 
@@ -85,6 +220,26 @@ impl AssetLoaderKind {
         match self {
             Self::Image => "image",
             Self::Sound => "sound",
+            Self::Music => "music",
+            Self::Font => "font",
+            Self::Shader => "shader",
+            Self::ImageData => "image data",
+            Self::Canvas => "canvas",
+            Self::Quad => "quad",
+            Self::SpriteBatch => "sprite batch",
+            Self::Particles => "particle system",
+        }
+    }
+
+    pub const fn has_asset_path(self) -> bool {
+        match self {
+            Self::Image
+            | Self::Sound
+            | Self::Music
+            | Self::Font
+            | Self::Shader
+            | Self::ImageData => true,
+            Self::Canvas | Self::Quad | Self::SpriteBatch | Self::Particles => false,
         }
     }
 }
@@ -154,6 +309,14 @@ pub(crate) fn loader_kind(name: &str) -> Option<AssetLoaderKind> {
     match name {
         "image" => Some(AssetLoaderKind::Image),
         "sound" => Some(AssetLoaderKind::Sound),
+        "music" => Some(AssetLoaderKind::Music),
+        "font" => Some(AssetLoaderKind::Font),
+        "shader" => Some(AssetLoaderKind::Shader),
+        "imageData" => Some(AssetLoaderKind::ImageData),
+        "canvas" => Some(AssetLoaderKind::Canvas),
+        "quad" => Some(AssetLoaderKind::Quad),
+        "spriteBatch" => Some(AssetLoaderKind::SpriteBatch),
+        "particles" => Some(AssetLoaderKind::Particles),
         _ => None,
     }
 }
@@ -165,6 +328,7 @@ pub(crate) fn builtin_type_names() -> &'static [&'static str] {
         "Font",
         "Image",
         "ImageData",
+        "ParticleSystem",
         "Quad",
         "Shader",
         "Source",
@@ -216,6 +380,18 @@ pub(crate) fn validate_asset(
     asset_roots: &[PathBuf],
 ) -> AssetMetadata {
     let extension = asset_extension(relative_path);
+    if !kind.has_asset_path() {
+        return AssetMetadata {
+            kind,
+            relative_path: relative_path.to_owned(),
+            extension,
+            span,
+            inferred_love_type: kind.return_type_name(),
+            status: AssetValidationStatus::Unchecked,
+            dimensions: None,
+            duration_seconds: None,
+        };
+    }
     let unsupported = extension
         .as_deref()
         .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
@@ -236,7 +412,7 @@ pub(crate) fn validate_asset(
     };
     let dimensions = resolved_path
         .as_deref()
-        .filter(|_| kind == AssetLoaderKind::Image)
+        .filter(|_| matches!(kind, AssetLoaderKind::Image | AssetLoaderKind::ImageData))
         .and_then(read_png_dimensions);
 
     AssetMetadata {
@@ -280,6 +456,9 @@ fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
         return None;
     };
     let kind = loader_kind(&token_text(name))?;
+    if !kind.has_asset_path() {
+        return None;
+    }
     let call = function_call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
         _ => None,

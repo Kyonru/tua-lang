@@ -181,6 +181,9 @@ Tua includes a built-in LOVE API catalog and small asset loader helpers:
 ```tua
 local playerImage = image "assets/player.png"
 local jumpSound = sound "assets/jump.wav"
+local themeMusic = music "assets/theme.ogg"
+local uiFont = font("assets/ui.ttf", 18)
+local waveShader = shader "assets/wave.glsl"
 local position: Vec2 = vec2(100, 200)
 
 playerImage:setFilter("nearest")
@@ -192,6 +195,9 @@ These lower to ordinary LOVE calls:
 ```lua
 local playerImage = love.graphics.newImage("assets/player.png")
 local jumpSound = love.audio.newSource("assets/jump.wav", "static")
+local themeMusic = love.audio.newSource("assets/theme.ogg", "stream")
+local uiFont = love.graphics.newFont("assets/ui.ttf", 18)
+local waveShader = love.graphics.newShader("assets/wave.glsl")
 local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 
@@ -201,8 +207,9 @@ jumpSound:play()
 
 Because Tua knows `playerImage` is an `Image` and `jumpSound` is a `Source`, the
 editor can show LOVE method completions, hovers, and signature help. Tua can
-also warn about obvious missing or unsupported asset paths. Inside asset loader
-strings, completion suggests supported project files such as
+also warn about obvious missing or unsupported asset paths. Inside asset helper
+strings such as `image "..."`, `music "..."`, `font("...", 18)`, and
+`shader "..."`, completion suggests supported project files such as
 `assets/player.png`, and hovering an asset string shows the inferred LOVE type,
 validation status, extension, and optional cheap metadata such as PNG dimensions
 when available.

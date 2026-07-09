@@ -73,10 +73,12 @@ make build-features
 - `src/navigation.tua` is a compact same-file sample for go to definition,
   references, rename, document symbols, inlay hints, and semantic highlighting.
 - `src/assets.tua` covers typed LÖVE asset loader helpers such as
-  `image "assets/player.png"` and `sound "assets/jump.wav"`, plus LOVE object
-  method completion/signature behavior such as preferring `player:setFilter()`
-  over `player.setFilter()`. Hover the asset strings to see metadata, and edit
-  inside the strings to try asset-path completion.
+  `image "assets/player.png"`, `sound "assets/jump.wav"`,
+  `music "assets/theme.ogg"`, `font("assets/ui.ttf", 18)`, `shader`,
+  `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, plus LOVE
+  object method completion/signature behavior such as preferring
+  `player:setFilter()` over `player.setFilter()`. Hover asset strings to see
+  metadata, and edit inside the strings to try asset-path completion.
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.

@@ -821,6 +821,14 @@ fn hovers_love_asset_loader_items_and_inferred_locals() {
     let source = r#"
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local mainFont = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local data = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 "#;
     let image = hover_tua_source("src/main.tua", source, position_at(source, "image"))
         .expect("hover should not fail")
@@ -831,10 +839,42 @@ local jump = sound "assets/jump.wav"
     let jump = hover_tua_source("src/main.tua", source, position_at(source, "jump"))
         .expect("hover should not fail")
         .expect("inferred sound local should hover");
+    let theme = hover_tua_source("src/main.tua", source, position_at(source, "theme"))
+        .expect("hover should not fail")
+        .expect("inferred music local should hover");
+    let font = hover_tua_source("src/main.tua", source, position_at(source, "mainFont"))
+        .expect("hover should not fail")
+        .expect("inferred font local should hover");
+    let shader = hover_tua_source("src/main.tua", source, position_at(source, "wave"))
+        .expect("hover should not fail")
+        .expect("inferred shader local should hover");
+    let image_data = hover_tua_source("src/main.tua", source, position_at(source, "data"))
+        .expect("hover should not fail")
+        .expect("inferred imageData local should hover");
+    let canvas = hover_tua_source("src/main.tua", source, position_at(source, "target"))
+        .expect("hover should not fail")
+        .expect("inferred canvas local should hover");
+    let quad = hover_tua_source("src/main.tua", source, position_at(source, "frame"))
+        .expect("hover should not fail")
+        .expect("inferred quad local should hover");
+    let batch = hover_tua_source("src/main.tua", source, position_at(source, "batch"))
+        .expect("hover should not fail")
+        .expect("inferred spriteBatch local should hover");
+    let particles = hover_tua_source("src/main.tua", source, position_at(source, "sparks"))
+        .expect("hover should not fail")
+        .expect("inferred particles local should hover");
 
     assert_eq!(image.contents, "function image(path: string): Image");
     assert_eq!(player.contents, "local player: Image");
     assert_eq!(jump.contents, "local jump: Source");
+    assert_eq!(theme.contents, "local theme: Source");
+    assert_eq!(font.contents, "local mainFont: Font");
+    assert_eq!(shader.contents, "local wave: Shader");
+    assert_eq!(image_data.contents, "local data: ImageData");
+    assert_eq!(canvas.contents, "local target: Canvas");
+    assert_eq!(quad.contents, "local frame: Quad");
+    assert_eq!(batch.contents, "local batch: SpriteBatch");
+    assert_eq!(particles.contents, "local sparks: ParticleSystem");
 }
 
 #[test]

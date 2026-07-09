@@ -913,27 +913,31 @@ fn lower_asset_loader_call(
     argument_start: usize,
     kind: asset::AssetLoaderKind,
 ) -> Option<(String, usize)> {
-    if let Some(path_end) = consume_string_literal(output, argument_start) {
-        let path_literal = &output[argument_start..path_end];
+    if kind.supports_string_sugar() {
+        if let Some(path_end) = consume_string_literal(output, argument_start) {
+            let path_literal = output[argument_start..path_end].to_owned();
 
-        return Some((kind.emitted_call(path_literal), path_end));
+            return Some((kind.emitted_call(&[path_literal])?, path_end));
+        }
     }
 
     if !output[argument_start..].starts_with('(') {
         return None;
     }
 
-    let path_start = skip_whitespace(output, argument_start + 1);
-    let path_end = consume_string_literal(output, path_start)?;
-    let close = skip_whitespace(output, path_end);
+    let close = find_matching_paren(output, argument_start)?;
+    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
+    let arguments = arguments.into_iter().map(str::to_owned).collect::<Vec<_>>();
 
-    if !output[close..].starts_with(')') {
+    if arguments
+        .iter()
+        .take(kind.required_argument_count())
+        .any(|argument| argument.is_empty())
+    {
         return None;
     }
 
-    let path_literal = &output[path_start..path_end];
-
-    Some((kind.emitted_call(path_literal), close + 1))
+    Some((kind.emitted_call(&arguments)?, close + 1))
 }
 
 fn can_start_asset_loader(output: &str, index: usize) -> bool {

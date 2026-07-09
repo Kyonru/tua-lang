@@ -172,6 +172,14 @@ Tua also includes small source-level helpers for common asset loading:
 ```tua
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local ui = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local pixels = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 local position: Vec2 = vec2(100, 200)
 
 player:setFilter("nearest")
@@ -184,6 +192,14 @@ editor tooling. `vec2(x, y)` lowers to a cached BrineVector constructor:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+local ui = love.graphics.newFont("assets/ui.ttf", 18)
+local wave = love.graphics.newShader("assets/wave.glsl")
+local pixels = love.image.newImageData("assets/player.png")
+local target = love.graphics.newCanvas(320, 180)
+local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
+local batch = love.graphics.newSpriteBatch(player, 128)
+local sparks = love.graphics.newParticleSystem(player, 64)
 local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 
@@ -314,6 +330,14 @@ infer LOVE object types and emit ordinary LOVE API calls:
 ```tua
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local ui = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local pixels = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 local position: Vec2 = vec2(100, 200)
 ```
 
@@ -322,6 +346,14 @@ Emitted Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+local ui = love.graphics.newFont("assets/ui.ttf", 18)
+local wave = love.graphics.newShader("assets/wave.glsl")
+local pixels = love.image.newImageData("assets/player.png")
+local target = love.graphics.newCanvas(320, 180)
+local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
+local batch = love.graphics.newSpriteBatch(player, 128)
+local sparks = love.graphics.newParticleSystem(player, 64)
 local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 ```
@@ -336,10 +368,12 @@ jump:play()
 ```
 
 Asset loader string paths also participate in editor tooling. In a configured
-project, completion inside `image "..."` and `sound "..."` suggests supported
-project asset paths. Hovering an asset path shows the asset kind, relative path,
-inferred LOVE type, validation status, extension, and cheap metadata when Tua
-can read it without running game code. Today that optional binary metadata is
+project, completion inside helpers with asset path arguments, such as
+`image "..."`, `sound "..."`, `music "..."`, `font("...", 18)`, `shader "..."`,
+and `imageData "..."`, suggests supported project asset paths. Hovering an
+asset path shows the asset kind, relative path, inferred LOVE type, validation
+status, extension, and cheap metadata when Tua can read it without running game
+code. Today that optional binary metadata is
 conservative; for example, valid PNG headers can provide dimensions, while audio
 duration is left unknown.
 

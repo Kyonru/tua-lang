@@ -2313,6 +2313,9 @@ impl AnalysisSnapshot {
         let Some(kind) = asset::loader_kind(&callee_parts[0]) else {
             return Vec::new();
         };
+        if !kind.has_asset_path() {
+            return Vec::new();
+        }
 
         asset::complete_asset_paths(self.effective_asset_roots(), kind, &prefix)
             .into_iter()

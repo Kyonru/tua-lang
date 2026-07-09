@@ -392,6 +392,14 @@ fn snapshot_lowers_love_asset_loader_calls() {
         r#"
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local mainFont = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local data = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 local ui = image("assets/ui.png")
 "#,
     )
@@ -401,6 +409,14 @@ local ui = image("assets/ui.png")
         emitted,
         r#"local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+local mainFont = love.graphics.newFont("assets/ui.ttf", 18)
+local wave = love.graphics.newShader("assets/wave.glsl")
+local data = love.image.newImageData("assets/player.png")
+local target = love.graphics.newCanvas(320, 180)
+local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
+local batch = love.graphics.newSpriteBatch(player, 128)
+local sparks = love.graphics.newParticleSystem(player, 64)
 local ui = love.graphics.newImage("assets/ui.png")
 "#
     );

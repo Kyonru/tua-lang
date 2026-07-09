@@ -208,6 +208,22 @@ fn returns_love_asset_loader_signatures() {
         .expect("image loader should have signature help");
     let sound = signature_at("local jump = sound(\n", "sound(")
         .expect("sound loader should have signature help");
+    let music = signature_at("local theme = music(\n", "music(")
+        .expect("music loader should have signature help");
+    let font = signature_at("local ui = font(\"assets/ui.ttf\", \n", "ui.ttf\", ")
+        .expect("font loader should have signature help");
+    let shader = signature_at("local wave = shader(\n", "shader(")
+        .expect("shader loader should have signature help");
+    let image_data = signature_at("local data = imageData(\n", "imageData(")
+        .expect("imageData loader should have signature help");
+    let canvas = signature_at("local target = canvas(320, \n", "canvas(320, ")
+        .expect("canvas helper should have signature help");
+    let quad = signature_at("local frame = quad(0, 0, 16, 16, 64, \n", "64, ")
+        .expect("quad helper should have signature help");
+    let batch = signature_at("local batch = spriteBatch(player, \n", "player, ")
+        .expect("spriteBatch helper should have signature help");
+    let particles = signature_at("local sparks = particles(player, \n", "player, ")
+        .expect("particles helper should have signature help");
 
     assert_eq!(
         image.signatures[0].label,
@@ -217,6 +233,43 @@ fn returns_love_asset_loader_signatures() {
         sound.signatures[0].label,
         "function sound(path: string): Source"
     );
+    assert_eq!(
+        music.signatures[0].label,
+        "function music(path: string): Source"
+    );
+    assert_eq!(
+        font.signatures[0].label,
+        "function font(path: string, size: number): Font"
+    );
+    assert_eq!(
+        shader.signatures[0].label,
+        "function shader(path: string): Shader"
+    );
+    assert_eq!(
+        image_data.signatures[0].label,
+        "function imageData(path: string): ImageData"
+    );
+    assert_eq!(
+        canvas.signatures[0].label,
+        "function canvas(width: number, height: number): Canvas"
+    );
+    assert_eq!(
+        quad.signatures[0].label,
+        "function quad(x: number, y: number, width: number, height: number, sw: number, sh: number): Quad"
+    );
+    assert_eq!(
+        batch.signatures[0].label,
+        "function spriteBatch(image: Image, size: number): SpriteBatch"
+    );
+    assert_eq!(
+        particles.signatures[0].label,
+        "function particles(image: Image, count: number): ParticleSystem"
+    );
+    assert_eq!(font.active_parameter, 1);
+    assert_eq!(canvas.active_parameter, 1);
+    assert_eq!(quad.active_parameter, 5);
+    assert_eq!(batch.active_parameter, 1);
+    assert_eq!(particles.active_parameter, 1);
 }
 
 #[test]

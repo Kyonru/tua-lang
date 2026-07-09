@@ -247,6 +247,9 @@ Tua also includes small typed LOVE asset loader helpers:
 ```tua
 local player: Image = image "assets/player.png"
 local jump: Source = sound "assets/jump.wav"
+local theme: Source = music "assets/theme.ogg"
+local ui: Font = font("assets/ui.ttf", 18)
+local wave: Shader = shader "assets/wave.glsl"
 local position: Vec2 = vec2(100, 200)
 ```
 
@@ -255,6 +258,9 @@ They emit plain LOVE calls in generated Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+local ui = love.graphics.newFont("assets/ui.ttf", 18)
+local wave = love.graphics.newShader("assets/wave.glsl")
 local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 ```

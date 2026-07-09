@@ -1959,15 +1959,21 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
 
 fn typed_function_from_asset_loader(kind: AssetLoaderKind) -> TypedFunction {
     let return_type = kind.return_type();
+    let parameter_types = kind.parameter_types();
+    let parameter_names = kind.parameter_names();
 
     TypedFunction {
         name: Some(kind.name().to_owned()),
-        parameters: vec![TypedParameter {
-            name: "path".to_owned(),
-            ty: Type::string(),
-            documentation: None,
-        }],
-        parameter_count: 1,
+        parameters: parameter_types
+            .into_iter()
+            .enumerate()
+            .map(|(index, ty)| TypedParameter {
+                name: parameter_names.get(index).copied().unwrap_or("").to_owned(),
+                ty,
+                documentation: None,
+            })
+            .collect(),
+        parameter_count: kind.required_argument_count(),
         has_varargs: false,
         vararg_type: None,
         return_type: Some(return_type.clone()),

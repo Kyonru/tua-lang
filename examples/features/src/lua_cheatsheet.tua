@@ -588,6 +588,8 @@ end
 -- Hover `cheatsheetImage` or type `cheatsheetImage:` to inspect Image methods.
 local cheatsheetImage = image "assets/player.png"
 local cheatsheetSound = sound "assets/jump.wav"
+local cheatsheetMusic = music "assets/theme.ogg"
+local cheatsheetFont = font("assets/ui.ttf", 18)
 cheatsheetImage:setFilter("nearest", "nearest")
 
 -- Feature: return table exports are indexed for module-aware hover,

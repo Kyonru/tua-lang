@@ -439,6 +439,14 @@ tua provides typed LOVE-focused asset loader helpers:
 ```tua
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local ui = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local pixels = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 ```
 
 These helpers are syntax sugar for ordinary LOVE calls and are lowered during
@@ -449,11 +457,23 @@ Emitted Lua:
 ```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+local ui = love.graphics.newFont("assets/ui.ttf", 18)
+local wave = love.graphics.newShader("assets/wave.glsl")
+local pixels = love.image.newImageData("assets/player.png")
+local target = love.graphics.newCanvas(320, 180)
+local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
+local batch = love.graphics.newSpriteBatch(player, 128)
+local sparks = love.graphics.newParticleSystem(player, 64)
 ```
 
-`image` returns `Image`; `sound` returns `Source`. The checker should validate
-obvious missing or unsupported asset paths when the project file exists on disk
-and should stay permissive when a path cannot be proven statically.
+`image` returns `Image`; `sound` and `music` return `Source`; `font` returns
+`Font`; `shader` returns `Shader`; `imageData` returns `ImageData`; `canvas`
+returns `Canvas`; `quad` returns `Quad`; `spriteBatch` returns `SpriteBatch`;
+and `particles` returns `ParticleSystem`. The checker should validate obvious
+missing or unsupported paths for helpers with asset path arguments when the
+project file exists on disk and should stay permissive when a path cannot be
+proven statically.
 
 The compiler should collect reusable asset metadata for these calls:
 

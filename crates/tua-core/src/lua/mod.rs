@@ -633,6 +633,14 @@ const TOP_LEVEL: &[LuaItem] = &[
 const ASSET_LOADERS: &[LuaItem] = &[
     asset_item(asset::AssetLoaderKind::Image),
     asset_item(asset::AssetLoaderKind::Sound),
+    asset_item(asset::AssetLoaderKind::Music),
+    asset_item(asset::AssetLoaderKind::Font),
+    asset_item(asset::AssetLoaderKind::Shader),
+    asset_item(asset::AssetLoaderKind::ImageData),
+    asset_item(asset::AssetLoaderKind::Canvas),
+    asset_item(asset::AssetLoaderKind::Quad),
+    asset_item(asset::AssetLoaderKind::SpriteBatch),
+    asset_item(asset::AssetLoaderKind::Particles),
 ];
 
 const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];

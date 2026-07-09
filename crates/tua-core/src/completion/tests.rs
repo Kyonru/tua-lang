@@ -255,21 +255,43 @@ fn completes_lua_keywords_and_globals_in_expression_positions() {
 
 #[test]
 fn completes_love_asset_loader_globals() {
-    let source = "local player = im\n";
-    let position = position_after(source, "im");
+    let source = "local player = \n";
+    let position = position_after(source, "= ");
     let completions = complete_tua_source("src/main.tua", source, position)
         .expect("asset loader completion should succeed");
 
-    let image = completions
-        .iter()
-        .find(|completion| completion.label == "image")
-        .expect("image loader should complete");
+    for (label, detail) in [
+        ("image", "function image(path: string): Image"),
+        ("sound", "function sound(path: string): Source"),
+        ("music", "function music(path: string): Source"),
+        ("font", "function font(path: string, size: number): Font"),
+        ("shader", "function shader(path: string): Shader"),
+        ("imageData", "function imageData(path: string): ImageData"),
+        (
+            "canvas",
+            "function canvas(width: number, height: number): Canvas",
+        ),
+        (
+            "quad",
+            "function quad(x: number, y: number, width: number, height: number, sw: number, sh: number): Quad",
+        ),
+        (
+            "spriteBatch",
+            "function spriteBatch(image: Image, size: number): SpriteBatch",
+        ),
+        (
+            "particles",
+            "function particles(image: Image, count: number): ParticleSystem",
+        ),
+    ] {
+        let completion = completions
+            .iter()
+            .find(|completion| completion.label == label)
+            .unwrap_or_else(|| panic!("{label} helper should complete"));
 
-    assert_eq!(image.kind, CompletionKind::Function);
-    assert_eq!(
-        image.detail.as_deref(),
-        Some("function image(path: string): Image")
-    );
+        assert_eq!(completion.kind, CompletionKind::Function);
+        assert_eq!(completion.detail.as_deref(), Some(detail));
+    }
 }
 
 #[test]

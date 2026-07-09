@@ -10,7 +10,21 @@ local function loadJumpSound()
   return sound "assets/jump.wav"
 end
 
+-- Feature: music assets use streaming Sources by default.
+local function loadThemeMusic()
+  return music "assets/theme.ogg"
+end
+
+-- Feature: common LOVE constructors have typed helper shorthands too.
+local mainFont = font("assets/ui.ttf", 18)
+local waveShader = shader "assets/wave.glsl"
+local playerData = imageData "assets/player.png"
+local targetCanvas = canvas(320, 180)
+local playerFrame = quad(0, 0, 16, 16, 64, 64)
+
 local player = loadPlayerImage()
+local playerBatch = spriteBatch(player, 128)
+local playerParticles = particles(player, 64)
 
 -- Feature: inferred LOVE object return values keep method return types.
 local a, b = player:getDimensions()
@@ -31,5 +45,13 @@ local anotherPlayer = image "assets/player.png"
 return {
   loadPlayerImage = loadPlayerImage,
   loadJumpSound = loadJumpSound,
+  loadThemeMusic = loadThemeMusic,
+  mainFont = mainFont,
+  waveShader = waveShader,
+  playerData = playerData,
+  targetCanvas = targetCanvas,
+  playerFrame = playerFrame,
+  playerBatch = playerBatch,
+  playerParticles = playerParticles,
   anotherPlayer = anotherPlayer,
 }

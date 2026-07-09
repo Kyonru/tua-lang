@@ -195,6 +195,14 @@ fn hints_love_asset_loader_local_types() {
     let source = r#"
 local player = image "assets/player.png"
 local jump = sound "assets/jump.wav"
+local theme = music "assets/theme.ogg"
+local mainFont = font("assets/ui.ttf", 18)
+local wave = shader "assets/wave.glsl"
+local data = imageData "assets/player.png"
+local target = canvas(320, 180)
+local frame = quad(0, 0, 16, 16, 64, 64)
+local batch = spriteBatch(player, 128)
+local sparks = particles(player, 64)
 "#;
     let hints = inlay_hints_tua_source("src/assets.tua", source).expect("source should parse");
     let type_hints = hints
@@ -203,7 +211,21 @@ local jump = sound "assets/jump.wav"
         .map(|hint| hint.label.as_str())
         .collect::<Vec<_>>();
 
-    assert_eq!(type_hints, vec![": Image", ": Source"]);
+    assert_eq!(
+        type_hints,
+        vec![
+            ": Image",
+            ": Source",
+            ": Source",
+            ": Font",
+            ": Shader",
+            ": ImageData",
+            ": Canvas",
+            ": Quad",
+            ": SpriteBatch",
+            ": ParticleSystem"
+        ]
+    );
 }
 
 #[test]
