@@ -1,4 +1,8 @@
 use super::*;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SOURCE: &str = r#"
 type Player = { hp: number }
@@ -292,6 +296,132 @@ local label = "width: " .. z
     );
 }
 
+#[test]
+fn hints_required_tua_and_lua_module_call_parameters() {
+    let temp = TempProject::new("required-module-inlay-hints");
+    let source = r#"local Player = require("entities.player")
+local Legacy = require("legacy")
+
+local player = Player.new("Ada")
+local label = Legacy.label(player.name)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/entities/player.tua",
+        r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local M = {}
+
+function M.new(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return M
+"#,
+    );
+    temp.write(
+        "src/legacy.lua",
+        r#"local M = {}
+
+---@param name number
+---@return string
+function M.label(name)
+  return "player:" .. name
+end
+
+return M
+"#,
+    );
+
+    let hints = inlay_hints_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("source should parse");
+    let parameter_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Parameter)
+        .filter(|hint| hint.label == "name:")
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(parameter_hints, vec!["name:", "name:"]);
+    assert_hint_position(&hints, "name:", 4, "local player = Player.new(".len() + 1);
+    assert_hint_position(&hints, "name:", 5, "local label = Legacy.label(".len() + 1);
+}
+
+#[test]
+fn hints_required_module_alias_and_inline_lua_export_call_parameters() {
+    let temp = TempProject::new("required-module-alias-inlay-hints");
+    let source = r#"local Functions = require("functions")
+local Legacy = require("legacy")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("require graph")
+local description = Legacy.describe("hp", player.hp)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/functions.tua",
+        r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    temp.write(
+        "src/legacy.lua",
+        r#"return {
+  describe = function(label, value)
+    return label
+  end,
+}
+"#,
+    );
+
+    let hints = inlay_hints_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("source should parse");
+    let parameter_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Parameter)
+        .filter(|hint| hint.label != "modname:")
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(parameter_hints, vec!["name:", "label:", "value:"]);
+    assert_hint_position(&hints, "name:", 5, "local player = makePlayer(".len() + 1);
+    assert_hint_position(
+        &hints,
+        "label:",
+        6,
+        "local description = Legacy.describe(".len() + 1,
+    );
+    assert_hint_position(
+        &hints,
+        "value:",
+        6,
+        "local description = Legacy.describe(\"hp\", ".len() + 1,
+    );
+}
+
 fn inlay_hints() -> Vec<InlayHint> {
     inlay_hints_tua_source("src/player.tua", SOURCE).expect("source should parse")
 }
@@ -307,4 +437,38 @@ fn assert_hint_position(hints: &[InlayHint], label: &str, line: usize, column: u
         .unwrap_or_else(|| panic!("expected hint `{label}` on line {line}"));
 
     assert_eq!(hint.position.column, column);
+}
+
+struct TempProject {
+    path: PathBuf,
+}
+
+impl TempProject {
+    fn new(name: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tua-core-{name}-{}-{unique}", process::id()));
+
+        fs::create_dir_all(&path).expect("temp project should be created");
+
+        Self { path }
+    }
+
+    fn write(&self, relative: &str, contents: &str) {
+        let path = self.path.join(relative);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+
+        fs::write(path, contents).expect("fixture should be written");
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }

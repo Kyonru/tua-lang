@@ -28,6 +28,7 @@ return {
         exports.field("play"),
         Some(&Type::function([Type::Any], Type::Any))
     );
+    assert_eq!(exports.fields["play"].parameter_names, vec!["source"]);
 
     let Some(Type::Table(nested)) = exports.field("nested") else {
         panic!("nested export should be a table");
@@ -61,6 +62,10 @@ return {
             [Type::string(), Type::number()],
             Type::boolean()
         ))
+    );
+    assert_eq!(
+        exports.fields["play"].parameter_names,
+        vec!["source", "volume"]
     );
 }
 
@@ -153,6 +158,7 @@ return {
         exports.field("play"),
         Some(&Type::function([Type::Any], Type::Any))
     );
+    assert_eq!(exports.fields["play"].parameter_names, vec!["source"]);
 }
 
 #[test]
@@ -199,6 +205,7 @@ return {
         exports.fields["play"].parameter_documentation,
         vec![Some("audio source".to_owned())]
     );
+    assert_eq!(exports.fields["play"].parameter_names, vec!["source"]);
 }
 
 #[test]

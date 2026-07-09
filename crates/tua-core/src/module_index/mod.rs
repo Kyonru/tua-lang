@@ -38,6 +38,7 @@ pub struct ModuleExports {
 pub struct ModuleExportField {
     pub ty: Type,
     pub documentation: Option<String>,
+    pub parameter_names: Vec<String>,
     pub parameter_documentation: Vec<Option<String>>,
 }
 
@@ -123,6 +124,7 @@ pub fn exported_field_for_fields(
     export_field_type(&field.ty, rest).map(|ty| ModuleExportField {
         ty,
         documentation: None,
+        parameter_names: Vec::new(),
         parameter_documentation: Vec::new(),
     })
 }
@@ -297,6 +299,7 @@ struct ExportInferer<'a> {
     environment: Option<&'a TypeEnvironment>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
+    function_parameter_names: BTreeMap<String, Vec<String>>,
     function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
     table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
     return_expr: Option<&'a Expression>,
@@ -309,6 +312,7 @@ impl<'a> ExportInferer<'a> {
             environment,
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
+            function_parameter_names: BTreeMap::new(),
             function_parameter_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
             return_expr: None,
@@ -337,6 +341,7 @@ impl<'a> ExportInferer<'a> {
                             ModuleExportField {
                                 ty,
                                 documentation: function.documentation.clone(),
+                                parameter_names: parameter_names(function),
                                 parameter_documentation: parameter_documentation(function),
                             },
                         );
@@ -352,6 +357,9 @@ impl<'a> ExportInferer<'a> {
                     self.function_parameter_docs
                         .entry(name.clone())
                         .or_insert_with(|| parameter_documentation(function));
+                    self.function_parameter_names
+                        .entry(name.clone())
+                        .or_insert_with(|| parameter_names(function));
                 }
             }
         }
@@ -392,6 +400,7 @@ impl<'a> ExportInferer<'a> {
                         .or_insert_with(|| ModuleExportField {
                             ty: function_type_from_body(function.body()),
                             documentation: None,
+                            parameter_names: parameter_names_from_body(function.body()),
                             parameter_documentation: Vec::new(),
                         });
                 }
@@ -425,6 +434,7 @@ impl<'a> ExportInferer<'a> {
             ModuleExportField {
                 ty,
                 documentation: None,
+                parameter_names: Vec::new(),
                 parameter_documentation: Vec::new(),
             },
         );
@@ -496,6 +506,26 @@ impl<'a> ExportInferer<'a> {
                         self.function_parameter_docs.get(&token_text(name)).cloned()
                     })
                     .unwrap_or_default();
+                let parameter_names = lua_doc_export
+                    .as_ref()
+                    .map(|export| export.parameter_names.clone())
+                    .or_else(|| {
+                        let Expression::Function(function) = value else {
+                            return None;
+                        };
+
+                        Some(parameter_names_from_body(function.body()))
+                    })
+                    .or_else(|| {
+                        let Expression::Var(Var::Name(name)) = value else {
+                            return None;
+                        };
+
+                        self.function_parameter_names
+                            .get(&token_text(name))
+                            .cloned()
+                    })
+                    .unwrap_or_default();
                 let ty = lua_doc_export
                     .map(|export| export.ty)
                     .unwrap_or_else(|| self.infer_expression(value));
@@ -505,6 +535,7 @@ impl<'a> ExportInferer<'a> {
                     ModuleExportField {
                         ty,
                         documentation,
+                        parameter_names,
                         parameter_documentation,
                     },
                 ))
@@ -556,6 +587,7 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
                     ModuleExportField {
                         ty: field.ty.clone(),
                         documentation: None,
+                        parameter_names: Vec::new(),
                         parameter_documentation: Vec::new(),
                     },
                 )
@@ -667,6 +699,7 @@ fn lua_doc_function_export_for_field(
     Some(ModuleExportField {
         ty: Type::function_returns(parameters, return_types),
         documentation: field_documentation(parsed, field),
+        parameter_names: parameter_names_from_body(body),
         parameter_documentation,
     })
 }
@@ -916,6 +949,14 @@ fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {
         .collect()
 }
 
+fn parameter_names(function: &TypedFunction) -> Vec<String> {
+    function
+        .parameters
+        .iter()
+        .map(|parameter| parameter.name.clone())
+        .collect()
+}
+
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
     let parameters = function_parameter_types(body);
     let return_type = body
@@ -924,6 +965,19 @@ fn function_type_from_body(body: &ast::FunctionBody) -> Type {
         .unwrap_or(Type::Any);
 
     Type::function(parameters, return_type)
+}
+
+fn parameter_names_from_body(body: &ast::FunctionBody) -> Vec<String> {
+    body.parameters()
+        .iter()
+        .filter_map(|parameter| {
+            let ast::Parameter::Name(name) = parameter else {
+                return None;
+            };
+
+            Some(token_text(name))
+        })
+        .collect()
 }
 
 fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {

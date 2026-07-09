@@ -3711,6 +3711,156 @@ damage(player, 10)
 }
 
 #[test]
+fn inlay_hint_returns_required_module_parameter_hints() {
+    let temp = TempProject::new("required-module-inlay-hints");
+    let source = r#"local Player = require("entities.player")
+local Legacy = require("legacy")
+
+local player = Player.new("Ada")
+local label = Legacy.label(player.name)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/entities/player.tua",
+        r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local M = {}
+
+function M.new(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return M
+"#,
+    );
+    temp.write(
+        "src/legacy.lua",
+        r#"local M = {}
+
+---@param name number
+---@return string
+function M.label(name)
+  return "player:" .. name
+end
+
+return M
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        inlay_hint_request(2, &uri, 0, 0, 10, 0),
+    ]);
+    let response = response_with_id(&output, 2);
+    let hints = response["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+    let parameter_hints = hints
+        .iter()
+        .filter(|hint| hint["kind"] == 2)
+        .filter(|hint| {
+            hint["position"]["line"]
+                .as_u64()
+                .is_some_and(|line| line == 3 || line == 4)
+        })
+        .map(|hint| hint["label"].as_str().expect("label should be a string"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(parameter_hints, vec!["name:", "name:"]);
+    assert!(hints.iter().any(|hint| {
+        hint["label"] == "name:" && hint["position"] == json!({ "line": 3, "character": 26 })
+    }));
+    assert!(hints.iter().any(|hint| {
+        hint["label"] == "name:" && hint["position"] == json!({ "line": 4, "character": 27 })
+    }));
+}
+
+#[test]
+fn inlay_hint_returns_required_module_alias_and_lua_export_parameter_hints() {
+    let temp = TempProject::new("required-module-alias-inlay-hints");
+    let source = r#"local Functions = require("functions")
+local Legacy = require("legacy")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("require graph")
+local description = Legacy.describe("hp", player.hp)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/functions.tua",
+        r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    temp.write(
+        "src/legacy.lua",
+        r#"return {
+  describe = function(label, value)
+    return label
+  end,
+}
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        inlay_hint_request(2, &uri, 0, 0, 10, 0),
+    ]);
+    let response = response_with_id(&output, 2);
+    let hints = response["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+    let target_hints = hints
+        .iter()
+        .filter(|hint| hint["kind"] == 2)
+        .filter(|hint| {
+            hint["position"]["line"]
+                .as_u64()
+                .is_some_and(|line| line == 4 || line == 5)
+        })
+        .map(|hint| hint["label"].as_str().expect("label should be a string"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(target_hints, vec!["name:", "label:", "value:"]);
+    assert!(hints.iter().any(|hint| {
+        hint["label"] == "name:" && hint["position"] == json!({ "line": 4, "character": 26 })
+    }));
+    assert!(hints.iter().any(|hint| {
+        hint["label"] == "label:" && hint["position"] == json!({ "line": 5, "character": 36 })
+    }));
+    assert!(hints.iter().any(|hint| {
+        hint["label"] == "value:" && hint["position"] == json!({ "line": 5, "character": 42 })
+    }));
+}
+
+#[test]
 fn inlay_hint_filters_to_requested_range() {
     let uri = "file:///tmp/ranged-inlay-hints.tua";
     let source = r#"type Player = { hp: number }

@@ -10,7 +10,8 @@ use full_moon::node::Node;
 use crate::asset::{self, AssetLoaderKind};
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{
-    required_module_export_type_for_fields, required_module_exports_for_receiver, ModuleExports,
+    required_module_export_for_fields, required_module_export_type_for_fields,
+    required_module_exports_for_receiver, ModuleExportField, ModuleExports,
 };
 use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
 use crate::types::{
@@ -203,6 +204,10 @@ impl<'a> SemanticModel<'a> {
                 return Some(function.clone());
             }
 
+            if let Some(function) = self.typed_function_for_local_export_alias(root, position) {
+                return Some(function);
+            }
+
             if let Some(kind) = asset::loader_kind(root) {
                 return Some(typed_function_from_asset_loader(kind));
             }
@@ -226,6 +231,16 @@ impl<'a> SemanticModel<'a> {
             return Some(function);
         }
 
+        if !fields.is_empty() {
+            if let Some(export) = required_module_export_for_fields(self.parsed, root, fields) {
+                if let Some(function) =
+                    typed_function_from_module_export(Some(qualified_name.clone()), export)
+                {
+                    return Some(function);
+                }
+            }
+        }
+
         if let Some(Type::Function(function)) = self.type_of_field_chain(parts, position) {
             return Some(typed_function_from_function_type(
                 Some(qualified_name),
@@ -238,6 +253,27 @@ impl<'a> SemanticModel<'a> {
         }
 
         None
+    }
+
+    fn typed_function_for_local_export_alias(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<TypedFunction> {
+        let local = self.local_assignment_value(name, position)?;
+        let expression = local.expression?;
+        let Expression::Var(var) = expression else {
+            return None;
+        };
+        let parts = plain_field_chain_from_var(var)?;
+        let (root, fields) = parts.split_first()?;
+
+        if fields.is_empty() {
+            return None;
+        }
+
+        required_module_export_for_fields(self.parsed, root, fields)
+            .and_then(|export| typed_function_from_module_export(Some(name.to_owned()), export))
     }
 
     pub(crate) fn lua_function_item_for_call_parts(
@@ -585,7 +621,8 @@ impl<'a> SemanticModel<'a> {
                 continue;
             };
 
-            for (variable, expression) in assignment.variables().iter().zip(assignment.expressions())
+            for (variable, expression) in
+                assignment.variables().iter().zip(assignment.expressions())
             {
                 let Some(parts) = plain_field_chain_from_var(variable) else {
                     continue;
@@ -1972,6 +2009,7 @@ fn typed_function_from_function_type(
     function: FunctionType,
 ) -> TypedFunction {
     let return_types = function.return_types_or_any().to_vec();
+    let parameter_count = function.parameters.len();
 
     TypedFunction {
         name,
@@ -1984,7 +2022,7 @@ fn typed_function_from_function_type(
                 documentation: None,
             })
             .collect(),
-        parameter_count: 0,
+        parameter_count,
         has_varargs: false,
         vararg_type: None,
         return_type: return_types.first().cloned(),
@@ -1992,6 +2030,44 @@ fn typed_function_from_function_type(
         documentation: None,
         overloads: Vec::new(),
     }
+}
+
+fn typed_function_from_module_export(
+    name: Option<String>,
+    export: ModuleExportField,
+) -> Option<TypedFunction> {
+    let Type::Function(function) = export.ty else {
+        return None;
+    };
+
+    let return_types = function.return_types_or_any().to_vec();
+    let parameter_count = function.parameters.len();
+    let parameters = function
+        .parameters
+        .into_iter()
+        .enumerate()
+        .map(|(index, ty)| TypedParameter {
+            name: export
+                .parameter_names
+                .get(index)
+                .cloned()
+                .unwrap_or_default(),
+            ty,
+            documentation: export.parameter_documentation.get(index).cloned().flatten(),
+        })
+        .collect();
+
+    Some(TypedFunction {
+        name,
+        parameters,
+        parameter_count,
+        has_varargs: false,
+        vararg_type: None,
+        return_type: return_types.first().cloned(),
+        return_types,
+        documentation: export.documentation,
+        overloads: Vec::new(),
+    })
 }
 
 fn typed_function_from_lua_item(item: LuaItem) -> Option<TypedFunction> {

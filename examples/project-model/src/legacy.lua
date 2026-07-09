@@ -2,8 +2,11 @@
 -- into dist/legacy.lua so the emitted main.lua can require it.
 local M = {}
 
+--- Create player label
+---@param name number
+---@return string
 function M.label(name)
-  return "player:" .. name
+	return "player:" .. name
 end
 
 return M
