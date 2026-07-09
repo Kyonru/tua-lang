@@ -272,6 +272,23 @@ player.hp = "low"
 }
 
 #[test]
+fn rejects_love_conf_config_field_assignment_mismatch() {
+    let diagnostics = check_tua_source(
+        "src/conf.tua",
+        r#"
+function love.conf(t)
+  t.window.title = "Tua LOVE minimal"
+  t.window.width = 320
+  t.window.msaa = "12"
+end
+"#,
+    )
+    .expect_err("love.conf config field assignment mismatch should be reported");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
 fn rejects_table_field_mismatch_in_annotated_local_initializer() {
     let diagnostics = check_tua_source(
         "src/player.tua",

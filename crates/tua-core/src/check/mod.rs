@@ -11,6 +11,7 @@ use full_moon::node::Node;
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
+use crate::love_conf;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition, SourceSpan};
@@ -241,7 +242,7 @@ impl<'a> Checker<'a> {
 
                 let name = function.name().to_string();
                 let return_types = self.function_return_types(&name);
-                let scoped_locals = self.function_parameter_locals(&name);
+                let scoped_locals = self.function_declaration_parameter_locals(function);
 
                 self.scoped_locals.push(scoped_locals);
                 self.check_block(function.body().block(), return_types.as_deref());
@@ -1315,6 +1316,20 @@ impl<'a> Checker<'a> {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    fn function_declaration_parameter_locals(
+        &self,
+        function: &ast::FunctionDeclaration,
+    ) -> BTreeMap<String, Type> {
+        let name = function.name().to_string();
+        let mut locals = self.function_parameter_locals(&name);
+
+        if let Some((parameter, ty)) = love_conf::parameter_type_for_function(function) {
+            locals.insert(parameter, ty);
+        }
+
+        locals
     }
 
     fn types_can_overlap(&self, left: &Type, right: &Type) -> bool {

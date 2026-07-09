@@ -9,6 +9,7 @@ use full_moon::node::Node;
 
 use crate::asset::{self, AssetLoaderKind};
 use crate::lua::{self, LuaItem, LuaItemKind};
+use crate::love_conf;
 use crate::module_index::{
     required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_exports_for_receiver, ModuleExportField, ModuleExports,
@@ -348,6 +349,7 @@ impl<'a> SemanticModel<'a> {
             .environment
             .local(name)
             .cloned()
+            .or_else(|| love_conf::parameter_type_at_position(self.parsed, name, position))
             .or_else(|| {
                 self.environment
                     .function(name)

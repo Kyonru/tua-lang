@@ -2388,8 +2388,7 @@ impl AnalysisSnapshot {
         path: &Path,
         file: &AnalysisFile,
     ) -> Option<RecoveredSemanticFacts> {
-        let recovered = source_without_incomplete_field_access_lines(&file.source);
-        let parsed = parse_analysis_source(path, recovered, file.kind).ok()?;
+        let parsed = parse_recovered_analysis_source(path, &file.source, file.kind).ok()?;
         let hir = Some(lower_parsed_source(&parsed));
         let environment =
             self.recovered_project_type_environment_for_parsed(&parsed, file.environment.clone());
@@ -3278,15 +3277,27 @@ fn byte_for_position_column(line: &str, column: usize) -> usize {
         .unwrap_or(line.len())
 }
 
-fn source_without_incomplete_field_access_lines(source: &str) -> String {
+fn parse_recovered_analysis_source(
+    path: &Path,
+    source: &str,
+    kind: AnalysisSourceKind,
+) -> Result<ParsedSource, Vec<Diagnostic>> {
+    parse_analysis_source(
+        path,
+        source_without_recoverable_incomplete_lines(source),
+        kind,
+    )
+}
+
+fn source_without_recoverable_incomplete_lines(source: &str) -> String {
     let mut recovered = String::with_capacity(source.len());
 
     for line in source.split_inclusive('\n') {
         let content = line.strip_suffix('\n').unwrap_or(line);
         let content = content.strip_suffix('\r').unwrap_or(content);
-        let trimmed = content.trim_end();
+        let trimmed = code_before_line_comment(content).trim();
 
-        if trimmed.ends_with('.') || trimmed.ends_with(':') {
+        if line_is_recoverable_incomplete_edit(trimmed) {
             recovered.push('\n');
         } else {
             recovered.push_str(line);
@@ -3294,6 +3305,56 @@ fn source_without_incomplete_field_access_lines(source: &str) -> String {
     }
 
     recovered
+}
+
+fn line_is_recoverable_incomplete_edit(trimmed_code: &str) -> bool {
+    if trimmed_code.is_empty() {
+        return false;
+    }
+
+    trimmed_code.ends_with('.')
+        || trimmed_code.ends_with(':')
+        || is_bare_dotted_field_chain(trimmed_code)
+}
+
+fn is_bare_dotted_field_chain(value: &str) -> bool {
+    let mut saw_dot = false;
+    let mut parts = value.split('.');
+
+    let Some(first) = parts.next() else {
+        return false;
+    };
+
+    if !is_simple_identifier(first) {
+        return false;
+    }
+
+    for part in parts {
+        saw_dot = true;
+
+        if !is_simple_identifier(part) {
+            return false;
+        }
+    }
+
+    saw_dot
+}
+
+fn is_simple_identifier(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+
+    if !(first == b'_' || first.is_ascii_alphabetic()) {
+        return false;
+    }
+
+    bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
+}
+
+fn code_before_line_comment(line: &str) -> &str {
+    line.split_once("--").map(|(code, _)| code).unwrap_or(line)
 }
 
 fn push_incoming_call(
@@ -3625,7 +3686,25 @@ fn build_analysis_file(
             )
             .err()
             .unwrap_or_default(),
-            Err(diagnostics) => diagnostics.clone(),
+            Err(diagnostics) => {
+                let mut diagnostics = diagnostics.clone();
+
+                if let Ok(recovered) = parse_recovered_analysis_source(path, &source, kind) {
+                    diagnostics.extend(
+                        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+                            &recovered,
+                            analysis_asset_roots(context.source_roots, context.asset_roots),
+                            &diagnostics_config,
+                            &context.config.jit,
+                            &context.config.ecs,
+                        )
+                        .err()
+                        .unwrap_or_default(),
+                    );
+                }
+
+                diagnostics
+            }
         }
     };
     if kind == AnalysisSourceKind::Tua {

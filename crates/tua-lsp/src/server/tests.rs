@@ -401,6 +401,28 @@ player:setFilter(123)
 }
 
 #[test]
+fn did_open_publishes_love_conf_field_assignment_diagnostics() {
+    let uri = "file:///tmp/conf.tua";
+    let source = r#"
+function love.conf(t)
+  t.window.title = "Tua LOVE minimal"
+  t.window.width = 320
+  t.window.msaa = "12"
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL1003");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("type mismatch: expected number, found string"));
+}
+
+#[test]
 fn did_open_publishes_love_asset_path_diagnostics() {
     let temp = TempProject::new("missing-asset-diagnostics");
     let source = r#"
@@ -2444,6 +2466,37 @@ return {
         4,
         "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
     );
+}
+
+#[test]
+fn semantic_features_survive_incomplete_field_chain_statement() {
+    let uri = "file:///tmp/recovered-love-conf.tua";
+    let source = r#"function love.conf(t)
+  local bad: number = "oops"
+  local title = t.window.title
+  t.modules.font
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "bad: number"),
+        completion_request(3, uri, source, "t.modules.font"),
+        inlay_hint_request(4, uri, 0, 0, 5, 0),
+    ]);
+    let diagnostics = published_diagnostics(&output, uri);
+    let hints = response_with_id(&output, 4)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "TL1003"),
+        "{diagnostics:?}"
+    );
+    assert_hover_contains(&output, 2, "local bad: number");
+    assert_completion_labels(&output, 3, ["font"]);
+    assert!(inlay_hint_labels(hints).contains(&": string"));
 }
 
 #[test]

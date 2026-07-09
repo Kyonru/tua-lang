@@ -641,6 +641,73 @@ fn completion_labels(completions: &[Completion]) -> Vec<String> {
 }
 
 #[test]
+fn snapshot_recovers_semantics_when_field_chain_statement_is_incomplete() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/conf.tua
+function love.conf(t)
+  local bad: number = "oops"
+  local title = t.window.<|hover|>title
+  t.modules.font<|complete|>
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics("src/conf.tua");
+    let hover = snapshot
+        .hover("src/conf.tua", fixture.position("hover"))
+        .expect("hover should recover before incomplete field chain");
+    let completions = snapshot.completion("src/conf.tua", fixture.position("complete"));
+    let hints = snapshot.inlay_hints("src/conf.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+    assert!(hover.contents.contains("title"), "{}", hover.contents);
+    assert_eq!(completion_labels(&completions), vec!["font".to_owned()]);
+    assert!(
+        hints.iter().any(|hint| hint.label == ": string"),
+        "{hints:?}"
+    );
+}
+
+#[test]
+fn love_conf_parameter_type_does_not_escape_callback_body() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/conf.tua
+function love.conf(t)
+  t.window.title = "inside"
+end
+
+local outside = t.window.<|hover|>title
+local field = t.<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot
+        .hover("src/conf.tua", fixture.position("hover"))
+        .is_none());
+    assert!(snapshot
+        .completion("src/conf.tua", fixture.position("complete"))
+        .is_empty());
+}
+
+#[test]
 fn cache_reuses_unedited_files_across_snapshots() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");

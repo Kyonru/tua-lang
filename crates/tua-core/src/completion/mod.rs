@@ -1,10 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use full_moon::ast;
-use full_moon::node::Node;
-use full_moon::tokenizer::TokenReference;
-
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
@@ -13,10 +9,8 @@ use crate::module_index::{exported_field_for_fields, required_module_exports_for
 use crate::profile;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
-use crate::types::{
-    build_type_environment_with_diagnostics, TableField, TableShape, Type, TypeEnvironment,
-};
-use crate::{asset, vector};
+use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::{asset, love_conf, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -1134,44 +1128,14 @@ fn love_conf_receiver_type(
     position: SourcePosition,
 ) -> Option<Type> {
     let receiver = receiver_parts.first()?;
-    let parameter = love_conf_parameter_at(parsed, position)
+    let parameter = love_conf::parameter_name_at(parsed, position)
         .or_else(|| love_conf_parameter_in_source(source, position))?;
 
     if receiver != &parameter {
         return None;
     }
 
-    field_chain_type(love_conf_type(), &receiver_parts[1..])
-}
-
-fn love_conf_parameter_at(parsed: &ParsedSource, position: SourcePosition) -> Option<String> {
-    for stmt in parsed.ast.nodes().stmts() {
-        let ast::Stmt::FunctionDeclaration(function) = stmt else {
-            continue;
-        };
-
-        let name = function
-            .name()
-            .to_string()
-            .split_whitespace()
-            .collect::<String>();
-        if name != "love.conf" {
-            continue;
-        }
-
-        let body_span = node_span(function.body())?;
-        if !span_contains(body_span, position) {
-            continue;
-        }
-
-        let Some(ast::Parameter::Name(name)) = function.body().parameters().iter().next() else {
-            continue;
-        };
-
-        return Some(token_text(name));
-    }
-
-    None
+    field_chain_type(love_conf::config_type(), &receiver_parts[1..])
 }
 
 fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
@@ -1230,75 +1194,6 @@ fn love_conf_parameter_in_source(source: &str, position: SourcePosition) -> Opti
     }
 
     parameter
-}
-
-fn love_conf_type() -> Type {
-    Type::table([
-        ("audio", TableField::optional(love_conf_audio_type())),
-        ("console", TableField::optional(Type::boolean())),
-        ("externalstorage", TableField::optional(Type::boolean())),
-        ("gammacorrect", TableField::optional(Type::boolean())),
-        ("identity", TableField::optional(Type::string())),
-        ("modules", TableField::optional(love_conf_modules_type())),
-        ("version", TableField::optional(Type::string())),
-        ("window", TableField::optional(love_conf_window_type())),
-    ])
-}
-
-fn love_conf_audio_type() -> Type {
-    Type::table([
-        ("mic", TableField::optional(Type::boolean())),
-        ("mixwithsystem", TableField::optional(Type::boolean())),
-    ])
-}
-
-fn love_conf_modules_type() -> Type {
-    Type::table([
-        ("audio", TableField::optional(Type::boolean())),
-        ("data", TableField::optional(Type::boolean())),
-        ("event", TableField::optional(Type::boolean())),
-        ("font", TableField::optional(Type::boolean())),
-        ("graphics", TableField::optional(Type::boolean())),
-        ("image", TableField::optional(Type::boolean())),
-        ("joystick", TableField::optional(Type::boolean())),
-        ("keyboard", TableField::optional(Type::boolean())),
-        ("math", TableField::optional(Type::boolean())),
-        ("mouse", TableField::optional(Type::boolean())),
-        ("physics", TableField::optional(Type::boolean())),
-        ("sound", TableField::optional(Type::boolean())),
-        ("system", TableField::optional(Type::boolean())),
-        ("thread", TableField::optional(Type::boolean())),
-        ("timer", TableField::optional(Type::boolean())),
-        ("touch", TableField::optional(Type::boolean())),
-        ("video", TableField::optional(Type::boolean())),
-        ("window", TableField::optional(Type::boolean())),
-    ])
-}
-
-fn love_conf_window_type() -> Type {
-    Type::table([
-        ("borderless", TableField::optional(Type::boolean())),
-        ("centered", TableField::optional(Type::boolean())),
-        ("depth", TableField::optional(Type::number())),
-        ("display", TableField::optional(Type::number())),
-        ("displayindex", TableField::optional(Type::number())),
-        ("fullscreen", TableField::optional(Type::boolean())),
-        ("fullscreentype", TableField::optional(Type::string())),
-        ("height", TableField::optional(Type::number())),
-        ("highdpi", TableField::optional(Type::boolean())),
-        ("icon", TableField::optional(Type::string())),
-        ("minheight", TableField::optional(Type::number())),
-        ("minwidth", TableField::optional(Type::number())),
-        ("msaa", TableField::optional(Type::number())),
-        ("resizable", TableField::optional(Type::boolean())),
-        ("stencil", TableField::optional(Type::number())),
-        ("title", TableField::optional(Type::string())),
-        ("usedpiscale", TableField::optional(Type::boolean())),
-        ("vsync", TableField::optional(Type::number())),
-        ("width", TableField::optional(Type::number())),
-        ("x", TableField::optional(Type::number())),
-        ("y", TableField::optional(Type::number())),
-    ])
 }
 
 fn insert_lua_item(completions: &mut BTreeMap<String, Completion>, item: LuaItem) {
@@ -1381,23 +1276,6 @@ fn source_with_line_removed(source: &str, line_to_remove: usize) -> String {
     }
 
     output
-}
-
-fn node_span(node: &impl Node) -> Option<crate::SourceSpan> {
-    node.range()
-        .map(|(start, end)| crate::SourceSpan::from_range(start, end))
-}
-
-fn span_contains(span: crate::SourceSpan, position: SourcePosition) -> bool {
-    let start = (span.start.line, span.start.column);
-    let end = (span.end.line, span.end.column);
-    let position = (position.line, position.column);
-
-    start <= position && position < end
-}
-
-fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
 }
 
 #[cfg(test)]
