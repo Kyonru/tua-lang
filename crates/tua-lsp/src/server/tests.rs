@@ -1748,6 +1748,34 @@ player:setFilter("")
 }
 
 #[test]
+fn completion_returns_love_callback_snippet_and_conf_fields() {
+    let callback_uri = "file:///tmp/love-callback-completion.tua";
+    let callback_source = "function love.up\n";
+    let conf_uri = "file:///tmp/love-conf-completion.tua";
+    let conf_source = r#"function love.conf(t)
+  local title = t.window.ti
+end
+"#;
+    let output = run_messages(vec![
+        did_open(callback_uri, callback_source),
+        did_open(conf_uri, conf_source),
+        completion_request(2, callback_uri, callback_source, "love.up"),
+        completion_request(3, conf_uri, conf_source, "t.window.ti"),
+    ]);
+    let callback = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("callback completions should be an array")
+        .iter()
+        .find(|item| item["label"] == "update")
+        .expect("update callback should complete")
+        .clone();
+
+    assert_eq!(callback["insertText"], "update(dt)\n  $0\nend");
+    assert_eq!(callback["insertTextFormat"], 2);
+    assert_completion_labels(&output, 3, ["title"]);
+}
+
+#[test]
 fn completion_items_can_be_resolved_for_documentation() {
     let uri = "file:///tmp/resolve-completion.tua";
     let source = "local value = math.si\n";
@@ -3039,6 +3067,49 @@ fn code_action_adds_missing_local_annotation() {
     assert_eq!(
         range_text(source, &action["edit"]["changes"][uri][0]["range"]),
         ""
+    );
+}
+
+#[test]
+fn code_action_rewrites_love_dot_call_and_constructor_helpers() {
+    let uri = "file:///tmp/code-action-love-devex.tua";
+    let source = r#"local player = image "assets/player.png"
+player.setFilter("nearest")
+local raw = love.graphics.newImage("assets/player.png")
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+
+    server.send(code_action_request(2, uri, 1, 0, 1, 32, diagnostics));
+    server.send(code_action_request(3, uri, 2, 0, 2, 60, Vec::new()));
+
+    let colon_action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(colon_action["title"], "Use colon method call");
+    assert_eq!(colon_action["edit"]["changes"][uri][0]["newText"], ":");
+    assert_eq!(
+        range_text(source, &colon_action["edit"]["changes"][uri][0]["range"]),
+        "."
+    );
+
+    let helper_actions = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .expect("constructor code actions should be an array");
+    let helper_action = helper_actions
+        .iter()
+        .find(|action| action["title"] == "Rewrite as `image` helper")
+        .expect("image helper action should be present");
+
+    assert_eq!(
+        helper_action["edit"]["changes"][uri][0]["newText"],
+        "image \"assets/player.png\""
+    );
+    assert_eq!(
+        range_text(source, &helper_action["edit"]["changes"][uri][0]["range"]),
+        "love.graphics.newImage(\"assets/player.png\")"
     );
 }
 

@@ -41,14 +41,14 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | References | Finds same-file references and project-wide references for supported globals, module exports, aliases, and required-module callers. | Still less complete than LuaHelper for dynamic fields/metatables. | 42 |
 | Rename | Supports same-file rename and safe cross-file rename for project-identity symbols such as exported functions and type aliases. | Dynamic globals, `any`, and ambiguous fields are rejected. | 43 |
 | Workspace symbols | Uses configured workspace indexes for modules, aliases, and functions with fuzzy matching. | Smaller than rust-analyzer's global index, but it no longer has to behave like a raw scan. | 24, 64 |
-| Code actions | Provides conservative fixes for missing require targets, inferred local annotations, unused locals, duplicate table keys, self-assignments, and trailing whitespace. | Smaller action set than rust-analyzer assists. | 44, 70.9 |
+| Code actions | Provides conservative fixes for missing require targets, inferred local annotations, unused locals, duplicate table keys, self-assignments, trailing whitespace, LOVE dot-method calls, and obvious LOVE constructor-to-helper rewrites. | Smaller action set than rust-analyzer assists. | 44, 70.9 |
 | Auto-import completion | Unresolved exported functions can complete with a require insertion or reuse of an existing require alias. | Narrower than rust-analyzer auto-imports, but the workflow exists. | 45 |
 | Call hierarchy | Incoming and outgoing calls work for known local functions, module-exported functions, and typed receiver methods. | Dynamic calls through `any` are ignored instead of guessed. | 48 |
 | Inlay hints | Provides local type hints and parameter-name hints for supported known expressions. | Shallower than rust-analyzer expression-chain hints. | 60, 64 |
 | Selection and folding ranges | Provides selection growth and folding for common syntax structures. | Smaller than rust-analyzer's syntax-tree backed editing surface, but the protocol surface exists. | 67 |
 | Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and modifiers. | Core semantic classes are present; deep dynamic Lua remains limited. | 47 |
 | Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
-| LOVE helpers | `image`, `sound`, `music`, `font`, `shader`, `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles` infer LOVE object types, emit ordinary LOVE calls, and validate obvious paths/extensions for path-based helpers. | Tua-specific LOVE-focused workflow. | 48.6 |
+| LOVE helpers | `image`, `sound`, `music`, `font`, `shader`, `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles` infer LOVE object types, emit ordinary LOVE calls, validate obvious paths/extensions for path-based helpers, and drive helper-specific asset path completion. | Tua-specific LOVE-focused workflow. | 48.6 |
 | LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, BrineVector-backed emission, and bundled runtime output. | Deeper vector-library-specific docs and richer overload presentation can still improve. | 73 |
 | ECS domain helper | Opt-in `[ecs]` / `tua.ecs.enabled` support adds typed `ecs` APIs, component/query diagnostics, and a tiny-ecs-compatible reference adapter. | Tua models clear static ECS patterns and leaves dynamic runtime composition permissive. | 74 |
 | Workspace folders and watchers | Workspace folders, folder changes, watched files, and `tua.toml` changes affect diagnostics and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
@@ -63,7 +63,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
-| Code actions | Mechanical fixes exist for a focused set of diagnostics. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
+| Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
 
 ## Missing And Planned
 

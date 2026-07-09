@@ -211,10 +211,102 @@ fn removes_trailing_whitespace() {
     assert_eq!(edit.new_text, "");
 }
 
+#[test]
+fn rewrites_love_dot_method_call_to_colon_call() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+local player = image "assets/player.png"
+player.setFilter("nearest")
+"#,
+    )
+    .expect("source should parse");
+    let diagnostics = diagnostics(&parsed, DiagnosticsConfig::default());
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range(3, 8),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Use colon method call")
+        .expect("colon quick fix should be present");
+    let edit = &action.edit.changes[&std::path::PathBuf::from("src/main.tua")][0];
+
+    assert_eq!(edit.new_text, ":");
+    assert_eq!(
+        edit.span,
+        SourceSpan {
+            start: SourcePosition { line: 3, column: 7 },
+            end: SourcePosition { line: 3, column: 8 },
+        }
+    );
+}
+
+#[test]
+fn rewrites_love_constructors_to_asset_helpers() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+local player = love.graphics.newImage("assets/player.png")
+local jump = love.audio.newSource("assets/jump.wav", "static")
+local theme = love.audio.newSource("assets/theme.ogg", "stream")
+"#,
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        CodeActionRange {
+            start: SourcePosition { line: 2, column: 1 },
+            end: SourcePosition {
+                line: 4,
+                column: 80,
+            },
+        },
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert_action_rewrite(
+        &actions,
+        "Rewrite as `image` helper",
+        "image \"assets/player.png\"",
+    );
+    assert_action_rewrite(
+        &actions,
+        "Rewrite as `sound` helper",
+        "sound \"assets/jump.wav\"",
+    );
+    assert_action_rewrite(
+        &actions,
+        "Rewrite as `music` helper",
+        "music \"assets/theme.ogg\"",
+    );
+}
+
 fn diagnostics(parsed: &ParsedSource, config: DiagnosticsConfig) -> Vec<Diagnostic> {
     check_parsed_source_with_diagnostics_config(parsed, &config)
         .err()
         .unwrap_or_default()
+}
+
+fn assert_action_rewrite(actions: &[CodeAction], title: &str, new_text: &str) {
+    let action = actions
+        .iter()
+        .find(|action| action.title == title)
+        .unwrap_or_else(|| panic!("{title} should be present in {actions:?}"));
+    let edit = action
+        .edit
+        .changes
+        .values()
+        .next()
+        .and_then(|edits| edits.first())
+        .expect("action should have an edit");
+
+    assert_eq!(edit.new_text, new_text);
 }
 
 fn range(line: usize, column: usize) -> CodeActionRange {

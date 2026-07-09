@@ -423,6 +423,49 @@ local next = image "assets/p<|complete|>"
 }
 
 #[test]
+fn snapshot_filters_love_asset_path_completion_by_helper_kind() {
+    let temp = TempProject::new("asset-kind-completion");
+    let source = r#"local player = image "assets/<|image|>"
+local jump = sound "assets/<|sound|>"
+local ui = font("assets/<|font|>", 18)
+local wave = shader "assets/<|shader|>"
+"#;
+    let fixture = Fixture::parse(&format!("-- file: {}\n{source}", "src/main.tua"));
+
+    temp.write("assets/player.png", png_header(16, 16));
+    temp.write("assets/jump.wav", b"placeholder");
+    temp.write("assets/ui.ttf", b"placeholder");
+    temp.write("assets/wave.glsl", b"placeholder");
+
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("image"))),
+        vec!["assets/player.png".to_owned()]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("sound"))),
+        vec!["assets/jump.wav".to_owned()]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("font"))),
+        vec!["assets/ui.ttf".to_owned()]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("shader"))),
+        vec!["assets/wave.glsl".to_owned()]
+    );
+}
+
+#[test]
 fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
     let mut config = ProjectConfig::default();
 

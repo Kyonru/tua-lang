@@ -385,6 +385,66 @@ fn completes_love_fields() {
 }
 
 #[test]
+fn completes_love_callbacks_as_function_declaration_snippets() {
+    let source = "function love.up\n";
+    let completions = complete_tua_source("src/main.tua", source, position_after(source, "up"))
+        .expect("LOVE callback completion should succeed");
+    let update = completions
+        .iter()
+        .find(|completion| completion.label == "update")
+        .expect("update callback should complete");
+
+    assert_eq!(update.kind, CompletionKind::Function);
+    assert!(update.is_snippet);
+    assert_eq!(update.insert_text.as_deref(), Some("update(dt)\n  $0\nend"));
+
+    let expression_source = "local callback = love.up\n";
+    let expression_completions = complete_tua_source(
+        "src/main.tua",
+        expression_source,
+        position_after(expression_source, "up"),
+    )
+    .expect("LOVE expression completion should succeed");
+    let expression_update = expression_completions
+        .iter()
+        .find(|completion| completion.label == "update")
+        .expect("update should complete");
+
+    assert!(!expression_update.is_snippet);
+    assert_eq!(expression_update.insert_text, None);
+}
+
+#[test]
+fn completes_love_conf_config_fields_for_callback_parameter() {
+    let source = r#"
+function love.conf(t)
+  local title = t.window.ti
+  local physics = t.modules.ph
+end
+"#;
+    let window = complete_tua_source(
+        "src/conf.tua",
+        source,
+        position_after(source, "t.window.ti"),
+    )
+    .expect("love.conf window completion should succeed");
+    let modules = complete_tua_source(
+        "src/conf.tua",
+        source,
+        position_after(source, "t.modules.ph"),
+    )
+    .expect("love.conf modules completion should succeed");
+
+    assert_eq!(labels(&window), vec!["title".to_owned()]);
+    assert_eq!(window[0].detail.as_deref(), Some("field optional: string"));
+    assert_eq!(labels(&modules), vec!["physics".to_owned()]);
+    assert_eq!(
+        modules[0].detail.as_deref(),
+        Some("field optional: boolean")
+    );
+}
+
+#[test]
 fn completes_love_api_generated_fields() {
     let graphics = complete_tua_source(
         "src/main.tua",

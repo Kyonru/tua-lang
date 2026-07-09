@@ -1,4 +1,7 @@
 function love.conf(t)
-  t.window = false
+  -- Feature: `love.conf` gets config-field completion for nested settings.
+  t.window.title = "Tua LOVE minimal"
+  t.window.width = 320
+  t.window.height = 180
   t.modules.audio = false
 end

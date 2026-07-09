@@ -370,10 +370,10 @@ jump:play()
 Asset loader string paths also participate in editor tooling. In a configured
 project, completion inside helpers with asset path arguments, such as
 `image "..."`, `sound "..."`, `music "..."`, `font("...", 18)`, `shader "..."`,
-and `imageData "..."`, suggests supported project asset paths. Hovering an
-asset path shows the asset kind, relative path, inferred LOVE type, validation
-status, extension, and cheap metadata when Tua can read it without running game
-code. Today that optional binary metadata is
+and `imageData "..."`, suggests supported project asset paths filtered by helper
+kind. Hovering an asset path shows the asset kind, relative path, inferred LOVE
+type, validation status, extension, and cheap metadata when Tua can read it
+without running game code. Today that optional binary metadata is
 conservative; for example, valid PNG headers can provide dimensions, while audio
 duration is left unknown.
 
@@ -391,6 +391,13 @@ dot-style calls such as `player.setFilter("nearest")` produce warning `TL4018`
 with a suggested colon call. Editor completions for LOVE methods also prefer
 colon-call snippets; accepting a method completion after `player.setF` can
 replace the dot with `:`.
+
+The editor can also help with common LOVE declarations and helpers. Completion
+after `function love.` can insert callback snippets such as `love.update(dt)`,
+`love.draw()`, and `love.conf(t)`. Inside `love.conf(t)`, nested config fields
+such as `t.window.title`, `t.window.width`, and `t.modules.physics` complete.
+Code actions can apply the TL4018 colon-call fix and can rewrite obvious
+constructors such as `love.graphics.newImage("path")` to `image "path"`.
 
 ## Practical Metatable Typing
 

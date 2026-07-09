@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use full_moon::ast;
+use full_moon::node::Node;
+use full_moon::tokenizer::TokenReference;
+
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::complete_require_paths;
 use self::symbol::lua_symbols_before_position;
@@ -9,7 +13,9 @@ use crate::module_index::{exported_field_for_fields, required_module_exports_for
 use crate::profile;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
-use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::types::{
+    build_type_environment_with_diagnostics, TableField, TableShape, Type, TypeEnvironment,
+};
 use crate::{asset, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
@@ -92,6 +98,7 @@ pub fn complete_tua_source(
 
     Ok(complete_parsed_source_with_context(
         &parsed,
+        &source,
         context,
         &environment,
     ))
@@ -119,7 +126,7 @@ pub(crate) fn complete_parsed_source_with_environment(
         return Vec::new();
     };
 
-    complete_parsed_source_with_context(parsed, context, environment)
+    complete_parsed_source_with_context(parsed, &parsed.source, context, environment)
 }
 
 pub(crate) fn complete_field_access_in_source_with_environment(
@@ -141,6 +148,7 @@ pub(crate) fn complete_field_access_in_source_with_environment(
 
     complete_fields(
         parsed,
+        source,
         environment,
         &receiver_parts,
         prefix.as_str(),
@@ -152,6 +160,7 @@ pub(crate) fn complete_field_access_in_source_with_environment(
 
 fn complete_parsed_source_with_context(
     parsed: &ParsedSource,
+    source: &str,
     context: CompletionContext,
     environment: &TypeEnvironment,
 ) -> Vec<Completion> {
@@ -179,6 +188,7 @@ fn complete_parsed_source_with_context(
 
             let fields = complete_fields(
                 parsed,
+                source,
                 environment,
                 &receiver_parts,
                 prefix.as_str(),
@@ -195,7 +205,7 @@ fn complete_parsed_source_with_context(
                 return fields;
             }
 
-            complete_lua_fields(&receiver_parts, prefix.as_str())
+            complete_lua_fields(source, &receiver_parts, prefix.as_str(), position)
         }
         CompletionContext::StringArgument {
             callee_parts,
@@ -229,8 +239,9 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
         CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
+            position,
             ..
-        } => complete_lua_fields(&receiver_parts, prefix.as_str()),
+        } => complete_lua_fields(source, &receiver_parts, prefix.as_str(), position),
         CompletionContext::StringArgument { .. } => Vec::new(),
         CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
         CompletionContext::Identifier { prefix, position } => {
@@ -714,6 +725,7 @@ fn insert_lossy_identifier_items(
 
 fn complete_fields(
     parsed: &ParsedSource,
+    source: &str,
     environment: &TypeEnvironment,
     receiver_parts: &[String],
     prefix: &str,
@@ -723,7 +735,9 @@ fn complete_fields(
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.receiver");
     let semantic = SemanticModel::new(parsed, environment);
-    let Some(receiver_type) = semantic.type_of_field_chain(receiver_parts, position) else {
+    let Some(receiver_type) = love_conf_receiver_type(parsed, source, receiver_parts, position)
+        .or_else(|| semantic.type_of_field_chain(receiver_parts, position))
+    else {
         return Vec::new();
     };
     let mut completions = BTreeMap::new();
@@ -763,6 +777,10 @@ fn complete_fields(
             separator_span,
             &mut completions,
         );
+    }
+
+    if receiver_parts.len() == 1 && receiver_parts[0] == "love" {
+        apply_love_callback_snippets(source, position, &mut completions);
     }
 
     completions.into_values().collect()
@@ -927,10 +945,15 @@ fn collect_shape_fields(table: &TableShape, fields: &mut BTreeMap<String, String
     }
 }
 
-fn complete_lua_fields(receiver_parts: &[String], prefix: &str) -> Vec<Completion> {
+fn complete_lua_fields(
+    source: &str,
+    receiver_parts: &[String],
+    prefix: &str,
+    position: SourcePosition,
+) -> Vec<Completion> {
     lua::field_items(receiver_parts, prefix)
         .into_iter()
-        .map(completion_from_lua_item)
+        .map(|item| completion_from_lua_field_item(source, receiver_parts, item, position))
         .collect()
 }
 
@@ -1038,6 +1061,246 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
     }
 }
 
+fn completion_from_lua_field_item(
+    source: &str,
+    receiver_parts: &[String],
+    item: LuaItem,
+    position: SourcePosition,
+) -> Completion {
+    let mut completion = completion_from_lua_item(item);
+
+    if receiver_parts.len() == 1 && receiver_parts[0] == "love" {
+        if let Some(snippet) = love_callback_snippet(item.label, source, position) {
+            completion.insert_text = Some(snippet);
+            completion.is_snippet = true;
+        }
+    }
+
+    completion
+}
+
+fn apply_love_callback_snippets(
+    source: &str,
+    position: SourcePosition,
+    completions: &mut BTreeMap<String, Completion>,
+) {
+    for completion in completions.values_mut() {
+        if let Some(snippet) = love_callback_snippet(&completion.label, source, position) {
+            completion.insert_text = Some(snippet);
+            completion.is_snippet = true;
+        }
+    }
+}
+
+fn love_callback_snippet(label: &str, source: &str, position: SourcePosition) -> Option<String> {
+    if !field_completion_is_function_declaration(source, position) {
+        return None;
+    }
+
+    let parameters = match label {
+        "conf" => "t",
+        "draw" => "",
+        "focus" => "focus",
+        "keypressed" => "key, scancode, isrepeat",
+        "keyreleased" => "key, scancode",
+        "load" => "args",
+        "mousemoved" => "x, y, dx, dy, istouch",
+        "mousepressed" => "x, y, button, istouch, presses",
+        "mousereleased" => "x, y, button, istouch, presses",
+        "quit" => "",
+        "resize" => "width, height",
+        "textinput" => "text",
+        "update" => "dt",
+        "wheelmoved" => "x, y",
+        _ => return None,
+    };
+
+    Some(format!("{label}({parameters})\n  $0\nend"))
+}
+
+fn field_completion_is_function_declaration(source: &str, position: SourcePosition) -> bool {
+    let Some(line) = line_at(source, position.line) else {
+        return false;
+    };
+    let cursor = crate::source_text::byte_for_column(line, position.column).min(line.len());
+
+    line[..cursor].trim_start().starts_with("function ")
+}
+
+fn love_conf_receiver_type(
+    parsed: &ParsedSource,
+    source: &str,
+    receiver_parts: &[String],
+    position: SourcePosition,
+) -> Option<Type> {
+    let receiver = receiver_parts.first()?;
+    let parameter = love_conf_parameter_at(parsed, position)
+        .or_else(|| love_conf_parameter_in_source(source, position))?;
+
+    if receiver != &parameter {
+        return None;
+    }
+
+    field_chain_type(love_conf_type(), &receiver_parts[1..])
+}
+
+fn love_conf_parameter_at(parsed: &ParsedSource, position: SourcePosition) -> Option<String> {
+    for stmt in parsed.ast.nodes().stmts() {
+        let ast::Stmt::FunctionDeclaration(function) = stmt else {
+            continue;
+        };
+
+        let name = function
+            .name()
+            .to_string()
+            .split_whitespace()
+            .collect::<String>();
+        if name != "love.conf" {
+            continue;
+        }
+
+        let body_span = node_span(function.body())?;
+        if !span_contains(body_span, position) {
+            continue;
+        }
+
+        let Some(ast::Parameter::Name(name)) = function.body().parameters().iter().next() else {
+            continue;
+        };
+
+        return Some(token_text(name));
+    }
+
+    None
+}
+
+fn field_chain_type(mut ty: Type, fields: &[String]) -> Option<Type> {
+    for field in fields {
+        ty = match ty {
+            Type::Table(table) => table.semantic_field(field)?.ty.clone(),
+            Type::Union(types) => {
+                let mut resolved = Vec::new();
+
+                for ty in types {
+                    if let Some(field_ty) = field_chain_type(ty, std::slice::from_ref(field)) {
+                        resolved.push(field_ty);
+                    }
+                }
+
+                match resolved.len() {
+                    0 => return None,
+                    1 => resolved.remove(0),
+                    _ => Type::union(resolved),
+                }
+            }
+            Type::Any
+            | Type::Alias(_)
+            | Type::Function(_)
+            | Type::Primitive(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => return None,
+        };
+    }
+
+    Some(ty)
+}
+
+fn love_conf_parameter_in_source(source: &str, position: SourcePosition) -> Option<String> {
+    let mut parameter = None;
+
+    for line_number in 1..=position.line {
+        let line = line_at(source, line_number)?;
+        let trimmed = line.trim_start();
+
+        if let Some(rest) = trimmed.strip_prefix("function love.conf(") {
+            parameter = rest
+                .split([',', ')'])
+                .next()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned);
+            continue;
+        }
+
+        if parameter.is_some() && trimmed == "end" {
+            parameter = None;
+        }
+    }
+
+    parameter
+}
+
+fn love_conf_type() -> Type {
+    Type::table([
+        ("audio", TableField::optional(love_conf_audio_type())),
+        ("console", TableField::optional(Type::boolean())),
+        ("externalstorage", TableField::optional(Type::boolean())),
+        ("gammacorrect", TableField::optional(Type::boolean())),
+        ("identity", TableField::optional(Type::string())),
+        ("modules", TableField::optional(love_conf_modules_type())),
+        ("version", TableField::optional(Type::string())),
+        ("window", TableField::optional(love_conf_window_type())),
+    ])
+}
+
+fn love_conf_audio_type() -> Type {
+    Type::table([
+        ("mic", TableField::optional(Type::boolean())),
+        ("mixwithsystem", TableField::optional(Type::boolean())),
+    ])
+}
+
+fn love_conf_modules_type() -> Type {
+    Type::table([
+        ("audio", TableField::optional(Type::boolean())),
+        ("data", TableField::optional(Type::boolean())),
+        ("event", TableField::optional(Type::boolean())),
+        ("font", TableField::optional(Type::boolean())),
+        ("graphics", TableField::optional(Type::boolean())),
+        ("image", TableField::optional(Type::boolean())),
+        ("joystick", TableField::optional(Type::boolean())),
+        ("keyboard", TableField::optional(Type::boolean())),
+        ("math", TableField::optional(Type::boolean())),
+        ("mouse", TableField::optional(Type::boolean())),
+        ("physics", TableField::optional(Type::boolean())),
+        ("sound", TableField::optional(Type::boolean())),
+        ("system", TableField::optional(Type::boolean())),
+        ("thread", TableField::optional(Type::boolean())),
+        ("timer", TableField::optional(Type::boolean())),
+        ("touch", TableField::optional(Type::boolean())),
+        ("video", TableField::optional(Type::boolean())),
+        ("window", TableField::optional(Type::boolean())),
+    ])
+}
+
+fn love_conf_window_type() -> Type {
+    Type::table([
+        ("borderless", TableField::optional(Type::boolean())),
+        ("centered", TableField::optional(Type::boolean())),
+        ("depth", TableField::optional(Type::number())),
+        ("display", TableField::optional(Type::number())),
+        ("displayindex", TableField::optional(Type::number())),
+        ("fullscreen", TableField::optional(Type::boolean())),
+        ("fullscreentype", TableField::optional(Type::string())),
+        ("height", TableField::optional(Type::number())),
+        ("highdpi", TableField::optional(Type::boolean())),
+        ("icon", TableField::optional(Type::string())),
+        ("minheight", TableField::optional(Type::number())),
+        ("minwidth", TableField::optional(Type::number())),
+        ("msaa", TableField::optional(Type::number())),
+        ("resizable", TableField::optional(Type::boolean())),
+        ("stencil", TableField::optional(Type::number())),
+        ("title", TableField::optional(Type::string())),
+        ("usedpiscale", TableField::optional(Type::boolean())),
+        ("vsync", TableField::optional(Type::number())),
+        ("width", TableField::optional(Type::number())),
+        ("x", TableField::optional(Type::number())),
+        ("y", TableField::optional(Type::number())),
+    ])
+}
+
 fn insert_lua_item(completions: &mut BTreeMap<String, Completion>, item: LuaItem) {
     completions
         .entry(item.label.to_owned())
@@ -1118,6 +1381,23 @@ fn source_with_line_removed(source: &str, line_to_remove: usize) -> String {
     }
 
     output
+}
+
+fn node_span(node: &impl Node) -> Option<crate::SourceSpan> {
+    node.range()
+        .map(|(start, end)| crate::SourceSpan::from_range(start, end))
+}
+
+fn span_contains(span: crate::SourceSpan, position: SourcePosition) -> bool {
+    let start = (span.start.line, span.start.column);
+    let end = (span.end.line, span.end.column);
+    let position = (position.line, position.column);
+
+    start <= position && position < end
+}
+
+fn token_text(token: &TokenReference) -> String {
+    token.to_string().trim().to_owned()
 }
 
 #[cfg(test)]

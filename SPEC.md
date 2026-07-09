@@ -486,8 +486,11 @@ The compiler should collect reusable asset metadata for these calls:
 - optional cheap metadata such as PNG dimensions when available.
 
 The language server uses this metadata for asset-path completion and asset
-literal hover. Binary parsing must stay conservative and optional; Tua must not
-run game code to discover assets.
+literal hover. Asset-path completion should filter suggestions by helper kind,
+so `image` and `imageData` suggest image files, `sound` and `music` suggest
+audio files, `font` suggests font files, and `shader` suggests shader files.
+Binary parsing must stay conservative and optional; Tua must not run game code
+to discover assets.
 
 ### LOVE Object Method Calls
 
@@ -514,6 +517,24 @@ point at the method name and suggest the equivalent colon call.
 Completions for LOVE object methods should also prefer colon-call snippets. If
 completion is requested after a dot, such as `player.setF`, accepting the method
 completion may replace the dot with a colon and insert a call snippet.
+
+Code actions should provide the same mechanical colon-call fix for TL4018
+diagnostics. They may also offer conservative rewrites from obvious LOVE
+constructors to helper syntax, such as `love.graphics.newImage("path")` to
+`image "path"` and `love.audio.newSource("path", "static" | "stream")` to
+`sound "path"` or `music "path"`.
+
+### LOVE Callback Editing
+
+The language server should make common LOVE callbacks easy to declare. In a
+function declaration context, completion after `function love.` may insert
+callback snippets such as `love.load`, `love.update(dt)`, `love.draw`,
+`love.keypressed(key, scancode, isrepeat)`, `love.mousepressed(...)`, and
+`love.conf(t)`.
+
+Within `function love.conf(t)`, the config parameter should expose common
+nested fields for editor completion, including `t.window.title`,
+`t.window.width`, and `t.modules.physics`.
 
 ## CLI
 

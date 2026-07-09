@@ -78,7 +78,9 @@ make build-features
   `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, plus LOVE
   object method completion/signature behavior such as preferring
   `player:setFilter()` over `player.setFilter()`. Hover asset strings to see
-  metadata, and edit inside the strings to try asset-path completion.
+  metadata, and edit inside the strings to try helper-specific asset-path
+  completion. LOVE code actions can also rewrite obvious raw constructors into
+  helper calls.
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.

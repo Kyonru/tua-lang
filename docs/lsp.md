@@ -33,6 +33,10 @@ The VS Code extension starts this server and surfaces editor features for
   available.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
+- LOVE callback completions can insert declaration snippets for callbacks such
+  as `love.load`, `love.update(dt)`, `love.draw`, and `love.conf(t)`.
+- `love.conf(t)` parameters expose common config fields such as
+  `t.window.title`, `t.window.width`, and `t.modules.physics`.
 - Completion item resolve for documentation/details.
 - Signature help triggered by `(` and `,`, including parameter documentation
   from supported annotations.
@@ -60,6 +64,12 @@ player:setFilter("nearest")
 
 This mirrors Lua/LOVE runtime behavior: `:` passes the receiver as `self`, while
 `.` does not.
+
+The code-action list can apply that fix mechanically. It can also rewrite
+obvious LOVE constructor calls to Tua helpers, for example
+`love.graphics.newImage("assets/player.png")` to `image "assets/player.png"`,
+or `love.audio.newSource("assets/theme.ogg", "stream")` to
+`music "assets/theme.ogg"`.
 
 ## Inline Suppressions
 

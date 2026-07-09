@@ -7,6 +7,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::visitors::Visitor;
 
 use crate::inlay_hints_parsed_source;
 use crate::source_text::line_at;
@@ -111,9 +112,16 @@ pub fn code_actions_parsed_source(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::LINT_DOT_METHOD_CALL) => {
+                if let Some(action) = use_colon_method_call_action(parsed, diagnostic) {
+                    actions.push(action);
+                }
+            }
             _ => {}
         }
     }
+
+    actions.extend(love_constructor_helper_actions(parsed, range));
 
     if diagnostics.is_empty() {
         actions.extend(add_missing_local_annotation_actions(parsed, range));
@@ -265,6 +273,196 @@ fn remove_trailing_whitespace_action(
             },
         ),
     })
+}
+
+fn use_colon_method_call_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
+    let method_start = diagnostic_position(diagnostic);
+    let line = line_at(&parsed.source, method_start.line)?;
+    let method_start_byte = crate::source_text::byte_for_column(line, method_start.column);
+    let dot_byte = method_start_byte.checked_sub(1)?;
+
+    if line.as_bytes().get(dot_byte) != Some(&b'.') {
+        return None;
+    }
+
+    Some(Assist {
+        title: "Use colon method call".to_owned(),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: SourcePosition {
+                        line: method_start.line,
+                        column: method_start.column.saturating_sub(1),
+                    },
+                    end: method_start,
+                },
+                new_text: ":".to_owned(),
+            },
+        ),
+    })
+}
+
+fn love_constructor_helper_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    let mut visitor = LoveConstructorAssistVisitor {
+        parsed,
+        range,
+        actions: Vec::new(),
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.actions
+}
+
+struct LoveConstructorAssistVisitor<'a> {
+    parsed: &'a ParsedSource,
+    range: AssistRange,
+    actions: Vec<Assist>,
+}
+
+impl Visitor for LoveConstructorAssistVisitor<'_> {
+    fn visit_function_call(&mut self, function_call: &FunctionCall) {
+        let Some(action) = love_constructor_helper_action(self.parsed, function_call) else {
+            return;
+        };
+        let Some(edit) = action
+            .edit
+            .changes
+            .get(&self.parsed.path)
+            .and_then(|edits| edits.first())
+        else {
+            return;
+        };
+
+        if assist_range_intersects_span(self.range, edit.span) {
+            self.actions.push(action);
+        }
+    }
+}
+
+fn love_constructor_helper_action(
+    parsed: &ParsedSource,
+    function_call: &FunctionCall,
+) -> Option<Assist> {
+    let span = node_span(function_call)?;
+    let parts = plain_field_chain_from_function_call(function_call)?;
+    let helper = love_constructor_helper_rewrite(parsed, function_call, &parts)?;
+
+    Some(Assist {
+        title: format!("Rewrite as `{}` helper", helper.name),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span,
+                new_text: helper.replacement,
+            },
+        ),
+    })
+}
+
+struct LoveConstructorRewrite {
+    name: &'static str,
+    replacement: String,
+}
+
+fn love_constructor_helper_rewrite(
+    parsed: &ParsedSource,
+    function_call: &FunctionCall,
+    parts: &[String],
+) -> Option<LoveConstructorRewrite> {
+    let call = anonymous_call(function_call)?;
+
+    match parts {
+        [love, graphics, new_image]
+            if love == "love" && graphics == "graphics" && new_image == "newImage" =>
+        {
+            let arguments = call_arguments(call);
+            let [path] = arguments.as_slice() else {
+                return None;
+            };
+            let path = string_argument_source(parsed, path)?;
+
+            Some(LoveConstructorRewrite {
+                name: "image",
+                replacement: format!("image {path}"),
+            })
+        }
+        [love, audio, new_source]
+            if love == "love" && audio == "audio" && new_source == "newSource" =>
+        {
+            let arguments = call_arguments(call);
+            let [path, mode] = arguments.as_slice() else {
+                return None;
+            };
+            let path_source = string_argument_source(parsed, path)?;
+            let mode_value = string_argument_value(mode)?;
+            let name = match mode_value.as_str() {
+                "static" => "sound",
+                "stream" => "music",
+                _ => return None,
+            };
+
+            Some(LoveConstructorRewrite {
+                name,
+                replacement: format!("{name} {path_source}"),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn anonymous_call(function_call: &FunctionCall) -> Option<&ast::Call> {
+    function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })
+}
+
+fn call_arguments(call: &ast::Call) -> Vec<&Expression> {
+    match call {
+        ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            arguments.iter().collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn string_argument_source(parsed: &ParsedSource, expression: &Expression) -> Option<String> {
+    let Expression::String(token) = expression else {
+        return None;
+    };
+
+    source_text_for_span(&parsed.source, node_span(token)?).map(str::to_owned)
+}
+
+fn string_argument_value(expression: &Expression) -> Option<String> {
+    let Expression::String(token) = expression else {
+        return None;
+    };
+
+    string_literal_value(token)
+}
+
+fn plain_field_chain_from_function_call(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(_) => break,
+            _ => return None,
+        }
+    }
+
+    Some(parts)
 }
 
 fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
@@ -558,6 +756,30 @@ fn edit_for(path: PathBuf, edit: TextEdit) -> AssistEdit {
 
     output.changes.insert(path, vec![edit]);
     output
+}
+
+fn source_text_for_span(source: &str, span: SourceSpan) -> Option<&str> {
+    if span.start.line != span.end.line {
+        return None;
+    }
+
+    let line = line_at(source, span.start.line)?;
+    let start = crate::source_text::byte_for_column(line, span.start.column);
+    let end = crate::source_text::byte_for_column(line, span.end.column);
+
+    line.get(start..end)
+}
+
+fn assist_range_intersects_span(range: AssistRange, span: SourceSpan) -> bool {
+    range.contains(span.start)
+        || range.contains(span.end)
+        || span_contains(
+            span,
+            SourcePosition {
+                line: range.start.line,
+                column: range.start.column,
+            },
+        )
 }
 
 fn diagnostic_position(diagnostic: &Diagnostic) -> SourcePosition {
