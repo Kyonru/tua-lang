@@ -33,7 +33,7 @@ use crate::types::{
 };
 use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
-    assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
+    assists_parsed_source, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check::{
         check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
@@ -660,6 +660,18 @@ impl AnalysisHost {
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
         self.cache.borrow().stats.clone()
+    }
+
+    pub fn fast_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
+        let path = normalize_path(path.as_ref());
+        let Some(source) = self.vfs.source(&path) else {
+            return Vec::new();
+        };
+        let Some(kind) = self.vfs.kind(&path) else {
+            return Vec::new();
+        };
+
+        fast_diagnostics_for_source(&path, source, analysis_source_kind(kind), &self.config)
     }
 
     pub fn revision(&self) -> u64 {
@@ -4123,22 +4135,95 @@ fn parse_analysis_source(
     }
 }
 
+fn fast_diagnostics_for_source(
+    path: &Path,
+    source: &str,
+    kind: AnalysisSourceKind,
+    config: &ProjectConfig,
+) -> Vec<Diagnostic> {
+    let parsed = match parse_analysis_source(path, source.to_owned(), kind) {
+        Ok(parsed) => parsed,
+        Err(diagnostics) => {
+            return apply_inline_ignores(path, source, diagnostics, &config.diagnostics);
+        }
+    };
+    let (environment, mut diagnostics) =
+        build_analysis_type_environment_with_diagnostics(&parsed, config);
+    let fast_config = fast_diagnostics_config(&config.diagnostics);
+    diagnostics.extend(
+        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+            &parsed,
+            &environment,
+            &[],
+            &fast_config,
+            &crate::config::JitConfig::default(),
+        )
+        .err()
+        .unwrap_or_default(),
+    );
+
+    let diagnostics = fast_lane_diagnostics(deduplicate_diagnostics(diagnostics));
+
+    apply_inline_ignores(path, source, diagnostics, &config.diagnostics)
+}
+
 fn build_analysis_type_environment(
     parsed: &ParsedSource,
     config: &ProjectConfig,
 ) -> Option<TypeEnvironment> {
+    let (environment, diagnostics) =
+        build_analysis_type_environment_with_diagnostics(parsed, config);
+
+    diagnostics.is_empty().then_some(environment)
+}
+
+fn build_analysis_type_environment_with_diagnostics(
+    parsed: &ParsedSource,
+    config: &ProjectConfig,
+) -> (TypeEnvironment, Vec<Diagnostic>) {
     if config.ecs.enabled {
         let (environment, diagnostics) =
             build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
 
-        if diagnostics.is_empty() {
-            Some(environment.with_local_types(crate::ecs::builtin_locals()))
-        } else {
-            None
-        }
+        (
+            environment.with_local_types(crate::ecs::builtin_locals()),
+            diagnostics,
+        )
     } else {
-        build_type_environment(parsed).ok()
+        build_type_environment_with_diagnostics(parsed)
     }
+}
+
+fn fast_diagnostics_config(
+    config: &crate::config::DiagnosticsConfig,
+) -> crate::config::DiagnosticsConfig {
+    let mut fast = crate::config::DiagnosticsConfig::default();
+
+    fast.undefined_variables = config.undefined_variables;
+    fast.globals = config.globals.clone();
+
+    fast
+}
+
+fn fast_lane_diagnostics(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic.code.is_some_and(is_fast_lane_diagnostic_code))
+        .collect()
+}
+
+fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool {
+    matches!(
+        code,
+        crate::DiagnosticCode::SYNTAX_PARSE
+            | crate::DiagnosticCode::SYNTAX_COMPOUND_ASSIGNMENT
+            | crate::DiagnosticCode::TYPE_UNKNOWN_NAME
+            | crate::DiagnosticCode::TYPE_DUPLICATE_ALIAS
+            | crate::DiagnosticCode::TYPE_MISMATCH
+            | crate::DiagnosticCode::TYPE_ARGUMENT_COUNT
+            | crate::DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON
+            | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
+    )
 }
 
 fn require_targets_for_source(path: &Path, source: &str) -> BTreeSet<PathBuf> {

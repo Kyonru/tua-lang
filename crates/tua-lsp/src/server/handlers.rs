@@ -175,8 +175,11 @@ impl LspServer {
 
         self.analysis
             .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        self.queue_slow_diagnostics(uri.clone());
 
-        Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+        let diagnostics = self.fast_diagnostics_for(&uri);
+
+        Some(vec![self.publish_tracked_diagnostics(&uri, diagnostics)])
     }
 
     fn did_save_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
@@ -192,6 +195,8 @@ impl LspServer {
             );
         }
 
+        self.pending_slow_diagnostics.remove(&uri);
+
         self.analysis
             .contains_document(&uri)
             .then(|| vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
@@ -202,6 +207,8 @@ impl LspServer {
         let uri = document_uri(params)?.to_owned();
 
         self.analysis.close_document(&uri);
+        self.pending_slow_diagnostics.remove(&uri);
+        self.last_published_diagnostics.remove(&uri);
 
         Some(vec![publish_diagnostics(&uri, Vec::new())])
     }
@@ -244,6 +251,7 @@ impl LspServer {
         }
 
         if should_reindex || !source_changes.is_empty() || !deleted_sources.is_empty() {
+            self.pending_slow_diagnostics.clear();
             self.analysis
                 .refresh_open_documents(&self.workspace_folders, &self.settings);
         }
@@ -300,6 +308,7 @@ impl LspServer {
             .reindex_workspace(&self.workspace_folders, &self.settings);
         self.analysis
             .refresh_open_documents(&self.workspace_folders, &self.settings);
+        self.pending_slow_diagnostics.clear();
 
         Some(self.publish_all_open_diagnostics())
     }
@@ -326,6 +335,59 @@ impl LspServer {
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
+    }
+
+    fn fast_diagnostics_for(&self, uri: &str) -> Vec<Value> {
+        self.analysis
+            .fast_diagnostics_for_uri(uri)
+            .into_iter()
+            .map(lsp_diagnostic_from_core)
+            .collect()
+    }
+
+    fn queue_slow_diagnostics(&mut self, uri: String) {
+        self.pending_slow_diagnostics.insert(uri);
+    }
+
+    pub(super) fn drain_pending_slow_diagnostics(&mut self) -> Vec<Value> {
+        let pending = std::mem::take(&mut self.pending_slow_diagnostics);
+        let mut publications = Vec::new();
+
+        for uri in pending {
+            if !self.analysis.contains_document(&uri) {
+                continue;
+            }
+
+            let diagnostics = self.diagnostics_for(&uri);
+            if let Some(publication) = self.publish_diagnostics_if_changed(&uri, diagnostics) {
+                publications.push(publication);
+            }
+        }
+
+        publications
+    }
+
+    fn publish_tracked_diagnostics(&mut self, uri: &str, diagnostics: Vec<Value>) -> Value {
+        self.last_published_diagnostics
+            .insert(uri.to_owned(), diagnostics.clone());
+
+        publish_diagnostics(uri, diagnostics)
+    }
+
+    fn publish_diagnostics_if_changed(
+        &mut self,
+        uri: &str,
+        diagnostics: Vec<Value>,
+    ) -> Option<Value> {
+        if self
+            .last_published_diagnostics
+            .get(uri)
+            .is_some_and(|previous| previous == &diagnostics)
+        {
+            return None;
+        }
+
+        Some(self.publish_tracked_diagnostics(uri, diagnostics))
     }
 
     fn diagnostics_for_disk_file(&self, uri: &str) -> Vec<Value> {

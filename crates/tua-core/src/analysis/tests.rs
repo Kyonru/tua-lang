@@ -726,6 +726,35 @@ local field = t.<|complete|>
 }
 
 #[test]
+fn fast_diagnostics_include_current_file_errors_without_slow_asset_validation() {
+    let path = PathBuf::from("src/main.tua");
+    let mut config = ProjectConfig::default();
+    config.diagnostics.undefined_variables = true;
+    let mut host = AnalysisHost::with_config(config);
+
+    host.set_file(
+        &path,
+        r#"
+type Broken = MissingType
+local hp: number = "full"
+missing()
+local sprite = image "missing.png"
+"#,
+    );
+
+    let diagnostics = host.fast_diagnostics(&path);
+    let codes = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+
+    assert!(codes.contains(&DiagnosticCode::TYPE_UNKNOWN_NAME));
+    assert!(codes.contains(&DiagnosticCode::TYPE_MISMATCH));
+    assert!(codes.contains(&DiagnosticCode::LINT_UNDEFINED_VARIABLE));
+    assert!(!codes.contains(&DiagnosticCode::ASSET_MISSING));
+}
+
+#[test]
 fn cache_reuses_unedited_files_across_snapshots() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");

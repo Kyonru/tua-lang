@@ -7,6 +7,7 @@ mod protocol;
 mod transport;
 mod uri;
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
 
@@ -41,6 +42,10 @@ pub(crate) fn run(reader: impl Read, writer: impl Write) -> io::Result<()> {
             }
         }
 
+        for message in server.drain_pending_slow_diagnostics() {
+            write_message(&mut writer, &message)?;
+        }
+
         if server.should_exit {
             break;
         }
@@ -54,6 +59,8 @@ struct LspServer {
     analysis: AnalysisHost,
     workspace_folders: Vec<PathBuf>,
     settings: WorkspaceSettings,
+    pending_slow_diagnostics: BTreeSet<String>,
+    last_published_diagnostics: BTreeMap<String, Vec<serde_json::Value>>,
     client_watched_files_dynamic_registration: bool,
     next_server_request_id: u64,
     shutdown_requested: bool,

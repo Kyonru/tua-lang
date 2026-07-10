@@ -726,6 +726,36 @@ fn did_change_applies_incremental_edits_and_republishes_diagnostics() {
 }
 
 #[test]
+fn did_change_publishes_fast_diagnostics_before_slow_diagnostics() {
+    let temp = TempProject::new("fast-slow-diagnostics");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local ready = true\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let edited = "local sprite = image \"missing.png\"\n";
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, "local ready = true\n"),
+        did_change(&uri, edited, 2),
+    ]);
+    let publications = diagnostics_publications(&output, &uri);
+
+    assert_eq!(publications.len(), 3);
+    assert_eq!(
+        publications[1]["params"]["diagnostics"]
+            .as_array()
+            .expect("fast diagnostics should be an array")
+            .len(),
+        0
+    );
+    assert_eq!(
+        publications[2]["params"]["diagnostics"][0]["code"],
+        "TL2004"
+    );
+}
+
+#[test]
 fn did_save_accepts_text_and_republishes_diagnostics() {
     let uri = "file:///tmp/save.tua";
     let output = run_messages(vec![
@@ -4265,6 +4295,9 @@ impl TestServer {
         if let Some(messages) = self.server.handle_message(message) {
             self.output.extend(messages);
         }
+
+        self.output
+            .extend(self.server.drain_pending_slow_diagnostics());
     }
 
     fn output(&self) -> &[Value] {

@@ -173,6 +173,24 @@ impl VirtualFileSystem {
             .then_some(VfsFileId(path))
     }
 
+    pub fn source(&self, path: impl AsRef<Path>) -> Option<&str> {
+        let path = normalize_path(path);
+
+        self.open_files
+            .get(&path)
+            .or_else(|| self.disk_files.get(&path))
+            .map(|file| file.source.as_str())
+    }
+
+    pub fn kind(&self, path: impl AsRef<Path>) -> Option<VfsSourceKind> {
+        let path = normalize_path(path);
+
+        self.open_files
+            .get(&path)
+            .or_else(|| self.disk_files.get(&path))
+            .map(|file| file.kind)
+    }
+
     pub fn snapshot(&self) -> VfsSnapshot {
         let mut files = BTreeMap::new();
 

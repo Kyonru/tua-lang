@@ -89,6 +89,14 @@ impl AnalysisHost {
         self.core.cache_stats()
     }
 
+    pub(super) fn fast_diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {
+        if !self.contains_document(uri) {
+            return Vec::new();
+        }
+
+        self.core.fast_diagnostics(path_from_uri(uri))
+    }
+
     pub(super) fn open_document(
         &mut self,
         uri: impl Into<String>,
