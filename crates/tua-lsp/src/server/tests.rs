@@ -2486,6 +2486,41 @@ load("assets/jump.wav",
 }
 
 #[test]
+fn signature_help_returns_love_overloads_and_parameter_docs() {
+    let uri = "file:///tmp/signature-help-love-overloads.tua";
+    let source = "love.graphics.print(\"hi\", \n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "love.graphics.print(\"hi\", "),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"].as_array().unwrap().len(),
+        6
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function love.graphics.print(text: string, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
+    );
+    assert_eq!(
+        response["result"]["signatures"][2]["label"],
+        "function love.graphics.print(text: string, transform: Transform)"
+    );
+    assert_eq!(response["result"]["activeParameter"], 1);
+    assert!(
+        response["result"]["signatures"][0]["documentation"]["value"]
+            .as_str()
+            .expect("signature documentation should be a string")
+            .contains("Draws text on screen")
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][1]["documentation"]["value"],
+        "The position to draw the object (x-axis).\n\nDefault: `0`."
+    );
+}
+
+#[test]
 fn signature_help_returns_lua_and_required_module_signatures() {
     let temp = TempProject::new("signature-help-modules");
     let source = r#"local Player = require("player")

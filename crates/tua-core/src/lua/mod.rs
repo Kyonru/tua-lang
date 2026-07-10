@@ -1,4 +1,4 @@
-use crate::{asset, love_api, love_api_extra, vector};
+use crate::{asset, love_api, love_api_extra, love_api_signatures, vector};
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
@@ -7,6 +7,19 @@ pub(crate) struct LuaItem {
     pub label: &'static str,
     pub kind: LuaItemKind,
     pub detail: &'static str,
+    pub documentation: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LuaSignature {
+    pub label: &'static str,
+    pub documentation: &'static str,
+    pub parameters: &'static [LuaSignatureParameter],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LuaSignatureParameter {
+    pub label: &'static str,
     pub documentation: &'static str,
 }
 
@@ -108,6 +121,12 @@ pub(crate) fn documentation_with_love_wiki_link(item: LuaItem) -> String {
     documentation
 }
 
+pub(crate) fn signature_variants(item: LuaItem) -> Option<&'static [LuaSignature]> {
+    let target = function_target(item)?;
+
+    love_api_signatures::signatures_for_target(target)
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 
@@ -145,13 +164,7 @@ fn love_wiki_page(item: LuaItem) -> Option<String> {
         return Some(format!("love.{}", item.label));
     }
 
-    let target = item
-        .detail
-        .strip_prefix("function ")?
-        .split('(')
-        .next()?
-        .trim();
-
+    let target = function_target(item)?;
     if target.starts_with("love.") {
         return Some(target.to_owned());
     }
@@ -163,6 +176,15 @@ fn love_wiki_page(item: LuaItem) -> Option<String> {
     }
 
     Some(target.to_owned())
+}
+
+fn function_target(item: LuaItem) -> Option<&'static str> {
+    item.detail
+        .strip_prefix("function ")?
+        .split('(')
+        .next()
+        .map(str::trim)
+        .filter(|target| !target.is_empty())
 }
 
 pub(crate) fn builtin_definition_for_item(item: LuaItem) -> Option<BuiltinDefinition> {

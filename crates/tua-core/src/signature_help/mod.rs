@@ -185,7 +185,7 @@ impl<'a> SignatureResolver<'a> {
                 .semantic
                 .lua_function_item_for_call_parts(parts, position)
             {
-                return signature_from_lua_item(item).map(|signature| vec![signature]);
+                return signatures_from_lua_item(item);
             }
 
             if let Some(function) = self.semantic.typed_function_for_call_parts(parts, position) {
@@ -207,8 +207,8 @@ impl<'a> SignatureResolver<'a> {
             }
         }
 
-        if let Some(signature) = lua_signature_for_parts(parts) {
-            return Some(vec![signature]);
+        if let Some(signatures) = lua_signatures_for_parts(parts) {
+            return Some(signatures);
         }
 
         self.semantic
@@ -600,34 +600,63 @@ fn format_type_list(types: &[Type]) -> String {
 }
 
 fn lua_signature_help(context: &CallContext) -> Option<SignatureHelp> {
-    let signature = lua_signature_for_parts(&context.callee_parts)?;
-    let active_parameter = active_parameter_for_signature(context.active_parameter, &signature);
+    let signatures = lua_signatures_for_parts(&context.callee_parts)?;
+    let active_signature =
+        active_signature_for_argument_count(&signatures, context.active_parameter);
+    let active_parameter =
+        active_parameter_for_signature(context.active_parameter, &signatures[active_signature]);
 
     Some(SignatureHelp {
-        signatures: vec![signature],
-        active_signature: 0,
+        signatures,
+        active_signature,
         active_parameter,
     })
 }
 
-fn lua_signature_for_parts(parts: &[String]) -> Option<SignatureInformation> {
+fn lua_signatures_for_parts(parts: &[String]) -> Option<Vec<SignatureInformation>> {
     let item = lua::hover_item(parts)?;
 
     if item.kind != LuaItemKind::Function {
         return None;
     }
 
-    signature_from_lua_item(item)
+    signatures_from_lua_item(item)
 }
 
-fn signature_from_lua_item(item: LuaItem) -> Option<SignatureInformation> {
+fn signatures_from_lua_item(item: LuaItem) -> Option<Vec<SignatureInformation>> {
+    if let Some(signatures) = lua::signature_variants(item) {
+        let signatures = signatures
+            .iter()
+            .map(signature_from_lua_signature)
+            .collect::<Vec<_>>();
+
+        if !signatures.is_empty() {
+            return Some(signatures);
+        }
+    }
+
     let parameters = parameters_from_function_label(item.detail)?;
 
-    Some(signature_from_parts(
+    Some(vec![signature_from_parts(
         item.detail.to_owned(),
         parameters,
         Some(item.documentation.to_owned()),
-    ))
+    )])
+}
+
+fn signature_from_lua_signature(signature: &lua::LuaSignature) -> SignatureInformation {
+    signature_from_parameter_information(
+        signature
+            .parameters
+            .iter()
+            .map(|parameter| ParameterInformation {
+                label: parameter.label.to_owned(),
+                documentation: non_empty_documentation(parameter.documentation),
+            })
+            .collect(),
+        signature.label.to_owned(),
+        non_empty_documentation(signature.documentation),
+    )
 }
 
 fn parameters_from_function_label(label: &str) -> Option<Vec<String>> {
@@ -677,6 +706,10 @@ fn signature_from_parameter_information(
         parameters,
         documentation,
     }
+}
+
+fn non_empty_documentation(documentation: &str) -> Option<String> {
+    (!documentation.trim().is_empty()).then(|| documentation.to_owned())
 }
 
 fn apply_parameter_documentation(

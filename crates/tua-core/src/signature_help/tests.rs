@@ -184,6 +184,7 @@ fn returns_lua_and_love_builtin_signatures() {
         love.signatures[0].label,
         "function love.graphics.print(text: string, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
     );
+    assert_eq!(love.signatures.len(), 6);
     assert_eq!(
         parameter_labels(&love),
         vec![
@@ -200,6 +201,54 @@ fn returns_lua_and_love_builtin_signatures() {
         ]
     );
     assert_eq!(love.active_parameter, 1);
+    assert_eq!(
+        love.signatures[0].parameters[1].documentation.as_deref(),
+        Some("The position to draw the object (x-axis).\n\nDefault: `0`.")
+    );
+    assert_eq!(
+        love.signatures[2].label,
+        "function love.graphics.print(text: string, transform: Transform)"
+    );
+}
+
+#[test]
+fn returns_love_official_overloads_and_parameter_docs() {
+    let draw = signature_at("love.graphics.draw(sprite, quad, \n", "quad, ")
+        .expect("love.graphics.draw should have overload signatures");
+    let source = signature_at(
+        "local source = love.audio.newSource(\"jump.wav\", \n",
+        "jump.wav\", ",
+    )
+    .expect("love.audio.newSource should have overload signatures");
+
+    assert_eq!(draw.signatures.len(), 4);
+    assert_eq!(
+        draw.signatures[0].label,
+        "function love.graphics.draw(drawable: Drawable, x?: number, y?: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
+    );
+    assert_eq!(
+        draw.signatures[1].label,
+        "function love.graphics.draw(texture: Texture, quad: Quad, x: number, y: number, r?: number, sx?: number, sy?: number, ox?: number, oy?: number, kx?: number, ky?: number)"
+    );
+    assert_eq!(
+        draw.signatures[1].parameters[1].documentation.as_deref(),
+        Some("The Quad to draw on screen.")
+    );
+    assert!(draw.signatures[0]
+        .documentation
+        .as_deref()
+        .expect("draw documentation should be present")
+        .contains("Draws a Drawable object"));
+
+    assert_eq!(source.signatures.len(), 5);
+    assert_eq!(
+        source.signatures[4].label,
+        "function love.audio.newSource(data: SoundData): Source"
+    );
+    assert_eq!(
+        source.signatures[0].parameters[1].documentation.as_deref(),
+        Some("Streaming or static source.")
+    );
 }
 
 #[test]

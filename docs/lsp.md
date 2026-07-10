@@ -54,8 +54,9 @@ The VS Code extension starts this server and surfaces editor features for
 - Open buffers retain their last valid semantic snapshot. During a temporary
   syntax error, hover and inlay hints keep using those facts, while completion
   combines the current cursor context with the last valid type environment.
-- Signature help triggered by `(` and `,`, including parameter documentation
-  from supported annotations.
+- Signature help triggered by `(` and `,`, including LuaDoc overloads,
+  generated LOVE overload variants, optional parameters, return labels, and
+  parameter documentation where catalog or annotations provide it.
 - Definition, references, rename, document highlight, document symbols,
   workspace symbols, document links, code actions, call hierarchy, inlay hints,
   and semantic tokens.
