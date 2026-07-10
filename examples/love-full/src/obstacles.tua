@@ -52,14 +52,27 @@ function obstacles.update(dt: number)
     end
 
     local is_colliding_player: boolean =
-      utils.AABB_collision(player.x, player.y, player.width, player.height, wall.x, wall.y, wall.width, wall.height)
+      utils.AABB_collision(
+        player.x,
+        player.y,
+        player.width,
+        player.height,
+        wall.x,
+        wall.y,
+        wall.width,
+        wall.height
+      )
 
     if is_colliding_player then
       player.damage(1, function()
         sound.play_disappear()
         print("Game Over!")
       end)
-      particles.create_block_explosion(wall.x + wall.width / 2, wall.y + wall.height / 2, wall.width / _HEIGHT)
+      particles.create_block_explosion(
+        wall.x + wall.width / 2,
+        wall.y + wall.height / 2,
+        wall.width / _HEIGHT
+      )
       sound.play_hurt()
       table.remove(obstacles.list, i)
     end

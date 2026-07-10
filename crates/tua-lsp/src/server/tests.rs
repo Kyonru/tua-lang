@@ -615,6 +615,53 @@ local player = image "assets/player.png"
 }
 
 #[test]
+fn did_change_uses_warmed_asset_index_until_watched_asset_refresh() {
+    let temp = TempProject::new("asset-index-no-request-scan");
+    let source = r#"
+local player = image "assets/player.png"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("assets/player.png", "placeholder");
+
+    let uri = temp.uri_for("src/main.tua");
+    let asset_uri = temp.uri_for("assets/player.png");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert!(
+        last_published_diagnostics(server.output(), &uri).is_empty(),
+        "indexed asset should be valid on open"
+    );
+
+    temp.remove("assets/player.png");
+    let edited = format!("{source}local touched = true\n");
+
+    server.send(did_change(&uri, &edited, 2));
+    assert!(
+        last_published_diagnostics(server.output(), &uri).is_empty(),
+        "ordinary edits should reuse the warmed asset index instead of rescanning disk"
+    );
+
+    server.send(completion_request(2, &uri, &edited, "assets/p"));
+    assert_completion_labels(server.output(), 2, ["assets/player.png"]);
+
+    server.send(watched_files_changed([(&asset_uri, 3)]));
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "TL2004"),
+        "watched asset deletion should refresh the asset index: {diagnostics:#?}"
+    );
+
+    server.send(completion_request(3, &uri, &edited, "assets/p"));
+    assert_completion_labels(server.output(), 3, []);
+}
+
+#[test]
 fn did_open_publishes_impossible_comparison_warnings() {
     let uri = "file:///tmp/comparison.tua";
     let source = r#"local function recursive(a: string)
@@ -3626,6 +3673,23 @@ local unresolved = missing
     assert_reference_texts(&output, 3, source, ["damage", "damage"]);
     assert_reference_texts(&output, 4, source, ["player", "player", "player", "player"]);
     assert_reference_texts(&output, 5, source, ["hp", "hp", "hp", "hp"]);
+}
+
+#[test]
+fn references_returns_require_alias_usages() {
+    let uri = "file:///tmp/require-alias-references.tua";
+    let source = r#"local Player = require("player")
+Player.load()
+Player.draw()
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        references_request(2, uri, source, "Player = require", 0, true),
+        references_request(3, uri, source, "Player = require", 0, false),
+    ]);
+
+    assert_reference_texts(&output, 2, source, ["Player", "Player", "Player"]);
+    assert_reference_texts(&output, 3, source, ["Player", "Player"]);
 }
 
 #[test]

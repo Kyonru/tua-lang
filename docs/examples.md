@@ -58,3 +58,21 @@ They include comments describing the feature surface each file stresses.
 ```bash
 make profile-lsp
 ```
+
+## Examples Speed Suite
+
+The real bundled examples can also be profiled as a regression suite:
+
+```bash
+make profile-examples-smoke
+make profile-examples
+make profile-examples-baseline
+```
+
+The suite discovers every `examples/*/tua.toml`, times CLI commands and LSP
+editor requests, and writes JSON reports under `target/tua-speed/`. It uses
+local soft thresholds for comparisons because timing varies by machine:
+
+```bash
+TUA_SPEED_BASELINE=target/tua-speed/examples-baseline.json make profile-examples
+```

@@ -74,6 +74,21 @@ profile-lsp: ## Profile LSP request latency against small/medium/large benchmark
 	$(CARGO) build --package tua-cli
 	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-3} node editors/vscode/scripts/lsp-profile.js target/debug/tua benchmarks/lsp/small benchmarks/lsp/medium benchmarks/lsp/large
 
+.PHONY: profile-examples
+profile-examples: ## Profile CLI and LSP speed across every bundled example project.
+	$(CARGO) build --release --package tua-cli
+	node scripts/profile-examples.js $(RELEASE_TUA)
+
+.PHONY: profile-examples-baseline
+profile-examples-baseline: ## Write a local examples speed baseline for future comparisons.
+	$(CARGO) build --release --package tua-cli
+	TUA_SPEED_OUT=$${TUA_SPEED_OUT:-target/tua-speed/examples-baseline.json} node scripts/profile-examples.js $(RELEASE_TUA)
+
+.PHONY: profile-examples-smoke
+profile-examples-smoke: ## Run one quick examples speed profiling pass.
+	$(CARGO) build --release --package tua-cli
+	TUA_SPEED_WARMUP=0 TUA_SPEED_REPEAT=1 TUA_SPEED_OUT=$${TUA_SPEED_OUT:-target/tua-speed/examples-profile-smoke.json} node scripts/profile-examples.js $(RELEASE_TUA)
+
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.
 	cd $(EXAMPLE) && $(TUA) check

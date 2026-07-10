@@ -35,4 +35,3 @@ return {
   bonus = bonus,
   tick = tick,
 }
-

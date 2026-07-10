@@ -199,6 +199,23 @@ TUA_PROFILE=1 make profile-lsp
 TUA_PROFILE=1 TUA_PROFILE_STREAM=1 make profile-lsp
 ```
 
+To profile the real bundled examples across both CLI commands and editor
+requests:
+
+```bash
+make profile-examples
+make profile-examples-smoke
+make profile-examples-baseline
+```
+
+`make profile-examples` discovers every `examples/*/tua.toml`, times `check`,
+`lint`, `fmt --check`, `build`, and LSP request latency, then writes
+`target/tua-speed/examples-profile.json`. The build timing runs in a temporary
+copy so generated output does not dirty the example projects. Set
+`TUA_SPEED_BASELINE=target/tua-speed/examples-baseline.json` to compare against
+a previous run; timing regressions are warnings by default and can be made
+fatal with `TUA_SPEED_FAIL_ON_REGRESSION=1`.
+
 For diagnostic-specific timing, start the server with `TUA_TRACE=diagnostics`.
 The trace writes stderr lines after `textDocument/publishDiagnostics` without
 touching LSP stdout:

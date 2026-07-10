@@ -52,6 +52,11 @@ pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> S
 struct Formatter<'a> {
     options: &'a FormatOptions,
     indent_level: usize,
+    paren_depth: usize,
+    brace_depth: usize,
+    paren_continuation_indents: Vec<usize>,
+    pending_continuation: bool,
+    paren_suppressed_block_depth: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,6 +71,11 @@ impl<'a> Formatter<'a> {
         Self {
             options,
             indent_level: 0,
+            paren_depth: 0,
+            brace_depth: 0,
+            paren_continuation_indents: Vec::new(),
+            pending_continuation: false,
+            paren_suppressed_block_depth: 0,
         }
     }
 
@@ -112,24 +122,107 @@ impl<'a> Formatter<'a> {
 
         let code = code_before_comment(trimmed);
         let dedent = line_starts_with_dedent(code);
+        let closes_suppressed_block = dedent && self.paren_suppressed_block_depth > 0;
+        let suppress_paren_for_block = self.paren_suppressed_block_depth > 0;
 
         if dedent {
             self.indent_level = self.indent_level.saturating_sub(1);
         }
 
         let normalized = normalize_spacing(trimmed);
-        let indent = " ".repeat(self.indent_level * self.options.indent_width);
+        let closes_paren = code.trim_start().starts_with(')');
+        let closes_brace = code.trim_start().starts_with('}');
+        let suppress_paren_for_brace = self.brace_depth > 0 || closes_brace;
+        let paren_indent = if suppress_paren_for_brace || suppress_paren_for_block {
+            0
+        } else {
+            self.paren_depth.saturating_sub(usize::from(closes_paren))
+        };
+        let paren_extra = self.paren_continuation_indents.iter().sum::<usize>();
+        let continuation_indent =
+            usize::from(self.pending_continuation && paren_indent == 0 && !dedent && !closes_paren);
+        let indent_level = self.indent_level + paren_indent + paren_extra + continuation_indent;
+        let indent = " ".repeat(indent_level * self.options.indent_width);
         let formatted = break_long_groups(&normalized, &indent, self.options);
 
         output.push_str(&formatted);
         output.push('\n');
 
+        self.update_paren_state(code, continuation_indent);
+        self.brace_depth = update_group_depth(self.brace_depth, code, b'{', b'}');
+        self.pending_continuation = self.paren_depth == 0 && line_ends_with_continuation(code);
+
+        if closes_suppressed_block {
+            self.paren_suppressed_block_depth = self.paren_suppressed_block_depth.saturating_sub(1);
+        }
+
         if line_opens_block(code) {
+            if self.paren_depth > 0 {
+                self.paren_suppressed_block_depth += 1;
+            }
             self.indent_level += 1;
         }
 
         if line_is_middle_block(code) {
             self.indent_level += 1;
+        }
+    }
+
+    fn update_paren_state(&mut self, code: &str, continuation_indent: usize) {
+        let bytes = code.as_bytes();
+        let mut state = MaskState::Code;
+        let mut index = 0;
+
+        while index < bytes.len() {
+            match &mut state {
+                MaskState::Code => {
+                    if bytes[index] == b'\'' || bytes[index] == b'"' {
+                        state = MaskState::ShortString {
+                            quote: bytes[index],
+                            escaped: false,
+                        };
+                        index += 1;
+                        continue;
+                    }
+                    if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                        state = MaskState::LongString { close };
+                        index += consumed;
+                        continue;
+                    }
+
+                    match bytes[index] {
+                        b'(' => {
+                            self.paren_depth += 1;
+                            self.paren_continuation_indents.push(continuation_indent);
+                        }
+                        b')' => {
+                            self.paren_depth = self.paren_depth.saturating_sub(1);
+                            self.paren_continuation_indents.pop();
+                        }
+                        _ => {}
+                    }
+
+                    index += 1;
+                }
+                MaskState::ShortString { quote, escaped } => {
+                    if *escaped {
+                        *escaped = false;
+                    } else if bytes[index] == b'\\' {
+                        *escaped = true;
+                    } else if bytes[index] == *quote {
+                        state = MaskState::Code;
+                    }
+                    index += 1;
+                }
+                MaskState::LongString { close } => {
+                    if bytes[index..].starts_with(close) {
+                        index += close.len();
+                        state = MaskState::Code;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
         }
     }
 }
@@ -193,7 +286,20 @@ fn normalize_spacing(line: &str) -> String {
                             index += 1;
                         }
                     }
-                    b'(' | b'[' => {
+                    b'(' => {
+                        if should_trim_before_call_paren(&output) {
+                            trim_trailing_spaces(&mut output);
+                        }
+                        output.push(bytes[index] as char);
+                        index += 1;
+                        while bytes
+                            .get(index)
+                            .is_some_and(|byte| byte.is_ascii_whitespace())
+                        {
+                            index += 1;
+                        }
+                    }
+                    b'[' => {
                         trim_trailing_spaces(&mut output);
                         output.push(bytes[index] as char);
                         index += 1;
@@ -322,10 +428,14 @@ fn break_long_call(line: &str, indent: &str, options: &FormatOptions) -> Option<
     output.push_str(callee);
     output.push_str("(\n");
 
-    for arg in args {
+    let last_index = args.len().saturating_sub(1);
+    for (index, arg) in args.into_iter().enumerate() {
         output.push_str(&item_indent);
         output.push_str(arg.trim());
-        output.push_str(",\n");
+        if index != last_index {
+            output.push(',');
+        }
+        output.push('\n');
     }
 
     output.push_str(indent);
@@ -617,6 +727,78 @@ fn line_opens_brace_block(code: &str) -> bool {
     depth > 0 && opens > closes
 }
 
+fn update_group_depth(current: usize, code: &str, open: u8, close: u8) -> usize {
+    let bytes = code.as_bytes();
+    let mut state = MaskState::Code;
+    let mut depth = current;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match &mut state {
+            MaskState::Code => {
+                if bytes[index] == b'\'' || bytes[index] == b'"' {
+                    state = MaskState::ShortString {
+                        quote: bytes[index],
+                        escaped: false,
+                    };
+                    index += 1;
+                    continue;
+                }
+                if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                    state = MaskState::LongString { close };
+                    index += consumed;
+                    continue;
+                }
+
+                match bytes[index] {
+                    byte if byte == open => depth += 1,
+                    byte if byte == close => depth = depth.saturating_sub(1),
+                    _ => {}
+                }
+
+                index += 1;
+            }
+            MaskState::ShortString { quote, escaped } => {
+                if *escaped {
+                    *escaped = false;
+                } else if bytes[index] == b'\\' {
+                    *escaped = true;
+                } else if bytes[index] == *quote {
+                    state = MaskState::Code;
+                }
+                index += 1;
+            }
+            MaskState::LongString { close } => {
+                if bytes[index..].starts_with(close) {
+                    index += close.len();
+                    state = MaskState::Code;
+                } else {
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    depth
+}
+
+fn line_ends_with_continuation(code: &str) -> bool {
+    let code = code.trim_end();
+
+    if code.is_empty()
+        || code.ends_with("==")
+        || code.ends_with("<=")
+        || code.ends_with(">=")
+        || code.ends_with("~=")
+    {
+        return false;
+    }
+
+    code.as_bytes()
+        .last()
+        .is_some_and(|byte| matches!(byte, b'=' | b'+' | b'-' | b'*' | b'/' | b'%' | b'^'))
+}
+
 fn starts_with_word(value: &str, word: &str) -> bool {
     value.strip_prefix(word).is_some_and(|rest| {
         rest.as_bytes()
@@ -707,6 +889,12 @@ fn trim_trailing_spaces(output: &mut String) {
     while output.ends_with(' ') {
         output.pop();
     }
+}
+
+fn should_trim_before_call_paren(output: &str) -> bool {
+    output.trim_end().as_bytes().last().is_some_and(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b')' | b']' | b'}')
+    })
 }
 
 fn long_bracket_open(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {

@@ -1104,6 +1104,37 @@ local message = greet("Ada")
 }
 
 #[test]
+fn module_alias_references_use_file_scope_without_building_reverse_index() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local <|def|>player = require("player")
+player.load()
+-- file: src/player.tua
+local M = {}
+return M
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let references = snapshot.references("src/main.tua", fixture.position("def"), true);
+
+    assert_eq!(references.len(), 2);
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::Module));
+    assert!(
+        snapshot.reverse_reference_index.get().is_none(),
+        "module alias references should not build the project-wide reverse-reference index"
+    );
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

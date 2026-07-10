@@ -2,6 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Run Extension (All Examples)",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--log",
+        "tua-lang.tua:debug",
+        "${workspaceFolder}/examples"
+      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
+      "preLaunchTask": "Build Server and Check Extension",
+      "skipFiles": ["<node_internals>/**/*.js"],
+      "env": {
+        "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
+      }
+    },
+    {
       "name": "Run Extension (Features Example)",
       "type": "extensionHost",
       "request": "launch",
@@ -13,13 +32,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Build Server and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ],
+      "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
       }
@@ -36,13 +51,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Stage Extension Server and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ]
+      "skipFiles": ["<node_internals>/**/*.js"]
     },
     {
       "name": "Run Extension (Debug Server)",
@@ -56,13 +67,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Build Server and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ],
+      "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
       }
@@ -79,13 +86,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Build Server (Release) and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ],
+      "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
       }
@@ -102,13 +105,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Stage Extension Server and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ]
+      "skipFiles": ["<node_internals>/**/*.js"]
     },
     {
       "name": "Run With Extensions (Release Server)",
@@ -123,13 +122,9 @@
         "tua-lang.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
-      "outFiles": [
-        "${workspaceFolder}/editors/vscode/src/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
       "preLaunchTask": "Build Server (Release) and Check Extension",
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ],
+      "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
         "TUA_SERVER_PATH": "${workspaceFolder}/target/release/tua"
       }
@@ -140,9 +135,7 @@
       "request": "attach",
       "program": "${workspaceFolder}/target/debug/tua",
       "pid": "${command:pickMyProcess}",
-      "sourceLanguages": [
-        "rust"
-      ]
+      "sourceLanguages": ["rust"]
     },
     {
       "name": "Win Attach To Server",

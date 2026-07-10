@@ -163,6 +163,116 @@ fn breaks_long_table_groups() {
 }
 
 #[test]
+fn breaks_long_call_groups_without_trailing_argument_comma() {
+    let source = r#"local hit = intersects(player.x, player.y, player.width, player.height, wall.x, wall.y, wall.width, wall.height)"#;
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(
+        output,
+        r#"local hit = intersects(
+  player.x,
+  player.y,
+  player.width,
+  player.height,
+  wall.x,
+  wall.y,
+  wall.width,
+  wall.height
+)
+"#
+    );
+    parse_tua_source("src/main.tua", output).expect("formatted call should parse");
+}
+
+#[test]
+fn preserves_multiline_call_indentation_and_grouping_spacing() {
+    let source = r#"function draw()
+love.graphics.draw(
+sprite,
+8 + (i - 1),
+40 / sprite:getWidth()
+)
+end"#;
+
+    assert_eq!(
+        format(source),
+        r#"function draw()
+  love.graphics.draw(
+    sprite,
+    8 + (i - 1),
+    40 / sprite:getWidth()
+  )
+end
+"#
+    );
+}
+
+#[test]
+fn indents_continued_assignment_calls() {
+    let source = r#"function update()
+local hit =
+utils.AABB_collision(player.x, player.y, player.width, player.height, wall.x, wall.y, wall.width, wall.height)
+end"#;
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+
+    let output = format_tua_source("src/main.tua", source, &options).expect("source should format");
+
+    assert_eq!(
+        output,
+        r#"function update()
+  local hit =
+    utils.AABB_collision(
+      player.x,
+      player.y,
+      player.width,
+      player.height,
+      wall.x,
+      wall.y,
+      wall.width,
+      wall.height
+    )
+end
+"#
+    );
+    parse_tua_source("src/main.tua", output).expect("formatted call should parse");
+}
+
+#[test]
+fn avoids_extra_paren_indent_inside_call_table_and_function_blocks() {
+    let source = r#"function update()
+table.insert(list, {
+x = 1,
+y = 2,
+})
+player.damage(1, function()
+print("hit")
+end)
+end"#;
+
+    assert_eq!(
+        format(source),
+        r#"function update()
+  table.insert(list, {
+    x = 1,
+    y = 2,
+  })
+  player.damage(1, function()
+    print("hit")
+  end)
+end
+"#
+    );
+}
+
+#[test]
 fn is_idempotent() {
     let source = r#"function draw()
   local values = {

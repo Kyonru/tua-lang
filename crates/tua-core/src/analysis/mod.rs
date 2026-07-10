@@ -1310,9 +1310,20 @@ impl AnalysisSnapshot {
     ) -> Vec<Reference> {
         let _profile = profile::span("analysis.query.references");
         let path = path.as_ref();
+
+        if let Some(references) =
+            self.scope_references_at_position(path, position, include_declaration)
+        {
+            return references;
+        }
+
         let Some(target) = self.definition(path, position) else {
             return Vec::new();
         };
+
+        if let Some(references) = self.parameter_scope_references(&target, include_declaration) {
+            return references;
+        }
 
         {
             let _profile = profile::span("analysis.references.reverse_index.lookup");
@@ -1326,6 +1337,62 @@ impl AnalysisSnapshot {
         }
 
         self.references_by_scan(&target, include_declaration)
+    }
+
+    fn scope_references_at_position(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        let _profile = profile::span("analysis.references.scope_position_fast_path");
+        let file = self.file(path)?;
+        let parsed = file.parsed.as_ref().ok()?;
+        let scope = file.scope.as_ref()?;
+        let symbol = scope.symbol_at_position(position)?;
+        let declaration = scope.declaration(symbol)?;
+        let kind = match declaration.kind {
+            ScopeDeclarationKind::ModuleAlias { .. } => ReferenceKind::Module,
+            ScopeDeclarationKind::Parameter => ReferenceKind::Parameter,
+            ScopeDeclarationKind::Local
+            | ScopeDeclarationKind::Function
+            | ScopeDeclarationKind::TableField => return None,
+        };
+        let mut references = scope
+            .references_to_symbol(symbol, include_declaration)
+            .into_iter()
+            .map(|reference| Reference {
+                path: parsed.path.clone(),
+                span: reference.span,
+                kind,
+            })
+            .collect::<Vec<_>>();
+
+        sort_and_dedup_references(&mut references);
+        Some(references)
+    }
+
+    fn parameter_scope_references(
+        &self,
+        target: &Definition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        if target.kind != DefinitionKind::Parameter {
+            return None;
+        }
+
+        let _profile = profile::span("analysis.references.parameter_scope_fast_path");
+        let file = self.file(&target.path)?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        references_to_definition_parsed_source_with_artifacts(
+            parsed,
+            target,
+            include_declaration,
+            file.hir.as_ref(),
+            file.scope.as_ref(),
+        )
+        .ok()
     }
 
     fn references_by_scan(&self, target: &Definition, include_declaration: bool) -> Vec<Reference> {
