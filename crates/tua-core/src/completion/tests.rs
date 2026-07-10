@@ -734,6 +734,31 @@ player:setFilter("li")
 }
 
 #[test]
+fn recovers_love_enum_values_for_typoed_string_arguments() {
+    let source = r#"
+function love.update(dt)
+  love.graphics.circle(
+    "fillter",
+    100,
+    100,
+    2
+  )
+end
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "\"fillter"))
+            .expect("DrawMode typo recovery completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["fill", "line"]);
+    assert!(completions
+        .iter()
+        .all(|completion| completion.detail.as_deref() == Some("DrawMode")));
+    assert!(completions
+        .iter()
+        .all(|completion| completion.filter_text.as_deref() == Some("fillter")));
+}
+
+#[test]
 fn completes_lua_doc_literal_union_values_in_string_arguments() {
     let source = r#"
 ---@param mode "static" | "stream"

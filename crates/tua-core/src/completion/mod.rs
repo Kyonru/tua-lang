@@ -27,6 +27,7 @@ pub struct Completion {
     pub detail: Option<String>,
     pub documentation: Option<String>,
     pub insert_text: Option<String>,
+    pub filter_text: Option<String>,
     pub is_snippet: bool,
     pub module_path: Option<PathBuf>,
     pub source_module: Option<String>,
@@ -274,6 +275,7 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         detail: Some(detail.to_owned()),
         documentation: None,
         insert_text: None,
+        filter_text: None,
         is_snippet: false,
         module_path: None,
         source_module: None,
@@ -308,6 +310,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
             detail: Some("built-in type".to_owned()),
             documentation: None,
             insert_text: None,
+            filter_text: None,
             is_snippet: false,
             module_path: None,
             source_module: None,
@@ -326,6 +329,7 @@ fn complete_type_aliases(environment: &TypeEnvironment, prefix: &str) -> Vec<Com
             detail: Some("type alias".to_owned()),
             documentation: environment.alias_documentation(name).map(str::to_owned),
             insert_text: None,
+            filter_text: None,
             is_snippet: false,
             module_path: None,
             source_module: None,
@@ -353,6 +357,7 @@ fn complete_documentation_snippet(
             "Generate LuaHelper-style parameter and return annotations.".to_owned(),
         ),
         insert_text: Some(snippet),
+        filter_text: None,
         is_snippet: true,
         module_path: None,
         source_module: None,
@@ -373,6 +378,7 @@ fn complete_lossy_documentation_snippet(source: &str, position: SourcePosition) 
             "Generate LuaHelper-style parameter and return annotations.".to_owned(),
         ),
         insert_text: Some(snippet),
+        filter_text: None,
         is_snippet: true,
         module_path: None,
         source_module: None,
@@ -659,6 +665,7 @@ fn complete_identifier_items(
                     detail: Some("local".to_owned()),
                     documentation: None,
                     insert_text: None,
+                    filter_text: None,
                     is_snippet: false,
                     module_path: None,
                     source_module: None,
@@ -682,6 +689,7 @@ fn complete_identifier_items(
                     detail: Some("function".to_owned()),
                     documentation: None,
                     insert_text: None,
+                    filter_text: None,
                     is_snippet: false,
                     module_path: None,
                     source_module: None,
@@ -760,6 +768,7 @@ fn complete_fields(
                 detail: Some(detail),
                 documentation: None,
                 insert_text: None,
+                filter_text: None,
                 is_snippet: false,
                 module_path: None,
                 source_module: None,
@@ -834,6 +843,22 @@ fn parameter_type_from_function_detail(detail: &str, index: usize) -> Option<Str
 }
 
 fn complete_lua_enum_values(type_label: &str, prefix: &str) -> Vec<Completion> {
+    let completions = complete_lua_enum_value_candidates(type_label, prefix);
+
+    if !completions.is_empty() || prefix.is_empty() {
+        return completions;
+    }
+
+    let mut fallback = complete_lua_enum_value_candidates(type_label, "");
+
+    for completion in &mut fallback {
+        completion.filter_text = Some(prefix.to_owned());
+    }
+
+    fallback
+}
+
+fn complete_lua_enum_value_candidates(type_label: &str, prefix: &str) -> Vec<Completion> {
     type_label
         .split('|')
         .map(str::trim)
@@ -860,6 +885,7 @@ fn literal_value_item(type_name: &str, prefix: &str) -> Option<Completion> {
         detail: Some(type_name.to_owned()),
         documentation: None,
         insert_text: None,
+        filter_text: None,
         is_snippet: false,
         module_path: None,
         source_module: None,
@@ -985,6 +1011,7 @@ fn complete_required_module_fields(
                 label: name,
                 documentation: field.documentation,
                 insert_text: None,
+                filter_text: None,
                 is_snippet: false,
                 module_path: Some(module_path.clone()),
                 source_module: None,
@@ -1010,6 +1037,7 @@ fn complete_required_module_fields(
             label: name,
             documentation: export.documentation.clone(),
             insert_text: None,
+            filter_text: None,
             is_snippet: false,
             module_path: Some(module_path.clone()),
             source_module: None,
@@ -1057,6 +1085,7 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         detail: Some(item.detail.to_owned()),
         documentation: Some(item.documentation.to_owned()),
         insert_text: None,
+        filter_text: None,
         is_snippet: false,
         module_path: None,
         source_module: None,

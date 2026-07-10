@@ -66,6 +66,7 @@ fn collect_require_paths(
                 detail: Some("module".to_owned()),
                 documentation: None,
                 insert_text: None,
+                filter_text: None,
                 is_snippet: false,
                 module_path: Some(path),
                 source_module: None,

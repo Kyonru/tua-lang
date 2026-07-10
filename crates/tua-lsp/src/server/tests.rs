@@ -2039,6 +2039,28 @@ player:setFilter("")
 }
 
 #[test]
+fn completion_recovers_love_enum_values_for_typoed_string_arguments() {
+    let uri = "file:///tmp/love-draw-mode-completion.tua";
+    let source = r#"function love.update(dt)
+  love.graphics.circle(
+    "fillter",
+    100,
+    100,
+    2
+  )
+end
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "\"fillter"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["fill", "line"]);
+    let fill = completion_with_label(&output, 2, "fill");
+    assert_eq!(fill["filterText"], "fillter");
+}
+
+#[test]
 fn completion_returns_love_callback_snippet_and_conf_fields() {
     let callback_uri = "file:///tmp/love-callback-completion.tua";
     let callback_source = "function love.up\n";

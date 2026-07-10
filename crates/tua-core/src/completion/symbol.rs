@@ -20,6 +20,7 @@ impl LuaSymbol {
             detail: Some(self.detail),
             documentation: None,
             insert_text: None,
+            filter_text: None,
             is_snippet: false,
             module_path: None,
             source_module: None,

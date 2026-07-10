@@ -50,6 +50,7 @@ impl TuaPlugin for TestPlugin {
                 detail: Some("plugin completion".to_owned()),
                 documentation: None,
                 insert_text: Some("pluginItem".to_owned()),
+                filter_text: None,
                 is_snippet: false,
                 module_path: None,
                 source_module: Some(self.name().to_owned()),

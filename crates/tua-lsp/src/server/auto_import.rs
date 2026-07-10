@@ -39,6 +39,7 @@ pub(super) fn auto_import_completion(candidate: AutoImportCandidate<'_>) -> Comp
         )),
         documentation: candidate.field.documentation.clone(),
         insert_text: Some(format!("{}.{}", candidate.alias, candidate.name)),
+        filter_text: None,
         is_snippet: false,
         module_path: Some(PathBuf::from(candidate.module_path)),
         source_module: Some(candidate.module.to_owned()),

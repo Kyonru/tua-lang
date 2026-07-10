@@ -168,6 +168,7 @@ pub(super) fn lsp_completion_from_core(
     let kind = lsp_completion_kind(completion.kind);
     let label = completion.label;
     let insert_text = completion.insert_text;
+    let filter_text = completion.filter_text;
     let is_snippet = completion.is_snippet;
     let core_kind = completion.kind.as_str();
     let module_path = completion
@@ -188,6 +189,10 @@ pub(super) fn lsp_completion_from_core(
 
     if let Some(insert_text) = insert_text {
         item["insertText"] = json!(insert_text);
+    }
+
+    if let Some(filter_text) = filter_text {
+        item["filterText"] = json!(filter_text);
     }
 
     if is_snippet {
@@ -255,6 +260,12 @@ pub(super) fn lsp_resolved_completion_item(
     if item.get("insertText").is_none() {
         if let Some(insert_text) = completion.insert_text {
             item["insertText"] = json!(insert_text);
+        }
+    }
+
+    if item.get("filterText").is_none() {
+        if let Some(filter_text) = completion.filter_text {
+            item["filterText"] = json!(filter_text);
         }
     }
 

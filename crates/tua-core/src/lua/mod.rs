@@ -159,7 +159,10 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(SPRITE_BATCH_ITEMS.iter())
         .chain(BODY_ITEMS.iter())
         .chain(WORLD_ITEMS.iter())
+        .chain(DRAW_MODE_ITEMS.iter())
         .chain(FILTER_MODE_ITEMS.iter())
+        .chain(MESH_DRAW_MODE_ITEMS.iter())
+        .chain(SPRITE_BATCH_USAGE_ITEMS.iter())
         .chain(SOURCE_ITEMS.iter())
         .chain(BIT_ITEMS.iter())
         .chain(MATH_ITEMS.iter())
@@ -226,7 +229,10 @@ fn span_for_label(source: &str, label: &str) -> Option<crate::SourceSpan> {
 
 fn items_for_enum(type_name: &str) -> Option<&'static [LuaItem]> {
     match type_name {
+        "DrawMode" => Some(DRAW_MODE_ITEMS),
         "FilterMode" => Some(FILTER_MODE_ITEMS),
+        "MeshDrawMode" => Some(MESH_DRAW_MODE_ITEMS),
+        "SpriteBatchUsage" => Some(SPRITE_BATCH_USAGE_ITEMS),
         _ => None,
     }
 }
@@ -1229,6 +1235,21 @@ const WORLD_ITEMS: &[LuaItem] = &[
     ),
 ];
 
+const DRAW_MODE_ITEMS: &[LuaItem] = &[
+    item(
+        "fill",
+        LuaItemKind::Value,
+        "DrawMode",
+        "Draws a filled shape.",
+    ),
+    item(
+        "line",
+        LuaItemKind::Value,
+        "DrawMode",
+        "Draws only the outline of a shape.",
+    ),
+];
+
 const FILTER_MODE_ITEMS: &[LuaItem] = &[
     item(
         "linear",
@@ -1241,6 +1262,48 @@ const FILTER_MODE_ITEMS: &[LuaItem] = &[
         LuaItemKind::Value,
         "FilterMode",
         "Scales using nearest-neighbor interpolation.",
+    ),
+];
+
+const MESH_DRAW_MODE_ITEMS: &[LuaItem] = &[
+    item(
+        "fan",
+        LuaItemKind::Value,
+        "MeshDrawMode",
+        "Draws vertices as a triangle fan.",
+    ),
+    item(
+        "strip",
+        LuaItemKind::Value,
+        "MeshDrawMode",
+        "Draws vertices as a triangle strip.",
+    ),
+    item(
+        "triangles",
+        LuaItemKind::Value,
+        "MeshDrawMode",
+        "Draws vertices as separate triangles.",
+    ),
+];
+
+const SPRITE_BATCH_USAGE_ITEMS: &[LuaItem] = &[
+    item(
+        "dynamic",
+        LuaItemKind::Value,
+        "SpriteBatchUsage",
+        "Optimized for frequent sprite batch changes.",
+    ),
+    item(
+        "static",
+        LuaItemKind::Value,
+        "SpriteBatchUsage",
+        "Optimized for rarely changed sprite batches.",
+    ),
+    item(
+        "stream",
+        LuaItemKind::Value,
+        "SpriteBatchUsage",
+        "Optimized for sprite batch data changed every frame.",
     ),
 ];
 
