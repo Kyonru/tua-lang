@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use serde_json::{json, Value};
 use tua_core::{ProjectModel, ProjectModelOptions, SourcePosition};
@@ -18,7 +19,7 @@ use super::protocol::{
     response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
-use super::{capabilities, LspServer};
+use super::{capabilities, LspServer, PendingDiagnostics, SLOW_DIAGNOSTICS_DEBOUNCE};
 
 struct DocumentRequest<'a> {
     params: &'a Value,
@@ -160,22 +161,29 @@ impl LspServer {
         let text_document = message.get("params")?.get("textDocument")?;
         let uri = text_document.get("uri")?.as_str()?.to_owned();
         let text = text_document.get("text")?.as_str()?.to_owned();
+        let version = text_document.get("version").and_then(Value::as_i64);
 
         self.analysis
             .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        self.bump_document_generation(&uri, version);
 
-        Some(vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+        let diagnostics = self.diagnostics_for(&uri);
+
+        Some(vec![self.publish_tracked_diagnostics(&uri, diagnostics)])
     }
 
     fn did_change_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
         let params = message.get("params")?;
-        let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_owned();
+        let text_document = params.get("textDocument")?;
+        let uri = text_document.get("uri")?.as_str()?.to_owned();
+        let version = text_document.get("version").and_then(Value::as_i64);
         let current = self.analysis.document_text(&uri)?;
         let text = apply_content_changes(current, params.get("contentChanges")?.as_array()?)?;
 
         self.analysis
             .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
-        self.queue_slow_diagnostics(uri.clone());
+        let generation = self.bump_document_generation(&uri, version);
+        self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
         let diagnostics = self.fast_diagnostics_for(&uri);
 
@@ -187,19 +195,27 @@ impl LspServer {
         let uri = document_uri(params)?.to_owned();
 
         if let Some(text) = params.get("text").and_then(Value::as_str) {
+            let version = params
+                .get("textDocument")
+                .and_then(|document| document.get("version"))
+                .and_then(Value::as_i64);
+
             self.analysis.update_document(
                 uri.clone(),
                 text.to_owned(),
                 &self.workspace_folders,
                 &self.settings,
             );
+            self.bump_document_generation(&uri, version);
         }
 
         self.pending_slow_diagnostics.remove(&uri);
 
-        self.analysis
-            .contains_document(&uri)
-            .then(|| vec![publish_diagnostics(&uri, self.diagnostics_for(&uri))])
+        self.analysis.contains_document(&uri).then(|| {
+            let diagnostics = self.diagnostics_for(&uri);
+
+            vec![self.publish_tracked_diagnostics(&uri, diagnostics)]
+        })
     }
 
     fn did_close_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
@@ -209,6 +225,8 @@ impl LspServer {
         self.analysis.close_document(&uri);
         self.pending_slow_diagnostics.remove(&uri);
         self.last_published_diagnostics.remove(&uri);
+        self.document_generations.remove(&uri);
+        self.document_versions.remove(&uri);
 
         Some(vec![publish_diagnostics(&uri, Vec::new())])
     }
@@ -345,15 +363,63 @@ impl LspServer {
             .collect()
     }
 
-    fn queue_slow_diagnostics(&mut self, uri: String) {
-        self.pending_slow_diagnostics.insert(uri);
+    fn queue_slow_diagnostics(
+        &mut self,
+        uri: String,
+        generation: u64,
+        version: Option<i64>,
+        now: Instant,
+    ) {
+        self.pending_slow_diagnostics.insert(
+            uri,
+            PendingDiagnostics {
+                generation,
+                version,
+                due_at: now + SLOW_DIAGNOSTICS_DEBOUNCE,
+            },
+        );
     }
 
-    pub(super) fn drain_pending_slow_diagnostics(&mut self) -> Vec<Value> {
-        let pending = std::mem::take(&mut self.pending_slow_diagnostics);
+    pub(super) fn next_slow_diagnostics_due(&self) -> Option<Instant> {
+        self.pending_slow_diagnostics
+            .values()
+            .map(|pending| pending.due_at)
+            .min()
+    }
+
+    pub(super) fn drain_due_slow_diagnostics(&mut self, now: Instant) -> Vec<Value> {
+        let due = self
+            .pending_slow_diagnostics
+            .iter()
+            .filter_map(|(uri, pending)| (pending.due_at <= now).then(|| uri.clone()))
+            .collect::<Vec<_>>();
+
+        self.drain_slow_diagnostics_for(due)
+    }
+
+    pub(super) fn drain_all_pending_slow_diagnostics(&mut self) -> Vec<Value> {
+        let pending = self
+            .pending_slow_diagnostics
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        self.drain_slow_diagnostics_for(pending)
+    }
+
+    fn drain_slow_diagnostics_for(&mut self, pending: Vec<String>) -> Vec<Value> {
         let mut publications = Vec::new();
 
         for uri in pending {
+            let Some(job) = self.pending_slow_diagnostics.remove(&uri) else {
+                continue;
+            };
+            if self.document_generations.get(&uri).copied() != Some(job.generation) {
+                continue;
+            }
+            if job.version.is_some() && self.document_versions.get(&uri).copied() != job.version {
+                continue;
+            }
             if !self.analysis.contains_document(&uri) {
                 continue;
             }
@@ -365,6 +431,22 @@ impl LspServer {
         }
 
         publications
+    }
+
+    fn bump_document_generation(&mut self, uri: &str, version: Option<i64>) -> u64 {
+        let generation = self
+            .document_generations
+            .get(uri)
+            .copied()
+            .unwrap_or_default()
+            + 1;
+
+        self.document_generations.insert(uri.to_owned(), generation);
+        if let Some(version) = version {
+            self.document_versions.insert(uri.to_owned(), version);
+        }
+
+        generation
     }
 
     fn publish_tracked_diagnostics(&mut self, uri: &str, diagnostics: Vec<Value>) -> Value {

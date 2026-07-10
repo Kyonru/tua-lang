@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tua_core::{Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
 
 #[test]
@@ -752,6 +752,82 @@ fn did_change_publishes_fast_diagnostics_before_slow_diagnostics() {
     assert_eq!(
         publications[2]["params"]["diagnostics"][0]["code"],
         "TL2004"
+    );
+}
+
+#[test]
+fn did_change_debounces_slow_diagnostics_until_idle_window() {
+    let temp = TempProject::new("debounced-slow-diagnostics");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local ready = true\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, "local ready = true\n"));
+    server.send_without_drain(did_change(
+        &uri,
+        "local sprite = image \"missing.png\"\n",
+        2,
+    ));
+
+    let publications = diagnostics_publications(server.output(), &uri);
+    assert_eq!(publications.len(), 2);
+    assert_eq!(
+        publications[1]["params"]["diagnostics"]
+            .as_array()
+            .expect("fast diagnostics should be an array")
+            .len(),
+        0
+    );
+
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("slow diagnostics should be queued");
+    server.drain_due_diagnostics(due - Duration::from_millis(1));
+    assert_eq!(diagnostics_publications(server.output(), &uri).len(), 2);
+
+    server.drain_due_diagnostics(due);
+    let publications = diagnostics_publications(server.output(), &uri);
+    assert_eq!(publications.len(), 3);
+    assert_eq!(
+        publications[2]["params"]["diagnostics"][0]["code"],
+        "TL2004"
+    );
+}
+
+#[test]
+fn did_change_cancels_stale_slow_diagnostics_for_newer_versions() {
+    let temp = TempProject::new("cancel-stale-slow-diagnostics");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local ready = true\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, "local ready = true\n"),
+        did_change(&uri, "local sprite = image \"missing.png\"\n", 2),
+        did_change(&uri, "local ready = true\n", 3),
+    ]);
+    let publications = diagnostics_publications(&output, &uri);
+    let published_codes = publications
+        .iter()
+        .flat_map(|publication| {
+            publication["params"]["diagnostics"]
+                .as_array()
+                .into_iter()
+                .flat_map(|diagnostics| diagnostics.iter())
+        })
+        .filter_map(|diagnostic| diagnostic["code"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(publications.len(), 3);
+    assert!(
+        !published_codes.contains(&"TL2004"),
+        "stale missing-asset diagnostic should not publish: {published_codes:?}"
     );
 }
 
@@ -4292,12 +4368,25 @@ impl TestServer {
     }
 
     fn send(&mut self, message: Value) {
+        self.send_without_drain(message);
+
+        self.output
+            .extend(self.server.drain_all_pending_slow_diagnostics());
+    }
+
+    fn send_without_drain(&mut self, message: Value) {
         if let Some(messages) = self.server.handle_message(message) {
             self.output.extend(messages);
         }
+    }
 
+    fn drain_due_diagnostics(&mut self, now: Instant) {
         self.output
-            .extend(self.server.drain_pending_slow_diagnostics());
+            .extend(self.server.drain_due_slow_diagnostics(now));
+    }
+
+    fn next_slow_diagnostics_due(&self) -> Option<Instant> {
+        self.server.next_slow_diagnostics_due()
     }
 
     fn output(&self) -> &[Value] {

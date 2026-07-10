@@ -14,7 +14,8 @@ The VS Code extension starts this server and surfaces editor features for
 - Incremental document sync with open, change, save, and close notifications.
 - Diagnostics on open, change, save, and watched-file updates. While typing,
   `didChange` publishes a fast current-file lane first, then a full
-  project-aware lane after queued idle work runs.
+  project-aware lane after a 200ms debounce. Newer document versions cancel
+  stale queued slow diagnostics before they publish.
 - Optional formatting consistency diagnostics can be enabled through
   `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
 - Full-document formatting is provided through `textDocument/formatting` and
