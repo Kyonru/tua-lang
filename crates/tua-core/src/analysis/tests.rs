@@ -825,7 +825,8 @@ return M
     host.snapshot();
 
     let after_snapshot = host.cache_stats();
-    assert_eq!(after_snapshot.parse_misses, 4);
+    assert_eq!(after_snapshot.parse_misses, 3);
+    assert_eq!(after_snapshot.parse_hits, 1);
 }
 
 #[test]

@@ -833,6 +833,8 @@ mod tests {
 
         assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
         assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
+        assert_eq!(host.cache_stats().parse_misses, 2);
+        assert_eq!(host.cache_stats().parse_hits, 0);
 
         host.update_document(player_uri, "local hp: number = 1\n", &roots, &settings);
         assert_eq!(host.core_revision(), before);
@@ -845,5 +847,7 @@ mod tests {
         assert!(after > before);
         assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
         assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
+        assert_eq!(host.cache_stats().parse_misses, 3);
+        assert_eq!(host.cache_stats().parse_hits, 1);
     }
 }

@@ -1,5 +1,7 @@
 use std::cell::{OnceCell, RefCell};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -74,7 +76,7 @@ impl Default for BuiltinCatalogs {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AnalysisSourceKind {
     Tua,
     Lua,
@@ -197,6 +199,7 @@ pub struct AnalysisCacheStats {
 #[derive(Clone, Debug, Default)]
 struct AnalysisQueryCache {
     files: BTreeMap<PathBuf, CachedAnalysisFile>,
+    parsed_files: BTreeMap<ParsedCacheKey, Result<ParsedSource, Vec<Diagnostic>>>,
     dependencies: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     importers: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     stats: AnalysisCacheStats,
@@ -207,6 +210,19 @@ struct CachedAnalysisFile {
     source: String,
     kind: AnalysisSourceKind,
     file: AnalysisFile,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct ParsedCacheKey {
+    path: PathBuf,
+    kind: AnalysisSourceKind,
+    fingerprint: SourceFingerprint,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SourceFingerprint {
+    len: usize,
+    hash: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -3511,14 +3527,16 @@ impl AnalysisQueryCache {
             if cached.source == source && cached.kind == kind {
                 let file = cached.file.clone();
 
-                self.record_hit();
+                self.record_file_hit();
                 return file;
             }
         }
 
-        self.record_miss();
+        let (parsed, parsed_cache_hit) = self.cached_parsed_file(&path, source, kind);
 
-        let file = build_analysis_file(&path, source.to_owned(), kind, context);
+        self.record_file_rebuild(parsed_cache_hit);
+
+        let file = build_analysis_file(&path, source.to_owned(), kind, context, parsed);
         self.update_dependencies(&path, &file.require_edges);
         self.files.insert(
             path,
@@ -3530,6 +3548,33 @@ impl AnalysisQueryCache {
         );
 
         file
+    }
+
+    fn cached_parsed_file(
+        &mut self,
+        path: &Path,
+        source: &str,
+        kind: AnalysisSourceKind,
+    ) -> (Result<ParsedSource, Vec<Diagnostic>>, bool) {
+        let key = parsed_cache_key(path, source, kind);
+
+        if let Some(parsed) = self.parsed_files.get(&key) {
+            return (parsed.clone(), true);
+        }
+
+        self.parsed_files
+            .retain(|cached_key, _| cached_key.path != key.path);
+
+        let parsed = {
+            let _profile = profile::span_for_path("analysis.parse", path);
+            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Parse);
+
+            parse_analysis_source(path, source.to_owned(), kind)
+        };
+
+        self.parsed_files.insert(key, parsed.clone());
+
+        (parsed, false)
     }
 
     fn invalidate_file(&mut self, path: &Path) {
@@ -3563,6 +3608,9 @@ impl AnalysisQueryCache {
         for path in removed {
             self.invalidate_file(&path);
         }
+
+        self.parsed_files
+            .retain(|key, _| live_paths.contains(&key.path));
     }
 
     fn invalidate_one(
@@ -3625,7 +3673,7 @@ impl AnalysisQueryCache {
         self.dependencies.insert(path, dependencies);
     }
 
-    fn record_hit(&mut self) {
+    fn record_file_hit(&mut self) {
         self.stats.parse_hits += 1;
         self.stats.hir_hits += 1;
         self.stats.scope_hits += 1;
@@ -3636,8 +3684,13 @@ impl AnalysisQueryCache {
         self.stats.symbol_index_hits += 1;
     }
 
-    fn record_miss(&mut self) {
-        self.stats.parse_misses += 1;
+    fn record_file_rebuild(&mut self, parsed_cache_hit: bool) {
+        if parsed_cache_hit {
+            self.stats.parse_hits += 1;
+        } else {
+            self.stats.parse_misses += 1;
+        }
+
         self.stats.hir_misses += 1;
         self.stats.scope_misses += 1;
         self.stats.type_environment_misses += 1;
@@ -3653,13 +3706,8 @@ fn build_analysis_file(
     source: String,
     kind: AnalysisSourceKind,
     context: AnalysisBuildContext<'_>,
+    parsed: Result<ParsedSource, Vec<Diagnostic>>,
 ) -> AnalysisFile {
-    let parsed = {
-        let _profile = profile::span_for_path("analysis.parse", path);
-        let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Parse);
-
-        parse_analysis_source(path, source.clone(), kind)
-    };
     let hir = {
         let _profile = profile::span_for_path("analysis.lower.hir", path);
 
@@ -3947,6 +3995,25 @@ fn parse_analysis_source(
     match kind {
         AnalysisSourceKind::Lua => parse_lua_source(path, source),
         AnalysisSourceKind::Tua => parse_tua_source(path, source),
+    }
+}
+
+fn parsed_cache_key(path: &Path, source: &str, kind: AnalysisSourceKind) -> ParsedCacheKey {
+    ParsedCacheKey {
+        path: normalize_path(path),
+        kind,
+        fingerprint: source_fingerprint(source),
+    }
+}
+
+fn source_fingerprint(source: &str) -> SourceFingerprint {
+    let mut hasher = DefaultHasher::new();
+
+    source.hash(&mut hasher);
+
+    SourceFingerprint {
+        len: source.len(),
+        hash: hasher.finish(),
     }
 }
 
