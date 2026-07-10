@@ -59,10 +59,10 @@ TUA_TRACE=diagnostics cargo run -p tua-cli -- check
 TUA_TRACE=diagnostics cargo run -p tua-cli -- lint
 ```
 
-The trace reports fixed buckets for `discover_files`, `read_vfs_update`,
-`parse`, `module_graph`, `type_environment`, `checker`, `lints`,
-`inline_ignores`, and `publish`. Each bucket is printed as milliseconds/count,
-for example `parse=2.413ms/21`.
+The trace reports `total`, `covered`, `unaccounted`, and fixed buckets for
+`discover_files`, `read_vfs_update`, `parse`, `module_graph`,
+`type_environment`, `checker`, `lints`, `inline_ignores`, and `publish`. Each
+bucket is printed as milliseconds/count, for example `parse=2.413ms/21`.
 
 ## `build`
 

@@ -33,7 +33,10 @@ use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
 use crate::{
     assists_parsed_source, build_type_environment, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
-    check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
+    check::{
+        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
+        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config,
+    },
     complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
     document_highlights_parsed_source, document_symbols_parsed_source_with_hir, emit_lua_with_mode,
     exported_field_for_fields, global_function_definition_count,
@@ -3695,15 +3698,29 @@ fn build_analysis_file(
         diagnostics_config.inline_ignores = false;
 
         match &parsed {
-            Ok(parsed) => check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
-                parsed,
-                analysis_asset_roots(context.source_roots, context.asset_roots),
-                &diagnostics_config,
-                &context.config.jit,
-                &context.config.ecs,
-            )
-            .err()
-            .unwrap_or_default(),
+            Ok(parsed) => {
+                let asset_roots = analysis_asset_roots(context.source_roots, context.asset_roots);
+
+                if let Some(environment) = environment.as_ref() {
+                    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+                        parsed,
+                        environment,
+                        asset_roots,
+                        &diagnostics_config,
+                        &context.config.jit,
+                    )
+                } else {
+                    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+                        parsed,
+                        asset_roots,
+                        &diagnostics_config,
+                        &context.config.jit,
+                        &context.config.ecs,
+                    )
+                }
+                .err()
+                .unwrap_or_default()
+            }
             Err(diagnostics) => {
                 let mut diagnostics = diagnostics.clone();
 
@@ -3728,6 +3745,7 @@ fn build_analysis_file(
     if kind == AnalysisSourceKind::Tua {
         if let Ok(parsed) = &parsed {
             let _profile = profile::span_for_path("analysis.emit.check", path);
+            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Checker);
 
             if let Err(mut emit_diagnostics) =
                 emit_lua_with_mode(parsed, context.config.emit.annotation_mode)
@@ -3764,6 +3782,7 @@ fn build_analysis_file(
     let diagnostics = deduplicate_diagnostics(diagnostics);
     let exports = {
         let _profile = profile::span_for_path("analysis.index.exports", path);
+        let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
         parsed.as_ref().ok().and_then(|parsed| {
             infer_module_exports_with_optional_environment(parsed, environment.as_ref())
@@ -3771,6 +3790,7 @@ fn build_analysis_file(
     };
     let require_edges = {
         let _profile = profile::span_for_path("analysis.index.requires", path);
+        let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
         module_links_tua_source(path, source.clone())
     };

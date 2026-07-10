@@ -152,9 +152,16 @@ pub fn report_diagnostics_trace(context: impl AsRef<str>) {
     }
 
     let elapsed = totals.started.elapsed();
+    let covered = DiagnosticsTraceCategory::ALL
+        .into_iter()
+        .map(|category| totals.durations.get(&category).copied().unwrap_or_default())
+        .sum::<Duration>();
+    let unaccounted = elapsed.checked_sub(covered).unwrap_or_default();
     let mut parts = Vec::new();
 
     parts.push(format!("total={:.3}ms", duration_ms(elapsed)));
+    parts.push(format!("covered={:.3}ms", duration_ms(covered)));
+    parts.push(format!("unaccounted={:.3}ms", duration_ms(unaccounted)));
 
     for category in DiagnosticsTraceCategory::ALL {
         let duration = totals.durations.get(&category).copied().unwrap_or_default();

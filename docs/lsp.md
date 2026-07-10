@@ -198,10 +198,10 @@ touching LSP stdout:
 TUA_TRACE=diagnostics cargo run -p tua-cli -- lsp --stdio
 ```
 
-Each line reports `discover_files`, `read_vfs_update`, `parse`, `module_graph`,
-`type_environment`, `checker`, `lints`, `inline_ignores`, and `publish` as
-milliseconds/count pairs so slow diagnostic phases are easy to compare across
-edits.
+Each line reports `total`, `covered`, `unaccounted`, `discover_files`,
+`read_vfs_update`, `parse`, `module_graph`, `type_environment`, `checker`,
+`lints`, `inline_ignores`, and `publish`. Buckets are milliseconds/count pairs
+so slow diagnostic phases are easy to compare across edits.
 
 `TUA_PROFILE=1` enables per-phase tracing from the server. By default the
 profiling script prints those traces after each fixture; `TUA_PROFILE_STREAM=1`

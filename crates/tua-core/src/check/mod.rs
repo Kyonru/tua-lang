@@ -121,7 +121,24 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
             build_type_environment(parsed)?
         }
     };
-    let mut checker = Checker::new(parsed, &environment, asset_roots);
+
+    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+        parsed,
+        &environment,
+        asset_roots,
+        diagnostics_config,
+        jit_config,
+    )
+}
+
+pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
+) -> Result<(), Vec<Diagnostic>> {
+    let mut checker = Checker::new(parsed, environment, asset_roots);
 
     {
         let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Checker);
