@@ -300,8 +300,19 @@ sort_by_name(entries)
 local enum_values = collect_enum_values()
 local enum_case_by_key = {}
 local enum_cases = {}
+local object_method_cases = {}
 
 for _, entry in ipairs(entries) do
+  local type_name, method_name = entry.name:match("^([^:]+):(.+)$")
+
+  if type_name and method_name then
+    object_method_cases[#object_method_cases + 1] = {
+      target = entry.name,
+      type_name = type_name,
+      method_name = method_name,
+    }
+  end
+
   local types_by_index = {}
 
   for _, signature in ipairs(entry.signatures) do
@@ -408,6 +419,19 @@ pub(crate) fn enum_completion_cases() -> &'static [LoveEnumCompletionCase] {
 }
 
 #[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LoveObjectMethodCase {
+    pub target: &'static str,
+    pub type_name: &'static str,
+    pub method_name: &'static str,
+}
+
+#[cfg(test)]
+pub(crate) fn object_method_cases() -> &'static [LoveObjectMethodCase] {
+    OBJECT_METHOD_CASES
+}
+
+#[cfg(test)]
 const ENUM_COMPLETION_CASES: &[LoveEnumCompletionCase] = &[
 ]])
 
@@ -422,6 +446,20 @@ for _, case in ipairs(enum_cases) do
   end
 
   file:write("        ],\n")
+  file:write("    },\n")
+end
+
+file:write([[];
+
+#[cfg(test)]
+const OBJECT_METHOD_CASES: &[LoveObjectMethodCase] = &[
+]])
+
+for _, case in ipairs(object_method_cases) do
+  file:write("    LoveObjectMethodCase {\n")
+  file:write("        target: ", rust_raw(case.target), ",\n")
+  file:write("        type_name: ", rust_raw(case.type_name), ",\n")
+  file:write("        method_name: ", rust_raw(case.method_name), ",\n")
   file:write("    },\n")
 end
 

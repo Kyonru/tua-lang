@@ -23997,6 +23997,19 @@ pub(crate) fn enum_completion_cases() -> &'static [LoveEnumCompletionCase] {
 }
 
 #[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LoveObjectMethodCase {
+    pub target: &'static str,
+    pub type_name: &'static str,
+    pub method_name: &'static str,
+}
+
+#[cfg(test)]
+pub(crate) fn object_method_cases() -> &'static [LoveObjectMethodCase] {
+    OBJECT_METHOD_CASES
+}
+
+#[cfg(test)]
 const ENUM_COMPLETION_CASES: &[LoveEnumCompletionCase] = &[
     LoveEnumCompletionCase {
         target: r"Body:setType",
@@ -24602,5 +24615,5049 @@ const ENUM_COMPLETION_CASES: &[LoveEnumCompletionCase] = &[
         target: r"love.window.showMessageBox",
         parameter_index: 3,
         enum_types: &[r"MessageBoxType"],
+    },
+];
+
+#[cfg(test)]
+const OBJECT_METHOD_CASES: &[LoveObjectMethodCase] = &[
+    LoveObjectMethodCase {
+        target: r"BezierCurve:evaluate",
+        type_name: r"BezierCurve",
+        method_name: r"evaluate",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:getControlPoint",
+        type_name: r"BezierCurve",
+        method_name: r"getControlPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:getControlPointCount",
+        type_name: r"BezierCurve",
+        method_name: r"getControlPointCount",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:getDegree",
+        type_name: r"BezierCurve",
+        method_name: r"getDegree",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:getDerivative",
+        type_name: r"BezierCurve",
+        method_name: r"getDerivative",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:getSegment",
+        type_name: r"BezierCurve",
+        method_name: r"getSegment",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:insertControlPoint",
+        type_name: r"BezierCurve",
+        method_name: r"insertControlPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:release",
+        type_name: r"BezierCurve",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:removeControlPoint",
+        type_name: r"BezierCurve",
+        method_name: r"removeControlPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:render",
+        type_name: r"BezierCurve",
+        method_name: r"render",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:renderSegment",
+        type_name: r"BezierCurve",
+        method_name: r"renderSegment",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:rotate",
+        type_name: r"BezierCurve",
+        method_name: r"rotate",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:scale",
+        type_name: r"BezierCurve",
+        method_name: r"scale",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:setControlPoint",
+        type_name: r"BezierCurve",
+        method_name: r"setControlPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:translate",
+        type_name: r"BezierCurve",
+        method_name: r"translate",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:type",
+        type_name: r"BezierCurve",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"BezierCurve:typeOf",
+        type_name: r"BezierCurve",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:applyAngularImpulse",
+        type_name: r"Body",
+        method_name: r"applyAngularImpulse",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:applyForce",
+        type_name: r"Body",
+        method_name: r"applyForce",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:applyLinearImpulse",
+        type_name: r"Body",
+        method_name: r"applyLinearImpulse",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:applyTorque",
+        type_name: r"Body",
+        method_name: r"applyTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:destroy",
+        type_name: r"Body",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getAngle",
+        type_name: r"Body",
+        method_name: r"getAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getAngularDamping",
+        type_name: r"Body",
+        method_name: r"getAngularDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getAngularVelocity",
+        type_name: r"Body",
+        method_name: r"getAngularVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getContacts",
+        type_name: r"Body",
+        method_name: r"getContacts",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getFixtures",
+        type_name: r"Body",
+        method_name: r"getFixtures",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getGravityScale",
+        type_name: r"Body",
+        method_name: r"getGravityScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getInertia",
+        type_name: r"Body",
+        method_name: r"getInertia",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getJoints",
+        type_name: r"Body",
+        method_name: r"getJoints",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLinearDamping",
+        type_name: r"Body",
+        method_name: r"getLinearDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLinearVelocity",
+        type_name: r"Body",
+        method_name: r"getLinearVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLinearVelocityFromLocalPoint",
+        type_name: r"Body",
+        method_name: r"getLinearVelocityFromLocalPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLinearVelocityFromWorldPoint",
+        type_name: r"Body",
+        method_name: r"getLinearVelocityFromWorldPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLocalCenter",
+        type_name: r"Body",
+        method_name: r"getLocalCenter",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLocalPoint",
+        type_name: r"Body",
+        method_name: r"getLocalPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLocalPoints",
+        type_name: r"Body",
+        method_name: r"getLocalPoints",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getLocalVector",
+        type_name: r"Body",
+        method_name: r"getLocalVector",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getMass",
+        type_name: r"Body",
+        method_name: r"getMass",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getMassData",
+        type_name: r"Body",
+        method_name: r"getMassData",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getPosition",
+        type_name: r"Body",
+        method_name: r"getPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getTransform",
+        type_name: r"Body",
+        method_name: r"getTransform",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getType",
+        type_name: r"Body",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getUserData",
+        type_name: r"Body",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getWorld",
+        type_name: r"Body",
+        method_name: r"getWorld",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getWorldCenter",
+        type_name: r"Body",
+        method_name: r"getWorldCenter",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getWorldPoint",
+        type_name: r"Body",
+        method_name: r"getWorldPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getWorldPoints",
+        type_name: r"Body",
+        method_name: r"getWorldPoints",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getWorldVector",
+        type_name: r"Body",
+        method_name: r"getWorldVector",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getX",
+        type_name: r"Body",
+        method_name: r"getX",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:getY",
+        type_name: r"Body",
+        method_name: r"getY",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isActive",
+        type_name: r"Body",
+        method_name: r"isActive",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isAwake",
+        type_name: r"Body",
+        method_name: r"isAwake",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isBullet",
+        type_name: r"Body",
+        method_name: r"isBullet",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isDestroyed",
+        type_name: r"Body",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isFixedRotation",
+        type_name: r"Body",
+        method_name: r"isFixedRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isSleepingAllowed",
+        type_name: r"Body",
+        method_name: r"isSleepingAllowed",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:isTouching",
+        type_name: r"Body",
+        method_name: r"isTouching",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:release",
+        type_name: r"Body",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:resetMassData",
+        type_name: r"Body",
+        method_name: r"resetMassData",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setActive",
+        type_name: r"Body",
+        method_name: r"setActive",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setAngle",
+        type_name: r"Body",
+        method_name: r"setAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setAngularDamping",
+        type_name: r"Body",
+        method_name: r"setAngularDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setAngularVelocity",
+        type_name: r"Body",
+        method_name: r"setAngularVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setAwake",
+        type_name: r"Body",
+        method_name: r"setAwake",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setBullet",
+        type_name: r"Body",
+        method_name: r"setBullet",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setFixedRotation",
+        type_name: r"Body",
+        method_name: r"setFixedRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setGravityScale",
+        type_name: r"Body",
+        method_name: r"setGravityScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setInertia",
+        type_name: r"Body",
+        method_name: r"setInertia",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setLinearDamping",
+        type_name: r"Body",
+        method_name: r"setLinearDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setLinearVelocity",
+        type_name: r"Body",
+        method_name: r"setLinearVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setMass",
+        type_name: r"Body",
+        method_name: r"setMass",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setMassData",
+        type_name: r"Body",
+        method_name: r"setMassData",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setPosition",
+        type_name: r"Body",
+        method_name: r"setPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setSleepingAllowed",
+        type_name: r"Body",
+        method_name: r"setSleepingAllowed",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setTransform",
+        type_name: r"Body",
+        method_name: r"setTransform",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setType",
+        type_name: r"Body",
+        method_name: r"setType",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setUserData",
+        type_name: r"Body",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setX",
+        type_name: r"Body",
+        method_name: r"setX",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:setY",
+        type_name: r"Body",
+        method_name: r"setY",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:type",
+        type_name: r"Body",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Body:typeOf",
+        type_name: r"Body",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:clone",
+        type_name: r"ByteData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:getFFIPointer",
+        type_name: r"ByteData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:getPointer",
+        type_name: r"ByteData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:getSize",
+        type_name: r"ByteData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:getString",
+        type_name: r"ByteData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:release",
+        type_name: r"ByteData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:type",
+        type_name: r"ByteData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"ByteData:typeOf",
+        type_name: r"ByteData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:generateMipmaps",
+        type_name: r"Canvas",
+        method_name: r"generateMipmaps",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getDPIScale",
+        type_name: r"Canvas",
+        method_name: r"getDPIScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getDepth",
+        type_name: r"Canvas",
+        method_name: r"getDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getDepthSampleMode",
+        type_name: r"Canvas",
+        method_name: r"getDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getDimensions",
+        type_name: r"Canvas",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getFilter",
+        type_name: r"Canvas",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getFormat",
+        type_name: r"Canvas",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getHeight",
+        type_name: r"Canvas",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getLayerCount",
+        type_name: r"Canvas",
+        method_name: r"getLayerCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getMSAA",
+        type_name: r"Canvas",
+        method_name: r"getMSAA",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getMipmapCount",
+        type_name: r"Canvas",
+        method_name: r"getMipmapCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getMipmapFilter",
+        type_name: r"Canvas",
+        method_name: r"getMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getMipmapMode",
+        type_name: r"Canvas",
+        method_name: r"getMipmapMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getPixelDimensions",
+        type_name: r"Canvas",
+        method_name: r"getPixelDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getPixelHeight",
+        type_name: r"Canvas",
+        method_name: r"getPixelHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getPixelWidth",
+        type_name: r"Canvas",
+        method_name: r"getPixelWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getTextureType",
+        type_name: r"Canvas",
+        method_name: r"getTextureType",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getWidth",
+        type_name: r"Canvas",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:getWrap",
+        type_name: r"Canvas",
+        method_name: r"getWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:isReadable",
+        type_name: r"Canvas",
+        method_name: r"isReadable",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:newImageData",
+        type_name: r"Canvas",
+        method_name: r"newImageData",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:release",
+        type_name: r"Canvas",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:renderTo",
+        type_name: r"Canvas",
+        method_name: r"renderTo",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:setDepthSampleMode",
+        type_name: r"Canvas",
+        method_name: r"setDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:setFilter",
+        type_name: r"Canvas",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:setMipmapFilter",
+        type_name: r"Canvas",
+        method_name: r"setMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:setWrap",
+        type_name: r"Canvas",
+        method_name: r"setWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:type",
+        type_name: r"Canvas",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Canvas:typeOf",
+        type_name: r"Canvas",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:computeAABB",
+        type_name: r"ChainShape",
+        method_name: r"computeAABB",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:computeMass",
+        type_name: r"ChainShape",
+        method_name: r"computeMass",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getChildCount",
+        type_name: r"ChainShape",
+        method_name: r"getChildCount",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getChildEdge",
+        type_name: r"ChainShape",
+        method_name: r"getChildEdge",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getNextVertex",
+        type_name: r"ChainShape",
+        method_name: r"getNextVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getPoint",
+        type_name: r"ChainShape",
+        method_name: r"getPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getPoints",
+        type_name: r"ChainShape",
+        method_name: r"getPoints",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getPreviousVertex",
+        type_name: r"ChainShape",
+        method_name: r"getPreviousVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getRadius",
+        type_name: r"ChainShape",
+        method_name: r"getRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getType",
+        type_name: r"ChainShape",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:getVertexCount",
+        type_name: r"ChainShape",
+        method_name: r"getVertexCount",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:rayCast",
+        type_name: r"ChainShape",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:release",
+        type_name: r"ChainShape",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:setNextVertex",
+        type_name: r"ChainShape",
+        method_name: r"setNextVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:setPreviousVertex",
+        type_name: r"ChainShape",
+        method_name: r"setPreviousVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:testPoint",
+        type_name: r"ChainShape",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:type",
+        type_name: r"ChainShape",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"ChainShape:typeOf",
+        type_name: r"ChainShape",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:clear",
+        type_name: r"Channel",
+        method_name: r"clear",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:demand",
+        type_name: r"Channel",
+        method_name: r"demand",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:getCount",
+        type_name: r"Channel",
+        method_name: r"getCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:hasRead",
+        type_name: r"Channel",
+        method_name: r"hasRead",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:peek",
+        type_name: r"Channel",
+        method_name: r"peek",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:performAtomic",
+        type_name: r"Channel",
+        method_name: r"performAtomic",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:pop",
+        type_name: r"Channel",
+        method_name: r"pop",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:push",
+        type_name: r"Channel",
+        method_name: r"push",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:release",
+        type_name: r"Channel",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:supply",
+        type_name: r"Channel",
+        method_name: r"supply",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:type",
+        type_name: r"Channel",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Channel:typeOf",
+        type_name: r"Channel",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:computeAABB",
+        type_name: r"CircleShape",
+        method_name: r"computeAABB",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:computeMass",
+        type_name: r"CircleShape",
+        method_name: r"computeMass",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:getChildCount",
+        type_name: r"CircleShape",
+        method_name: r"getChildCount",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:getPoint",
+        type_name: r"CircleShape",
+        method_name: r"getPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:getRadius",
+        type_name: r"CircleShape",
+        method_name: r"getRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:getType",
+        type_name: r"CircleShape",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:rayCast",
+        type_name: r"CircleShape",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:release",
+        type_name: r"CircleShape",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:setPoint",
+        type_name: r"CircleShape",
+        method_name: r"setPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:setRadius",
+        type_name: r"CircleShape",
+        method_name: r"setRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:testPoint",
+        type_name: r"CircleShape",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:type",
+        type_name: r"CircleShape",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"CircleShape:typeOf",
+        type_name: r"CircleShape",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:clone",
+        type_name: r"CompressedData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:getFFIPointer",
+        type_name: r"CompressedData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:getFormat",
+        type_name: r"CompressedData",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:getPointer",
+        type_name: r"CompressedData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:getSize",
+        type_name: r"CompressedData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:getString",
+        type_name: r"CompressedData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:release",
+        type_name: r"CompressedData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:type",
+        type_name: r"CompressedData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedData:typeOf",
+        type_name: r"CompressedData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:clone",
+        type_name: r"CompressedImageData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getDimensions",
+        type_name: r"CompressedImageData",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getFFIPointer",
+        type_name: r"CompressedImageData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getFormat",
+        type_name: r"CompressedImageData",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getHeight",
+        type_name: r"CompressedImageData",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getMipmapCount",
+        type_name: r"CompressedImageData",
+        method_name: r"getMipmapCount",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getPointer",
+        type_name: r"CompressedImageData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getSize",
+        type_name: r"CompressedImageData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getString",
+        type_name: r"CompressedImageData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:getWidth",
+        type_name: r"CompressedImageData",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:release",
+        type_name: r"CompressedImageData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:type",
+        type_name: r"CompressedImageData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"CompressedImageData:typeOf",
+        type_name: r"CompressedImageData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getChildren",
+        type_name: r"Contact",
+        method_name: r"getChildren",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getFixtures",
+        type_name: r"Contact",
+        method_name: r"getFixtures",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getFriction",
+        type_name: r"Contact",
+        method_name: r"getFriction",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getNormal",
+        type_name: r"Contact",
+        method_name: r"getNormal",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getPositions",
+        type_name: r"Contact",
+        method_name: r"getPositions",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:getRestitution",
+        type_name: r"Contact",
+        method_name: r"getRestitution",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:isEnabled",
+        type_name: r"Contact",
+        method_name: r"isEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:isTouching",
+        type_name: r"Contact",
+        method_name: r"isTouching",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:release",
+        type_name: r"Contact",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:resetFriction",
+        type_name: r"Contact",
+        method_name: r"resetFriction",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:resetRestitution",
+        type_name: r"Contact",
+        method_name: r"resetRestitution",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:setEnabled",
+        type_name: r"Contact",
+        method_name: r"setEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:setFriction",
+        type_name: r"Contact",
+        method_name: r"setFriction",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:setRestitution",
+        type_name: r"Contact",
+        method_name: r"setRestitution",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:type",
+        type_name: r"Contact",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Contact:typeOf",
+        type_name: r"Contact",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Cursor:getType",
+        type_name: r"Cursor",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"Cursor:release",
+        type_name: r"Cursor",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Cursor:type",
+        type_name: r"Cursor",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Cursor:typeOf",
+        type_name: r"Cursor",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:clone",
+        type_name: r"Data",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:getFFIPointer",
+        type_name: r"Data",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:getPointer",
+        type_name: r"Data",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:getSize",
+        type_name: r"Data",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:getString",
+        type_name: r"Data",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:release",
+        type_name: r"Data",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:type",
+        type_name: r"Data",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Data:typeOf",
+        type_name: r"Data",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:clone",
+        type_name: r"Decoder",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:decode",
+        type_name: r"Decoder",
+        method_name: r"decode",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:getBitDepth",
+        type_name: r"Decoder",
+        method_name: r"getBitDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:getChannelCount",
+        type_name: r"Decoder",
+        method_name: r"getChannelCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:getDuration",
+        type_name: r"Decoder",
+        method_name: r"getDuration",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:getSampleRate",
+        type_name: r"Decoder",
+        method_name: r"getSampleRate",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:release",
+        type_name: r"Decoder",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:seek",
+        type_name: r"Decoder",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:type",
+        type_name: r"Decoder",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Decoder:typeOf",
+        type_name: r"Decoder",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:destroy",
+        type_name: r"DistanceJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getAnchors",
+        type_name: r"DistanceJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getBodies",
+        type_name: r"DistanceJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getCollideConnected",
+        type_name: r"DistanceJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getDampingRatio",
+        type_name: r"DistanceJoint",
+        method_name: r"getDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getFrequency",
+        type_name: r"DistanceJoint",
+        method_name: r"getFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getLength",
+        type_name: r"DistanceJoint",
+        method_name: r"getLength",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getReactionForce",
+        type_name: r"DistanceJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getReactionTorque",
+        type_name: r"DistanceJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getType",
+        type_name: r"DistanceJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:getUserData",
+        type_name: r"DistanceJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:isDestroyed",
+        type_name: r"DistanceJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:release",
+        type_name: r"DistanceJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:setDampingRatio",
+        type_name: r"DistanceJoint",
+        method_name: r"setDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:setFrequency",
+        type_name: r"DistanceJoint",
+        method_name: r"setFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:setLength",
+        type_name: r"DistanceJoint",
+        method_name: r"setLength",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:setUserData",
+        type_name: r"DistanceJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:type",
+        type_name: r"DistanceJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"DistanceJoint:typeOf",
+        type_name: r"DistanceJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Drawable:release",
+        type_name: r"Drawable",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Drawable:type",
+        type_name: r"Drawable",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Drawable:typeOf",
+        type_name: r"Drawable",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:close",
+        type_name: r"DroppedFile",
+        method_name: r"close",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:flush",
+        type_name: r"DroppedFile",
+        method_name: r"flush",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:getBuffer",
+        type_name: r"DroppedFile",
+        method_name: r"getBuffer",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:getFilename",
+        type_name: r"DroppedFile",
+        method_name: r"getFilename",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:getMode",
+        type_name: r"DroppedFile",
+        method_name: r"getMode",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:getSize",
+        type_name: r"DroppedFile",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:isEOF",
+        type_name: r"DroppedFile",
+        method_name: r"isEOF",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:isOpen",
+        type_name: r"DroppedFile",
+        method_name: r"isOpen",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:lines",
+        type_name: r"DroppedFile",
+        method_name: r"lines",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:open",
+        type_name: r"DroppedFile",
+        method_name: r"open",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:read",
+        type_name: r"DroppedFile",
+        method_name: r"read",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:release",
+        type_name: r"DroppedFile",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:seek",
+        type_name: r"DroppedFile",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:setBuffer",
+        type_name: r"DroppedFile",
+        method_name: r"setBuffer",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:tell",
+        type_name: r"DroppedFile",
+        method_name: r"tell",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:type",
+        type_name: r"DroppedFile",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:typeOf",
+        type_name: r"DroppedFile",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"DroppedFile:write",
+        type_name: r"DroppedFile",
+        method_name: r"write",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:computeAABB",
+        type_name: r"EdgeShape",
+        method_name: r"computeAABB",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:computeMass",
+        type_name: r"EdgeShape",
+        method_name: r"computeMass",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getChildCount",
+        type_name: r"EdgeShape",
+        method_name: r"getChildCount",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getNextVertex",
+        type_name: r"EdgeShape",
+        method_name: r"getNextVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getPoints",
+        type_name: r"EdgeShape",
+        method_name: r"getPoints",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getPreviousVertex",
+        type_name: r"EdgeShape",
+        method_name: r"getPreviousVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getRadius",
+        type_name: r"EdgeShape",
+        method_name: r"getRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:getType",
+        type_name: r"EdgeShape",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:rayCast",
+        type_name: r"EdgeShape",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:release",
+        type_name: r"EdgeShape",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:setNextVertex",
+        type_name: r"EdgeShape",
+        method_name: r"setNextVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:setPreviousVertex",
+        type_name: r"EdgeShape",
+        method_name: r"setPreviousVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:testPoint",
+        type_name: r"EdgeShape",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:type",
+        type_name: r"EdgeShape",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"EdgeShape:typeOf",
+        type_name: r"EdgeShape",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"File:close",
+        type_name: r"File",
+        method_name: r"close",
+    },
+    LoveObjectMethodCase {
+        target: r"File:flush",
+        type_name: r"File",
+        method_name: r"flush",
+    },
+    LoveObjectMethodCase {
+        target: r"File:getBuffer",
+        type_name: r"File",
+        method_name: r"getBuffer",
+    },
+    LoveObjectMethodCase {
+        target: r"File:getFilename",
+        type_name: r"File",
+        method_name: r"getFilename",
+    },
+    LoveObjectMethodCase {
+        target: r"File:getMode",
+        type_name: r"File",
+        method_name: r"getMode",
+    },
+    LoveObjectMethodCase {
+        target: r"File:getSize",
+        type_name: r"File",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"File:isEOF",
+        type_name: r"File",
+        method_name: r"isEOF",
+    },
+    LoveObjectMethodCase {
+        target: r"File:isOpen",
+        type_name: r"File",
+        method_name: r"isOpen",
+    },
+    LoveObjectMethodCase {
+        target: r"File:lines",
+        type_name: r"File",
+        method_name: r"lines",
+    },
+    LoveObjectMethodCase {
+        target: r"File:open",
+        type_name: r"File",
+        method_name: r"open",
+    },
+    LoveObjectMethodCase {
+        target: r"File:read",
+        type_name: r"File",
+        method_name: r"read",
+    },
+    LoveObjectMethodCase {
+        target: r"File:release",
+        type_name: r"File",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"File:seek",
+        type_name: r"File",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"File:setBuffer",
+        type_name: r"File",
+        method_name: r"setBuffer",
+    },
+    LoveObjectMethodCase {
+        target: r"File:tell",
+        type_name: r"File",
+        method_name: r"tell",
+    },
+    LoveObjectMethodCase {
+        target: r"File:type",
+        type_name: r"File",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"File:typeOf",
+        type_name: r"File",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"File:write",
+        type_name: r"File",
+        method_name: r"write",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:clone",
+        type_name: r"FileData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getExtension",
+        type_name: r"FileData",
+        method_name: r"getExtension",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getFFIPointer",
+        type_name: r"FileData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getFilename",
+        type_name: r"FileData",
+        method_name: r"getFilename",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getPointer",
+        type_name: r"FileData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getSize",
+        type_name: r"FileData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:getString",
+        type_name: r"FileData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:release",
+        type_name: r"FileData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:type",
+        type_name: r"FileData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"FileData:typeOf",
+        type_name: r"FileData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:destroy",
+        type_name: r"Fixture",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getBody",
+        type_name: r"Fixture",
+        method_name: r"getBody",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getBoundingBox",
+        type_name: r"Fixture",
+        method_name: r"getBoundingBox",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getCategory",
+        type_name: r"Fixture",
+        method_name: r"getCategory",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getDensity",
+        type_name: r"Fixture",
+        method_name: r"getDensity",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getFilterData",
+        type_name: r"Fixture",
+        method_name: r"getFilterData",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getFriction",
+        type_name: r"Fixture",
+        method_name: r"getFriction",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getGroupIndex",
+        type_name: r"Fixture",
+        method_name: r"getGroupIndex",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getMask",
+        type_name: r"Fixture",
+        method_name: r"getMask",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getMassData",
+        type_name: r"Fixture",
+        method_name: r"getMassData",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getRestitution",
+        type_name: r"Fixture",
+        method_name: r"getRestitution",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getShape",
+        type_name: r"Fixture",
+        method_name: r"getShape",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:getUserData",
+        type_name: r"Fixture",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:isDestroyed",
+        type_name: r"Fixture",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:isSensor",
+        type_name: r"Fixture",
+        method_name: r"isSensor",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:rayCast",
+        type_name: r"Fixture",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:release",
+        type_name: r"Fixture",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setCategory",
+        type_name: r"Fixture",
+        method_name: r"setCategory",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setDensity",
+        type_name: r"Fixture",
+        method_name: r"setDensity",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setFilterData",
+        type_name: r"Fixture",
+        method_name: r"setFilterData",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setFriction",
+        type_name: r"Fixture",
+        method_name: r"setFriction",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setGroupIndex",
+        type_name: r"Fixture",
+        method_name: r"setGroupIndex",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setMask",
+        type_name: r"Fixture",
+        method_name: r"setMask",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setRestitution",
+        type_name: r"Fixture",
+        method_name: r"setRestitution",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setSensor",
+        type_name: r"Fixture",
+        method_name: r"setSensor",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:setUserData",
+        type_name: r"Fixture",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:testPoint",
+        type_name: r"Fixture",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:type",
+        type_name: r"Fixture",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Fixture:typeOf",
+        type_name: r"Fixture",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getAscent",
+        type_name: r"Font",
+        method_name: r"getAscent",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getBaseline",
+        type_name: r"Font",
+        method_name: r"getBaseline",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getDPIScale",
+        type_name: r"Font",
+        method_name: r"getDPIScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getDescent",
+        type_name: r"Font",
+        method_name: r"getDescent",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getFilter",
+        type_name: r"Font",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getHeight",
+        type_name: r"Font",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getKerning",
+        type_name: r"Font",
+        method_name: r"getKerning",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getLineHeight",
+        type_name: r"Font",
+        method_name: r"getLineHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getWidth",
+        type_name: r"Font",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:getWrap",
+        type_name: r"Font",
+        method_name: r"getWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:hasGlyphs",
+        type_name: r"Font",
+        method_name: r"hasGlyphs",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:release",
+        type_name: r"Font",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:setFallbacks",
+        type_name: r"Font",
+        method_name: r"setFallbacks",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:setFilter",
+        type_name: r"Font",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:setLineHeight",
+        type_name: r"Font",
+        method_name: r"setLineHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:type",
+        type_name: r"Font",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Font:typeOf",
+        type_name: r"Font",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:destroy",
+        type_name: r"FrictionJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getAnchors",
+        type_name: r"FrictionJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getBodies",
+        type_name: r"FrictionJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getCollideConnected",
+        type_name: r"FrictionJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getMaxForce",
+        type_name: r"FrictionJoint",
+        method_name: r"getMaxForce",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getMaxTorque",
+        type_name: r"FrictionJoint",
+        method_name: r"getMaxTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getReactionForce",
+        type_name: r"FrictionJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getReactionTorque",
+        type_name: r"FrictionJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getType",
+        type_name: r"FrictionJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:getUserData",
+        type_name: r"FrictionJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:isDestroyed",
+        type_name: r"FrictionJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:release",
+        type_name: r"FrictionJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:setMaxForce",
+        type_name: r"FrictionJoint",
+        method_name: r"setMaxForce",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:setMaxTorque",
+        type_name: r"FrictionJoint",
+        method_name: r"setMaxTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:setUserData",
+        type_name: r"FrictionJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:type",
+        type_name: r"FrictionJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"FrictionJoint:typeOf",
+        type_name: r"FrictionJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:destroy",
+        type_name: r"GearJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getAnchors",
+        type_name: r"GearJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getBodies",
+        type_name: r"GearJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getCollideConnected",
+        type_name: r"GearJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getJoints",
+        type_name: r"GearJoint",
+        method_name: r"getJoints",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getRatio",
+        type_name: r"GearJoint",
+        method_name: r"getRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getReactionForce",
+        type_name: r"GearJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getReactionTorque",
+        type_name: r"GearJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getType",
+        type_name: r"GearJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:getUserData",
+        type_name: r"GearJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:isDestroyed",
+        type_name: r"GearJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:release",
+        type_name: r"GearJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:setRatio",
+        type_name: r"GearJoint",
+        method_name: r"setRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:setUserData",
+        type_name: r"GearJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:type",
+        type_name: r"GearJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"GearJoint:typeOf",
+        type_name: r"GearJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:clone",
+        type_name: r"GlyphData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getAdvance",
+        type_name: r"GlyphData",
+        method_name: r"getAdvance",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getBearing",
+        type_name: r"GlyphData",
+        method_name: r"getBearing",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getBoundingBox",
+        type_name: r"GlyphData",
+        method_name: r"getBoundingBox",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getDimensions",
+        type_name: r"GlyphData",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getFFIPointer",
+        type_name: r"GlyphData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getFormat",
+        type_name: r"GlyphData",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getGlyph",
+        type_name: r"GlyphData",
+        method_name: r"getGlyph",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getGlyphString",
+        type_name: r"GlyphData",
+        method_name: r"getGlyphString",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getHeight",
+        type_name: r"GlyphData",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getPointer",
+        type_name: r"GlyphData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getSize",
+        type_name: r"GlyphData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getString",
+        type_name: r"GlyphData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:getWidth",
+        type_name: r"GlyphData",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:release",
+        type_name: r"GlyphData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:type",
+        type_name: r"GlyphData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"GlyphData:typeOf",
+        type_name: r"GlyphData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getDPIScale",
+        type_name: r"Image",
+        method_name: r"getDPIScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getDepth",
+        type_name: r"Image",
+        method_name: r"getDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getDepthSampleMode",
+        type_name: r"Image",
+        method_name: r"getDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getDimensions",
+        type_name: r"Image",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getFilter",
+        type_name: r"Image",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getFormat",
+        type_name: r"Image",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getHeight",
+        type_name: r"Image",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getLayerCount",
+        type_name: r"Image",
+        method_name: r"getLayerCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getMipmapCount",
+        type_name: r"Image",
+        method_name: r"getMipmapCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getMipmapFilter",
+        type_name: r"Image",
+        method_name: r"getMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getPixelDimensions",
+        type_name: r"Image",
+        method_name: r"getPixelDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getPixelHeight",
+        type_name: r"Image",
+        method_name: r"getPixelHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getPixelWidth",
+        type_name: r"Image",
+        method_name: r"getPixelWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getTextureType",
+        type_name: r"Image",
+        method_name: r"getTextureType",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getWidth",
+        type_name: r"Image",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:getWrap",
+        type_name: r"Image",
+        method_name: r"getWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:isCompressed",
+        type_name: r"Image",
+        method_name: r"isCompressed",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:isFormatLinear",
+        type_name: r"Image",
+        method_name: r"isFormatLinear",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:isReadable",
+        type_name: r"Image",
+        method_name: r"isReadable",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:release",
+        type_name: r"Image",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:replacePixels",
+        type_name: r"Image",
+        method_name: r"replacePixels",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:setDepthSampleMode",
+        type_name: r"Image",
+        method_name: r"setDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:setFilter",
+        type_name: r"Image",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:setMipmapFilter",
+        type_name: r"Image",
+        method_name: r"setMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:setWrap",
+        type_name: r"Image",
+        method_name: r"setWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:type",
+        type_name: r"Image",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Image:typeOf",
+        type_name: r"Image",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:clone",
+        type_name: r"ImageData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:encode",
+        type_name: r"ImageData",
+        method_name: r"encode",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getDimensions",
+        type_name: r"ImageData",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getFFIPointer",
+        type_name: r"ImageData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getFormat",
+        type_name: r"ImageData",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getHeight",
+        type_name: r"ImageData",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getPixel",
+        type_name: r"ImageData",
+        method_name: r"getPixel",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getPointer",
+        type_name: r"ImageData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getSize",
+        type_name: r"ImageData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getString",
+        type_name: r"ImageData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:getWidth",
+        type_name: r"ImageData",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:mapPixel",
+        type_name: r"ImageData",
+        method_name: r"mapPixel",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:paste",
+        type_name: r"ImageData",
+        method_name: r"paste",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:release",
+        type_name: r"ImageData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:setPixel",
+        type_name: r"ImageData",
+        method_name: r"setPixel",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:type",
+        type_name: r"ImageData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"ImageData:typeOf",
+        type_name: r"ImageData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:destroy",
+        type_name: r"Joint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getAnchors",
+        type_name: r"Joint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getBodies",
+        type_name: r"Joint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getCollideConnected",
+        type_name: r"Joint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getReactionForce",
+        type_name: r"Joint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getReactionTorque",
+        type_name: r"Joint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getType",
+        type_name: r"Joint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:getUserData",
+        type_name: r"Joint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:isDestroyed",
+        type_name: r"Joint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:release",
+        type_name: r"Joint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:setUserData",
+        type_name: r"Joint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:type",
+        type_name: r"Joint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Joint:typeOf",
+        type_name: r"Joint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getAxes",
+        type_name: r"Joystick",
+        method_name: r"getAxes",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getAxis",
+        type_name: r"Joystick",
+        method_name: r"getAxis",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getAxisCount",
+        type_name: r"Joystick",
+        method_name: r"getAxisCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getButtonCount",
+        type_name: r"Joystick",
+        method_name: r"getButtonCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getDeviceInfo",
+        type_name: r"Joystick",
+        method_name: r"getDeviceInfo",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getGUID",
+        type_name: r"Joystick",
+        method_name: r"getGUID",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getGamepadAxis",
+        type_name: r"Joystick",
+        method_name: r"getGamepadAxis",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getGamepadMapping",
+        type_name: r"Joystick",
+        method_name: r"getGamepadMapping",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getGamepadMappingString",
+        type_name: r"Joystick",
+        method_name: r"getGamepadMappingString",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getHat",
+        type_name: r"Joystick",
+        method_name: r"getHat",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getHatCount",
+        type_name: r"Joystick",
+        method_name: r"getHatCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getID",
+        type_name: r"Joystick",
+        method_name: r"getID",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getName",
+        type_name: r"Joystick",
+        method_name: r"getName",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:getVibration",
+        type_name: r"Joystick",
+        method_name: r"getVibration",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:isConnected",
+        type_name: r"Joystick",
+        method_name: r"isConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:isDown",
+        type_name: r"Joystick",
+        method_name: r"isDown",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:isGamepad",
+        type_name: r"Joystick",
+        method_name: r"isGamepad",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:isGamepadDown",
+        type_name: r"Joystick",
+        method_name: r"isGamepadDown",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:isVibrationSupported",
+        type_name: r"Joystick",
+        method_name: r"isVibrationSupported",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:release",
+        type_name: r"Joystick",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:setVibration",
+        type_name: r"Joystick",
+        method_name: r"setVibration",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:type",
+        type_name: r"Joystick",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Joystick:typeOf",
+        type_name: r"Joystick",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:attachAttribute",
+        type_name: r"Mesh",
+        method_name: r"attachAttribute",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:detachAttribute",
+        type_name: r"Mesh",
+        method_name: r"detachAttribute",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:flush",
+        type_name: r"Mesh",
+        method_name: r"flush",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getDrawMode",
+        type_name: r"Mesh",
+        method_name: r"getDrawMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getDrawRange",
+        type_name: r"Mesh",
+        method_name: r"getDrawRange",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getTexture",
+        type_name: r"Mesh",
+        method_name: r"getTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getVertex",
+        type_name: r"Mesh",
+        method_name: r"getVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getVertexAttribute",
+        type_name: r"Mesh",
+        method_name: r"getVertexAttribute",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getVertexCount",
+        type_name: r"Mesh",
+        method_name: r"getVertexCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getVertexFormat",
+        type_name: r"Mesh",
+        method_name: r"getVertexFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:getVertexMap",
+        type_name: r"Mesh",
+        method_name: r"getVertexMap",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:isAttributeEnabled",
+        type_name: r"Mesh",
+        method_name: r"isAttributeEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:release",
+        type_name: r"Mesh",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setAttributeEnabled",
+        type_name: r"Mesh",
+        method_name: r"setAttributeEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setDrawMode",
+        type_name: r"Mesh",
+        method_name: r"setDrawMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setDrawRange",
+        type_name: r"Mesh",
+        method_name: r"setDrawRange",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setTexture",
+        type_name: r"Mesh",
+        method_name: r"setTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setVertex",
+        type_name: r"Mesh",
+        method_name: r"setVertex",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setVertexAttribute",
+        type_name: r"Mesh",
+        method_name: r"setVertexAttribute",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setVertexMap",
+        type_name: r"Mesh",
+        method_name: r"setVertexMap",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:setVertices",
+        type_name: r"Mesh",
+        method_name: r"setVertices",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:type",
+        type_name: r"Mesh",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Mesh:typeOf",
+        type_name: r"Mesh",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:destroy",
+        type_name: r"MotorJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getAnchors",
+        type_name: r"MotorJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getAngularOffset",
+        type_name: r"MotorJoint",
+        method_name: r"getAngularOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getBodies",
+        type_name: r"MotorJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getCollideConnected",
+        type_name: r"MotorJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getLinearOffset",
+        type_name: r"MotorJoint",
+        method_name: r"getLinearOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getReactionForce",
+        type_name: r"MotorJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getReactionTorque",
+        type_name: r"MotorJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getType",
+        type_name: r"MotorJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:getUserData",
+        type_name: r"MotorJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:isDestroyed",
+        type_name: r"MotorJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:release",
+        type_name: r"MotorJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:setAngularOffset",
+        type_name: r"MotorJoint",
+        method_name: r"setAngularOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:setLinearOffset",
+        type_name: r"MotorJoint",
+        method_name: r"setLinearOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:setUserData",
+        type_name: r"MotorJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:type",
+        type_name: r"MotorJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"MotorJoint:typeOf",
+        type_name: r"MotorJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:destroy",
+        type_name: r"MouseJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getAnchors",
+        type_name: r"MouseJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getBodies",
+        type_name: r"MouseJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getCollideConnected",
+        type_name: r"MouseJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getDampingRatio",
+        type_name: r"MouseJoint",
+        method_name: r"getDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getFrequency",
+        type_name: r"MouseJoint",
+        method_name: r"getFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getMaxForce",
+        type_name: r"MouseJoint",
+        method_name: r"getMaxForce",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getReactionForce",
+        type_name: r"MouseJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getReactionTorque",
+        type_name: r"MouseJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getTarget",
+        type_name: r"MouseJoint",
+        method_name: r"getTarget",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getType",
+        type_name: r"MouseJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:getUserData",
+        type_name: r"MouseJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:isDestroyed",
+        type_name: r"MouseJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:release",
+        type_name: r"MouseJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:setDampingRatio",
+        type_name: r"MouseJoint",
+        method_name: r"setDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:setFrequency",
+        type_name: r"MouseJoint",
+        method_name: r"setFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:setMaxForce",
+        type_name: r"MouseJoint",
+        method_name: r"setMaxForce",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:setTarget",
+        type_name: r"MouseJoint",
+        method_name: r"setTarget",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:setUserData",
+        type_name: r"MouseJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:type",
+        type_name: r"MouseJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"MouseJoint:typeOf",
+        type_name: r"MouseJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Object:release",
+        type_name: r"Object",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Object:type",
+        type_name: r"Object",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Object:typeOf",
+        type_name: r"Object",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:clone",
+        type_name: r"ParticleSystem",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:emit",
+        type_name: r"ParticleSystem",
+        method_name: r"emit",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getBufferSize",
+        type_name: r"ParticleSystem",
+        method_name: r"getBufferSize",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getColors",
+        type_name: r"ParticleSystem",
+        method_name: r"getColors",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getCount",
+        type_name: r"ParticleSystem",
+        method_name: r"getCount",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getDirection",
+        type_name: r"ParticleSystem",
+        method_name: r"getDirection",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getEmissionArea",
+        type_name: r"ParticleSystem",
+        method_name: r"getEmissionArea",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getEmissionRate",
+        type_name: r"ParticleSystem",
+        method_name: r"getEmissionRate",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getEmitterLifetime",
+        type_name: r"ParticleSystem",
+        method_name: r"getEmitterLifetime",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getInsertMode",
+        type_name: r"ParticleSystem",
+        method_name: r"getInsertMode",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getLinearAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"getLinearAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getLinearDamping",
+        type_name: r"ParticleSystem",
+        method_name: r"getLinearDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getOffset",
+        type_name: r"ParticleSystem",
+        method_name: r"getOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getParticleLifetime",
+        type_name: r"ParticleSystem",
+        method_name: r"getParticleLifetime",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getPosition",
+        type_name: r"ParticleSystem",
+        method_name: r"getPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getQuads",
+        type_name: r"ParticleSystem",
+        method_name: r"getQuads",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getRadialAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"getRadialAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getRotation",
+        type_name: r"ParticleSystem",
+        method_name: r"getRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSizeVariation",
+        type_name: r"ParticleSystem",
+        method_name: r"getSizeVariation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSizes",
+        type_name: r"ParticleSystem",
+        method_name: r"getSizes",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSpeed",
+        type_name: r"ParticleSystem",
+        method_name: r"getSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSpin",
+        type_name: r"ParticleSystem",
+        method_name: r"getSpin",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSpinVariation",
+        type_name: r"ParticleSystem",
+        method_name: r"getSpinVariation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getSpread",
+        type_name: r"ParticleSystem",
+        method_name: r"getSpread",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getTangentialAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"getTangentialAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:getTexture",
+        type_name: r"ParticleSystem",
+        method_name: r"getTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:hasRelativeRotation",
+        type_name: r"ParticleSystem",
+        method_name: r"hasRelativeRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:isActive",
+        type_name: r"ParticleSystem",
+        method_name: r"isActive",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:isPaused",
+        type_name: r"ParticleSystem",
+        method_name: r"isPaused",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:isStopped",
+        type_name: r"ParticleSystem",
+        method_name: r"isStopped",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:moveTo",
+        type_name: r"ParticleSystem",
+        method_name: r"moveTo",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:pause",
+        type_name: r"ParticleSystem",
+        method_name: r"pause",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:release",
+        type_name: r"ParticleSystem",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:reset",
+        type_name: r"ParticleSystem",
+        method_name: r"reset",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setBufferSize",
+        type_name: r"ParticleSystem",
+        method_name: r"setBufferSize",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setColors",
+        type_name: r"ParticleSystem",
+        method_name: r"setColors",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setDirection",
+        type_name: r"ParticleSystem",
+        method_name: r"setDirection",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setEmissionArea",
+        type_name: r"ParticleSystem",
+        method_name: r"setEmissionArea",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setEmissionRate",
+        type_name: r"ParticleSystem",
+        method_name: r"setEmissionRate",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setEmitterLifetime",
+        type_name: r"ParticleSystem",
+        method_name: r"setEmitterLifetime",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setInsertMode",
+        type_name: r"ParticleSystem",
+        method_name: r"setInsertMode",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setLinearAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"setLinearAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setLinearDamping",
+        type_name: r"ParticleSystem",
+        method_name: r"setLinearDamping",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setOffset",
+        type_name: r"ParticleSystem",
+        method_name: r"setOffset",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setParticleLifetime",
+        type_name: r"ParticleSystem",
+        method_name: r"setParticleLifetime",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setPosition",
+        type_name: r"ParticleSystem",
+        method_name: r"setPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setQuads",
+        type_name: r"ParticleSystem",
+        method_name: r"setQuads",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setRadialAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"setRadialAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setRelativeRotation",
+        type_name: r"ParticleSystem",
+        method_name: r"setRelativeRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setRotation",
+        type_name: r"ParticleSystem",
+        method_name: r"setRotation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSizeVariation",
+        type_name: r"ParticleSystem",
+        method_name: r"setSizeVariation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSizes",
+        type_name: r"ParticleSystem",
+        method_name: r"setSizes",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSpeed",
+        type_name: r"ParticleSystem",
+        method_name: r"setSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSpin",
+        type_name: r"ParticleSystem",
+        method_name: r"setSpin",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSpinVariation",
+        type_name: r"ParticleSystem",
+        method_name: r"setSpinVariation",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setSpread",
+        type_name: r"ParticleSystem",
+        method_name: r"setSpread",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setTangentialAcceleration",
+        type_name: r"ParticleSystem",
+        method_name: r"setTangentialAcceleration",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:setTexture",
+        type_name: r"ParticleSystem",
+        method_name: r"setTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:start",
+        type_name: r"ParticleSystem",
+        method_name: r"start",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:stop",
+        type_name: r"ParticleSystem",
+        method_name: r"stop",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:type",
+        type_name: r"ParticleSystem",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:typeOf",
+        type_name: r"ParticleSystem",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"ParticleSystem:update",
+        type_name: r"ParticleSystem",
+        method_name: r"update",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:computeAABB",
+        type_name: r"PolygonShape",
+        method_name: r"computeAABB",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:computeMass",
+        type_name: r"PolygonShape",
+        method_name: r"computeMass",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:getChildCount",
+        type_name: r"PolygonShape",
+        method_name: r"getChildCount",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:getPoints",
+        type_name: r"PolygonShape",
+        method_name: r"getPoints",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:getRadius",
+        type_name: r"PolygonShape",
+        method_name: r"getRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:getType",
+        type_name: r"PolygonShape",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:rayCast",
+        type_name: r"PolygonShape",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:release",
+        type_name: r"PolygonShape",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:testPoint",
+        type_name: r"PolygonShape",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:type",
+        type_name: r"PolygonShape",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"PolygonShape:typeOf",
+        type_name: r"PolygonShape",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:areLimitsEnabled",
+        type_name: r"PrismaticJoint",
+        method_name: r"areLimitsEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:destroy",
+        type_name: r"PrismaticJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getAnchors",
+        type_name: r"PrismaticJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getAxis",
+        type_name: r"PrismaticJoint",
+        method_name: r"getAxis",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getBodies",
+        type_name: r"PrismaticJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getCollideConnected",
+        type_name: r"PrismaticJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getJointSpeed",
+        type_name: r"PrismaticJoint",
+        method_name: r"getJointSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getJointTranslation",
+        type_name: r"PrismaticJoint",
+        method_name: r"getJointTranslation",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getLimits",
+        type_name: r"PrismaticJoint",
+        method_name: r"getLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getLowerLimit",
+        type_name: r"PrismaticJoint",
+        method_name: r"getLowerLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getMaxMotorForce",
+        type_name: r"PrismaticJoint",
+        method_name: r"getMaxMotorForce",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getMotorForce",
+        type_name: r"PrismaticJoint",
+        method_name: r"getMotorForce",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getMotorSpeed",
+        type_name: r"PrismaticJoint",
+        method_name: r"getMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getReactionForce",
+        type_name: r"PrismaticJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getReactionTorque",
+        type_name: r"PrismaticJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getReferenceAngle",
+        type_name: r"PrismaticJoint",
+        method_name: r"getReferenceAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getType",
+        type_name: r"PrismaticJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getUpperLimit",
+        type_name: r"PrismaticJoint",
+        method_name: r"getUpperLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:getUserData",
+        type_name: r"PrismaticJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:isDestroyed",
+        type_name: r"PrismaticJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:isMotorEnabled",
+        type_name: r"PrismaticJoint",
+        method_name: r"isMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:release",
+        type_name: r"PrismaticJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setLimits",
+        type_name: r"PrismaticJoint",
+        method_name: r"setLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setLimitsEnabled",
+        type_name: r"PrismaticJoint",
+        method_name: r"setLimitsEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setLowerLimit",
+        type_name: r"PrismaticJoint",
+        method_name: r"setLowerLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setMaxMotorForce",
+        type_name: r"PrismaticJoint",
+        method_name: r"setMaxMotorForce",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setMotorEnabled",
+        type_name: r"PrismaticJoint",
+        method_name: r"setMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setMotorSpeed",
+        type_name: r"PrismaticJoint",
+        method_name: r"setMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setUpperLimit",
+        type_name: r"PrismaticJoint",
+        method_name: r"setUpperLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:setUserData",
+        type_name: r"PrismaticJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:type",
+        type_name: r"PrismaticJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"PrismaticJoint:typeOf",
+        type_name: r"PrismaticJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:destroy",
+        type_name: r"PulleyJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getAnchors",
+        type_name: r"PulleyJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getBodies",
+        type_name: r"PulleyJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getCollideConnected",
+        type_name: r"PulleyJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getConstant",
+        type_name: r"PulleyJoint",
+        method_name: r"getConstant",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getGroundAnchors",
+        type_name: r"PulleyJoint",
+        method_name: r"getGroundAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getLengthA",
+        type_name: r"PulleyJoint",
+        method_name: r"getLengthA",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getLengthB",
+        type_name: r"PulleyJoint",
+        method_name: r"getLengthB",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getMaxLengths",
+        type_name: r"PulleyJoint",
+        method_name: r"getMaxLengths",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getRatio",
+        type_name: r"PulleyJoint",
+        method_name: r"getRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getReactionForce",
+        type_name: r"PulleyJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getReactionTorque",
+        type_name: r"PulleyJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getType",
+        type_name: r"PulleyJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:getUserData",
+        type_name: r"PulleyJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:isDestroyed",
+        type_name: r"PulleyJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:release",
+        type_name: r"PulleyJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:setConstant",
+        type_name: r"PulleyJoint",
+        method_name: r"setConstant",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:setMaxLengths",
+        type_name: r"PulleyJoint",
+        method_name: r"setMaxLengths",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:setRatio",
+        type_name: r"PulleyJoint",
+        method_name: r"setRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:setUserData",
+        type_name: r"PulleyJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:type",
+        type_name: r"PulleyJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"PulleyJoint:typeOf",
+        type_name: r"PulleyJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:getTextureDimensions",
+        type_name: r"Quad",
+        method_name: r"getTextureDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:getViewport",
+        type_name: r"Quad",
+        method_name: r"getViewport",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:release",
+        type_name: r"Quad",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:setViewport",
+        type_name: r"Quad",
+        method_name: r"setViewport",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:type",
+        type_name: r"Quad",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Quad:typeOf",
+        type_name: r"Quad",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:getSeed",
+        type_name: r"RandomGenerator",
+        method_name: r"getSeed",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:getState",
+        type_name: r"RandomGenerator",
+        method_name: r"getState",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:random",
+        type_name: r"RandomGenerator",
+        method_name: r"random",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:randomNormal",
+        type_name: r"RandomGenerator",
+        method_name: r"randomNormal",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:release",
+        type_name: r"RandomGenerator",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:setSeed",
+        type_name: r"RandomGenerator",
+        method_name: r"setSeed",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:setState",
+        type_name: r"RandomGenerator",
+        method_name: r"setState",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:type",
+        type_name: r"RandomGenerator",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"RandomGenerator:typeOf",
+        type_name: r"RandomGenerator",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getAdvance",
+        type_name: r"Rasterizer",
+        method_name: r"getAdvance",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getAscent",
+        type_name: r"Rasterizer",
+        method_name: r"getAscent",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getDescent",
+        type_name: r"Rasterizer",
+        method_name: r"getDescent",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getGlyphCount",
+        type_name: r"Rasterizer",
+        method_name: r"getGlyphCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getGlyphData",
+        type_name: r"Rasterizer",
+        method_name: r"getGlyphData",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getHeight",
+        type_name: r"Rasterizer",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:getLineHeight",
+        type_name: r"Rasterizer",
+        method_name: r"getLineHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:hasGlyphs",
+        type_name: r"Rasterizer",
+        method_name: r"hasGlyphs",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:release",
+        type_name: r"Rasterizer",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:type",
+        type_name: r"Rasterizer",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Rasterizer:typeOf",
+        type_name: r"Rasterizer",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getBitDepth",
+        type_name: r"RecordingDevice",
+        method_name: r"getBitDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getChannelCount",
+        type_name: r"RecordingDevice",
+        method_name: r"getChannelCount",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getData",
+        type_name: r"RecordingDevice",
+        method_name: r"getData",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getName",
+        type_name: r"RecordingDevice",
+        method_name: r"getName",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getSampleCount",
+        type_name: r"RecordingDevice",
+        method_name: r"getSampleCount",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:getSampleRate",
+        type_name: r"RecordingDevice",
+        method_name: r"getSampleRate",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:isRecording",
+        type_name: r"RecordingDevice",
+        method_name: r"isRecording",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:release",
+        type_name: r"RecordingDevice",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:start",
+        type_name: r"RecordingDevice",
+        method_name: r"start",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:stop",
+        type_name: r"RecordingDevice",
+        method_name: r"stop",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:type",
+        type_name: r"RecordingDevice",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"RecordingDevice:typeOf",
+        type_name: r"RecordingDevice",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:areLimitsEnabled",
+        type_name: r"RevoluteJoint",
+        method_name: r"areLimitsEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:destroy",
+        type_name: r"RevoluteJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getAnchors",
+        type_name: r"RevoluteJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getBodies",
+        type_name: r"RevoluteJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getCollideConnected",
+        type_name: r"RevoluteJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getJointAngle",
+        type_name: r"RevoluteJoint",
+        method_name: r"getJointAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getJointSpeed",
+        type_name: r"RevoluteJoint",
+        method_name: r"getJointSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getLimits",
+        type_name: r"RevoluteJoint",
+        method_name: r"getLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getLowerLimit",
+        type_name: r"RevoluteJoint",
+        method_name: r"getLowerLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getMaxMotorTorque",
+        type_name: r"RevoluteJoint",
+        method_name: r"getMaxMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getMotorSpeed",
+        type_name: r"RevoluteJoint",
+        method_name: r"getMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getMotorTorque",
+        type_name: r"RevoluteJoint",
+        method_name: r"getMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getReactionForce",
+        type_name: r"RevoluteJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getReactionTorque",
+        type_name: r"RevoluteJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getReferenceAngle",
+        type_name: r"RevoluteJoint",
+        method_name: r"getReferenceAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getType",
+        type_name: r"RevoluteJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getUpperLimit",
+        type_name: r"RevoluteJoint",
+        method_name: r"getUpperLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:getUserData",
+        type_name: r"RevoluteJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:hasLimitsEnabled",
+        type_name: r"RevoluteJoint",
+        method_name: r"hasLimitsEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:isDestroyed",
+        type_name: r"RevoluteJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:isMotorEnabled",
+        type_name: r"RevoluteJoint",
+        method_name: r"isMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:release",
+        type_name: r"RevoluteJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setLimits",
+        type_name: r"RevoluteJoint",
+        method_name: r"setLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setLimitsEnabled",
+        type_name: r"RevoluteJoint",
+        method_name: r"setLimitsEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setLowerLimit",
+        type_name: r"RevoluteJoint",
+        method_name: r"setLowerLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setMaxMotorTorque",
+        type_name: r"RevoluteJoint",
+        method_name: r"setMaxMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setMotorEnabled",
+        type_name: r"RevoluteJoint",
+        method_name: r"setMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setMotorSpeed",
+        type_name: r"RevoluteJoint",
+        method_name: r"setMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setUpperLimit",
+        type_name: r"RevoluteJoint",
+        method_name: r"setUpperLimit",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:setUserData",
+        type_name: r"RevoluteJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:type",
+        type_name: r"RevoluteJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"RevoluteJoint:typeOf",
+        type_name: r"RevoluteJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:destroy",
+        type_name: r"RopeJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getAnchors",
+        type_name: r"RopeJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getBodies",
+        type_name: r"RopeJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getCollideConnected",
+        type_name: r"RopeJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getMaxLength",
+        type_name: r"RopeJoint",
+        method_name: r"getMaxLength",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getReactionForce",
+        type_name: r"RopeJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getReactionTorque",
+        type_name: r"RopeJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getType",
+        type_name: r"RopeJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:getUserData",
+        type_name: r"RopeJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:isDestroyed",
+        type_name: r"RopeJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:release",
+        type_name: r"RopeJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:setMaxLength",
+        type_name: r"RopeJoint",
+        method_name: r"setMaxLength",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:setUserData",
+        type_name: r"RopeJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:type",
+        type_name: r"RopeJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"RopeJoint:typeOf",
+        type_name: r"RopeJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:getWarnings",
+        type_name: r"Shader",
+        method_name: r"getWarnings",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:hasUniform",
+        type_name: r"Shader",
+        method_name: r"hasUniform",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:release",
+        type_name: r"Shader",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:send",
+        type_name: r"Shader",
+        method_name: r"send",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:sendColor",
+        type_name: r"Shader",
+        method_name: r"sendColor",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:type",
+        type_name: r"Shader",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Shader:typeOf",
+        type_name: r"Shader",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:computeAABB",
+        type_name: r"Shape",
+        method_name: r"computeAABB",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:computeMass",
+        type_name: r"Shape",
+        method_name: r"computeMass",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:getChildCount",
+        type_name: r"Shape",
+        method_name: r"getChildCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:getRadius",
+        type_name: r"Shape",
+        method_name: r"getRadius",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:getType",
+        type_name: r"Shape",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:rayCast",
+        type_name: r"Shape",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:release",
+        type_name: r"Shape",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:testPoint",
+        type_name: r"Shape",
+        method_name: r"testPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:type",
+        type_name: r"Shape",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Shape:typeOf",
+        type_name: r"Shape",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:clone",
+        type_name: r"SoundData",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getBitDepth",
+        type_name: r"SoundData",
+        method_name: r"getBitDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getChannelCount",
+        type_name: r"SoundData",
+        method_name: r"getChannelCount",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getDuration",
+        type_name: r"SoundData",
+        method_name: r"getDuration",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getFFIPointer",
+        type_name: r"SoundData",
+        method_name: r"getFFIPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getPointer",
+        type_name: r"SoundData",
+        method_name: r"getPointer",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getSample",
+        type_name: r"SoundData",
+        method_name: r"getSample",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getSampleCount",
+        type_name: r"SoundData",
+        method_name: r"getSampleCount",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getSampleRate",
+        type_name: r"SoundData",
+        method_name: r"getSampleRate",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getSize",
+        type_name: r"SoundData",
+        method_name: r"getSize",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:getString",
+        type_name: r"SoundData",
+        method_name: r"getString",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:release",
+        type_name: r"SoundData",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:setSample",
+        type_name: r"SoundData",
+        method_name: r"setSample",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:type",
+        type_name: r"SoundData",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"SoundData:typeOf",
+        type_name: r"SoundData",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:clone",
+        type_name: r"Source",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getActiveEffects",
+        type_name: r"Source",
+        method_name: r"getActiveEffects",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getAirAbsorption",
+        type_name: r"Source",
+        method_name: r"getAirAbsorption",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getAttenuationDistances",
+        type_name: r"Source",
+        method_name: r"getAttenuationDistances",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getChannelCount",
+        type_name: r"Source",
+        method_name: r"getChannelCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getCone",
+        type_name: r"Source",
+        method_name: r"getCone",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getDirection",
+        type_name: r"Source",
+        method_name: r"getDirection",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getDuration",
+        type_name: r"Source",
+        method_name: r"getDuration",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getEffect",
+        type_name: r"Source",
+        method_name: r"getEffect",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getFilter",
+        type_name: r"Source",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getFreeBufferCount",
+        type_name: r"Source",
+        method_name: r"getFreeBufferCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getPitch",
+        type_name: r"Source",
+        method_name: r"getPitch",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getPosition",
+        type_name: r"Source",
+        method_name: r"getPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getRolloff",
+        type_name: r"Source",
+        method_name: r"getRolloff",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getType",
+        type_name: r"Source",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getVelocity",
+        type_name: r"Source",
+        method_name: r"getVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getVolume",
+        type_name: r"Source",
+        method_name: r"getVolume",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:getVolumeLimits",
+        type_name: r"Source",
+        method_name: r"getVolumeLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:isLooping",
+        type_name: r"Source",
+        method_name: r"isLooping",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:isPlaying",
+        type_name: r"Source",
+        method_name: r"isPlaying",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:isRelative",
+        type_name: r"Source",
+        method_name: r"isRelative",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:pause",
+        type_name: r"Source",
+        method_name: r"pause",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:play",
+        type_name: r"Source",
+        method_name: r"play",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:queue",
+        type_name: r"Source",
+        method_name: r"queue",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:release",
+        type_name: r"Source",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:seek",
+        type_name: r"Source",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setAirAbsorption",
+        type_name: r"Source",
+        method_name: r"setAirAbsorption",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setAttenuationDistances",
+        type_name: r"Source",
+        method_name: r"setAttenuationDistances",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setCone",
+        type_name: r"Source",
+        method_name: r"setCone",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setDirection",
+        type_name: r"Source",
+        method_name: r"setDirection",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setEffect",
+        type_name: r"Source",
+        method_name: r"setEffect",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setFilter",
+        type_name: r"Source",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setLooping",
+        type_name: r"Source",
+        method_name: r"setLooping",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setPitch",
+        type_name: r"Source",
+        method_name: r"setPitch",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setPosition",
+        type_name: r"Source",
+        method_name: r"setPosition",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setRelative",
+        type_name: r"Source",
+        method_name: r"setRelative",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setRolloff",
+        type_name: r"Source",
+        method_name: r"setRolloff",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setVelocity",
+        type_name: r"Source",
+        method_name: r"setVelocity",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setVolume",
+        type_name: r"Source",
+        method_name: r"setVolume",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:setVolumeLimits",
+        type_name: r"Source",
+        method_name: r"setVolumeLimits",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:stop",
+        type_name: r"Source",
+        method_name: r"stop",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:tell",
+        type_name: r"Source",
+        method_name: r"tell",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:type",
+        type_name: r"Source",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Source:typeOf",
+        type_name: r"Source",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:add",
+        type_name: r"SpriteBatch",
+        method_name: r"add",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:addLayer",
+        type_name: r"SpriteBatch",
+        method_name: r"addLayer",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:attachAttribute",
+        type_name: r"SpriteBatch",
+        method_name: r"attachAttribute",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:clear",
+        type_name: r"SpriteBatch",
+        method_name: r"clear",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:flush",
+        type_name: r"SpriteBatch",
+        method_name: r"flush",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:getBufferSize",
+        type_name: r"SpriteBatch",
+        method_name: r"getBufferSize",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:getColor",
+        type_name: r"SpriteBatch",
+        method_name: r"getColor",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:getCount",
+        type_name: r"SpriteBatch",
+        method_name: r"getCount",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:getTexture",
+        type_name: r"SpriteBatch",
+        method_name: r"getTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:release",
+        type_name: r"SpriteBatch",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:set",
+        type_name: r"SpriteBatch",
+        method_name: r"set",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:setColor",
+        type_name: r"SpriteBatch",
+        method_name: r"setColor",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:setDrawRange",
+        type_name: r"SpriteBatch",
+        method_name: r"setDrawRange",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:setLayer",
+        type_name: r"SpriteBatch",
+        method_name: r"setLayer",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:setTexture",
+        type_name: r"SpriteBatch",
+        method_name: r"setTexture",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:type",
+        type_name: r"SpriteBatch",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"SpriteBatch:typeOf",
+        type_name: r"SpriteBatch",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:add",
+        type_name: r"Text",
+        method_name: r"add",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:addf",
+        type_name: r"Text",
+        method_name: r"addf",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:clear",
+        type_name: r"Text",
+        method_name: r"clear",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:getDimensions",
+        type_name: r"Text",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:getFont",
+        type_name: r"Text",
+        method_name: r"getFont",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:getHeight",
+        type_name: r"Text",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:getWidth",
+        type_name: r"Text",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:release",
+        type_name: r"Text",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:set",
+        type_name: r"Text",
+        method_name: r"set",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:setFont",
+        type_name: r"Text",
+        method_name: r"setFont",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:setf",
+        type_name: r"Text",
+        method_name: r"setf",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:type",
+        type_name: r"Text",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Text:typeOf",
+        type_name: r"Text",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getDPIScale",
+        type_name: r"Texture",
+        method_name: r"getDPIScale",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getDepth",
+        type_name: r"Texture",
+        method_name: r"getDepth",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getDepthSampleMode",
+        type_name: r"Texture",
+        method_name: r"getDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getDimensions",
+        type_name: r"Texture",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getFilter",
+        type_name: r"Texture",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getFormat",
+        type_name: r"Texture",
+        method_name: r"getFormat",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getHeight",
+        type_name: r"Texture",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getLayerCount",
+        type_name: r"Texture",
+        method_name: r"getLayerCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getMipmapCount",
+        type_name: r"Texture",
+        method_name: r"getMipmapCount",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getMipmapFilter",
+        type_name: r"Texture",
+        method_name: r"getMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getPixelDimensions",
+        type_name: r"Texture",
+        method_name: r"getPixelDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getPixelHeight",
+        type_name: r"Texture",
+        method_name: r"getPixelHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getPixelWidth",
+        type_name: r"Texture",
+        method_name: r"getPixelWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getTextureType",
+        type_name: r"Texture",
+        method_name: r"getTextureType",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getWidth",
+        type_name: r"Texture",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:getWrap",
+        type_name: r"Texture",
+        method_name: r"getWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:isReadable",
+        type_name: r"Texture",
+        method_name: r"isReadable",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:release",
+        type_name: r"Texture",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:setDepthSampleMode",
+        type_name: r"Texture",
+        method_name: r"setDepthSampleMode",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:setFilter",
+        type_name: r"Texture",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:setMipmapFilter",
+        type_name: r"Texture",
+        method_name: r"setMipmapFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:setWrap",
+        type_name: r"Texture",
+        method_name: r"setWrap",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:type",
+        type_name: r"Texture",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Texture:typeOf",
+        type_name: r"Texture",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:getError",
+        type_name: r"Thread",
+        method_name: r"getError",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:isRunning",
+        type_name: r"Thread",
+        method_name: r"isRunning",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:release",
+        type_name: r"Thread",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:start",
+        type_name: r"Thread",
+        method_name: r"start",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:type",
+        type_name: r"Thread",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:typeOf",
+        type_name: r"Thread",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Thread:wait",
+        type_name: r"Thread",
+        method_name: r"wait",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:apply",
+        type_name: r"Transform",
+        method_name: r"apply",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:clone",
+        type_name: r"Transform",
+        method_name: r"clone",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:getMatrix",
+        type_name: r"Transform",
+        method_name: r"getMatrix",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:inverse",
+        type_name: r"Transform",
+        method_name: r"inverse",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:inverseTransformPoint",
+        type_name: r"Transform",
+        method_name: r"inverseTransformPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:isAffine2DTransform",
+        type_name: r"Transform",
+        method_name: r"isAffine2DTransform",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:release",
+        type_name: r"Transform",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:reset",
+        type_name: r"Transform",
+        method_name: r"reset",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:rotate",
+        type_name: r"Transform",
+        method_name: r"rotate",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:scale",
+        type_name: r"Transform",
+        method_name: r"scale",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:setMatrix",
+        type_name: r"Transform",
+        method_name: r"setMatrix",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:setTransformation",
+        type_name: r"Transform",
+        method_name: r"setTransformation",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:shear",
+        type_name: r"Transform",
+        method_name: r"shear",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:transformPoint",
+        type_name: r"Transform",
+        method_name: r"transformPoint",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:translate",
+        type_name: r"Transform",
+        method_name: r"translate",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:type",
+        type_name: r"Transform",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Transform:typeOf",
+        type_name: r"Transform",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getDimensions",
+        type_name: r"Video",
+        method_name: r"getDimensions",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getFilter",
+        type_name: r"Video",
+        method_name: r"getFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getHeight",
+        type_name: r"Video",
+        method_name: r"getHeight",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getSource",
+        type_name: r"Video",
+        method_name: r"getSource",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getStream",
+        type_name: r"Video",
+        method_name: r"getStream",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:getWidth",
+        type_name: r"Video",
+        method_name: r"getWidth",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:isPlaying",
+        type_name: r"Video",
+        method_name: r"isPlaying",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:pause",
+        type_name: r"Video",
+        method_name: r"pause",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:play",
+        type_name: r"Video",
+        method_name: r"play",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:release",
+        type_name: r"Video",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:rewind",
+        type_name: r"Video",
+        method_name: r"rewind",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:seek",
+        type_name: r"Video",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:setFilter",
+        type_name: r"Video",
+        method_name: r"setFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:setSource",
+        type_name: r"Video",
+        method_name: r"setSource",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:tell",
+        type_name: r"Video",
+        method_name: r"tell",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:type",
+        type_name: r"Video",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"Video:typeOf",
+        type_name: r"Video",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:getFilename",
+        type_name: r"VideoStream",
+        method_name: r"getFilename",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:isPlaying",
+        type_name: r"VideoStream",
+        method_name: r"isPlaying",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:pause",
+        type_name: r"VideoStream",
+        method_name: r"pause",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:play",
+        type_name: r"VideoStream",
+        method_name: r"play",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:release",
+        type_name: r"VideoStream",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:rewind",
+        type_name: r"VideoStream",
+        method_name: r"rewind",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:seek",
+        type_name: r"VideoStream",
+        method_name: r"seek",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:tell",
+        type_name: r"VideoStream",
+        method_name: r"tell",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:type",
+        type_name: r"VideoStream",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"VideoStream:typeOf",
+        type_name: r"VideoStream",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:destroy",
+        type_name: r"WeldJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getAnchors",
+        type_name: r"WeldJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getBodies",
+        type_name: r"WeldJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getCollideConnected",
+        type_name: r"WeldJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getDampingRatio",
+        type_name: r"WeldJoint",
+        method_name: r"getDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getFrequency",
+        type_name: r"WeldJoint",
+        method_name: r"getFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getReactionForce",
+        type_name: r"WeldJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getReactionTorque",
+        type_name: r"WeldJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getReferenceAngle",
+        type_name: r"WeldJoint",
+        method_name: r"getReferenceAngle",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getType",
+        type_name: r"WeldJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:getUserData",
+        type_name: r"WeldJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:isDestroyed",
+        type_name: r"WeldJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:release",
+        type_name: r"WeldJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:setDampingRatio",
+        type_name: r"WeldJoint",
+        method_name: r"setDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:setFrequency",
+        type_name: r"WeldJoint",
+        method_name: r"setFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:setUserData",
+        type_name: r"WeldJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:type",
+        type_name: r"WeldJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"WeldJoint:typeOf",
+        type_name: r"WeldJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:destroy",
+        type_name: r"WheelJoint",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getAnchors",
+        type_name: r"WheelJoint",
+        method_name: r"getAnchors",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getAxis",
+        type_name: r"WheelJoint",
+        method_name: r"getAxis",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getBodies",
+        type_name: r"WheelJoint",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getCollideConnected",
+        type_name: r"WheelJoint",
+        method_name: r"getCollideConnected",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getJointSpeed",
+        type_name: r"WheelJoint",
+        method_name: r"getJointSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getJointTranslation",
+        type_name: r"WheelJoint",
+        method_name: r"getJointTranslation",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getMaxMotorTorque",
+        type_name: r"WheelJoint",
+        method_name: r"getMaxMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getMotorSpeed",
+        type_name: r"WheelJoint",
+        method_name: r"getMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getMotorTorque",
+        type_name: r"WheelJoint",
+        method_name: r"getMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getReactionForce",
+        type_name: r"WheelJoint",
+        method_name: r"getReactionForce",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getReactionTorque",
+        type_name: r"WheelJoint",
+        method_name: r"getReactionTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getSpringDampingRatio",
+        type_name: r"WheelJoint",
+        method_name: r"getSpringDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getSpringFrequency",
+        type_name: r"WheelJoint",
+        method_name: r"getSpringFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getType",
+        type_name: r"WheelJoint",
+        method_name: r"getType",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:getUserData",
+        type_name: r"WheelJoint",
+        method_name: r"getUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:isDestroyed",
+        type_name: r"WheelJoint",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:isMotorEnabled",
+        type_name: r"WheelJoint",
+        method_name: r"isMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:release",
+        type_name: r"WheelJoint",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setMaxMotorTorque",
+        type_name: r"WheelJoint",
+        method_name: r"setMaxMotorTorque",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setMotorEnabled",
+        type_name: r"WheelJoint",
+        method_name: r"setMotorEnabled",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setMotorSpeed",
+        type_name: r"WheelJoint",
+        method_name: r"setMotorSpeed",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setSpringDampingRatio",
+        type_name: r"WheelJoint",
+        method_name: r"setSpringDampingRatio",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setSpringFrequency",
+        type_name: r"WheelJoint",
+        method_name: r"setSpringFrequency",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:setUserData",
+        type_name: r"WheelJoint",
+        method_name: r"setUserData",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:type",
+        type_name: r"WheelJoint",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"WheelJoint:typeOf",
+        type_name: r"WheelJoint",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"World:destroy",
+        type_name: r"World",
+        method_name: r"destroy",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getBodies",
+        type_name: r"World",
+        method_name: r"getBodies",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getBodyCount",
+        type_name: r"World",
+        method_name: r"getBodyCount",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getCallbacks",
+        type_name: r"World",
+        method_name: r"getCallbacks",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getContactCount",
+        type_name: r"World",
+        method_name: r"getContactCount",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getContactFilter",
+        type_name: r"World",
+        method_name: r"getContactFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getContacts",
+        type_name: r"World",
+        method_name: r"getContacts",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getGravity",
+        type_name: r"World",
+        method_name: r"getGravity",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getJointCount",
+        type_name: r"World",
+        method_name: r"getJointCount",
+    },
+    LoveObjectMethodCase {
+        target: r"World:getJoints",
+        type_name: r"World",
+        method_name: r"getJoints",
+    },
+    LoveObjectMethodCase {
+        target: r"World:isDestroyed",
+        type_name: r"World",
+        method_name: r"isDestroyed",
+    },
+    LoveObjectMethodCase {
+        target: r"World:isLocked",
+        type_name: r"World",
+        method_name: r"isLocked",
+    },
+    LoveObjectMethodCase {
+        target: r"World:isSleepingAllowed",
+        type_name: r"World",
+        method_name: r"isSleepingAllowed",
+    },
+    LoveObjectMethodCase {
+        target: r"World:queryBoundingBox",
+        type_name: r"World",
+        method_name: r"queryBoundingBox",
+    },
+    LoveObjectMethodCase {
+        target: r"World:rayCast",
+        type_name: r"World",
+        method_name: r"rayCast",
+    },
+    LoveObjectMethodCase {
+        target: r"World:release",
+        type_name: r"World",
+        method_name: r"release",
+    },
+    LoveObjectMethodCase {
+        target: r"World:setCallbacks",
+        type_name: r"World",
+        method_name: r"setCallbacks",
+    },
+    LoveObjectMethodCase {
+        target: r"World:setContactFilter",
+        type_name: r"World",
+        method_name: r"setContactFilter",
+    },
+    LoveObjectMethodCase {
+        target: r"World:setGravity",
+        type_name: r"World",
+        method_name: r"setGravity",
+    },
+    LoveObjectMethodCase {
+        target: r"World:setSleepingAllowed",
+        type_name: r"World",
+        method_name: r"setSleepingAllowed",
+    },
+    LoveObjectMethodCase {
+        target: r"World:translateOrigin",
+        type_name: r"World",
+        method_name: r"translateOrigin",
+    },
+    LoveObjectMethodCase {
+        target: r"World:type",
+        type_name: r"World",
+        method_name: r"type",
+    },
+    LoveObjectMethodCase {
+        target: r"World:typeOf",
+        type_name: r"World",
+        method_name: r"typeOf",
+    },
+    LoveObjectMethodCase {
+        target: r"World:update",
+        type_name: r"World",
+        method_name: r"update",
     },
 ];

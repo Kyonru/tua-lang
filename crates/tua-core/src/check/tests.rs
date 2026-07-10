@@ -641,6 +641,31 @@ player.setFilter("nearest")
 }
 
 #[test]
+fn warns_for_dot_calls_to_every_generated_love_object_method() {
+    for (type_name, methods) in love_object_methods_by_type() {
+        let source = love_dot_method_source(type_name, &methods);
+        let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+            "src/assets.tua",
+            source,
+            &[],
+            &crate::DiagnosticsConfig::default(),
+        )
+        .unwrap_err();
+
+        for method in methods {
+            let expected = format!("use `receiver:{method}(...)`");
+
+            assert!(
+                diagnostics.iter().any(|diagnostic| diagnostic.code
+                    == Some(DiagnosticCode::LINT_DOT_METHOD_CALL)
+                    && diagnostic.message.contains(&expected)),
+                "{type_name}.{method} should warn with colon guidance; got {diagnostics:#?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn inline_ignores_are_disabled_by_default() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
@@ -1450,6 +1475,31 @@ fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
     );
     assert!(diagnostics[0].message.contains(message));
     assert!(diagnostics[0].format_cli().contains("error TL1003"));
+}
+
+fn love_object_methods_by_type() -> std::collections::BTreeMap<&'static str, Vec<&'static str>> {
+    let mut cases: std::collections::BTreeMap<&'static str, Vec<&'static str>> =
+        std::collections::BTreeMap::new();
+
+    for case in crate::love_api_signatures::object_method_cases() {
+        let methods = cases.entry(case.type_name).or_default();
+
+        if !methods.contains(&case.method_name) {
+            methods.push(case.method_name);
+        }
+    }
+
+    cases
+}
+
+fn love_dot_method_source(type_name: &str, methods: &[&str]) -> String {
+    let mut source = format!("local receiver: {type_name} | nil = nil\n");
+
+    for method in methods {
+        source.push_str(&format!("receiver.{method}()\n"));
+    }
+
+    source
 }
 
 struct TempProject {

@@ -701,6 +701,50 @@ body.setP
 }
 
 #[test]
+fn completes_every_generated_love_object_method_with_colon_rewrite() {
+    let cases = love_object_methods_by_type();
+
+    assert!(
+        crate::love_api_signatures::object_method_cases().len() >= 1_000,
+        "expected broad generated LOVE object method coverage"
+    );
+
+    for (type_name, methods) in cases {
+        let source = format!("local receiver: {type_name} | nil = nil\nreceiver.\n");
+        let completions = complete_tua_source(
+            "src/main.tua",
+            &source,
+            position_after(&source, "receiver."),
+        )
+        .expect("LOVE object method completion should succeed");
+        let labels = labels(&completions);
+
+        for method in methods {
+            let completion = completions
+                .iter()
+                .find(|completion| completion.label == method)
+                .unwrap_or_else(|| panic!("{type_name}:{method} should complete; got {labels:?}"));
+
+            assert_eq!(completion.kind, CompletionKind::Function);
+            assert!(
+                completion.detail.as_deref().is_some_and(
+                    |detail| detail.starts_with(&format!("function {type_name}:{method}("))
+                ),
+                "{type_name}:{method} should use generated method detail, got {:?}",
+                completion.detail
+            );
+            assert!(
+                completion
+                    .additional_text_edits
+                    .iter()
+                    .any(|edit| edit.new_text == ":"),
+                "{type_name}:{method} dot completion should rewrite the receiver separator to `:`"
+            );
+        }
+    }
+}
+
+#[test]
 fn completes_love_image_methods_after_colon_access() {
     let source = r#"
 local player = image "assets/player.png"
@@ -1503,6 +1547,21 @@ fn expected_love_enum_labels(enum_types: &[&str]) -> Vec<String> {
     }
 
     labels
+}
+
+fn love_object_methods_by_type() -> std::collections::BTreeMap<&'static str, Vec<&'static str>> {
+    let mut cases: std::collections::BTreeMap<&'static str, Vec<&'static str>> =
+        std::collections::BTreeMap::new();
+
+    for case in crate::love_api_signatures::object_method_cases() {
+        let methods = cases.entry(case.type_name).or_default();
+
+        if !methods.contains(&case.method_name) {
+            methods.push(case.method_name);
+        }
+    }
+
+    cases
 }
 
 fn position_after(source: &str, needle: &str) -> SourcePosition {

@@ -965,6 +965,39 @@ player:setFilter()
 }
 
 #[test]
+fn hovers_every_generated_love_object_method() {
+    for (type_name, methods) in love_object_methods_by_type() {
+        let source = love_object_method_source(type_name, &methods, ":");
+        let parsed = parse_tua_source("src/main.tua", source).unwrap_or_else(|diagnostics| {
+            panic!("{type_name} generated LOVE method hover source should parse: {diagnostics:#?}")
+        });
+        let environment =
+            crate::types::build_type_environment(&parsed).unwrap_or_else(|diagnostics| {
+                panic!(
+                    "{type_name} generated LOVE method hover source should type: {diagnostics:#?}"
+                )
+            });
+
+        for method in methods {
+            let hover = hover_parsed_source_with_environment(
+                &parsed,
+                love_method_position(&parsed.source, ":", method),
+                &environment,
+            )
+            .unwrap_or_else(|| panic!("{type_name}:{method} should hover"));
+
+            assert!(
+                hover
+                    .contents
+                    .starts_with(&format!("function {type_name}:{method}(")),
+                "{type_name}:{method} should use generated method hover, got {:?}",
+                hover.contents
+            );
+        }
+    }
+}
+
+#[test]
 fn hovers_love_object_method_return_types_from_inferred_asset_loader_returns() {
     let source = r#"
 local player = image "assets/hero.png"
@@ -1242,6 +1275,39 @@ fn assert_hover_in_source(source: &str, needle: &str, offset: usize, expected: &
         .expect("hover should resolve");
 
     assert_eq!(hover.contents, expected);
+}
+
+fn love_object_methods_by_type() -> std::collections::BTreeMap<&'static str, Vec<&'static str>> {
+    let mut cases: std::collections::BTreeMap<&'static str, Vec<&'static str>> =
+        std::collections::BTreeMap::new();
+
+    for case in crate::love_api_signatures::object_method_cases() {
+        let methods = cases.entry(case.type_name).or_default();
+
+        if !methods.contains(&case.method_name) {
+            methods.push(case.method_name);
+        }
+    }
+
+    cases
+}
+
+fn love_object_method_source(type_name: &str, methods: &[&str], separator: &str) -> String {
+    let mut source = format!("local receiver: {type_name} | nil = nil\n");
+
+    for method in methods {
+        source.push_str(&format!("receiver{separator}{method}()\n"));
+    }
+
+    source
+}
+
+fn love_method_position(source: &str, separator: &str, method: &str) -> SourcePosition {
+    let needle = format!("receiver{separator}{method}");
+    let mut position = position_at(source, &needle);
+
+    position.column += format!("receiver{separator}").chars().count();
+    position
 }
 
 struct TempProject {

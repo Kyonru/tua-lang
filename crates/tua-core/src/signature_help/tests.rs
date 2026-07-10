@@ -378,6 +378,45 @@ player:setFilter(
 }
 
 #[test]
+fn returns_signature_help_for_every_generated_love_object_method() {
+    for (type_name, methods) in love_object_methods_by_type() {
+        let source = love_object_method_source(type_name, &methods);
+        let parsed = parse_tua_source("src/main.tua", source).unwrap_or_else(|diagnostics| {
+            panic!(
+                "{type_name} generated LOVE method signature source should parse: {diagnostics:#?}"
+            )
+        });
+        let (environment, diagnostics) =
+            crate::types::build_type_environment_with_diagnostics(&parsed);
+
+        assert!(
+            diagnostics.is_empty(),
+            "{type_name} generated LOVE method signature source should type: {diagnostics:#?}"
+        );
+
+        for method in methods {
+            let help = signature_help_parsed_source_with_environment(
+                &parsed,
+                love_call_position(&parsed.source, method),
+                &environment,
+            )
+            .unwrap_or_else(|| panic!("{type_name}:{method} should have signature help"));
+
+            assert!(
+                help.signatures.iter().any(|signature| signature
+                    .label
+                    .starts_with(&format!("function {type_name}:{method}("))),
+                "{type_name}:{method} should use generated method signature help, got {:?}",
+                help.signatures
+                    .iter()
+                    .map(|signature| signature.label.as_str())
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+}
+
+#[test]
 fn returns_typed_colon_method_signature_without_visible_self() {
     let source = r#"
 type Account = {
@@ -610,6 +649,35 @@ fn position_after_last(source: &str, needle: &str) -> SourcePosition {
 
     position.column += needle.chars().count();
     position
+}
+
+fn love_object_methods_by_type() -> std::collections::BTreeMap<&'static str, Vec<&'static str>> {
+    let mut cases: std::collections::BTreeMap<&'static str, Vec<&'static str>> =
+        std::collections::BTreeMap::new();
+
+    for case in crate::love_api_signatures::object_method_cases() {
+        let methods = cases.entry(case.type_name).or_default();
+
+        if !methods.contains(&case.method_name) {
+            methods.push(case.method_name);
+        }
+    }
+
+    cases
+}
+
+fn love_object_method_source(type_name: &str, methods: &[&str]) -> String {
+    let mut source = format!("local receiver: {type_name} | nil = nil\n");
+
+    for method in methods {
+        source.push_str(&format!("receiver:{method}()\n"));
+    }
+
+    source
+}
+
+fn love_call_position(source: &str, method: &str) -> SourcePosition {
+    position_after(source, &format!("receiver:{method}("))
 }
 
 struct TempProject {
