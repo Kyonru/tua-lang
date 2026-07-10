@@ -105,6 +105,24 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
+    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
+        parsed,
+        asset_roots,
+        diagnostics_config,
+        jit_config,
+        ecs_config,
+        None,
+    )
+}
+
+pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
+    parsed: &ParsedSource,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
+    ecs_config: &EcsConfig,
+    asset_index: Option<&asset::AssetIndex>,
+) -> Result<(), Vec<Diagnostic>> {
     let environment = {
         let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::TypeEnvironment);
 
@@ -122,12 +140,13 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
         }
     };
 
-    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
         parsed,
         &environment,
         asset_roots,
         diagnostics_config,
         jit_config,
+        asset_index,
     )
 }
 
@@ -138,7 +157,25 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    let mut checker = Checker::new(parsed, environment, asset_roots);
+    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
+        parsed,
+        environment,
+        asset_roots,
+        diagnostics_config,
+        jit_config,
+        None,
+    )
+}
+
+pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    asset_roots: &[PathBuf],
+    diagnostics_config: &DiagnosticsConfig,
+    jit_config: &JitConfig,
+    asset_index: Option<&asset::AssetIndex>,
+) -> Result<(), Vec<Diagnostic>> {
+    let mut checker = Checker::new(parsed, environment, asset_roots, asset_index);
 
     {
         let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Checker);
@@ -179,6 +216,7 @@ struct Checker<'a> {
     context: TypeContext,
     scoped_locals: Vec<BTreeMap<String, Type>>,
     asset_roots: Vec<PathBuf>,
+    asset_index: Option<&'a asset::AssetIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
     reported_method_style_diagnostics: BTreeSet<(usize, usize, String)>,
     diagnostics: Vec<Diagnostic>,
@@ -189,13 +227,19 @@ impl<'a> Checker<'a> {
         parsed: &'a ParsedSource,
         environment: &'a TypeEnvironment,
         asset_roots: &[PathBuf],
+        asset_index: Option<&'a asset::AssetIndex>,
     ) -> Self {
         Self {
             parsed,
             environment,
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
-            asset_roots: normalize_asset_roots(asset_roots),
+            asset_roots: if asset_index.is_some() {
+                normalize_asset_roots_without_fs(asset_roots)
+            } else {
+                normalize_asset_roots(asset_roots)
+            },
+            asset_index,
             reported_asset_diagnostics: BTreeSet::new(),
             reported_method_style_diagnostics: BTreeSet::new(),
             diagnostics: Vec::new(),
@@ -874,8 +918,13 @@ impl<'a> Checker<'a> {
             start: node_position(function_call),
             end: node_position(function_call),
         });
-        let metadata =
-            asset::validate_asset(asset_call.kind, &asset_call.path, span, &self.asset_roots);
+        let metadata = asset::validate_asset_with_index(
+            asset_call.kind,
+            &asset_call.path,
+            span,
+            &self.asset_roots,
+            self.asset_index,
+        );
 
         match metadata.status {
             asset::AssetValidationStatus::UnsupportedExtension => {
@@ -2221,6 +2270,14 @@ fn normalize_asset_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
     }
 
     output
+}
+
+fn normalize_asset_roots_without_fs(roots: &[PathBuf]) -> Vec<PathBuf> {
+    roots
+        .iter()
+        .filter(|root| !root.as_os_str().is_empty())
+        .map(|root| root.components().collect::<PathBuf>())
+        .collect()
 }
 
 fn unquote_string(value: &str) -> String {

@@ -11,6 +11,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use crate::asset::{self, AssetMetadata};
 use crate::completion::{
     complete_field_access_in_source_with_environment, complete_parsed_source_with_environment,
+    complete_source_with_parsed_environment,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -36,8 +37,9 @@ use crate::{
     assists_parsed_source, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check::{
-        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
+        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config,
+        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
     complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
     document_highlights_parsed_source, document_symbols_parsed_source_with_hir, emit_lua_with_mode,
@@ -93,6 +95,7 @@ pub struct AnalysisHost {
     config: ProjectConfig,
     vfs: VirtualFileSystem,
     asset_roots: Vec<PathBuf>,
+    asset_index: Option<asset::AssetIndex>,
     builtin_catalogs: BuiltinCatalogs,
     plugin_registry: PluginRegistry,
     cache: RefCell<AnalysisQueryCache>,
@@ -106,6 +109,7 @@ pub struct AnalysisSnapshot {
     config: ProjectConfig,
     vfs: VfsSnapshot,
     asset_roots: Vec<PathBuf>,
+    asset_index: Option<asset::AssetIndex>,
     files: BTreeMap<PathBuf, AnalysisFile>,
     builtin_catalogs: BuiltinCatalogs,
     plugin_registry: PluginRegistry,
@@ -171,6 +175,7 @@ struct AnalysisBuildContext<'a> {
     config: &'a ProjectConfig,
     source_roots: &'a [PathBuf],
     asset_roots: &'a [PathBuf],
+    asset_index: Option<&'a asset::AssetIndex>,
     plugin_registry: &'a PluginRegistry,
 }
 
@@ -361,6 +366,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_source_roots(roots);
+        self.asset_index = None;
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -389,7 +395,21 @@ impl AnalysisHost {
         }
 
         self.asset_roots = roots;
+        self.asset_index = None;
         self.invalidate_all_analysis();
+        self.bump_revision();
+    }
+
+    pub fn refresh_asset_index_from_disk(&mut self) {
+        let roots = analysis_asset_roots(self.source_roots(), &self.asset_roots).to_vec();
+        let index = asset::AssetIndex::from_roots(&roots);
+
+        if self.asset_index.as_ref() == Some(&index) {
+            return;
+        }
+
+        self.asset_index = Some(index);
+        self.cache.borrow_mut().invalidate_all();
         self.bump_revision();
     }
 
@@ -551,6 +571,7 @@ impl AnalysisHost {
                             config: &self.config,
                             source_roots: &source_roots,
                             asset_roots: &self.asset_roots,
+                            asset_index: self.asset_index.as_ref(),
                             plugin_registry: &plugin_registry,
                         },
                     );
@@ -629,6 +650,7 @@ impl AnalysisHost {
             config: self.config.clone(),
             vfs,
             asset_roots: self.asset_roots.clone(),
+            asset_index: self.asset_index.clone(),
             files,
             builtin_catalogs: self.builtin_catalogs.clone(),
             plugin_registry,
@@ -908,7 +930,19 @@ impl AnalysisSnapshot {
                     if !completions.is_empty() {
                         completions
                     } else {
-                        complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
+                        let completions = complete_source_with_parsed_environment(
+                            &file.source,
+                            &facts.parsed,
+                            position,
+                            &facts.environment,
+                        );
+
+                        if !completions.is_empty() {
+                            completions
+                        } else {
+                            complete_tua_source(path, file.source.clone(), position)
+                                .unwrap_or_default()
+                        }
                     }
                 } else {
                     complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
@@ -2431,7 +2465,12 @@ impl AnalysisSnapshot {
             return Vec::new();
         }
 
-        asset::complete_asset_paths(self.effective_asset_roots(), kind, &prefix)
+        self.asset_index
+            .as_ref()
+            .map(|index| index.complete_paths(kind, &prefix))
+            .unwrap_or_else(|| {
+                asset::complete_asset_paths(self.effective_asset_roots(), kind, &prefix)
+            })
             .into_iter()
             .map(|candidate| Completion {
                 label: candidate.path.clone(),
@@ -3887,20 +3926,22 @@ fn build_analysis_file(
                 let asset_roots = analysis_asset_roots(context.source_roots, context.asset_roots);
 
                 if let Some(environment) = environment.as_ref() {
-                    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+                    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
                         parsed,
                         environment,
                         asset_roots,
                         &diagnostics_config,
                         &context.config.jit,
+                        context.asset_index,
                     )
                 } else {
-                    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+                    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
                         parsed,
                         asset_roots,
                         &diagnostics_config,
                         &context.config.jit,
                         &context.config.ecs,
+                        context.asset_index,
                     )
                 }
                 .err()
@@ -3911,12 +3952,13 @@ fn build_analysis_file(
 
                 if let Ok(recovered) = parse_recovered_analysis_source(path, &source, kind) {
                     diagnostics.extend(
-                        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+                        check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
                             &recovered,
                             analysis_asset_roots(context.source_roots, context.asset_roots),
                             &diagnostics_config,
                             &context.config.jit,
                             &context.config.ecs,
+                            context.asset_index,
                         )
                         .err()
                         .unwrap_or_default(),
@@ -3946,10 +3988,13 @@ fn build_analysis_file(
             .as_ref()
             .ok()
             .map(|parsed| {
-                asset::collect_asset_metadata(
-                    parsed,
-                    analysis_asset_roots(context.source_roots, context.asset_roots),
-                )
+                let asset_roots = analysis_asset_roots(context.source_roots, context.asset_roots);
+
+                if let Some(asset_index) = context.asset_index {
+                    asset::collect_asset_metadata_with_index(parsed, asset_roots, Some(asset_index))
+                } else {
+                    asset::collect_asset_metadata(parsed, asset_roots)
+                }
             })
             .unwrap_or_default()
     };

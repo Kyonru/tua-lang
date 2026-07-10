@@ -305,6 +305,83 @@ pub(crate) struct AssetPathCandidate {
     pub extension: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct AssetIndex {
+    roots: Vec<PathBuf>,
+    by_relative: BTreeMap<String, AssetIndexEntry>,
+    by_absolute: BTreeMap<PathBuf, String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct AssetIndexEntry {
+    relative_path: String,
+    extension: Option<String>,
+    dimensions: Option<(u32, u32)>,
+}
+
+impl AssetIndex {
+    pub(crate) fn from_roots(roots: &[PathBuf]) -> Self {
+        let roots = normalize_asset_roots(roots);
+        let mut index = Self {
+            roots: roots.clone(),
+            by_relative: BTreeMap::new(),
+            by_absolute: BTreeMap::new(),
+        };
+
+        for root in roots {
+            collect_asset_index_entries(&root, &root, &mut index);
+        }
+
+        index
+    }
+
+    pub(crate) fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+
+    pub(crate) fn complete_paths(
+        &self,
+        kind: AssetLoaderKind,
+        prefix: &str,
+    ) -> Vec<AssetPathCandidate> {
+        self.by_relative
+            .values()
+            .filter_map(|entry| {
+                let extension = entry.extension.as_deref()?;
+
+                if !kind.supported_extensions().contains(&extension) {
+                    return None;
+                }
+
+                if !entry.relative_path.starts_with(prefix) {
+                    return None;
+                }
+
+                Some(AssetPathCandidate {
+                    path: entry.relative_path.clone(),
+                    kind,
+                    extension: Some(extension.to_owned()),
+                })
+            })
+            .collect()
+    }
+
+    fn entry_for_path(&self, relative_path: &str) -> Option<&AssetIndexEntry> {
+        let path = Path::new(relative_path);
+
+        if path.is_absolute() {
+            let normalized = normalize_path_components(path);
+
+            return self
+                .by_absolute
+                .get(&normalized)
+                .and_then(|relative| self.by_relative.get(relative));
+        }
+
+        self.by_relative.get(relative_path)
+    }
+}
+
 pub(crate) fn loader_kind(name: &str) -> Option<AssetLoaderKind> {
     match name {
         "image" => Some(AssetLoaderKind::Image),
@@ -341,9 +418,22 @@ pub(crate) fn collect_asset_metadata(
     parsed: &ParsedSource,
     asset_roots: &[PathBuf],
 ) -> Vec<AssetMetadata> {
+    collect_asset_metadata_with_index(parsed, asset_roots, None)
+}
+
+pub(crate) fn collect_asset_metadata_with_index(
+    parsed: &ParsedSource,
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+) -> Vec<AssetMetadata> {
     let mut visitor = AssetVisitor {
         assets: Vec::new(),
-        roots: normalize_asset_roots(asset_roots),
+        roots: if asset_index.is_some() {
+            normalize_asset_roots_without_fs(asset_roots)
+        } else {
+            normalize_asset_roots(asset_roots)
+        },
+        index: asset_index,
     };
 
     visitor.visit_ast(&parsed.ast);
@@ -379,6 +469,16 @@ pub(crate) fn validate_asset(
     span: SourceSpan,
     asset_roots: &[PathBuf],
 ) -> AssetMetadata {
+    validate_asset_with_index(kind, relative_path, span, asset_roots, None)
+}
+
+pub(crate) fn validate_asset_with_index(
+    kind: AssetLoaderKind,
+    relative_path: &str,
+    span: SourceSpan,
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+) -> AssetMetadata {
     let extension = asset_extension(relative_path);
     if !kind.has_asset_path() {
         return AssetMetadata {
@@ -392,6 +492,11 @@ pub(crate) fn validate_asset(
             duration_seconds: None,
         };
     }
+
+    if let Some(asset_index) = asset_index {
+        return validate_asset_from_index(kind, relative_path, span, asset_roots, asset_index);
+    }
+
     let unsupported = extension
         .as_deref()
         .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
@@ -427,20 +532,28 @@ pub(crate) fn validate_asset(
     }
 }
 
-struct AssetVisitor {
+struct AssetVisitor<'a> {
     assets: Vec<AssetMetadata>,
     roots: Vec<PathBuf>,
+    index: Option<&'a AssetIndex>,
 }
 
-impl Visitor for AssetVisitor {
+impl Visitor for AssetVisitor<'_> {
     fn visit_function_call(&mut self, function_call: &FunctionCall) {
         if let Some(call) = asset_loader_call(function_call) {
-            self.assets.push(validate_asset(
-                call.kind,
-                &call.path,
-                call.path_span,
-                &self.roots,
-            ));
+            let metadata = if let Some(index) = self.index {
+                validate_asset_with_index(
+                    call.kind,
+                    &call.path,
+                    call.path_span,
+                    &self.roots,
+                    Some(index),
+                )
+            } else {
+                validate_asset(call.kind, &call.path, call.path_span, &self.roots)
+            };
+
+            self.assets.push(metadata);
         }
     }
 }
@@ -528,6 +641,98 @@ fn collect_asset_path_candidates(
     }
 }
 
+fn collect_asset_index_entries(root: &Path, dir: &Path, index: &mut AssetIndex) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            collect_asset_index_entries(root, &path, index);
+            continue;
+        }
+
+        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+            continue;
+        };
+        let extension = extension.to_ascii_lowercase();
+
+        if !supported_asset_extension(&extension) {
+            continue;
+        }
+
+        let Some(relative_path) = path.strip_prefix(root).ok().map(normalize_relative_path) else {
+            continue;
+        };
+
+        if index.by_relative.contains_key(&relative_path) {
+            continue;
+        }
+
+        let absolute_path = normalize_path_components(&path);
+        let dimensions = if extension == "png" {
+            read_png_dimensions(&path)
+        } else {
+            None
+        };
+
+        index
+            .by_absolute
+            .insert(absolute_path.clone(), relative_path.clone());
+        index.by_relative.insert(
+            relative_path.clone(),
+            AssetIndexEntry {
+                relative_path,
+                extension: Some(extension),
+                dimensions,
+            },
+        );
+    }
+}
+
+fn validate_asset_from_index(
+    kind: AssetLoaderKind,
+    relative_path: &str,
+    span: SourceSpan,
+    asset_roots: &[PathBuf],
+    asset_index: &AssetIndex,
+) -> AssetMetadata {
+    let extension = asset_extension(relative_path);
+    let unsupported = extension
+        .as_deref()
+        .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
+    let indexed = (!unsupported)
+        .then(|| asset_index.entry_for_path(relative_path))
+        .flatten();
+    let path_is_absolute = Path::new(relative_path).is_absolute();
+    let roots_are_empty = asset_roots.is_empty() && asset_index.roots().is_empty();
+    let status = if unsupported {
+        AssetValidationStatus::UnsupportedExtension
+    } else if indexed.is_some() {
+        AssetValidationStatus::Valid
+    } else if roots_are_empty && !path_is_absolute {
+        AssetValidationStatus::Unchecked
+    } else {
+        AssetValidationStatus::Missing
+    };
+    let dimensions = indexed
+        .filter(|_| matches!(kind, AssetLoaderKind::Image | AssetLoaderKind::ImageData))
+        .and_then(|entry| entry.dimensions);
+
+    AssetMetadata {
+        kind,
+        relative_path: relative_path.to_owned(),
+        extension,
+        span,
+        inferred_love_type: kind.return_type_name(),
+        status,
+        dimensions,
+        duration_seconds: None,
+    }
+}
+
 fn resolve_asset_path(relative_path: &str, asset_roots: &[PathBuf]) -> Option<PathBuf> {
     let path = Path::new(relative_path);
 
@@ -561,6 +766,14 @@ fn normalize_asset_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
+fn normalize_asset_roots_without_fs(roots: &[PathBuf]) -> Vec<PathBuf> {
+    roots
+        .iter()
+        .filter(|root| !root.as_os_str().is_empty())
+        .map(|root| root.components().collect::<PathBuf>())
+        .collect()
+}
+
 fn normalize_relative_path(path: &Path) -> String {
     path.components()
         .map(|component| component.as_os_str().to_string_lossy())
@@ -568,11 +781,28 @@ fn normalize_relative_path(path: &Path) -> String {
         .join("/")
 }
 
+fn normalize_path_components(path: &Path) -> PathBuf {
+    path.components().collect()
+}
+
 fn asset_extension(path: &str) -> Option<String> {
     Path::new(path)
         .extension()
         .and_then(|extension| extension.to_str())
         .map(str::to_ascii_lowercase)
+}
+
+fn supported_asset_extension(extension: &str) -> bool {
+    [
+        AssetLoaderKind::Image,
+        AssetLoaderKind::Sound,
+        AssetLoaderKind::Music,
+        AssetLoaderKind::Font,
+        AssetLoaderKind::Shader,
+        AssetLoaderKind::ImageData,
+    ]
+    .into_iter()
+    .any(|kind| kind.supported_extensions().contains(&extension))
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

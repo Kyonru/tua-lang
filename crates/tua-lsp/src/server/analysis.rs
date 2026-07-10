@@ -4,14 +4,14 @@ use std::path::{Path, PathBuf};
 
 use tua_core::{
     require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
-    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind,
+    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AssetLoaderKind,
     CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, Completion, Diagnostic,
-    DocumentHighlight, DocumentSymbol, FoldingRange, InlayHint, ModuleLink, ProjectModel,
-    ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
-    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, VfsSourceKind, WorkspaceSymbol,
-    CONFIG_FILE,
+    DocumentHighlight, DocumentSymbol, FoldingRange, FormatOptions, InlayHint, ModuleLink,
+    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
+    SelectionRange, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, VfsSourceKind,
+    WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -24,6 +24,7 @@ use super::uri::path_from_uri;
 pub(super) struct AnalysisHost {
     core: CoreAnalysisHost,
     documents: HashMap<String, OpenDocument>,
+    project_model: Option<ProjectModel>,
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +32,7 @@ pub(super) struct AnalysisSnapshot {
     core: CoreAnalysisSnapshot,
     workspace_folders: Vec<PathBuf>,
     settings: WorkspaceSettings,
+    project_model: Option<ProjectModel>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,6 +72,7 @@ pub(super) struct CallHierarchyOutgoingCall {
 struct OpenDocument {
     path: PathBuf,
     source: String,
+    config_root: Option<PathBuf>,
 }
 
 impl AnalysisHost {
@@ -82,6 +85,7 @@ impl AnalysisHost {
             core: self.core.snapshot(),
             workspace_folders: self.effective_workspace_folders(workspace_folders),
             settings: settings.clone(),
+            project_model: self.project_model.clone(),
         }
     }
 
@@ -108,6 +112,11 @@ impl AnalysisHost {
         let path = path_from_uri(&uri);
         let source = source.into();
         let previous_roots = self.effective_workspace_folders(roots);
+        let config_root = self
+            .documents
+            .get(&uri)
+            .and_then(|document| document.config_root.clone())
+            .or_else(|| nearest_config_root(&path));
 
         {
             let _trace = tua_core::profile::diagnostics_span(
@@ -120,6 +129,7 @@ impl AnalysisHost {
                 OpenDocument {
                     path: path.clone(),
                     source: source.clone(),
+                    config_root,
                 },
             );
         }
@@ -149,7 +159,32 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) {
-        self.open_document(uri, source, roots, settings);
+        let uri = uri.into();
+        let source = source.into();
+
+        let Some(document) = self.documents.get_mut(&uri) else {
+            self.open_document(uri, source, roots, settings);
+            return;
+        };
+
+        document.source = source.clone();
+        let path = document.path.clone();
+        let effective_roots = self.effective_workspace_folders(roots);
+
+        let kind = {
+            let _trace = tua_core::profile::diagnostics_span(
+                tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+            );
+
+            self.cache_source_after_sync(path.clone(), source.clone(), &effective_roots, settings)
+        };
+
+        if let Some(kind) = kind {
+            self.core
+                .open_document_with_kind(path, source, core_source_kind(kind));
+        } else {
+            self.core.remove_file(path);
+        }
     }
 
     pub(super) fn close_document(&mut self, uri: &str) {
@@ -247,7 +282,7 @@ impl AnalysisHost {
                 .values()
                 .map(|document| document.path.clone())
                 .collect::<BTreeSet<_>>();
-            let model = project_model_for_roots(&effective_roots, settings).ok();
+            let model = self.project_model.clone();
 
             (effective_roots, open_paths, model)
         };
@@ -301,7 +336,7 @@ impl AnalysisHost {
             return None;
         }
 
-        let Some(kind) = source_kind_for_path(&path, roots, settings) else {
+        let Some(kind) = source_kind_for_path(&path, self.project_model.as_ref()) else {
             self.core.remove_file(&path);
             return None;
         };
@@ -331,6 +366,7 @@ impl AnalysisHost {
     fn sync_core_project_inputs(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
         let effective_roots = self.effective_workspace_folders(roots);
         let Ok(model) = project_model_for_roots(&effective_roots, settings) else {
+            self.project_model = None;
             return;
         };
         let source_roots = model
@@ -363,13 +399,71 @@ impl AnalysisHost {
             self.core
                 .set_config(settings.apply_project_config(workspace.config().clone()));
         }
+        self.core.refresh_asset_index_from_disk();
+
+        self.project_model = Some(model);
+    }
+
+    pub(super) fn format_options_for_path(
+        &self,
+        path: &Path,
+        settings: &WorkspaceSettings,
+    ) -> FormatOptions {
+        let format_config = self
+            .project_model
+            .as_ref()
+            .and_then(|model| model.workspace_for_path(path))
+            .map(|workspace| workspace.config().format.clone())
+            .unwrap_or_default();
+
+        settings.format_options(format_config)
+    }
+
+    pub(super) fn is_source_uri(
+        &self,
+        uri: &str,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> bool {
+        let path = path_from_uri(uri);
+
+        if settings.is_ignored(&path, roots) {
+            return false;
+        }
+
+        source_kind_for_path(&path, self.project_model.as_ref()).is_some()
+    }
+
+    pub(super) fn is_asset_uri(
+        &self,
+        uri: &str,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> bool {
+        let path = path_from_uri(uri);
+
+        if settings.is_ignored(&path, roots) || !is_love_asset_path(&path) {
+            return false;
+        }
+
+        self.project_model
+            .as_ref()
+            .map(|model| {
+                model.workspaces().iter().any(|workspace| {
+                    workspace
+                        .asset_roots()
+                        .into_iter()
+                        .any(|root| path.starts_with(root))
+                })
+            })
+            .unwrap_or_else(|| roots.iter().any(|root| path.starts_with(root)))
     }
 
     fn effective_workspace_folders(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
         let mut effective = roots.to_vec();
 
         for document in self.documents.values() {
-            if let Some(root) = nearest_config_root(&document.path) {
+            if let Some(root) = document.config_root.clone() {
                 push_unique_path(&mut effective, root);
             }
         }
@@ -459,8 +553,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         }
 
-        let Some(model) = project_model_for_roots(&self.workspace_folders, &self.settings).ok()
-        else {
+        let Some(model) = self.project_model.as_ref() else {
             return Vec::new();
         };
         let Some(workspace) = model.workspace_for_path(path) else {
@@ -649,13 +742,13 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        let model = project_model_for_roots(&self.workspace_folders, &self.settings).ok();
+        let model = self.project_model.as_ref();
 
         self.core
             .workspace_symbols(query)
             .into_iter()
             .filter(|symbol| {
-                project_contains_path(model.as_ref(), &symbol.path)
+                project_contains_path(model, &symbol.path)
                     && !self
                         .settings
                         .is_ignored(&symbol.path, &self.workspace_folders)
@@ -776,29 +869,41 @@ fn discover_project_sources_into(
     }
 }
 
-fn source_kind_for_path(
-    path: &Path,
-    roots: &[PathBuf],
-    settings: &WorkspaceSettings,
-) -> Option<SourceKind> {
-    project_model_for_roots(roots, settings)
-        .ok()
+fn source_kind_for_path(path: &Path, model: Option<&ProjectModel>) -> Option<SourceKind> {
+    model
         .and_then(|model| {
             model
                 .workspace_for_path(path)
                 .and_then(|workspace| workspace.source_kind_for_path(path))
         })
         .map(source_kind_from_vfs)
-        .or_else(|| {
-            ProjectModel::load_for_path(path)
-                .ok()
-                .and_then(|model| {
-                    model
-                        .workspace_for_path(path)
-                        .and_then(|workspace| workspace.source_kind_for_path(path))
-                })
-                .map(source_kind_from_vfs)
-        })
+        .or_else(|| source_kind_from_extension(path))
+}
+
+fn source_kind_from_extension(path: &Path) -> Option<SourceKind> {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("lua") => Some(SourceKind::Lua),
+        Some("tua") => Some(SourceKind::Tua),
+        _ => None,
+    }
+}
+
+fn is_love_asset_path(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+        return false;
+    };
+    let extension = extension.to_ascii_lowercase();
+
+    [
+        AssetLoaderKind::Image,
+        AssetLoaderKind::Sound,
+        AssetLoaderKind::Music,
+        AssetLoaderKind::Font,
+        AssetLoaderKind::Shader,
+        AssetLoaderKind::ImageData,
+    ]
+    .into_iter()
+    .any(|kind| kind.supported_extensions().contains(&extension.as_str()))
 }
 
 fn nearest_config_root(path: &Path) -> Option<PathBuf> {

@@ -116,11 +116,20 @@ pub(crate) fn complete_parsed_source_with_environment(
     position: SourcePosition,
     environment: &TypeEnvironment,
 ) -> Vec<Completion> {
-    let Some(context) = completion_context(&parsed.source, position) else {
+    complete_source_with_parsed_environment(&parsed.source, parsed, position, environment)
+}
+
+pub(crate) fn complete_source_with_parsed_environment(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+) -> Vec<Completion> {
+    let Some(context) = completion_context(source, position) else {
         return Vec::new();
     };
 
-    complete_parsed_source_with_context(parsed, &parsed.source, context, environment)
+    complete_parsed_source_with_context(parsed, source, context, environment)
 }
 
 pub(crate) fn complete_field_access_in_source_with_environment(

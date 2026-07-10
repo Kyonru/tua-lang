@@ -36,6 +36,9 @@ The VS Code extension starts this server and surfaces editor features for
 - Asset path hovers show kind, relative path, inferred LOVE type, validation
   status, extension, and optional cheap metadata such as PNG dimensions when
   available.
+- Asset path completion and validation use an in-memory asset index refreshed
+  from workspace and watched-file events instead of walking asset directories
+  during editor requests.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
 - LOVE callback completions can insert declaration snippets for callbacks such
@@ -43,13 +46,16 @@ The VS Code extension starts this server and surfaces editor features for
 - `love.conf(t)` parameters expose common config fields such as
   `t.window.title`, `t.window.width`, and `t.modules.physics`.
 - Completion item resolve for documentation/details.
+- Open buffers retain their last valid semantic snapshot. During a temporary
+  syntax error, hover and inlay hints keep using those facts, while completion
+  combines the current cursor context with the last valid type environment.
 - Signature help triggered by `(` and `,`, including parameter documentation
   from supported annotations.
 - Definition, references, rename, document highlight, document symbols,
   workspace symbols, document links, code actions, call hierarchy, inlay hints,
   and semantic tokens.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
-  and `tua.toml`.
+  LOVE asset extensions, and `tua.toml`.
 
 ## LOVE Method Guidance
 

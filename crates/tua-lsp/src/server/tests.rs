@@ -256,6 +256,15 @@ fn initialized_registers_watched_files_when_client_supports_dynamic_registration
         registration["params"]["registrations"][0]["registerOptions"]["watchers"][0]["globPattern"],
         "**/*.tua"
     );
+    let watchers = registration["params"]["registrations"][0]["registerOptions"]["watchers"]
+        .as_array()
+        .expect("watchers should be an array");
+    assert!(
+        watchers
+            .iter()
+            .any(|watcher| watcher["globPattern"] == "**/*.png"),
+        "asset files should be watched: {watchers:?}"
+    );
 }
 
 #[test]
@@ -570,6 +579,39 @@ local next = image "assets/p"
         .as_str()
         .expect("asset completion docs should be markdown")
         .contains("Supported image asset"));
+}
+
+#[test]
+fn watched_asset_changes_refresh_asset_index_and_republish_open_diagnostics() {
+    let temp = TempProject::new("watched-asset-index");
+    let source = r#"
+local player = image "assets/player.png"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+
+    let uri = temp.uri_for("src/main.tua");
+    let asset_uri = temp.uri_for("assets/player.png");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(
+        last_published_diagnostics(server.output(), &uri)[0]["code"],
+        "TL2004"
+    );
+
+    temp.write("assets/player.png", "placeholder");
+    server.send(watched_files_changed([(&asset_uri, 1)]));
+    server.send(completion_request(2, &uri, source, "assets/p"));
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "asset refresh should clear missing-asset diagnostics: {diagnostics:#?}"
+    );
+    assert_completion_labels(server.output(), 2, ["assets/player.png"]);
 }
 
 #[test]
@@ -2709,6 +2751,35 @@ end
     assert_hover_contains(&output, 2, "local bad: number");
     assert_completion_labels(&output, 3, ["font"]);
     assert!(inlay_hint_labels(hints).contains(&": string"));
+}
+
+#[test]
+fn semantic_features_use_last_good_snapshot_during_unrecoverable_edits() {
+    let uri = "file:///tmp/last-good-semantics.tua";
+    let valid = r#"type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 100 }
+local health = player.hp
+"#;
+    let invalid = format!("{valid}local unfinished = (\nlocal nextPlayer: Pl\n");
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, valid));
+    server.send(did_change(uri, &invalid, 2));
+    server.send(hover_request(3, uri, &invalid, "player: Player"));
+    server.send(completion_request(4, uri, &invalid, "nextPlayer: Pl"));
+    server.send(inlay_hint_request(5, uri, 0, 0, 8, 0));
+
+    assert_hover_contains(server.output(), 3, "local player: Player");
+    assert_completion_labels(server.output(), 4, ["Player"]);
+
+    let hints = response_with_id(server.output(), 5)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert!(inlay_hint_labels(hints).contains(&": number"));
 }
 
 #[test]

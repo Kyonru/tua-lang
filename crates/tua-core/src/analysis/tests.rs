@@ -484,6 +484,50 @@ local wave = shader "assets/<|shader|>"
 }
 
 #[test]
+fn refreshed_asset_index_updates_asset_diagnostics_and_completion_without_source_change() {
+    let temp = TempProject::new("asset-index-refresh");
+    let source = r#"-- file: src/main.tua
+local player = image "assets/player.png"
+local next = image "assets/p<|complete|>"
+"#;
+    let fixture = Fixture::parse(source);
+    let mut host = AnalysisHost::new();
+
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    host.refresh_asset_index_from_disk();
+
+    let before = host.snapshot();
+    assert!(before
+        .pipeline_diagnostics("src/main.tua")
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::ASSET_MISSING)));
+    assert!(before
+        .completion("src/main.tua", fixture.position("complete"))
+        .is_empty());
+
+    temp.write("assets/player.png", png_header(24, 12));
+    host.refresh_asset_index_from_disk();
+
+    let after = host.snapshot();
+    let diagnostics = after.pipeline_diagnostics("src/main.tua");
+    let completions = after.completion("src/main.tua", fixture.position("complete"));
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::ASSET_MISSING)),
+        "{diagnostics:?}"
+    );
+    assert_eq!(
+        completion_labels(&completions),
+        vec!["assets/player.png".to_owned()]
+    );
+}
+
+#[test]
 fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
     let mut config = ProjectConfig::default();
 
@@ -695,6 +739,54 @@ end
         hints.iter().any(|hint| hint.label == ": string"),
         "{hints:?}"
     );
+}
+
+#[test]
+fn snapshot_combines_current_completion_context_with_last_good_semantics() {
+    let valid = r#"type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 100 }
+local health = player.hp
+"#;
+    let invalid = Fixture::parse(
+        r#"-- file: src/main.tua
+type Player = {
+  hp: number,
+}
+
+local <|hover|>player: Player = { hp = 100 }
+local health = player.hp
+local unfinished = (
+local nextPlayer: Pl<|complete|>
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, invalid.source("src/main.tua"));
+
+    let snapshot = host.snapshot();
+
+    assert!(matches!(snapshot.parse(&path), Some(Err(_))));
+    assert_eq!(
+        snapshot
+            .hover(&path, invalid.position("hover"))
+            .expect("hover should use the last valid semantic snapshot")
+            .contents,
+        "local player: Player"
+    );
+    assert!(
+        completion_labels(&snapshot.completion(&path, invalid.position("complete")))
+            .contains(&"Player".to_owned())
+    );
+    assert!(snapshot
+        .inlay_hints(&path)
+        .iter()
+        .any(|hint| hint.label == ": number"));
 }
 
 #[test]
@@ -1418,6 +1510,71 @@ local account = setmetatable({ balance = 50 }, Account)
             .iter()
             .any(|label| label == "deposit"),
         "incomplete colon access should preserve metatable method completion"
+    );
+}
+
+#[test]
+fn snapshot_completion_uses_current_source_with_last_good_semantics_after_unrecoverable_edit() {
+    let valid = r#"type Player = {
+  hp: number,
+  name: string,
+}
+
+local player: Player = { hp = 100, name = "Ada" }
+"#;
+    let invalid = Fixture::parse(&format!(
+        "-- file: src/main.tua\n{valid}local unfinished = (\nplayer.<|complete|>\n"
+    ));
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, invalid.source("src/main.tua"));
+
+    let completions = host
+        .snapshot()
+        .completion(&path, invalid.position("complete"));
+    let labels = completion_labels(&completions);
+
+    assert!(
+        labels.contains(&"hp".to_owned()) && labels.contains(&"name".to_owned()),
+        "field completion should use last good types at the current edit position: {labels:?}"
+    );
+}
+
+#[test]
+fn asset_index_refresh_preserves_last_good_semantics_for_invalid_open_documents() {
+    let temp = TempProject::new("asset-refresh-last-good");
+    let valid = r#"type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 100 }
+"#;
+    let invalid = Fixture::parse(&format!(
+        "-- file: src/main.tua\n{valid}local unfinished = (\nplayer.<|complete|>\n"
+    ));
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, invalid.source("src/main.tua"));
+
+    temp.write("assets/player.png", png_header(8, 8));
+    host.refresh_asset_index_from_disk();
+
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion(&path, invalid.position("complete")),
+    );
+
+    assert!(
+        labels.contains(&"hp".to_owned()),
+        "asset refresh should not clear last-good semantic completions: {labels:?}"
     );
 }
 

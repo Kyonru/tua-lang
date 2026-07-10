@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use serde_json::{json, Value};
-use tua_core::{ProjectModel, ProjectModelOptions, SourcePosition};
+use tua_core::SourcePosition;
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -236,6 +236,7 @@ impl LspServer {
         let mut source_changes = Vec::new();
         let mut deleted_sources = Vec::new();
         let mut should_reindex = false;
+        let mut asset_changed = false;
 
         for change in changes {
             if is_config_uri(&change.uri) {
@@ -243,7 +244,16 @@ impl LspServer {
                 continue;
             }
 
-            if !is_source_uri(&change.uri, &self.workspace_folders, &self.settings) {
+            if !self
+                .analysis
+                .is_source_uri(&change.uri, &self.workspace_folders, &self.settings)
+            {
+                if self
+                    .analysis
+                    .is_asset_uri(&change.uri, &self.workspace_folders, &self.settings)
+                {
+                    asset_changed = true;
+                }
                 continue;
             }
 
@@ -268,7 +278,11 @@ impl LspServer {
                 .reindex_workspace(&self.workspace_folders, &self.settings);
         }
 
-        if should_reindex || !source_changes.is_empty() || !deleted_sources.is_empty() {
+        if should_reindex
+            || asset_changed
+            || !source_changes.is_empty()
+            || !deleted_sources.is_empty()
+        {
             self.pending_slow_diagnostics.clear();
             self.analysis
                 .refresh_open_documents(&self.workspace_folders, &self.settings);
@@ -979,39 +993,8 @@ impl LspServer {
     }
 
     fn format_options_for_path(&self, path: &PathBuf) -> tua_core::FormatOptions {
-        let format_config = ProjectModel::load_for_path(path)
-            .ok()
-            .and_then(|model| {
-                model
-                    .workspace_for_path(path)
-                    .map(|workspace| workspace.config().format.clone())
-            })
-            .or_else(|| {
-                project_model_for_settings(&self.workspace_folders, &self.settings)
-                    .ok()
-                    .and_then(|model| {
-                        model
-                            .workspace_for_path(path)
-                            .map(|workspace| workspace.config().format.clone())
-                    })
-            })
-            .unwrap_or_default();
-
-        self.settings.format_options(format_config)
+        self.analysis.format_options_for_path(path, &self.settings)
     }
-}
-
-fn project_model_for_settings(
-    roots: &[PathBuf],
-    settings: &WorkspaceSettings,
-) -> Result<ProjectModel, tua_core::ConfigError> {
-    ProjectModel::load_with_options(ProjectModelOptions {
-        workspace_folders: roots.to_vec(),
-        ignored_paths: settings.ignored_paths.clone(),
-        file_associations: settings.project_file_associations(),
-        require_path_separator: settings.module_path_separator(),
-        ..ProjectModelOptions::default()
-    })
 }
 
 fn document_uri(params: &Value) -> Option<&str> {
@@ -1073,38 +1056,6 @@ fn push_diagnostics_publication(
     }
 }
 
-fn is_source_uri(uri: &str, roots: &[PathBuf], settings: &WorkspaceSettings) -> bool {
-    let path = path_from_uri(uri);
-
-    if settings.is_ignored(&path, roots) {
-        return false;
-    }
-
-    ProjectModel::load_for_path(&path)
-        .ok()
-        .and_then(|model| {
-            model
-                .workspace_for_path(&path)
-                .and_then(|workspace| workspace.source_kind_for_path(&path))
-        })
-        .or_else(|| {
-            ProjectModel::load_with_options(ProjectModelOptions {
-                workspace_folders: roots.to_vec(),
-                ignored_paths: settings.ignored_paths.clone(),
-                file_associations: settings.project_file_associations(),
-                require_path_separator: settings.module_path_separator(),
-                ..ProjectModelOptions::default()
-            })
-            .ok()
-            .and_then(|model| {
-                model
-                    .workspace_for_path(&path)
-                    .and_then(|workspace| workspace.source_kind_for_path(&path))
-            })
-        })
-        .is_some()
-}
-
 fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {
     message
         .get("params")
@@ -1137,7 +1088,26 @@ fn register_watched_files_request(id: u64) -> Value {
                         "watchers": [
                             { "globPattern": "**/*.tua" },
                             { "globPattern": "**/*.lua" },
-                            { "globPattern": "**/tua.toml" }
+                            { "globPattern": "**/tua.toml" },
+                            { "globPattern": "**/*.bmp" },
+                            { "globPattern": "**/*.exr" },
+                            { "globPattern": "**/*.hdr" },
+                            { "globPattern": "**/*.jpeg" },
+                            { "globPattern": "**/*.jpg" },
+                            { "globPattern": "**/*.pic" },
+                            { "globPattern": "**/*.png" },
+                            { "globPattern": "**/*.tga" },
+                            { "globPattern": "**/*.flac" },
+                            { "globPattern": "**/*.mp3" },
+                            { "globPattern": "**/*.ogg" },
+                            { "globPattern": "**/*.wav" },
+                            { "globPattern": "**/*.otf" },
+                            { "globPattern": "**/*.ttf" },
+                            { "globPattern": "**/*.frag" },
+                            { "globPattern": "**/*.fs" },
+                            { "globPattern": "**/*.glsl" },
+                            { "globPattern": "**/*.vert" },
+                            { "globPattern": "**/*.vs" }
                         ]
                     }
                 }

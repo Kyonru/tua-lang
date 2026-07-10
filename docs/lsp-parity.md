@@ -48,16 +48,16 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Selection and folding ranges | Provides selection growth and folding for common syntax structures. | Smaller than rust-analyzer's syntax-tree backed editing surface, but the protocol surface exists. | 67 |
 | Semantic tokens | Covers aliases, functions, locals, parameters, fields, builtins, unresolved references, globals, module names, methods, annotation tags, and modifiers. | Core semantic classes are present; deep dynamic Lua remains limited. | 47 |
 | Lua and LOVE builtin surface | Curated Lua catalog plus generated LOVE 11.x catalog provide hover, completion, signatures, object method signatures, and selected return types. | LuaHelper commonly uses richer annotation stubs. | 35, 48.5 |
-| LOVE helpers | `image`, `sound`, `music`, `font`, `shader`, `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles` infer LOVE object types, emit ordinary LOVE calls, validate obvious paths/extensions for path-based helpers, and drive helper-specific asset path completion. | Tua-specific LOVE-focused workflow. | 48.6 |
+| LOVE helpers | `image`, `sound`, `music`, `font`, `shader`, `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles` infer LOVE object types, emit ordinary LOVE calls, validate obvious paths/extensions for path-based helpers, and drive helper-specific asset path completion from the warmed asset index. | Tua-specific LOVE-focused workflow. | 48.6 |
 | LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, BrineVector-backed emission, and bundled runtime output. | Deeper vector-library-specific docs and richer overload presentation can still improve. | 73 |
 | ECS domain helper | Opt-in `[ecs]` / `tua.ecs.enabled` support adds typed `ecs` APIs, component/query diagnostics, and a tiny-ecs-compatible reference adapter. | Tua models clear static ECS patterns and leaves dynamic runtime composition permissive. | 74 |
-| Workspace folders and watchers | Workspace folders, folder changes, watched files, and `tua.toml` changes affect diagnostics and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
+| Workspace folders and watchers | Workspace folders, folder changes, watched source files, watched LOVE assets, and `tua.toml` changes refresh cached project state, diagnostics, and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
 
 ## Protocol Surface Supported But Shallow
 
 | Feature | Tua today | Gap | Roadmap |
 | --- | --- | --- | --- |
-| Analysis architecture | Shared analysis host/snapshot, VFS overlays, project model, HIR-like modules, module graph, scope maps, project type database, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
+| Analysis architecture | Shared analysis host/snapshot, VFS overlays, cached project model, warmed asset index, HIR-like modules, module graph, scope maps, project type database, last-good semantic recovery, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
 | LuaDoc coverage | Common interop tags are parsed/lowered, including overload and vararg signatures. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49, 70.25 |
 | Type system | Supports primitives, `any`, aliases, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 61, 62 |
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
