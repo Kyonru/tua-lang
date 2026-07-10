@@ -572,7 +572,7 @@ Returns:
             ],
         }]),
         r"Body:getLocalPoints" => Some(&[LuaSignature {
-            label: r"function Body:getLocalPoints(x1: number, y1: number, x2: number, y2: number, ...): number, number, number, number, number",
+            label: r"function Body:getLocalPoints(x1: number, y1: number, x2: number, y2: number, ...: number): number, number, number, number, number",
             documentation: r"Transforms multiple points from world coordinates to local coordinates.
 
 Returns:
@@ -599,7 +599,7 @@ Returns:
                     documentation: r"(Argument) The y position of the second point.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: number",
                     documentation: r"(Argument) You can continue passing x and y position of the points.",
                 },
             ],
@@ -1443,7 +1443,7 @@ Returns:
             parameters: &[],
         }]),
         r"Canvas:renderTo" => Some(&[LuaSignature {
-            label: r"function Canvas:renderTo(func: function, ...)",
+            label: r"function Canvas:renderTo(func: function, ...: any)",
             documentation: r"Render to the Canvas using a function.
 
 This is a shortcut to love.graphics.setCanvas:
@@ -1463,7 +1463,7 @@ love.graphics.setCanvas()",
                     documentation: r"A function performing drawing operations.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: any",
                     documentation: r"Additional arguments to call the function with.",
                 },
             ],
@@ -1927,7 +1927,7 @@ Returns:
             parameters: &[],
         }]),
         r"Channel:performAtomic" => Some(&[LuaSignature {
-            label: r"function Channel:performAtomic(func: function, ...): any, any",
+            label: r"function Channel:performAtomic(func: function, ...: any): any, any",
             documentation: r"Executes the specified function atomically with respect to this Channel.
 
 Calling multiple methods in a row on the same Channel is often useful. However if multiple Threads are calling this Channel's methods at the same time, the different calls on each Thread might end up interleaved (e.g. one or more of the second thread's calls may happen in between the first thread's calls.)
@@ -1943,7 +1943,7 @@ Returns:
                     documentation: r"The function to call, the form of function(channel, arg1, arg2, ...) end. The Channel is passed as the first argument to the function when it is called.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: any",
                     documentation: r"Additional arguments that the given function will receive when it is called.",
                 },
             ],
@@ -4049,12 +4049,12 @@ Returns:
             parameters: &[],
         }]),
         r"Fixture:setCategory" => Some(&[LuaSignature {
-            label: r"function Fixture:setCategory(...)",
+            label: r"function Fixture:setCategory(...: number)",
             documentation: r"Sets the categories the fixture belongs to. There can be up to 16 categories represented as a number from 1 to 16.
 
 All fixture's default category is 1.",
             parameters: &[LuaSignatureParameter {
-                label: r"...",
+                label: r"...: number",
                 documentation: r"The categories.",
             }],
         }]),
@@ -4115,12 +4115,12 @@ The groups range from -32768 to 32767.",
             }],
         }]),
         r"Fixture:setMask" => Some(&[LuaSignature {
-            label: r"function Fixture:setMask(...)",
+            label: r"function Fixture:setMask(...: number)",
             documentation: r"Sets the category mask of the fixture. There can be up to 16 categories represented as a number from 1 to 16.
 
 This fixture will '''NOT''' collide with the fixtures that are in the selected categories if the other fixture also has a category of this fixture selected.",
             parameters: &[LuaSignatureParameter {
-                label: r"...",
+                label: r"...: number",
                 documentation: r"The masks.",
             }],
         }]),
@@ -4411,7 +4411,7 @@ Returns:
             parameters: &[],
         }]),
         r"Font:setFallbacks" => Some(&[LuaSignature {
-            label: r"function Font:setFallbacks(fallbackfont1: Font, ...)",
+            label: r"function Font:setFallbacks(fallbackfont1: Font, ...: Font)",
             documentation: r"Sets the fallback fonts. When the Font doesn't contain a glyph, it will substitute the glyph from the next subsequent fallback Fonts. This is akin to setting a 'font stack' in Cascading Style Sheets (CSS).
 
 If this is called it should be before love.graphics.print, Font:getWrap, and other Font methods which use glyph positioning information are called.
@@ -4423,7 +4423,7 @@ Every fallback Font must be created from the same file type as the primary Font.
                     documentation: r"The first fallback Font to use.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: Font",
                     documentation: r"Additional fallback Fonts.",
                 },
             ],
@@ -6300,7 +6300,7 @@ Disables any texture from being used when drawing the Mesh. Untextured meshes ha
         ]),
         r"Mesh:setVertex" => Some(&[
             LuaSignature {
-                label: r"function Mesh:setVertex(index: number, attributecomponent: number, ...)",
+                label: r"function Mesh:setVertex(index: number, attributecomponent: number, ...: number)",
                 documentation: r"Sets the properties of a vertex in the Mesh.
 
 In versions prior to 11.0, color and byte component values were within the range of 0 to 255 instead of 0 to 1.
@@ -6318,7 +6318,7 @@ If no value is supplied for a specific vertex attribute component, it will be se
                         documentation: r"The first component of the first vertex attribute in the specified vertex.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional components of all vertex attributes in the specified vertex.",
                     },
                 ],
@@ -6417,7 +6417,7 @@ Sets the vertex components of a Mesh that wasn't created with a custom vertex fo
             },
         ]),
         r"Mesh:setVertexAttribute" => Some(&[LuaSignature {
-            label: r"function Mesh:setVertexAttribute(vertexindex: number, attributeindex: number, value1: number, value2: number, ...)",
+            label: r"function Mesh:setVertexAttribute(vertexindex: number, attributeindex: number, value1: number, value2: number, ...: number)",
             documentation: r"Sets the properties of a specific attribute within a vertex in the Mesh.
 
 Meshes without a custom vertex format specified in love.graphics.newMesh have position as their first attribute, texture coordinates as their second attribute, and color as their third attribute.
@@ -6441,7 +6441,7 @@ Attribute components which exist within the attribute but are not specified as a
                     documentation: r"The new value for the second component of the attribute.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: number",
                     documentation: r"Any additional vertex attribute components.",
                 },
             ],
@@ -7276,7 +7276,7 @@ Returns:
         }]),
         r"ParticleSystem:setColors" => Some(&[
             LuaSignature {
-                label: r"function ParticleSystem:setColors(r1: number, g1: number, b1: number, a1?: number, ...)",
+                label: r"function ParticleSystem:setColors(r1: number, g1: number, b1: number, a1?: number, ...: number)",
                 documentation: r"Sets a series of colors to apply to the particle sprite. The particle system will interpolate between each color evenly over the particle's lifetime.
 
 Arguments can be passed in groups of four, representing the components of the desired RGBA value, or as tables of RGBA component values, with a default alpha value of 1 if only three values are given. At least one color must be specified. A maximum of eight may be used.
@@ -7302,13 +7302,13 @@ In versions prior to 11.0, color component values were within the range of 0 to 
 Default: `1`.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional colors.",
                     },
                 ],
             },
             LuaSignature {
-                label: r"function ParticleSystem:setColors(rgba1: table, ...)",
+                label: r"function ParticleSystem:setColors(rgba1: table, ...: table)",
                 documentation: r"Sets a series of colors to apply to the particle sprite. The particle system will interpolate between each color evenly over the particle's lifetime.
 
 Arguments can be passed in groups of four, representing the components of the desired RGBA value, or as tables of RGBA component values, with a default alpha value of 1 if only three values are given. At least one color must be specified. A maximum of eight may be used.
@@ -7320,7 +7320,7 @@ In versions prior to 11.0, color component values were within the range of 0 to 
                         documentation: r"First color, a numerical indexed table with the red, green, blue and alpha values as numbers (0-1). The alpha is optional and defaults to 1 if it is left out.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: table",
                         documentation: r"Additional color, a numerical indexed table with the red, green, blue and alpha values as numbers (0-1). The alpha is optional and defaults to 1 if it is left out.",
                     },
                 ],
@@ -7480,7 +7480,7 @@ Default: `min`.",
         }]),
         r"ParticleSystem:setQuads" => Some(&[
             LuaSignature {
-                label: r"function ParticleSystem:setQuads(quad1: Quad, ...)",
+                label: r"function ParticleSystem:setQuads(quad1: Quad, ...: Quad)",
                 documentation: r"Sets a series of Quads to use for the particle sprites. Particles will choose a Quad from the list based on the particle's current lifetime, allowing for the use of animated sprite sheets with ParticleSystems.",
                 parameters: &[
                     LuaSignatureParameter {
@@ -7488,7 +7488,7 @@ Default: `min`.",
                         documentation: r"The first Quad to use.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: Quad",
                         documentation: r"Additional Quads to use.",
                     },
                 ],
@@ -8689,7 +8689,7 @@ Returns:
             parameters: &[],
         }]),
         r"Rasterizer:hasGlyphs" => Some(&[LuaSignature {
-            label: r"function Rasterizer:hasGlyphs(glyph1: string | number, ...): boolean",
+            label: r"function Rasterizer:hasGlyphs(glyph1: string | number, ...: string | number): boolean",
             documentation: r"Checks if font contains specified glyphs.
 
 Returns:
@@ -8700,7 +8700,7 @@ Returns:
                     documentation: r"Glyph",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: string | number",
                     documentation: r"Additional glyphs",
                 },
             ],
@@ -9316,7 +9316,7 @@ Returns:
         }]),
         r"Shader:send" => Some(&[
             LuaSignature {
-                label: r"function Shader:send(name: string, number: number, ...)",
+                label: r"function Shader:send(name: string, number: number, ...: number)",
                 documentation: r"Sends one or more values to a special (''uniform'') variable inside the shader. Uniform variables have to be marked using the ''uniform'' or ''extern'' keyword, e.g.
 
 uniform float time;  // 'float' is the typical number type used in GLSL shaders.
@@ -9348,13 +9348,13 @@ Because all numbers in Lua are floating point, in versions prior to 0.10.2 you m
                         documentation: r"Number to send to store in the uniform variable.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional numbers to send if the uniform variable is an array.",
                     },
                 ],
             },
             LuaSignature {
-                label: r"function Shader:send(name: string, vector: table, ...)",
+                label: r"function Shader:send(name: string, vector: table, ...: table)",
                 documentation: r"Sends one or more values to a special (''uniform'') variable inside the shader. Uniform variables have to be marked using the ''uniform'' or ''extern'' keyword, e.g.
 
 uniform float time;  // 'float' is the typical number type used in GLSL shaders.
@@ -9384,13 +9384,13 @@ Uniform / extern variables are read-only in the shader code and remain constant 
                         documentation: r"Numbers to send to the uniform variable as a vector. The number of elements in the table determines the type of the vector (e.g. two numbers -&gt; vec2). At least two and at most four numbers can be used.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: table",
                         documentation: r"Additional vectors to send if the uniform variable is an array. All vectors need to be of the same size (e.g. only vec3's).",
                     },
                 ],
             },
             LuaSignature {
-                label: r"function Shader:send(name: string, matrix: table, ...)",
+                label: r"function Shader:send(name: string, matrix: table, ...: table)",
                 documentation: r"Sends one or more values to a special (''uniform'') variable inside the shader. Uniform variables have to be marked using the ''uniform'' or ''extern'' keyword, e.g.
 
 uniform float time;  // 'float' is the typical number type used in GLSL shaders.
@@ -9420,7 +9420,7 @@ Uniform / extern variables are read-only in the shader code and remain constant 
                         documentation: r"2x2, 3x3, or 4x4 matrix to send to the uniform variable. Using table form: {{a,b,c,d}, {e,f,g,h}, ... } or (since version 0.10.2) {a,b,c,d, e,f,g,h, ...}. The order in 0.10.2 is column-major; starting in 11.0 it's row-major instead.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: table",
                         documentation: r"Additional matrices of the same type as ''matrix'' to store in a uniform array.",
                     },
                 ],
@@ -9458,7 +9458,7 @@ Uniform / extern variables are read-only in the shader code and remain constant 
                 ],
             },
             LuaSignature {
-                label: r"function Shader:send(name: string, boolean: boolean, ...)",
+                label: r"function Shader:send(name: string, boolean: boolean, ...: boolean)",
                 documentation: r"Sends one or more values to a special (''uniform'') variable inside the shader. Uniform variables have to be marked using the ''uniform'' or ''extern'' keyword, e.g.
 
 uniform float time;  // 'float' is the typical number type used in GLSL shaders.
@@ -9488,13 +9488,13 @@ Uniform / extern variables are read-only in the shader code and remain constant 
                         documentation: r"Boolean to send to store in the uniform variable.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: boolean",
                         documentation: r"Additional booleans to send if the uniform variable is an array.",
                     },
                 ],
             },
             LuaSignature {
-                label: r"function Shader:send(name: string, matrixlayout: MatrixLayout, matrix: table, ...)",
+                label: r"function Shader:send(name: string, matrixlayout: MatrixLayout, matrix: table, ...: table)",
                 documentation: r"Sends one or more values to a special (''uniform'') variable inside the shader. Uniform variables have to be marked using the ''uniform'' or ''extern'' keyword, e.g.
 
 uniform float time;  // 'float' is the typical number type used in GLSL shaders.
@@ -9528,7 +9528,7 @@ Uniform / extern variables are read-only in the shader code and remain constant 
                         documentation: r"2x2, 3x3, or 4x4 matrix to send to the uniform variable. Using table form: {{a,b,c,d}, {e,f,g,h}, ... } or {a,b,c,d, e,f,g,h, ...}.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: table",
                         documentation: r"Additional matrices of the same type as ''matrix'' to store in a uniform array.",
                     },
                 ],
@@ -9681,7 +9681,7 @@ Default: `all`.",
             },
         ]),
         r"Shader:sendColor" => Some(&[LuaSignature {
-            label: r"function Shader:sendColor(name: string, color: table, ...)",
+            label: r"function Shader:sendColor(name: string, color: table, ...: table)",
             documentation: r"Sends one or more colors to a special (''extern'' / ''uniform'') vec3 or vec4 variable inside the shader. The color components must be in the range of 1. The colors are gamma-corrected if global gamma-correction is enabled.
 
 Extern variables must be marked using the ''extern'' keyword, e.g.
@@ -9705,7 +9705,7 @@ In versions prior to 11.0, color component values were within the range of 0 to 
                     documentation: r"A table with red, green, blue, and optional alpha color components in the range of 1 to send to the extern as a vector.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: table",
                     documentation: r"Additional colors to send in case the extern is an array. All colors need to be of the same size (e.g. only vec3's).",
                 },
             ],
@@ -12237,14 +12237,14 @@ Beginning with version 0.9.0, threads can be restarted after they have completed
                 parameters: &[],
             },
             LuaSignature {
-                label: r"function Thread:start(...)",
+                label: r"function Thread:start(...: Variant)",
                 documentation: r"Starts the thread.
 
 Beginning with version 0.9.0, threads can be restarted after they have completed their execution.
 
 Arguments passed to Thread:start are accessible in the thread's main file via '''...''' (the vararg expression.)",
                 parameters: &[LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: Variant",
                     documentation: r"A string, number, boolean, LÖVE object, or simple table.",
                 }],
             },
@@ -13902,7 +13902,7 @@ Returns:
                 parameters: &[],
             },
             LuaSignature {
-                label: r"function love.audio.pause(source: Source, ...)",
+                label: r"function love.audio.pause(source: Source, ...: Source)",
                 documentation: r"Pauses specific or all currently played Sources.
 
 Pauses the given Sources.",
@@ -13912,7 +13912,7 @@ Pauses the given Sources.",
                         documentation: r"The first Source to pause.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: Source",
                         documentation: r"Additional Sources to pause.",
                     },
                 ],
@@ -13948,7 +13948,7 @@ Starts playing multiple Sources simultaneously.",
                 }],
             },
             LuaSignature {
-                label: r"function love.audio.play(source1: Source, source2: Source, ...)",
+                label: r"function love.audio.play(source1: Source, source2: Source, ...: Source)",
                 documentation: r"Plays the specified Source.
 
 Starts playing multiple Sources simultaneously.",
@@ -13962,7 +13962,7 @@ Starts playing multiple Sources simultaneously.",
                         documentation: r"The second Source to play.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: Source",
                         documentation: r"Additional Sources to play.",
                     },
                 ],
@@ -14114,7 +14114,7 @@ This function will only stop the specified source.",
                 }],
             },
             LuaSignature {
-                label: r"function love.audio.stop(source1: Source, source2: Source, ...)",
+                label: r"function love.audio.stop(source1: Source, source2: Source, ...: Source)",
                 documentation: r"Stops currently played sources.
 
 Simultaneously stops all given Sources.",
@@ -14128,7 +14128,7 @@ Simultaneously stops all given Sources.",
                         documentation: r"The second Source to stop.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: Source",
                         documentation: r"Additional Sources to stop.",
                     },
                 ],
@@ -14525,7 +14525,7 @@ Returns:
             ],
         }]),
         r"love.data.pack" => Some(&[LuaSignature {
-            label: r"function love.data.pack(container: ContainerType, format: string, v1: number | boolean | string, ...): Data | string",
+            label: r"function love.data.pack(container: ContainerType, format: string, v1: number | boolean | string, ...: number | boolean | string): Data | string",
             documentation: r"Packs (serializes) simple Lua values.
 
 This function behaves the same as Lua 5.3's string.pack.
@@ -14548,7 +14548,7 @@ Returns:
                     documentation: r"The first value (number, boolean, or string) to serialize.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: number | boolean | string",
                     documentation: r"Additional values to serialize.",
                 },
             ],
@@ -14676,7 +14676,7 @@ and if you want to handle OS-generated events at all (think callbacks).",
             parameters: &[],
         }]),
         r"love.event.push" => Some(&[LuaSignature {
-            label: r"function love.event.push(n: Event, a?: Variant, b?: Variant, c?: Variant, d?: Variant, e?: Variant, f?: Variant, ...)",
+            label: r"function love.event.push(n: Event, a?: Variant, b?: Variant, c?: Variant, d?: Variant, e?: Variant, f?: Variant, ...: Variant)",
             documentation: r"Adds an event to the event queue.
 
 From 0.10.0 onwards, you may pass an arbitrary amount of arguments with this function, though the default callbacks don't ever use more than six.",
@@ -14722,7 +14722,7 @@ Default: `nil`.",
 Default: `nil`.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: Variant",
                     documentation: r"Further event arguments may follow.
 
 Default: `nil`.",
@@ -16147,7 +16147,7 @@ Default: `true`.",
                 ],
             },
             LuaSignature {
-                label: r"function love.graphics.clear(color: table, ..., clearstencil?: boolean, cleardepth?: boolean)",
+                label: r"function love.graphics.clear(color: table, ...: table, clearstencil?: boolean, cleardepth?: boolean)",
                 documentation: r"Clears the screen or active Canvas to the specified color.
 
 This function is called automatically before love.draw in the default love.run function. See the example in love.run for a typical use of this function.
@@ -16167,7 +16167,7 @@ A color must be specified for each active Canvas, when this function variant is 
                         documentation: r"A table in the form of {r, g, b, a} containing the color to clear the first active Canvas to.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: table",
                         documentation: r"Additional tables for each active Canvas.",
                     },
                     LuaSignatureParameter {
@@ -17261,7 +17261,7 @@ Returns:
         }]),
         r"love.graphics.line" => Some(&[
             LuaSignature {
-                label: r"function love.graphics.line(x1: number, y1: number, x2: number, y2: number, ...)",
+                label: r"function love.graphics.line(x1: number, y1: number, x2: number, y2: number, ...: number)",
                 documentation: r"Draws lines between points.",
                 parameters: &[
                     LuaSignatureParameter {
@@ -17281,7 +17281,7 @@ Returns:
                         documentation: r"The position of second point on the y-axis.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"You can continue passing point positions to draw a polyline.",
                     },
                 ],
@@ -18356,7 +18356,7 @@ This function is always used to reverse any previous calls to love.graphics.rota
         }]),
         r"love.graphics.points" => Some(&[
             LuaSignature {
-                label: r"function love.graphics.points(x: number, y: number, ...)",
+                label: r"function love.graphics.points(x: number, y: number, ...: number)",
                 documentation: r"Draws one or more points.",
                 parameters: &[
                     LuaSignatureParameter {
@@ -18368,7 +18368,7 @@ This function is always used to reverse any previous calls to love.graphics.rota
                         documentation: r"The position of the first point on the y-axis.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"The x and y coordinates of additional points.",
                     },
                 ],
@@ -18400,7 +18400,7 @@ Points are not affected by size is always in pixels.",
         ]),
         r"love.graphics.polygon" => Some(&[
             LuaSignature {
-                label: r"function love.graphics.polygon(mode: DrawMode, ...)",
+                label: r"function love.graphics.polygon(mode: DrawMode, ...: number)",
                 documentation: r"Draw a polygon.
 
 Following the mode argument, this function can accept multiple numeric arguments or a single table of numeric arguments. In either case the arguments are interpreted as alternating x and y coordinates of the polygon's vertices.",
@@ -18410,7 +18410,7 @@ Following the mode argument, this function can accept multiple numeric arguments
                         documentation: r"How to draw the polygon.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"The vertices of the polygon.",
                     },
                 ],
@@ -19379,7 +19379,7 @@ Resets the render target to the screen, i.e. re-enables drawing to the screen.",
                 parameters: &[],
             },
             LuaSignature {
-                label: r"function love.graphics.setCanvas(canvas1: Canvas, canvas2: Canvas, ...)",
+                label: r"function love.graphics.setCanvas(canvas1: Canvas, canvas2: Canvas, ...: Canvas)",
                 documentation: r"Captures drawing operations to a Canvas.
 
 Sets the render target to multiple simultaneous 2D Canvases. All drawing operations until the next ''love.graphics.setCanvas'' call will be redirected to the specified canvases and not shown on the screen.
@@ -19397,7 +19397,7 @@ All canvas arguments must have the same widths and heights and the same texture 
                         documentation: r"The second render target.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: Canvas",
                         documentation: r"More canvases.",
                     },
                 ],
@@ -20429,7 +20429,7 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.keyboard.isDown(key: KeyConstant, ...): boolean",
+                label: r"function love.keyboard.isDown(key: KeyConstant, ...: KeyConstant): boolean",
                 documentation: r"Checks whether a certain key is down. Not to be confused with love.keypressed or love.keyreleased.
 
 Returns:
@@ -20440,7 +20440,7 @@ Returns:
                         documentation: r"A key to check.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: KeyConstant",
                         documentation: r"Additional keys to check.",
                     },
                 ],
@@ -20458,7 +20458,7 @@ Returns:
             },
         ]),
         r"love.keyboard.isScancodeDown" => Some(&[LuaSignature {
-            label: r"function love.keyboard.isScancodeDown(scancode: Scancode, ...): boolean",
+            label: r"function love.keyboard.isScancodeDown(scancode: Scancode, ...: Scancode): boolean",
             documentation: r"Checks whether the specified Scancodes are pressed. Not to be confused with love.keypressed or love.keyreleased.
 
 Unlike regular KeyConstants, Scancodes are keyboard layout-independent. The scancode 'w' is used if the key in the same place as the 'w' key on an American keyboard is pressed, no matter what the key is labelled or what the user's operating system settings are.
@@ -20471,7 +20471,7 @@ Returns:
                     documentation: r"A Scancode to check.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: Scancode",
                     documentation: r"Additional Scancodes to check.",
                 },
             ],
@@ -20828,7 +20828,7 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.math.isConvex(x1: number, y1: number, x2: number, y2: number, ...): boolean",
+                label: r"function love.math.isConvex(x1: number, y1: number, x2: number, y2: number, ...: number): boolean",
                 documentation: r"Checks whether a polygon is convex.
 
 PolygonShapes in love.physics, some forms of Meshes, and polygons drawn with love.graphics.polygon must be simple convex polygons.
@@ -20853,7 +20853,7 @@ Returns:
                         documentation: r"The position of the second vertex of the polygon on the y-axis.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional position of the vertex of the polygon on the x-axis and y-axis.",
                     },
                 ],
@@ -20943,7 +20943,7 @@ Returns:
                 }],
             },
             LuaSignature {
-                label: r"function love.math.newBezierCurve(x1: number, y1: number, x2: number, y2: number, ...): BezierCurve",
+                label: r"function love.math.newBezierCurve(x1: number, y1: number, x2: number, y2: number, ...: number): BezierCurve",
                 documentation: r"Creates a new BezierCurve object.
 
 The number of vertices in the control polygon determines the degree of the curve, e.g. three vertices define a quadratic (degree 2) Bézier curve, four vertices define a cubic (degree 3) Bézier curve, etc.
@@ -20968,7 +20968,7 @@ Returns:
                         documentation: r"The position of the second vertex of the control polygon on the y-axis.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional position of the vertex of the control polygon on the x-axis and y-axis.",
                     },
                 ],
@@ -21411,7 +21411,7 @@ Returns:
             parameters: &[],
         }]),
         r"love.mouse.isDown" => Some(&[LuaSignature {
-            label: r"function love.mouse.isDown(button: number, ...): boolean",
+            label: r"function love.mouse.isDown(button: number, ...: number): boolean",
             documentation: r"Checks whether a certain mouse button is down.
 
 This function does not detect mouse wheel scrolling; you must use the love.wheelmoved (or love.mousepressed in version 0.9.2 and older) callback for that. 
@@ -21424,7 +21424,7 @@ Returns:
                     documentation: r"The index of a button to check. 1 is the primary mouse button, 2 is the secondary mouse button and 3 is the middle button. Further buttons are mouse dependant.",
                 },
                 LuaSignatureParameter {
-                    label: r"...",
+                    label: r"...: number",
                     documentation: r"Additional button numbers to check.",
                 },
             ],
@@ -21779,7 +21779,7 @@ Default: `'static'`.",
         }]),
         r"love.physics.newChainShape" => Some(&[
             LuaSignature {
-                label: r"function love.physics.newChainShape(loop: boolean, x1: number, y1: number, x2: number, y2: number, ...): ChainShape",
+                label: r"function love.physics.newChainShape(loop: boolean, x1: number, y1: number, x2: number, y2: number, ...: number): ChainShape",
                 documentation: r"Creates a new ChainShape.
 
 Returns:
@@ -21806,7 +21806,7 @@ Returns:
                         documentation: r"The y position of the second point.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"Additional point positions.",
                     },
                 ],
@@ -22144,7 +22144,7 @@ Returns:
         }]),
         r"love.physics.newPolygonShape" => Some(&[
             LuaSignature {
-                label: r"function love.physics.newPolygonShape(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, ...): PolygonShape",
+                label: r"function love.physics.newPolygonShape(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, ...: number): PolygonShape",
                 documentation: r"Creates a new PolygonShape.
 
 This shape can have 8 vertices at most, and must form a convex shape.
@@ -22177,7 +22177,7 @@ Returns:
                         documentation: r"The y position of the third point.",
                     },
                     LuaSignatureParameter {
-                        label: r"...",
+                        label: r"...: number",
                         documentation: r"You can continue passing more point positions to create the PolygonShape.",
                     },
                 ],
@@ -23982,3 +23982,625 @@ Returns:
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LoveEnumCompletionCase {
+    pub target: &'static str,
+    pub parameter_index: usize,
+    pub enum_types: &'static [&'static str],
+}
+
+#[cfg(test)]
+pub(crate) fn enum_completion_cases() -> &'static [LoveEnumCompletionCase] {
+    ENUM_COMPLETION_CASES
+}
+
+#[cfg(test)]
+const ENUM_COMPLETION_CASES: &[LoveEnumCompletionCase] = &[
+    LoveEnumCompletionCase {
+        target: r"Body:setType",
+        parameter_index: 0,
+        enum_types: &[r"BodyType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setDepthSampleMode",
+        parameter_index: 0,
+        enum_types: &[r"CompareMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setMipmapFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setWrap",
+        parameter_index: 0,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setWrap",
+        parameter_index: 1,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Canvas:setWrap",
+        parameter_index: 2,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"DroppedFile:open",
+        parameter_index: 0,
+        enum_types: &[r"FileMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"DroppedFile:read",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"DroppedFile:setBuffer",
+        parameter_index: 0,
+        enum_types: &[r"BufferMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"File:open",
+        parameter_index: 0,
+        enum_types: &[r"FileMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"File:read",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"File:setBuffer",
+        parameter_index: 0,
+        enum_types: &[r"BufferMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Font:setFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Font:setFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setDepthSampleMode",
+        parameter_index: 0,
+        enum_types: &[r"CompareMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setMipmapFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setWrap",
+        parameter_index: 0,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setWrap",
+        parameter_index: 1,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Image:setWrap",
+        parameter_index: 2,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"ImageData:encode",
+        parameter_index: 0,
+        enum_types: &[r"ImageFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"ImageData:encode",
+        parameter_index: 1,
+        enum_types: &[r"ImageFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Joystick:getGamepadAxis",
+        parameter_index: 0,
+        enum_types: &[r"GamepadAxis"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Joystick:getGamepadMapping",
+        parameter_index: 0,
+        enum_types: &[r"GamepadAxis", r"GamepadButton"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Joystick:isGamepadDown",
+        parameter_index: 0,
+        enum_types: &[r"GamepadButton"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Mesh:attachAttribute",
+        parameter_index: 2,
+        enum_types: &[r"VertexAttributeStep"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Mesh:setDrawMode",
+        parameter_index: 0,
+        enum_types: &[r"MeshDrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Mesh:setVertexMap",
+        parameter_index: 1,
+        enum_types: &[r"IndexDataType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"ParticleSystem:setEmissionArea",
+        parameter_index: 0,
+        enum_types: &[r"AreaSpreadDistribution"],
+    },
+    LoveEnumCompletionCase {
+        target: r"ParticleSystem:setInsertMode",
+        parameter_index: 0,
+        enum_types: &[r"ParticleInsertMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Shader:send",
+        parameter_index: 1,
+        enum_types: &[r"MatrixLayout"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Shader:send",
+        parameter_index: 2,
+        enum_types: &[r"MatrixLayout"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Source:getDuration",
+        parameter_index: 0,
+        enum_types: &[r"TimeUnit"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Source:seek",
+        parameter_index: 1,
+        enum_types: &[r"TimeUnit"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Source:tell",
+        parameter_index: 0,
+        enum_types: &[r"TimeUnit"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Text:addf",
+        parameter_index: 2,
+        enum_types: &[r"AlignMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Text:setf",
+        parameter_index: 2,
+        enum_types: &[r"AlignMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setDepthSampleMode",
+        parameter_index: 0,
+        enum_types: &[r"CompareMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setMipmapFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setWrap",
+        parameter_index: 0,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setWrap",
+        parameter_index: 1,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Texture:setWrap",
+        parameter_index: 2,
+        enum_types: &[r"WrapMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Transform:setMatrix",
+        parameter_index: 0,
+        enum_types: &[r"MatrixLayout"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Video:setFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"Video:setFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.audio.newSource",
+        parameter_index: 1,
+        enum_types: &[r"SourceType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.audio.setDistanceModel",
+        parameter_index: 0,
+        enum_types: &[r"DistanceModel"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.compress",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.compress",
+        parameter_index: 1,
+        enum_types: &[r"CompressedDataFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.decode",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.decode",
+        parameter_index: 1,
+        enum_types: &[r"EncodeFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.decompress",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.decompress",
+        parameter_index: 1,
+        enum_types: &[r"CompressedDataFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.encode",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.encode",
+        parameter_index: 1,
+        enum_types: &[r"EncodeFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.hash",
+        parameter_index: 0,
+        enum_types: &[r"HashFunction"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.data.pack",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.displayrotated",
+        parameter_index: 1,
+        enum_types: &[r"DisplayOrientation"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.event.push",
+        parameter_index: 0,
+        enum_types: &[r"Event"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.filesystem.getInfo",
+        parameter_index: 1,
+        enum_types: &[r"FileType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.filesystem.newFile",
+        parameter_index: 1,
+        enum_types: &[r"FileMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.filesystem.read",
+        parameter_index: 0,
+        enum_types: &[r"ContainerType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.font.newRasterizer",
+        parameter_index: 1,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.font.newRasterizer",
+        parameter_index: 2,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.font.newTrueTypeRasterizer",
+        parameter_index: 1,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.font.newTrueTypeRasterizer",
+        parameter_index: 2,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.gamepadaxis",
+        parameter_index: 1,
+        enum_types: &[r"GamepadAxis"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.gamepadpressed",
+        parameter_index: 1,
+        enum_types: &[r"GamepadButton"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.gamepadreleased",
+        parameter_index: 1,
+        enum_types: &[r"GamepadButton"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.arc",
+        parameter_index: 0,
+        enum_types: &[r"DrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.arc",
+        parameter_index: 1,
+        enum_types: &[r"ArcType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.circle",
+        parameter_index: 0,
+        enum_types: &[r"DrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.ellipse",
+        parameter_index: 0,
+        enum_types: &[r"DrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newFont",
+        parameter_index: 1,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newFont",
+        parameter_index: 2,
+        enum_types: &[r"HintingMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newMesh",
+        parameter_index: 1,
+        enum_types: &[r"MeshDrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newMesh",
+        parameter_index: 2,
+        enum_types: &[r"MeshDrawMode", r"SpriteBatchUsage"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newMesh",
+        parameter_index: 3,
+        enum_types: &[r"SpriteBatchUsage"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.newSpriteBatch",
+        parameter_index: 2,
+        enum_types: &[r"SpriteBatchUsage"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.polygon",
+        parameter_index: 0,
+        enum_types: &[r"DrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.printf",
+        parameter_index: 3,
+        enum_types: &[r"AlignMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.printf",
+        parameter_index: 4,
+        enum_types: &[r"AlignMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.printf",
+        parameter_index: 5,
+        enum_types: &[r"AlignMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.push",
+        parameter_index: 0,
+        enum_types: &[r"StackType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.rectangle",
+        parameter_index: 0,
+        enum_types: &[r"DrawMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setBlendMode",
+        parameter_index: 0,
+        enum_types: &[r"BlendMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setBlendMode",
+        parameter_index: 1,
+        enum_types: &[r"BlendAlphaMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setDefaultFilter",
+        parameter_index: 0,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setDefaultFilter",
+        parameter_index: 1,
+        enum_types: &[r"FilterMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setDepthMode",
+        parameter_index: 0,
+        enum_types: &[r"CompareMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setFrontFaceWinding",
+        parameter_index: 0,
+        enum_types: &[r"VertexWinding"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setLineJoin",
+        parameter_index: 0,
+        enum_types: &[r"LineJoin"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setLineStyle",
+        parameter_index: 0,
+        enum_types: &[r"LineStyle"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setMeshCullMode",
+        parameter_index: 0,
+        enum_types: &[r"CullMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.setStencilTest",
+        parameter_index: 0,
+        enum_types: &[r"CompareMode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.graphics.stencil",
+        parameter_index: 1,
+        enum_types: &[r"StencilAction"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.image.newImageData",
+        parameter_index: 2,
+        enum_types: &[r"PixelFormat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.joystick.setGamepadMapping",
+        parameter_index: 1,
+        enum_types: &[r"GamepadAxis", r"GamepadButton"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.joystick.setGamepadMapping",
+        parameter_index: 2,
+        enum_types: &[r"JoystickInputType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.joystick.setGamepadMapping",
+        parameter_index: 4,
+        enum_types: &[r"JoystickHat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.joystickhat",
+        parameter_index: 2,
+        enum_types: &[r"JoystickHat"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.getKeyFromScancode",
+        parameter_index: 0,
+        enum_types: &[r"Scancode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.getScancodeFromKey",
+        parameter_index: 0,
+        enum_types: &[r"KeyConstant"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.isDown",
+        parameter_index: 0,
+        enum_types: &[r"KeyConstant"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.isDown",
+        parameter_index: 1,
+        enum_types: &[r"KeyConstant"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.isScancodeDown",
+        parameter_index: 0,
+        enum_types: &[r"Scancode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyboard.isScancodeDown",
+        parameter_index: 1,
+        enum_types: &[r"Scancode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keypressed",
+        parameter_index: 0,
+        enum_types: &[r"KeyConstant"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keypressed",
+        parameter_index: 1,
+        enum_types: &[r"Scancode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyreleased",
+        parameter_index: 0,
+        enum_types: &[r"KeyConstant"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.keyreleased",
+        parameter_index: 1,
+        enum_types: &[r"Scancode"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.mouse.getSystemCursor",
+        parameter_index: 0,
+        enum_types: &[r"CursorType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.physics.newBody",
+        parameter_index: 3,
+        enum_types: &[r"BodyType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.window.setFullscreen",
+        parameter_index: 1,
+        enum_types: &[r"FullscreenType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.window.showMessageBox",
+        parameter_index: 2,
+        enum_types: &[r"MessageBoxType"],
+    },
+    LoveEnumCompletionCase {
+        target: r"love.window.showMessageBox",
+        parameter_index: 3,
+        enum_types: &[r"MessageBoxType"],
+    },
+];

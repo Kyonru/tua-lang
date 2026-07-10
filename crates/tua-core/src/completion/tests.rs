@@ -827,6 +827,9 @@ love.audio.newSource("assets/jump.wav", "str")
     let message_box_source = r#"
 love.window.showMessageBox("Title", "Body", "warn")
 "#;
+    let key_vararg_source = r#"
+love.keyboard.isDown("a", "b", "")
+"#;
 
     let blend = complete_tua_source(
         "src/main.tua",
@@ -846,10 +849,69 @@ love.window.showMessageBox("Title", "Body", "warn")
         position_after(message_box_source, "\"warn"),
     )
     .expect("generated MessageBoxType completion should succeed");
+    let key_vararg = complete_tua_source(
+        "src/main.tua",
+        key_vararg_source,
+        position_after(key_vararg_source, "b\", \""),
+    )
+    .expect("generated KeyConstant vararg completion should succeed");
 
     assert_eq!(labels(&blend), vec!["screen"]);
     assert_eq!(labels(&source_type), vec!["stream"]);
     assert_eq!(labels(&message_box), vec!["warning"]);
+    assert!(labels(&key_vararg).contains(&"space".to_owned()));
+}
+
+#[test]
+fn completes_every_generated_love_enum_parameter() {
+    let cases = crate::love_api_signatures::enum_completion_cases();
+    let mut failures = Vec::new();
+
+    assert!(
+        cases.len() >= 100,
+        "expected broad generated LOVE enum coverage, got {} cases",
+        cases.len()
+    );
+
+    for case in cases {
+        let (source, position) = love_enum_completion_source(case);
+        let expected = expected_love_enum_labels(case.enum_types);
+        let completions = match complete_tua_source("src/main.tua", &source, position) {
+            Ok(completions) => completions,
+            Err(diagnostics) => {
+                failures.push(format!(
+                    "{} argument {} ({}) failed to complete: {diagnostics:?}\n{source}",
+                    case.target,
+                    case.parameter_index,
+                    case.enum_types.join(" | ")
+                ));
+                continue;
+            }
+        };
+        let actual = labels(&completions);
+        let missing = expected
+            .iter()
+            .filter(|label| !actual.contains(label))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !missing.is_empty() {
+            failures.push(format!(
+                "{} argument {} ({}) missing {:?}; got {:?}\n{source}",
+                case.target,
+                case.parameter_index,
+                case.enum_types.join(" | "),
+                missing,
+                actual
+            ));
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "LOVE enum completion regressions:\n{}",
+        failures.join("\n\n")
+    );
 }
 
 #[test]
@@ -1401,6 +1463,46 @@ fn labels(completions: &[Completion]) -> Vec<String> {
         .iter()
         .map(|completion| completion.label.clone())
         .collect()
+}
+
+fn love_enum_completion_source(
+    case: &crate::love_api_signatures::LoveEnumCompletionCase,
+) -> (String, SourcePosition) {
+    const CURSOR: &str = "__tua_enum_completion_cursor__";
+
+    let arguments = (0..=case.parameter_index)
+        .map(|index| {
+            if index == case.parameter_index {
+                format!("\"{CURSOR}\"")
+            } else {
+                "nil".to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = if let Some((type_name, method)) = case.target.split_once(':') {
+        format!("local receiver: {type_name} = nil\nreceiver:{method}({arguments})\n")
+    } else {
+        format!("{}({arguments})\n", case.target)
+    };
+    let position = position_at(&source, CURSOR);
+    let source = source.replace(CURSOR, "");
+
+    (source, position)
+}
+
+fn expected_love_enum_labels(enum_types: &[&str]) -> Vec<String> {
+    let mut labels = Vec::new();
+
+    for type_name in enum_types {
+        for item in crate::lua::enum_value_items(type_name, "") {
+            if !labels.iter().any(|label| label == item.label) {
+                labels.push(item.label.to_owned());
+            }
+        }
+    }
+
+    labels
 }
 
 fn position_after(source: &str, needle: &str) -> SourcePosition {

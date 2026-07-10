@@ -40,6 +40,10 @@ local function argument_label(arg)
   local name = arg.name or "arg"
 
   if name == "..." then
+    if arg.type ~= nil then
+      return "...: " .. type_label(arg.type)
+    end
+
     return "..."
   end
 
@@ -225,6 +229,46 @@ local function sorted_type_names(types)
   return names
 end
 
+local function collect_enum_values()
+  local enums = {}
+
+  for _, module in ipairs(api.modules or {}) do
+    for _, enum in ipairs(module.enums or {}) do
+      if enum.name then
+        local values = {}
+
+        for _, constant in ipairs(enum.constants or {}) do
+          if constant.name then
+            values[#values + 1] = constant.name
+          end
+        end
+
+        if #values > 0 then
+          enums[enum.name] = values
+        end
+      end
+    end
+  end
+
+  return enums
+end
+
+local function enum_type_names(type_name, enum_values)
+  local names = {}
+  local seen = {}
+
+  for part in type_label(type_name):gmatch("[^|]+") do
+    part = part:match("^%s*(.-)%s*$")
+
+    if enum_values[part] and not seen[part] then
+      seen[part] = true
+      names[#names + 1] = part
+    end
+  end
+
+  return names
+end
+
 local entries = {}
 
 for _, fn in ipairs(api.functions or {}) do
@@ -252,6 +296,64 @@ for _, entry in ipairs(sorted_type_names(types)) do
 end
 
 sort_by_name(entries)
+
+local enum_values = collect_enum_values()
+local enum_case_by_key = {}
+local enum_cases = {}
+
+for _, entry in ipairs(entries) do
+  local types_by_index = {}
+
+  for _, signature in ipairs(entry.signatures) do
+    for index, parameter in ipairs(signature.parameters) do
+      local types = enum_type_names(parameter.type, enum_values)
+
+      if #types > 0 then
+        local zero_index = index - 1
+        types_by_index[zero_index] = types_by_index[zero_index] or {}
+
+        for _, type_name in ipairs(types) do
+          types_by_index[zero_index][type_name] = true
+        end
+      end
+    end
+  end
+
+  for index, type_set in pairs(types_by_index) do
+    local types = {}
+
+    for type_name in pairs(type_set) do
+      types[#types + 1] = { name = type_name }
+    end
+
+    sort_by_name(types)
+
+    local key_parts = { entry.name, tostring(index) }
+
+    for _, type_entry in ipairs(types) do
+      key_parts[#key_parts + 1] = type_entry.name
+    end
+
+    local key = table.concat(key_parts, "\0")
+
+    if not enum_case_by_key[key] then
+      enum_case_by_key[key] = true
+      enum_cases[#enum_cases + 1] = {
+        name = entry.name,
+        parameter_index = index,
+        types = types,
+      }
+    end
+  end
+end
+
+table.sort(enum_cases, function(left, right)
+  if left.name ~= right.name then
+    return left.name < right.name
+  end
+
+  return left.parameter_index < right.parameter_index
+end)
 
 local file = assert(io.open(out, "w"))
 
@@ -291,6 +393,39 @@ end
 file:write([[        _ => None,
     }
 }
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LoveEnumCompletionCase {
+    pub target: &'static str,
+    pub parameter_index: usize,
+    pub enum_types: &'static [&'static str],
+}
+
+#[cfg(test)]
+pub(crate) fn enum_completion_cases() -> &'static [LoveEnumCompletionCase] {
+    ENUM_COMPLETION_CASES
+}
+
+#[cfg(test)]
+const ENUM_COMPLETION_CASES: &[LoveEnumCompletionCase] = &[
+]])
+
+for _, case in ipairs(enum_cases) do
+  file:write("    LoveEnumCompletionCase {\n")
+  file:write("        target: ", rust_raw(case.name), ",\n")
+  file:write("        parameter_index: ", tostring(case.parameter_index), ",\n")
+  file:write("        enum_types: &[\n")
+
+  for _, type_entry in ipairs(case.types) do
+    file:write("            ", rust_raw(type_entry.name), ",\n")
+  end
+
+  file:write("        ],\n")
+  file:write("    },\n")
+end
+
+file:write([[];
 ]])
 
 file:close()

@@ -822,12 +822,48 @@ fn complete_string_argument_values(
     let Some(item) = semantic.lua_function_item_for_call_parts(callee_parts, position) else {
         return Vec::new();
     };
-    let Some(parameter_type) = parameter_type_from_function_detail(item.detail, active_parameter)
-    else {
+    let Some(parameter_type) = parameter_type_from_lua_item(item, active_parameter) else {
         return Vec::new();
     };
 
     complete_lua_enum_values(&parameter_type, prefix)
+}
+
+fn parameter_type_from_lua_item(item: LuaItem, index: usize) -> Option<String> {
+    if let Some(signatures) = lua::signature_variants(item) {
+        let mut types = Vec::new();
+
+        for signature in signatures {
+            let Some(parameter) = lua_signature_parameter_at(signature, index) else {
+                continue;
+            };
+            let Some(ty) = parameter_type_from_label(parameter.label) else {
+                continue;
+            };
+
+            if !types.iter().any(|existing| existing == &ty) {
+                types.push(ty);
+            }
+        }
+
+        if !types.is_empty() {
+            return Some(types.join(" | "));
+        }
+    }
+
+    parameter_type_from_function_detail(item.detail, index)
+}
+
+fn lua_signature_parameter_at(
+    signature: &lua::LuaSignature,
+    index: usize,
+) -> Option<&lua::LuaSignatureParameter> {
+    signature.parameters.get(index).or_else(|| {
+        signature
+            .parameters
+            .last()
+            .filter(|parameter| parameter.label.starts_with("..."))
+    })
 }
 
 fn parameter_type_from_function_detail(detail: &str, index: usize) -> Option<String> {
@@ -838,8 +874,11 @@ fn parameter_type_from_function_detail(detail: &str, index: usize) -> Option<Str
         .map(str::trim)
         .filter(|parameter| !parameter.is_empty())
         .nth(index)?;
-    let (_, ty) = parameter.split_once(':')?;
+    parameter_type_from_label(parameter)
+}
 
+fn parameter_type_from_label(parameter: &str) -> Option<String> {
+    let (_, ty) = parameter.split_once(':')?;
     Some(ty.trim().to_owned())
 }
 
