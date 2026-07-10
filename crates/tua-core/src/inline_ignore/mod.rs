@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, DiagnosticsConfig,
 };
@@ -32,6 +33,8 @@ pub(crate) fn apply_inline_ignores(
     diagnostics: Vec<Diagnostic>,
     config: &DiagnosticsConfig,
 ) -> Vec<Diagnostic> {
+    let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::InlineIgnores);
+
     if !config.inline_ignores {
         return diagnostics;
     }

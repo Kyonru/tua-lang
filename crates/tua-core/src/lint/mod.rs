@@ -11,6 +11,7 @@ use full_moon::visitors::Visitor;
 
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::module_index::resolve_required_module;
+use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
@@ -21,6 +22,8 @@ pub(crate) fn lint_parsed_source(
     jit_config: &JitConfig,
     environment: &TypeEnvironment,
 ) -> Vec<Diagnostic> {
+    let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Lints);
+
     if !config.duplicate_keys
         && !config.missing_requires
         && !config.self_assignments

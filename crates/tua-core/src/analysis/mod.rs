@@ -475,6 +475,7 @@ impl AnalysisHost {
         };
         let module_graph = {
             let _profile = profile::span("analysis.index.module_graph");
+            let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::ModuleGraph);
 
             ModuleGraph::build(
                 files.iter().map(|(path, file)| ModuleGraphInput {
@@ -493,6 +494,8 @@ impl AnalysisHost {
         };
         let type_database = {
             let _profile = profile::span("analysis.index.type_database");
+            let _trace =
+                profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
             ProjectTypeDatabase::build(
                 files.iter().map(|(path, file)| ProjectTypeDatabaseInput {
@@ -3650,6 +3653,7 @@ fn build_analysis_file(
 ) -> AnalysisFile {
     let parsed = {
         let _profile = profile::span_for_path("analysis.parse", path);
+        let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Parse);
 
         parse_analysis_source(path, source.clone(), kind)
     };
@@ -3665,6 +3669,7 @@ fn build_analysis_file(
     };
     let environment = {
         let _profile = profile::span_for_path("analysis.types.environment", path);
+        let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
         parsed.as_ref().ok().and_then(|parsed| {
             if context.config.ecs.enabled {

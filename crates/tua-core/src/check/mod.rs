@@ -15,6 +15,7 @@ use crate::love_conf;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition, SourceSpan};
+use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
     MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
@@ -104,33 +105,42 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
 ) -> Result<(), Vec<Diagnostic>> {
-    let environment = if ecs_config.enabled {
-        let (environment, diagnostics) =
-            build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
+    let environment = {
+        let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::TypeEnvironment);
 
-        if diagnostics.is_empty() {
-            environment.with_local_types(crate::ecs::builtin_locals())
+        if ecs_config.enabled {
+            let (environment, diagnostics) =
+                build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
+
+            if diagnostics.is_empty() {
+                environment.with_local_types(crate::ecs::builtin_locals())
+            } else {
+                return Err(diagnostics);
+            }
         } else {
-            return Err(diagnostics);
+            build_type_environment(parsed)?
         }
-    } else {
-        build_type_environment(parsed)?
     };
     let mut checker = Checker::new(parsed, &environment, asset_roots);
 
-    checker.check_block(parsed.ast.nodes(), None);
+    {
+        let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Checker);
+
+        checker.check_block(parsed.ast.nodes(), None);
+
+        if diagnostics_config.doc_annotations {
+            checker
+                .diagnostics
+                .extend(parsed.lua_doc_diagnostics.iter().cloned());
+        }
+    }
+
     checker.diagnostics.extend(lint_parsed_source(
         parsed,
         diagnostics_config,
         jit_config,
         &environment,
     ));
-
-    if diagnostics_config.doc_annotations {
-        checker
-            .diagnostics
-            .extend(parsed.lua_doc_diagnostics.iter().cloned());
-    }
 
     checker.diagnostics = apply_inline_ignores(
         &parsed.path,

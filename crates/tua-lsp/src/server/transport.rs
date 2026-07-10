@@ -44,10 +44,37 @@ pub(super) fn read_message(reader: &mut impl BufRead) -> io::Result<Option<Value
 }
 
 pub(super) fn write_message(writer: &mut impl Write, message: &Value) -> io::Result<()> {
+    let is_diagnostics_publication =
+        message.get("method").and_then(Value::as_str) == Some("textDocument/publishDiagnostics");
+    let _trace = is_diagnostics_publication.then(|| {
+        tua_core::profile::diagnostics_span(tua_core::profile::DiagnosticsTraceCategory::Publish)
+    });
     let body = serde_json::to_vec(message)
         .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source.to_string()))?;
 
     write!(writer, "Content-Length: {}\r\n\r\n", body.len())?;
     writer.write_all(&body)?;
-    writer.flush()
+    writer.flush()?;
+
+    drop(_trace);
+
+    if is_diagnostics_publication {
+        let uri = message
+            .get("params")
+            .and_then(|params| params.get("uri"))
+            .and_then(Value::as_str)
+            .unwrap_or("<unknown>");
+        let diagnostic_count = message
+            .get("params")
+            .and_then(|params| params.get("diagnostics"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or_default();
+
+        tua_core::profile::report_diagnostics_trace(format!(
+            "lsp publishDiagnostics uri={uri} diagnostics={diagnostic_count}"
+        ));
+    }
+
+    Ok(())
 }

@@ -101,21 +101,32 @@ impl AnalysisHost {
         let source = source.into();
         let previous_roots = self.effective_workspace_folders(roots);
 
-        self.sync_core_project_inputs(roots, settings);
-        self.documents.insert(
-            uri,
-            OpenDocument {
-                path: path.clone(),
-                source: source.clone(),
-            },
-        );
+        {
+            let _trace = tua_core::profile::diagnostics_span(
+                tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+            );
+
+            self.sync_core_project_inputs(roots, settings);
+            self.documents.insert(
+                uri,
+                OpenDocument {
+                    path: path.clone(),
+                    source: source.clone(),
+                },
+            );
+        }
         let current_roots = self.effective_workspace_folders(roots);
         if path_sets_differ(&previous_roots, &current_roots) {
             self.reindex_workspace(roots, settings);
         }
-        if let Some(kind) =
+        let kind = {
+            let _trace = tua_core::profile::diagnostics_span(
+                tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+            );
+
             self.cache_source_after_sync(path.clone(), source.clone(), &current_roots, settings)
-        {
+        };
+        if let Some(kind) = kind {
             self.core
                 .open_document_with_kind(path, source, core_source_kind(kind));
         } else {
@@ -152,6 +163,9 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) {
+        let _trace = tua_core::profile::diagnostics_span(
+            tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+        );
         let path = path_from_uri(uri);
 
         self.sync_core_project_inputs(roots, settings);
@@ -194,6 +208,10 @@ impl AnalysisHost {
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) {
+        let _trace = tua_core::profile::diagnostics_span(
+            tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+        );
+
         self.sync_core_project_inputs(roots, settings);
         let effective_roots = self.effective_workspace_folders(roots);
         let documents = self
@@ -209,14 +227,22 @@ impl AnalysisHost {
     }
 
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
-        self.sync_core_project_inputs(roots, settings);
-        let effective_roots = self.effective_workspace_folders(roots);
-        let open_paths = self
-            .documents
-            .values()
-            .map(|document| document.path.clone())
-            .collect::<BTreeSet<_>>();
-        let model = project_model_for_roots(&effective_roots, settings).ok();
+        let (effective_roots, open_paths, model) = {
+            let _trace = tua_core::profile::diagnostics_span(
+                tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+            );
+
+            self.sync_core_project_inputs(roots, settings);
+            let effective_roots = self.effective_workspace_folders(roots);
+            let open_paths = self
+                .documents
+                .values()
+                .map(|document| document.path.clone())
+                .collect::<BTreeSet<_>>();
+            let model = project_model_for_roots(&effective_roots, settings).ok();
+
+            (effective_roots, open_paths, model)
+        };
 
         let Some(model) = model else {
             return;
@@ -224,12 +250,24 @@ impl AnalysisHost {
 
         for workspace in model.workspaces() {
             for source_dir in workspace.source_roots() {
-                for (path, kind) in discover_project_sources(source_dir, workspace, settings) {
+                let sources = {
+                    let _trace = tua_core::profile::diagnostics_span(
+                        tua_core::profile::DiagnosticsTraceCategory::DiscoverFiles,
+                    );
+
+                    discover_project_sources(source_dir, workspace, settings)
+                };
+
+                for (path, kind) in sources {
                     if open_paths.contains(&path) {
                         continue;
                     }
 
                     if let Ok(source) = fs::read_to_string(&path) {
+                        let _trace = tua_core::profile::diagnostics_span(
+                            tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+                        );
+
                         self.cache_source_with_kind_after_sync(
                             path,
                             source,

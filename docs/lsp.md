@@ -190,6 +190,19 @@ TUA_PROFILE=1 make profile-lsp
 TUA_PROFILE=1 TUA_PROFILE_STREAM=1 make profile-lsp
 ```
 
+For diagnostic-specific timing, start the server with `TUA_TRACE=diagnostics`.
+The trace writes stderr lines after `textDocument/publishDiagnostics` without
+touching LSP stdout:
+
+```bash
+TUA_TRACE=diagnostics cargo run -p tua-cli -- lsp --stdio
+```
+
+Each line reports `discover_files`, `read_vfs_update`, `parse`, `module_graph`,
+`type_environment`, `checker`, `lints`, `inline_ignores`, and `publish` as
+milliseconds/count pairs so slow diagnostic phases are easy to compare across
+edits.
+
 `TUA_PROFILE=1` enables per-phase tracing from the server. By default the
 profiling script prints those traces after each fixture; `TUA_PROFILE_STREAM=1`
 streams them live to stderr. The same tracing can be enabled for any manual LSP

@@ -49,6 +49,21 @@ Runs the same project diagnostic pipeline as `check`, but reports success as
 lint diagnostic, including formatting lints, while keeping inline-ignore
 settings controlled by project/editor configuration.
 
+## Diagnostic Timings
+
+Set `TUA_TRACE=diagnostics` to print one stderr timing line for `check` and
+`lint` diagnostic work:
+
+```bash
+TUA_TRACE=diagnostics cargo run -p tua-cli -- check
+TUA_TRACE=diagnostics cargo run -p tua-cli -- lint
+```
+
+The trace reports fixed buckets for `discover_files`, `read_vfs_update`,
+`parse`, `module_graph`, `type_environment`, `checker`, `lints`,
+`inline_ignores`, and `publish`. Each bucket is printed as milliseconds/count,
+for example `parse=2.413ms/21`.
+
 ## `build`
 
 ```bash
