@@ -385,6 +385,28 @@ fn completes_love_fields() {
 }
 
 #[test]
+fn completes_love_function_calls_as_signature_snippets() {
+    let source = "love.graphics.cir\n";
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "love.graphics.cir"),
+    )
+    .expect("LÖVE function completion should succeed");
+    let circle = completions
+        .iter()
+        .find(|completion| completion.label == "circle")
+        .expect("circle should complete");
+
+    assert_eq!(circle.kind, CompletionKind::Function);
+    assert!(circle.is_snippet);
+    assert_eq!(
+        circle.insert_text.as_deref(),
+        Some(r#"circle("${1|fill,line|}", ${2:x}, ${3:y}, ${4:radius})$0"#)
+    );
+}
+
+#[test]
 fn completes_love_callbacks_as_function_declaration_snippets() {
     let source = "function love.up\n";
     let completions = complete_tua_source("src/main.tua", source, position_after(source, "up"))
@@ -543,7 +565,10 @@ player.setF
         .find(|completion| completion.label == "setFilter")
         .expect("setFilter should complete");
 
-    assert_eq!(completion.insert_text.as_deref(), Some("setFilter($0)"));
+    assert_eq!(
+        completion.insert_text.as_deref(),
+        Some(r#"setFilter("${1|linear,nearest|}")$0"#)
+    );
     assert!(completion.is_snippet);
     assert_eq!(completion.additional_text_edits.len(), 1);
     assert_eq!(completion.additional_text_edits[0].new_text, ":");

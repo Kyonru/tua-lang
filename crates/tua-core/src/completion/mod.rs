@@ -1107,6 +1107,13 @@ fn completion_from_lua_field_item(
             completion.insert_text = Some(snippet);
             completion.is_snippet = true;
         }
+    } else if receiver_parts.first().map(String::as_str) == Some("love")
+        && item.kind == LuaItemKind::Function
+    {
+        if let Some(snippet) = function_call_snippet_from_lua_item(item) {
+            completion.insert_text = Some(snippet);
+            completion.is_snippet = true;
+        }
     }
 
     completion
@@ -1149,6 +1156,91 @@ fn love_callback_snippet(label: &str, source: &str, position: SourcePosition) ->
     };
 
     Some(format!("{label}({parameters})\n  $0\nend"))
+}
+
+fn function_call_snippet_from_lua_item(item: LuaItem) -> Option<String> {
+    let signature = parse_function_signature_line(item.detail)?;
+    let mut arguments = Vec::new();
+    let mut placeholder = 1;
+
+    for parameter in signature.parameters {
+        let Some(argument) = function_call_snippet_argument(&parameter, placeholder) else {
+            continue;
+        };
+
+        arguments.push(argument);
+        placeholder += 1;
+    }
+
+    if arguments.is_empty() {
+        return Some(format!("{}($0)", item.label));
+    }
+
+    Some(format!("{}({})$0", item.label, arguments.join(", ")))
+}
+
+fn function_call_snippet_argument(parameter: &DocParameter, placeholder: usize) -> Option<String> {
+    let name = parameter.name.trim();
+
+    if name.ends_with('?') {
+        return None;
+    }
+
+    if name == "..." {
+        return Some(format!(
+            "${{{placeholder}:{}}}",
+            escape_snippet_placeholder("...")
+        ));
+    }
+
+    let name = name.trim_end_matches('?');
+    let enum_values = lua_enum_choice_values(&parameter.ty);
+
+    if !enum_values.is_empty() {
+        let choices = enum_values
+            .into_iter()
+            .map(|value| escape_snippet_choice(&value))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        return Some(format!("\"${{{placeholder}|{choices}|}}\""));
+    }
+
+    Some(format!(
+        "${{{placeholder}:{}}}",
+        escape_snippet_placeholder(name)
+    ))
+}
+
+fn lua_enum_choice_values(type_label: &str) -> Vec<String> {
+    let mut values = Vec::new();
+
+    for type_name in type_label.split('|').map(str::trim) {
+        if let Some(value) = quoted_string_literal_value(type_name) {
+            values.push(value);
+        }
+
+        for item in lua::enum_value_items(type_name, "") {
+            values.push(item.label.to_owned());
+        }
+    }
+
+    values.dedup();
+    values
+}
+
+fn escape_snippet_placeholder(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('$', "\\$")
+        .replace('}', "\\}")
+}
+
+fn escape_snippet_choice(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace(',', "\\,")
+        .replace('|', "\\|")
 }
 
 fn field_completion_is_function_declaration(source: &str, position: SourcePosition) -> bool {
@@ -1252,7 +1344,10 @@ fn insert_love_object_item(
         let mut completion = completion_from_lua_item(item);
 
         if item.kind == LuaItemKind::Function {
-            completion.insert_text = Some(format!("{}($0)", item.label));
+            completion.insert_text = Some(
+                function_call_snippet_from_lua_item(item)
+                    .unwrap_or_else(|| format!("{}($0)", item.label)),
+            );
             completion.is_snippet = true;
 
             if separator == FieldAccessSeparator::Dot {
