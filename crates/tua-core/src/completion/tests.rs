@@ -404,6 +404,11 @@ fn completes_love_function_calls_as_signature_snippets() {
         circle.insert_text.as_deref(),
         Some(r#"circle("${1|fill,line|}", ${2:x}, ${3:y}, ${4:radius})$0"#)
     );
+    assert!(circle
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("[Open LOVE wiki](https://love2d.org/wiki/love.graphics.circle)"));
 }
 
 #[test]

@@ -1084,7 +1084,7 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         label: item.label.to_owned(),
         kind: completion_kind_from_lua_item(item.kind),
         detail: Some(item.detail.to_owned()),
-        documentation: Some(item.documentation.to_owned()),
+        documentation: Some(lua::documentation_with_love_wiki_link(item)),
         insert_text: None,
         filter_text: None,
         is_snippet: false,

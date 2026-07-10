@@ -383,9 +383,10 @@ fn hover(contents: impl Into<String>, span: Option<SourceSpan>) -> Hover {
 
 fn lua_item_hover(item: LuaItem, span: Option<SourceSpan>) -> Hover {
     let mut hover = hover(item.detail.to_owned(), span);
+    let documentation = lua::documentation_with_love_wiki_link(item);
 
-    if !item.documentation.is_empty() {
-        hover.documentation = Some(item.documentation.to_owned());
+    if !documentation.is_empty() {
+        hover.documentation = Some(documentation);
     }
 
     hover

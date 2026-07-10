@@ -28,11 +28,16 @@ The VS Code extension starts this server and surfaces editor features for
   `[ecs].enabled`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
-  locals where possible.
+  locals where possible. Generated LOVE API hovers include direct LOVE wiki
+  links when a matching page is known.
 - Completion for type aliases, local symbols, table fields, Lua builtins,
   generated LOVE API items, generated LOVE enum values, LuaDoc
   tags/types/snippets, require paths, required-module fields, asset paths in
   LOVE asset-loader strings, and auto-import candidates.
+- Generated LOVE API function completions can insert signature-driven call
+  snippets, including enum choice placeholders such as `"fill" | "line"`.
+- Completion item resolve includes LOVE wiki links for generated LOVE API
+  functions and object methods when a matching page is known.
 - Asset path hovers show kind, relative path, inferred LOVE type, validation
   status, extension, and optional cheap metadata such as PNG dimensions when
   available.

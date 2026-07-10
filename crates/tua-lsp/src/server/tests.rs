@@ -2062,13 +2062,13 @@ player:setFilter("")
 fn completion_returns_love_function_call_snippets_from_signatures() {
     let uri = "file:///tmp/love-function-snippet.tua";
     let source = "love.graphics.cir\n";
-    let output = run_messages(vec![
-        did_open(uri, source),
-        completion_request(2, uri, source, "love.graphics.cir"),
-    ]);
+    let mut server = TestServer::new();
 
-    assert_completion_labels(&output, 2, ["circle"]);
-    let circle = completion_with_label(&output, 2, "circle");
+    server.send(did_open(uri, source));
+    server.send(completion_request(2, uri, source, "love.graphics.cir"));
+
+    assert_completion_labels(server.output(), 2, ["circle"]);
+    let circle = completion_with_label(server.output(), 2, "circle");
 
     assert_eq!(circle["kind"], 3);
     assert_eq!(circle["insertTextFormat"], 2);
@@ -2076,6 +2076,14 @@ fn completion_returns_love_function_call_snippets_from_signatures() {
         circle["insertText"],
         r#"circle("${1|fill,line|}", ${2:x}, ${3:y}, ${4:radius})$0"#
     );
+
+    server.send(completion_resolve_request(3, circle));
+    let resolved = &response_with_id(server.output(), 3)["result"];
+
+    assert!(resolved["documentation"]["value"]
+        .as_str()
+        .expect("documentation should be a string")
+        .contains("[Open LOVE wiki](https://love2d.org/wiki/love.graphics.circle)"));
 }
 
 #[test]
@@ -2615,6 +2623,11 @@ love.graphics.print("hi", 0, 0)
         "function love.graphics.print(text: string, x?: number, y?: number",
     );
     assert_hover_contains(&output, 3, "Draws text on screen");
+    assert_hover_contains(
+        &output,
+        3,
+        "[Open LOVE wiki](https://love2d.org/wiki/love.graphics.print)",
+    );
 }
 
 #[test]

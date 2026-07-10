@@ -92,6 +92,22 @@ pub(crate) fn love_type_names() -> &'static [&'static str] {
     love_api_extra::type_names()
 }
 
+pub(crate) fn documentation_with_love_wiki_link(item: LuaItem) -> String {
+    let mut documentation = item.documentation.to_owned();
+
+    if let Some(url) = love_wiki_url(item) {
+        if !documentation.trim().is_empty() {
+            documentation.push_str("\n\n");
+        }
+
+        documentation.push_str("[Open LOVE wiki](");
+        documentation.push_str(&url);
+        documentation.push(')');
+    }
+
+    documentation
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 
@@ -112,6 +128,41 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
 
     items_for_receiver(receiver)
         .and_then(|items| items.iter().find(|item| item.label == name).copied())
+}
+
+fn love_wiki_url(item: LuaItem) -> Option<String> {
+    let page = love_wiki_page(item)?;
+
+    Some(format!("https://love2d.org/wiki/{page}"))
+}
+
+fn love_wiki_page(item: LuaItem) -> Option<String> {
+    if item.kind == LuaItemKind::Module
+        && item.detail.starts_with("LÖVE ")
+        && item.detail.ends_with(" module")
+        && item.label != "love"
+    {
+        return Some(format!("love.{}", item.label));
+    }
+
+    let target = item
+        .detail
+        .strip_prefix("function ")?
+        .split('(')
+        .next()?
+        .trim();
+
+    if target.starts_with("love.") {
+        return Some(target.to_owned());
+    }
+
+    let (type_name, method) = target.split_once(':')?;
+
+    if method.is_empty() || !love_type_names().contains(&type_name) {
+        return None;
+    }
+
+    Some(target.to_owned())
 }
 
 pub(crate) fn builtin_definition_for_item(item: LuaItem) -> Option<BuiltinDefinition> {

@@ -814,6 +814,11 @@ fn hovers_love_items() {
         .as_deref()
         .unwrap_or_default()
         .contains("Draws text on screen"));
+    assert!(hover
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("[Open LOVE wiki](https://love2d.org/wiki/love.graphics.print)"));
 }
 
 #[test]
@@ -935,6 +940,11 @@ player:setFilter()
         .as_deref()
         .unwrap_or_default()
         .contains("filter mode"));
+    assert!(hover
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("[Open LOVE wiki](https://love2d.org/wiki/Image:setFilter)"));
 }
 
 #[test]
