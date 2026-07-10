@@ -58,7 +58,7 @@ use crate::{
     ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
     RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex, SemanticToken,
     SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type,
-    TypeEnvironment, WorkspaceSymbol,
+    TypeEnvironment, TypedFunction, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -212,6 +212,15 @@ struct CachedAnalysisFile {
     file: AnalysisFile,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DependencySurface {
+    exports: Option<ModuleExports>,
+    aliases: BTreeMap<String, Type>,
+    locals: BTreeMap<String, Type>,
+    functions: BTreeMap<String, TypedFunction>,
+    require_targets: BTreeSet<PathBuf>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct ParsedCacheKey {
     path: PathBuf,
@@ -229,6 +238,58 @@ struct SourceFingerprint {
 struct CachedAnalysisSnapshot {
     revision: u64,
     snapshot: AnalysisSnapshot,
+}
+
+impl DependencySurface {
+    fn from_analysis_file(file: &AnalysisFile) -> Self {
+        Self::from_parts(
+            file.exports.clone(),
+            file.environment.as_ref(),
+            require_targets_for_links(&file.require_edges),
+        )
+    }
+
+    fn from_parsed(
+        parsed: &ParsedSource,
+        config: &ProjectConfig,
+        require_targets: BTreeSet<PathBuf>,
+    ) -> Self {
+        let environment = build_analysis_type_environment(parsed, config);
+        let exports = infer_module_exports_with_optional_environment(parsed, environment.as_ref());
+
+        Self::from_parts(exports, environment.as_ref(), require_targets)
+    }
+
+    fn from_parts(
+        exports: Option<ModuleExports>,
+        environment: Option<&TypeEnvironment>,
+        require_targets: BTreeSet<PathBuf>,
+    ) -> Self {
+        Self {
+            exports,
+            aliases: environment
+                .into_iter()
+                .flat_map(TypeEnvironment::aliases)
+                .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                .collect(),
+            locals: environment
+                .into_iter()
+                .flat_map(TypeEnvironment::locals)
+                .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                .collect(),
+            functions: environment
+                .into_iter()
+                .flat_map(TypeEnvironment::functions)
+                .filter_map(|function| {
+                    function
+                        .name
+                        .as_ref()
+                        .map(|name| (name.clone(), function.clone()))
+                })
+                .collect(),
+            require_targets,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -399,13 +460,15 @@ impl AnalysisHost {
             return;
         }
 
-        self.cache.borrow_mut().invalidate_file(&path);
+        self.cache
+            .borrow_mut()
+            .invalidate_changed_file(&path, &source, kind, &self.config);
         self.vfs.set_disk_file(path, source, vfs_kind);
         self.bump_revision();
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
-        self.cache.borrow_mut().invalidate_file(path.as_ref());
+        self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.last_good_files
             .borrow_mut()
             .remove(&normalize_path(path.as_ref()));
@@ -414,7 +477,9 @@ impl AnalysisHost {
     }
 
     pub fn invalidate_file_analysis(&mut self, path: impl AsRef<Path>) {
-        self.cache.borrow_mut().invalidate_file(path.as_ref());
+        self.cache
+            .borrow_mut()
+            .invalidate_file(path.as_ref(), false);
         self.bump_revision();
     }
 
@@ -439,7 +504,9 @@ impl AnalysisHost {
             return;
         }
 
-        self.cache.borrow_mut().invalidate_file(&path);
+        self.cache
+            .borrow_mut()
+            .invalidate_changed_file(&path, &source, kind, &self.config);
         self.vfs.open_file(path, source, vfs_kind);
         self.bump_revision();
     }
@@ -449,7 +516,7 @@ impl AnalysisHost {
     }
 
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
-        self.cache.borrow_mut().invalidate_file(path.as_ref());
+        self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.vfs.close_file(path);
         self.bump_revision();
     }
@@ -3577,15 +3644,77 @@ impl AnalysisQueryCache {
         (parsed, false)
     }
 
-    fn invalidate_file(&mut self, path: &Path) {
+    fn invalidate_changed_file(
+        &mut self,
+        path: &Path,
+        source: &str,
+        kind: AnalysisSourceKind,
+        config: &ProjectConfig,
+    ) {
+        let invalidate_dependents =
+            self.changed_file_affects_dependents(path, source, kind, config);
+
+        self.invalidate_file(path, invalidate_dependents);
+    }
+
+    fn changed_file_affects_dependents(
+        &mut self,
+        path: &Path,
+        source: &str,
+        kind: AnalysisSourceKind,
+        config: &ProjectConfig,
+    ) -> bool {
+        let path = normalize_path(path);
+
+        if !self
+            .importers
+            .get(&path)
+            .is_some_and(|importers| !importers.is_empty())
+        {
+            return false;
+        }
+
+        let Some(cached) = self.files.get(&path) else {
+            return true;
+        };
+
+        if cached.kind != kind {
+            return true;
+        }
+
+        let old_surface = DependencySurface::from_analysis_file(&cached.file);
+        let new_require_targets = require_targets_for_source(&path, source);
+
+        if old_surface.require_targets != new_require_targets {
+            return true;
+        }
+
+        let (parsed, parsed_cache_hit) = self.cached_parsed_file(&path, source, kind);
+        self.record_parse_cache_lookup(parsed_cache_hit);
+        let Ok(parsed) = parsed else {
+            return false;
+        };
+
+        let new_surface = DependencySurface::from_parsed(&parsed, config, new_require_targets);
+
+        old_surface != new_surface
+    }
+
+    fn invalidate_file(&mut self, path: &Path, invalidate_dependents: bool) {
         let path = normalize_path(path);
         let mut invalidated = BTreeSet::new();
 
         self.invalidate_one(&path, &mut invalidated, false);
 
-        if let Some(importers) = self.importers.get(&path).cloned() {
+        if invalidate_dependents {
+            self.invalidate_dependents(&path, &mut invalidated);
+        }
+    }
+
+    fn invalidate_dependents(&mut self, path: &Path, invalidated: &mut BTreeSet<PathBuf>) {
+        if let Some(importers) = self.importers.get(path).cloned() {
             for importer in importers {
-                self.invalidate_one(&importer, &mut invalidated, true);
+                self.invalidate_one(&importer, invalidated, true);
             }
         }
     }
@@ -3606,7 +3735,7 @@ impl AnalysisQueryCache {
             .collect::<Vec<_>>();
 
         for path in removed {
-            self.invalidate_file(&path);
+            self.invalidate_file(&path, true);
         }
 
         self.parsed_files
@@ -3699,6 +3828,14 @@ impl AnalysisQueryCache {
         self.stats.require_edge_misses += 1;
         self.stats.symbol_index_misses += 1;
     }
+
+    fn record_parse_cache_lookup(&mut self, parsed_cache_hit: bool) {
+        if parsed_cache_hit {
+            self.stats.parse_hits += 1;
+        } else {
+            self.stats.parse_misses += 1;
+        }
+    }
 }
 
 fn build_analysis_file(
@@ -3722,22 +3859,10 @@ fn build_analysis_file(
         let _profile = profile::span_for_path("analysis.types.environment", path);
         let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
-        parsed.as_ref().ok().and_then(|parsed| {
-            if context.config.ecs.enabled {
-                let (environment, diagnostics) = build_type_environment_with_builtin_aliases(
-                    parsed,
-                    crate::ecs::builtin_aliases(),
-                );
-
-                if diagnostics.is_empty() {
-                    Some(environment.with_local_types(crate::ecs::builtin_locals()))
-                } else {
-                    None
-                }
-            } else {
-                build_type_environment(parsed).ok()
-            }
-        })
+        parsed
+            .as_ref()
+            .ok()
+            .and_then(|parsed| build_analysis_type_environment(parsed, context.config))
     };
     let mut diagnostics = {
         let _profile = profile::span_for_path("analysis.check", path);
@@ -3996,6 +4121,35 @@ fn parse_analysis_source(
         AnalysisSourceKind::Lua => parse_lua_source(path, source),
         AnalysisSourceKind::Tua => parse_tua_source(path, source),
     }
+}
+
+fn build_analysis_type_environment(
+    parsed: &ParsedSource,
+    config: &ProjectConfig,
+) -> Option<TypeEnvironment> {
+    if config.ecs.enabled {
+        let (environment, diagnostics) =
+            build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
+
+        if diagnostics.is_empty() {
+            Some(environment.with_local_types(crate::ecs::builtin_locals()))
+        } else {
+            None
+        }
+    } else {
+        build_type_environment(parsed).ok()
+    }
+}
+
+fn require_targets_for_source(path: &Path, source: &str) -> BTreeSet<PathBuf> {
+    require_targets_for_links(&module_links_tua_source(path, source.to_owned()))
+}
+
+fn require_targets_for_links(require_edges: &[ModuleLink]) -> BTreeSet<PathBuf> {
+    require_edges
+        .iter()
+        .map(|edge| normalize_path(&edge.target))
+        .collect()
 }
 
 fn parsed_cache_key(path: &Path, source: &str, kind: AnalysisSourceKind) -> ParsedCacheKey {

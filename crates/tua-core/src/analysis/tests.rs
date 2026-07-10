@@ -807,7 +807,7 @@ return M
         r#"
 local M = {}
 function M.new()
-  return { hp = 200 }
+  return { hp = "full" }
 end
 return M
 "#,
@@ -826,7 +826,69 @@ return M
 
     let after_snapshot = host.cache_stats();
     assert_eq!(after_snapshot.parse_misses, 3);
-    assert_eq!(after_snapshot.parse_hits, 1);
+    assert_eq!(after_snapshot.parse_hits, 2);
+    assert_eq!(after_snapshot.diagnostics_misses, 4);
+}
+
+#[test]
+fn changing_required_module_body_without_surface_change_keeps_importers_cached() {
+    let temp = TempProject::new("module-body-dependency");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    let main = temp.write(
+        "src/main.tua",
+        r#"
+local Player = require("player")
+local player = Player.new()
+return player.hp
+"#,
+    );
+    let player = temp.write(
+        "src/player.tua",
+        r#"
+local M = {}
+function M.new()
+  return { hp = 100 }
+end
+return M
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&main, fs::read_to_string(&main).expect("main should read"));
+    host.set_file(
+        &player,
+        fs::read_to_string(&player).expect("player should read"),
+    );
+    host.snapshot();
+
+    fs::write(
+        &player,
+        r#"
+local M = {}
+function M.new()
+  local base = 100
+  return { hp = base }
+end
+return M
+"#,
+    )
+    .expect("player should update");
+    host.set_file(
+        &player,
+        fs::read_to_string(&player).expect("player should read"),
+    );
+
+    let after_update = host.cache_stats();
+    assert_eq!(after_update.invalidations, 1);
+    assert_eq!(after_update.dependent_invalidations, 0);
+
+    host.snapshot();
+
+    let after_snapshot = host.cache_stats();
+    assert_eq!(after_snapshot.diagnostics_hits, 1);
+    assert_eq!(after_snapshot.diagnostics_misses, 3);
 }
 
 #[test]
