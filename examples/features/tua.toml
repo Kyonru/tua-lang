@@ -9,3 +9,4 @@ enabled = true
 
 [diagnostics]
 inline_ignores = true
+undefined_variables = true

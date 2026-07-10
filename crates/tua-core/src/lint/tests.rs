@@ -447,6 +447,26 @@ ConfiguredGlobal()
 }
 
 #[test]
+fn reports_undefined_function_calls_in_local_initializers() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local b = atun("")
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("undefined function call should report a diagnostic");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
+            && diagnostic.message.contains("undefined variable `atun`")
+    }));
+}
+
+#[test]
 fn accepts_luajit_bit_global_for_undefined_variable_lint() {
     check_tua_source_with_diagnostics_config(
         "src/main.tua",
