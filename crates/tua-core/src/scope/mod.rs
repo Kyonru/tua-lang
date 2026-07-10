@@ -438,7 +438,7 @@ impl<'a> ScopeBuilder<'a> {
             parent,
         );
 
-        self.analyze_function_body(function.body(), function_id.or(parent));
+        self.analyze_function_body(function.body(), function_id.or(parent), None);
     }
 
     fn analyze_function_declaration(
@@ -458,17 +458,29 @@ impl<'a> ScopeBuilder<'a> {
             }
         }
 
-        self.analyze_function_body(function.body(), parent);
+        let implicit_self = function.name().method_name().and_then(node_span);
+
+        self.analyze_function_body(function.body(), parent, implicit_self);
     }
 
     fn analyze_function_body(
         &mut self,
         body: &'a ast::FunctionBody,
         parent: Option<ScopeSymbolId>,
+        implicit_self: Option<SourceSpan>,
     ) {
         let span = node_span(body.block()).unwrap_or_else(default_span);
 
         self.enter_scope(span);
+
+        if let Some(self_span) = implicit_self {
+            self.declare_synthetic(
+                "self".to_owned(),
+                ScopeDeclarationKind::Parameter,
+                self_span,
+                parent,
+            );
+        }
 
         for parameter in body.parameters() {
             if let Parameter::Name(name) = parameter {
@@ -495,7 +507,9 @@ impl<'a> ScopeBuilder<'a> {
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => self.analyze_expression(expression),
             Expression::UnaryOperator { expression, .. } => self.analyze_expression(expression),
-            Expression::Function(function) => self.analyze_function_body(function.body(), None),
+            Expression::Function(function) => {
+                self.analyze_function_body(function.body(), None, None)
+            }
             Expression::FunctionCall(function_call) => self.analyze_function_call(function_call),
             Expression::TableConstructor(table) => self.analyze_table_constructor(table),
             Expression::Var(var) => self.analyze_var(var),
@@ -618,6 +632,33 @@ impl<'a> ScopeBuilder<'a> {
             name_span,
             declaration_span,
             scope_span,
+            parent,
+        });
+
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.bindings.insert(name, id);
+        }
+
+        Some(id)
+    }
+
+    fn declare_synthetic(
+        &mut self,
+        name: String,
+        kind: ScopeDeclarationKind,
+        span: SourceSpan,
+        parent: Option<ScopeSymbolId>,
+    ) -> Option<ScopeSymbolId> {
+        let id = self.push_declaration(ScopeDeclarationInput {
+            name: name.clone(),
+            kind,
+            name_span: span,
+            declaration_span: span,
+            scope_span: self
+                .scopes
+                .last()
+                .map(|scope| scope.span)
+                .unwrap_or_else(default_span),
             parent,
         });
 

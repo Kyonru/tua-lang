@@ -15,6 +15,8 @@ The VS Code extension starts this server and surfaces editor features for
 - Diagnostics on open, change, save, and watched-file updates.
 - Optional formatting consistency diagnostics can be enabled through
   `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
+- Full-document formatting is provided through `textDocument/formatting` and
+  uses `[format]` plus `tua.format.*` editor settings.
 - Optional inline diagnostic suppressions can be enabled through
   `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
 - Optional LuaJIT shape guidance can be enabled through `tua.jit.enabled` or
@@ -86,6 +88,27 @@ local legacy: number = "soon" -- tua-ignore-line TL1003
 Invalid diagnostic codes and suppressions that do not match any diagnostic still
 publish warnings. Suppression comments do not change hover, completion, inferred
 types, or emitted Lua.
+
+## Formatting
+
+The language server advertises `documentFormattingProvider: true` for Tua files.
+Formatting returns one full-document edit when the file would change, an empty
+edit list when the buffer is already formatted, and no edit for syntax-invalid
+buffers.
+
+Formatter defaults come from `[format]` in `tua.toml`:
+
+```toml
+[format]
+indent_width = 2
+line_width = 100
+quote_style = "preserve"
+final_newline = true
+```
+
+VS Code can override those values with `tua.format.indentWidth`,
+`tua.format.lineWidth`, `tua.format.quoteStyle`, and
+`tua.format.finalNewline`.
 
 ## LuaJIT Guidance
 

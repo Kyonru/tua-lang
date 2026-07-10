@@ -7,8 +7,8 @@
 -- Feature: comments.
 -- Single-line comments are preserved in emitted Lua.
 --[[
-  Long comments are also ordinary Lua and should not affect parsing,
-  semantic tokens, completion, hover, or emission.
+Long comments are also ordinary Lua and should not affect parsing,
+semantic tokens, completion, hover, or emission.
 ]]
 
 -- Feature: primitive values and local inference.
@@ -348,7 +348,7 @@ local auditText = auditedAccount:audit()
 -- explicit self and colon-call forms use the same field type.
 local lookupObject = {
   count = 0,
-  y = function(self, amount)
+  y = function(self: Self, amount: number): number
     self.count = self.count + amount
 
     return self.count

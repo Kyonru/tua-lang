@@ -10,12 +10,12 @@ use super::protocol::{
     error_response, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
     lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_completion_from_core,
     lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
-    lsp_document_symbol_from_core, lsp_folding_range_from_core, lsp_hover_from_core,
-    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
-    lsp_reference_location, lsp_resolved_completion_item, lsp_selection_range_from_core,
-    lsp_semantic_tokens_from_core, lsp_signature_help_from_core, lsp_source_range,
-    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
-    source_position_from_lsp,
+    lsp_document_symbol_from_core, lsp_folding_range_from_core, lsp_full_document_text_edit,
+    lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_location_from_core,
+    lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
+    lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
+    lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
+    response, source_position_from_lsp,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer};
@@ -101,6 +101,10 @@ impl LspServer {
             "textDocument/selectionRange" => response(id, self.selection_range_response(&message)),
             "textDocument/foldingRange" => response(id, self.folding_range_response(&message)),
             "textDocument/codeAction" => response(id, self.code_action_response(&message)),
+            "textDocument/formatting" => response(
+                id,
+                self.formatting_response(&message).unwrap_or(Value::Null),
+            ),
             "textDocument/references" => response(id, self.references_response(&message)),
             "textDocument/prepareRename" => response(
                 id,
@@ -680,6 +684,19 @@ impl LspServer {
         Value::Array(actions.into_iter().map(lsp_code_action_from_core).collect())
     }
 
+    fn formatting_response(&self, message: &Value) -> Option<Value> {
+        let request = self.document_request(message)?;
+        let source = self.analysis.document_text(request.uri)?;
+        let options = self.format_options_for_path(&request.path);
+        let formatted = tua_core::format_tua_source(&request.path, source, &options).ok()?;
+
+        if formatted == source {
+            Some(json!([]))
+        } else {
+            Some(json!([lsp_full_document_text_edit(source, formatted)]))
+        }
+    }
+
     fn references_response(&self, message: &Value) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!([]);
@@ -816,6 +833,41 @@ impl LspServer {
             path: path_from_uri(uri),
         })
     }
+
+    fn format_options_for_path(&self, path: &PathBuf) -> tua_core::FormatOptions {
+        let format_config = ProjectModel::load_for_path(path)
+            .ok()
+            .and_then(|model| {
+                model
+                    .workspace_for_path(path)
+                    .map(|workspace| workspace.config().format.clone())
+            })
+            .or_else(|| {
+                project_model_for_settings(&self.workspace_folders, &self.settings)
+                    .ok()
+                    .and_then(|model| {
+                        model
+                            .workspace_for_path(path)
+                            .map(|workspace| workspace.config().format.clone())
+                    })
+            })
+            .unwrap_or_default();
+
+        self.settings.format_options(format_config)
+    }
+}
+
+fn project_model_for_settings(
+    roots: &[PathBuf],
+    settings: &WorkspaceSettings,
+) -> Result<ProjectModel, tua_core::ConfigError> {
+    ProjectModel::load_with_options(ProjectModelOptions {
+        workspace_folders: roots.to_vec(),
+        ignored_paths: settings.ignored_paths.clone(),
+        file_associations: settings.project_file_associations(),
+        require_path_separator: settings.module_path_separator(),
+        ..ProjectModelOptions::default()
+    })
 }
 
 fn document_uri(params: &Value) -> Option<&str> {
@@ -884,27 +936,29 @@ fn is_source_uri(uri: &str, roots: &[PathBuf], settings: &WorkspaceSettings) -> 
         return false;
     }
 
-    ProjectModel::load_with_options(ProjectModelOptions {
-        workspace_folders: roots.to_vec(),
-        ignored_paths: settings.ignored_paths.clone(),
-        file_associations: settings.project_file_associations(),
-        require_path_separator: settings.module_path_separator(),
-        ..ProjectModelOptions::default()
-    })
-    .ok()
-    .and_then(|model| {
-        model
-            .workspace_for_path(&path)
-            .and_then(|workspace| workspace.source_kind_for_path(&path))
-    })
-    .is_some()
-}
-
-fn is_config_uri(uri: &str) -> bool {
-    path_from_uri(uri)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name == "tua.toml")
+    ProjectModel::load_for_path(&path)
+        .ok()
+        .and_then(|model| {
+            model
+                .workspace_for_path(&path)
+                .and_then(|workspace| workspace.source_kind_for_path(&path))
+        })
+        .or_else(|| {
+            ProjectModel::load_with_options(ProjectModelOptions {
+                workspace_folders: roots.to_vec(),
+                ignored_paths: settings.ignored_paths.clone(),
+                file_associations: settings.project_file_associations(),
+                require_path_separator: settings.module_path_separator(),
+                ..ProjectModelOptions::default()
+            })
+            .ok()
+            .and_then(|model| {
+                model
+                    .workspace_for_path(&path)
+                    .and_then(|workspace| workspace.source_kind_for_path(&path))
+            })
+        })
+        .is_some()
 }
 
 fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {
@@ -916,6 +970,13 @@ fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {
         .and_then(|watched| watched.get("dynamicRegistration"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn is_config_uri(uri: &str) -> bool {
+    path_from_uri(uri)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "tua.toml")
 }
 
 fn register_watched_files_request(id: u64) -> Value {

@@ -554,6 +554,37 @@ Expected behavior:
 - returns non-zero when parse or type errors are found;
 - prints diagnostics with file, line, column, severity, and message.
 
+### `tua fmt`
+
+Formats project `.tua` files in place with the built-in Rust formatter.
+
+Expected behavior:
+
+- uses `[format]` configuration from `tua.toml`;
+- preserves Tua-only syntax and comments;
+- is idempotent;
+- leaves files with parse errors unchanged and reports diagnostics.
+
+### `tua fmt --check`
+
+Reports files that would change without writing them and returns non-zero when
+formatting drift is found.
+
+### `tua lint`
+
+Runs the configured diagnostic/lint pipeline without writing output.
+
+Expected behavior:
+
+- shares project discovery and config loading with `tua check`;
+- respects configured diagnostics and inline-ignore settings;
+- reports success as `linted N file(s)`.
+
+### `tua lint --strict`
+
+Enables the full lint set, including formatting lints, while preserving the
+configured inline-ignore policy.
+
 ### `tua build`
 
 Checks and emits Lua output.
@@ -610,6 +641,7 @@ The extension should provide:
 - completion for known aliases, locals, table fields, Lua builtins, LOVE API
   items, LuaDoc tags/types/snippets, require paths, required-module fields, and
   auto-import candidates;
+- full-document formatting through the language server formatter;
 - signature help for known function calls, including supported parameter docs;
 - go to definition, references, rename, document links, document symbols,
   workspace symbols, document highlights, code actions, call hierarchy, inlay
@@ -770,5 +802,6 @@ The v1 implementation is acceptable when:
 - compound assignment examples lower correctly;
 - unsupported complex compound assignments produce diagnostics;
 - `require` calls are preserved;
-- `tua check`, `tua build`, `tua watch`, and `tua lsp` exist;
+- `tua check`, `tua fmt`, `tua lint`, `tua build`, `tua watch`, and `tua lsp`
+  exist;
 - the VS Code extension can surface diagnostics from `tua lsp`.

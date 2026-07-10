@@ -44,7 +44,7 @@ function describe(player: Player): string
   return "down"
 end
 
-local player: Player = makePlayer("Mina")
+local player = makePlayer("Mina")
 damage(player, 15)
 heal(player, 5)
 
@@ -55,4 +55,3 @@ return {
   describe = describe,
   sample = player,
 }
-

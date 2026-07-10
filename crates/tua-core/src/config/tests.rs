@@ -45,6 +45,7 @@ fn default_config_matches_spec() {
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Off,
             },
+            format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
@@ -63,6 +64,12 @@ extension = "tl"
 emit_maps = false
 [emit]
 annotation_mode = "luacats"
+
+[format]
+indent_width = 4
+line_width = 80
+quote_style = "preserve"
+final_newline = false
 
 [jit]
 enabled = true
@@ -117,6 +124,12 @@ globals = ["Game", "World"]
             emit_maps: false,
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Luacats,
+            },
+            format: FormatConfig {
+                indent_width: 4,
+                line_width: 80,
+                quote_style: QuoteStyle::Preserve,
+                final_newline: false,
             },
             jit: JitConfig {
                 enabled: true,
@@ -188,7 +201,34 @@ emit_maps = false
         }
     );
     assert_eq!(config.jit, JitConfig::default());
+    assert_eq!(config.format, FormatConfig::default());
     assert_eq!(config.diagnostics, DiagnosticsConfig::default());
+}
+
+#[test]
+fn parses_format_section_with_partial_defaults() {
+    let config = parse_config(
+        r#"
+[format]
+line_width = 120
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.format,
+        FormatConfig {
+            line_width: 120,
+            ..FormatConfig::default()
+        }
+    );
+    assert_eq!(
+        config.format.options(),
+        FormatOptions {
+            line_width: 120,
+            ..FormatOptions::default()
+        }
+    );
 }
 
 #[test]

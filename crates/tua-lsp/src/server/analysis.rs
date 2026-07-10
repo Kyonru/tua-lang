@@ -11,6 +11,7 @@ use tua_core::{
     DocumentHighlight, DocumentSymbol, FoldingRange, InlayHint, ModuleLink, ProjectModel,
     ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
     SemanticToken, SignatureHelp, SourcePosition, SourceSpan, VfsSourceKind, WorkspaceSymbol,
+    CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -79,7 +80,7 @@ impl AnalysisHost {
     ) -> AnalysisSnapshot {
         AnalysisSnapshot {
             core: self.core.snapshot(),
-            workspace_folders: workspace_folders.to_vec(),
+            workspace_folders: self.effective_workspace_folders(workspace_folders),
             settings: settings.clone(),
         }
     }
@@ -98,6 +99,7 @@ impl AnalysisHost {
         let uri = uri.into();
         let path = path_from_uri(&uri);
         let source = source.into();
+        let previous_roots = self.effective_workspace_folders(roots);
 
         self.sync_core_project_inputs(roots, settings);
         self.documents.insert(
@@ -107,6 +109,10 @@ impl AnalysisHost {
                 source: source.clone(),
             },
         );
+        let current_roots = self.effective_workspace_folders(roots);
+        if path_sets_differ(&previous_roots, &current_roots) {
+            self.reindex_workspace(roots, settings);
+        }
         if let Some(kind) = self.cache_source(path.clone(), source.clone(), roots, settings) {
             self.core
                 .open_document_with_kind(path, source, core_source_kind(kind));
@@ -198,12 +204,13 @@ impl AnalysisHost {
 
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
         self.sync_core_project_inputs(roots, settings);
+        let effective_roots = self.effective_workspace_folders(roots);
         let open_paths = self
             .documents
             .values()
             .map(|document| document.path.clone())
             .collect::<BTreeSet<_>>();
-        let model = project_model_for_roots(roots, settings).ok();
+        let model = project_model_for_roots(&effective_roots, settings).ok();
 
         let Some(model) = model else {
             return;
@@ -217,7 +224,7 @@ impl AnalysisHost {
                     }
 
                     if let Ok(source) = fs::read_to_string(&path) {
-                        self.cache_source(path, source, roots, settings);
+                        self.cache_source(path, source, &effective_roots, settings);
                     }
                 }
             }
@@ -237,7 +244,8 @@ impl AnalysisHost {
             return None;
         }
 
-        let Some(kind) = source_kind_for_path(&path, roots, settings) else {
+        let effective_roots = self.effective_workspace_folders(roots);
+        let Some(kind) = source_kind_for_path(&path, &effective_roots, settings) else {
             self.core.remove_file(&path);
             return None;
         };
@@ -249,7 +257,8 @@ impl AnalysisHost {
     }
 
     fn sync_core_project_inputs(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
-        let Ok(model) = project_model_for_roots(roots, settings) else {
+        let effective_roots = self.effective_workspace_folders(roots);
+        let Ok(model) = project_model_for_roots(&effective_roots, settings) else {
             return;
         };
         let source_roots = model
@@ -282,6 +291,18 @@ impl AnalysisHost {
             self.core
                 .set_config(settings.apply_project_config(workspace.config().clone()));
         }
+    }
+
+    fn effective_workspace_folders(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
+        let mut effective = roots.to_vec();
+
+        for document in self.documents.values() {
+            if let Some(root) = nearest_config_root(&document.path) {
+                push_unique_path(&mut effective, root);
+            }
+        }
+
+        effective
     }
 
     #[cfg(test)]
@@ -695,6 +716,36 @@ fn source_kind_for_path(
                 .and_then(|workspace| workspace.source_kind_for_path(path))
         })
         .map(source_kind_from_vfs)
+        .or_else(|| {
+            ProjectModel::load_for_path(path)
+                .ok()
+                .and_then(|model| {
+                    model
+                        .workspace_for_path(path)
+                        .and_then(|workspace| workspace.source_kind_for_path(path))
+                })
+                .map(source_kind_from_vfs)
+        })
+}
+
+fn nearest_config_root(path: &Path) -> Option<PathBuf> {
+    path.parent()?
+        .ancestors()
+        .find(|dir| dir.join(CONFIG_FILE).is_file())
+        .map(Path::to_path_buf)
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, path: PathBuf) {
+    if !paths.iter().any(|existing| existing == &path) {
+        paths.push(path);
+    }
+}
+
+fn path_sets_differ(left: &[PathBuf], right: &[PathBuf]) -> bool {
+    left.len() != right.len()
+        || left
+            .iter()
+            .any(|path| !right.iter().any(|other| other == path))
 }
 
 #[cfg(test)]

@@ -52,11 +52,13 @@ fn help_prints_command_list() {
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
 
-    for command in ["init", "check", "build", "watch", "lsp"] {
+    for command in ["init", "check", "fmt", "lint", "build", "watch", "lsp"] {
         assert!(stdout.contains(command), "missing command `{command}`");
     }
 
     assert!(stdout.contains("--emit-on-error"));
+    assert!(stdout.contains("--check"));
+    assert!(stdout.contains("--strict"));
 }
 
 #[test]
@@ -849,6 +851,117 @@ return hp
     assert!(emitted.contains(r#"local hp = "full""#));
     assert!(emitted.contains("hp = hp + 1"));
     assert!(!emitted.contains(": number"));
+}
+
+#[test]
+fn fmt_formats_project_files_in_place() {
+    let temp = TempDir::new("fmt-in-place");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.tua"), "local value=1\n").expect("failed to write source");
+
+    let output = tua()
+        .arg("fmt")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua fmt");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let formatted =
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read source");
+
+    assert!(stdout.contains("formatted 1 file(s)"));
+    assert_eq!(formatted, "local value = 1\n");
+}
+
+#[test]
+fn fmt_check_reports_unformatted_files_without_writing() {
+    let temp = TempDir::new("fmt-check");
+    let original = "local value=1\n";
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.tua"), original).expect("failed to write source");
+
+    let output = tua()
+        .args(["fmt", "--check"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua fmt --check");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    let current =
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read source");
+
+    assert!(stderr.contains("format check failed"));
+    assert!(stderr.contains("would reformat src/main.tua"));
+    assert_eq!(current, original);
+}
+
+#[test]
+fn lint_respects_project_config() {
+    let temp = TempDir::new("lint-config");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+
+[diagnostics]
+duplicate_keys = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local config = { hp = 10, hp = 20 }\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("lint")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tua:1"));
+    assert!(stderr.contains("warning TL4001"));
+    assert!(stderr.contains("duplicate table key `hp`"));
+}
+
+#[test]
+fn lint_strict_enables_all_lints() {
+    let temp = TempDir::new("lint-strict");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local config = { hp = 10, hp = 20 }\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .args(["lint", "--strict"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint --strict");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("warning TL4001"));
+    assert!(stderr.contains("duplicate table key `hp`"));
 }
 
 #[test]

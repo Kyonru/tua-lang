@@ -2,13 +2,14 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tua_core::{
-    DiagnosticsConfig, EcsConfig, JitConfig, ModulePathSeparator, ProjectConfig,
-    ProjectFileAssociation, VfsSourceKind,
+    DiagnosticsConfig, EcsConfig, FormatConfig, FormatOptions, JitConfig, ModulePathSeparator,
+    ProjectConfig, ProjectFileAssociation, QuoteStyle, VfsSourceKind,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct WorkspaceSettings {
     pub(super) diagnostics: DiagnosticOverrides,
+    pub(super) format: FormatOverrides,
     pub(super) jit: JitOverrides,
     pub(super) ecs: EcsOverrides,
     pub(super) file_associations: Vec<FileAssociation>,
@@ -47,6 +48,14 @@ pub(super) struct DiagnosticOverrides {
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
     pub(super) globals: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct FormatOverrides {
+    pub(super) indent_width: Option<usize>,
+    pub(super) line_width: Option<usize>,
+    pub(super) quote_style: Option<QuoteStyle>,
+    pub(super) final_newline: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -101,6 +110,7 @@ impl WorkspaceSettings {
 
         Self {
             diagnostics: DiagnosticOverrides::from_settings(settings.get("diagnostics")),
+            format: FormatOverrides::from_settings(settings.get("format")),
             jit: JitOverrides::from_settings(settings.get("jit")),
             ecs: EcsOverrides::from_settings(settings.get("ecs")),
             file_associations: file_associations_from_settings(settings),
@@ -115,8 +125,14 @@ impl WorkspaceSettings {
         project
     }
 
+    pub(super) fn format_options(&self, mut project: FormatConfig) -> FormatOptions {
+        self.format.apply(&mut project);
+        project.options()
+    }
+
     pub(super) fn apply_project_config(&self, mut project: ProjectConfig) -> ProjectConfig {
         project.diagnostics = self.diagnostics_config(project.diagnostics);
+        self.format.apply(&mut project.format);
         self.jit.apply(&mut project.jit);
         self.ecs.apply(&mut project.ecs);
 
@@ -321,6 +337,37 @@ impl DiagnosticOverrides {
     }
 }
 
+impl FormatOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+
+        Self {
+            indent_width: usize_setting(settings, "indent_width", "indentWidth"),
+            line_width: usize_setting(settings, "line_width", "lineWidth"),
+            quote_style: quote_style_setting(settings, "quote_style", "quoteStyle"),
+            final_newline: bool_setting(settings, "final_newline", "finalNewline"),
+        }
+    }
+
+    fn apply(&self, format: &mut FormatConfig) {
+        if let Some(indent_width) = self.indent_width {
+            format.indent_width = indent_width;
+        }
+
+        if let Some(line_width) = self.line_width {
+            format.line_width = line_width;
+        }
+
+        if let Some(quote_style) = self.quote_style {
+            format.quote_style = quote_style;
+        }
+
+        apply_bool(self.final_newline, &mut format.final_newline);
+    }
+}
+
 impl JitOverrides {
     fn from_settings(value: Option<&Value>) -> Self {
         let Some(settings) = value.and_then(Value::as_object) else {
@@ -444,6 +491,21 @@ fn usize_setting(
         .or_else(|| settings.get(snake_case))
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
+}
+
+fn quote_style_setting(
+    settings: &serde_json::Map<String, Value>,
+    snake_case: &str,
+    camel_case: &str,
+) -> Option<QuoteStyle> {
+    match settings
+        .get(camel_case)
+        .or_else(|| settings.get(snake_case))
+        .and_then(Value::as_str)
+    {
+        Some("preserve") => Some(QuoteStyle::Preserve),
+        _ => None,
+    }
 }
 
 fn string_array_setting(settings: &Value, names: &[&str]) -> Vec<String> {

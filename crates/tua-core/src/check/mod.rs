@@ -1359,6 +1359,13 @@ impl<'a> Checker<'a> {
             return Some(Type::number());
         }
 
+        if is_ordering_operator(binop)
+            && ((self.is_number_type(left) && self.is_number_type(right))
+                || (self.is_string_type(left) && self.is_string_type(right)))
+        {
+            return Some(Type::boolean());
+        }
+
         if matches!(binop, ast::BinOp::TwoDots(_))
             && self.is_concat_operand_type(left)
             && self.is_concat_operand_type(right)
@@ -1434,6 +1441,14 @@ impl<'a> Checker<'a> {
         match resolve_aliases(ty, self.environment, 0) {
             Type::Primitive(crate::PrimitiveType::Number) => true,
             Type::Union(types) => types.iter().all(|ty| self.is_number_type(ty)),
+            _ => false,
+        }
+    }
+
+    fn is_string_type(&self, ty: &Type) -> bool {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Primitive(crate::PrimitiveType::String) | Type::StringLiteral(_) => true,
+            Type::Union(types) => types.iter().all(|ty| self.is_string_type(ty)),
             _ => false,
         }
     }
@@ -1619,6 +1634,16 @@ fn is_numeric_operator(binop: &ast::BinOp) -> bool {
             | ast::BinOp::Plus(_)
             | ast::BinOp::Slash(_)
             | ast::BinOp::Star(_)
+    )
+}
+
+fn is_ordering_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::GreaterThan(_)
+            | ast::BinOp::GreaterThanEqual(_)
+            | ast::BinOp::LessThan(_)
+            | ast::BinOp::LessThanEqual(_)
     )
 }
 

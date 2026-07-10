@@ -188,10 +188,7 @@ impl<'a> SignatureResolver<'a> {
                 return signature_from_lua_item(item).map(|signature| vec![signature]);
             }
 
-            if let Some(function) = self
-                .semantic
-                .typed_function_for_call_parts(parts, position)
-            {
+            if let Some(function) = self.semantic.typed_function_for_call_parts(parts, position) {
                 return Some(signatures_from_typed_function(
                     &function,
                     Some(&qualified_name),

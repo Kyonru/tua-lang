@@ -26,6 +26,29 @@ Loads project config, parses sources, runs type checking and enabled lints, and
 prints diagnostics. Warnings are printed but do not make the command fail unless
 an error is also present.
 
+## `fmt`
+
+```bash
+cargo run -p tua-cli -- fmt
+cargo run -p tua-cli -- fmt --check
+```
+
+Formats project `.tua` source files in place using the built-in formatter.
+`--check` reports files that would change and exits non-zero without writing.
+Files with parse errors are left unchanged and reported with diagnostics.
+
+## `lint`
+
+```bash
+cargo run -p tua-cli -- lint
+cargo run -p tua-cli -- lint --strict
+```
+
+Runs the same project diagnostic pipeline as `check`, but reports success as
+`linted N file(s)`. By default it respects `tua.toml`; `--strict` enables every
+lint diagnostic, including formatting lints, while keeping inline-ignore
+settings controlled by project/editor configuration.
+
 ## `build`
 
 ```bash

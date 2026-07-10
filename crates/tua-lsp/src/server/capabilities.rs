@@ -51,6 +51,7 @@ pub(super) fn initialize_result() -> Value {
             "selectionRangeProvider": true,
             "foldingRangeProvider": true,
             "codeActionProvider": true,
+            "documentFormattingProvider": true,
             "referencesProvider": true,
             "workspaceSymbolProvider": true,
             "renameProvider": {

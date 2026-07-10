@@ -14,6 +14,7 @@ pub mod emit;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod fixture;
 pub mod folding_range;
+pub mod format;
 pub mod hir;
 pub mod hover;
 pub mod ide_db;
@@ -72,8 +73,8 @@ pub use code_action::{
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,
-    ConfigParseError, DiagnosticsConfig, EcsConfig, EmitConfig, InitResult, JitConfig,
-    LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+    ConfigParseError, DiagnosticsConfig, EcsConfig, EmitConfig, FormatConfig, InitResult,
+    JitConfig, LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
 };
 pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,
@@ -96,6 +97,7 @@ pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, Fixtu
 pub use folding_range::{
     folding_ranges_parsed_source, folding_ranges_tua_source, FoldingRange, FoldingRangeKind,
 };
+pub use format::{format_parsed_source, format_tua_source, FormatOptions, QuoteStyle};
 pub use hir::{
     lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,
     HirModuleExport, HirRequireBinding, HirSymbol, HirSymbolId, HirSymbolKind,

@@ -161,6 +161,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(WORLD_ITEMS.iter())
         .chain(FILTER_MODE_ITEMS.iter())
         .chain(SOURCE_ITEMS.iter())
+        .chain(BIT_ITEMS.iter())
         .chain(MATH_ITEMS.iter())
         .chain(STRING_ITEMS.iter())
         .chain(TABLE_ITEMS.iter())
@@ -236,6 +237,7 @@ fn receiver_is_love(parts: &[String]) -> bool {
 
 fn items_for_receiver(receiver_parts: &[String]) -> Option<&'static [LuaItem]> {
     match receiver_parts {
+        [root] if root == "bit" => Some(BIT_ITEMS),
         [root] if root == "coroutine" => Some(COROUTINE_ITEMS),
         [root] if root == "debug" => Some(DEBUG_ITEMS),
         [root] if root == "io" => Some(IO_ITEMS),
@@ -399,6 +401,12 @@ const TOP_LEVEL: &[LuaItem] = &[
         LuaItemKind::Value,
         "table",
         "Command-line argument table provided by standalone Lua hosts.",
+    ),
+    item(
+        "bit",
+        LuaItemKind::Module,
+        "LuaJIT bit library",
+        "LuaJIT bit operations for 32-bit integers.",
     ),
     item(
         "assert",
@@ -1361,6 +1369,81 @@ const fn asset_item(kind: asset::AssetLoaderKind) -> LuaItem {
         documentation: kind.documentation(),
     }
 }
+
+const BIT_ITEMS: &[LuaItem] = &[
+    item(
+        "arshift",
+        LuaItemKind::Function,
+        "function bit.arshift(x: number, n: number): number",
+        "Arithmetic right shift.",
+    ),
+    item(
+        "band",
+        LuaItemKind::Function,
+        "function bit.band(...: number): number",
+        "Bitwise and.",
+    ),
+    item(
+        "bnot",
+        LuaItemKind::Function,
+        "function bit.bnot(x: number): number",
+        "Bitwise not.",
+    ),
+    item(
+        "bor",
+        LuaItemKind::Function,
+        "function bit.bor(...: number): number",
+        "Bitwise or.",
+    ),
+    item(
+        "bswap",
+        LuaItemKind::Function,
+        "function bit.bswap(x: number): number",
+        "Byte swap.",
+    ),
+    item(
+        "bxor",
+        LuaItemKind::Function,
+        "function bit.bxor(...: number): number",
+        "Bitwise xor.",
+    ),
+    item(
+        "lshift",
+        LuaItemKind::Function,
+        "function bit.lshift(x: number, n: number): number",
+        "Logical left shift.",
+    ),
+    item(
+        "rol",
+        LuaItemKind::Function,
+        "function bit.rol(x: number, n: number): number",
+        "Left rotate.",
+    ),
+    item(
+        "ror",
+        LuaItemKind::Function,
+        "function bit.ror(x: number, n: number): number",
+        "Right rotate.",
+    ),
+    item(
+        "rshift",
+        LuaItemKind::Function,
+        "function bit.rshift(x: number, n: number): number",
+        "Logical right shift.",
+    ),
+    item(
+        "tobit",
+        LuaItemKind::Function,
+        "function bit.tobit(x: number): number",
+        "Normalizes a number to a signed 32-bit integer.",
+    ),
+    item(
+        "tohex",
+        LuaItemKind::Function,
+        "function bit.tohex(x: number, n?: number): string",
+        "Formats a 32-bit integer as hexadecimal.",
+    ),
+];
 
 const MATH_ITEMS: &[LuaItem] = &[
     item(

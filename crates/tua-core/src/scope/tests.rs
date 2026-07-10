@@ -98,6 +98,28 @@ fn globals_and_unresolved_names_use_the_same_lookup_path() {
 }
 
 #[test]
+fn colon_method_self_resolves_to_implicit_parameter() {
+    let source = r#"
+local Account = {}
+
+function Account:deposit(amount)
+  self.balance = self.balance + amount
+end
+"#;
+    let parsed = parse_tua_source("src/account.tua", source).expect("source should parse");
+    let map = scope_map_parsed_source(&parsed);
+    let self_symbol = map
+        .symbol_at_position(position_at(source, "self.balance"))
+        .expect("self reference should resolve");
+    let declaration = map
+        .declaration(self_symbol)
+        .expect("self declaration should exist");
+
+    assert_eq!(declaration.name, "self");
+    assert_eq!(declaration.kind, ScopeDeclarationKind::Parameter);
+}
+
+#[test]
 fn table_shape_fields_are_available_as_scope_declarations() {
     let parsed = parse_tua_source(
         "src/player.tua",

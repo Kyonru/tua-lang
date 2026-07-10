@@ -447,6 +447,24 @@ ConfiguredGlobal()
 }
 
 #[test]
+fn accepts_luajit_bit_global_for_undefined_variable_lint() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+if bit then
+  local mask = bit.bor(1, 2)
+  print(mask)
+end
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("LuaJIT bit library should be a known builtin global");
+}
+
+#[test]
 fn reports_unused_locals_and_parameters_independently() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
@@ -482,6 +500,51 @@ test(1, 2, 3)
                 .message
                 .contains("unused parameter `unused_param`")
     }));
+}
+
+#[test]
+fn compound_assignments_read_rhs_parameters_for_symbol_lints() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+type Player = {
+  hp: number,
+}
+
+local function damage(player: Player, amount: number)
+  player.hp -= amount
+end
+
+local player: Player = { hp = 10 }
+damage(player, 2)
+"#,
+        &DiagnosticsConfig {
+            unused_parameters: true,
+            unused_locals: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("compound assignment operands should count as reads");
+}
+
+#[test]
+fn colon_methods_have_implicit_self_for_symbol_lints() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local Account = {}
+
+function Account:deposit(amount: number)
+  print(self, amount)
+end
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            unused_parameters: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("colon method bodies should have an implicit self parameter");
 }
 
 #[test]
@@ -670,6 +733,25 @@ local unknown = dynamic + 1
             .message
             .contains("operator `+` cannot be applied to number and string")
     }));
+}
+
+#[test]
+fn accepts_valid_ordering_operators_when_binary_operator_lint_is_enabled() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local hp: number = 10
+local name: string = "Ada"
+local healthy = hp > 0
+local high = hp >= 9
+local sorted = name <= "Mina"
+"#,
+        &DiagnosticsConfig {
+            binary_operator_type_mismatches: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("valid number and string ordering operators should not warn");
 }
 
 #[test]

@@ -11,6 +11,8 @@ Usage:
 Commands:
   init      Create a default tua.toml and src/ directory
   check     Parse and type-check the project
+  fmt       Format project source files
+  lint      Run configured diagnostics as lints
   build     Check and emit Lua output
   watch     Rebuild when source files change
   lsp       Start the tua language server over stdio
@@ -18,6 +20,8 @@ Commands:
 Options:
   --stdio           With lsp, accepted for editor-client compatibility
   --emit-on-error   With build, emit parseable/lowerable files even if errors exist
+  --check           With fmt, report files that would change without writing
+  --strict          With lint, enable all lint diagnostics
   -h, --help        Print command help
   -V, --version     Print version
 ";
@@ -28,14 +32,23 @@ pub enum CliAction {
     Version,
     Command {
         name: CommandName,
-        emit_on_error: bool,
+        options: CommandOptions,
     },
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CommandOptions {
+    pub emit_on_error: bool,
+    pub fmt_check: bool,
+    pub lint_strict: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommandName {
     Init,
     Check,
+    Fmt,
+    Lint,
     Build,
     Watch,
     Lsp,
@@ -66,6 +79,8 @@ where
     let command = match args[0].as_str() {
         "init" => CommandName::Init,
         "check" => CommandName::Check,
+        "fmt" => CommandName::Fmt,
+        "lint" => CommandName::Lint,
         "build" => CommandName::Build,
         "watch" => CommandName::Watch,
         "lsp" => CommandName::Lsp,
@@ -74,16 +89,24 @@ where
         }
     };
 
-    let mut emit_on_error = false;
+    let mut options = CommandOptions::default();
 
     for arg in args.iter().skip(1) {
         match arg.as_str() {
-            "--emit-on-error" if command == CommandName::Build => emit_on_error = true,
+            "--emit-on-error" if command == CommandName::Build => options.emit_on_error = true,
+            "--check" if command == CommandName::Fmt => options.fmt_check = true,
+            "--strict" if command == CommandName::Lint => options.lint_strict = true,
             "--stdio" if command == CommandName::Lsp => {}
             "--emit-on-error" => {
                 return Err(CliError::usage(
                     "`--emit-on-error` is only valid with `tua build`",
                 ));
+            }
+            "--check" => {
+                return Err(CliError::usage("`--check` is only valid with `tua fmt`"));
+            }
+            "--strict" => {
+                return Err(CliError::usage("`--strict` is only valid with `tua lint`"));
             }
             other => {
                 return Err(CliError::usage(format!("unknown option `{other}`")));
@@ -93,7 +116,7 @@ where
 
     Ok(CliAction::Command {
         name: command,
-        emit_on_error,
+        options,
     })
 }
 

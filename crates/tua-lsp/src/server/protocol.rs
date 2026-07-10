@@ -547,6 +547,40 @@ fn lsp_text_edit(edit: TextEdit) -> Value {
     })
 }
 
+pub(super) fn lsp_full_document_text_edit(source: &str, new_text: String) -> Value {
+    let (end_line, end_character) = lsp_document_end_position(source);
+
+    json!({
+        "range": {
+            "start": {
+                "line": 0,
+                "character": 0
+            },
+            "end": {
+                "line": end_line,
+                "character": end_character
+            }
+        },
+        "newText": new_text
+    })
+}
+
+fn lsp_document_end_position(source: &str) -> (usize, usize) {
+    let mut line = 0usize;
+    let mut character = 0usize;
+
+    for ch in source.chars() {
+        if ch == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
+    }
+
+    (line, character)
+}
+
 pub(super) fn lsp_workspace_symbol_from_core(symbol: WorkspaceSymbol) -> Value {
     let mut item = json!({
         "name": symbol.name,

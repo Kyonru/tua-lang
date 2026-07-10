@@ -14,6 +14,12 @@ emit_maps = true
 [emit]
 annotation_mode = "off"
 
+[format]
+indent_width = 2
+line_width = 100
+quote_style = "preserve"
+final_newline = true
+
 [jit]
 enabled = false
 variable_type_drift = true
@@ -88,6 +94,31 @@ LuaCATS output includes:
 - `---@type` for annotated locals.
 - `---@param` and `---@return` for function signatures.
 - `---@field` for stable table/object fields.
+
+## Format
+
+The built-in formatter is Rust-native and is used by `tua fmt` and LSP
+`textDocument/formatting`.
+
+```toml
+[format]
+indent_width = 2
+line_width = 100
+quote_style = "preserve"
+final_newline = true
+```
+
+`indent_width`
+: Spaces per indentation level.
+
+`line_width`
+: Preferred maximum line width for line-aware groups.
+
+`quote_style`
+: Currently `preserve`, which keeps existing string quote style.
+
+`final_newline`
+: Writes a final LF newline when formatting.
 
 ## LuaJIT Guidance
 
@@ -281,8 +312,8 @@ disabled.
 intentionally small and opt-in: trailing whitespace, tabs or odd-space
 indentation, obvious spacing around `then`/`do`, comma spacing,
 parenthesis/bracket padding, and assignment-style token spacing. These lints
-help mixed `.lua` and `.tua` code stay readable across contributors without
-rewriting files or enforcing a full formatter.
+help mixed `.lua` and `.tua` code stay readable across contributors. Use
+`tua fmt` or editor formatting when you want the formatter to rewrite files.
 
 `inline_ignores`
 : Enables diagnostic suppression comments. This is disabled by default so

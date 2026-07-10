@@ -25,7 +25,7 @@ leaving the normal Lua and LOVE workflow.
   path validation for helpers that load assets.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.
-- CLI commands for init, check, build, watch, and LSP.
+- CLI commands for init, check, fmt, lint, build, watch, and LSP.
 - A language server with diagnostics, hover, completion, signature help,
   document highlights, definition, references, rename, document symbols,
   workspace symbols, document links, code actions, call hierarchy, inlay hints,

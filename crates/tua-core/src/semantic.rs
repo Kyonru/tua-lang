@@ -8,8 +8,8 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::asset::{self, AssetLoaderKind};
-use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::love_conf;
+use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{
     required_module_export_for_fields, required_module_export_type_for_fields,
     required_module_exports_for_receiver, ModuleExportField, ModuleExports,
@@ -2175,6 +2175,13 @@ fn infer_binary_operator_type(
         return Some(Type::number());
     }
 
+    if is_ordering_operator(binop)
+        && ((is_number_type(environment, left) && is_number_type(environment, right))
+            || (is_string_type(environment, left) && is_string_type(environment, right)))
+    {
+        return Some(Type::boolean());
+    }
+
     if matches!(binop, ast::BinOp::TwoDots(_))
         && is_concat_operand_type(environment, left)
         && is_concat_operand_type(environment, right)
@@ -2348,6 +2355,16 @@ fn is_numeric_operator(binop: &ast::BinOp) -> bool {
     )
 }
 
+fn is_ordering_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::GreaterThan(_)
+            | ast::BinOp::GreaterThanEqual(_)
+            | ast::BinOp::LessThan(_)
+            | ast::BinOp::LessThanEqual(_)
+    )
+}
+
 fn is_number_type(environment: &TypeEnvironment, ty: &Type) -> bool {
     match resolve_aliases(environment, ty, 0) {
         Type::Primitive(PrimitiveType::Number) => true,
@@ -2356,9 +2373,19 @@ fn is_number_type(environment: &TypeEnvironment, ty: &Type) -> bool {
     }
 }
 
+fn is_string_type(environment: &TypeEnvironment, ty: &Type) -> bool {
+    match resolve_aliases(environment, ty, 0) {
+        Type::Primitive(PrimitiveType::String) | Type::StringLiteral(_) => true,
+        Type::Union(types) => types.iter().all(|ty| is_string_type(environment, ty)),
+        _ => false,
+    }
+}
+
 fn is_concat_operand_type(environment: &TypeEnvironment, ty: &Type) -> bool {
     match resolve_aliases(environment, ty, 0) {
-        Type::Primitive(PrimitiveType::Number | PrimitiveType::String) => true,
+        Type::Primitive(PrimitiveType::Number | PrimitiveType::String) | Type::StringLiteral(_) => {
+            true
+        }
         Type::Union(types) => types
             .iter()
             .all(|ty| is_concat_operand_type(environment, ty)),

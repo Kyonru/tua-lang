@@ -2876,6 +2876,13 @@ fn infer_binary_operator_type(
         return Some(Type::number());
     }
 
+    if is_ordering_operator(binop)
+        && ((is_number_type(aliases, left) && is_number_type(aliases, right))
+            || (is_string_type(aliases, left) && is_string_type(aliases, right)))
+    {
+        return Some(Type::boolean());
+    }
+
     if matches!(binop, ast::BinOp::TwoDots(_))
         && is_concat_operand_type(aliases, left)
         && is_concat_operand_type(aliases, right)
@@ -3000,6 +3007,16 @@ fn is_numeric_operator(binop: &ast::BinOp) -> bool {
     )
 }
 
+fn is_ordering_operator(binop: &ast::BinOp) -> bool {
+    matches!(
+        binop,
+        ast::BinOp::GreaterThan(_)
+            | ast::BinOp::GreaterThanEqual(_)
+            | ast::BinOp::LessThan(_)
+            | ast::BinOp::LessThanEqual(_)
+    )
+}
+
 fn is_number_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
     match resolve_aliases_from_map(aliases, ty, 0) {
         Type::Primitive(crate::PrimitiveType::Number) => true,
@@ -3008,9 +3025,18 @@ fn is_number_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
     }
 }
 
+fn is_string_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
+    match resolve_aliases_from_map(aliases, ty, 0) {
+        Type::Primitive(crate::PrimitiveType::String) | Type::StringLiteral(_) => true,
+        Type::Union(types) => types.iter().all(|ty| is_string_type(aliases, ty)),
+        _ => false,
+    }
+}
+
 fn is_concat_operand_type(aliases: &BTreeMap<String, Type>, ty: &Type) -> bool {
     match resolve_aliases_from_map(aliases, ty, 0) {
-        Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String) => true,
+        Type::Primitive(crate::PrimitiveType::Number | crate::PrimitiveType::String)
+        | Type::StringLiteral(_) => true,
         Type::Union(types) => types.iter().all(|ty| is_concat_operand_type(aliases, ty)),
         _ => false,
     }

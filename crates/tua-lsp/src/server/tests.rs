@@ -107,6 +107,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["documentFormattingProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["referencesProvider"],
         true
     );
@@ -154,6 +158,66 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["workspace"]["workspaceFolders"]["changeNotifications"],
         true
     );
+}
+
+#[test]
+fn formatting_returns_full_document_edit() {
+    let temp = TempProject::new("formatting-edit");
+    let source = "local value=1\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(formatting_request(2, &uri));
+
+    let result = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("formatting result should be an array");
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0]["range"]["start"]["line"], 0);
+    assert_eq!(result[0]["range"]["start"]["character"], 0);
+    assert_eq!(result[0]["range"]["end"]["line"], 1);
+    assert_eq!(result[0]["range"]["end"]["character"], 0);
+    assert_eq!(result[0]["newText"], "local value = 1\n");
+}
+
+#[test]
+fn formatting_returns_empty_edits_when_unchanged() {
+    let temp = TempProject::new("formatting-unchanged");
+    let source = "local value = 1\n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(formatting_request(2, &uri));
+
+    let result = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("formatting result should be an array");
+
+    assert!(result.is_empty());
+}
+
+#[test]
+fn formatting_returns_null_for_parse_errors() {
+    let temp = TempProject::new("formatting-parse-error");
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, "local value = \n"));
+    server.send(formatting_request(2, &uri));
+
+    assert_eq!(response_with_id(server.output(), 2)["result"], Value::Null);
 }
 
 #[test]
@@ -1177,7 +1241,12 @@ unused_locals = false
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
 
     server.send(did_change_configuration(json!({
         "diagnostics": {
@@ -1203,7 +1272,12 @@ fn did_change_configuration_can_enable_formatting_lints() {
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
 
     server.send(did_change_configuration(json!({
         "diagnostics": {
@@ -2420,6 +2494,38 @@ return {
         5,
         "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
     );
+}
+
+#[test]
+fn nested_project_type_aliases_resolve_when_outer_workspace_is_open() {
+    let temp = TempProject::new("nested-project-type-aliases");
+    let source = r#"local Types = require("types")
+
+local playerFromTuaModule: Types.Player = nil
+"#;
+    let types = r#"type Player = { hp: number }
+
+return {}
+"#;
+
+    temp.write("examples/features/tua.toml", "source = \"src\"\n");
+    temp.write("examples/features/src/main.tua", source);
+    temp.write("examples/features/src/types.tua", types);
+
+    let uri = temp.uri_for("examples/features/src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(hover_request(2, &uri, source, "Player = nil"));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
+    assert_hover_contains(server.output(), 2, "type Types.Player = { hp: number }");
 }
 
 #[test]
@@ -4325,6 +4431,23 @@ fn completion_resolve_request(id: u64, item: Value) -> Value {
         "id": id,
         "method": "completionItem/resolve",
         "params": item
+    })
+}
+
+fn formatting_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/formatting",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "options": {
+                "tabSize": 2,
+                "insertSpaces": true
+            }
+        }
     })
 }
 

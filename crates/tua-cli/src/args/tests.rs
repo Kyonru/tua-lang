@@ -22,6 +22,8 @@ fn parses_known_commands() {
     let cases = [
         ("init", CommandName::Init),
         ("check", CommandName::Check),
+        ("fmt", CommandName::Fmt),
+        ("lint", CommandName::Lint),
         ("build", CommandName::Build),
         ("watch", CommandName::Watch),
         ("lsp", CommandName::Lsp),
@@ -32,7 +34,7 @@ fn parses_known_commands() {
             parse_args([raw]),
             Ok(CliAction::Command {
                 name: expected,
-                emit_on_error: false,
+                options: CommandOptions::default(),
             })
         );
     }
@@ -44,7 +46,38 @@ fn build_accepts_emit_on_error() {
         parse_args(["build", "--emit-on-error"]),
         Ok(CliAction::Command {
             name: CommandName::Build,
-            emit_on_error: true,
+            options: CommandOptions {
+                emit_on_error: true,
+                ..CommandOptions::default()
+            },
+        })
+    );
+}
+
+#[test]
+fn fmt_accepts_check() {
+    assert_eq!(
+        parse_args(["fmt", "--check"]),
+        Ok(CliAction::Command {
+            name: CommandName::Fmt,
+            options: CommandOptions {
+                fmt_check: true,
+                ..CommandOptions::default()
+            },
+        })
+    );
+}
+
+#[test]
+fn lint_accepts_strict() {
+    assert_eq!(
+        parse_args(["lint", "--strict"]),
+        Ok(CliAction::Command {
+            name: CommandName::Lint,
+            options: CommandOptions {
+                lint_strict: true,
+                ..CommandOptions::default()
+            },
         })
     );
 }
@@ -55,7 +88,7 @@ fn lsp_accepts_stdio_for_editor_client_compatibility() {
         parse_args(["lsp", "--stdio"]),
         Ok(CliAction::Command {
             name: CommandName::Lsp,
-            emit_on_error: false,
+            options: CommandOptions::default(),
         })
     );
 }
@@ -63,6 +96,20 @@ fn lsp_accepts_stdio_for_editor_client_compatibility() {
 #[test]
 fn other_commands_reject_emit_on_error() {
     let error = parse_args(["check", "--emit-on-error"]).unwrap_err();
+
+    assert!(error.message.contains("only valid"));
+}
+
+#[test]
+fn other_commands_reject_check() {
+    let error = parse_args(["check", "--check"]).unwrap_err();
+
+    assert!(error.message.contains("only valid"));
+}
+
+#[test]
+fn other_commands_reject_strict() {
+    let error = parse_args(["check", "--strict"]).unwrap_err();
 
     assert!(error.message.contains("only valid"));
 }

@@ -32,6 +32,44 @@
           "default": "tua",
           "description": "Path to the tua executable used to launch the language server."
         },
+        "tua.format.indentWidth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 1,
+          "description": "Spaces per indentation level for the tua formatter. Null inherits [format].indent_width from tua.toml."
+        },
+        "tua.format.lineWidth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 1,
+          "description": "Preferred line width for the tua formatter. Null inherits [format].line_width from tua.toml."
+        },
+        "tua.format.quoteStyle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "enum": [
+            "preserve",
+            null
+          ],
+          "description": "Quote style for the tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
+        },
+        "tua.format.finalNewline": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Whether the formatter writes a final newline. Null inherits [format].final_newline from tua.toml."
+        },
         "tua.diagnostics.duplicateKeys": {
           "type": [
             "boolean",

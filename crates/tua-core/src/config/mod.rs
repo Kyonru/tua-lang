@@ -4,6 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::format::{FormatOptions, QuoteStyle};
 use crate::{Diagnostic, DiagnosticCode};
 
 pub const CONFIG_FILE: &str = "tua.toml";
@@ -17,6 +18,12 @@ emit_maps = true
 
 [emit]
 annotation_mode = \"off\"
+
+[format]
+indent_width = 2
+line_width = 100
+quote_style = \"preserve\"
+final_newline = true
 
 [jit]
 enabled = false
@@ -67,6 +74,7 @@ pub struct ProjectConfig {
     pub extension: String,
     pub emit_maps: bool,
     pub emit: EmitConfig,
+    pub format: FormatConfig,
     pub jit: JitConfig,
     pub ecs: EcsConfig,
     pub diagnostics: DiagnosticsConfig,
@@ -81,6 +89,7 @@ impl Default for ProjectConfig {
             extension: "tua".to_owned(),
             emit_maps: true,
             emit: EmitConfig::default(),
+            format: FormatConfig::default(),
             jit: JitConfig::default(),
             ecs: EcsConfig::default(),
             diagnostics: DiagnosticsConfig::default(),
@@ -124,6 +133,46 @@ impl AnnotationMode {
             Self::Off => "off",
             Self::Luacats => "luacats",
         }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FormatConfig {
+    pub indent_width: usize,
+    pub line_width: usize,
+    pub quote_style: QuoteStyle,
+    pub final_newline: bool,
+}
+
+impl Default for FormatConfig {
+    fn default() -> Self {
+        Self {
+            indent_width: 2,
+            line_width: 100,
+            quote_style: QuoteStyle::Preserve,
+            final_newline: true,
+        }
+    }
+}
+
+impl FormatConfig {
+    pub fn options(&self) -> FormatOptions {
+        FormatOptions {
+            indent_width: self.indent_width,
+            line_width: self.line_width,
+            quote_style: self.quote_style,
+            final_newline: self.final_newline,
+        }
+    }
+}
+
+fn parse_quote_style(line: usize, value: &str) -> Result<QuoteStyle, ConfigParseError> {
+    match parse_string(line, value)?.as_str() {
+        "preserve" => Ok(QuoteStyle::Preserve),
+        _ => Err(ConfigParseError::new(
+            line,
+            "expected quote style \"preserve\"",
+        )),
     }
 }
 
@@ -228,6 +277,35 @@ impl Default for DiagnosticsConfig {
             inline_ignore_max_per_file: 0,
             globals: Vec::new(),
         }
+    }
+}
+
+impl DiagnosticsConfig {
+    pub fn enable_all_lints(&mut self) {
+        self.duplicate_keys = true;
+        self.missing_requires = true;
+        self.self_assignments = true;
+        self.doc_annotations = true;
+        self.undefined_variables = true;
+        self.unused_locals = true;
+        self.unused_parameters = true;
+        self.use_before_definition = true;
+        self.duplicate_parameters = true;
+        self.wrong_argument_count = true;
+        self.bad_requires = true;
+        self.impossible_boolean_expressions = true;
+        self.duplicate_if_conditions = true;
+        self.duplicate_binary_operands = true;
+        self.float_equality = true;
+        self.const_assignments = true;
+        self.parameter_type_mismatches = true;
+        self.return_type_mismatches = true;
+        self.assignment_arity = true;
+        self.local_declaration_arity = true;
+        self.unused_assignments = true;
+        self.binary_operator_type_mismatches = true;
+        self.uncalled_local_functions = true;
+        self.formatting_lints = true;
     }
 }
 
@@ -445,6 +523,21 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
                     ));
                 }
             },
+            ConfigSection::Format => match key {
+                "indent_width" => config.format.indent_width = parse_usize(line_number, value)?,
+                "line_width" => config.format.line_width = parse_usize(line_number, value)?,
+                "quote_style" => config.format.quote_style = parse_quote_style(line_number, value)?,
+                "final_newline" => config.format.final_newline = parse_bool(line_number, value)?,
+                "" => {
+                    return Err(ConfigParseError::new(line_number, "missing config key"));
+                }
+                other => {
+                    return Err(ConfigParseError::new(
+                        line_number,
+                        format!("unknown format config key `{other}`"),
+                    ));
+                }
+            },
             ConfigSection::Jit => match key {
                 "enabled" => config.jit.enabled = parse_bool(line_number, value)?,
                 "variable_type_drift" => {
@@ -581,6 +674,7 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
 enum ConfigSection {
     Root,
     Emit,
+    Format,
     Jit,
     Ecs,
     Diagnostics,
@@ -606,6 +700,7 @@ fn parse_section_header(
 
     match section.trim() {
         "emit" => Ok(Some(ConfigSection::Emit)),
+        "format" => Ok(Some(ConfigSection::Format)),
         "jit" => Ok(Some(ConfigSection::Jit)),
         "ecs" => Ok(Some(ConfigSection::Ecs)),
         "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),

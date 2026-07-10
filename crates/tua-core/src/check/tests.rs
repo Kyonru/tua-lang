@@ -39,6 +39,20 @@ end
 }
 
 #[test]
+fn accepts_number_and_string_ordering_expressions() {
+    check_tua_source(
+        "src/comparison.tua",
+        r#"
+local hp: number = 10
+local alive: boolean = hp > 0
+local passing: boolean = hp >= 1
+local sorted: boolean = "Ada" <= "Mina"
+"#,
+    )
+    .expect("Lua ordering operators should accept number-number and string-string operands");
+}
+
+#[test]
 fn accepts_typed_love_asset_loader_initializers() {
     check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

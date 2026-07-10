@@ -286,10 +286,7 @@ fn call_visible_parameters<'a>(
     function_call: &FunctionCall,
     parameters: &'a [crate::TypedParameter],
 ) -> &'a [crate::TypedParameter] {
-    if is_method_call(function_call)
-        && parameters
-            .first()
-            .is_some_and(is_synthetic_method_receiver)
+    if is_method_call(function_call) && parameters.first().is_some_and(is_synthetic_method_receiver)
     {
         &parameters[1..]
     } else {

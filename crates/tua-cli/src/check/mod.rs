@@ -6,6 +6,15 @@ use crate::source::{discover_build_files, read_source_file, SourceKind};
 use tua_core::{AnalysisHost, AnalysisSourceKind, LoadedConfig, ProjectWorkspace};
 
 pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
+    run_project_diagnostics(cwd, loaded, "checked", "project check failed")
+}
+
+pub(crate) fn run_project_diagnostics(
+    cwd: impl AsRef<Path>,
+    loaded: LoadedConfig,
+    success_verb: &str,
+    error_message: &str,
+) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let source_dir = workspace.primary_source_root().to_path_buf();
@@ -52,10 +61,10 @@ pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<S
     }
 
     if diagnostics.is_empty() {
-        Ok(format!("checked {checked} file(s)"))
+        Ok(format!("{success_verb} {checked} file(s)"))
     } else {
         Err(CliError::from_diagnostics(
-            "project check failed",
+            error_message,
             sorted_diagnostics(diagnostics),
         ))
     }

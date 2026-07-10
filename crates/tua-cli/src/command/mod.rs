@@ -1,14 +1,16 @@
 use std::path::Path;
 
-use crate::args::CommandName;
+use crate::args::{CommandName, CommandOptions};
 use crate::build::run_build;
 use crate::check::run_check;
 use crate::error::CliError;
+use crate::fmt::run_fmt;
+use crate::lint::run_lint;
 use crate::watch::run_watch;
 
 pub fn run_command(
     command: CommandName,
-    emit_on_error: bool,
+    options: CommandOptions,
     cwd: impl AsRef<Path>,
 ) -> Result<String, CliError> {
     match command {
@@ -19,13 +21,25 @@ pub fn run_command(
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
-            run_build(cwd, loaded, emit_on_error)
+            run_build(cwd, loaded, options.emit_on_error)
         }
         CommandName::Check => {
             let loaded =
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
             run_check(cwd, loaded)
+        }
+        CommandName::Fmt => {
+            let loaded =
+                tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+            run_fmt(cwd, loaded, options.fmt_check)
+        }
+        CommandName::Lint => {
+            let loaded =
+                tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+            run_lint(cwd, loaded, options.lint_strict)
         }
         CommandName::Watch => {
             run_watch_command(cwd)?;

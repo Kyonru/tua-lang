@@ -525,6 +525,10 @@ impl<'a> SymbolAnalyzer<'a> {
     fn analyze_stmt(&mut self, stmt: &ast::Stmt) {
         match stmt {
             ast::Stmt::Assignment(assignment) => self.analyze_assignment(assignment),
+            ast::Stmt::CompoundAssignment(assignment) => {
+                self.analyze_expression(assignment.rhs());
+                self.analyze_compound_assignment_target(assignment.lhs());
+            }
             ast::Stmt::FunctionCall(function_call) => self.analyze_function_call(function_call),
             ast::Stmt::LocalAssignment(local) => self.analyze_local_assignment(local),
             ast::Stmt::LocalFunction(function) => self.analyze_local_function(function),
@@ -651,6 +655,20 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
+    fn analyze_compound_assignment_target(&mut self, variable: &Var) {
+        match variable {
+            Var::Name(name) => {
+                self.read_name(&token_text(name), token_position(name));
+                self.analyze_assignment_target(variable);
+            }
+            Var::Expression(expression) => {
+                self.analyze_var_expression(expression);
+                self.analyze_assignment_target(variable);
+            }
+            _ => self.analyze_assignment_target(variable),
+        }
+    }
+
     fn analyze_local_assignment(&mut self, local: &ast::LocalAssignment) {
         for expression in local.expressions() {
             self.analyze_expression(expression);
@@ -671,7 +689,7 @@ impl<'a> SymbolAnalyzer<'a> {
             token_position(function.name()),
             DeclarationKind::LocalFunction,
         );
-        self.analyze_function_body(function.body());
+        self.analyze_function_body(function.body(), None);
     }
 
     fn analyze_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
@@ -687,11 +705,21 @@ impl<'a> SymbolAnalyzer<'a> {
             }
         }
 
-        self.analyze_function_body(function.body());
+        let implicit_self = function.name().method_name().map(token_position);
+
+        self.analyze_function_body(function.body(), implicit_self);
     }
 
-    fn analyze_function_body(&mut self, body: &ast::FunctionBody) {
+    fn analyze_function_body(
+        &mut self,
+        body: &ast::FunctionBody,
+        implicit_self: Option<SourcePosition>,
+    ) {
         self.enter_scope(future_locals_for_block(body.block()));
+
+        if let Some(position) = implicit_self {
+            self.declare_implicit_self(position);
+        }
 
         for parameter in body.parameters() {
             if let Parameter::Name(name) = parameter {
@@ -725,7 +753,7 @@ impl<'a> SymbolAnalyzer<'a> {
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => self.analyze_expression(expression),
             Expression::UnaryOperator { expression, .. } => self.analyze_expression(expression),
-            Expression::Function(function) => self.analyze_function_body(function.body()),
+            Expression::Function(function) => self.analyze_function_body(function.body(), None),
             Expression::FunctionCall(function_call) => self.analyze_function_call(function_call),
             Expression::TableConstructor(table) => self.analyze_table_constructor(table),
             Expression::Var(var) => self.analyze_var(var),
@@ -917,6 +945,24 @@ impl<'a> SymbolAnalyzer<'a> {
                 assignment_positions: Vec::new(),
             });
             scope.bindings.insert(name, id);
+            scope.declarations.push(id);
+        }
+    }
+
+    fn declare_implicit_self(&mut self, position: SourcePosition) {
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.future_locals.remove("self");
+
+            let id = self.declarations.len();
+            self.declarations.push(Declaration {
+                name: "self".to_owned(),
+                position,
+                kind: DeclarationKind::Parameter,
+                used: true,
+                called: false,
+                assignment_positions: Vec::new(),
+            });
+            scope.bindings.insert("self".to_owned(), id);
             scope.declarations.push(id);
         }
     }

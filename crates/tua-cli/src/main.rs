@@ -42,11 +42,8 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Ok(CliAction::Command {
-            name,
-            emit_on_error,
-        }) => match env::current_dir() {
-            Ok(cwd) => match run_command(name, emit_on_error, cwd) {
+        Ok(CliAction::Command { name, options }) => match env::current_dir() {
+            Ok(cwd) => match run_command(name, options, cwd) {
                 Ok(message) => {
                     println!("{message}");
                     ExitCode::SUCCESS
