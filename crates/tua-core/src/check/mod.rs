@@ -1018,6 +1018,15 @@ impl<'a> Checker<'a> {
                 return Some(Callable::ExternalFunction(function));
             }
 
+            if parts.first().map(String::as_str) == Some("love") {
+                if let Some(function) = lua::hover_item(&parts)
+                    .filter(|item| item.kind == lua::LuaItemKind::Function)
+                    .and_then(external_function_type_from_lua_item)
+                {
+                    return Some(Callable::ExternalFunction(function));
+                }
+            }
+
             if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
             {
                 return callable_from_type(&export, self.environment);
@@ -1280,11 +1289,26 @@ impl<'a> Checker<'a> {
     }
 
     fn external_argument_assignable(&self, source: &Type, target: &Type) -> bool {
-        self.context.is_assignable(source, target)
-            || matches!(
-                source,
-                Type::Primitive(crate::PrimitiveType::String) | Type::StringLiteral(_)
-            ) && matches!(target, Type::Alias(name) if self.context.alias(name).is_none())
+        if self.context.is_assignable(source, target) {
+            return true;
+        }
+
+        let Type::Alias(name) = target else {
+            return false;
+        };
+
+        if self.context.alias(name).is_some() {
+            return false;
+        }
+
+        match source {
+            Type::Primitive(crate::PrimitiveType::String) => true,
+            Type::StringLiteral(value) => {
+                let enum_values = lua::enum_value_items(name, "");
+                enum_values.is_empty() || enum_values.iter().any(|item| item.label == value)
+            }
+            _ => false,
+        }
     }
 
     fn function_return_types(&self, name: &str) -> Option<Vec<Type>> {
@@ -2701,7 +2725,7 @@ fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &T
 }
 
 fn mismatch_found_label(expected: &Type, found: &Type) -> String {
-    if type_contains_string_literal(expected) {
+    if type_contains_string_literal(expected) || type_contains_lua_enum_alias(expected) {
         found.to_string()
     } else {
         type_with_string_literals_erased(found).to_string()
@@ -2791,6 +2815,29 @@ fn type_contains_string_literal(ty: &Type) -> bool {
             type_contains_string_literal(key) || type_contains_string_literal(value)
         }
         Type::Primitive(_) | Type::Any | Type::Alias(_) => false,
+    }
+}
+
+fn type_contains_lua_enum_alias(ty: &Type) -> bool {
+    match ty {
+        Type::Alias(name) => !lua::enum_value_items(name, "").is_empty(),
+        Type::Union(types) => types.iter().any(type_contains_lua_enum_alias),
+        Type::Function(function) => {
+            function.parameters.iter().any(type_contains_lua_enum_alias)
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(type_contains_lua_enum_alias)
+        }
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_contains_lua_enum_alias(&field.ty)),
+        Type::Array(item) => type_contains_lua_enum_alias(item),
+        Type::Tuple(items) => items.iter().any(type_contains_lua_enum_alias),
+        Type::Dictionary { key, value } => {
+            type_contains_lua_enum_alias(key) || type_contains_lua_enum_alias(value)
+        }
+        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
     }
 }
 

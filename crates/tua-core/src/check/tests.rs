@@ -440,6 +440,38 @@ player:setFilter("nearest", "linear", 4)
 }
 
 #[test]
+fn rejects_invalid_love_method_enum_string_arguments() {
+    let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
+        "src/assets.tua",
+        r#"
+local player = image "assets/player.png"
+
+player:setFilter("blurry")
+"#,
+        &[],
+        &crate::DiagnosticsConfig::default(),
+    )
+    .expect_err("invalid Love enum-like method parameter should be reported");
+
+    assert_single_mismatch(&diagnostics, r#"expected FilterMode, found "blurry""#);
+}
+
+#[test]
+fn rejects_invalid_generated_love_api_enum_string_arguments() {
+    let diagnostics = check_tua_source(
+        "src/draw.tua",
+        r#"
+function love.update(dt)
+  love.graphics.circle("fillter", 100, 100, 2)
+end
+"#,
+    )
+    .expect_err("invalid generated Love enum-like parameter should be reported");
+
+    assert_single_mismatch(&diagnostics, r#"expected DrawMode, found "fillter""#);
+}
+
+#[test]
 fn accepts_generated_love_api_type_annotations() {
     check_tua_source(
         "src/love_types.tua",

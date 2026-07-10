@@ -474,6 +474,26 @@ player:setFilter(123)
 }
 
 #[test]
+fn did_open_publishes_love_enum_string_argument_diagnostics() {
+    let uri = "file:///tmp/draw.tua";
+    let source = r#"
+function love.update(dt)
+  love.graphics.circle("fillter", 100, 100, 2)
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL1003");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains(r#"type mismatch: expected DrawMode, found "fillter""#));
+}
+
+#[test]
 fn did_open_publishes_love_conf_field_assignment_diagnostics() {
     let uri = "file:///tmp/conf.tua";
     let source = r#"
