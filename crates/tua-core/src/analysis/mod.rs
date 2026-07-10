@@ -363,9 +363,7 @@ impl AnalysisHost {
         let path = path.into();
         let kind = infer_source_kind(&path, &self.config);
 
-        self.cache.borrow_mut().invalidate_file(&path);
-        self.vfs.set_disk_file(path, source, vfs_source_kind(kind));
-        self.bump_revision();
+        self.set_file_with_kind(path, source, kind);
     }
 
     pub fn set_file_with_kind(
@@ -375,9 +373,15 @@ impl AnalysisHost {
         kind: AnalysisSourceKind,
     ) {
         let path = path.into();
+        let source = source.into();
+        let vfs_kind = vfs_source_kind(kind);
+
+        if self.vfs.disk_file_matches(&path, &source, vfs_kind) {
+            return;
+        }
 
         self.cache.borrow_mut().invalidate_file(&path);
-        self.vfs.set_disk_file(path, source, vfs_source_kind(kind));
+        self.vfs.set_disk_file(path, source, vfs_kind);
         self.bump_revision();
     }
 
@@ -390,13 +394,16 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    pub fn invalidate_file_analysis(&mut self, path: impl AsRef<Path>) {
+        self.cache.borrow_mut().invalidate_file(path.as_ref());
+        self.bump_revision();
+    }
+
     pub fn open_document(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
         let kind = infer_source_kind(&path, &self.config);
 
-        self.cache.borrow_mut().invalidate_file(&path);
-        self.vfs.open_file(path, source, vfs_source_kind(kind));
-        self.bump_revision();
+        self.open_document_with_kind(path, source, kind);
     }
 
     pub fn open_document_with_kind(
@@ -406,9 +413,15 @@ impl AnalysisHost {
         kind: AnalysisSourceKind,
     ) {
         let path = path.into();
+        let source = source.into();
+        let vfs_kind = vfs_source_kind(kind);
+
+        if self.vfs.open_file_matches(&path, &source, vfs_kind) {
+            return;
+        }
 
         self.cache.borrow_mut().invalidate_file(&path);
-        self.vfs.open_file(path, source, vfs_source_kind(kind));
+        self.vfs.open_file(path, source, vfs_kind);
         self.bump_revision();
     }
 

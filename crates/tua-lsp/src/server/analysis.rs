@@ -113,7 +113,9 @@ impl AnalysisHost {
         if path_sets_differ(&previous_roots, &current_roots) {
             self.reindex_workspace(roots, settings);
         }
-        if let Some(kind) = self.cache_source(path.clone(), source.clone(), roots, settings) {
+        if let Some(kind) =
+            self.cache_source_after_sync(path.clone(), source.clone(), &current_roots, settings)
+        {
             self.core
                 .open_document_with_kind(path, source, core_source_kind(kind));
         } else {
@@ -167,7 +169,9 @@ impl AnalysisHost {
         }
 
         if let Ok(source) = fs::read_to_string(&path) {
-            self.cache_source(path, source, roots, settings);
+            let effective_roots = self.effective_workspace_folders(roots);
+
+            self.cache_source_after_sync(path, source, &effective_roots, settings);
         }
     }
 
@@ -191,6 +195,7 @@ impl AnalysisHost {
         settings: &WorkspaceSettings,
     ) {
         self.sync_core_project_inputs(roots, settings);
+        let effective_roots = self.effective_workspace_folders(roots);
         let documents = self
             .documents
             .values()
@@ -198,7 +203,8 @@ impl AnalysisHost {
             .collect::<Vec<_>>();
 
         for (path, source) in documents {
-            self.cache_source(path, source, roots, settings);
+            self.core.invalidate_file_analysis(&path);
+            self.cache_source_after_sync(path, source, &effective_roots, settings);
         }
     }
 
@@ -218,37 +224,57 @@ impl AnalysisHost {
 
         for workspace in model.workspaces() {
             for source_dir in workspace.source_roots() {
-                for path in discover_project_sources(source_dir, workspace, settings) {
+                for (path, kind) in discover_project_sources(source_dir, workspace, settings) {
                     if open_paths.contains(&path) {
                         continue;
                     }
 
                     if let Ok(source) = fs::read_to_string(&path) {
-                        self.cache_source(path, source, &effective_roots, settings);
+                        self.cache_source_with_kind_after_sync(
+                            path,
+                            source,
+                            &effective_roots,
+                            settings,
+                            kind,
+                        );
                     }
                 }
             }
         }
     }
 
-    fn cache_source(
+    fn cache_source_after_sync(
         &mut self,
         path: PathBuf,
         source: String,
         roots: &[PathBuf],
         settings: &WorkspaceSettings,
     ) -> Option<SourceKind> {
-        self.sync_core_project_inputs(roots, settings);
         if settings.is_ignored(&path, roots) {
             self.core.remove_file(&path);
             return None;
         }
 
-        let effective_roots = self.effective_workspace_folders(roots);
-        let Some(kind) = source_kind_for_path(&path, &effective_roots, settings) else {
+        let Some(kind) = source_kind_for_path(&path, roots, settings) else {
             self.core.remove_file(&path);
             return None;
         };
+
+        self.cache_source_with_kind_after_sync(path, source, roots, settings, kind)
+    }
+
+    fn cache_source_with_kind_after_sync(
+        &mut self,
+        path: PathBuf,
+        source: String,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+        kind: SourceKind,
+    ) -> Option<SourceKind> {
+        if settings.is_ignored(&path, roots) {
+            self.core.remove_file(&path);
+            return None;
+        }
 
         self.core
             .set_file_with_kind(path, source, core_source_kind(kind));
@@ -663,11 +689,11 @@ fn discover_project_sources(
     source_dir: &Path,
     workspace: &ProjectWorkspace,
     settings: &WorkspaceSettings,
-) -> Vec<PathBuf> {
+) -> Vec<(PathBuf, SourceKind)> {
     let mut files = Vec::new();
 
     discover_project_sources_into(source_dir, workspace, settings, &mut files);
-    files.sort();
+    files.sort_by(|left, right| left.0.cmp(&right.0));
     files
 }
 
@@ -675,7 +701,7 @@ fn discover_project_sources_into(
     dir: &Path,
     workspace: &ProjectWorkspace,
     settings: &WorkspaceSettings,
-    files: &mut Vec<PathBuf>,
+    files: &mut Vec<(PathBuf, SourceKind)>,
 ) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -696,9 +722,10 @@ fn discover_project_sources_into(
         } else if file_type.is_file()
             && !workspace.is_ignored(&path)
             && !settings.is_ignored(&path, &[workspace.root().to_path_buf()])
-            && workspace.source_kind_for_path(&path).is_some()
         {
-            files.push(path);
+            if let Some(kind) = workspace.source_kind_for_path(&path) {
+                files.push((path, source_kind_from_vfs(kind)));
+            }
         }
     }
 }
@@ -768,6 +795,9 @@ mod tests {
 
         assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
         assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
+
+        host.update_document(player_uri, "local hp: number = 1\n", &roots, &settings);
+        assert_eq!(host.core_revision(), before);
 
         host.update_document(player_uri, "local hp: number = 3\n", &roots, &settings);
 

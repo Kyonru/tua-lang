@@ -101,6 +101,21 @@ impl VirtualFileSystem {
         Some(VfsFileId(path))
     }
 
+    pub fn disk_file_matches(
+        &self,
+        path: impl AsRef<Path>,
+        source: &str,
+        kind: VfsSourceKind,
+    ) -> bool {
+        let path = normalize_path(path);
+
+        !self.is_excluded(&path)
+            && self
+                .disk_files
+                .get(&path)
+                .is_some_and(|file| file.source == source && file.kind == kind)
+    }
+
     pub fn open_file(
         &mut self,
         path: impl AsRef<Path>,
@@ -123,6 +138,21 @@ impl VirtualFileSystem {
         );
 
         Some(VfsFileId(path))
+    }
+
+    pub fn open_file_matches(
+        &self,
+        path: impl AsRef<Path>,
+        source: &str,
+        kind: VfsSourceKind,
+    ) -> bool {
+        let path = normalize_path(path);
+
+        !self.is_excluded(&path)
+            && self
+                .open_files
+                .get(&path)
+                .is_some_and(|file| file.source == source && file.kind == kind)
     }
 
     pub fn close_file(&mut self, path: impl AsRef<Path>) {

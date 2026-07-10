@@ -236,6 +236,24 @@ fn snapshot_reuses_cached_project_artifacts_until_revision_changes() {
 }
 
 #[test]
+fn setting_identical_file_source_does_not_bump_revision() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, "local value: number = 1\n");
+    host.snapshot();
+
+    let revision = host.revision();
+    let stats = host.cache_stats();
+
+    host.set_file(&path, "local value: number = 1\n");
+    host.snapshot();
+
+    assert_eq!(host.revision(), revision);
+    assert_eq!(host.cache_stats(), stats);
+}
+
+#[test]
 fn snapshot_clones_share_warmed_definition_cache() {
     let fixture = Fixture::parse(
         r#"type <|alias_def|>Player<|/alias_def|> = { hp: number }
