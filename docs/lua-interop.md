@@ -58,10 +58,11 @@ local player = Player.makePlayer("Ada")
 ## Builtins And Stubs
 
 Tua includes a curated Lua catalog and a built-in LOVE catalog generated from
-`love2d-community/love-api` for completions, hover, and signature help. The
-parser also understands a LuaHelper/LuaLS-style annotation subset, so plain Lua
-files can provide typed functions, aliases, fields, documentation, and simple
-module exports to `.tua` callers.
+`love2d-community/love-api` for completions, hover, signature help, enum-like
+string values, and LOVE object methods. The parser also understands a
+LuaHelper/LuaLS-style annotation subset, so plain Lua files can provide typed
+functions, aliases, fields, documentation, and simple module exports to `.tua`
+callers.
 
 ## LuaDoc Annotations
 
@@ -265,8 +266,8 @@ local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 ```
 
-Values inferred as `Image` or `Source` expose common LOVE object methods in
-completion, such as `player:getWidth()` or `jump:play()`.
+Values inferred as LOVE API objects expose generated object methods in
+completion, such as `player:getWidth()`, `jump:play()`, or `file:open("r")`.
 
 `Vec2` is a built-in table-shaped type for position and velocity values. The
 `vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits

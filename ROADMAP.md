@@ -907,6 +907,8 @@ Acceptance:
   `print`, and `printf`.
 - APIs outside the old curated subset, such as `love.physics.newWorld`, are
   available through completion.
+- Generated LOVE enum constants complete in string arguments, and generated
+  LOVE object methods complete on inferred object values.
 - LOVE hover and signature help show generated argument and return labels.
 - No project configuration is required to enable LOVE autocomplete.
 

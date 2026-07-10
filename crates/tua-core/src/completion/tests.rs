@@ -446,6 +446,12 @@ end
 
 #[test]
 fn completes_love_api_generated_fields() {
+    let modules = complete_tua_source(
+        "src/main.tua",
+        "love.\n",
+        position_after("love.\n", "love."),
+    )
+    .expect("LÖVE module completion should succeed");
     let graphics = complete_tua_source(
         "src/main.tua",
         "love.graphics.newCan\n",
@@ -459,8 +465,52 @@ fn completes_love_api_generated_fields() {
     )
     .expect("LÖVE physics completion should succeed");
 
+    let module_labels = labels(&modules);
+    for module in [
+        "audio",
+        "data",
+        "event",
+        "filesystem",
+        "font",
+        "graphics",
+        "image",
+        "joystick",
+        "keyboard",
+        "math",
+        "mouse",
+        "physics",
+        "sound",
+        "system",
+        "thread",
+        "timer",
+        "touch",
+        "video",
+        "window",
+    ] {
+        assert!(
+            module_labels.contains(&module.to_owned()),
+            "{module_labels:?}"
+        );
+    }
     assert_eq!(labels(&graphics), vec!["newCanvas".to_owned()]);
     assert_eq!(labels(&physics), vec!["newWorld".to_owned()]);
+}
+
+#[test]
+fn completes_generated_love_type_methods_from_module_catalog() {
+    let source = r#"
+local file = love.filesystem.newFile("save.txt")
+file.op
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "file.op"))
+            .expect("generated LÖVE type method completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["open".to_owned()]);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("function File:open(mode: FileMode): boolean, string")
+    );
 }
 
 #[test]
@@ -601,7 +651,10 @@ body.setP
     )
     .expect("Body completion should succeed");
 
-    assert_eq!(labels(&canvas), vec!["getWidth".to_owned()]);
+    assert_eq!(
+        labels(&canvas),
+        vec!["getWidth".to_owned(), "getWrap".to_owned()]
+    );
     assert_eq!(
         labels(&font),
         vec!["getWidth".to_owned(), "getWrap".to_owned()]
@@ -731,6 +784,42 @@ player:setFilter("li")
         .expect("FilterMode prefix completion should succeed");
 
     assert_eq!(labels(&completions), vec!["linear"]);
+}
+
+#[test]
+fn completes_generated_love_enum_values_from_module_catalog() {
+    let blend_source = r#"
+love.graphics.setBlendMode("scr")
+"#;
+    let source_type_source = r#"
+love.audio.newSource("assets/jump.wav", "str")
+"#;
+    let message_box_source = r#"
+love.window.showMessageBox("Title", "Body", "warn")
+"#;
+
+    let blend = complete_tua_source(
+        "src/main.tua",
+        blend_source,
+        position_after(blend_source, "\"scr"),
+    )
+    .expect("generated BlendMode completion should succeed");
+    let source_type = complete_tua_source(
+        "src/main.tua",
+        source_type_source,
+        position_after(source_type_source, "\"str"),
+    )
+    .expect("generated SourceType completion should succeed");
+    let message_box = complete_tua_source(
+        "src/main.tua",
+        message_box_source,
+        position_after(message_box_source, "\"warn"),
+    )
+    .expect("generated MessageBoxType completion should succeed");
+
+    assert_eq!(labels(&blend), vec!["screen"]);
+    assert_eq!(labels(&source_type), vec!["stream"]);
+    assert_eq!(labels(&message_box), vec!["warning"]);
 }
 
 #[test]

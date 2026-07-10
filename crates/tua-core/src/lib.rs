@@ -22,6 +22,7 @@ pub mod inlay_hint;
 mod inline_ignore;
 mod lint;
 mod love_api;
+mod love_api_extra;
 mod love_conf;
 mod lua;
 pub mod module_graph;

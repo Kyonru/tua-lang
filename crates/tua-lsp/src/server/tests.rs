@@ -2061,6 +2061,23 @@ end
 }
 
 #[test]
+fn completion_returns_generated_love_api_enum_and_type_items() {
+    let uri = "file:///tmp/generated-love-api-completion.tua";
+    let source = r#"local file = love.filesystem.newFile("save.txt")
+file.op
+love.graphics.setBlendMode("scr")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "file.op"),
+        completion_request(3, uri, source, "\"scr"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["open"]);
+    assert_completion_labels(&output, 3, ["screen"]);
+}
+
+#[test]
 fn completion_returns_love_callback_snippet_and_conf_fields() {
     let callback_uri = "file:///tmp/love-callback-completion.tua";
     let callback_source = "function love.up\n";

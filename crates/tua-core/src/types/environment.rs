@@ -201,6 +201,7 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(lua::love_type_names().iter().map(|name| (*name).to_owned()))
         .chain(
             vector::builtin_type_names()
                 .iter()

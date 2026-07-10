@@ -302,6 +302,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
     ["any", "boolean", "nil", "number", "string"]
         .into_iter()
         .chain(asset::builtin_type_names().iter().copied())
+        .chain(lua::love_type_names().iter().copied())
         .chain(vector::builtin_type_names().iter().copied())
         .filter(|primitive| primitive.starts_with(prefix))
         .map(|primitive| Completion {

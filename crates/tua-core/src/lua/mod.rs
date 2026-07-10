@@ -1,4 +1,4 @@
-use crate::{asset, love_api, vector};
+use crate::{asset, love_api, love_api_extra, vector};
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
@@ -57,27 +57,39 @@ pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaIte
 }
 
 pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
-    let Some(items) = items_for_type(type_name) else {
-        return Vec::new();
-    };
+    let mut results = love_api_extra::type_field_items(type_name, prefix);
 
-    items
-        .iter()
-        .copied()
-        .filter(|item| item.label.starts_with(prefix))
-        .collect()
+    if let Some(items) = items_for_type(type_name) {
+        for item in items
+            .iter()
+            .copied()
+            .filter(|item| item.label.starts_with(prefix))
+        {
+            push_unique_lua_item(&mut results, item);
+        }
+    }
+
+    results
 }
 
 pub(crate) fn enum_value_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
-    let Some(items) = items_for_enum(type_name) else {
-        return Vec::new();
-    };
+    let mut results = love_api_extra::enum_value_items(type_name, prefix);
 
-    items
-        .iter()
-        .copied()
-        .filter(|item| item.label.starts_with(prefix))
-        .collect()
+    if let Some(items) = items_for_enum(type_name) {
+        for item in items
+            .iter()
+            .copied()
+            .filter(|item| item.label.starts_with(prefix))
+        {
+            push_unique_lua_item(&mut results, item);
+        }
+    }
+
+    results
+}
+
+pub(crate) fn love_type_names() -> &'static [&'static str] {
+    love_api_extra::type_names()
 }
 
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
@@ -146,7 +158,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
 }
 
 fn all_builtin_items() -> Vec<LuaItem> {
-    TOP_LEVEL
+    let mut items = TOP_LEVEL
         .iter()
         .chain(ASSET_LOADERS.iter())
         .chain(VECTOR_ITEMS.iter())
@@ -174,7 +186,19 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(OS_ITEMS.iter())
         .chain(PACKAGE_ITEMS.iter())
         .copied()
-        .collect()
+        .collect::<Vec<_>>();
+
+    items.extend(love_api_extra::all_items());
+
+    items
+}
+
+fn push_unique_lua_item(items: &mut Vec<LuaItem>, item: LuaItem) {
+    if items.iter().any(|existing| existing.label == item.label) {
+        return;
+    }
+
+    items.push(item);
 }
 
 fn builtin_definition_path(item: LuaItem) -> std::path::PathBuf {

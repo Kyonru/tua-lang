@@ -440,6 +440,21 @@ player:setFilter("nearest", "linear", 4)
 }
 
 #[test]
+fn accepts_generated_love_api_type_annotations() {
+    check_tua_source(
+        "src/love_types.tua",
+        r#"
+local file: File = love.filesystem.newFile("save.txt")
+local channel: Channel = love.thread.newChannel()
+
+file:open("r")
+channel:push("ready")
+"#,
+    )
+    .expect("generated LOVE API type names and methods should be available");
+}
+
+#[test]
 fn checks_lua_doc_literal_union_arguments() {
     check_tua_source(
         "src/mode.tua",
