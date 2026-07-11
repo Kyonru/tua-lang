@@ -94,6 +94,21 @@ end
 }
 
 #[test]
+fn formats_optional_parameters() {
+    let source = r#"function shake(duration:number, easing?:string)
+return duration
+end"#;
+
+    assert_eq!(
+        format(source),
+        r#"function shake(duration:number, easing?:string)
+  return duration
+end
+"#
+    );
+}
+
+#[test]
 fn formats_multiline_type_and_table_bodies() {
     let source = r#"type Vec2 = {
 x: number,

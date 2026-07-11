@@ -153,6 +153,7 @@ pub struct FunctionAnnotation {
     pub required_parameter_count: usize,
     pub has_varargs: bool,
     pub default_parameters: Vec<ParameterDefault>,
+    pub optional_parameters: Vec<ParameterOptional>,
     pub return_type: Option<TuaType>,
     pub span: Option<SourceSpan>,
 }
@@ -169,6 +170,13 @@ pub struct ParameterAnnotation {
 pub struct ParameterDefault {
     pub name: String,
     pub expression: String,
+    pub name_span: Option<SourceSpan>,
+    pub span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ParameterOptional {
+    pub name: String,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
 }

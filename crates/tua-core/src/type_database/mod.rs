@@ -262,7 +262,11 @@ impl ProjectTypeDatabase {
                     .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
                     .collect::<Vec<_>>();
 
-                Type::function_returns(parameters, return_types)
+                Type::function_returns_with_required(
+                    parameters,
+                    function.required_parameter_count,
+                    return_types,
+                )
             }
             Type::Table(table) => {
                 let mut resolved_table =
@@ -477,7 +481,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 })
                 .collect(),
             parameter_count: function.parameters.len(),
-            required_parameter_count: function.parameters.len(),
+            required_parameter_count: function.required_parameter_count,
             has_varargs: false,
             vararg_type: None,
             return_type: Some((*function.return_type).clone()),

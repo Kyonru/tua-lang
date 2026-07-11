@@ -36,7 +36,16 @@ local function heal(player: Player, amount: number = 5): Player
   return player
 end
 
-function describe(player: Player): string
+function describe(player: Player, mode?: string): string
+  -- Feature: trailing optional parameters accept omitted arguments.
+  if mode == "short" then
+    if player.alive then
+      return "up"
+    end
+
+    return "down"
+  end
+
   if player.alive then
     return "alive"
   end

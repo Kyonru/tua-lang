@@ -373,6 +373,22 @@ local explicit: number = shake(1)
 }
 
 #[test]
+fn accepts_omitted_trailing_optional_parameters() {
+    check_tua_source(
+        "src/shake.tua",
+        r#"
+local function shake(duration: number, easing?: string): number
+  return duration
+end
+
+local basic: number = shake(1)
+local explicit: number = shake(1, "out")
+"#,
+    )
+    .expect("omitted optional parameters should type-check");
+}
+
+#[test]
 fn accepts_love_method_multi_return_from_inferred_function_body() {
     check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",
@@ -437,6 +453,34 @@ return {
 
     check_tua_source(temp.path.join("src/main.tua"), source)
         .expect("required module function returns should satisfy checker return validation");
+}
+
+#[test]
+fn accepts_omitted_optional_arguments_for_required_module_exports() {
+    let temp = TempProject::new("required-module-optional-argument");
+    let source = r#"local Functions = require("functions")
+
+local state: string = Functions.describe()
+"#;
+    let functions = r#"function describe(mode?: string): string
+  if mode == "short" then
+    return "up"
+  end
+
+  return "alive"
+end
+
+return {
+  describe = describe,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/functions.tua", functions);
+
+    check_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("required module exports should preserve optional parameter arity");
 }
 
 #[test]

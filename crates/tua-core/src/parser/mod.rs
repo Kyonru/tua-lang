@@ -19,8 +19,8 @@ pub use model::{
     LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
     LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
-    ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType,
-    TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
+    ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
+    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 
@@ -478,10 +478,12 @@ fn function_annotation(
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
     let default_parameters = parameter_defaults_from_body(source, body);
-    let required_parameter_count = required_parameter_count_for_defaults(
+    let optional_parameters = parameter_optionals_from_body(source, body);
+    let required_parameter_count = required_parameter_count_for_optional_parameters(
         path,
         &parameter_names,
         &default_parameters,
+        &optional_parameters,
         diagnostics,
     );
     let parameters = body
@@ -511,11 +513,24 @@ fn function_annotation(
         required_parameter_count,
         has_varargs,
         default_parameters,
+        optional_parameters,
         return_type: body
             .return_type()
             .map(|specifier| tua_type_from_type_info(specifier.type_info())),
         span: node_span(body),
     }
+}
+
+fn parameter_optionals_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterOptional> {
+    let Some((inner, inner_start)) = parameter_list_inner(source, body.parameters_parentheses())
+    else {
+        return Vec::new();
+    };
+
+    split_parameter_parts(inner, inner_start)
+        .into_iter()
+        .filter_map(|part| parameter_optional_from_part(source, part))
+        .collect()
 }
 
 fn parameter_defaults_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterDefault> {
@@ -530,38 +545,50 @@ fn parameter_defaults_from_body(source: &str, body: &ast::FunctionBody) -> Vec<P
         .collect()
 }
 
-fn required_parameter_count_for_defaults(
+fn required_parameter_count_for_optional_parameters(
     path: &Path,
     parameter_names: &[String],
     defaults: &[ParameterDefault],
+    optionals: &[ParameterOptional],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> usize {
     let mut required = 0usize;
-    let mut seen_default = false;
+    let mut seen_optional = false;
+    let mut reported_non_trailing = false;
+    let mut first_optional_span = None;
+    let mut first_optional_is_default = false;
 
     for name in parameter_names {
-        let has_default = defaults.iter().any(|default| default.name == *name);
+        let default = defaults.iter().find(|default| default.name == *name);
+        let optional = optionals.iter().find(|optional| optional.name == *name);
+        let has_optional = default.is_some() || optional.is_some();
 
-        if has_default {
-            seen_default = true;
+        if has_optional {
+            if !seen_optional {
+                first_optional_span = optional
+                    .and_then(|optional| optional.span)
+                    .or_else(|| default.and_then(|default| default.span));
+                first_optional_is_default = optional.is_none() && default.is_some();
+            }
+            seen_optional = true;
             continue;
         }
 
-        if seen_default {
+        if seen_optional && !reported_non_trailing {
+            reported_non_trailing = true;
+            let message = if first_optional_is_default {
+                "default parameters must be trailing"
+            } else {
+                "optional parameters must be trailing"
+            };
             diagnostics.push(
                 Diagnostic::error(
                     path,
-                    defaults
-                        .first()
-                        .and_then(|default| default.span)
-                        .map(|span| span.start.line)
-                        .unwrap_or(1),
-                    defaults
-                        .first()
-                        .and_then(|default| default.span)
+                    first_optional_span.map(|span| span.start.line).unwrap_or(1),
+                    first_optional_span
                         .map(|span| span.start.column)
                         .unwrap_or(1),
-                    "default parameters must be trailing",
+                    message,
                 )
                 .with_code(DiagnosticCode::SYNTAX_PARSE),
             );
@@ -668,6 +695,40 @@ fn split_parameter_parts(input: &str, base: usize) -> Vec<ParameterPart<'_>> {
         start: base + start,
     });
     parts
+}
+
+fn parameter_optional_from_part(
+    source: &str,
+    part: ParameterPart<'_>,
+) -> Option<ParameterOptional> {
+    let trimmed_start = leading_ascii_whitespace(part.text);
+    let trimmed = &part.text[trimmed_start..];
+    let name_end_relative = identifier_end(trimmed)?;
+    let after_name_untrimmed = &trimmed[name_end_relative..];
+    let after_name = after_name_untrimmed.trim_start();
+
+    if !after_name.starts_with("?:") {
+        return None;
+    }
+
+    let name = trimmed[..name_end_relative].to_owned();
+    let name_start = part.start + trimmed_start;
+    let name_end = name_start + name.len();
+    let whitespace_after_name = after_name_untrimmed.len() - after_name.len();
+    let marker_end_relative = name_end_relative + whitespace_after_name + 2;
+    let span_end = part.start + trimmed_start + marker_end_relative;
+
+    Some(ParameterOptional {
+        name,
+        name_span: Some(SourceSpan {
+            start: source_position_for_byte(source, name_start),
+            end: source_position_for_byte(source, name_end),
+        }),
+        span: Some(SourceSpan {
+            start: source_position_for_byte(source, name_start),
+            end: source_position_for_byte(source, span_end),
+        }),
+    })
 }
 
 fn parameter_default_from_part(source: &str, part: ParameterPart<'_>) -> Option<ParameterDefault> {

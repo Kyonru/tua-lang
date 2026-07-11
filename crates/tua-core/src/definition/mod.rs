@@ -437,18 +437,26 @@ fn type_from_tua_type(ty: &TuaType) -> Type {
         TuaType::Function {
             parameters,
             returns,
-        } => Type::function_returns(
-            parameters.iter().map(|parameter| {
-                let ty = type_from_tua_type(&parameter.ty);
+        } => {
+            let required_parameter_count = parameters
+                .iter()
+                .take_while(|parameter| !parameter.optional)
+                .count();
 
-                if parameter.optional {
-                    Type::union([ty, Type::nil()])
-                } else {
-                    ty
-                }
-            }),
-            returns.iter().map(type_from_tua_type),
-        ),
+            Type::function_returns_with_required(
+                parameters.iter().map(|parameter| {
+                    let ty = type_from_tua_type(&parameter.ty);
+
+                    if parameter.optional {
+                        Type::union([ty, Type::nil()])
+                    } else {
+                        ty
+                    }
+                }),
+                required_parameter_count,
+                returns.iter().map(type_from_tua_type),
+            )
+        }
     }
 }
 

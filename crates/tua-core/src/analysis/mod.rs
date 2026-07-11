@@ -2774,20 +2774,28 @@ impl AnalysisSnapshot {
             TuaType::Function {
                 parameters,
                 returns,
-            } => Some(Type::function_returns(
-                parameters.iter().filter_map(|parameter| {
-                    let ty = self.project_type_from_tua_type(parsed, &parameter.ty)?;
-
-                    Some(if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    })
-                }),
-                returns
+            } => {
+                let required_parameter_count = parameters
                     .iter()
-                    .filter_map(|ty| self.project_type_from_tua_type(parsed, ty)),
-            )),
+                    .take_while(|parameter| !parameter.optional)
+                    .count();
+
+                Some(Type::function_returns_with_required(
+                    parameters.iter().filter_map(|parameter| {
+                        let ty = self.project_type_from_tua_type(parsed, &parameter.ty)?;
+
+                        Some(if parameter.optional {
+                            Type::union([ty, Type::nil()])
+                        } else {
+                            ty
+                        })
+                    }),
+                    required_parameter_count,
+                    returns
+                        .iter()
+                        .filter_map(|ty| self.project_type_from_tua_type(parsed, ty)),
+                ))
+            }
         }
     }
 

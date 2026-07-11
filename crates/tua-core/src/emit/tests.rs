@@ -438,6 +438,27 @@ end
 }
 
 #[test]
+fn snapshot_erases_optional_parameters() {
+    let emitted = emit_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(duration: number, easing?: string): number
+  return duration
+end
+"#,
+    )
+    .expect("optional parameters should emit");
+
+    assert_eq!(
+        emitted,
+        r#"function shake(duration, easing)
+  return duration
+end
+"#
+    );
+}
+
+#[test]
 fn snapshot_lowers_all_supported_compound_assignments() {
     let emitted = emit_tua_source(
         "src/compound.tua",

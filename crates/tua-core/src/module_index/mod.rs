@@ -928,18 +928,26 @@ fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
         crate::TuaType::Function {
             parameters,
             returns,
-        } => Type::function_returns(
-            parameters.iter().map(|parameter| {
-                let ty = type_from_lua_doc_type(&parameter.ty);
+        } => {
+            let required_parameter_count = parameters
+                .iter()
+                .take_while(|parameter| !parameter.optional)
+                .count();
 
-                if parameter.optional {
-                    Type::union([ty, Type::nil()])
-                } else {
-                    ty
-                }
-            }),
-            returns.iter().map(type_from_lua_doc_type),
-        ),
+            Type::function_returns_with_required(
+                parameters.iter().map(|parameter| {
+                    let ty = type_from_lua_doc_type(&parameter.ty);
+
+                    if parameter.optional {
+                        Type::union([ty, Type::nil()])
+                    } else {
+                        ty
+                    }
+                }),
+                required_parameter_count,
+                returns.iter().map(type_from_lua_doc_type),
+            )
+        }
     }
 }
 
@@ -1020,7 +1028,11 @@ fn typed_function_type(function: &TypedFunction) -> Type {
         vec![Type::Any; function.parameter_count]
     };
 
-    Type::function_returns(parameters, function.return_types_or_any())
+    Type::function_returns_with_required(
+        parameters,
+        function.required_parameter_count,
+        function.return_types_or_any(),
+    )
 }
 
 fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {

@@ -207,6 +207,13 @@ fn push_parameter_list_with_erased_defaults(
             continue;
         }
 
+        if !erasing_default && is_optional_field_marker(chars, index) {
+            output.push(':');
+            index += 2;
+            index = push_parameter_type_with_trailing_optional(chars, index, output);
+            continue;
+        }
+
         match character {
             '(' | '{' | '[' => {
                 depth += 1;
@@ -239,6 +246,57 @@ fn push_parameter_list_with_erased_defaults(
         }
     }
 
+    index
+}
+
+fn push_parameter_type_with_trailing_optional(
+    chars: &[char],
+    mut index: usize,
+    output: &mut String,
+) -> usize {
+    let mut depth = 0usize;
+
+    while index < chars.len() {
+        if starts_line_comment(chars, index) {
+            insert_optional_before_trailing_whitespace(output);
+            return index;
+        }
+
+        if chars[index] == '"' || chars[index] == '\'' {
+            index = push_short_string(chars, index, output);
+            continue;
+        }
+
+        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+            index = push_long_bracket(chars, index, output);
+            continue;
+        }
+
+        let character = chars[index];
+
+        match character {
+            '{' | '(' | '[' => {
+                depth += 1;
+                output.push(character);
+                index += 1;
+            }
+            ',' | ')' | '=' if depth == 0 => {
+                insert_optional_before_trailing_whitespace(output);
+                return index;
+            }
+            '}' | ')' | ']' => {
+                depth = depth.saturating_sub(1);
+                output.push(character);
+                index += 1;
+            }
+            _ => {
+                output.push(character);
+                index += 1;
+            }
+        }
+    }
+
+    insert_optional_before_trailing_whitespace(output);
     index
 }
 

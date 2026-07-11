@@ -1608,18 +1608,26 @@ fn type_from_tua_type(ty: &TuaType) -> Type {
         TuaType::Function {
             parameters,
             returns,
-        } => Type::function_returns(
-            parameters.iter().map(|parameter| {
-                let ty = type_from_tua_type(&parameter.ty);
+        } => {
+            let required_parameter_count = parameters
+                .iter()
+                .take_while(|parameter| !parameter.optional)
+                .count();
 
-                if parameter.optional {
-                    Type::union([ty, Type::nil()])
-                } else {
-                    ty
-                }
-            }),
-            returns.iter().map(type_from_tua_type),
-        ),
+            Type::function_returns_with_required(
+                parameters.iter().map(|parameter| {
+                    let ty = type_from_tua_type(&parameter.ty);
+
+                    if parameter.optional {
+                        Type::union([ty, Type::nil()])
+                    } else {
+                        ty
+                    }
+                }),
+                required_parameter_count,
+                returns.iter().map(type_from_tua_type),
+            )
+        }
     }
 }
 
@@ -2020,6 +2028,7 @@ fn typed_function_from_function_type(
 ) -> TypedFunction {
     let return_types = function.return_types_or_any().to_vec();
     let parameter_count = function.parameters.len();
+    let required_parameter_count = function.required_parameter_count;
 
     TypedFunction {
         name,
@@ -2033,7 +2042,7 @@ fn typed_function_from_function_type(
             })
             .collect(),
         parameter_count,
-        required_parameter_count: parameter_count,
+        required_parameter_count,
         has_varargs: false,
         vararg_type: None,
         return_type: return_types.first().cloned(),
@@ -2053,6 +2062,7 @@ fn typed_function_from_module_export(
 
     let return_types = function.return_types_or_any().to_vec();
     let parameter_count = function.parameters.len();
+    let required_parameter_count = function.required_parameter_count;
     let parameters = function
         .parameters
         .into_iter()
@@ -2072,7 +2082,7 @@ fn typed_function_from_module_export(
         name,
         parameters,
         parameter_count,
-        required_parameter_count: parameter_count,
+        required_parameter_count,
         has_varargs: false,
         vararg_type: None,
         return_type: return_types.first().cloned(),

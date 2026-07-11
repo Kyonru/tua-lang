@@ -1088,7 +1088,17 @@ impl<'a> Checker<'a> {
     fn check_call_arguments(&mut self, function_call: &FunctionCall, function: &FunctionType) {
         let arguments = self.call_arguments_for_function(function_call);
 
-        if arguments.len() != function.parameters.len() {
+        if arguments.len() < function.required_parameter_count {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                function.required_parameter_count,
+                arguments.len(),
+            ));
+            return;
+        }
+
+        if arguments.len() > function.parameters.len() {
             self.diagnostics.push(argument_count_diagnostic(
                 &self.parsed.path,
                 function_call,
@@ -2383,6 +2393,7 @@ fn callable_from_type(ty: &Type, environment: &TypeEnvironment) -> Option<Callab
 fn call_metamethod_type(mut function: FunctionType) -> FunctionType {
     if !function.parameters.is_empty() {
         function.parameters.remove(0);
+        function.required_parameter_count = function.required_parameter_count.saturating_sub(1);
     }
 
     function
@@ -2739,11 +2750,12 @@ fn type_with_string_literals_erased(ty: &Type) -> Type {
     match ty {
         Type::StringLiteral(_) => Type::string(),
         Type::Union(types) => Type::union(types.iter().map(type_with_string_literals_erased)),
-        Type::Function(function) => Type::function_returns(
+        Type::Function(function) => Type::function_returns_with_required(
             function
                 .parameters
                 .iter()
                 .map(type_with_string_literals_erased),
+            function.required_parameter_count,
             function
                 .return_types_or_any()
                 .iter()

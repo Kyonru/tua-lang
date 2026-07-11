@@ -267,7 +267,10 @@ end
 Trailing parameters may provide defaults with `name = expression` or
 `name: Type = expression`. Defaults lower to a nil guard at the start of the Lua
 function body, so omitted arguments and explicit `nil` use the default value.
-Non-trailing defaults are rejected.
+Trailing parameters may also be marked optional with `name?: Type`; the
+parameter has type `Type | nil` inside the function, accepts omitted arguments,
+and erases to an ordinary Lua parameter. Non-trailing defaults and optional
+parameters are rejected.
 
 Emitted Lua:
 

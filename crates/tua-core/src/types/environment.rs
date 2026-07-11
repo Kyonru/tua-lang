@@ -136,8 +136,9 @@ impl TypedFunction {
 
     pub fn as_type(&self) -> Option<Type> {
         self.has_fully_annotated_parameters().then(|| {
-            Type::function_returns(
+            Type::function_returns_with_required(
                 self.parameters.iter().map(|parameter| parameter.ty.clone()),
+                self.required_parameter_count,
                 self.return_types_or_any(),
             )
         })
@@ -1617,11 +1618,12 @@ fn function_types_by_name(
 
             Some((
                 name.clone(),
-                Type::function_returns(
+                Type::function_returns_with_required(
                     function
                         .parameters
                         .iter()
                         .map(|parameter| parameter.ty.clone()),
+                    function.required_parameter_count,
                     return_types,
                 ),
             ))
@@ -3544,6 +3546,10 @@ fn resolve_tua_type(
             parameters,
             returns,
         } => {
+            let required_parameter_count = parameters
+                .iter()
+                .take_while(|parameter| !parameter.optional)
+                .count();
             let parameters = parameters
                 .iter()
                 .map(|parameter| {
@@ -3561,7 +3567,7 @@ fn resolve_tua_type(
                 .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics))
                 .collect::<Vec<_>>();
 
-            Type::function_returns(parameters, returns)
+            Type::function_returns_with_required(parameters, required_parameter_count, returns)
         }
     }
 }

@@ -98,6 +98,7 @@ impl TypeContext {
         depth: usize,
     ) -> bool {
         source.parameters.len() == target.parameters.len()
+            && source.required_parameter_count <= target.required_parameter_count
             && source
                 .parameters
                 .iter()

@@ -70,6 +70,18 @@ impl Type {
         Self::Function(FunctionType::new_returns(parameters, return_types))
     }
 
+    pub fn function_returns_with_required(
+        parameters: impl IntoIterator<Item = Type>,
+        required_parameter_count: usize,
+        return_types: impl IntoIterator<Item = Type>,
+    ) -> Self {
+        Self::Function(FunctionType::new_returns_with_required(
+            parameters,
+            required_parameter_count,
+            return_types,
+        ))
+    }
+
     pub fn empty_table() -> Self {
         Self::Table(TableShape::new())
     }
@@ -124,6 +136,7 @@ impl TypeAlias {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FunctionType {
     pub parameters: Vec<Type>,
+    pub required_parameter_count: usize,
     pub return_type: Box<Type>,
     pub return_types: Vec<Type>,
 }
@@ -137,14 +150,28 @@ impl FunctionType {
         parameters: impl IntoIterator<Item = Type>,
         return_types: impl IntoIterator<Item = Type>,
     ) -> Self {
+        let parameters = parameters.into_iter().collect::<Vec<_>>();
+        let required_parameter_count = parameters.len();
+        Self::new_returns_with_required(parameters, required_parameter_count, return_types)
+    }
+
+    pub fn new_returns_with_required(
+        parameters: impl IntoIterator<Item = Type>,
+        required_parameter_count: usize,
+        return_types: impl IntoIterator<Item = Type>,
+    ) -> Self {
+        let parameters = parameters.into_iter().collect::<Vec<_>>();
         let mut return_types = return_types.into_iter().collect::<Vec<_>>();
 
         if return_types.is_empty() {
             return_types.push(Type::nil());
         }
 
+        let required_parameter_count = required_parameter_count.min(parameters.len());
+
         Self {
-            parameters: parameters.into_iter().collect(),
+            parameters,
+            required_parameter_count,
             return_type: Box::new(return_types[0].clone()),
             return_types,
         }

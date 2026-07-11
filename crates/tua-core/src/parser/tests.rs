@@ -454,6 +454,51 @@ end
 }
 
 #[test]
+fn parses_optional_parameters_on_named_functions() {
+    let parsed = parse_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(duration: number, easing?: string)
+  return duration
+end
+"#,
+    )
+    .expect("optional parameters should parse");
+
+    let function = &parsed.function_annotations[0];
+
+    assert_eq!(function.parameter_count, 2);
+    assert_eq!(function.required_parameter_count, 1);
+    assert_eq!(function.optional_parameters.len(), 1);
+    assert_eq!(function.optional_parameters[0].name, "easing");
+    assert_eq!(
+        function.parameters[1].ty,
+        TuaType::Union(vec![
+            TuaType::Named("string".to_owned()),
+            TuaType::Named("nil".to_owned()),
+        ])
+    );
+}
+
+#[test]
+fn rejects_non_trailing_optional_parameters() {
+    let diagnostics = parse_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(easing?: string, duration: number)
+  return duration
+end
+"#,
+    )
+    .expect_err("non-trailing optional parameters should be rejected");
+
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::SYNTAX_PARSE));
+    assert!(diagnostics[0]
+        .message
+        .contains("optional parameters must be trailing"));
+}
+
+#[test]
 fn rejects_non_trailing_default_parameters() {
     let diagnostics = parse_tua_source(
         "src/shake.tua",
