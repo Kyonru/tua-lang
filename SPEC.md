@@ -253,7 +253,7 @@ triples, and unknown `setmetatable` inputs remain gradual.
 Function parameters and returns may be annotated.
 
 ```tua
-local function damage(player: Player, amount: number): Player
+local function damage(player: Player, amount: number = 1): Player
   player.hp -= amount
 
   if player.hp <= 0 then
@@ -263,6 +263,11 @@ local function damage(player: Player, amount: number): Player
   return player
 end
 ```
+
+Trailing parameters may provide defaults with `name = expression` or
+`name: Type = expression`. Defaults lower to a nil guard at the start of the Lua
+function body, so omitted arguments and explicit `nil` use the default value.
+Non-trailing defaults are rejected.
 
 Emitted Lua:
 

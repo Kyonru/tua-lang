@@ -9,6 +9,7 @@ use full_moon::ast::luau::{TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
 use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 
+use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub use model::{
@@ -17,9 +18,9 @@ pub use model::{
     LuaDocClass, LuaDocDeprecated, LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric,
     LuaDocGenericParameter, LuaDocMeta, LuaDocModule, LuaDocNoDiscard, LuaDocOverload, LuaDocParam,
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
-    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParsedLanguage,
-    ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias,
-    TypeAliasKind, TypedSourceModel,
+    LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
+    ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan, TableFieldType,
+    TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
 };
 use normalize::normalize_tua_source_for_luau_parser;
 
@@ -157,19 +158,19 @@ struct TuaSyntax {
 fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
     let mut syntax = TuaSyntax::default();
 
-    collect_block_tua_syntax(path, ast.nodes(), &mut syntax);
+    collect_block_tua_syntax(path, source, ast.nodes(), &mut syntax);
     collect_enum_declarations(path, source, &mut syntax);
 
     syntax
 }
 
-fn collect_block_tua_syntax(path: &Path, block: &ast::Block, syntax: &mut TuaSyntax) {
+fn collect_block_tua_syntax(path: &Path, source: &str, block: &ast::Block, syntax: &mut TuaSyntax) {
     for stmt in block.stmts() {
-        collect_stmt_tua_syntax(path, stmt, syntax);
+        collect_stmt_tua_syntax(path, source, stmt, syntax);
     }
 }
 
-fn collect_stmt_tua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TuaSyntax) {
+fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: &mut TuaSyntax) {
     match stmt {
         ast::Stmt::TypeDeclaration(declaration) => {
             syntax
@@ -191,20 +192,28 @@ fn collect_stmt_tua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TuaSyntax
             }
         }
         ast::Stmt::LocalFunction(function) => {
-            syntax.function_annotations.push(function_annotation(
+            let annotation = function_annotation(
+                path,
+                source,
                 Some(token_text(function.name())),
                 node_span(function.name()),
                 function.body(),
-            ));
-            collect_block_tua_syntax(path, function.body().block(), syntax);
+                &mut syntax.diagnostics,
+            );
+            syntax.function_annotations.push(annotation);
+            collect_block_tua_syntax(path, source, function.body().block(), syntax);
         }
         ast::Stmt::FunctionDeclaration(function) => {
-            syntax.function_annotations.push(function_annotation(
+            let annotation = function_annotation(
+                path,
+                source,
                 Some(function.name().to_string()),
                 node_span(function.name()),
                 function.body(),
-            ));
-            collect_block_tua_syntax(path, function.body().block(), syntax);
+                &mut syntax.diagnostics,
+            );
+            syntax.function_annotations.push(annotation);
+            collect_block_tua_syntax(path, source, function.body().block(), syntax);
         }
         ast::Stmt::CompoundAssignment(assignment) => {
             match compound_assignment_from_ast(path, assignment) {
@@ -212,27 +221,27 @@ fn collect_stmt_tua_syntax(path: &Path, stmt: &ast::Stmt, syntax: &mut TuaSyntax
                 Err(diagnostic) => syntax.diagnostics.push(diagnostic),
             }
         }
-        ast::Stmt::Do(block) => collect_block_tua_syntax(path, block.block(), syntax),
+        ast::Stmt::Do(block) => collect_block_tua_syntax(path, source, block.block(), syntax),
         ast::Stmt::If(if_stmt) => {
-            collect_block_tua_syntax(path, if_stmt.block(), syntax);
+            collect_block_tua_syntax(path, source, if_stmt.block(), syntax);
             if let Some(else_ifs) = if_stmt.else_if() {
                 for else_if in else_ifs {
-                    collect_block_tua_syntax(path, else_if.block(), syntax);
+                    collect_block_tua_syntax(path, source, else_if.block(), syntax);
                 }
             }
             if let Some(else_block) = if_stmt.else_block() {
-                collect_block_tua_syntax(path, else_block, syntax);
+                collect_block_tua_syntax(path, source, else_block, syntax);
             }
         }
         ast::Stmt::GenericFor(for_stmt) => {
-            collect_block_tua_syntax(path, for_stmt.block(), syntax);
+            collect_block_tua_syntax(path, source, for_stmt.block(), syntax);
         }
         ast::Stmt::NumericFor(for_stmt) => {
-            collect_block_tua_syntax(path, for_stmt.block(), syntax);
+            collect_block_tua_syntax(path, source, for_stmt.block(), syntax);
         }
-        ast::Stmt::Repeat(repeat) => collect_block_tua_syntax(path, repeat.block(), syntax),
+        ast::Stmt::Repeat(repeat) => collect_block_tua_syntax(path, source, repeat.block(), syntax),
         ast::Stmt::While(while_stmt) => {
-            collect_block_tua_syntax(path, while_stmt.block(), syntax);
+            collect_block_tua_syntax(path, source, while_stmt.block(), syntax);
         }
         _ => {}
     }
@@ -445,19 +454,36 @@ fn enum_diagnostic(
 }
 
 fn function_annotation(
+    path: &Path,
+    source: &str,
     name: Option<String>,
     name_span: Option<SourceSpan>,
     body: &ast::FunctionBody,
+    diagnostics: &mut Vec<Diagnostic>,
 ) -> FunctionAnnotation {
-    let parameter_count = body
+    let parameter_names = body
         .parameters()
         .iter()
-        .filter(|parameter| matches!(parameter, ast::Parameter::Name(_)))
-        .count();
+        .filter_map(|parameter| {
+            let ast::Parameter::Name(name) = parameter else {
+                return None;
+            };
+
+            Some(token_text(name))
+        })
+        .collect::<Vec<_>>();
+    let parameter_count = parameter_names.len();
     let has_varargs = body
         .parameters()
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
+    let default_parameters = parameter_defaults_from_body(source, body);
+    let required_parameter_count = required_parameter_count_for_defaults(
+        path,
+        &parameter_names,
+        &default_parameters,
+        diagnostics,
+    );
     let parameters = body
         .parameters()
         .iter()
@@ -482,12 +508,312 @@ fn function_annotation(
         name_span,
         parameters,
         parameter_count,
+        required_parameter_count,
         has_varargs,
+        default_parameters,
         return_type: body
             .return_type()
             .map(|specifier| tua_type_from_type_info(specifier.type_info())),
         span: node_span(body),
     }
+}
+
+fn parameter_defaults_from_body(source: &str, body: &ast::FunctionBody) -> Vec<ParameterDefault> {
+    let Some((inner, inner_start)) = parameter_list_inner(source, body.parameters_parentheses())
+    else {
+        return Vec::new();
+    };
+
+    split_parameter_parts(inner, inner_start)
+        .into_iter()
+        .filter_map(|part| parameter_default_from_part(source, part))
+        .collect()
+}
+
+fn required_parameter_count_for_defaults(
+    path: &Path,
+    parameter_names: &[String],
+    defaults: &[ParameterDefault],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> usize {
+    let mut required = 0usize;
+    let mut seen_default = false;
+
+    for name in parameter_names {
+        let has_default = defaults.iter().any(|default| default.name == *name);
+
+        if has_default {
+            seen_default = true;
+            continue;
+        }
+
+        if seen_default {
+            diagnostics.push(
+                Diagnostic::error(
+                    path,
+                    defaults
+                        .first()
+                        .and_then(|default| default.span)
+                        .map(|span| span.start.line)
+                        .unwrap_or(1),
+                    defaults
+                        .first()
+                        .and_then(|default| default.span)
+                        .map(|span| span.start.column)
+                        .unwrap_or(1),
+                    "default parameters must be trailing",
+                )
+                .with_code(DiagnosticCode::SYNTAX_PARSE),
+            );
+        } else {
+            required += 1;
+        }
+    }
+
+    required
+}
+
+fn parameter_list_inner<'a>(
+    source: &'a str,
+    parentheses: &ast::span::ContainedSpan,
+) -> Option<(&'a str, usize)> {
+    let span = node_span(parentheses)?;
+    let start = byte_for_source_position(source, span.start)?;
+    let end = byte_for_source_position(source, span.end).unwrap_or(source.len());
+    let range = source.get(start..end)?;
+    let open = range.find('(')?;
+    let close = range.rfind(')')?;
+
+    if close <= open {
+        return None;
+    }
+
+    let inner_start = start + open + 1;
+    let inner_end = start + close;
+
+    Some((source.get(inner_start..inner_end)?, inner_start))
+}
+
+#[derive(Clone, Copy)]
+struct ParameterPart<'a> {
+    text: &'a str,
+    start: usize,
+}
+
+fn split_parameter_parts(input: &str, base: usize) -> Vec<ParameterPart<'_>> {
+    let bytes = input.as_bytes();
+    let mut parts = Vec::new();
+    let mut state = ParameterScanState::Code;
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        match &mut state {
+            ParameterScanState::Code => {
+                if bytes[index] == b'\'' || bytes[index] == b'"' {
+                    state = ParameterScanState::ShortString {
+                        quote: bytes[index],
+                        escaped: false,
+                    };
+                    index += 1;
+                    continue;
+                }
+
+                if bytes[index..].starts_with(b"[[") {
+                    state = ParameterScanState::LongString;
+                    index += 2;
+                    continue;
+                }
+
+                match bytes[index] {
+                    b'(' | b'{' | b'[' => depth += 1,
+                    b')' | b'}' | b']' => depth = depth.saturating_sub(1),
+                    b',' if depth == 0 => {
+                        parts.push(ParameterPart {
+                            text: &input[start..index],
+                            start: base + start,
+                        });
+                        start = index + 1;
+                    }
+                    _ => {}
+                }
+
+                index += 1;
+            }
+            ParameterScanState::ShortString { quote, escaped } => {
+                if *escaped {
+                    *escaped = false;
+                } else if bytes[index] == b'\\' {
+                    *escaped = true;
+                } else if bytes[index] == *quote {
+                    state = ParameterScanState::Code;
+                }
+
+                index += 1;
+            }
+            ParameterScanState::LongString => {
+                if bytes[index..].starts_with(b"]]") {
+                    index += 2;
+                    state = ParameterScanState::Code;
+                } else {
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    parts.push(ParameterPart {
+        text: &input[start..],
+        start: base + start,
+    });
+    parts
+}
+
+fn parameter_default_from_part(source: &str, part: ParameterPart<'_>) -> Option<ParameterDefault> {
+    let trimmed_start = leading_ascii_whitespace(part.text);
+    let trimmed = &part.text[trimmed_start..];
+    let name_end = identifier_end(trimmed)?;
+    let name = trimmed[..name_end].to_owned();
+    let equal = top_level_equal(trimmed)?;
+    let expression = trimmed[equal + 1..].trim();
+
+    if expression.is_empty() {
+        return None;
+    }
+
+    let name_start = part.start + trimmed_start;
+    let name_end = name_start + name.len();
+    let span_start = name_start;
+    let span_end = part.start + trimmed_start + trimmed.trim_end().len();
+
+    Some(ParameterDefault {
+        name,
+        expression: expression.to_owned(),
+        name_span: Some(SourceSpan {
+            start: source_position_for_byte(source, name_start),
+            end: source_position_for_byte(source, name_end),
+        }),
+        span: Some(SourceSpan {
+            start: source_position_for_byte(source, span_start),
+            end: source_position_for_byte(source, span_end),
+        }),
+    })
+}
+
+fn leading_ascii_whitespace(input: &str) -> usize {
+    input
+        .bytes()
+        .position(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(input.len())
+}
+
+fn identifier_end(input: &str) -> Option<usize> {
+    let bytes = input.as_bytes();
+
+    if !bytes
+        .first()
+        .is_some_and(|byte| *byte == b'_' || byte.is_ascii_alphabetic())
+    {
+        return None;
+    }
+
+    Some(
+        bytes
+            .iter()
+            .position(|byte| !(*byte == b'_' || byte.is_ascii_alphanumeric()))
+            .unwrap_or(bytes.len()),
+    )
+}
+
+fn top_level_equal(input: &str) -> Option<usize> {
+    let bytes = input.as_bytes();
+    let mut state = ParameterScanState::Code;
+    let mut depth = 0usize;
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        match &mut state {
+            ParameterScanState::Code => {
+                if bytes[index] == b'\'' || bytes[index] == b'"' {
+                    state = ParameterScanState::ShortString {
+                        quote: bytes[index],
+                        escaped: false,
+                    };
+                    index += 1;
+                    continue;
+                }
+
+                if bytes[index..].starts_with(b"[[") {
+                    state = ParameterScanState::LongString;
+                    index += 2;
+                    continue;
+                }
+
+                match bytes[index] {
+                    b'(' | b'{' | b'[' => depth += 1,
+                    b')' | b'}' | b']' => depth = depth.saturating_sub(1),
+                    b'=' if depth == 0 => return Some(index),
+                    _ => {}
+                }
+
+                index += 1;
+            }
+            ParameterScanState::ShortString { quote, escaped } => {
+                if *escaped {
+                    *escaped = false;
+                } else if bytes[index] == b'\\' {
+                    *escaped = true;
+                } else if bytes[index] == *quote {
+                    state = ParameterScanState::Code;
+                }
+
+                index += 1;
+            }
+            ParameterScanState::LongString => {
+                if bytes[index..].starts_with(b"]]") {
+                    index += 2;
+                    state = ParameterScanState::Code;
+                } else {
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[derive(Clone, Copy)]
+enum ParameterScanState {
+    Code,
+    ShortString { quote: u8, escaped: bool },
+    LongString,
+}
+
+fn byte_for_source_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0usize;
+
+    for (line_index, line) in source.split_inclusive('\n').enumerate() {
+        if line_index + 1 == position.line {
+            let line = line.trim_end_matches(['\n', '\r']);
+            return Some(offset + byte_for_column(line, position.column));
+        }
+
+        offset += line.len();
+    }
+
+    (position.line == source.lines().count() + 1).then_some(source.len())
+}
+
+fn source_position_for_byte(source: &str, byte: usize) -> SourcePosition {
+    let byte = byte.min(source.len());
+    let before = &source[..byte];
+    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let line_start = before.rfind('\n').map(|index| index + 1).unwrap_or(0);
+    let column = column_for_byte(&source[line_start..byte], byte - line_start);
+
+    SourcePosition { line, column }
 }
 
 fn compound_assignment_from_ast(

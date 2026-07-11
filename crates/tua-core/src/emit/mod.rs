@@ -7,7 +7,7 @@ use full_moon::tokenizer::TokenReference;
 
 use crate::{
     asset, infer_module_exports, parse_tua_source, vector, AnnotationMode, Diagnostic,
-    DiagnosticCode, ParsedSource, ProjectWorkspace, TuaType, Type,
+    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, TuaType, Type,
 };
 
 pub fn emit_tua_source(
@@ -63,6 +63,7 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
 
     if diagnostics.is_empty() {
         let output = normalize_emitted_lua(ast.to_string());
+        let output = lower_default_parameter_guards_text(&output, parsed);
         let output = lower_builtin_calls_text(&output);
         let output = lower_import_calls_text(&output, parsed, import_resolver)?;
         let output = lower_compound_assignments_text(&output);
@@ -716,11 +717,15 @@ fn erase_function_body(
 }
 
 fn parameters_parentheses_without_return_type(body: &ast::FunctionBody) -> ContainedSpan {
+    let (open, close) = body.parameters_parentheses().tokens();
+
     let Some(return_type) = body.return_type() else {
-        return body.parameters_parentheses().clone();
+        let close_text = close.to_string();
+        let trailing = trailing_whitespace(&close_text);
+
+        return ContainedSpan::new(open.clone(), symbol_with_trailing(close, trailing));
     };
 
-    let (open, close) = body.parameters_parentheses().tokens();
     let return_type_text = return_type.to_string();
     let trailing = trailing_whitespace(&return_type_text);
 
@@ -1122,6 +1127,85 @@ fn lua_string_literal(value: &str) -> String {
 
     output.push('"');
     output
+}
+
+fn lower_default_parameter_guards_text(output: &str, parsed: &ParsedSource) -> String {
+    let mut lowered = output.to_owned();
+    let mut search_start = 0usize;
+
+    for function in parsed
+        .function_annotations
+        .iter()
+        .filter(|function| !function.default_parameters.is_empty())
+    {
+        let Some(name) = function.name.as_deref() else {
+            continue;
+        };
+        let needle = format!("function {name}(");
+        let Some(relative_start) = lowered[search_start..].find(&needle) else {
+            continue;
+        };
+        let header_start = search_start + relative_start;
+        let open = header_start + needle.len() - 1;
+        let Some(mut close) = find_matching_paren(&lowered, open) else {
+            continue;
+        };
+        let trimmed_close = lowered[..close]
+            .trim_end_matches(|character| character == ' ' || character == '\t')
+            .len();
+
+        if trimmed_close < close {
+            lowered.replace_range(trimmed_close..close, "");
+            close = trimmed_close;
+        }
+
+        let insert_at = lowered[close + 1..]
+            .find('\n')
+            .map(|offset| close + 1 + offset + 1)
+            .unwrap_or(close + 1);
+        let body_indent = format!("{}  ", line_indent_before(&lowered, header_start));
+        let guard = default_parameter_guard_text(&function.default_parameters, &body_indent);
+
+        lowered.insert_str(insert_at, &guard);
+        search_start = insert_at + guard.len();
+    }
+
+    lowered
+}
+
+fn default_parameter_guard_text(defaults: &[ParameterDefault], body_indent: &str) -> String {
+    let nested_indent = format!("{body_indent}  ");
+    let mut output = String::new();
+
+    for default in defaults {
+        output.push_str(body_indent);
+        output.push_str("if ");
+        output.push_str(&default.name);
+        output.push_str(" == nil then\n");
+        output.push_str(&nested_indent);
+        output.push_str(&default.name);
+        output.push_str(" = ");
+        output.push_str(&default.expression);
+        output.push('\n');
+        output.push_str(body_indent);
+        output.push_str("end\n");
+    }
+
+    output
+}
+
+fn line_indent_before(input: &str, index: usize) -> &str {
+    let line_start = input[..index]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let line = &input[line_start..index];
+    let indent_len = line
+        .bytes()
+        .take_while(|byte| byte.is_ascii_whitespace())
+        .count();
+
+    &line[..indent_len]
 }
 
 fn invalid_import_specifier_reason(specifier: &str) -> Option<&'static str> {

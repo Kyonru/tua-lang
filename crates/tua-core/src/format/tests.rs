@@ -79,6 +79,21 @@ local player = makePlayer("Ada")
 }
 
 #[test]
+fn formats_default_parameters() {
+    let source = r#"function shake(duration=0.3, strength:number=1)
+return duration*strength
+end"#;
+
+    assert_eq!(
+        format(source),
+        r#"function shake(duration = 0.3, strength:number = 1)
+  return duration*strength
+end
+"#
+    );
+}
+
+#[test]
 fn formats_multiline_type_and_table_bodies() {
     let source = r#"type Vec2 = {
 x: number,

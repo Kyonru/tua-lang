@@ -108,6 +108,7 @@ pub struct TypedFunction {
     pub name: Option<String>,
     pub parameters: Vec<TypedParameter>,
     pub parameter_count: usize,
+    pub required_parameter_count: usize,
     pub has_varargs: bool,
     pub vararg_type: Option<Type>,
     pub return_type: Option<Type>,
@@ -357,6 +358,7 @@ fn resolve_function_annotation(
         })
         .collect::<Vec<_>>();
     let mut parameter_count = function.parameter_count;
+    let mut required_parameter_count = function.required_parameter_count;
 
     if let Some((owner, _, true)) = function.name.as_deref().and_then(function_name_table_field) {
         parameters.insert(
@@ -368,6 +370,7 @@ fn resolve_function_annotation(
             },
         );
         parameter_count += 1;
+        required_parameter_count += 1;
     }
 
     let return_type = function
@@ -380,6 +383,7 @@ fn resolve_function_annotation(
         name: function.name.clone(),
         parameters,
         parameter_count,
+        required_parameter_count,
         has_varargs: function.has_varargs,
         vararg_type: None,
         return_type,
@@ -857,6 +861,7 @@ fn lua_doc_function_for_code_line(
     Some(TypedFunction {
         name: Some(name),
         parameter_count: parameters.len(),
+        required_parameter_count: parameters.len(),
         parameters,
         has_varargs: vararg_type.is_some(),
         vararg_type: None,
@@ -1118,6 +1123,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
         name,
         parameters,
         parameter_count,
+        required_parameter_count: parameter_count,
         has_varargs,
         vararg_type,
         return_type,

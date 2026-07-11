@@ -24,6 +24,12 @@ pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
             continue;
         }
 
+        if starts_function_keyword(&chars, index) {
+            index =
+                push_function_header_with_erased_parameter_defaults(&chars, index, &mut normalized);
+            continue;
+        }
+
         if is_optional_field_marker(&chars, index) {
             normalized.push(':');
             index += 2;
@@ -47,6 +53,19 @@ fn is_optional_field_marker(chars: &[char], index: usize) -> bool {
 
 fn is_identifier_char(character: char) -> bool {
     character == '_' || character.is_ascii_alphanumeric()
+}
+
+fn starts_function_keyword(chars: &[char], index: usize) -> bool {
+    if !starts_keyword(chars, index, "function") {
+        return false;
+    }
+
+    !index
+        .checked_sub(1)
+        .and_then(|previous| chars.get(previous))
+        .is_some_and(|character| {
+            is_identifier_char(*character) || *character == '.' || *character == ':'
+        })
 }
 
 fn starts_enum_declaration(chars: &[char], index: usize) -> bool {
@@ -75,6 +94,152 @@ fn starts_keyword(chars: &[char], index: usize, keyword: &str) -> bool {
     !chars
         .get(index + keyword.chars().count())
         .is_some_and(|character| is_identifier_char(*character))
+}
+
+fn push_function_header_with_erased_parameter_defaults(
+    chars: &[char],
+    mut index: usize,
+    output: &mut String,
+) -> usize {
+    for character in "function".chars() {
+        output.push(character);
+        index += 1;
+    }
+
+    let mut lookahead = index;
+    while chars
+        .get(lookahead)
+        .is_some_and(|character| character.is_whitespace())
+    {
+        lookahead += 1;
+    }
+
+    if chars.get(lookahead) == Some(&'(') {
+        return index;
+    }
+
+    while index < chars.len() {
+        if starts_line_comment(chars, index) {
+            return push_until_line_end(chars, index, output);
+        }
+
+        if chars[index] == '"' || chars[index] == '\'' {
+            index = push_short_string(chars, index, output);
+            continue;
+        }
+
+        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+            index = push_long_bracket(chars, index, output);
+            continue;
+        }
+
+        let character = chars[index];
+        output.push(character);
+        index += 1;
+
+        if character == '(' {
+            return push_parameter_list_with_erased_defaults(chars, index, output);
+        }
+
+        if character == '\n' {
+            return index;
+        }
+    }
+
+    index
+}
+
+fn push_parameter_list_with_erased_defaults(
+    chars: &[char],
+    mut index: usize,
+    output: &mut String,
+) -> usize {
+    let mut depth = 0usize;
+    let mut erasing_default = false;
+    let mut string_quote = None;
+    let mut escaped = false;
+    let mut long_string = false;
+
+    while index < chars.len() {
+        let character = chars[index];
+
+        if let Some(quote) = string_quote {
+            output.push(if erasing_default { ' ' } else { character });
+            index += 1;
+
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == quote {
+                string_quote = None;
+            }
+
+            continue;
+        }
+
+        if long_string {
+            output.push(if erasing_default { ' ' } else { character });
+
+            if character == ']' && chars.get(index + 1) == Some(&']') {
+                index += 1;
+                output.push(if erasing_default { ' ' } else { chars[index] });
+                long_string = false;
+            }
+
+            index += 1;
+            continue;
+        }
+
+        if character == '"' || character == '\'' {
+            string_quote = Some(character);
+            output.push(if erasing_default { ' ' } else { character });
+            index += 1;
+            continue;
+        }
+
+        if character == '[' && chars.get(index + 1) == Some(&'[') {
+            long_string = true;
+            output.push(if erasing_default { ' ' } else { character });
+            index += 1;
+            output.push(if erasing_default { ' ' } else { chars[index] });
+            index += 1;
+            continue;
+        }
+
+        match character {
+            '(' | '{' | '[' => {
+                depth += 1;
+                output.push(if erasing_default { ' ' } else { character });
+                index += 1;
+            }
+            ')' if depth == 0 => {
+                output.push(')');
+                return index + 1;
+            }
+            ')' | '}' | ']' => {
+                depth = depth.saturating_sub(1);
+                output.push(if erasing_default { ' ' } else { character });
+                index += 1;
+            }
+            ',' if depth == 0 => {
+                erasing_default = false;
+                output.push(',');
+                index += 1;
+            }
+            '=' if depth == 0 => {
+                erasing_default = true;
+                output.push(' ');
+                index += 1;
+            }
+            _ => {
+                output.push(if erasing_default { ' ' } else { character });
+                index += 1;
+            }
+        }
+    }
+
+    index
 }
 
 fn push_erased_enum_block(chars: &[char], mut index: usize, output: &mut String) -> usize {

@@ -1611,6 +1611,7 @@ struct ExternalParameter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TypedCallCandidate {
     parameters: Vec<Type>,
+    required_parameter_count: usize,
     has_varargs: bool,
     vararg_type: Option<Type>,
     return_types: Vec<Type>,
@@ -1639,6 +1640,7 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
                 .iter()
                 .map(|parameter| parameter.ty.clone())
                 .collect(),
+            required_parameter_count: overload.parameters.len(),
             has_varargs: overload.has_varargs,
             vararg_type: overload.vararg_type.clone(),
             return_types: overload.return_types_or_any(),
@@ -1661,6 +1663,7 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
                 .iter()
                 .map(|parameter| parameter.ty.clone())
                 .collect(),
+            required_parameter_count: function.required_parameter_count,
             has_varargs: function.has_varargs,
             vararg_type: function.vararg_type.clone(),
             return_types: function.return_types_or_any(),
@@ -1695,8 +1698,8 @@ fn typed_call_candidate_matches(
 }
 
 fn expected_typed_argument_count(candidate: &TypedCallCandidate, actual: usize) -> Option<usize> {
-    if actual < candidate.parameters.len() {
-        return Some(candidate.parameters.len());
+    if actual < candidate.required_parameter_count {
+        return Some(candidate.required_parameter_count);
     }
 
     if !candidate.has_varargs && actual > candidate.parameters.len() {

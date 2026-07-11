@@ -431,6 +431,47 @@ end
 }
 
 #[test]
+fn parses_default_parameters_on_named_functions() {
+    let parsed = parse_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(duration: number = 0.3, strength = 1)
+  return duration
+end
+"#,
+    )
+    .expect("default parameters should parse");
+
+    let function = &parsed.function_annotations[0];
+
+    assert_eq!(function.parameter_count, 2);
+    assert_eq!(function.required_parameter_count, 0);
+    assert_eq!(function.default_parameters.len(), 2);
+    assert_eq!(function.default_parameters[0].name, "duration");
+    assert_eq!(function.default_parameters[0].expression, "0.3");
+    assert_eq!(function.default_parameters[1].name, "strength");
+    assert_eq!(function.default_parameters[1].expression, "1");
+}
+
+#[test]
+fn rejects_non_trailing_default_parameters() {
+    let diagnostics = parse_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(duration = 0.3, strength)
+  return duration + strength
+end
+"#,
+    )
+    .expect_err("non-trailing defaults should be rejected");
+
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::SYNTAX_PARSE));
+    assert!(diagnostics[0]
+        .message
+        .contains("default parameters must be trailing"));
+}
+
+#[test]
 fn parses_luahelper_doc_annotations_into_source_model() {
     let parsed = parse_tua_source(
         "src/lua_doc.tua",

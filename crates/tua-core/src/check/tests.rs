@@ -357,6 +357,22 @@ local total: number = add(1, 2)
 }
 
 #[test]
+fn accepts_omitted_trailing_default_parameters() {
+    check_tua_source(
+        "src/shake.tua",
+        r#"
+local function shake(duration: number = 0.3): number
+  return duration
+end
+
+local defaulted: number = shake()
+local explicit: number = shake(1)
+"#,
+    )
+    .expect("omitted default parameters should type-check");
+}
+
+#[test]
 fn accepts_love_method_multi_return_from_inferred_function_body() {
     check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

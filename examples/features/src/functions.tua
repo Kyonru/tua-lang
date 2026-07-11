@@ -29,7 +29,7 @@ local function damage(player: Player, amount: number): Player
   return player
 end
 
-local function heal(player: Player, amount: number): Player
+local function heal(player: Player, amount: number = 5): Player
   player.hp += amount
   player.alive = true
 
@@ -46,7 +46,7 @@ end
 
 local player = makePlayer("Mina")
 damage(player, 15)
-heal(player, 5)
+heal(player)
 
 return {
   makePlayer = makePlayer,

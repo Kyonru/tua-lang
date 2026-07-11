@@ -411,6 +411,33 @@ end
 }
 
 #[test]
+fn snapshot_lowers_default_parameters() {
+    let emitted = emit_tua_source(
+        "src/shake.tua",
+        r#"
+function shake(duration: number = 0.3, strength = 1)
+  return duration * strength
+end
+"#,
+    )
+    .expect("default parameters should emit");
+
+    assert_eq!(
+        emitted,
+        r#"function shake(duration, strength)
+  if duration == nil then
+    duration = 0.3
+  end
+  if strength == nil then
+    strength = 1
+  end
+  return duration * strength
+end
+"#
+    );
+}
+
+#[test]
 fn snapshot_lowers_all_supported_compound_assignments() {
     let emitted = emit_tua_source(
         "src/compound.tua",

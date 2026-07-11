@@ -134,8 +134,9 @@ pub use parser::{
     LuaDocDiagnostic, LuaDocEnum, LuaDocField, LuaDocGeneric, LuaDocGenericParameter, LuaDocMeta,
     LuaDocModule, LuaDocNoDiscard, LuaDocParam, LuaDocParseOptions, LuaDocParseResult,
     LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource,
-    ParameterAnnotation, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
-    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
+    ParameterAnnotation, ParameterDefault, ParsedLanguage, ParsedSource, RawParsedSource,
+    SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
+    TypedSourceModel,
 };
 pub use plugin::{
     PluginCompletionContext, PluginContext, PluginDeclaration, PluginDeclarationKind, PluginHover,

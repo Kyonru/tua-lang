@@ -477,6 +477,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 })
                 .collect(),
             parameter_count: function.parameters.len(),
+            required_parameter_count: function.parameters.len(),
             has_varargs: false,
             vararg_type: None,
             return_type: Some((*function.return_type).clone()),
@@ -488,6 +489,7 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
             name: Some(name.to_owned()),
             parameters: Vec::new(),
             parameter_count: 0,
+            required_parameter_count: 0,
             has_varargs: true,
             vararg_type: Some(Type::Any),
             return_type: Some(field.ty.clone()),

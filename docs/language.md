@@ -90,6 +90,7 @@ Useful static facts include:
 - string literal types such as `"static"` and `"stream"`;
 - local annotations and simple initializer inference;
 - function parameter and return annotations;
+- trailing default parameters such as `duration: number = 0.3`;
 - inferred returns for simple unannotated functions;
 - multiple returns where known Lua or LOVE functions provide them;
 - table-shape fields and optional fields;
