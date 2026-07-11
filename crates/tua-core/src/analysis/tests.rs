@@ -406,6 +406,8 @@ fn snapshot_surfaces_love_asset_metadata_in_hover_and_completion() {
     let temp = TempProject::new("asset-metadata");
     let source = r#"local player = image "assets/<|hover|>player.png"
 local next = image "assets/p<|complete|>"
+local raw = love.graphics.newImage("assets/<|raw_hover|>player.png")
+local rawNext = love.graphics.newImage("assets/p<|raw_complete|>")
 "#;
     let fixture = Fixture::parse(&format!("-- file: {}\n{source}", "src/main.tua"));
 
@@ -424,14 +426,24 @@ local next = image "assets/p<|complete|>"
     let hover = snapshot
         .hover("src/main.tua", fixture.position("hover"))
         .expect("asset literal should hover");
+    let raw_hover = snapshot
+        .hover("src/main.tua", fixture.position("raw_hover"))
+        .expect("native asset literal should hover");
     let completions = snapshot.completion("src/main.tua", fixture.position("complete"));
+    let raw_completions = snapshot.completion("src/main.tua", fixture.position("raw_complete"));
 
     assert!(hover.contents.contains("asset `assets/player.png`"));
     assert!(hover.contents.contains("LOVE type: Image"));
     assert!(hover.contents.contains("status: valid"));
     assert!(hover.contents.contains("dimensions: 64x32"));
+    assert!(raw_hover.contents.contains("asset `assets/player.png`"));
+    assert!(raw_hover.contents.contains("LOVE type: Image"));
     assert_eq!(
         completion_labels(&completions),
+        vec!["assets/player.png".to_owned()]
+    );
+    assert_eq!(
+        completion_labels(&raw_completions),
         vec!["assets/player.png".to_owned()]
     );
     assert_eq!(

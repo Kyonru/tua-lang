@@ -33,7 +33,8 @@ The VS Code extension starts this server and surfaces editor features for
 - Completion for type aliases, local symbols, table fields, Lua builtins,
   generated LOVE API items, generated LOVE enum values, LuaDoc
   tags/types/snippets, require paths, import paths, module fields,
-  asset paths in LOVE asset-loader strings, and auto-import candidates.
+  asset paths in LOVE asset-loader and native constructor strings, and
+  auto-import candidates.
 - Generated LOVE API function completions can insert signature-driven call
   snippets, including enum choice placeholders such as `"fill" | "line"`.
 - Completion item resolve includes LOVE wiki links for generated LOVE API
@@ -44,6 +45,8 @@ The VS Code extension starts this server and surfaces editor features for
 - Asset path completion and validation use an in-memory asset index refreshed
   from workspace and watched-file events instead of walking asset directories
   during editor requests.
+- Static LOVE asset diagnostics cover obvious missing files, unsupported
+  formats, and source type mismatches before the game runs.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
 - LOVE callback completions can insert declaration snippets for callbacks such

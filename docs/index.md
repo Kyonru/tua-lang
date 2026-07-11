@@ -22,7 +22,7 @@ leaving the normal Lua and LOVE workflow.
 - LOVE helpers such as `image "assets/player.png"`, `sound "assets/jump.wav"`,
   `music "assets/theme.ogg"`, `font("assets/ui.ttf", 18)`, `shader`,
   `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, with static
-  path validation for helpers that load assets.
+  path validation for helpers and native LOVE constructors that load assets.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.
 - CLI commands for init, check, fmt, lint, build, watch, and LSP.

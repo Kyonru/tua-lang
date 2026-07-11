@@ -455,14 +455,23 @@ fn did_open_publishes_matching_core_diagnostics() {
 
 #[test]
 fn did_open_publishes_love_method_argument_diagnostics() {
-    let uri = "file:///tmp/assets.tua";
+    let temp = TempProject::new("love-method-argument-diagnostics");
     let source = r#"
 local player: Image = love.graphics.newImage("assets/player.png")
 
 player:setFilter(123)
 "#;
-    let output = run_messages(vec![did_open(uri, source)]);
-    let diagnostics = published_diagnostics(&output, uri);
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/assets.tua", source);
+    temp.write("assets/player.png", "");
+
+    let uri = temp.uri_for("src/assets.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let diagnostics = published_diagnostics(&output, &uri);
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0]["severity"], 1);

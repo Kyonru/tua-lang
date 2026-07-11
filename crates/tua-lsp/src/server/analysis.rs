@@ -917,6 +917,10 @@ fn is_love_asset_path(path: &Path) -> bool {
         AssetLoaderKind::Font,
         AssetLoaderKind::Shader,
         AssetLoaderKind::ImageData,
+        AssetLoaderKind::ImageFont,
+        AssetLoaderKind::SoundData,
+        AssetLoaderKind::Video,
+        AssetLoaderKind::VideoStream,
     ]
     .into_iter()
     .any(|kind| kind.supported_extensions().contains(&extension.as_str()))

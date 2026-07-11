@@ -911,7 +911,7 @@ impl<'a> Checker<'a> {
     }
 
     fn check_asset_loader_call(&mut self, function_call: &FunctionCall) {
-        let Some(asset_call) = asset_loader_call(function_call) else {
+        let Some(asset_call) = asset::asset_loader_call(function_call) else {
             return;
         };
         let span = node_span(function_call).unwrap_or(SourceSpan {
@@ -927,10 +927,18 @@ impl<'a> Checker<'a> {
         );
 
         match metadata.status {
+            asset::AssetValidationStatus::WrongKind => {
+                self.push_asset_diagnostic(wrong_asset_kind_diagnostic(
+                    &self.parsed.path,
+                    asset_call.path_span,
+                    asset_call.kind,
+                    &asset_call.path,
+                ));
+            }
             asset::AssetValidationStatus::UnsupportedExtension => {
                 self.push_asset_diagnostic(unsupported_asset_extension_diagnostic(
                     &self.parsed.path,
-                    function_call,
+                    asset_call.path_span,
                     asset_call.kind,
                     &asset_call.path,
                 ));
@@ -938,7 +946,7 @@ impl<'a> Checker<'a> {
             asset::AssetValidationStatus::Missing => {
                 self.push_asset_diagnostic(missing_asset_diagnostic(
                     &self.parsed.path,
-                    function_call,
+                    asset_call.path_span,
                     asset_call.kind,
                     &asset_call.path,
                 ));
@@ -1585,11 +1593,6 @@ enum CallArgument<'a> {
     Inferred(Type),
 }
 
-struct AssetLoaderCall {
-    kind: asset::AssetLoaderKind,
-    path: String,
-}
-
 struct DotMethodCall {
     parts: Vec<String>,
     receiver: String,
@@ -2218,30 +2221,6 @@ fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
     expression_is_name(meta, "self")
 }
 
-fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-    let kind = asset::loader_kind(&token_text(name))?;
-    let call = function_call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(call) => Some(call),
-        _ => None,
-    })?;
-    let path = match call {
-        Call::AnonymousCall(FunctionArgs::String(path)) => Some(unquote_string(&path.to_string())),
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            let Expression::String(path) = arguments.iter().next()? else {
-                return None;
-            };
-
-            Some(unquote_string(&path.to_string()))
-        }
-        _ => None,
-    }?;
-
-    Some(AssetLoaderCall { kind, path })
-}
-
 fn dot_method_call(function_call: &FunctionCall) -> Option<DotMethodCall> {
     let Prefix::Name(name) = function_call.prefix() else {
         return None;
@@ -2671,11 +2650,11 @@ fn argument_count_diagnostic(
 
 fn missing_asset_diagnostic(
     path: &Path,
-    node: &impl Node,
+    span: SourceSpan,
     kind: asset::AssetLoaderKind,
     asset_path: &str,
 ) -> Diagnostic {
-    let position = node_position(node);
+    let position = span.start;
 
     Diagnostic::error(
         path,
@@ -2686,13 +2665,35 @@ fn missing_asset_diagnostic(
     .with_code(DiagnosticCode::ASSET_MISSING)
 }
 
-fn unsupported_asset_extension_diagnostic(
+fn wrong_asset_kind_diagnostic(
     path: &Path,
-    node: &impl Node,
+    span: SourceSpan,
     kind: asset::AssetLoaderKind,
     asset_path: &str,
 ) -> Diagnostic {
-    let position = node_position(node);
+    let position = span.start;
+    let actual = asset::asset_source_type_label(asset_path).unwrap_or("different");
+    let supported = kind.supported_extensions().join(", ");
+
+    Diagnostic::error(
+        path,
+        position.line,
+        position.column,
+        format!(
+            "wrong {} asset type for `{asset_path}`; found {actual} asset, expected one of: {supported}",
+            kind.asset_label()
+        ),
+    )
+    .with_code(DiagnosticCode::ASSET_WRONG_KIND)
+}
+
+fn unsupported_asset_extension_diagnostic(
+    path: &Path,
+    span: SourceSpan,
+    kind: asset::AssetLoaderKind,
+    asset_path: &str,
+) -> Diagnostic {
+    let position = span.start;
     let supported = kind.supported_extensions().join(", ");
 
     Diagnostic::error(

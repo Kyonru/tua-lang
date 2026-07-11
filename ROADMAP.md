@@ -2155,8 +2155,10 @@ Scope:
 Acceptance:
 
 - Asset hovers show path, inferred LOVE type, and validation status.
-- Completion can suggest project asset paths in asset-loader positions.
-- Unsupported or missing assets produce diagnostics with actionable messages.
+- Completion can suggest project asset paths in asset-loader and native
+  constructor positions.
+- Unsupported, wrong-kind, or missing assets produce diagnostics with
+  actionable messages.
 - Metadata is available to built-in plugins through a stable internal API.
 
 ### 76. `docs(tooling): explore optional Feather integration hooks`

@@ -2543,16 +2543,13 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        if active_parameter != 0 || callee_parts.len() != 1 {
+        if active_parameter != 0 {
             return Vec::new();
         }
 
-        let Some(kind) = asset::loader_kind(&callee_parts[0]) else {
+        let Some(kind) = asset::asset_loader_kind_for_callee_parts(&callee_parts) else {
             return Vec::new();
         };
-        if !kind.has_asset_path() {
-            return Vec::new();
-        }
 
         self.asset_index
             .as_ref()

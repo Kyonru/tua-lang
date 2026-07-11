@@ -52,23 +52,32 @@ fn collects_love_asset_metadata_with_validation_status() {
 local player = image "assets/player.png"
 local missing = sound "assets/missing.wav"
 local wrong = image "assets/readme.txt"
+local wrongKind = image "assets/jump.wav"
 local theme = music "assets/theme.ogg"
 local mainFont = font("assets/ui.ttf", 18)
 local wave = shader "assets/wave.glsl"
 local data = imageData "assets/player.png"
+local raw = love.graphics.newImage("assets/player.png")
+local streamed = love.audio.newSource("assets/theme.ogg", "stream")
+local fontImage = love.graphics.newImageFont("assets/font.png", "abc")
+local soundData = love.sound.newSoundData("assets/jump.wav")
+local video = love.graphics.newVideo("assets/intro.ogv")
 "#;
     let path = temp.write("src/main.tua", source);
 
     temp.write("assets/player.png", png_header(32, 16));
+    temp.write("assets/font.png", png_header(8, 8));
+    temp.write("assets/jump.wav", b"placeholder");
     temp.write("assets/readme.txt", b"not an image");
     temp.write("assets/theme.ogg", b"placeholder");
+    temp.write("assets/intro.ogv", b"placeholder");
     temp.write("assets/ui.ttf", b"placeholder");
     temp.write("assets/wave.glsl", b"placeholder");
 
     let parsed = parse_tua_source(&path, source).expect("source should parse");
     let assets = collect_asset_metadata(&parsed, std::slice::from_ref(&temp.path));
 
-    assert_eq!(assets.len(), 7);
+    assert_eq!(assets.len(), 13);
     assert_eq!(assets[0].kind, AssetLoaderKind::Image);
     assert_eq!(assets[0].relative_path, "assets/player.png");
     assert_eq!(assets[0].extension.as_deref(), Some("png"));
@@ -80,18 +89,28 @@ local data = imageData "assets/player.png"
         assets[2].status,
         AssetValidationStatus::UnsupportedExtension
     );
-    assert_eq!(assets[3].kind, AssetLoaderKind::Music);
-    assert_eq!(assets[3].inferred_love_type, "Source");
-    assert_eq!(assets[3].status, AssetValidationStatus::Valid);
-    assert_eq!(assets[4].kind, AssetLoaderKind::Font);
-    assert_eq!(assets[4].inferred_love_type, "Font");
+    assert_eq!(assets[3].status, AssetValidationStatus::WrongKind);
+    assert_eq!(assets[4].kind, AssetLoaderKind::Music);
+    assert_eq!(assets[4].inferred_love_type, "Source");
     assert_eq!(assets[4].status, AssetValidationStatus::Valid);
-    assert_eq!(assets[5].kind, AssetLoaderKind::Shader);
-    assert_eq!(assets[5].inferred_love_type, "Shader");
+    assert_eq!(assets[5].kind, AssetLoaderKind::Font);
+    assert_eq!(assets[5].inferred_love_type, "Font");
     assert_eq!(assets[5].status, AssetValidationStatus::Valid);
-    assert_eq!(assets[6].kind, AssetLoaderKind::ImageData);
-    assert_eq!(assets[6].inferred_love_type, "ImageData");
-    assert_eq!(assets[6].dimensions, Some((32, 16)));
+    assert_eq!(assets[6].kind, AssetLoaderKind::Shader);
+    assert_eq!(assets[6].inferred_love_type, "Shader");
+    assert_eq!(assets[6].status, AssetValidationStatus::Valid);
+    assert_eq!(assets[7].kind, AssetLoaderKind::ImageData);
+    assert_eq!(assets[7].inferred_love_type, "ImageData");
+    assert_eq!(assets[7].dimensions, Some((32, 16)));
+    assert_eq!(assets[8].kind, AssetLoaderKind::Image);
+    assert_eq!(assets[8].dimensions, Some((32, 16)));
+    assert_eq!(assets[9].kind, AssetLoaderKind::Music);
+    assert_eq!(assets[10].kind, AssetLoaderKind::ImageFont);
+    assert_eq!(assets[10].inferred_love_type, "Font");
+    assert_eq!(assets[11].kind, AssetLoaderKind::SoundData);
+    assert_eq!(assets[11].inferred_love_type, "SoundData");
+    assert_eq!(assets[12].kind, AssetLoaderKind::Video);
+    assert_eq!(assets[12].inferred_love_type, "Video");
 }
 
 #[test]
@@ -103,6 +122,7 @@ fn completes_asset_paths_by_kind_and_prefix() {
     temp.write("assets/theme.ogg", b"placeholder");
     temp.write("assets/ui.ttf", b"placeholder");
     temp.write("assets/wave.glsl", b"placeholder");
+    temp.write("assets/intro.ogv", b"placeholder");
     temp.write("assets/readme.txt", b"placeholder");
 
     let image_paths = complete_asset_paths(
@@ -145,12 +165,21 @@ fn completes_asset_paths_by_kind_and_prefix() {
     .into_iter()
     .map(|candidate| candidate.path)
     .collect::<Vec<_>>();
+    let video_paths = complete_asset_paths(
+        std::slice::from_ref(&temp.path),
+        AssetLoaderKind::Video,
+        "assets/i",
+    )
+    .into_iter()
+    .map(|candidate| candidate.path)
+    .collect::<Vec<_>>();
 
     assert_eq!(image_paths, vec!["assets/player.png".to_owned()]);
     assert_eq!(sound_paths, vec!["assets/jump.wav".to_owned()]);
     assert_eq!(music_paths, vec!["assets/theme.ogg".to_owned()]);
     assert_eq!(font_paths, vec!["assets/ui.ttf".to_owned()]);
     assert_eq!(shader_paths, vec!["assets/wave.glsl".to_owned()]);
+    assert_eq!(video_paths, vec!["assets/intro.ogv".to_owned()]);
 }
 
 #[test]

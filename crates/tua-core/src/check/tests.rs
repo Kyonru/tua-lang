@@ -200,6 +200,79 @@ local player = image "assets/player.txt"
 }
 
 #[test]
+fn rejects_wrong_love_asset_loader_source_types() {
+    let temp = TempProject::new("wrong-asset-kind");
+    let source = r#"
+local player = image "assets/jump.wav"
+"#;
+
+    temp.write("src/assets.tua", source);
+    temp.write("assets/jump.wav", "");
+
+    let diagnostics = check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect_err("wrong asset source type should be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::ASSET_WRONG_KIND));
+    assert!(diagnostics[0]
+        .message
+        .contains("wrong image asset type for `assets/jump.wav`; found audio asset"));
+    assert!(diagnostics[0].format_cli().contains("error TL2006"));
+}
+
+#[test]
+fn validates_native_love_asset_constructor_paths() {
+    let temp = TempProject::new("native-asset-constructors");
+    let source = r#"
+local missing = love.graphics.newImage("assets/missing.png")
+local unsupported = love.sound.newSoundData("assets/readme.txt")
+local wrong = love.graphics.newImage("assets/jump.wav")
+local stream = love.audio.newSource("assets/theme.ogg", "stream")
+"#;
+
+    temp.write("src/assets.tua", source);
+    temp.write("assets/readme.txt", "");
+    temp.write("assets/jump.wav", "");
+    temp.write("assets/theme.ogg", "");
+
+    let diagnostics = check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect_err("native LOVE asset constructor diagnostics should be reported");
+    let codes = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        codes,
+        vec![
+            DiagnosticCode::ASSET_MISSING,
+            DiagnosticCode::ASSET_UNSUPPORTED_EXTENSION,
+            DiagnosticCode::ASSET_WRONG_KIND,
+        ]
+    );
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic
+        .message
+        .contains("image asset not found: assets/missing.png")));
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic
+        .message
+        .contains("unsupported sound data asset extension for `assets/readme.txt`")));
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic
+        .message
+        .contains("wrong image asset type for `assets/jump.wav`; found audio asset")));
+}
+
+#[test]
+fn accepts_inline_native_love_shader_source_strings() {
+    check_tua_source(
+        "src/shader.tua",
+        r#"
+local shader = love.graphics.newShader("vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) { return color; }")
+"#,
+    )
+    .expect("inline shader source strings should not be treated as asset paths");
+}
+
+#[test]
 fn accepts_love_asset_loader_paths_from_configured_asset_roots() {
     let temp = TempProject::new("configured-asset-roots");
     let source = r#"

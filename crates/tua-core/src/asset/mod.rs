@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffix};
+use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Index, Prefix, Suffix};
 use full_moon::node::Node;
 use full_moon::tokenizer::TokenReference;
 use full_moon::visitors::Visitor;
@@ -18,6 +18,10 @@ pub enum AssetLoaderKind {
     Font,
     Shader,
     ImageData,
+    ImageFont,
+    SoundData,
+    Video,
+    VideoStream,
     Canvas,
     Quad,
     SpriteBatch,
@@ -33,6 +37,10 @@ impl AssetLoaderKind {
             Self::Font => "font",
             Self::Shader => "shader",
             Self::ImageData => "imageData",
+            Self::ImageFont => "imageFont",
+            Self::SoundData => "soundData",
+            Self::Video => "video",
+            Self::VideoStream => "videoStream",
             Self::Canvas => "canvas",
             Self::Quad => "quad",
             Self::SpriteBatch => "spriteBatch",
@@ -48,6 +56,10 @@ impl AssetLoaderKind {
             Self::Font => "love.graphics.newFont",
             Self::Shader => "love.graphics.newShader",
             Self::ImageData => "love.image.newImageData",
+            Self::ImageFont => "love.graphics.newImageFont",
+            Self::SoundData => "love.sound.newSoundData",
+            Self::Video => "love.graphics.newVideo",
+            Self::VideoStream => "love.video.newVideoStream",
             Self::Canvas => "love.graphics.newCanvas",
             Self::Quad => "love.graphics.newQuad",
             Self::SpriteBatch => "love.graphics.newSpriteBatch",
@@ -86,6 +98,10 @@ impl AssetLoaderKind {
             Self::Font => Type::alias("Font"),
             Self::Shader => Type::alias("Shader"),
             Self::ImageData => Type::alias("ImageData"),
+            Self::ImageFont => Type::alias("Font"),
+            Self::SoundData => Type::alias("SoundData"),
+            Self::Video => Type::alias("Video"),
+            Self::VideoStream => Type::alias("VideoStream"),
             Self::Canvas => Type::alias("Canvas"),
             Self::Quad => Type::alias("Quad"),
             Self::SpriteBatch => Type::alias("SpriteBatch"),
@@ -100,6 +116,10 @@ impl AssetLoaderKind {
             Self::Font => "Font",
             Self::Shader => "Shader",
             Self::ImageData => "ImageData",
+            Self::ImageFont => "Font",
+            Self::SoundData => "SoundData",
+            Self::Video => "Video",
+            Self::VideoStream => "VideoStream",
             Self::Canvas => "Canvas",
             Self::Quad => "Quad",
             Self::SpriteBatch => "SpriteBatch",
@@ -117,6 +137,8 @@ impl AssetLoaderKind {
                 vec![Type::string()]
             }
             Self::Font => vec![Type::string(), Type::number()],
+            Self::ImageFont => vec![Type::string(), Type::string()],
+            Self::SoundData | Self::Video | Self::VideoStream => vec![Type::string()],
             Self::Canvas => vec![Type::number(), Type::number()],
             Self::Quad => vec![
                 Type::number(),
@@ -134,6 +156,8 @@ impl AssetLoaderKind {
         match self {
             Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData => &["path"],
             Self::Font => &["path", "size"],
+            Self::ImageFont => &["path", "glyphs"],
+            Self::SoundData | Self::Video | Self::VideoStream => &["path"],
             Self::Canvas => &["width", "height"],
             Self::Quad => &["x", "y", "width", "height", "sw", "sh"],
             Self::SpriteBatch => &["image", "size"],
@@ -144,6 +168,8 @@ impl AssetLoaderKind {
     pub(crate) const fn required_argument_count(self) -> usize {
         match self {
             Self::Image | Self::Sound | Self::Music | Self::Shader | Self::ImageData => 1,
+            Self::SoundData | Self::Video | Self::VideoStream => 1,
+            Self::ImageFont => 2,
             Self::Font | Self::Canvas | Self::SpriteBatch | Self::Particles => 2,
             Self::Quad => 6,
         }
@@ -164,6 +190,10 @@ impl AssetLoaderKind {
             Self::Font => "function font(path: string, size: number): Font",
             Self::Shader => "function shader(path: string): Shader",
             Self::ImageData => "function imageData(path: string): ImageData",
+            Self::ImageFont => "function love.graphics.newImageFont(path: string, glyphs: string): Font",
+            Self::SoundData => "function love.sound.newSoundData(path: string): SoundData",
+            Self::Video => "function love.graphics.newVideo(path: string): Video",
+            Self::VideoStream => "function love.video.newVideoStream(path: string): VideoStream",
             Self::Canvas => "function canvas(width: number, height: number): Canvas",
             Self::Quad => {
                 "function quad(x: number, y: number, width: number, height: number, sw: number, sh: number): Quad"
@@ -191,6 +221,16 @@ impl AssetLoaderKind {
             Self::ImageData => {
                 "Loads image data. Emits love.image.newImageData(path) in generated Lua."
             }
+            Self::ImageFont => {
+                "Loads an image font asset. Emits love.graphics.newImageFont(path, glyphs) in generated Lua."
+            }
+            Self::SoundData => {
+                "Loads sound data. Emits love.sound.newSoundData(path) in generated Lua."
+            }
+            Self::Video => "Loads a video asset. Emits love.graphics.newVideo(path) in generated Lua.",
+            Self::VideoStream => {
+                "Loads a video stream. Emits love.video.newVideoStream(path) in generated Lua."
+            }
             Self::Canvas => {
                 "Creates a canvas. Emits love.graphics.newCanvas(width, height) in generated Lua."
             }
@@ -206,12 +246,13 @@ impl AssetLoaderKind {
 
     pub const fn supported_extensions(self) -> &'static [&'static str] {
         match self {
-            Self::Image | Self::ImageData => {
+            Self::Image | Self::ImageData | Self::ImageFont => {
                 &["bmp", "exr", "hdr", "jpeg", "jpg", "pic", "png", "tga"]
             }
-            Self::Sound | Self::Music => &["flac", "mp3", "ogg", "wav"],
+            Self::Sound | Self::Music | Self::SoundData => &["flac", "mp3", "ogg", "wav"],
             Self::Font => &["otf", "ttf"],
             Self::Shader => &["frag", "fs", "glsl", "vert", "vs"],
+            Self::Video | Self::VideoStream => &["ogg", "ogm", "ogv"],
             Self::Canvas | Self::Quad | Self::SpriteBatch | Self::Particles => &[],
         }
     }
@@ -224,6 +265,10 @@ impl AssetLoaderKind {
             Self::Font => "font",
             Self::Shader => "shader",
             Self::ImageData => "image data",
+            Self::ImageFont => "image font",
+            Self::SoundData => "sound data",
+            Self::Video => "video",
+            Self::VideoStream => "video stream",
             Self::Canvas => "canvas",
             Self::Quad => "quad",
             Self::SpriteBatch => "sprite batch",
@@ -238,7 +283,11 @@ impl AssetLoaderKind {
             | Self::Music
             | Self::Font
             | Self::Shader
-            | Self::ImageData => true,
+            | Self::ImageData
+            | Self::ImageFont
+            | Self::SoundData
+            | Self::Video
+            | Self::VideoStream => true,
             Self::Canvas | Self::Quad | Self::SpriteBatch | Self::Particles => false,
         }
     }
@@ -263,6 +312,7 @@ impl AssetMetadata {
             AssetValidationStatus::Unchecked => "unchecked",
             AssetValidationStatus::Missing => "missing",
             AssetValidationStatus::UnsupportedExtension => "unsupported extension",
+            AssetValidationStatus::WrongKind => "wrong asset type",
         }
     }
 
@@ -295,6 +345,7 @@ pub enum AssetValidationStatus {
     Valid,
     Missing,
     UnsupportedExtension,
+    WrongKind,
     Unchecked,
 }
 
@@ -409,9 +460,22 @@ pub(crate) fn builtin_type_names() -> &'static [&'static str] {
         "Quad",
         "Shader",
         "Source",
+        "SoundData",
         "SpriteBatch",
+        "Video",
+        "VideoStream",
         "World",
     ]
+}
+
+pub(crate) fn asset_loader_kind_for_callee_parts(parts: &[String]) -> Option<AssetLoaderKind> {
+    asset_loader_spec_for_callee_parts(parts).map(|spec| spec.kind)
+}
+
+pub(crate) fn asset_source_type_label(path: &str) -> Option<&'static str> {
+    asset_extension(path)
+        .as_deref()
+        .and_then(source_type_label_for_extension)
 }
 
 pub(crate) fn collect_asset_metadata(
@@ -497,6 +561,12 @@ pub(crate) fn validate_asset_with_index(
         return validate_asset_from_index(kind, relative_path, span, asset_roots, asset_index);
     }
 
+    let wrong_kind = extension
+        .as_deref()
+        .is_some_and(|extension| source_type_label_for_extension(extension).is_some())
+        && extension
+            .as_deref()
+            .is_some_and(|extension| !kind.supported_extensions().contains(&extension));
     let unsupported = extension
         .as_deref()
         .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
@@ -506,7 +576,9 @@ pub(crate) fn validate_asset_with_index(
         resolve_asset_path(relative_path, asset_roots)
     };
     let path_is_absolute = Path::new(relative_path).is_absolute();
-    let status = if unsupported {
+    let status = if wrong_kind {
+        AssetValidationStatus::WrongKind
+    } else if unsupported {
         AssetValidationStatus::UnsupportedExtension
     } else if resolved_path.is_some() {
         AssetValidationStatus::Valid
@@ -558,43 +630,138 @@ impl Visitor for AssetVisitor<'_> {
     }
 }
 
-struct AssetLoaderCall {
-    kind: AssetLoaderKind,
-    path: String,
-    path_span: SourceSpan,
+pub(crate) struct AssetLoaderCall {
+    pub(crate) kind: AssetLoaderKind,
+    pub(crate) path: String,
+    pub(crate) path_span: SourceSpan,
 }
 
-fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-    let kind = loader_kind(&token_text(name))?;
-    if !kind.has_asset_path() {
+pub(crate) fn asset_loader_call(function_call: &FunctionCall) -> Option<AssetLoaderCall> {
+    let (callee_parts, call) = field_chain_before_first_call(function_call)?;
+    let spec = asset_loader_spec_for_callee_parts(&callee_parts)?;
+    let (path, path_span) = call_string_argument(call, 0)?;
+    let kind = kind_for_call_arguments(spec.kind, call);
+
+    if matches!(spec.path_mode, AssetPathMode::PathLikeOnly) && !looks_like_asset_path(&path) {
         return None;
     }
-    let call = function_call.suffixes().find_map(|suffix| match suffix {
-        Suffix::Call(call) => Some(call),
-        _ => None,
-    })?;
-    let (path, path_span) = match call {
-        Call::AnonymousCall(FunctionArgs::String(path)) => {
-            (string_literal_value(path)?, node_span(path)?)
-        }
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            let Expression::String(path) = arguments.iter().next()? else {
-                return None;
-            };
-
-            (string_literal_value(path)?, node_span(path)?)
-        }
-        _ => return None,
-    };
 
     Some(AssetLoaderCall {
         kind,
         path,
         path_span,
     })
+}
+
+fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<(Vec<String>, &Call)> {
+    let Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+
+    let mut parts = vec![token_text(name)];
+
+    for suffix in function_call.suffixes() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Call(call @ Call::AnonymousCall(_)) => return Some((parts, call)),
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+#[derive(Clone, Copy)]
+struct AssetLoaderSpec {
+    kind: AssetLoaderKind,
+    path_mode: AssetPathMode,
+}
+
+#[derive(Clone, Copy)]
+enum AssetPathMode {
+    Always,
+    PathLikeOnly,
+}
+
+fn asset_loader_spec_for_callee_parts(parts: &[String]) -> Option<AssetLoaderSpec> {
+    if parts.len() == 1 {
+        let kind = loader_kind(&parts[0])?;
+
+        return kind.has_asset_path().then_some(AssetLoaderSpec {
+            kind,
+            path_mode: AssetPathMode::Always,
+        });
+    }
+
+    let kind = if parts_match(parts, &["love", "graphics", "newImage"]) {
+        AssetLoaderKind::Image
+    } else if parts_match(parts, &["love", "graphics", "newImageFont"]) {
+        AssetLoaderKind::ImageFont
+    } else if parts_match(parts, &["love", "graphics", "newFont"]) {
+        AssetLoaderKind::Font
+    } else if parts_match(parts, &["love", "graphics", "newShader"]) {
+        return Some(AssetLoaderSpec {
+            kind: AssetLoaderKind::Shader,
+            path_mode: AssetPathMode::PathLikeOnly,
+        });
+    } else if parts_match(parts, &["love", "image", "newImageData"]) {
+        AssetLoaderKind::ImageData
+    } else if parts_match(parts, &["love", "audio", "newSource"]) {
+        AssetLoaderKind::Sound
+    } else if parts_match(parts, &["love", "sound", "newSoundData"]) {
+        AssetLoaderKind::SoundData
+    } else if parts_match(parts, &["love", "graphics", "newVideo"]) {
+        AssetLoaderKind::Video
+    } else if parts_match(parts, &["love", "video", "newVideoStream"]) {
+        AssetLoaderKind::VideoStream
+    } else {
+        return None;
+    };
+
+    Some(AssetLoaderSpec {
+        kind,
+        path_mode: AssetPathMode::Always,
+    })
+}
+
+fn kind_for_call_arguments(kind: AssetLoaderKind, call: &Call) -> AssetLoaderKind {
+    if kind == AssetLoaderKind::Sound
+        && call_string_argument(call, 1).is_some_and(|(mode, _)| mode == "stream")
+    {
+        AssetLoaderKind::Music
+    } else {
+        kind
+    }
+}
+
+fn call_string_argument(call: &Call, index: usize) -> Option<(String, SourceSpan)> {
+    match call {
+        Call::AnonymousCall(FunctionArgs::String(path)) if index == 0 => {
+            Some((string_literal_value(path)?, node_span(path)?))
+        }
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            let Expression::String(path) = arguments.iter().nth(index)? else {
+                return None;
+            };
+
+            Some((string_literal_value(path)?, node_span(path)?))
+        }
+        _ => None,
+    }
+}
+
+fn looks_like_asset_path(path: &str) -> bool {
+    path.contains('/')
+        || path.contains('\\')
+        || (asset_extension(path).is_some() && !path.chars().any(char::is_whitespace))
+}
+
+fn parts_match(parts: &[String], expected: &[&str]) -> bool {
+    parts.len() == expected.len()
+        && parts
+            .iter()
+            .zip(expected.iter())
+            .all(|(actual, expected)| actual.as_str() == *expected)
 }
 
 fn collect_asset_path_candidates(
@@ -700,6 +867,12 @@ fn validate_asset_from_index(
     asset_index: &AssetIndex,
 ) -> AssetMetadata {
     let extension = asset_extension(relative_path);
+    let wrong_kind = extension
+        .as_deref()
+        .is_some_and(|extension| source_type_label_for_extension(extension).is_some())
+        && extension
+            .as_deref()
+            .is_some_and(|extension| !kind.supported_extensions().contains(&extension));
     let unsupported = extension
         .as_deref()
         .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
@@ -708,7 +881,9 @@ fn validate_asset_from_index(
         .flatten();
     let path_is_absolute = Path::new(relative_path).is_absolute();
     let roots_are_empty = asset_roots.is_empty() && asset_index.roots().is_empty();
-    let status = if unsupported {
+    let status = if wrong_kind {
+        AssetValidationStatus::WrongKind
+    } else if unsupported {
         AssetValidationStatus::UnsupportedExtension
     } else if indexed.is_some() {
         AssetValidationStatus::Valid
@@ -793,16 +968,46 @@ fn asset_extension(path: &str) -> Option<String> {
 }
 
 fn supported_asset_extension(extension: &str) -> bool {
-    [
-        AssetLoaderKind::Image,
-        AssetLoaderKind::Sound,
-        AssetLoaderKind::Music,
-        AssetLoaderKind::Font,
-        AssetLoaderKind::Shader,
-        AssetLoaderKind::ImageData,
-    ]
-    .into_iter()
-    .any(|kind| kind.supported_extensions().contains(&extension))
+    source_type_label_for_extension(extension).is_some()
+}
+
+fn source_type_label_for_extension(extension: &str) -> Option<&'static str> {
+    if AssetLoaderKind::Image
+        .supported_extensions()
+        .contains(&extension)
+    {
+        Some("image")
+    } else if AssetLoaderKind::Sound
+        .supported_extensions()
+        .contains(&extension)
+        && AssetLoaderKind::Video
+            .supported_extensions()
+            .contains(&extension)
+    {
+        Some("audio or video")
+    } else if AssetLoaderKind::Sound
+        .supported_extensions()
+        .contains(&extension)
+    {
+        Some("audio")
+    } else if AssetLoaderKind::Font
+        .supported_extensions()
+        .contains(&extension)
+    {
+        Some("font")
+    } else if AssetLoaderKind::Shader
+        .supported_extensions()
+        .contains(&extension)
+    {
+        Some("shader")
+    } else if AssetLoaderKind::Video
+        .supported_extensions()
+        .contains(&extension)
+    {
+        Some("video")
+    } else {
+        None
+    }
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

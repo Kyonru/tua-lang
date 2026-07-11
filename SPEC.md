@@ -489,9 +489,10 @@ local sparks = love.graphics.newParticleSystem(player, 64)
 `Font`; `shader` returns `Shader`; `imageData` returns `ImageData`; `canvas`
 returns `Canvas`; `quad` returns `Quad`; `spriteBatch` returns `SpriteBatch`;
 and `particles` returns `ParticleSystem`. The checker should validate obvious
-missing or unsupported paths for helpers with asset path arguments when the
-project file exists on disk and should stay permissive when a path cannot be
-proven statically.
+missing paths, unsupported formats, and wrong asset source types for helpers
+and native LOVE constructors with static asset path arguments when the project
+file exists on disk. It should stay permissive when a path cannot be proven
+statically.
 
 The compiler should collect reusable asset metadata for these calls:
 
@@ -504,9 +505,11 @@ The compiler should collect reusable asset metadata for these calls:
 - optional cheap metadata such as PNG dimensions when available.
 
 The language server uses this metadata for asset-path completion and asset
-literal hover. Asset-path completion should filter suggestions by helper kind,
-so `image` and `imageData` suggest image files, `sound` and `music` suggest
-audio files, `font` suggests font files, and `shader` suggests shader files.
+literal hover. Asset-path completion should filter suggestions by loader kind,
+so `image`, `imageData`, and `love.graphics.newImage` suggest image files;
+`sound`, `music`, and `love.audio.newSource` suggest audio files; `font` and
+`love.graphics.newFont` suggest font files; and `shader`/path-like
+`love.graphics.newShader` strings suggest shader files.
 Binary parsing must stay conservative and optional; Tua must not run game code
 to discover assets.
 
