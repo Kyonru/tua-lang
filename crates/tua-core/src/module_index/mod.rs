@@ -10,6 +10,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::resolve_aliases;
@@ -45,6 +46,7 @@ pub struct ModuleExportField {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RequiredModule {
     pub module: String,
+    pub kind: ModuleSpecifierKind,
     pub path: PathBuf,
 }
 
@@ -52,6 +54,7 @@ pub struct RequiredModule {
 pub struct RequireBinding {
     pub alias: String,
     pub module: String,
+    pub kind: ModuleSpecifierKind,
 }
 
 impl ModuleExports {
@@ -69,7 +72,7 @@ impl ModuleExports {
 pub fn require_bindings_for_parsed_source(parsed: &ParsedSource) -> Vec<RequireBinding> {
     require_bindings(parsed)
         .into_iter()
-        .map(|(alias, module)| RequireBinding { alias, module })
+        .map(|(_, binding)| binding)
         .collect()
 }
 
@@ -78,9 +81,13 @@ pub fn required_module_for_receiver(
     receiver: &str,
 ) -> Option<RequiredModule> {
     let module = require_bindings(parsed).remove(receiver)?;
-    let path = resolve_required_module(&parsed.path, &module)?;
+    let path = resolve_module_specifier(&parsed.path, &module.module, module.kind)?;
 
-    Some(RequiredModule { module, path })
+    Some(RequiredModule {
+        module: module.module,
+        kind: module.kind,
+        path,
+    })
 }
 
 pub fn required_module_exports_for_receiver(
@@ -137,6 +144,19 @@ pub fn resolve_required_module(current_path: &Path, module: &str) -> Option<Path
     ProjectModel::load_for_path(current_path)
         .ok()
         .and_then(|model| model.resolve_required_module(current_path, module))
+}
+
+pub fn resolve_module_specifier(
+    current_path: &Path,
+    module: &str,
+    kind: ModuleSpecifierKind,
+) -> Option<PathBuf> {
+    ProjectModel::load_for_path(current_path)
+        .ok()
+        .and_then(|model| match kind {
+            ModuleSpecifierKind::Require => model.resolve_required_module(current_path, module),
+            ModuleSpecifierKind::Import => model.resolve_imported_module(current_path, module),
+        })
 }
 
 fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
@@ -248,7 +268,7 @@ fn required_module_exports_for_path(path: &Path) -> Option<ModuleExports> {
     exports
 }
 
-fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
+fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, RequireBinding> {
     let mut bindings = BTreeMap::new();
 
     for stmt in parsed.ast.nodes().stmts() {
@@ -256,19 +276,37 @@ fn require_bindings(parsed: &ParsedSource) -> BTreeMap<String, String> {
             continue;
         };
 
-        for (name, expression) in local.names().iter().zip(local.expressions()) {
-            let Some(module) = require_module_from_expression(expression) else {
+        let names = local.names();
+        let expressions = local.expressions().into_iter().collect::<Vec<_>>();
+
+        for (name, expression) in names.iter().zip(expressions.iter()) {
+            let Some((module, kind)) =
+                module_specifier_from_expression(expression, names.len(), expressions.len())
+            else {
                 continue;
             };
 
-            bindings.insert(token_text(name), module);
+            let alias = token_text(name);
+
+            bindings.insert(
+                alias.clone(),
+                RequireBinding {
+                    alias,
+                    module,
+                    kind,
+                },
+            );
         }
     }
 
     bindings
 }
 
-fn require_module_from_expression(expression: &Expression) -> Option<String> {
+fn module_specifier_from_expression(
+    expression: &Expression,
+    name_count: usize,
+    expression_count: usize,
+) -> Option<(String, ModuleSpecifierKind)> {
     let Expression::FunctionCall(call) = expression else {
         return None;
     };
@@ -276,9 +314,11 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
         return None;
     };
 
-    if token_text(name) != "require" {
-        return None;
-    }
+    let kind = match token_text(name).as_str() {
+        "require" => ModuleSpecifierKind::Require,
+        "import" if name_count == 1 && expression_count == 1 => ModuleSpecifierKind::Import,
+        _ => return None,
+    };
 
     let first_call = call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
@@ -291,7 +331,31 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
         return None;
     };
 
-    Some(unquote_string(&module.to_string()))
+    let module = unquote_string(&module.to_string());
+
+    if kind == ModuleSpecifierKind::Import && !is_static_import_specifier(&module) {
+        return None;
+    }
+
+    Some((module, kind))
+}
+
+fn is_static_import_specifier(module: &str) -> bool {
+    is_child_relative_import_specifier(module) || is_project_import_specifier(module)
+}
+
+fn is_child_relative_import_specifier(module: &str) -> bool {
+    module.starts_with("./") && !has_parent_path_component(module)
+}
+
+fn is_project_import_specifier(module: &str) -> bool {
+    !module.is_empty() && !module.starts_with('.') && !has_parent_path_component(module)
+}
+
+fn has_parent_path_component(module: &str) -> bool {
+    Path::new(module)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
 struct ExportInferer<'a> {

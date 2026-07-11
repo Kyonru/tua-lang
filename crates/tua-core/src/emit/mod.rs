@@ -7,7 +7,7 @@ use full_moon::tokenizer::TokenReference;
 
 use crate::{
     asset, infer_module_exports, parse_tua_source, vector, AnnotationMode, Diagnostic,
-    DiagnosticCode, ParsedSource, TuaType, Type,
+    DiagnosticCode, ParsedSource, ProjectWorkspace, TuaType, Type,
 };
 
 pub fn emit_tua_source(
@@ -28,6 +28,20 @@ pub fn emit_tua_source_with_mode(
     emit_lua_with_mode(&parsed, annotation_mode)
 }
 
+pub fn emit_tua_source_with_workspace(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    annotation_mode: AnnotationMode,
+    workspace: &ProjectWorkspace,
+) -> Result<String, Vec<Diagnostic>> {
+    let parsed =
+        parse_tua_source(path, source).map_err(reclassify_compound_assignment_diagnostics)?;
+
+    let resolver = |specifier: &str| workspace.module_name_for_import(&parsed.path, specifier);
+
+    emit_lua_with_mode_and_import_resolver(&parsed, annotation_mode, Some(&resolver))
+}
+
 pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
     emit_lua_with_mode(parsed, AnnotationMode::Off)
 }
@@ -36,12 +50,21 @@ pub fn emit_lua_with_mode(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
 ) -> Result<String, Vec<Diagnostic>> {
+    emit_lua_with_mode_and_import_resolver(parsed, annotation_mode, None)
+}
+
+pub(crate) fn emit_lua_with_mode_and_import_resolver(
+    parsed: &ParsedSource,
+    annotation_mode: AnnotationMode,
+    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+) -> Result<String, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
 
     if diagnostics.is_empty() {
         let output = normalize_emitted_lua(ast.to_string());
         let output = lower_builtin_calls_text(&output);
+        let output = lower_import_calls_text(&output, parsed, import_resolver)?;
         let output = lower_compound_assignments_text(&output);
 
         Ok(match annotation_mode {
@@ -884,6 +907,315 @@ fn lower_builtin_calls_text(output: &str) -> String {
     }
 
     lowered
+}
+
+fn lower_import_calls_text(
+    output: &str,
+    parsed: &ParsedSource,
+    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+) -> Result<String, Vec<Diagnostic>> {
+    let mut lowered = String::with_capacity(output.len());
+    let mut diagnostics = Vec::new();
+    let mut index = 0;
+
+    while index < output.len() {
+        let rest = &output[index..];
+
+        if rest.starts_with("--") {
+            let end = consume_comment(output, index);
+
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(output, index) {
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(identifier_end) = consume_identifier(rest) {
+            let name = &output[index..index + identifier_end];
+
+            if name == "import"
+                && can_start_builtin_call(output, index)
+                && looks_like_local_import_binding(output, index)
+            {
+                let argument_start = skip_whitespace(output, index + identifier_end);
+
+                if let Some((replacement, end)) =
+                    lower_import_call(output, argument_start, parsed, import_resolver)
+                {
+                    match replacement {
+                        Ok(replacement) => lowered.push_str(&replacement),
+                        Err(diagnostic) => {
+                            diagnostics.push(diagnostic);
+                            lowered.push_str(&output[index..end]);
+                        }
+                    }
+
+                    index = end;
+                    continue;
+                }
+            }
+
+            lowered.push_str(name);
+            index += identifier_end;
+            continue;
+        }
+
+        let character = rest
+            .chars()
+            .next()
+            .expect("loop only runs at valid string boundaries");
+
+        lowered.push(character);
+        index += character.len_utf8();
+    }
+
+    if diagnostics.is_empty() {
+        Ok(lowered)
+    } else {
+        Err(diagnostics)
+    }
+}
+
+fn lower_import_call(
+    output: &str,
+    argument_start: usize,
+    parsed: &ParsedSource,
+    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+) -> Option<(Result<String, Diagnostic>, usize)> {
+    if !output[argument_start..].starts_with('(') {
+        return None;
+    }
+
+    let close = find_matching_paren(output, argument_start)?;
+    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
+    let diagnostic_position = source_position_for_byte(output, argument_start);
+
+    let replacement = match arguments.as_slice() {
+        [argument] => {
+            let Some(specifier) = short_string_literal_value(argument) else {
+                return Some((
+                    Err(import_emit_diagnostic(
+                        parsed,
+                        diagnostic_position,
+                        "import(...) expects one static string literal",
+                        DiagnosticCode::LINT_BAD_REQUIRE,
+                    )),
+                    close + 1,
+                ));
+            };
+
+            if let Some(reason) = invalid_import_specifier_reason(&specifier) {
+                return Some((
+                    Err(import_emit_diagnostic(
+                        parsed,
+                        diagnostic_position,
+                        reason,
+                        DiagnosticCode::LINT_BAD_REQUIRE,
+                    )),
+                    close + 1,
+                ));
+            }
+
+            let Some(resolver) = import_resolver else {
+                if is_project_import_specifier(&specifier) {
+                    return Some((
+                        Ok(format!("require({})", lua_string_literal(&specifier))),
+                        close + 1,
+                    ));
+                }
+
+                return Some((
+                    Err(import_emit_diagnostic(
+                        parsed,
+                        diagnostic_position,
+                        "child-relative import cannot be emitted without project module resolution",
+                        DiagnosticCode::LINT_BAD_REQUIRE,
+                    )),
+                    close + 1,
+                ));
+            };
+
+            match resolver(&specifier) {
+                Some(module) => Ok(format!("require({})", lua_string_literal(&module))),
+                None => Err(import_emit_diagnostic(
+                    parsed,
+                    diagnostic_position,
+                    format!("import not found: `{specifier}`"),
+                    DiagnosticCode::LINT_MISSING_REQUIRE,
+                )),
+            }
+        }
+        _ => Err(import_emit_diagnostic(
+            parsed,
+            diagnostic_position,
+            "import(...) expects exactly one module path",
+            DiagnosticCode::LINT_BAD_REQUIRE,
+        )),
+    };
+
+    Some((replacement, close + 1))
+}
+
+fn short_string_literal_value(input: &str) -> Option<String> {
+    let mut chars = input.chars();
+    let quote = match chars.next()? {
+        '"' => '"',
+        '\'' => '\'',
+        _ => return None,
+    };
+
+    if !input.ends_with(quote) || input.len() < 2 {
+        return None;
+    }
+
+    let inner = &input[quote.len_utf8()..input.len() - quote.len_utf8()];
+    let mut output = String::new();
+    let mut escaped = false;
+
+    for character in inner.chars() {
+        if escaped {
+            output.push(match character {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                _ => character,
+            });
+            escaped = false;
+            continue;
+        }
+
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        output.push(character);
+    }
+
+    if escaped {
+        output.push('\\');
+    }
+
+    Some(output)
+}
+
+fn lua_string_literal(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 2);
+
+    output.push('"');
+
+    for character in value.chars() {
+        match character {
+            '\\' => output.push_str("\\\\"),
+            '"' => output.push_str("\\\""),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            _ => output.push(character),
+        }
+    }
+
+    output.push('"');
+    output
+}
+
+fn invalid_import_specifier_reason(specifier: &str) -> Option<&'static str> {
+    if is_child_relative_import_specifier(specifier) || is_project_import_specifier(specifier) {
+        return None;
+    }
+
+    if is_parent_relative_import_specifier(specifier) {
+        return Some("import specifier cannot traverse parent directories; use a project module name instead");
+    }
+
+    Some("import specifiers must be child-relative (`./foo`) or project modules (`engine.foo`)")
+}
+
+fn is_child_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("./") && !has_parent_path_component(specifier)
+}
+
+fn is_project_import_specifier(specifier: &str) -> bool {
+    !specifier.is_empty() && !specifier.starts_with('.') && !has_parent_path_component(specifier)
+}
+
+fn is_parent_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("../")
+        || (specifier.starts_with("./") && has_parent_path_component(specifier))
+}
+
+fn has_parent_path_component(specifier: &str) -> bool {
+    Path::new(specifier)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+}
+
+fn looks_like_local_import_binding(output: &str, import_start: usize) -> bool {
+    let line_start = output[..import_start]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let prefix = output[line_start..import_start].trim_start();
+    let Some(before_import) = prefix.strip_prefix("local ") else {
+        return false;
+    };
+    let before_import = before_import.trim_end();
+    let Some(lhs) = before_import.strip_suffix('=') else {
+        return false;
+    };
+    let lhs = lhs.trim();
+
+    if lhs.contains(',') {
+        return false;
+    }
+
+    let alias = lhs.split(':').next().map(str::trim).unwrap_or(lhs);
+
+    !alias.is_empty() && is_identifier(alias)
+}
+
+fn is_identifier(input: &str) -> bool {
+    let mut chars = input.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn import_emit_diagnostic(
+    parsed: &ParsedSource,
+    position: (usize, usize),
+    message: impl Into<String>,
+    code: DiagnosticCode,
+) -> Diagnostic {
+    Diagnostic::error(parsed.path.clone(), position.0, position.1, message).with_code(code)
+}
+
+fn source_position_for_byte(source: &str, byte: usize) -> (usize, usize) {
+    let mut line = 1usize;
+    let mut column = 1usize;
+
+    for (index, character) in source.char_indices() {
+        if index >= byte {
+            break;
+        }
+
+        if character == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    (line, column)
 }
 
 fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {

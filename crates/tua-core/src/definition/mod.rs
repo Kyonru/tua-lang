@@ -9,8 +9,8 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::hir::{lower_parsed_source, HirModule, HirSymbol, HirSymbolKind};
-use crate::module_index::resolve_required_module;
-use crate::module_link::require_module_at_position;
+use crate::module_index::resolve_module_specifier;
+use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
 use crate::semantic::SemanticModel;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
@@ -381,7 +381,7 @@ impl<'a> DefinitionResolver<'a> {
         position: SourcePosition,
     ) -> Option<Definition> {
         let binding = self.require_binding(name, position)?;
-        let path = resolve_required_module(&self.parsed.path, &binding.module)?;
+        let path = resolve_module_specifier(&self.parsed.path, &binding.module, binding.kind)?;
 
         module_file_definition(&path)
     }
@@ -394,7 +394,7 @@ impl<'a> DefinitionResolver<'a> {
         let (root, fields) = parts.split_first()?;
         let field = fields.first()?;
         let binding = self.require_binding(root, position)?;
-        let path = resolve_required_module(&self.parsed.path, &binding.module)?;
+        let path = resolve_module_specifier(&self.parsed.path, &binding.module, binding.kind)?;
         let parsed = parse_module_file(&path)?;
 
         exported_field_definition(&parsed, field).or_else(|| module_file_definition(&path))
@@ -457,14 +457,15 @@ struct RequireBinding {
     receiver: String,
     receiver_span: SourceSpan,
     module: String,
+    kind: ModuleSpecifierKind,
 }
 
 fn require_module_definition_at_position(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Option<Definition> {
-    let module = require_module_at_position(&parsed.source, position)?;
-    let path = resolve_required_module(&parsed.path, &module)?;
+    let specifier = module_specifier_at_position(&parsed.source, position)?;
+    let path = resolve_module_specifier(&parsed.path, &specifier.module, specifier.kind)?;
 
     module_file_definition(&path)
 }
@@ -477,8 +478,13 @@ fn require_bindings(parsed: &ParsedSource) -> Vec<RequireBinding> {
             continue;
         };
 
-        for (name, expression) in local.names().iter().zip(local.expressions()) {
-            let Some(module) = require_module_from_expression(expression) else {
+        let names = local.names();
+        let expressions = local.expressions().into_iter().collect::<Vec<_>>();
+
+        for (name, expression) in names.iter().zip(expressions.iter()) {
+            let Some((module, kind)) =
+                module_specifier_from_expression(expression, names.len(), expressions.len())
+            else {
                 continue;
             };
             let Some(receiver_span) = node_span(name) else {
@@ -489,6 +495,7 @@ fn require_bindings(parsed: &ParsedSource) -> Vec<RequireBinding> {
                 receiver: token_text(name),
                 receiver_span,
                 module,
+                kind,
             });
         }
     }
@@ -496,7 +503,11 @@ fn require_bindings(parsed: &ParsedSource) -> Vec<RequireBinding> {
     bindings
 }
 
-fn require_module_from_expression(expression: &Expression) -> Option<String> {
+fn module_specifier_from_expression(
+    expression: &Expression,
+    name_count: usize,
+    expression_count: usize,
+) -> Option<(String, ModuleSpecifierKind)> {
     let Expression::FunctionCall(call) = expression else {
         return None;
     };
@@ -504,9 +515,11 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
         return None;
     };
 
-    if token_text(name) != "require" {
-        return None;
-    }
+    let kind = match token_text(name).as_str() {
+        "require" => ModuleSpecifierKind::Require,
+        "import" if name_count == 1 && expression_count == 1 => ModuleSpecifierKind::Import,
+        _ => return None,
+    };
 
     let first_call = call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
@@ -519,7 +532,31 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
         return None;
     };
 
-    Some(unquote_string(&module.to_string()))
+    let module = unquote_string(&module.to_string());
+
+    if kind == ModuleSpecifierKind::Import && !is_static_import_specifier(&module) {
+        return None;
+    }
+
+    Some((module, kind))
+}
+
+fn is_static_import_specifier(module: &str) -> bool {
+    is_child_relative_import_specifier(module) || is_project_import_specifier(module)
+}
+
+fn is_child_relative_import_specifier(module: &str) -> bool {
+    module.starts_with("./") && !has_parent_path_component(module)
+}
+
+fn is_project_import_specifier(module: &str) -> bool {
+    !module.is_empty() && !module.starts_with('.') && !has_parent_path_component(module)
+}
+
+fn has_parent_path_component(module: &str) -> bool {
+    Path::new(module)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
 fn parse_module_file(path: &Path) -> Option<ParsedSource> {

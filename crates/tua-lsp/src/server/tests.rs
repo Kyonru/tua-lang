@@ -2320,7 +2320,7 @@ return {
 }
 
 #[test]
-fn completion_resolve_adds_auto_import_require_once() {
+fn completion_resolve_adds_child_import_once() {
     let temp = TempProject::new("auto-import-resolve");
     let main = "local made = make\n";
     let player = r#"---Creates a player.
@@ -2357,7 +2357,7 @@ return {
     assert_eq!(resolved["additionalTextEdits"].as_array().unwrap().len(), 1);
     assert_eq!(
         resolved["additionalTextEdits"][0]["newText"],
-        "local Player = require(\"player\")\n"
+        "local Player = import(\"./player\")\n"
     );
     assert_eq!(
         resolved["additionalTextEdits"][0]["range"],
@@ -2369,9 +2369,82 @@ return {
 }
 
 #[test]
+fn completion_resolve_uses_project_import_for_parent_modules() {
+    let temp = TempProject::new("auto-import-parent-module");
+    let main = "local made = make\n";
+    let player = r#"local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/systems/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    let completion = completion_with_label(server.output(), 2, "makePlayer");
+
+    server.send(completion_resolve_request(3, completion));
+
+    let resolved = &response_with_id(server.output(), 3)["result"];
+
+    assert_eq!(
+        resolved["additionalTextEdits"][0]["newText"],
+        "local Player = import(\"player\")\n"
+    );
+}
+
+#[test]
 fn completion_reuses_existing_require_alias_for_auto_import() {
     let temp = TempProject::new("auto-import-existing-alias");
     let main = r#"local Functions = require("player")
+
+local made = make
+"#;
+    let player = r#"local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "make"));
+
+    let completion = completion_with_label(server.output(), 2, "makePlayer");
+
+    assert_eq!(completion["insertText"], "Functions.makePlayer");
+
+    server.send(completion_resolve_request(3, completion));
+
+    let resolved = &response_with_id(server.output(), 3)["result"];
+
+    assert_eq!(resolved["insertText"], "Functions.makePlayer");
+    assert!(resolved.get("additionalTextEdits").is_none());
+}
+
+#[test]
+fn completion_reuses_existing_import_alias_for_auto_import() {
+    let temp = TempProject::new("auto-import-existing-import-alias");
+    let main = r#"local Functions = import("./player")
 
 local made = make
 "#;
@@ -3130,6 +3203,44 @@ return {
     assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
     assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
     assert_definition_text(&output, 4, &legacy_uri, legacy, "clamp");
+}
+
+#[test]
+fn definition_returns_imported_module_and_export_locations() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Player = import("<|module|>./player")
+
+local player = Player.<|export|>makePlayer()
+-- file: src/player.tua
+local function makePlayer()
+  return { hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("cross-file-import-definition")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let player = fixture.source("src/player.tua");
+
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let player_uri = path_uri(&temp.join("src/player.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        definition_request_at(2, &main_uri, fixture.position("module")),
+        definition_request_at(3, &main_uri, fixture.position("export")),
+    ]);
+
+    assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
+    assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
 }
 
 #[test]

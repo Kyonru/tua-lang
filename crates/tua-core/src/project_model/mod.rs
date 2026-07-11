@@ -127,6 +127,40 @@ impl ProjectModel {
         self.workspace_for_path(current_path)
             .and_then(|workspace| workspace.resolve_required_module(module))
     }
+
+    pub fn resolve_imported_module(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        let current_path = current_path.as_ref();
+
+        self.workspace_for_path(current_path)
+            .and_then(|workspace| workspace.resolve_imported_module(current_path, specifier))
+    }
+
+    pub fn module_name_for_import(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<String> {
+        let current_path = current_path.as_ref();
+
+        self.workspace_for_path(current_path)
+            .and_then(|workspace| workspace.module_name_for_import(current_path, specifier))
+    }
+
+    pub fn import_specifier_for_path(
+        &self,
+        current_path: impl AsRef<Path>,
+        target_path: impl AsRef<Path>,
+    ) -> Option<String> {
+        let current_path = current_path.as_ref();
+        let target_path = target_path.as_ref();
+
+        self.workspace_for_path(current_path)
+            .and_then(|workspace| workspace.import_specifier_for_path(current_path, target_path))
+    }
 }
 
 impl ProjectWorkspace {
@@ -292,6 +326,93 @@ impl ProjectWorkspace {
 
         None
     }
+
+    pub fn resolve_imported_module(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        if is_child_relative_import_specifier(specifier) {
+            return self.resolve_child_imported_module(current_path, specifier);
+        }
+
+        if is_parent_relative_import_specifier(specifier) {
+            return None;
+        }
+
+        if is_project_import_specifier(specifier) {
+            self.resolve_required_module(specifier)
+        } else {
+            None
+        }
+    }
+
+    fn resolve_child_imported_module(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        let base = child_relative_import_base(current_path.as_ref(), specifier)?;
+        let extensions = module_extensions(&self.config.extension);
+
+        if let Some(extension) = base.extension().and_then(|extension| extension.to_str()) {
+            if extension != "lua" && extension != self.config.extension {
+                return None;
+            }
+        }
+
+        let candidates = if base.extension().is_some() {
+            vec![base]
+        } else {
+            import_module_candidates(&base, &extensions)
+        };
+
+        for candidate in candidates {
+            let candidate = normalize_path(candidate);
+
+            if candidate.is_file() && self.module_name_for_path(&candidate).is_some() {
+                return Some(candidate);
+            }
+        }
+
+        None
+    }
+
+    pub fn module_name_for_import(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<String> {
+        let path = self.resolve_imported_module(current_path, specifier)?;
+
+        self.module_name_for_path(path)
+    }
+
+    pub fn import_specifier_for_path(
+        &self,
+        current_path: impl AsRef<Path>,
+        target_path: impl AsRef<Path>,
+    ) -> Option<String> {
+        let target_path = normalize_path(target_path);
+
+        self.module_name_for_path(&target_path)?;
+
+        let current_dir = normalize_path(current_path.as_ref().parent()?);
+        let target_module_path = module_path_without_runtime_suffix(&target_path);
+        let mut parts = relative_path_parts(&current_dir, &target_module_path)?;
+
+        if parts.is_empty() {
+            return None;
+        }
+
+        if parts.first().is_some_and(|part| part == "..") {
+            return self.module_name_for_path(&target_path);
+        }
+
+        parts.insert(0, ".".to_owned());
+
+        Some(parts.join("/"))
+    }
 }
 
 impl ProjectTarget {
@@ -352,6 +473,104 @@ fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<P
     }
 
     candidates
+}
+
+fn child_relative_import_base(current_path: &Path, specifier: &str) -> Option<PathBuf> {
+    if !is_child_relative_import_specifier(specifier) {
+        return None;
+    }
+
+    Some(normalize_path(current_path.parent()?.join(specifier)))
+}
+
+fn is_child_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("./") && !has_parent_path_component(specifier)
+}
+
+fn is_project_import_specifier(specifier: &str) -> bool {
+    !specifier.is_empty() && !specifier.starts_with('.') && !has_parent_path_component(specifier)
+}
+
+fn is_parent_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("../")
+        || specifier.starts_with("./") && has_parent_path_component(specifier)
+}
+
+fn has_parent_path_component(specifier: &str) -> bool {
+    Path::new(specifier)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+}
+
+fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    for extension in extensions {
+        candidates.push(base.with_extension(extension));
+        candidates.push(base.join(format!("init.{extension}")));
+    }
+
+    candidates
+}
+
+fn module_path_without_runtime_suffix(path: &Path) -> PathBuf {
+    let without_extension = path.with_extension("");
+
+    if without_extension
+        .file_name()
+        .is_some_and(|name| name == "init")
+    {
+        return without_extension
+            .parent()
+            .map(normalize_path)
+            .unwrap_or(without_extension);
+    }
+
+    without_extension
+}
+
+fn relative_path_parts(from_dir: &Path, target: &Path) -> Option<Vec<String>> {
+    let from = normalized_component_strings(from_dir)?;
+    let target = normalized_component_strings(target)?;
+    let mut common = 0usize;
+
+    while from.get(common).is_some()
+        && target.get(common).is_some()
+        && from[common] == target[common]
+    {
+        common += 1;
+    }
+
+    let mut parts = Vec::new();
+
+    for _ in common..from.len() {
+        parts.push("..".to_owned());
+    }
+    parts.extend(target.into_iter().skip(common));
+
+    Some(parts)
+}
+
+fn normalized_component_strings(path: &Path) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+
+    for component in normalize_path(path).components() {
+        match component {
+            std::path::Component::Normal(part) => {
+                parts.push(part.to_string_lossy().to_string());
+            }
+            std::path::Component::Prefix(prefix) => {
+                parts.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            std::path::Component::RootDir => {
+                parts.push(String::new());
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => return None,
+        }
+    }
+
+    Some(parts)
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, path: PathBuf) {

@@ -347,7 +347,7 @@ impl ProjectTypeDatabase {
         match module_graph.resolve_require(source_path, module)? {
             RequireResolution::Resolved { path }
             | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
-            RequireResolution::Missing { .. } => None,
+            RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => None,
         }
     }
 

@@ -5,7 +5,7 @@ use full_moon::ast::{self, Expression, FunctionArgs, Prefix, Suffix};
 use full_moon::node::Node;
 
 use crate::hir::{HirModule, HirSymbol, HirSymbolKind};
-use crate::module_link::require_module_at_position;
+use crate::module_link::module_specifier_at_position;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::{
     lua, Definition, DefinitionKind, ParsedSource, SourcePosition, SourceSpan, TableField, TuaType,
@@ -122,8 +122,8 @@ impl SemanticIndex {
         environment: &TypeEnvironment,
         position: SourcePosition,
     ) -> Option<DefinitionTarget> {
-        if let Some(module) = require_module_at_position(&parsed.source, position) {
-            return module_file_target(parsed, &module);
+        if let Some(specifier) = module_specifier_at_position(&parsed.source, position) {
+            return module_file_target(parsed, &specifier.module, specifier.kind);
         }
 
         let chain = dotted_chain_at_position(&parsed.source, position)?;
@@ -472,8 +472,12 @@ fn builtin_target(
     })
 }
 
-fn module_file_target(parsed: &ParsedSource, module: &str) -> Option<DefinitionTarget> {
-    let path = crate::resolve_required_module(&parsed.path, module)?;
+fn module_file_target(
+    parsed: &ParsedSource,
+    module: &str,
+    kind: crate::ModuleSpecifierKind,
+) -> Option<DefinitionTarget> {
+    let path = crate::resolve_module_specifier(&parsed.path, module, kind)?;
 
     Some(DefinitionTarget::ModuleFile {
         path,

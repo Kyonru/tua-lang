@@ -41,6 +41,7 @@ return {
             source_roots: vec![PathBuf::from("src")],
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
         },
     );
     let index = SymbolIndex::build(
@@ -96,6 +97,7 @@ end
             source_roots: vec![PathBuf::from("src")],
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
         },
     );
     let index = SymbolIndex::build(
@@ -163,6 +165,7 @@ return { makeEnemy = makeEnemy }
             source_roots: vec![PathBuf::from("src")],
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
         },
     );
     let index = SymbolIndex::build(
@@ -215,6 +218,7 @@ return { makePlayer = makePlayer }
             source_roots: vec![PathBuf::from("src")],
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
         },
     );
     let index = SymbolIndex::build(

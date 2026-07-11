@@ -29,6 +29,9 @@ make build-features
   permissive `any` boundary.
 - `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
   interop, and cross-file go to definition for required module exports.
+- `src/imports.tua` covers static `import(...)` module bindings that resolve
+  child-relative and project-module paths, participate in module-aware editor
+  features, and emit plain Lua `require(...)` calls.
 - `src/require_graph.tua` covers snapshot-indexed require edges and export
   lookup for `.tua` and `.lua` modules.
 - `src/scopes.tua` covers lexical scope maps, shadowed locals, and module
@@ -86,8 +89,9 @@ make build-features
   BrineVector properties/operators, and bundled BrineVector Lua emission.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
-- `src/main.tua` ties the feature modules together while keeping `require`
-  calls unchanged in emitted Lua.
+- `src/main.tua` ties the feature modules together while keeping ordinary
+  `require` calls unchanged and lowering static `import` calls to Lua
+  `require`.
 - `src/legacy.lua` is intentionally plain Lua. Builds copy it unchanged into
   `build/`, while the LSP can still infer simple returned module exports from
   it.

@@ -1,0 +1,13 @@
+local Functions = import("./functions")
+local Legacy = import("legacy")
+
+-- Feature: child-relative and project-module imports emit plain Lua require
+-- calls, while participating in the same module graph as require.
+local makePlayer = Functions.makePlayer
+local player = makePlayer("static import")
+local description = Legacy.describe("hp", player.hp)
+
+return {
+  player = player,
+  description = description,
+}

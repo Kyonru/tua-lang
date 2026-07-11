@@ -114,8 +114,9 @@ in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
 and should not depend on LSP-only concepts.
 
 Project and file identity code belongs in the project model, VFS, module graph,
-and analysis host. Do not resolve `require(...)`, ignored paths, output roots,
-or open unsaved buffers separately in feature handlers.
+and analysis host. Do not resolve `require(...)`, static `import(...)`,
+ignored paths, output roots, or open unsaved buffers separately in feature
+handlers.
 
 IDE features should have a pure core query first and a protocol conversion
 layer second. For example, go-to-definition logic belongs in `tua-core`; LSP
@@ -345,9 +346,9 @@ assert_eq!(module.exports[1].value, HirExportValue::Unknown);
 ### Require Graph Example
 
 The module graph is built from the snapshot's indexed files, HIR modules, and
-project roots. It resolves `require(...)` edges, keeps partial results for
-missing modules and cycles, and indexes public exports without rereading files
-during hover or go-to-definition requests.
+project roots. It resolves `require(...)` and static `import(...)` edges,
+keeps partial results for missing modules and cycles, and indexes public exports
+without rereading files during hover or go-to-definition requests.
 
 ```rust
 use tua_core::{

@@ -156,6 +156,88 @@ fn resolves_required_modules_from_project_require_roots() {
 }
 
 #[test]
+fn resolves_static_imports_from_child_and_project_modules() {
+    let project = TempProject::new("relative-imports");
+
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/main.tua", "local Player = import(\"./player\")\n");
+    project.write("src/player.tua", "return {}\n");
+    project.write("src/entities/enemy.lua", "return {}\n");
+    project.write("src/shared/init.tua", "return {}\n");
+    project.write(
+        "src/systems/combat.tua",
+        "local Shared = import(\"shared\")\nlocal Enemy = import(\"./enemy\")\n",
+    );
+    project.write("src/systems/enemy.tua", "return {}\n");
+
+    let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
+    let main = project.path().join("src/main.tua");
+    let combat = project.path().join("src/systems/combat.tua");
+
+    assert_eq!(
+        model.resolve_imported_module(&main, "./player"),
+        Some(project.path().join("src/player.tua"))
+    );
+    assert_eq!(
+        model.module_name_for_import(&main, "./entities/enemy.lua"),
+        Some("entities.enemy".to_owned())
+    );
+    assert_eq!(
+        model.resolve_imported_module(&combat, "./enemy"),
+        Some(project.path().join("src/systems/enemy.tua"))
+    );
+    assert_eq!(
+        model.resolve_imported_module(&combat, "shared"),
+        Some(project.path().join("src/shared/init.tua"))
+    );
+    assert_eq!(
+        model.resolve_imported_module(&combat, "entities.enemy"),
+        Some(project.path().join("src/entities/enemy.lua"))
+    );
+    assert_eq!(model.resolve_imported_module(&combat, "../shared"), None);
+    assert_eq!(model.resolve_imported_module(&combat, "./../shared"), None);
+}
+
+#[test]
+fn maps_module_paths_back_to_child_import_specifiers() {
+    let project = TempProject::new("relative-import-specifier");
+
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/main.tua", "");
+    project.write("src/player.tua", "return {}\n");
+    project.write("src/shared/init.lua", "return {}\n");
+
+    let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
+    let main = project.path().join("src/main.tua");
+
+    assert_eq!(
+        model.import_specifier_for_path(&main, project.path().join("src/player.tua")),
+        Some("./player".to_owned())
+    );
+    assert_eq!(
+        model.import_specifier_for_path(&main, project.path().join("src/shared/init.lua")),
+        Some("./shared".to_owned())
+    );
+}
+
+#[test]
+fn maps_parent_directory_auto_imports_to_project_module_specifiers() {
+    let project = TempProject::new("parent-import-specifier");
+
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/systems/main.tua", "");
+    project.write("src/shared/init.lua", "return {}\n");
+
+    let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
+    let main = project.path().join("src/systems/main.tua");
+
+    assert_eq!(
+        model.import_specifier_for_path(&main, project.path().join("src/shared/init.lua")),
+        Some("shared".to_owned())
+    );
+}
+
+#[test]
 fn missing_config_falls_back_to_workspace_root_for_require_resolution() {
     let project = TempProject::new("missing-config-require");
 

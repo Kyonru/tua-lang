@@ -231,8 +231,8 @@ annotation_mode = "luacats"
 : Reports repeated literal keys in table constructors.
 
 `missing_requires`
-: Reports `require("module")` calls that Tua cannot resolve from the current
-project layout.
+: Reports `require("module")` and static `import(...)` bindings that Tua cannot
+resolve from the current project layout.
 
 `self_assignments`
 : Reports assignments such as `player.hp = player.hp`.
@@ -262,7 +262,8 @@ ordering.
 : Reports calls to known functions with the wrong number of arguments.
 
 `bad_requires`
-: Reports require paths that cannot be resolved by project/module discovery.
+: Reports invalid require/import paths, including `import("../...")` parent
+traversal and malformed import specifiers.
 
 `impossible_boolean_expressions`
 : Reports boolean/equality expressions that Tua can prove are impossible.
@@ -383,6 +384,7 @@ Supported editor settings:
 - `tua.ecs.enabled`: overrides `[ecs].enabled` for opt-in ECS domain support.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
-  `/`.
+  `/`. Static `import(...)` lowering uses the same separator when mapping a
+  source path back to the emitted Lua `require("...")` module name.
 - `tua.preview.enabled`: reserves an editor-facing preview toggle for
   experimental features.

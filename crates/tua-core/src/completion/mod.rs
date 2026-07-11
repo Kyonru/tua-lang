@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
-use self::require::complete_require_paths;
+use self::require::{complete_import_paths, complete_require_paths};
 use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
@@ -227,6 +227,9 @@ fn complete_parsed_source_with_context(
         CompletionContext::RequirePath { prefix } => {
             complete_require_paths(&parsed.path, prefix.as_str())
         }
+        CompletionContext::ImportPath { prefix } => {
+            complete_import_paths(&parsed.path, prefix.as_str())
+        }
         CompletionContext::Identifier { prefix, position } => {
             complete_identifier_items(parsed, prefix.as_str(), position)
         }
@@ -248,6 +251,7 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
         } => complete_lua_fields(source, &receiver_parts, prefix.as_str(), position),
         CompletionContext::StringArgument { .. } => Vec::new(),
         CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
+        CompletionContext::ImportPath { prefix } => complete_import_paths(path, prefix.as_str()),
         CompletionContext::Identifier { prefix, position } => {
             complete_lossy_identifier_items(source, prefix.as_str(), position)
         }

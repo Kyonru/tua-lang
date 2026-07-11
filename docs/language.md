@@ -144,18 +144,33 @@ preserved as `---@alias FilterMode "linear" | "nearest"`.
 
 ## Modules And Interop
 
-Tua preserves Lua's `require(...)` style. Module paths are not replaced with a
-new import syntax.
+Tua preserves Lua's `require(...)` style for package-root modules, third-party
+Lua libraries, and dynamic runtime loading.
 
 ```tua
 local Player = require("player")
 local player = Player.new("Ada")
 ```
 
-The language server can resolve simple required modules for hover, completion,
-definition, references, document links, and diagnostics. The build step copies
-plain `.lua` files and non-code assets into the output tree so a LOVE project can
-produce a runnable distribution folder.
+For project-local modules, Tua also recognizes static import bindings:
+
+```tua
+local Player = import("./player")
+local Utils = import("shared.utils")
+```
+
+`import` is not a keyword and it does not emit a runtime helper. In top-level
+local bindings with one static string, `./` resolves child modules from the
+current file while bare module names resolve through the configured module
+roots. Parent traversal such as `../shared` is rejected; use a project module
+name instead. Successful imports lower to ordinary Lua `require("...")`. If Tua
+cannot map the import back to a runtime module name, it reports a diagnostic
+instead of emitting a broken `import(...)` call.
+
+The language server can resolve simple required and imported modules for hover,
+completion, definition, references, document links, and diagnostics. The build
+step copies plain `.lua` files and non-code assets into the output tree so a LOVE
+project can produce a runnable distribution folder.
 
 Lua interop is deliberately practical rather than magical. See
 [Lua Interop](lua-interop.md) for LuaDoc/LuaLS-style annotations, required Lua

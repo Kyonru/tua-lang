@@ -9,9 +9,9 @@ use tua_core::{
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, Completion, Diagnostic,
     DocumentHighlight, DocumentSymbol, FoldingRange, FormatOptions, InlayHint, ModuleLink,
-    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
-    SelectionRange, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, VfsSourceKind,
-    WorkspaceSymbol, CONFIG_FILE,
+    ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
+    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
+    SourceSpan, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -392,6 +392,8 @@ impl AnalysisHost {
 
         self.core.set_source_roots(source_roots);
         self.core.set_output_roots(output_roots);
+        self.core
+            .set_require_path_separator(settings.module_path_separator());
         self.core.set_ignored_paths(ignored_paths);
         self.core.set_asset_roots(asset_roots);
 
@@ -562,7 +564,16 @@ impl AnalysisSnapshot {
 
         let require_aliases = require_bindings_for_parsed_source(parsed)
             .into_iter()
-            .map(|binding| (binding.module, binding.alias))
+            .filter_map(|binding| {
+                let module = match binding.kind {
+                    ModuleSpecifierKind::Require => Some(binding.module),
+                    ModuleSpecifierKind::Import => {
+                        model.module_name_for_import(path, &binding.module)
+                    }
+                }?;
+
+                Some((module, binding.alias))
+            })
             .collect::<BTreeMap<_, _>>();
         let reserved_aliases = existing_labels
             .iter()
@@ -590,6 +601,10 @@ impl AnalysisSnapshot {
             let Some(module) = module else {
                 continue;
             };
+            let Some(import_specifier) = model.import_specifier_for_path(path, &symbol.module_path)
+            else {
+                continue;
+            };
 
             let existing_alias = require_aliases.get(&module).cloned();
             let alias = existing_alias
@@ -605,6 +620,7 @@ impl AnalysisSnapshot {
                 current_source: source,
                 module_path: &symbol.module_path,
                 module: &module,
+                import_specifier: &import_specifier,
                 alias: &alias,
                 already_imported: existing_alias.is_some(),
                 name: &export.public_name,

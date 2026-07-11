@@ -444,6 +444,44 @@ return {
     );
 }
 
+#[test]
+fn hints_imported_module_alias_call_parameters() {
+    let temp = TempProject::new("imported-module-alias-inlay-hints");
+    let source = r#"local Functions = import("./functions")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("import graph")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/functions.tua",
+        r#"type Player = {
+  name: string,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+
+    let hints = inlay_hints_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("source should parse");
+
+    assert!(hints
+        .iter()
+        .any(|hint| hint.kind == InlayHintKind::Parameter && hint.label == "name:"));
+    assert_hint_position(&hints, "name:", 4, "local player = makePlayer(".len() + 1);
+}
+
 fn inlay_hints() -> Vec<InlayHint> {
     inlay_hints_tua_source("src/player.tua", SOURCE).expect("source should parse")
 }

@@ -20,7 +20,7 @@ use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
 use crate::inlay_hint::inlay_hints_parsed_source_with_environment;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_index::infer_module_exports_with_optional_environment;
-use crate::module_link::require_module_at_position;
+use crate::module_link::module_specifier_at_position;
 use crate::plugin::{PluginContext, PluginRegistry};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
@@ -32,7 +32,10 @@ use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
-use crate::vfs::{normalize_path, VfsSnapshot, VfsSourceKind, VirtualFileSystem};
+use crate::vfs::{
+    module_name_for_path, normalize_path, ModulePathSeparator, VfsSnapshot, VfsSourceKind,
+    VirtualFileSystem,
+};
 use crate::{
     assists_parsed_source, call_hierarchy_calls_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
@@ -42,7 +45,7 @@ use crate::{
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
     complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
-    document_highlights_parsed_source, document_symbols_parsed_source_with_hir, emit_lua_with_mode,
+    document_highlights_parsed_source, document_symbols_parsed_source_with_hir,
     exported_field_for_fields, global_function_definition_count,
     global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
     global_type_alias_name_for_definition,
@@ -94,6 +97,7 @@ pub enum AnalysisWarmPriority {
 pub struct AnalysisHost {
     config: ProjectConfig,
     vfs: VirtualFileSystem,
+    require_path_separator: ModulePathSeparator,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<asset::AssetIndex>,
     builtin_catalogs: BuiltinCatalogs,
@@ -174,6 +178,9 @@ struct RecoveredSemanticFacts {
 struct AnalysisBuildContext<'a> {
     config: &'a ProjectConfig,
     source_roots: &'a [PathBuf],
+    output_roots: &'a [PathBuf],
+    known_paths: &'a BTreeSet<PathBuf>,
+    require_path_separator: ModulePathSeparator,
     asset_roots: &'a [PathBuf],
     asset_index: Option<&'a asset::AssetIndex>,
     plugin_registry: &'a PluginRegistry,
@@ -350,6 +357,16 @@ impl AnalysisHost {
         }
 
         self.config = config;
+        self.invalidate_all_analysis();
+        self.bump_revision();
+    }
+
+    pub fn set_require_path_separator(&mut self, separator: ModulePathSeparator) {
+        if self.require_path_separator == separator {
+            return;
+        }
+
+        self.require_path_separator = separator;
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -570,6 +587,9 @@ impl AnalysisHost {
                         AnalysisBuildContext {
                             config: &self.config,
                             source_roots: &source_roots,
+                            output_roots: &vfs.options().output_roots,
+                            known_paths: &live_paths,
+                            require_path_separator: self.require_path_separator,
                             asset_roots: &self.asset_roots,
                             asset_index: self.asset_index.as_ref(),
                             plugin_registry: &plugin_registry,
@@ -596,6 +616,7 @@ impl AnalysisHost {
                     source_roots: vfs.source_roots().to_vec(),
                     output_roots: vfs.options().output_roots.clone(),
                     extension: self.config.extension.clone(),
+                    require_path_separator: self.require_path_separator,
                 },
             )
         };
@@ -2178,11 +2199,11 @@ impl AnalysisSnapshot {
     }
 
     fn module_hover(&self, parsed: &ParsedSource, position: SourcePosition) -> Option<Hover> {
-        if let Some(module) = require_module_at_position(&parsed.source, position) {
-            let path = self.resolved_module_path(&parsed.path, &module)?;
+        if let Some(specifier) = module_specifier_at_position(&parsed.source, position) {
+            let path = self.resolved_module_path(&parsed.path, &specifier.module)?;
 
             return Some(Hover {
-                contents: format!("(module) {module} -> {}", path.display()),
+                contents: format!("(module) {} -> {}", specifier.module, path.display()),
                 span: None,
                 documentation: None,
                 context: Vec::new(),
@@ -2199,8 +2220,9 @@ impl AnalysisSnapshot {
 
             return Some(Hover {
                 contents: format!(
-                    "(module) {} = require(\"{}\") -> {}",
+                    "(module) {} = {}(\"{}\") -> {}",
                     binding.alias,
+                    binding.kind.label(),
                     binding.module,
                     path.display()
                 ),
@@ -2254,8 +2276,8 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         position: SourcePosition,
     ) -> Option<Definition> {
-        if let Some(module) = require_module_at_position(&parsed.source, position) {
-            let path = self.resolved_module_path(&parsed.path, &module)?;
+        if let Some(specifier) = module_specifier_at_position(&parsed.source, position) {
+            let path = self.resolved_module_path(&parsed.path, &specifier.module)?;
 
             return Some(module_file_definition(
                 path,
@@ -2311,7 +2333,7 @@ impl AnalysisSnapshot {
     }
 
     fn is_module_reference(&self, parsed: &ParsedSource, position: SourcePosition) -> bool {
-        if require_module_at_position(&parsed.source, position).is_some() {
+        if module_specifier_at_position(&parsed.source, position).is_some() {
             return true;
         }
 
@@ -2348,7 +2370,7 @@ impl AnalysisSnapshot {
         match self.module_graph.resolve_require(source_path, module)? {
             RequireResolution::Resolved { path }
             | RequireResolution::Duplicate { selected: path, .. } => Some(path.as_path()),
-            RequireResolution::Missing { .. } => None,
+            RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => None,
         }
     }
 
@@ -4045,9 +4067,23 @@ fn build_analysis_file(
             let _profile = profile::span_for_path("analysis.emit.check", path);
             let _trace = profile::diagnostics_span(profile::DiagnosticsTraceCategory::Checker);
 
-            if let Err(mut emit_diagnostics) =
-                emit_lua_with_mode(parsed, context.config.emit.annotation_mode)
-            {
+            let import_resolver = |specifier: &str| {
+                module_name_for_import_specifier(
+                    &parsed.path,
+                    specifier,
+                    context.known_paths,
+                    context.source_roots,
+                    context.output_roots,
+                    &context.config.extension,
+                    context.require_path_separator,
+                )
+            };
+
+            if let Err(mut emit_diagnostics) = crate::emit::emit_lua_with_mode_and_import_resolver(
+                parsed,
+                context.config.emit.annotation_mode,
+                Some(&import_resolver),
+            ) {
                 diagnostics.append(&mut emit_diagnostics);
             }
         }
@@ -4129,6 +4165,195 @@ fn analysis_asset_roots<'a>(
     } else {
         asset_roots
     }
+}
+
+fn module_name_for_import_specifier(
+    current_path: &Path,
+    specifier: &str,
+    known_paths: &BTreeSet<PathBuf>,
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
+    extension: &str,
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    if !is_child_relative_import_specifier(specifier) {
+        if is_parent_relative_import_specifier(specifier) {
+            return None;
+        }
+
+        return module_name_for_project_import(
+            specifier,
+            known_paths,
+            source_roots,
+            output_roots,
+            extension,
+            separator,
+        );
+    }
+
+    let parent = current_path.parent()?;
+    let base = normalize_path(parent.join(specifier));
+
+    module_name_for_import_base(
+        base,
+        known_paths,
+        source_roots,
+        output_roots,
+        extension,
+        separator,
+    )
+}
+
+fn module_name_for_project_import(
+    specifier: &str,
+    known_paths: &BTreeSet<PathBuf>,
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
+    extension: &str,
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    if !is_project_import_specifier(specifier) {
+        return None;
+    }
+
+    let relative = module_relative_path(specifier, separator);
+    let extensions = module_extensions(extension);
+
+    for root in source_roots.iter().chain(output_roots) {
+        for candidate in module_candidates(root, &relative, &extensions) {
+            let candidate = normalize_path(candidate);
+
+            if !known_paths.contains(&candidate) {
+                continue;
+            }
+
+            if let Some(module) =
+                module_name_for_import_candidate(&candidate, source_roots, output_roots, separator)
+            {
+                return Some(module);
+            }
+        }
+    }
+
+    None
+}
+
+fn module_name_for_import_base(
+    base: PathBuf,
+    known_paths: &BTreeSet<PathBuf>,
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
+    extension: &str,
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    if let Some(runtime_extension) = base.extension().and_then(|extension| extension.to_str()) {
+        if runtime_extension != "lua" && runtime_extension != extension {
+            return None;
+        }
+    }
+
+    let extensions = module_extensions(extension);
+    let candidates = if base.extension().is_some() {
+        vec![base]
+    } else {
+        import_module_candidates(&base, &extensions)
+    };
+
+    for candidate in candidates {
+        let candidate = normalize_path(candidate);
+
+        if !known_paths.contains(&candidate) {
+            continue;
+        }
+
+        if let Some(module) =
+            module_name_for_import_candidate(&candidate, source_roots, output_roots, separator)
+        {
+            return Some(module);
+        }
+    }
+
+    None
+}
+
+fn is_child_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("./") && !has_parent_path_component(specifier)
+}
+
+fn is_project_import_specifier(specifier: &str) -> bool {
+    !specifier.is_empty() && !specifier.starts_with('.') && !has_parent_path_component(specifier)
+}
+
+fn is_parent_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("../")
+        || specifier.starts_with("./") && has_parent_path_component(specifier)
+}
+
+fn has_parent_path_component(specifier: &str) -> bool {
+    Path::new(specifier)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+}
+
+fn module_relative_path(module: &str, separator: ModulePathSeparator) -> PathBuf {
+    let separator = match separator {
+        ModulePathSeparator::Dot => '.',
+        ModulePathSeparator::Slash => '/',
+    };
+    let mut relative = PathBuf::new();
+
+    for part in module.split(separator).filter(|part| !part.is_empty()) {
+        relative.push(part);
+    }
+
+    relative
+}
+
+fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let base = root.join(relative);
+    let mut candidates = Vec::new();
+
+    for extension in extensions {
+        candidates.push(base.with_extension(extension));
+        candidates.push(base.join(format!("init.{extension}")));
+    }
+
+    candidates
+}
+
+fn module_name_for_import_candidate(
+    path: &Path,
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    source_roots
+        .iter()
+        .chain(output_roots)
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .and_then(|root| module_name_for_path(root, path, separator))
+}
+
+fn module_extensions(project_extension: &str) -> Vec<&str> {
+    let mut extensions = vec![project_extension];
+
+    if project_extension != "lua" {
+        extensions.push("lua");
+    }
+
+    extensions
+}
+
+fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    for extension in extensions {
+        candidates.push(base.with_extension(extension));
+        candidates.push(base.join(format!("init.{extension}")));
+    }
+
+    candidates
 }
 
 fn module_file_definition(path: &Path, span: SourceSpan) -> Definition {

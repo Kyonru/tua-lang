@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Parameter, Prefix,
@@ -408,10 +409,14 @@ impl<'a> ScopeBuilder<'a> {
             self.analyze_expression(expression);
         }
 
-        for (index, name) in local.names().iter().enumerate() {
+        let names = local.names();
+
+        for (index, name) in names.iter().enumerate() {
             let kind = expressions
                 .get(index)
-                .and_then(|expression| require_module_from_expression(expression))
+                .and_then(|expression| {
+                    module_specifier_from_expression(expression, names.len(), expressions.len())
+                })
                 .map(|module| ScopeDeclarationKind::ModuleAlias { module })
                 .unwrap_or(ScopeDeclarationKind::Local);
 
@@ -751,16 +756,23 @@ struct ScopeDeclarationInput {
     parent: Option<ScopeSymbolId>,
 }
 
-fn require_module_from_expression(expression: &Expression) -> Option<String> {
+fn module_specifier_from_expression(
+    expression: &Expression,
+    name_count: usize,
+    expression_count: usize,
+) -> Option<String> {
     let Expression::FunctionCall(call) = expression else {
         return None;
     };
     let Prefix::Name(name) = call.prefix() else {
         return None;
     };
+    let call_name = token_text(name);
 
-    if token_text(name) != "require" {
-        return None;
+    match call_name.as_str() {
+        "require" => {}
+        "import" if name_count == 1 && expression_count == 1 => {}
+        _ => return None,
     }
 
     let Some(Suffix::Call(Call::AnonymousCall(args))) = call.suffixes().next() else {
@@ -773,12 +785,38 @@ fn require_module_from_expression(expression: &Expression) -> Option<String> {
                 return None;
             };
 
+            let module = unquote_string(&token.to_string());
+
+            if call_name == "import" && !is_static_import_specifier(&module) {
+                return None;
+            }
+
+            Some(module)
+        }
+        FunctionArgs::String(token) if call_name == "require" => {
             Some(unquote_string(&token.to_string()))
         }
-        FunctionArgs::String(token) => Some(unquote_string(&token.to_string())),
         FunctionArgs::TableConstructor(_) => None,
         _ => None,
     }
+}
+
+fn is_static_import_specifier(module: &str) -> bool {
+    is_child_relative_import_specifier(module) || is_project_import_specifier(module)
+}
+
+fn is_child_relative_import_specifier(module: &str) -> bool {
+    module.starts_with("./") && !has_parent_path_component(module)
+}
+
+fn is_project_import_specifier(module: &str) -> bool {
+    !module.is_empty() && !module.starts_with('.') && !has_parent_path_component(module)
+}
+
+fn has_parent_path_component(module: &str) -> bool {
+    Path::new(module)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
 fn unquote_string(raw: &str) -> String {

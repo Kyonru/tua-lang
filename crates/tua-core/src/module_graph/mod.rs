@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId};
 use crate::module_index::{ModuleExportField, ModuleExports};
-use crate::module_link::require_module_literals;
-use crate::vfs::normalize_path;
+use crate::module_link::{module_specifier_literals, ModuleSpecifierKind};
+use crate::vfs::{module_name_for_path, normalize_path, ModulePathSeparator};
 use crate::{
     AnalysisSourceKind, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan,
 };
@@ -31,6 +31,7 @@ pub struct ModuleGraphOptions {
     pub source_roots: Vec<PathBuf>,
     pub output_roots: Vec<PathBuf>,
     pub extension: String,
+    pub require_path_separator: ModulePathSeparator,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,6 +46,7 @@ pub struct ModuleGraphModule {
 pub struct RequireGraphEdge {
     pub source: PathBuf,
     pub module: String,
+    pub kind: ModuleSpecifierKind,
     pub span: SourceSpan,
     pub resolution: RequireResolution,
 }
@@ -56,6 +58,9 @@ pub enum RequireResolution {
     },
     Missing {
         search_roots: Vec<PathBuf>,
+    },
+    Invalid {
+        reason: String,
     },
     Duplicate {
         candidates: Vec<PathBuf>,
@@ -115,6 +120,7 @@ impl ModuleGraph {
                     &indexed_paths,
                     &search_roots,
                     &options.extension,
+                    options.require_path_separator,
                 );
             }
 
@@ -212,6 +218,11 @@ impl ModuleGraph {
                         .entry(module.path.clone())
                         .or_default()
                         .push(missing_module_diagnostic(edge, search_roots)),
+                    RequireResolution::Invalid { reason } => self
+                        .diagnostics
+                        .entry(module.path.clone())
+                        .or_default()
+                        .push(invalid_module_specifier_diagnostic(edge, reason)),
                     RequireResolution::Duplicate {
                         candidates,
                         selected,
@@ -283,7 +294,9 @@ impl ModuleGraph {
                     .filter_map(|edge| match &edge.resolution {
                         RequireResolution::Resolved { path }
                         | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
-                        RequireResolution::Missing { .. } => None,
+                        RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => {
+                            None
+                        }
                     })
                     .collect::<Vec<_>>()
             })
@@ -303,23 +316,36 @@ fn require_edges_for_source(
     indexed_paths: &BTreeSet<PathBuf>,
     search_roots: &[PathBuf],
     extension: &str,
+    separator: ModulePathSeparator,
 ) -> Vec<RequireGraphEdge> {
-    require_module_literals(source)
+    module_specifier_literals(source)
         .into_iter()
         .map(|literal| {
-            let candidates =
-                existing_candidates(&literal.module, indexed_paths, search_roots, extension);
-            let resolution = match candidates.as_slice() {
-                [] => RequireResolution::Missing {
-                    search_roots: search_roots.to_vec(),
-                },
-                [path] => RequireResolution::Resolved { path: path.clone() },
-                [selected, ..] => {
-                    let selected = selected.clone();
+            let resolution = match literal.kind {
+                ModuleSpecifierKind::Require => {
+                    let candidates = existing_candidates(
+                        &literal.module,
+                        indexed_paths,
+                        search_roots,
+                        extension,
+                        separator,
+                    );
 
-                    RequireResolution::Duplicate {
-                        candidates,
-                        selected,
+                    resolution_for_candidates(candidates, search_roots.to_vec())
+                }
+                ModuleSpecifierKind::Import => {
+                    match imported_module_candidates(
+                        source_path,
+                        &literal.module,
+                        indexed_paths,
+                        search_roots,
+                        extension,
+                        separator,
+                    ) {
+                        Ok((candidates, search_roots)) => {
+                            resolution_for_candidates(candidates, search_roots)
+                        }
+                        Err(reason) => RequireResolution::Invalid { reason },
                     }
                 }
             };
@@ -327,6 +353,7 @@ fn require_edges_for_source(
             RequireGraphEdge {
                 source: source_path.to_path_buf(),
                 module: literal.module,
+                kind: literal.kind,
                 span: literal.span,
                 resolution,
             }
@@ -334,13 +361,161 @@ fn require_edges_for_source(
         .collect()
 }
 
+fn resolution_for_candidates(
+    candidates: Vec<PathBuf>,
+    search_roots: Vec<PathBuf>,
+) -> RequireResolution {
+    match candidates.as_slice() {
+        [] => RequireResolution::Missing { search_roots },
+        [path] => RequireResolution::Resolved { path: path.clone() },
+        [selected, ..] => {
+            let selected = selected.clone();
+
+            RequireResolution::Duplicate {
+                candidates,
+                selected,
+            }
+        }
+    }
+}
+
+fn imported_module_candidates(
+    source_path: &Path,
+    specifier: &str,
+    indexed_paths: &BTreeSet<PathBuf>,
+    search_roots: &[PathBuf],
+    extension: &str,
+    separator: ModulePathSeparator,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
+    if is_child_relative_import_specifier(specifier) {
+        let search_roots = source_path
+            .parent()
+            .map(|path| vec![normalize_path(path)])
+            .unwrap_or_default();
+        let candidates = child_relative_import_candidates(
+            source_path,
+            specifier,
+            indexed_paths,
+            search_roots,
+            extension,
+            separator,
+        )?;
+
+        return Ok(candidates);
+    }
+
+    if is_parent_relative_import_specifier(specifier) {
+        return Err(
+            "import specifier cannot traverse parent directories; use a project module name instead"
+                .to_owned(),
+        );
+    }
+
+    if !is_project_import_specifier(specifier) {
+        return Err(
+            "import specifier must be child-relative (`./foo`) or a project module (`engine.foo`)"
+                .to_owned(),
+        );
+    }
+
+    let candidates =
+        existing_candidates(specifier, indexed_paths, search_roots, extension, separator);
+
+    Ok((candidates, search_roots.to_vec()))
+}
+
+fn child_relative_import_candidates(
+    source_path: &Path,
+    specifier: &str,
+    indexed_paths: &BTreeSet<PathBuf>,
+    search_roots: Vec<PathBuf>,
+    extension: &str,
+    separator: ModulePathSeparator,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
+    let parent = source_path
+        .parent()
+        .ok_or_else(|| "import specifier needs a source file parent directory".to_owned())?;
+    let base = normalize_path(parent.join(specifier));
+
+    if let Some(file_extension) = base.extension().and_then(|extension| extension.to_str()) {
+        if file_extension != "lua" && file_extension != extension {
+            return Err(format!(
+                "import specifier must be extensionless or end in `.{extension}`/`.lua`"
+            ));
+        }
+    }
+
+    let mut candidates = Vec::new();
+    let import_candidates = if base.extension().is_some() {
+        vec![base]
+    } else {
+        import_module_candidates(&base, &module_extensions(extension))
+    };
+
+    for candidate in import_candidates {
+        let candidate = normalize_path(candidate);
+
+        if indexed_paths.contains(&candidate)
+            && module_name_for_any_root(&search_roots, &candidate, separator).is_some()
+            && !candidates.contains(&candidate)
+        {
+            candidates.push(candidate);
+        }
+    }
+
+    Ok((candidates, search_roots))
+}
+
+fn is_child_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("./") && !has_parent_path_component(specifier)
+}
+
+fn is_project_import_specifier(specifier: &str) -> bool {
+    !specifier.is_empty() && !specifier.starts_with('.') && !has_parent_path_component(specifier)
+}
+
+fn is_parent_relative_import_specifier(specifier: &str) -> bool {
+    specifier.starts_with("../")
+        || specifier.starts_with("./") && has_parent_path_component(specifier)
+}
+
+fn has_parent_path_component(specifier: &str) -> bool {
+    Path::new(specifier)
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+}
+
+fn module_name_for_any_root(
+    roots: &[PathBuf],
+    path: &Path,
+    separator: ModulePathSeparator,
+) -> Option<String> {
+    roots
+        .iter()
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .and_then(|root| module_name_for_path(root, path, separator))
+}
+
+fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    for extension in extensions {
+        candidates.push(base.with_extension(extension));
+        candidates.push(base.join(format!("init.{extension}")));
+    }
+
+    candidates
+}
+
 fn existing_candidates(
     module: &str,
     indexed_paths: &BTreeSet<PathBuf>,
     search_roots: &[PathBuf],
     extension: &str,
+    separator: ModulePathSeparator,
 ) -> Vec<PathBuf> {
-    let relative = module_relative_path(module);
+    let relative = module_relative_path(module, separator);
     let extensions = module_extensions(extension);
     let mut candidates = Vec::new();
 
@@ -447,10 +622,14 @@ fn search_roots(inputs: &[ModuleGraphInput<'_>], options: &ModuleGraphOptions) -
     roots
 }
 
-fn module_relative_path(module: &str) -> PathBuf {
+fn module_relative_path(module: &str, separator: ModulePathSeparator) -> PathBuf {
+    let separator = match separator {
+        ModulePathSeparator::Dot => '.',
+        ModulePathSeparator::Slash => '/',
+    };
     let mut relative = PathBuf::new();
 
-    for part in module.split('.').filter(|part| !part.is_empty()) {
+    for part in module.split(separator).filter(|part| !part.is_empty()) {
         relative.push(part);
     }
 
@@ -500,11 +679,28 @@ fn missing_module_diagnostic(edge: &RequireGraphEdge, search_roots: &[PathBuf]) 
         edge.span.start.column,
         DiagnosticSeverity::Warning,
         format!(
-            "require file not found: `{}` (searched: {})",
-            edge.module, roots
+            "{} file not found: `{}` (searched: {})",
+            edge.kind.label(),
+            edge.module,
+            roots
         ),
     )
     .with_code(DiagnosticCode::LINT_MISSING_REQUIRE)
+}
+
+fn invalid_module_specifier_diagnostic(edge: &RequireGraphEdge, reason: &str) -> Diagnostic {
+    Diagnostic::new(
+        edge.source.clone(),
+        edge.span.start.line,
+        edge.span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "invalid {} specifier `{}`: {reason}",
+            edge.kind.label(),
+            edge.module
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_BAD_REQUIRE)
 }
 
 fn duplicate_module_diagnostic(
@@ -524,7 +720,8 @@ fn duplicate_module_diagnostic(
         edge.span.start.column,
         DiagnosticSeverity::Warning,
         format!(
-            "duplicate require candidates for `{}`: {candidates} (using {})",
+            "duplicate {} candidates for `{}`: {candidates} (using {})",
+            edge.kind.label(),
             edge.module,
             selected.to_string_lossy().replace('\\', "/")
         ),

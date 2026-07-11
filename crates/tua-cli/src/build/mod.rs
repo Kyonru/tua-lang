@@ -9,7 +9,7 @@ use crate::source::{
     SourceKind,
 };
 use tua_core::{
-    brinevector_runtime_source, emit_tua_source_with_mode, format_diagnostics_for_cli,
+    brinevector_runtime_source, emit_tua_source_with_workspace, format_diagnostics_for_cli,
     AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory,
     DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
@@ -158,13 +158,15 @@ pub(crate) fn build_changed_files(
 
         push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
 
-        let output = match emit_tua_source_with_mode(&source_path, source, annotation_mode) {
-            Ok(output) => output,
-            Err(mut source_diagnostics) => {
-                outcome.diagnostics.append(&mut source_diagnostics);
-                continue;
-            }
-        };
+        let output =
+            match emit_tua_source_with_workspace(&source_path, source, annotation_mode, &workspace)
+            {
+                Ok(output) => output,
+                Err(mut source_diagnostics) => {
+                    outcome.diagnostics.append(&mut source_diagnostics);
+                    continue;
+                }
+            };
         needs_brinevector_runtime |= requires_brinevector_runtime(&output);
 
         match write_output(&output_path, output) {
@@ -317,8 +319,12 @@ fn build_project_files(
                     continue;
                 }
 
-                let output = match emit_tua_source_with_mode(&source_path, source, annotation_mode)
-                {
+                let output = match emit_tua_source_with_workspace(
+                    &source_path,
+                    source,
+                    annotation_mode,
+                    &workspace,
+                ) {
                     Ok(output) => output,
                     Err(mut source_diagnostics) => {
                         diagnostics.append(&mut source_diagnostics);

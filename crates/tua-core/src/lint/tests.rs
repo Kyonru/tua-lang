@@ -148,6 +148,45 @@ fn bad_require_lint_does_not_duplicate_missing_require_lint() {
 }
 
 #[test]
+fn static_import_binding_is_not_an_undefined_variable() {
+    let project = TempProject::new("static-import-not-undefined");
+
+    project.write("tua.toml", "source = \"src\"\n");
+    project.write("src/player.tua", "return {}\n");
+
+    let main_path = project.path.join("src/main.tua");
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        &main_path,
+        r#"local Player = import("./player")
+
+return Player
+"#,
+        &DiagnosticsConfig::default(),
+    );
+
+    assert_eq!(diagnostics, Ok(()));
+}
+
+#[test]
+fn unresolved_static_import_binding_is_not_an_undefined_variable_when_unchecked() {
+    let project = TempProject::new("unresolved-import-not-undefined");
+
+    project.write("tua.toml", "source = \"src\"\n");
+
+    let main_path = project.path.join("src/main.tua");
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        &main_path,
+        r#"local Player = import("player")
+
+return Player
+"#,
+        &DiagnosticsConfig::default(),
+    );
+
+    assert_eq!(diagnostics, Ok(()));
+}
+
+#[test]
 fn reports_impossible_boolean_expressions_when_enabled() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

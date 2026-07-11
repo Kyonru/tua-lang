@@ -135,6 +135,16 @@ local player = Player.makePlayer("Ada")
 player.hp -= 10
 ```
 
+When you want a source-file-relative child import, use the Tua-only helper form:
+
+```tua
+local Player = import("./player")
+```
+
+That emits a normal Lua `require("player")`. Keep `require(...)` for package
+roots, third-party Lua libraries, and dynamic module loading. For modules outside
+the current folder, use the project module name, such as `import("engine.foo")`.
+
 Simple returned module tables give the language server enough information for
 hover, completion, go to definition, references, and rename.
 

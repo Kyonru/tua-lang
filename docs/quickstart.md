@@ -64,8 +64,8 @@ The checker reports syntax, type, config, and enabled lint diagnostics.
 cargo run -p tua-cli -- build
 ```
 
-This writes Lua output under `build/` and preserves ordinary `require(...)`
-calls.
+This writes Lua output under `build/`, preserves ordinary `require(...)` calls,
+and lowers static `import(...)` bindings to runtime `require(...)` calls.
 
 ## Watch
 

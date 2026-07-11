@@ -32,6 +32,9 @@ pub(crate) enum CompletionContext {
     RequirePath {
         prefix: String,
     },
+    ImportPath {
+        prefix: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,7 +53,7 @@ pub(crate) fn completion_context(
     annotation_tag_context(line, cursor)
         .or_else(|| documentation_snippet_context(line, cursor, position))
         .or_else(|| lua_doc_type_annotation_context(line, cursor))
-        .or_else(|| require_path_context(line, cursor))
+        .or_else(|| module_path_context(line, cursor))
         .or_else(|| string_argument_context(source, line, cursor, position))
         .or_else(|| field_access_context(line, cursor, position))
         .or_else(|| type_annotation_context(line, cursor))
@@ -197,7 +200,7 @@ fn field_access_context(
     })
 }
 
-fn require_path_context(line: &str, cursor: usize) -> Option<CompletionContext> {
+fn module_path_context(line: &str, cursor: usize) -> Option<CompletionContext> {
     let cursor = cursor.min(line.len());
     let prefix = &line[..cursor];
     let quote_start = prefix.rfind(['"', '\''])?;
@@ -211,6 +214,12 @@ fn require_path_context(line: &str, cursor: usize) -> Option<CompletionContext> 
 
     if before_quote.ends_with("require(") || before_quote.ends_with("require") {
         return Some(CompletionContext::RequirePath {
+            prefix: prefix[quote_start + 1..].to_owned(),
+        });
+    }
+
+    if before_quote.ends_with("import(") {
+        return Some(CompletionContext::ImportPath {
             prefix: prefix[quote_start + 1..].to_owned(),
         });
     }

@@ -39,7 +39,7 @@ LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stabl
 | `CheckErrorLocalParamNum = 8` | `LH-ERR`, `luahelper.Warn.CheckLocalDefineParamNum` in `LH-WARN` | `TL4028` local declaration arity when `local_declaration_arity` is enabled and initializer count is statically known. | Published diagnostics. | implemented | Phase 70.24. |
 | `CheckErrorGotoLabel = 9` | `LH-ERR`, `luahelper.Warn.CheckGotoLable` in `LH-WARN` | No `goto` support goal for Lua 5.1/LuaJIT output. | No LSP diagnostic. | out of scope | Tua targets LuaJIT/LOVE and does not plan Lua 5.2+ `goto` analysis in v1. |
 | `CheckErrorCallParam = 10` | `LH-ERR`, `luahelper.Warn.CheckFuncParam` in `LH-WARN` | `TL1004` / `TL4009` wrong argument count. | Diagnostics plus signature help for known calls. | implemented | Phases 16, 37, 41. |
-| `CheckErrorImportVar = 11` | `LH-ERR`, `luahelper.Warn.CheckImportModuleVar` in `LH-WARN` | Required-module fields and exports are checked for `require(...)`; custom `import(...)` is not special-cased. | Hover/completion/definition/references for indexed `require` exports. | partial | Owner: project model/module graph if custom import aliases become configurable; otherwise `import(...)` remains ordinary Lua. See 55, 59, 61. |
+| `CheckErrorImportVar = 11` | `LH-ERR`, `luahelper.Warn.CheckImportModuleVar` in `LH-WARN` | Module fields and exports are checked for `require(...)` and static `import(...)` bindings. Arbitrary custom import functions are not modeled. | Hover/completion/definition/references for indexed module exports. | partial | Owner: project model/module graph for any future configurable import helpers. See 55, 59, 61. |
 | `CheckErrorNotIfVar = 12` | `LH-ERR`, `luahelper.Warn.CheckIfNotVar` in `LH-WARN` | Some impossible comparisons and flow-sensitive narrowing exist; no dedicated "used after negative guard" diagnostic. | Hover/checking use narrowed facts in supported guards. | partial | Owner: type flow. Planned expansion in 62. |
 | `CheckErrorDuplicateParam = 13` | `LH-ERR`, `luahelper.Warn.CheckFunctionDuplicateParam` in `LH-WARN` | `TL4008` duplicate function parameters. | Published diagnostics. | implemented | Phase 37. |
 | `CheckErrorDuplicateExp = 14` | `LH-ERR`, `luahelper.Warn.CheckBinaryExpressionDuplicate` in `LH-WARN` | `TL4013` duplicate binary operands. | Published diagnostics. | implemented | Phase 37. |
@@ -149,7 +149,7 @@ not LuaHelper diagnostic codes.
 | --- | --- | --- |
 | `lint/types` | broader inferred assignment-type changes beyond annotated/known assignments | 61, 62 |
 | `types/flow` | negative-guard use diagnostics and broader boolean identities | 62 |
-| `project-model/module` | non-`require` custom import helper modeling | Optional future config work after 55/59/61; ordinary `import(...)` stays dynamic until configured. |
+| `project-model/module` | configurable non-`require` custom import helper modeling | Optional future config work after 55/59/61; static relative Tua `import("./...")` is built in, while arbitrary import functions stay dynamic. |
 | `types/lua-doc` | LuaHelper enum blocks and class-field precision | 70.10, 70.11, 70.13 |
 
 ## Maintenance Rules

@@ -4,9 +4,9 @@ use std::path::Path;
 
 use crate::lua::{self, LuaItem};
 use crate::module_index::{
-    required_module_export_for_fields, required_module_for_receiver, resolve_required_module,
+    required_module_export_for_fields, required_module_for_receiver, resolve_module_specifier,
 };
-use crate::module_link::require_module_at_position;
+use crate::module_link::module_specifier_at_position;
 use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
@@ -284,11 +284,11 @@ impl<'a> HoverResolver<'a> {
     }
 
     fn required_module_literal_hover(&self, position: SourcePosition) -> Option<Hover> {
-        let module = require_module_at_position(&self.parsed.source, position)?;
-        let path = resolve_required_module(&self.parsed.path, &module)?;
+        let specifier = module_specifier_at_position(&self.parsed.source, position)?;
+        let path = resolve_module_specifier(&self.parsed.path, &specifier.module, specifier.kind)?;
 
         Some(hover(
-            format!("(module) {module} -> {}", path.display()),
+            format!("(module) {} -> {}", specifier.module, path.display()),
             None,
         ))
     }
@@ -298,7 +298,8 @@ impl<'a> HoverResolver<'a> {
 
         Some(hover(
             format!(
-                "(module) {receiver} = require(\"{}\") -> {}",
+                "(module) {receiver} = {}(\"{}\") -> {}",
+                required.kind.label(),
                 required.module,
                 required.path.display()
             ),

@@ -1138,6 +1138,50 @@ return {
 }
 
 #[test]
+fn hovers_imported_module_literal_binding_and_tua_exports() {
+    let temp = TempProject::new("imported-module-hover");
+    let source = r#"local Player = import("./player")
+
+local player = Player.makePlayer("Ada")
+"#;
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", player);
+
+    let main_path = temp.path.join("src/main.tua");
+    let literal = hover_tua_source(&main_path, source, position_at(source, "player\")"))
+        .expect("hover should not fail")
+        .expect("import literal should hover");
+    let binding = hover_tua_source(&main_path, source, position_at(source, "Player.makePlayer"))
+        .expect("hover should not fail")
+        .expect("module binding should hover");
+    let function = hover_tua_source(&main_path, source, position_at(source, "makePlayer("))
+        .expect("hover should not fail")
+        .expect("module function should hover");
+
+    assert!(literal.contents.contains("(module) ./player ->"));
+    assert!(literal.contents.contains("player.tua"));
+    assert!(binding
+        .contents
+        .contains("(module) Player = import(\"./player\") ->"));
+    assert_eq!(
+        function.contents,
+        "function Player.makePlayer(string): Player"
+    );
+}
+
+#[test]
 fn hovers_required_lua_module_exports() {
     let temp = TempProject::new("required-lua-module-hover");
     let source = r#"local Legacy = require("legacy")

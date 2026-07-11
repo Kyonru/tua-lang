@@ -162,6 +162,46 @@ return {
 }
 
 #[test]
+fn resolves_import_binding_exports_for_receiver() {
+    let temp = TempProject::new("import-binding");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/main.tua",
+        r#"
+local Player = import("./player")
+local made = Player.makePlayer("Ada")
+"#,
+    );
+    temp.write(
+        "src/player.tua",
+        r#"
+local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+
+    let main = temp.path.join("src/main.tua");
+    let source = fs::read_to_string(&main).expect("main source should be readable");
+    let parsed = parse_tua_source(&main, source).expect("main source should parse");
+    let exports = required_module_exports_for_receiver(&parsed, "Player")
+        .expect("imported module exports should resolve");
+
+    assert_eq!(
+        exports.field("makePlayer"),
+        Some(&Type::function(
+            [Type::string()],
+            Type::table([("name", crate::TableField::required(Type::string()))])
+        ))
+    );
+}
+
+#[test]
 fn annotated_lua_modules_provide_typed_function_exports() {
     let temp = TempProject::new("annotated-lua-module");
 

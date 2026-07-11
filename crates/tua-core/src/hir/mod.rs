@@ -59,6 +59,7 @@ pub enum HirDeclarationKind {
 pub struct HirRequireBinding {
     pub alias: String,
     pub module: String,
+    pub kind: crate::ModuleSpecifierKind,
     pub alias_span: SourceSpan,
     pub module_span: Option<SourceSpan>,
 }
@@ -323,6 +324,7 @@ impl HirLowerer {
             self.module.require_bindings.push(HirRequireBinding {
                 alias: binding.alias,
                 module: binding.module,
+                kind: binding.kind,
                 alias_span,
                 module_span: None,
             });

@@ -10,6 +10,7 @@ pub(super) struct AutoImportCandidate<'a> {
     pub(super) current_source: &'a str,
     pub(super) module_path: &'a Path,
     pub(super) module: &'a str,
+    pub(super) import_specifier: &'a str,
     pub(super) alias: &'a str,
     pub(super) already_imported: bool,
     pub(super) name: &'a str,
@@ -24,8 +25,8 @@ pub(super) fn auto_import_completion(candidate: AutoImportCandidate<'_>) -> Comp
             path: candidate.current_path.to_path_buf(),
             span: import_insert_span(candidate.current_source),
             new_text: format!(
-                "local {} = require(\"{}\")\n",
-                candidate.alias, candidate.module
+                "local {} = import(\"{}\")\n",
+                candidate.alias, candidate.import_specifier
             ),
         }]
     };
@@ -160,13 +161,13 @@ fn import_insert_span(source: &str) -> SourceSpan {
 
 fn is_local_require_line(trimmed: &str) -> bool {
     trimmed.starts_with("local ")
-        && trimmed.contains(" = require(")
+        && (trimmed.contains(" = require(") || trimmed.contains(" = import("))
         && (trimmed.contains('"') || trimmed.contains('\''))
 }
 
 fn default_import_alias(module: &str) -> String {
     let segment = module
-        .split('.')
+        .split(['.', '/'])
         .next_back()
         .filter(|segment| !segment.is_empty())
         .unwrap_or("module");

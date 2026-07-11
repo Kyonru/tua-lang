@@ -325,6 +325,60 @@ end
 }
 
 #[test]
+fn snapshot_lowers_static_imports_with_project_resolution() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+local Player: any = import("./entities/player")
+local Shared = import("shared")
+"#,
+    )
+    .expect("source should parse");
+    let resolver = |specifier: &str| match specifier {
+        "./entities/player" => Some("entities.player".to_owned()),
+        "shared" => Some("shared".to_owned()),
+        _ => None,
+    };
+    let emitted =
+        emit_lua_with_mode_and_import_resolver(&parsed, AnnotationMode::Off, Some(&resolver))
+            .expect("static imports should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local Player = require("entities.player")
+local Shared = require("shared")
+"#
+    );
+}
+
+#[test]
+fn snapshot_lowers_project_imports_without_project_resolution() {
+    let emitted = emit_tua_source("src/main.tua", "local Shared = import(\"shared\")\n")
+        .expect("project module imports should emit like require");
+
+    assert_eq!(emitted, "local Shared = require(\"shared\")\n");
+}
+
+#[test]
+fn snapshot_leaves_runtime_import_calls_alone() {
+    let emitted = emit_tua_source("src/runtime_import.tua", "print(import(\"./runtime\"))\n")
+        .expect("ordinary runtime import calls should remain ordinary Lua calls");
+
+    assert_eq!(emitted, "print(import(\"./runtime\"))\n");
+}
+
+#[test]
+fn unresolved_child_relative_imports_do_not_emit_runtime_import_calls() {
+    let diagnostics = emit_tua_source("src/main.tua", "local Player = import(\"./player\")\n")
+        .expect_err("project-less child imports should not emit");
+
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
+    assert!(diagnostics[0]
+        .message
+        .contains("without project module resolution"));
+}
+
+#[test]
 fn snapshot_erases_annotations_in_nested_blocks() {
     let emitted = emit_tua_source(
         "src/nested.tua",

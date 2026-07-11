@@ -415,6 +415,51 @@ return {
 }
 
 #[test]
+fn build_lowers_static_imports_to_require_calls() {
+    let temp = TempDir::new("build-relative-import");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/entities")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local Player: any = import("./entities/player")
+
+return Player
+"#,
+    )
+    .expect("failed to write main.tua");
+    fs::write(
+        temp.path().join("src/entities/player.tua"),
+        r#"
+return {
+  name = "Ada",
+}
+"#,
+    )
+    .expect("failed to write player.tua");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let main_output =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read main output");
+
+    assert!(main_output.contains(r#"local Player = require("entities.player")"#));
+    assert!(!main_output.contains("import("));
+}
+
+#[test]
 fn build_emits_luacats_annotations_when_configured() {
     let temp = TempDir::new("build-luacats");
 

@@ -93,7 +93,10 @@ pub use document_symbol::{
     document_symbols_parsed_source, document_symbols_parsed_source_with_hir,
     document_symbols_tua_source, DocumentSymbol, DocumentSymbolKind,
 };
-pub use emit::{emit_lua, emit_lua_with_mode, emit_tua_source, emit_tua_source_with_mode};
+pub use emit::{
+    emit_lua, emit_lua_with_mode, emit_tua_source, emit_tua_source_with_mode,
+    emit_tua_source_with_workspace,
+};
 #[cfg(any(test, feature = "test-fixture"))]
 pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, FixtureTempDir};
 pub use folding_range::{
@@ -118,10 +121,10 @@ pub use module_index::{
     exported_field_for_fields, exported_type_for_fields, infer_module_exports,
     infer_module_exports_with_environment, require_bindings_for_parsed_source,
     required_module_export_for_fields, required_module_export_type_for_fields,
-    required_module_exports_for_receiver, required_module_for_receiver, resolve_required_module,
-    ModuleExportField, ModuleExports, RequireBinding, RequiredModule,
+    required_module_exports_for_receiver, required_module_for_receiver, resolve_module_specifier,
+    resolve_required_module, ModuleExportField, ModuleExports, RequireBinding, RequiredModule,
 };
-pub use module_link::{module_links_tua_source, ModuleLink};
+pub use module_link::{module_links_tua_source, ModuleLink, ModuleSpecifierKind};
 pub use parser::{
     extract_lua_source_model, extract_tua_source_model, normalize_tua_source,
     parse_lua_doc_annotations, parse_lua_doc_annotations_with_options, parse_lua_source,

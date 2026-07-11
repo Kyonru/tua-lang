@@ -673,11 +673,18 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn analyze_local_assignment(&mut self, local: &ast::LocalAssignment) {
-        for expression in local.expressions() {
+        let names = local.names().into_iter().collect::<Vec<_>>();
+        let expressions = local.expressions().into_iter().collect::<Vec<_>>();
+
+        for expression in &expressions {
+            if names.len() == 1 && expressions.len() == 1 && is_static_import_call(expression) {
+                continue;
+            }
+
             self.analyze_expression(expression);
         }
 
-        for name in local.names() {
+        for name in names {
             self.declare(
                 token_text(name),
                 token_position(name),
@@ -1374,6 +1381,29 @@ impl<'a> JitAnalyzer<'a> {
         self.semantic
             .type_of_field_chain(parts, position_before(position))
     }
+}
+
+fn is_static_import_call(expression: &Expression) -> bool {
+    let Expression::FunctionCall(call) = expression else {
+        return false;
+    };
+    let Prefix::Name(name) = call.prefix() else {
+        return false;
+    };
+
+    if token_text(name) != "import" {
+        return false;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        call.suffixes().next()
+    else {
+        return false;
+    };
+    let Some(Expression::String(_module)) = arguments.iter().next() else {
+        return false;
+    };
+    true
 }
 
 fn future_locals_for_block(block: &ast::Block) -> BTreeMap<String, SourcePosition> {

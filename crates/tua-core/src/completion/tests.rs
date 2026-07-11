@@ -1102,6 +1102,55 @@ fn completes_require_paths_from_current_directory() {
 }
 
 #[test]
+fn completes_import_paths_for_child_and_project_modules() {
+    let root = temp_project_dir("import_completion");
+    let src = root.join("src");
+    let systems = src.join("systems");
+    let shared = src.join("shared");
+
+    fs::create_dir_all(&systems).expect("systems dir should be created");
+    fs::create_dir_all(&shared).expect("shared dir should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        systems.join("main.tua"),
+        "local player = import(\"./pla\")\n",
+    )
+    .expect("main source should be written");
+    fs::write(systems.join("player.tua"), "return {}\n").expect("player source should be written");
+    fs::write(shared.join("math.lua"), "return {}\n").expect("Lua module should be written");
+    fs::write(shared.join("init.tua"), "return {}\n").expect("init module should be written");
+
+    let main_path = systems.join("main.tua");
+    let source = fs::read_to_string(&main_path).expect("main source should be readable");
+    let completions = complete_tua_source(
+        &main_path,
+        &source,
+        position_after(&source, "import(\"./pla"),
+    )
+    .expect("import path completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["./player".to_owned()]);
+
+    let source = "local module = import(\"sha\")\n";
+    let completions =
+        complete_tua_source(&main_path, source, position_after(source, "import(\"sha"))
+            .expect("project import path completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec!["shared".to_owned(), "shared.math".to_owned()]
+    );
+
+    let source = "local shared = import(\"../shared\")\n";
+    let completions = complete_tua_source(&main_path, source, position_after(source, "../shared"))
+        .expect("parent import path completion should succeed");
+
+    assert!(completions.is_empty());
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completes_fields_from_required_tua_and_lua_modules() {
     let root = temp_project_dir("required_module_fields");
     let src = root.join("src");

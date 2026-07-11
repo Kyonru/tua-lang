@@ -41,6 +41,7 @@ fn graph<'a>(
             source_roots: vec![PathBuf::from("src")],
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
         },
     )
 }
@@ -101,6 +102,81 @@ return {
 }
 
 #[test]
+fn resolves_static_import_edges_like_require_edges() {
+    let (main, main_hir, main_exports) = tua_input(
+        "src/systems/main.tua",
+        r#"
+local Enemy = import("./enemy")
+local Player = import("player")
+local Legacy = import("legacy")
+local Shared = import("shared")
+return { ok = true }
+"#,
+    );
+    let (enemy, enemy_hir, enemy_exports) =
+        tua_input("src/systems/enemy.tua", "return { hp = 50 }\n");
+    let (player, player_hir, player_exports) = tua_input("src/player.tua", "return { hp = 100 }\n");
+    let (shared, shared_hir, shared_exports) =
+        tua_input("src/shared/init.tua", "return { enabled = true }\n");
+    let (legacy, legacy_hir, legacy_exports) = lua_input(
+        "src/legacy.lua",
+        "return { clamp = function(value) return value end }\n",
+    );
+    let graph = graph([
+        (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+        (&enemy, &enemy_hir, &enemy_exports, AnalysisSourceKind::Tua),
+        (
+            &player,
+            &player_hir,
+            &player_exports,
+            AnalysisSourceKind::Tua,
+        ),
+        (
+            &legacy,
+            &legacy_hir,
+            &legacy_exports,
+            AnalysisSourceKind::Lua,
+        ),
+        (
+            &shared,
+            &shared_hir,
+            &shared_exports,
+            AnalysisSourceKind::Tua,
+        ),
+    ]);
+    let module = graph
+        .module("src/systems/main.tua")
+        .expect("main module should be indexed");
+
+    assert_eq!(module.require_edges.len(), 4);
+    assert_eq!(module.require_edges[0].kind, ModuleSpecifierKind::Import);
+    assert_eq!(
+        module.require_edges[0].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/systems/enemy.tua")
+        }
+    );
+    assert_eq!(
+        module.require_edges[1].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/player.tua")
+        }
+    );
+    assert_eq!(
+        module.require_edges[2].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/legacy.lua")
+        }
+    );
+    assert_eq!(
+        module.require_edges[3].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/shared/init.tua")
+        }
+    );
+}
+
+#[test]
 fn reports_missing_require_with_module_name_and_search_roots() {
     let main = parse_tua_source(
         "src/main.tua",
@@ -124,6 +200,56 @@ return { ok = true }
         .message
         .contains("require file not found: `missing.player`"));
     assert!(diagnostics[0].message.contains("searched: src"));
+}
+
+#[test]
+fn reports_missing_child_imports() {
+    let main = parse_tua_source(
+        "src/main.tua",
+        r#"
+local Missing = import("./missing")
+return { ok = true }
+"#,
+    )
+    .expect("main should parse");
+    let main_hir = lower_parsed_source(&main);
+    let main_exports = infer_module_exports(&main).expect("main exports should infer");
+    let graph = graph([(&main, &main_hir, &main_exports, AnalysisSourceKind::Tua)]);
+    let diagnostics = graph.diagnostics("src/main.tua");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_MISSING_REQUIRE)
+    );
+    assert!(diagnostics[0]
+        .message
+        .contains("import file not found: `./missing`"));
+}
+
+#[test]
+fn reports_invalid_import_specifiers() {
+    let main = parse_tua_source(
+        "src/main.tua",
+        r#"
+local Player = import("../player")
+return { ok = true }
+"#,
+    )
+    .expect("main should parse");
+    let main_hir = lower_parsed_source(&main);
+    let main_exports = infer_module_exports(&main).expect("main exports should infer");
+    let graph = graph([(&main, &main_hir, &main_exports, AnalysisSourceKind::Tua)]);
+    let diagnostics = graph.diagnostics("src/main.tua");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_BAD_REQUIRE));
+    assert!(diagnostics[0]
+        .message
+        .contains("invalid import specifier `../player`"));
+    assert!(diagnostics[0]
+        .message
+        .contains("cannot traverse parent directories"));
 }
 
 #[test]
@@ -176,6 +302,32 @@ return { ok = true }
         graph.diagnostics("src/main.tua")[0].code,
         Some(DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
     );
+}
+
+#[test]
+fn import_cycles_report_diagnostics() {
+    let (a, a_hir, a_exports) = tua_input(
+        "src/a.tua",
+        r#"
+local B = import("./b")
+return { name = "a" }
+"#,
+    );
+    let (b, b_hir, b_exports) = tua_input(
+        "src/b.tua",
+        r#"
+local A = import("./a")
+return { name = "b" }
+"#,
+    );
+    let graph = graph([
+        (&a, &a_hir, &a_exports, AnalysisSourceKind::Tua),
+        (&b, &b_hir, &b_exports, AnalysisSourceKind::Tua),
+    ]);
+
+    assert!(graph
+        .all_diagnostics()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_REQUIRE_CYCLE)));
 }
 
 #[test]

@@ -3,6 +3,7 @@ local Functions = require("functions")
 local Compound = require("compound")
 local Inference = require("inference")
 local Modules = require("modules")
+local Imports = import("./imports")
 local Navigation = require("navigation")
 local Assets = require("assets")
 local Vectors = require("vectors")
@@ -24,6 +25,7 @@ return {
   compound = Compound,
   inference = Inference,
   modules = Modules,
+  imports = Imports,
   navigation = Navigation,
   assets = Assets,
   vectors = Vectors,

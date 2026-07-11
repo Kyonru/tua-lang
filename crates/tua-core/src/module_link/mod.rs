@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::module_index::resolve_required_module;
+use crate::module_index::resolve_module_specifier;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{SourcePosition, SourceSpan};
 
@@ -17,10 +17,10 @@ pub fn module_links_tua_source(
     let path = path.as_ref();
     let source = source.into();
 
-    require_module_literals(&source)
+    module_specifier_literals(&source)
         .into_iter()
         .filter_map(|literal| {
-            let target = resolve_required_module(path, &literal.module)?;
+            let target = resolve_module_specifier(path, &literal.module, literal.kind)?;
 
             Some(ModuleLink {
                 span: literal.span,
@@ -30,20 +30,49 @@ pub fn module_links_tua_source(
         .collect()
 }
 
+#[cfg(test)]
 pub(crate) fn require_module_at_position(source: &str, position: SourcePosition) -> Option<String> {
-    require_module_literals(source)
-        .into_iter()
-        .find(|literal| contains_position(literal.span, position))
+    module_specifier_at_position(source, position)
+        .filter(|literal| literal.kind == ModuleSpecifierKind::Require)
         .map(|literal| literal.module)
 }
 
+pub(crate) fn module_specifier_at_position(
+    source: &str,
+    position: SourcePosition,
+) -> Option<ModuleSpecifierLiteral> {
+    module_specifier_literals(source)
+        .into_iter()
+        .find(|literal| contains_position(literal.span, position))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModuleSpecifierKind {
+    Require,
+    Import,
+}
+
+impl ModuleSpecifierKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Require => "require",
+            Self::Import => "import",
+        }
+    }
+
+    fn call_name(self) -> &'static str {
+        self.label()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RequireModuleLiteral {
+pub(crate) struct ModuleSpecifierLiteral {
     pub module: String,
+    pub kind: ModuleSpecifierKind,
     pub span: SourceSpan,
 }
 
-pub(crate) fn require_module_literals(source: &str) -> Vec<RequireModuleLiteral> {
+pub(crate) fn module_specifier_literals(source: &str) -> Vec<ModuleSpecifierLiteral> {
     let mut state = RequireScanState::Code;
 
     source
@@ -53,7 +82,26 @@ pub(crate) fn require_module_literals(source: &str) -> Vec<RequireModuleLiteral>
             let line_number = line_index + 1;
             let line = line.strip_suffix('\r').unwrap_or(line);
 
-            require_module_literals_on_line(line, line_number, &mut state)
+            module_specifier_literals_on_line(line, line_number, &mut state)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RequireModuleLiteral {
+    pub module: String,
+    pub span: SourceSpan,
+}
+
+#[cfg(test)]
+pub(crate) fn require_module_literals(source: &str) -> Vec<RequireModuleLiteral> {
+    module_specifier_literals(source)
+        .into_iter()
+        .filter(|literal| literal.kind == ModuleSpecifierKind::Require)
+        .map(|literal| RequireModuleLiteral {
+            module: literal.module,
+            span: literal.span,
         })
         .collect()
 }
@@ -65,11 +113,11 @@ enum RequireScanState {
     BlockComment { close: Vec<u8> },
 }
 
-fn require_module_literals_on_line(
+fn module_specifier_literals_on_line(
     line: &str,
     line_number: usize,
     state: &mut RequireScanState,
-) -> Vec<RequireModuleLiteral> {
+) -> Vec<ModuleSpecifierLiteral> {
     let mut literals = Vec::new();
     let mut index = 0usize;
     let bytes = line.as_bytes();
@@ -102,8 +150,17 @@ fn require_module_literals_on_line(
                     _ => {}
                 }
 
-                if starts_require_at(line, index) {
-                    if let Some(literal) = require_module_literal_after(line, line_number, index) {
+                if let Some(kind) = module_specifier_kind_at(line, index) {
+                    if kind == ModuleSpecifierKind::Import
+                        && !looks_like_local_import_binding(line, index)
+                    {
+                        index += char_len_at(line, index);
+                        continue;
+                    }
+
+                    if let Some(literal) =
+                        module_specifier_literal_after(line, line_number, index, kind)
+                    {
                         index = (byte_for_column(line, literal.span.end.column) + 1).max(index + 1);
                         literals.push(literal);
                         continue;
@@ -126,18 +183,22 @@ fn require_module_literals_on_line(
     literals
 }
 
-fn require_module_literal_after(
+fn module_specifier_literal_after(
     line: &str,
     line_number: usize,
-    require_start: usize,
-) -> Option<RequireModuleLiteral> {
+    call_start: usize,
+    kind: ModuleSpecifierKind,
+) -> Option<ModuleSpecifierLiteral> {
     let bytes = line.as_bytes();
-    let mut index = require_start + "require".len();
+    let mut index = call_start + kind.call_name().len();
 
     index = skip_spaces(line, index);
-    if bytes.get(index) == Some(&b'(') {
+    let has_parens = bytes.get(index) == Some(&b'(');
+    if has_parens {
         index += 1;
         index = skip_spaces(line, index);
+    } else if kind == ModuleSpecifierKind::Import {
+        return None;
     }
 
     let quote = *bytes.get(index)?;
@@ -148,8 +209,9 @@ fn require_module_literal_after(
     let module_start = index + 1;
     let quote_end = find_short_string_end(line, index, quote)?;
 
-    Some(RequireModuleLiteral {
+    Some(ModuleSpecifierLiteral {
         module: line[module_start..quote_end].to_owned(),
+        kind,
         span: SourceSpan {
             start: SourcePosition {
                 line: line_number,
@@ -163,8 +225,20 @@ fn require_module_literal_after(
     })
 }
 
-fn starts_require_at(line: &str, index: usize) -> bool {
-    if !line[index..].starts_with("require") {
+fn module_specifier_kind_at(line: &str, index: usize) -> Option<ModuleSpecifierKind> {
+    if starts_call_name_at(line, index, "require") {
+        return Some(ModuleSpecifierKind::Require);
+    }
+
+    if starts_call_name_at(line, index, "import") {
+        return Some(ModuleSpecifierKind::Import);
+    }
+
+    None
+}
+
+fn starts_call_name_at(line: &str, index: usize, name: &str) -> bool {
+    if !line[index..].starts_with(name) {
         return false;
     }
 
@@ -172,9 +246,39 @@ fn starts_require_at(line: &str, index: usize) -> bool {
         .checked_sub(1)
         .and_then(|previous| line.as_bytes().get(previous))
         .copied();
-    let after = line.as_bytes().get(index + "require".len()).copied();
+    let after = line.as_bytes().get(index + name.len()).copied();
 
     !before.is_some_and(is_identifier_byte) && !after.is_some_and(is_identifier_byte)
+}
+
+fn looks_like_local_import_binding(line: &str, import_start: usize) -> bool {
+    let prefix = line[..import_start].trim_start();
+    let Some(before_import) = prefix.strip_prefix("local ") else {
+        return false;
+    };
+    let before_import = before_import.trim_end();
+    let Some(lhs) = before_import.strip_suffix('=') else {
+        return false;
+    };
+    let lhs = lhs.trim();
+
+    if lhs.contains(',') {
+        return false;
+    }
+
+    let alias = lhs.split(':').next().map(str::trim).unwrap_or(lhs);
+
+    !alias.is_empty() && is_identifier(alias)
+}
+
+fn is_identifier(input: &str) -> bool {
+    let mut chars = input.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
 fn is_identifier_byte(byte: u8) -> bool {
@@ -315,6 +419,22 @@ local First = require("first"); local Second = require("second")
     }
 
     #[test]
+    fn import_literals_only_match_static_local_bindings() {
+        let source = r#"
+local Player = import("./player")
+local Typed: any = import("./typed")
+print(import("./runtime"))
+"#;
+        let modules = module_specifier_literals(source)
+            .into_iter()
+            .filter(|literal| literal.kind == ModuleSpecifierKind::Import)
+            .map(|literal| literal.module)
+            .collect::<Vec<_>>();
+
+        assert_eq!(modules, vec!["./player", "./typed"]);
+    }
+
+    #[test]
     fn creates_document_links_for_resolved_require_modules() {
         let temp = TempProject::new("module-links");
         let source = r#"local Player = require("player")
@@ -332,6 +452,26 @@ local Missing = require("missing")
         assert_eq!(links.len(), 2);
         assert_eq!(links[0].target, temp.path.join("src/player.tua"));
         assert_eq!(links[1].target, temp.path.join("src/legacy.lua"));
+    }
+
+    #[test]
+    fn creates_document_links_for_resolved_import_modules() {
+        let temp = TempProject::new("import-module-links");
+        let source = r#"local Player = import("./player")
+local Shared = import("./shared")
+local Missing = import("./missing")
+"#;
+
+        temp.write("tua.toml", "source = \"src\"\n");
+        temp.write("src/main.tua", source);
+        temp.write("src/player.tua", "return {}\n");
+        temp.write("src/shared/init.lua", "return {}\n");
+
+        let links = module_links_tua_source(temp.path.join("src/main.tua"), source);
+
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].target, temp.path.join("src/player.tua"));
+        assert_eq!(links[1].target, temp.path.join("src/shared/init.lua"));
     }
 
     struct TempProject {

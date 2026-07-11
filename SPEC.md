@@ -410,7 +410,7 @@ Parse errors always block emission for the affected file.
 
 ## Modules
 
-tua v1 preserves Lua's existing `require` style.
+tua v1 preserves Lua's existing `require` style for normal Lua module loading.
 
 ```tua
 local Player = require("player")
@@ -422,9 +422,19 @@ Emitted Lua:
 local Player = require("player")
 ```
 
-v1 does not introduce `import`, `export`, or type-only import syntax. Cross-file
-type discovery may be added by scanning project files for type aliases, but
-runtime module semantics remain normal Lua.
+Tua also recognizes a compile-time import helper in top-level local bindings:
+
+```tua
+local Player = import("./player")
+local Utils = import("shared.utils")
+```
+
+The helper is not a keyword and no runtime shim is emitted. It resolves relative
+to the current source file for child paths such as `./player`, or through the
+configured module roots for project module names such as `shared.utils`, then
+emits ordinary Lua `require("...")`. Parent traversal such as `../shared` is not
+allowed; use a project module name instead. V1 does not introduce `export`,
+type-only imports, named imports, or statement-style import syntax.
 
 ## LOVE-Focused Builtins
 
@@ -599,6 +609,7 @@ Expected behavior:
 - erases type-only syntax;
 - lowers supported sugar;
 - preserves `require`;
+- lowers static `import("./...")` and `import("module")` bindings to `require`;
 - fails without emission when blocking errors are found.
 
 ### `tua build --emit-on-error`
@@ -639,7 +650,7 @@ The extension should provide:
 - hover for known aliases, locals, parameters, functions, table fields, Lua
   builtins, LOVE API items, module exports, and supported LuaDoc docs;
 - completion for known aliases, locals, table fields, Lua builtins, LOVE API
-  items, LuaDoc tags/types/snippets, require paths, required-module fields, and
+  items, LuaDoc tags/types/snippets, require/import paths, module fields, and
   auto-import candidates;
 - full-document formatting through the language server formatter;
 - signature help for known function calls, including supported parameter docs;
@@ -802,6 +813,8 @@ The v1 implementation is acceptable when:
 - compound assignment examples lower correctly;
 - unsupported complex compound assignments produce diagnostics;
 - `require` calls are preserved;
+- static `import("./...")` and `import("module")` module bindings lower to
+  `require`;
 - `tua check`, `tua fmt`, `tua lint`, `tua build`, `tua watch`, and `tua lsp`
   exist;
 - the VS Code extension can surface diagnostics from `tua lsp`.

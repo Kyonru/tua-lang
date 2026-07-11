@@ -17,6 +17,22 @@ when the module shape is simple enough to analyze.
 Dynamic Lua remains permissive. Unknown values usually become `any` or stay
 quiet instead of producing speculative diagnostics.
 
+## Static Imports Between Tua Modules
+
+Tua files can bind project modules with a static `import(...)` helper:
+
+```tua
+local Player = import("./player")
+local Shared = import("shared")
+```
+
+This is compile-time sugar only. Child paths such as `./player` resolve from the
+current source file; cross-folder modules use project module names such as
+`shared` or `engine.foo`. Parent traversal such as `../shared` is rejected. Static
+imports participate in the same module graph as `require(...)` and emit normal
+Lua `require("...")` calls. Use `require(...)` directly for external Lua
+packages and runtime-computed module names.
+
 ## Requiring Tua From Lua
 
 Tua builds `.tua` files into `.lua` files under the configured output directory.
