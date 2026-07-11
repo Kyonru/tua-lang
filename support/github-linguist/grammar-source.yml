@@ -1,0 +1,5 @@
+name: Tua
+scope: source.tua
+source_path: editors/vscode/syntaxes/tua.tmLanguage.json
+note: Publish this grammar from a public repository, then add it to Linguist with script/add-grammar.
+

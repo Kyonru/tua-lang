@@ -1,0 +1,64 @@
+type Vec2 = {
+  x: number,
+  y: number,
+}
+
+type Player = {
+  name: string,
+  pos: Vec2,
+  hp: number,
+  alive: boolean,
+}
+
+type LoadMode = "static" | "stream"
+
+enum FilterMode
+  "linear"
+  "nearest"
+end
+
+local function makePlayer(name: string, hp: number = 100): Player
+  return {
+    name = name,
+    pos = { x = 0, y = 0 },
+    hp = hp,
+    alive = true,
+  }
+end
+
+local function damage(player: Player, amount: number): Player
+  player.hp -= amount
+
+  if player.hp <= 0 then
+    player.alive = false
+  end
+
+  return player
+end
+
+function describe(player: Player, mode?: string): string
+  if mode == "short" then
+    if player.alive then
+      return "up"
+    end
+
+    return "down"
+  end
+
+  if player.alive then
+    return "alive"
+  end
+
+  return "down"
+end
+
+local player: Player = makePlayer("Ada")
+damage(player, 15)
+
+return {
+  makePlayer = makePlayer,
+  damage = damage,
+  describe = describe,
+  sample = player,
+}
+

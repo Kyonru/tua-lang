@@ -1,0 +1,4 @@
+# Tua is not available in GitHub Linguist until it is accepted upstream.
+# Keep the intended repository override here so it starts working once accepted.
+*.tua linguist-language=Tua
+

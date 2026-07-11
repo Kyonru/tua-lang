@@ -27,6 +27,8 @@ make lsp-features-smoke
 make extension-package
 ```
 
+GitHub Linguist support materials live in `support/github-linguist/`.
+
 Serve the documentation site locally:
 
 ```sh

@@ -1,0 +1,12 @@
+Tua:
+  type: programming
+  color: "#8ACDD7"
+  extensions:
+  - ".tua"
+  tm_scope: source.tua
+  ace_mode: lua
+  codemirror_mode: lua
+  codemirror_mime_type: text/x-lua
+  wrap: true
+  # GitHub Linguist assigns the final numeric language_id during upstreaming.
+
