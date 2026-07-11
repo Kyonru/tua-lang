@@ -135,6 +135,15 @@ Emitted Lua:
 
 No code is emitted for a type alias.
 
+Inside a type alias body, `Self` resolves to the alias currently being defined.
+This is useful for recursive shapes:
+
+```tua
+type Node = {
+  parent: Self | nil,
+}
+```
+
 ### Table Shapes
 
 Table shape types describe known fields.
@@ -220,7 +229,9 @@ Supported v1 facts:
 - colon-defined methods with annotations, such as
   `function Account:withdraw(amount: number): number`, are typed internally as
   if they had a leading `self` parameter. If a type alias named `Account`
-  exists, that receiver is typed as `Account`; otherwise it remains `any`;
+  exists, that receiver is typed as `Account`; otherwise it remains `any`.
+  `Self` in that method's parameter or return annotations resolves to the same
+  receiver type;
 - simple `__index` table/function fallbacks may expose known string keys;
 - self-index class tables such as `Account.__index = Account` may expose
   methods on instances created with `setmetatable({}, Account)`;

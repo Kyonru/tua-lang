@@ -90,6 +90,7 @@ Useful static facts include:
 - string literal types such as `"static"` and `"stream"`;
 - local annotations and simple initializer inference;
 - function parameter and return annotations;
+- scoped `Self` in type aliases and named colon-method annotations;
 - trailing default and optional parameters such as `duration: number = 0.3`
   and `easing?: string`;
 - inferred returns for simple unannotated functions;
@@ -275,7 +276,14 @@ type Vec2 = {
 }
 ```
 
-Aliases are erased from emitted Lua.
+Aliases are erased from emitted Lua. Inside an alias body, `Self` resolves to
+the alias currently being defined:
+
+```tua
+type Node = {
+  parent: Self | nil,
+}
+```
 
 ## Table Shapes
 
@@ -444,7 +452,9 @@ lookupObject:y(2)
 Colon-defined methods with annotations get a typed receiver internally. For
 example, `function Account:withdraw(amount: number): number` is checked as
 though it had a leading `self: Account` parameter when a type alias named
-`Account` exists. The emitted Lua still uses the original colon method syntax.
+`Account` exists. `Self` in that method's parameter or return annotations
+resolves to the same receiver type, so `function Account:chain(): Self` returns
+`Account`. The emitted Lua still uses the original colon method syntax.
 
 For static `setmetatable(object, metatable)` calls where both sides are known
 tables, Tua propagates useful metatable facts into the object shape. The current

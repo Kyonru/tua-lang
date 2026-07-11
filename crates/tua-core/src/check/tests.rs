@@ -1364,6 +1364,31 @@ account:withdraw(10)
 }
 
 #[test]
+fn accepts_self_type_in_colon_method_annotations() {
+    check_tua_source(
+        "src/account.tua",
+        r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): Self
+  self.balance += amount
+  return self
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+local updated: Account = account:deposit(25)
+updated.balance = updated.balance + 1
+"#,
+    )
+    .expect("Self should resolve to the receiver type in typed colon methods");
+}
+
+#[test]
 fn rejects_typed_colon_method_argument_mismatch() {
     let diagnostics = check_tua_source(
         "src/account.tua",

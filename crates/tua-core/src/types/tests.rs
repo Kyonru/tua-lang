@@ -430,6 +430,86 @@ end
 }
 
 #[test]
+fn resolves_self_type_in_alias_and_colon_method_annotations() {
+    let parsed = parse_tua_source(
+        "src/account.tua",
+        r#"
+type Node = {
+  parent: Self | nil,
+}
+
+type Account = {
+  balance: number,
+}
+
+function Account:merge(other: Self): Self
+  return self
+end
+"#,
+    )
+    .expect("Self source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("Self should resolve in scoped annotations");
+
+    let Type::Table(node) = environment.alias("Node").expect("Node alias should exist") else {
+        panic!("Node should lower to a table shape");
+    };
+
+    assert_eq!(
+        node.field("parent").map(|field| &field.ty),
+        Some(&Type::union([Type::alias("Node"), Type::nil()]))
+    );
+
+    let function = environment
+        .function("Account:merge")
+        .expect("Self method should be collected");
+
+    assert_eq!(function.parameters[0].ty, Type::alias("Account"));
+    assert_eq!(function.parameters[1].ty, Type::alias("Account"));
+    assert_eq!(function.return_type, Some(Type::alias("Account")));
+}
+
+#[test]
+fn resolves_self_type_in_lua_doc_class_and_method_annotations() {
+    let parsed = parse_lua_source(
+        "src/account.lua",
+        r#"---@class Account
+---@field balance number
+---@field peer Self
+local Account = {}
+
+---@param other Self
+---@return Self
+function Account:merge(other)
+  return self
+end
+"#,
+    )
+    .expect("LuaDoc Self source should parse");
+    let environment =
+        build_type_environment(&parsed).expect("LuaDoc Self should resolve in scoped annotations");
+
+    let Type::Table(account) = environment
+        .alias("Account")
+        .expect("Account alias should exist")
+    else {
+        panic!("Account should lower to a table shape");
+    };
+
+    assert_eq!(
+        account.field("peer").map(|field| &field.ty),
+        Some(&Type::alias("Account"))
+    );
+
+    let function = environment
+        .function("Account:merge")
+        .expect("LuaDoc Self method should be collected");
+
+    assert_eq!(function.parameters[0].ty, Type::alias("Account"));
+    assert_eq!(function.return_type, Some(Type::alias("Account")));
+}
+
+#[test]
 fn infers_function_return_types_from_annotated_parameters() {
     let parsed = parse_tua_source(
         "src/functions.tua",

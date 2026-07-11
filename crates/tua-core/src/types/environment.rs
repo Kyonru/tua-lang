@@ -222,12 +222,14 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
             continue;
         }
 
-        let ty = resolve_tua_type(
+        let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
+        let ty = resolve_tua_type_with_context(
             &parsed.path,
             &alias.ty,
             alias.span,
             &alias_names,
             &mut diagnostics,
+            &context,
         );
         aliases.insert(alias.name.clone(), ty);
     }
@@ -237,12 +239,14 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
             continue;
         }
 
-        let ty = resolve_tua_type(
+        let context = TypeResolutionContext::with_self_type(Type::alias(alias.name.clone()));
+        let ty = resolve_tua_type_with_context(
             &parsed.path,
             &alias.ty,
             Some(alias.span),
             &alias_names,
             &mut diagnostics,
+            &context,
         );
 
         aliases.insert(alias.name.clone(), ty);
@@ -343,17 +347,23 @@ fn resolve_function_annotation(
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> TypedFunction {
+    let self_type = function
+        .name
+        .as_deref()
+        .and_then(|name| function_self_type(name, alias_names));
+    let context = TypeResolutionContext::from_self_type(self_type.clone());
     let mut parameters = function
         .parameters
         .iter()
         .map(|parameter| TypedParameter {
             name: parameter.name.clone(),
-            ty: resolve_tua_type(
+            ty: resolve_tua_type_with_context(
                 path,
                 &parameter.ty,
                 parameter.span,
                 alias_names,
                 diagnostics,
+                &context,
             ),
             documentation: None,
         })
@@ -361,12 +371,12 @@ fn resolve_function_annotation(
     let mut parameter_count = function.parameter_count;
     let mut required_parameter_count = function.required_parameter_count;
 
-    if let Some((owner, _, true)) = function.name.as_deref().and_then(function_name_table_field) {
+    if let Some(receiver_type) = self_type {
         parameters.insert(
             0,
             TypedParameter {
                 name: "self".to_owned(),
-                ty: receiver_type_for_owner(&owner, alias_names),
+                ty: receiver_type,
                 documentation: None,
             },
         );
@@ -374,10 +384,9 @@ fn resolve_function_annotation(
         required_parameter_count += 1;
     }
 
-    let return_type = function
-        .return_type
-        .as_ref()
-        .map(|ty| resolve_tua_type(path, ty, function.span, alias_names, diagnostics));
+    let return_type = function.return_type.as_ref().map(|ty| {
+        resolve_tua_type_with_context(path, ty, function.span, alias_names, diagnostics, &context)
+    });
     let return_types = return_type.iter().cloned().collect();
 
     TypedFunction {
@@ -392,6 +401,14 @@ fn resolve_function_annotation(
         documentation: None,
         overloads: Vec::new(),
     }
+}
+
+fn function_self_type(name: &str, alias_names: &BTreeSet<String>) -> Option<Type> {
+    let (owner, _, true) = function_name_table_field(name)? else {
+        return None;
+    };
+
+    Some(receiver_type_for_owner(&owner, alias_names))
 }
 
 fn receiver_type_for_owner(owner: &str, alias_names: &BTreeSet<String>) -> Type {
@@ -796,6 +813,7 @@ fn lua_doc_function_for_code_line(
     }
 
     let name = annotated_function_name(group.code)?;
+    let context = TypeResolutionContext::from_self_type(function_self_type(&name, alias_names));
     let parameter_names = group
         .annotations
         .iter()
@@ -811,12 +829,13 @@ fn lua_doc_function_for_code_line(
             let doc = param_annotations.get(&name);
             let ty = doc
                 .map(|annotation| {
-                    resolve_tua_type(
+                    resolve_tua_type_with_context(
                         &parsed.path,
                         &annotation.0.ty,
                         Some(annotation.0.type_span),
                         alias_names,
                         diagnostics,
+                        &context,
                     )
                 })
                 .unwrap_or(Type::Any);
@@ -837,7 +856,13 @@ fn lua_doc_function_for_code_line(
                     .returns
                     .iter()
                     .map(|ty| {
-                        resolve_lua_doc_return_type(&parsed.path, ty, alias_names, diagnostics)
+                        resolve_lua_doc_return_type(
+                            &parsed.path,
+                            ty,
+                            alias_names,
+                            diagnostics,
+                            &context,
+                        )
                     })
                     .collect::<Vec<_>>(),
             ),
@@ -849,12 +874,13 @@ fn lua_doc_function_for_code_line(
         .annotations
         .iter()
         .find_map(|annotation| match &annotation.kind {
-            LuaDocAnnotationKind::Vararg(vararg) => Some(resolve_tua_type(
+            LuaDocAnnotationKind::Vararg(vararg) => Some(resolve_tua_type_with_context(
                 &parsed.path,
                 &vararg.ty,
                 Some(vararg.type_span),
                 alias_names,
                 diagnostics,
+                &context,
             )),
             _ => None,
         });
@@ -869,7 +895,13 @@ fn lua_doc_function_for_code_line(
         return_type,
         return_types,
         documentation: lua_doc_documentation(&group.annotations),
-        overloads: lua_doc_overloads(parsed, &group.annotations, alias_names, diagnostics),
+        overloads: lua_doc_overloads(
+            parsed,
+            &group.annotations,
+            alias_names,
+            diagnostics,
+            &context,
+        ),
     })
 }
 
@@ -913,7 +945,7 @@ fn annotated_function_name(code: &str) -> Option<String> {
 fn take_name(rest: &str) -> Option<String> {
     let end = rest
         .char_indices()
-        .find_map(|(index, ch)| (!is_name_char(ch) && ch != '.').then_some(index))
+        .find_map(|(index, ch)| (!is_name_char(ch) && ch != '.' && ch != ':').then_some(index))
         .unwrap_or(rest.len());
 
     (end > 0).then(|| rest[..end].trim().to_owned())
@@ -1061,6 +1093,10 @@ pub(crate) fn typed_function_from_lua_doc_body(
         return None;
     }
 
+    let context = TypeResolutionContext::from_self_type(
+        name.as_deref()
+            .and_then(|name| function_self_type(name, alias_names)),
+    );
     let parameter_count = body
         .parameters()
         .iter()
@@ -1071,12 +1107,13 @@ pub(crate) fn typed_function_from_lua_doc_body(
         .iter()
         .any(|parameter| matches!(parameter, ast::Parameter::Ellipsis(_)));
     let vararg_type = vararg_annotation.map(|(_, vararg)| {
-        resolve_tua_type(
+        resolve_tua_type_with_context(
             &parsed.path,
             &vararg.ty,
             Some(vararg.type_span),
             alias_names,
             diagnostics,
+            &context,
         )
     });
     let parameters = body
@@ -1090,12 +1127,13 @@ pub(crate) fn typed_function_from_lua_doc_body(
             let doc = param_annotations.get(&name);
             let ty = doc
                 .map(|annotation| {
-                    resolve_tua_type(
+                    resolve_tua_type_with_context(
                         &parsed.path,
                         &annotation.0.ty,
                         Some(annotation.0.type_span),
                         alias_names,
                         diagnostics,
+                        &context,
                     )
                 })
                 .unwrap_or(Type::Any);
@@ -1114,6 +1152,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
                 ty,
                 alias_names,
                 diagnostics,
+                &context,
             )]
         })
         .unwrap_or_default();
@@ -1130,7 +1169,7 @@ pub(crate) fn typed_function_from_lua_doc_body(
         return_type,
         return_types,
         documentation,
-        overloads: lua_doc_overloads(parsed, docs, alias_names, diagnostics),
+        overloads: lua_doc_overloads(parsed, docs, alias_names, diagnostics, &context),
     })
 }
 
@@ -1153,6 +1192,7 @@ fn lua_doc_overloads(
     docs: &[&LuaDocAnnotation],
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
 ) -> Vec<TypedFunctionOverload> {
     docs.iter()
         .filter_map(|annotation| match &annotation.kind {
@@ -1163,6 +1203,7 @@ fn lua_doc_overloads(
                 annotation.documentation.clone(),
                 alias_names,
                 diagnostics,
+                context,
             ),
             _ => None,
         })
@@ -1176,6 +1217,7 @@ fn overload_from_tua_type(
     documentation: Option<String>,
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
 ) -> Option<TypedFunctionOverload> {
     let TuaType::Function {
         parameters,
@@ -1191,17 +1233,25 @@ fn overload_from_tua_type(
     for parameter in parameters {
         if function_type_parameter_is_vararg(parameter) {
             has_varargs = true;
-            vararg_type = Some(resolve_tua_type(
+            vararg_type = Some(resolve_tua_type_with_context(
                 &parsed.path,
                 &parameter.ty,
                 span,
                 alias_names,
                 diagnostics,
+                context,
             ));
             continue;
         }
 
-        let ty = resolve_tua_type(&parsed.path, &parameter.ty, span, alias_names, diagnostics);
+        let ty = resolve_tua_type_with_context(
+            &parsed.path,
+            &parameter.ty,
+            span,
+            alias_names,
+            diagnostics,
+            context,
+        );
         typed_parameters.push(TypedParameter {
             name: parameter.name.clone().unwrap_or_default(),
             ty: if parameter.optional {
@@ -1215,7 +1265,9 @@ fn overload_from_tua_type(
 
     let return_types = returns
         .iter()
-        .map(|ty| resolve_tua_type(&parsed.path, ty, span, alias_names, diagnostics))
+        .map(|ty| {
+            resolve_tua_type_with_context(&parsed.path, ty, span, alias_names, diagnostics, context)
+        })
         .collect();
 
     Some(TypedFunctionOverload {
@@ -1237,8 +1289,16 @@ fn resolve_lua_doc_return_type(
     ty: &LuaDocReturnType,
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
 ) -> Type {
-    resolve_tua_type(path, &ty.ty, Some(ty.type_span), alias_names, diagnostics)
+    resolve_tua_type_with_context(
+        path,
+        &ty.ty,
+        Some(ty.type_span),
+        alias_names,
+        diagnostics,
+        context,
+    )
 }
 
 fn lua_doc_documentation(docs: &[&LuaDocAnnotation]) -> Option<String> {
@@ -3506,6 +3566,27 @@ fn unquote_string(value: &str) -> String {
         .to_owned()
 }
 
+#[derive(Clone, Debug, Default)]
+struct TypeResolutionContext {
+    self_type: Option<Type>,
+}
+
+impl TypeResolutionContext {
+    fn from_self_type(self_type: Option<Type>) -> Self {
+        Self { self_type }
+    }
+
+    fn with_self_type(self_type: Type) -> Self {
+        Self {
+            self_type: Some(self_type),
+        }
+    }
+
+    fn self_type(&self) -> Option<&Type> {
+        self.self_type.as_ref()
+    }
+}
+
 fn resolve_tua_type(
     path: &Path,
     ty: &TuaType,
@@ -3513,34 +3594,50 @@ fn resolve_tua_type(
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Type {
+    let context = TypeResolutionContext::default();
+
+    resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, &context)
+}
+
+fn resolve_tua_type_with_context(
+    path: &Path,
+    ty: &TuaType,
+    span: Option<SourceSpan>,
+    alias_names: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
+) -> Type {
     match ty {
-        TuaType::Named(name) => resolve_named_type(path, name, span, alias_names, diagnostics),
+        TuaType::Named(name) => {
+            resolve_named_type(path, name, span, alias_names, diagnostics, context)
+        }
         TuaType::StringLiteral(value) => Type::string_literal(value),
-        TuaType::Union(types) => Type::union(
-            types
-                .iter()
-                .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics)),
-        ),
+        TuaType::Union(types) => Type::union(types.iter().map(|ty| {
+            resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
+        })),
         TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
             (
                 field.name.clone(),
                 TableField {
-                    ty: resolve_table_field_type(path, field, alias_names, diagnostics),
+                    ty: resolve_table_field_type(path, field, alias_names, diagnostics, context),
                     optional: field.optional,
                 },
             )
         })),
-        TuaType::Array(item) => {
-            Type::array(resolve_tua_type(path, item, span, alias_names, diagnostics))
-        }
-        TuaType::Tuple(items) => Type::tuple(
-            items
-                .iter()
-                .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics)),
-        ),
+        TuaType::Array(item) => Type::array(resolve_tua_type_with_context(
+            path,
+            item,
+            span,
+            alias_names,
+            diagnostics,
+            context,
+        )),
+        TuaType::Tuple(items) => Type::tuple(items.iter().map(|ty| {
+            resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
+        })),
         TuaType::Dictionary { key, value } => Type::dictionary(
-            resolve_tua_type(path, key, span, alias_names, diagnostics),
-            resolve_tua_type(path, value, span, alias_names, diagnostics),
+            resolve_tua_type_with_context(path, key, span, alias_names, diagnostics, context),
+            resolve_tua_type_with_context(path, value, span, alias_names, diagnostics, context),
         ),
         TuaType::Function {
             parameters,
@@ -3553,7 +3650,14 @@ fn resolve_tua_type(
             let parameters = parameters
                 .iter()
                 .map(|parameter| {
-                    let ty = resolve_tua_type(path, &parameter.ty, span, alias_names, diagnostics);
+                    let ty = resolve_tua_type_with_context(
+                        path,
+                        &parameter.ty,
+                        span,
+                        alias_names,
+                        diagnostics,
+                        context,
+                    );
 
                     if parameter.optional {
                         Type::union([ty, Type::nil()])
@@ -3564,7 +3668,9 @@ fn resolve_tua_type(
                 .collect::<Vec<_>>();
             let returns = returns
                 .iter()
-                .map(|ty| resolve_tua_type(path, ty, span, alias_names, diagnostics))
+                .map(|ty| {
+                    resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
+                })
                 .collect::<Vec<_>>();
 
             Type::function_returns_with_required(parameters, required_parameter_count, returns)
@@ -3577,8 +3683,16 @@ fn resolve_table_field_type(
     field: &ParsedTableFieldType,
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
 ) -> Type {
-    resolve_tua_type(path, &field.ty, field.span, alias_names, diagnostics)
+    resolve_tua_type_with_context(
+        path,
+        &field.ty,
+        field.span,
+        alias_names,
+        diagnostics,
+        context,
+    )
 }
 
 fn resolve_named_type(
@@ -3587,6 +3701,7 @@ fn resolve_named_type(
     span: Option<SourceSpan>,
     alias_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
 ) -> Type {
     let name = name.trim();
 
@@ -3597,6 +3712,19 @@ fn resolve_named_type(
         "nil" => Type::nil(),
         "any" => Type::Any,
         "identifier" => Type::string(),
+        "Self" => context.self_type().cloned().unwrap_or_else(|| {
+            if alias_names.contains(name) {
+                Type::alias(name)
+            } else {
+                diagnostics.push(type_diagnostic(
+                    path,
+                    span,
+                    format!("unknown type `{name}`"),
+                    DiagnosticCode::TYPE_UNKNOWN_NAME,
+                ));
+                Type::Any
+            }
+        }),
         _ if alias_names.contains(name) => Type::alias(name),
         _ => {
             diagnostics.push(type_diagnostic(

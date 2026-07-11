@@ -118,7 +118,9 @@ arrays such as `Image[]`, tuples such as `[number, number]`, dictionaries such
 as `{ [string]: Source }`, key-value tables such as `table<string, Image>`, and
 function types such as `fun(path: string): Image`. The LuaHelper `identifier`
 type keyword is treated as `string`; Tua does not currently model it as a
-separate name-like type.
+separate name-like type. Inside `---@class` fields and annotations attached to
+named colon methods, `Self` resolves to the class or receiver type being
+described.
 
 `---@overload` entries add extra call signatures for a known function. Signature
 help can show and select those overloads, and call diagnostics use the matching

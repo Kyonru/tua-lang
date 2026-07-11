@@ -610,6 +610,28 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_receiver_type_from_self_returning_method() {
+    let source = r#"
+type Account = {
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): Self
+  self.balance += amount
+  return self
+end
+
+local account = setmetatable({ balance = 100 }, Account)
+local updated = account:deposit(25)
+"#;
+
+    assert_hover_in_source(source, "updated = account", 0, "local updated: Account");
+}
+
+#[test]
 fn hovers_metatable_index_chain_inherited_methods() {
     let source = r#"
 local Base = {}

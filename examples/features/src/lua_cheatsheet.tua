@@ -292,6 +292,7 @@ local joined = joinWithSpaces("Lua", "inside", "Tua")
 -- Because the type alias and table are both named Account, a declaration like
 -- function Account:withdraw(amount: number): number is checked internally like
 -- function Account.withdraw(self: Account, amount: number): number.
+-- `Self` in a named colon method annotation resolves to the same receiver type.
 type Account = {
   name: string,
   balance: number,
@@ -309,10 +310,10 @@ function Account:new(name, balance)
   return setmetatable(instance, self)
 end
 
-function Account:deposit(amount: number): number
+function Account:deposit(amount: number): Self
   self.balance = self.balance + amount
 
-  return self.balance
+  return self
 end
 
 function Account:withdraw(amount: number): number
@@ -324,7 +325,7 @@ end
 local account = setmetatable({ name = "checking", balance = 50 }, Account)
 -- Feature: metatable method navigation.
 -- Go to definition on deposit/withdraw jumps back to the Account methods.
-account:deposit(25)
+local accountAfterDeposit: Account = account:deposit(25)
 account:withdraw(10)
 
 -- Feature: prototype-style metatable inheritance.
@@ -348,7 +349,7 @@ local auditText = auditedAccount:audit()
 -- explicit self and colon-call forms use the same field type.
 local lookupObject = {
   count = 0,
-  y = function(self: Self, amount: number): number
+  y = function(self: any, amount: number): number
     self.count = self.count + amount
 
     return self.count
@@ -671,6 +672,7 @@ return {
   objects = {
     Account = Account,
     account = account,
+    accountAfterDeposit = accountAfterDeposit,
     lookupObject = lookupObject,
     methodCallOne = methodCallOne,
     methodCallTwo = methodCallTwo,
