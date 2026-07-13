@@ -1,3 +1,7 @@
+---
+icon: lucide/puzzle
+---
+
 # Domain Plugins
 
 Tua's domain plugin model is a design direction for LOVE-focused extensions. It

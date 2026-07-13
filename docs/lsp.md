@@ -1,3 +1,7 @@
+---
+icon: lucide/server
+---
+
 # Language Server
 
 Tua ships a stdio language server through:

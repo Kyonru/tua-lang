@@ -38,6 +38,8 @@ nav = [
 
 [project.theme]
 language = "en"
+favicon = "assets/icon.svg"
+logo = "assets/icon.png"
 
 features = [
   "content.code.annotate",

@@ -1,3 +1,7 @@
+---
+icon: lucide/terminal
+---
+
 # CLI
 
 The Tua CLI is provided by the `tua-cli` crate.

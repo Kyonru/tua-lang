@@ -1,3 +1,7 @@
+---
+icon: lucide/book-open
+---
+
 # Learn Tua
 
 This page is a guided path through Tua. Use it when you want the language model

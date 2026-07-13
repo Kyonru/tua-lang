@@ -1,3 +1,7 @@
+---
+icon: lucide/zap
+---
+
 # Quickstart
 
 This guide creates a small Tua project, checks it, and emits Lua.

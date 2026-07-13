@@ -1,3 +1,7 @@
+---
+icon: lucide/map
+---
+
 # Roadmap
 
 The canonical roadmap lives at the repository root:

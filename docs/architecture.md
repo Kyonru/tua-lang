@@ -1,3 +1,7 @@
+---
+icon: lucide/workflow
+---
+
 # Architecture
 
 This page is the contributor guide for Tua's compiler and language-server

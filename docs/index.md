@@ -1,3 +1,7 @@
+---
+icon: lucide/home
+---
+
 # Tua
 
 **Typed Lua source-to-source tooling for LuaJIT and LOVE projects.**

@@ -1,3 +1,7 @@
+---
+icon: lucide/braces
+---
+
 # Language
 
 Tua is a typed Lua superset for LuaJIT and LOVE projects. It keeps Lua as the

@@ -1,3 +1,7 @@
+---
+icon: lucide/flask-conical
+---
+
 # Examples
 
 The repository includes examples for language features and LOVE workflows.

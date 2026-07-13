@@ -1,3 +1,7 @@
+---
+icon: lucide/clipboard-list
+---
+
 # LuaHelper Code Matrix
 
 This matrix maps LuaHelper check identifiers, warning settings, and annotation

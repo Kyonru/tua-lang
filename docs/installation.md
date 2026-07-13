@@ -1,3 +1,7 @@
+---
+icon: lucide/package
+---
+
 # Installation
 
 Tua is currently developed from source as a Rust workspace.

@@ -1,3 +1,7 @@
+---
+icon: lucide/repeat-2
+---
+
 # Lua Interop
 
 Tua is designed for existing Lua projects. It preserves normal Lua `require`

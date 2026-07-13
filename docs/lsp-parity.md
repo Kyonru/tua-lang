@@ -1,3 +1,7 @@
+---
+icon: lucide/table-2
+---
+
 # LSP Parity Matrix
 
 This matrix tracks Tua's current LSP behavior against LuaHelper-style Lua
