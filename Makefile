@@ -6,6 +6,7 @@ NPX ?= npx
 CODE ?= code
 LOVE ?= love
 VSCE ?= $(NPX) --yes @vscode/vsce
+RSVG_CONVERT ?= rsvg-convert
 
 TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
@@ -15,6 +16,11 @@ UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
 RELEASE_TUA := target/release/tua$(EXE_SUFFIX)
 VSCODE_TUA := $(VSCODE_DIR)/bin/tua$(EXE_SUFFIX)
+LOGO_SVG := logo.svg
+VSCODE_LOGO_SVG := $(VSCODE_DIR)/assets/logo.svg
+VSCODE_LOGO_PNG := $(VSCODE_DIR)/assets/logo.png
+DOCS_ICON_SVG := docs/assets/icon.svg
+DOCS_ICON_PNG := docs/assets/icon.png
 
 .PHONY: help
 help: ## Show available targets.
@@ -46,6 +52,15 @@ docs: ## Serve the Zensical documentation site locally.
 .PHONY: docs-build
 docs-build: ## Build the Zensical documentation site.
 	bash scripts/docs.sh build
+
+.PHONY: logo
+logo: ## Sync logo assets and render 256px PNGs for docs and the VS Code extension.
+	@command -v $(RSVG_CONVERT) >/dev/null 2>&1 || { echo "error: $(RSVG_CONVERT) not found. Install it with: brew install librsvg"; exit 1; }
+	mkdir -p $(VSCODE_DIR)/assets docs/assets
+	cp $(LOGO_SVG) $(VSCODE_LOGO_SVG)
+	cp $(LOGO_SVG) $(DOCS_ICON_SVG)
+	$(RSVG_CONVERT) -w 256 -h 256 $(LOGO_SVG) -o $(VSCODE_LOGO_PNG)
+	$(RSVG_CONVERT) -w 256 -h 256 $(LOGO_SVG) -o $(DOCS_ICON_PNG)
 
 .PHONY: cli-help
 cli-help: ## Print tua CLI help.
