@@ -753,6 +753,10 @@ impl AnalysisSnapshot {
         self.core.inlay_hints(path)
     }
 
+    pub(super) fn inlay_hints_in_range(&self, path: &Path, range: SourceSpan) -> Vec<InlayHint> {
+        self.core.inlay_hints_in_range(path, range)
+    }
+
     pub(super) fn semantic_tokens(&self, path: &Path) -> Vec<SemanticToken> {
         self.core.semantic_tokens(path)
     }

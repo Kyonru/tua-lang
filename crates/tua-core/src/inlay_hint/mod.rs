@@ -7,7 +7,7 @@ use full_moon::node::Node;
 
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment, Type, TypeEnvironment};
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
+use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InlayHint {
@@ -44,8 +44,17 @@ pub(crate) fn inlay_hints_parsed_source_with_environment(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
 ) -> Vec<InlayHint> {
+    inlay_hints_parsed_source_with_environment_in_range(parsed, environment, None)
+}
+
+pub(crate) fn inlay_hints_parsed_source_with_environment_in_range(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    range: Option<SourceSpan>,
+) -> Vec<InlayHint> {
     let mut collector = InlayHintCollector {
         semantic: SemanticModel::new(parsed, environment),
+        range,
         hints: Vec::new(),
     };
 
@@ -59,16 +68,25 @@ pub(crate) fn inlay_hints_parsed_source_with_environment(
 
 struct InlayHintCollector<'a> {
     semantic: SemanticModel<'a>,
+    range: Option<SourceSpan>,
     hints: Vec<InlayHint>,
 }
 
 impl<'a> InlayHintCollector<'a> {
     fn collect_block(&mut self, block: &ast::Block) {
         for stmt in block.stmts() {
+            if !self.node_overlaps_range(stmt) {
+                continue;
+            }
+
             self.collect_stmt(stmt);
         }
 
         if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
+            if !self.node_overlaps_range(return_stmt) {
+                return;
+            }
+
             for expression in return_stmt.returns() {
                 self.collect_expression(expression);
             }
@@ -138,7 +156,7 @@ impl<'a> InlayHintCollector<'a> {
             };
 
             if should_hint_type(&ty) {
-                self.hints.push(InlayHint {
+                self.push_hint(InlayHint {
                     position: node_end(name),
                     label: format!(": {ty}"),
                     kind: InlayHintKind::Type,
@@ -159,7 +177,7 @@ impl<'a> InlayHintCollector<'a> {
             };
 
             if should_hint_type(&ty) {
-                self.hints.push(InlayHint {
+                self.push_hint(InlayHint {
                     position: node_end(name),
                     label: format!(": {ty}"),
                     kind: InlayHintKind::Type,
@@ -178,7 +196,7 @@ impl<'a> InlayHintCollector<'a> {
             self.collect_expression(step);
         }
 
-        self.hints.push(InlayHint {
+        self.push_hint(InlayHint {
             position: node_end(for_stmt.index_variable()),
             label: ": number".to_owned(),
             kind: InlayHintKind::Type,
@@ -188,6 +206,10 @@ impl<'a> InlayHintCollector<'a> {
     }
 
     fn collect_expression(&mut self, expression: &Expression) {
+        if !self.node_overlaps_range(expression) {
+            return;
+        }
+
         match expression {
             Expression::BinaryOperator { lhs, rhs, .. } => {
                 self.collect_expression(lhs);
@@ -233,7 +255,7 @@ impl<'a> InlayHintCollector<'a> {
             self.collect_expression(argument);
 
             if !parameter.name.is_empty() {
-                self.hints.push(InlayHint {
+                self.push_hint(InlayHint {
                     position: node_start(*argument),
                     label: format!("{}:", parameter.name),
                     kind: InlayHintKind::Parameter,
@@ -252,6 +274,26 @@ impl<'a> InlayHintCollector<'a> {
                 self.collect_expression(argument);
             }
         }
+    }
+
+    fn push_hint(&mut self, hint: InlayHint) {
+        if self
+            .range
+            .is_none_or(|range| range_contains_position(range, hint.position))
+        {
+            self.hints.push(hint);
+        }
+    }
+
+    fn node_overlaps_range(&self, node: &impl Node) -> bool {
+        let Some(range) = self.range else {
+            return true;
+        };
+        let Some(span) = node_span(node) else {
+            return true;
+        };
+
+        span_overlaps_range(span, range)
     }
 }
 
@@ -332,6 +374,21 @@ fn node_end(node: &impl Node) -> SourcePosition {
     node.range()
         .map(|(_, end)| SourcePosition::from_full_moon(end))
         .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
+}
+
+fn span_overlaps_range(span: SourceSpan, range: SourceSpan) -> bool {
+    position_key(span.start) <= position_key(range.end)
+        && position_key(range.start) <= position_key(span.end)
+}
+
+fn range_contains_position(range: SourceSpan, position: SourcePosition) -> bool {
+    position_key(range.start) <= position_key(position)
+        && position_key(position) <= position_key(range.end)
 }
 
 fn position_key(position: SourcePosition) -> (usize, usize) {

@@ -17,7 +17,9 @@ use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
 use crate::hover::hover_parsed_source_with_environment;
 use crate::ide_db::{SymbolIndexEntry, SymbolIndexKind};
-use crate::inlay_hint::inlay_hints_parsed_source_with_environment;
+use crate::inlay_hint::{
+    inlay_hints_parsed_source_with_environment, inlay_hints_parsed_source_with_environment_in_range,
+};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::module_specifier_at_position;
@@ -156,7 +158,6 @@ struct AnalysisFile {
 struct AnalysisSemanticFacts {
     environment: TypeEnvironment,
     semantic_index: SemanticIndex,
-    inlay_hints: OnceCell<Vec<InlayHint>>,
 }
 
 #[derive(Clone, Debug)]
@@ -1896,14 +1897,15 @@ impl AnalysisSnapshot {
 
     pub fn inlay_hints(&self, path: impl AsRef<Path>) -> Vec<InlayHint> {
         let _profile = profile::span("analysis.query.inlay_hints");
-        let Some(file) = self.file(path.as_ref()) else {
+        let path = path.as_ref();
+        let Some(file) = self.file(path) else {
             return Vec::new();
         };
         let parsed = match &file.parsed {
             Ok(parsed) => parsed,
             Err(_) => {
                 return self
-                    .recovered_semantic_facts(path.as_ref(), file)
+                    .recovered_semantic_facts(path, file)
                     .map(|facts| {
                         inlay_hints_parsed_source_with_environment(
                             &facts.parsed,
@@ -1913,18 +1915,50 @@ impl AnalysisSnapshot {
                     .unwrap_or_default();
             }
         };
-        let Some(facts) = self.semantic_facts_for_parsed(parsed) else {
+        let Some(environment) = self.project_type_environment_for_file(file, parsed) else {
             return inlay_hints_parsed_source(parsed).unwrap_or_default();
         };
 
-        facts
-            .inlay_hints
-            .get_or_init(|| {
-                let _profile = profile::span("analysis.semantic.inlay_hints");
+        inlay_hints_parsed_source_with_environment(parsed, &environment)
+    }
 
-                inlay_hints_parsed_source_with_environment(parsed, &facts.environment)
-            })
-            .clone()
+    pub fn inlay_hints_in_range(
+        &self,
+        path: impl AsRef<Path>,
+        range: SourceSpan,
+    ) -> Vec<InlayHint> {
+        let _profile = profile::span("analysis.query.inlay_hints.range");
+        let path = path.as_ref();
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+        let parsed = match &file.parsed {
+            Ok(parsed) => parsed,
+            Err(_) => {
+                return self
+                    .recovered_semantic_facts(path, file)
+                    .map(|facts| {
+                        inlay_hints_parsed_source_with_environment_in_range(
+                            &facts.parsed,
+                            &facts.environment,
+                            Some(range),
+                        )
+                    })
+                    .unwrap_or_default();
+            }
+        };
+        let Some(environment) = self.project_type_environment_for_file(file, parsed) else {
+            return inlay_hints_parsed_source(parsed)
+                .map(|hints| {
+                    hints
+                        .into_iter()
+                        .filter(|hint| contains_position(range, hint.position))
+                        .collect()
+                })
+                .unwrap_or_default();
+        };
+
+        inlay_hints_parsed_source_with_environment_in_range(parsed, &environment, Some(range))
     }
 
     pub fn semantic_tokens(&self, path: impl AsRef<Path>) -> Vec<SemanticToken> {
@@ -2599,7 +2633,6 @@ impl AnalysisSnapshot {
         let facts = Rc::new(AnalysisSemanticFacts {
             semantic_index: SemanticIndex::build(parsed, file.hir.as_ref(), &environment),
             environment,
-            inlay_hints: OnceCell::new(),
         });
 
         self.semantic_facts

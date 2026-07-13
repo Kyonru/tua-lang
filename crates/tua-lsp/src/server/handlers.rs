@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use serde_json::{json, Value};
-use tua_core::SourcePosition;
+use tua_core::{SourcePosition, SourceSpan};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -934,7 +934,17 @@ impl LspServer {
         let hints = {
             let _profile = tua_core::profile::span("lsp.inlay_hints.query");
 
-            snapshot.inlay_hints(&request.path)
+            range
+                .map(|range| {
+                    snapshot.inlay_hints_in_range(
+                        &request.path,
+                        SourceSpan {
+                            start: range.start,
+                            end: range.end,
+                        },
+                    )
+                })
+                .unwrap_or_else(|| snapshot.inlay_hints(&request.path))
         };
 
         Value::Array(
