@@ -160,6 +160,7 @@ struct AnalysisFile {
 struct AnalysisSemanticFacts {
     environment: TypeEnvironment,
     semantic_index: SemanticIndex,
+    project_inference: ProjectLocalInference,
 }
 
 #[derive(Clone, Debug)]
@@ -175,6 +176,7 @@ struct RecoveredSemanticFacts {
     hir: Option<HirModule>,
     environment: TypeEnvironment,
     semantic_index: SemanticIndex,
+    project_inference: ProjectLocalInference,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1114,11 +1116,11 @@ impl AnalysisSnapshot {
             Err(_) => {
                 let facts = self.recovered_semantic_facts(path, file)?;
 
-                self.definition_parsed_snapshot_with_index(
+                self.definition_parsed_snapshot_with_facts(
                     &facts.parsed,
                     facts.hir.as_ref(),
                     position,
-                    Some(&facts.semantic_index),
+                    Some(&facts),
                 )
             }
         };
@@ -1151,15 +1153,15 @@ impl AnalysisSnapshot {
         hir: Option<&HirModule>,
         position: SourcePosition,
     ) -> Option<Definition> {
-        self.definition_parsed_snapshot_with_index(parsed, hir, position, None)
+        self.definition_parsed_snapshot_with_facts(parsed, hir, position, None)
     }
 
-    fn definition_parsed_snapshot_with_index(
+    fn definition_parsed_snapshot_with_facts(
         &self,
         parsed: &ParsedSource,
         hir: Option<&HirModule>,
         position: SourcePosition,
-        recovered_index: Option<&SemanticIndex>,
+        recovered_facts: Option<&RecoveredSemanticFacts>,
     ) -> Option<Definition> {
         if let Some(definition) = self.module_definition(parsed, position) {
             return Some(definition);
@@ -1169,13 +1171,17 @@ impl AnalysisSnapshot {
             return None;
         }
 
-        if let Some(definition) =
-            self.project_imported_return_alias_field_definition(parsed, position)
-        {
+        if let Some(definition) = self.project_imported_return_alias_field_definition(
+            parsed,
+            position,
+            recovered_facts.map(|facts| &facts.project_inference),
+        ) {
             return Some(definition);
         }
 
-        if let Some(definition) = recovered_index.and_then(|index| index.definition_at(position)) {
+        if let Some(definition) =
+            recovered_facts.and_then(|facts| facts.semantic_index.definition_at(position))
+        {
             return Some(definition);
         }
 
@@ -2041,11 +2047,11 @@ impl AnalysisSnapshot {
                     .unwrap_or_default();
             }
         };
-        let Some(environment) = self.project_type_environment_for_file(file, parsed) else {
+        let Some(facts) = self.semantic_facts_for_parsed(parsed) else {
             return inlay_hints_parsed_source(parsed).unwrap_or_default();
         };
 
-        inlay_hints_parsed_source_with_environment(parsed, &environment)
+        inlay_hints_parsed_source_with_environment(parsed, &facts.environment)
     }
 
     pub fn inlay_hints_in_range(
@@ -2073,7 +2079,7 @@ impl AnalysisSnapshot {
                     .unwrap_or_default();
             }
         };
-        let Some(environment) = self.project_type_environment_for_file(file, parsed) else {
+        let Some(facts) = self.semantic_facts_for_parsed(parsed) else {
             return inlay_hints_parsed_source(parsed)
                 .map(|hints| {
                     hints
@@ -2084,7 +2090,7 @@ impl AnalysisSnapshot {
                 .unwrap_or_default();
         };
 
-        inlay_hints_parsed_source_with_environment_in_range(parsed, &environment, Some(range))
+        inlay_hints_parsed_source_with_environment_in_range(parsed, &facts.environment, Some(range))
     }
 
     pub fn semantic_tokens(&self, path: impl AsRef<Path>) -> Vec<SemanticToken> {
@@ -2755,10 +2761,13 @@ impl AnalysisSnapshot {
 
         let file = self.file(&path)?;
         let _profile = profile::span_for_path("analysis.semantic.facts.file", &path);
-        let environment = self.project_type_environment_for_file(file, parsed)?;
+        let project_inference = self.project_local_inference(parsed);
+        let environment =
+            self.project_type_environment_for_file(file, parsed, &project_inference)?;
         let facts = Rc::new(AnalysisSemanticFacts {
             semantic_index: SemanticIndex::build(parsed, file.hir.as_ref(), &environment),
             environment,
+            project_inference,
         });
 
         self.semantic_facts
@@ -2789,8 +2798,12 @@ impl AnalysisSnapshot {
     ) -> Option<RecoveredSemanticFacts> {
         let parsed = parse_recovered_analysis_source(path, &file.source, file.kind).ok()?;
         let hir = Some(lower_parsed_source(&parsed));
-        let environment =
-            self.recovered_project_type_environment_for_parsed(&parsed, file.environment.clone());
+        let project_inference = self.project_local_inference(&parsed);
+        let environment = self.recovered_project_type_environment_for_parsed(
+            &parsed,
+            file.environment.clone(),
+            &project_inference,
+        );
         let semantic_index = SemanticIndex::build(&parsed, hir.as_ref(), &environment);
 
         Some(RecoveredSemanticFacts {
@@ -2798,14 +2811,17 @@ impl AnalysisSnapshot {
             hir,
             environment,
             semantic_index,
+            project_inference,
         })
     }
 
     fn last_good_semantic_facts(&self, path: &Path) -> Option<RecoveredSemanticFacts> {
         let last_good = self.last_good_files.get(&normalize_path(path))?.clone();
+        let project_inference = self.project_local_inference(&last_good.parsed);
         let environment = self.recovered_project_type_environment_for_parsed(
             &last_good.parsed,
             last_good.environment,
+            &project_inference,
         );
         let semantic_index =
             SemanticIndex::build(&last_good.parsed, last_good.hir.as_ref(), &environment);
@@ -2815,6 +2831,7 @@ impl AnalysisSnapshot {
             hir: last_good.hir,
             environment,
             semantic_index,
+            project_inference,
         })
     }
 
@@ -2822,15 +2839,21 @@ impl AnalysisSnapshot {
         &self,
         file: &AnalysisFile,
         parsed: &ParsedSource,
+        project_inference: &ProjectLocalInference,
     ) -> Option<TypeEnvironment> {
         let _profile = profile::span("analysis.semantic.environment");
-        self.project_type_environment_for_parsed(parsed, file.environment.clone())
+        self.project_type_environment_for_parsed(
+            parsed,
+            file.environment.clone(),
+            project_inference,
+        )
     }
 
     fn project_type_environment_for_parsed(
         &self,
         parsed: &ParsedSource,
         base_environment: Option<TypeEnvironment>,
+        project_inference: &ProjectLocalInference,
     ) -> Option<TypeEnvironment> {
         let environment = base_environment.or_else(|| {
             let (environment, diagnostics) = if self.config.ecs.enabled {
@@ -2843,7 +2866,7 @@ impl AnalysisSnapshot {
         })?;
 
         let environment = environment
-            .with_local_types(self.project_local_inference(parsed).local_types)
+            .with_local_types(project_inference.local_types.clone())
             .with_local_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {
@@ -2861,6 +2884,7 @@ impl AnalysisSnapshot {
         &self,
         parsed: &ParsedSource,
         base_environment: Option<TypeEnvironment>,
+        project_inference: &ProjectLocalInference,
     ) -> TypeEnvironment {
         let (fallback, _) = if self.config.ecs.enabled {
             build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases())
@@ -2869,7 +2893,7 @@ impl AnalysisSnapshot {
         };
         let environment = base_environment.unwrap_or(fallback);
         let environment = environment
-            .with_local_types(self.project_local_inference(parsed).local_types)
+            .with_local_types(project_inference.local_types.clone())
             .with_local_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {
@@ -3161,6 +3185,7 @@ impl AnalysisSnapshot {
         &self,
         parsed: &ParsedSource,
         position: SourcePosition,
+        recovered_inference: Option<&ProjectLocalInference>,
     ) -> Option<Definition> {
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
@@ -3178,8 +3203,15 @@ impl AnalysisSnapshot {
         let [receiver] = receiver_parts.as_slice() else {
             return None;
         };
-        let inference = self.project_local_inference(parsed);
-        let origin = inference.field_origins.get(receiver)?;
+
+        if let Some(inference) = recovered_inference {
+            let origin = inference.field_origins.get(receiver)?;
+
+            return self.project_alias_field_definition(origin, field);
+        }
+
+        let facts = self.semantic_facts_for_parsed(parsed)?;
+        let origin = facts.project_inference.field_origins.get(receiver)?;
 
         self.project_alias_field_definition(origin, field)
     }

@@ -1492,8 +1492,20 @@ return {
     }
 
     let snapshot = host.snapshot();
+    assert!(snapshot.semantic_facts.borrow().is_empty());
+
     let labels =
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    let facts = snapshot
+        .semantic_facts
+        .borrow()
+        .get(&normalize_path(Path::new("src/main.tua")))
+        .cloned()
+        .expect("completion should warm shared semantic facts");
+
+    assert!(facts.project_inference.field_origins.contains_key("player"));
+    assert!(facts.project_inference.field_origins.contains_key("direct"));
+
     let direct_labels = completion_labels(
         &snapshot.completion("src/main.tua", fixture.position("direct_complete")),
     );
@@ -1501,6 +1513,7 @@ return {
         .definition("src/main.tua", fixture.position("hp_ref"))
         .expect("imported return alias field should resolve to provider alias field");
 
+    assert_eq!(snapshot.semantic_facts.borrow().len(), 1);
     assert!(labels.contains(&"hp".to_owned()));
     assert!(labels.contains(&"name".to_owned()));
     assert!(direct_labels.contains(&"hp".to_owned()));
