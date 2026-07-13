@@ -379,6 +379,7 @@ local methodCallOne = lookupObject.y(lookupObject, 1)
 local methodCallTwo = lookupObject:y(2)
 local methodCallThree = lookupObject.y(lookupObject, 3)
 local methodCallFour = lookupObject:y(4)
+lookupObject.count = 1
 
 -- Feature: metatables and visible metamethod operators.
 -- Tua models visible __add, __sub, __mul, __div, __eq, __lt, __le, __len,

@@ -1178,6 +1178,44 @@ return M
 }
 
 #[test]
+fn inferred_local_table_field_definition_and_references_use_constructor_key() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local lookupObject = {
+  <|field_def|>count<|/field_def|> = 0,
+  y = function(self: any, amount: number): number
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+
+lookupObject.<|field_ref|>count<|/field_ref|> = 1
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("field_ref"))
+        .expect("inferred table field should resolve to constructor key");
+    let references = snapshot.references("src/main.tua", fixture.position("field_ref"), true);
+
+    assert_eq!(definition.kind, DefinitionKind::TableField);
+    assert_eq!(definition.span, fixture.range("field_def"));
+    assert!(references
+        .iter()
+        .any(|reference| reference.span == fixture.range("field_def")));
+    assert!(references
+        .iter()
+        .any(|reference| reference.span == fixture.range("field_ref")));
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

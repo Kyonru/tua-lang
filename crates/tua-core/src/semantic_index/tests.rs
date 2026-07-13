@@ -105,6 +105,35 @@ end
     assert_eq!(definition.span.start.line, 5);
 }
 
+#[test]
+fn resolves_inferred_local_table_field_to_constructor_key() {
+    let source = r#"
+local lookupObject = {
+  count = 0,
+  y = function(self: any, amount: number): number
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+
+lookupObject.count = 1
+"#;
+    let (index, parsed) = semantic_index(source);
+    let receiver = crate::source_text::position_at(source, "lookupObject.count");
+    let position = SourcePosition {
+        line: receiver.line,
+        column: receiver.column + "lookupObject.".len(),
+    };
+    let definition = index
+        .definition_at(position)
+        .expect("inferred local table field should resolve to constructor key");
+
+    assert_eq!(definition.kind, DefinitionKind::TableField);
+    assert_eq!(source_text(&parsed.source, definition.span), "count");
+    assert_eq!(definition.span.start.line, 3);
+}
+
 fn semantic_index(source: &str) -> (SemanticIndex, crate::ParsedSource) {
     let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
     let hir = lower_parsed_source(&parsed);

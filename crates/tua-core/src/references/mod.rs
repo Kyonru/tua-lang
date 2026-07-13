@@ -9,7 +9,7 @@ use crate::source_text::{byte_for_column, line_at};
 use crate::{
     definition_parsed_source, definition_parsed_source_with_hir, lower_parsed_source,
     parse_tua_source, scope_map_parsed_source, Definition, DefinitionKind, Diagnostic,
-    ParsedSource, ScopeDeclarationKind, ScopeMap, SourcePosition, SourceSpan,
+    ParsedSource, ScopeDeclarationKind, ScopeMap, SemanticIndex, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -63,6 +63,7 @@ pub fn references_to_definition_parsed_source(
         include_declaration,
         None,
         None,
+        None,
     )
 }
 
@@ -72,6 +73,7 @@ pub fn references_to_definition_parsed_source_with_artifacts(
     include_declaration: bool,
     hir: Option<&HirModule>,
     scope: Option<&ScopeMap>,
+    semantic_index: Option<&SemanticIndex>,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
     if target.kind == DefinitionKind::Builtin {
         return Ok(Vec::new());
@@ -87,7 +89,9 @@ pub fn references_to_definition_parsed_source_with_artifacts(
         .ast
         .tokens()
         .filter(|token| is_identifier(token))
-        .filter_map(|token| reference_for_token(parsed, token, target, hir).transpose())
+        .filter_map(|token| {
+            reference_for_token(parsed, token, target, hir, semantic_index).transpose()
+        })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
     if include_declaration
@@ -410,11 +414,18 @@ fn reference_for_token(
     token: &TokenReference,
     target: &Definition,
     hir: Option<&HirModule>,
+    semantic_index: Option<&SemanticIndex>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
     let Some(span) = node_span(token) else {
         return Ok(None);
     };
-    let Some(definition) = definition_parsed_source_with_hir(parsed, hir, span.start)? else {
+    let definition = semantic_index.and_then(|index| index.definition_at(span.start));
+    let definition = if definition.is_some() {
+        definition
+    } else {
+        definition_parsed_source_with_hir(parsed, hir, span.start)?
+    };
+    let Some(definition) = definition else {
         return Ok(None);
     };
 

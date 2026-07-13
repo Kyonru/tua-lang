@@ -253,22 +253,125 @@ fn field_definition_target(
     position: SourcePosition,
 ) -> Option<DefinitionTarget> {
     let (root, fields) = parts.split_first()?;
-    let mut current = receiver_type(parsed, environment, root, position)?;
+    let Some(mut current) = receiver_type(parsed, environment, root, position) else {
+        return Some(DefinitionTarget::TypeField {
+            path: parsed.path.clone(),
+            span: local_table_field_span(parsed, parts, position)?,
+        });
+    };
 
     for (index, field) in fields.iter().enumerate() {
         let target = field_target(parsed, &current, field, 0)?;
+        let source_span = local_table_field_span(parsed, &parts[..index + 2], position);
 
         current = target.ty;
 
         if index == fields.len() - 1 {
             return Some(DefinitionTarget::TypeField {
                 path: parsed.path.clone(),
-                span: target.span,
+                span: target.span.or(source_span)?,
             });
         }
     }
 
     None
+}
+
+fn local_table_field_span(
+    parsed: &ParsedSource,
+    parts: &[String],
+    position: SourcePosition,
+) -> Option<SourceSpan> {
+    let (root, fields) = parts.split_first()?;
+    let expression = latest_table_expression_for_name(parsed, root, position)?;
+
+    table_field_span_in_expression(expression, fields)
+}
+
+fn latest_table_expression_for_name<'a>(
+    parsed: &'a ParsedSource,
+    name: &str,
+    position: SourcePosition,
+) -> Option<&'a Expression> {
+    let mut candidates = Vec::new();
+
+    for stmt in parsed.ast.nodes().stmts() {
+        let Some(span) = node_span(stmt) else {
+            continue;
+        };
+        if !starts_before_or_at(span, position) {
+            continue;
+        }
+
+        match stmt {
+            ast::Stmt::LocalAssignment(local) => {
+                for (local_name, expression) in local.names().iter().zip(local.expressions()) {
+                    if token_text(local_name) == name
+                        && table_constructor_expression(expression).is_some()
+                    {
+                        candidates.push((span.start, expression));
+                    }
+                }
+            }
+            ast::Stmt::Assignment(assignment) => {
+                for (variable, expression) in
+                    assignment.variables().iter().zip(assignment.expressions())
+                {
+                    if root_assignment_name(variable).as_deref() == Some(name)
+                        && table_constructor_expression(expression).is_some()
+                    {
+                        candidates.push((span.start, expression));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    candidates
+        .into_iter()
+        .max_by_key(|(position, _)| (position.line, position.column))
+        .map(|(_, expression)| expression)
+}
+
+fn table_field_span_in_expression(
+    expression: &Expression,
+    fields: &[String],
+) -> Option<SourceSpan> {
+    let (field, remaining) = fields.split_first()?;
+    let table = table_constructor_expression(expression)?;
+
+    for table_field in table.fields() {
+        let ast::Field::NameKey { key, value, .. } = table_field else {
+            continue;
+        };
+        if token_text(key) != *field {
+            continue;
+        }
+
+        if remaining.is_empty() {
+            return node_span(key).or_else(|| node_span(table_field));
+        }
+
+        return table_field_span_in_expression(value, remaining);
+    }
+
+    None
+}
+
+fn table_constructor_expression(expression: &Expression) -> Option<&ast::TableConstructor> {
+    match expression {
+        Expression::TableConstructor(table) => Some(table),
+        Expression::Parentheses { expression, .. } => table_constructor_expression(expression),
+        _ => None,
+    }
+}
+
+fn root_assignment_name(variable: &ast::Var) -> Option<String> {
+    match variable {
+        ast::Var::Name(name) => Some(token_text(name)),
+        _ => None,
+    }
 }
 
 fn receiver_type(
@@ -325,7 +428,7 @@ fn field_target(
                         let span = candidate.name_span.or(candidate.span)?;
 
                         Some(FieldTarget {
-                            span,
+                            span: Some(span),
                             ty: type_from_tua_type(&candidate.ty),
                         })
                     }),
@@ -336,10 +439,7 @@ fn field_target(
             .iter()
             .find_map(|ty| field_target(parsed, ty, field, depth + 1)),
         Type::Table(table) => table.semantic_field(field).map(|field| FieldTarget {
-            span: SourceSpan {
-                start: SourcePosition { line: 1, column: 1 },
-                end: SourcePosition { line: 1, column: 2 },
-            },
+            span: None,
             ty: field.ty.clone(),
         }),
         Type::Any
@@ -354,7 +454,7 @@ fn field_target(
 
 #[derive(Clone, Debug)]
 struct FieldTarget {
-    span: SourceSpan,
+    span: Option<SourceSpan>,
     ty: Type,
 }
 

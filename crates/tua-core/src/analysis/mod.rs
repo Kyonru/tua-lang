@@ -1447,7 +1447,7 @@ impl AnalysisSnapshot {
             return references;
         }
 
-        {
+        if target.kind != DefinitionKind::TableField {
             let _profile = profile::span("analysis.references.reverse_index.lookup");
 
             if let Some(references) = self
@@ -1513,6 +1513,7 @@ impl AnalysisSnapshot {
             include_declaration,
             file.hir.as_ref(),
             file.scope.as_ref(),
+            None,
         )
         .ok()
     }
@@ -1533,12 +1534,16 @@ impl AnalysisSnapshot {
             let Ok(parsed) = &file.parsed else {
                 continue;
             };
+            let semantic_facts = (target.kind == DefinitionKind::TableField)
+                .then(|| self.semantic_facts_for_parsed(parsed))
+                .flatten();
             let Ok(mut file_references) = references_to_definition_parsed_source_with_artifacts(
                 parsed,
                 target,
                 include_declaration,
                 file.hir.as_ref(),
                 file.scope.as_ref(),
+                semantic_facts.as_ref().map(|facts| &facts.semantic_index),
             ) else {
                 continue;
             };

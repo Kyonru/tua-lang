@@ -3138,6 +3138,43 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn definition_and_references_resolve_inferred_local_table_fields() {
+    let uri = "file:///tmp/inferred-table-field.tua";
+    let source = r#"local lookupObject = {
+  count = 0,
+  y = function(self: any, amount: number): number
+    self.count = self.count + amount
+
+    return self.count
+  end,
+}
+
+lookupObject.count = 1
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(
+            2,
+            uri,
+            source,
+            "lookupObject.count = 1",
+            "lookupObject.".len(),
+        ),
+        references_request(
+            3,
+            uri,
+            source,
+            "lookupObject.count = 1",
+            "lookupObject.".len(),
+            true,
+        ),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "count");
+    assert_reference_texts(&output, 3, source, ["count", "count"]);
+}
+
+#[test]
 fn definition_returns_global_function_location() {
     let uri = "file:///tmp/global-definition.tua";
     let source = r#"function test(a: boolean)
