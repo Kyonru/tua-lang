@@ -16,8 +16,9 @@ The VS Code extension starts this server and surfaces editor features for
   `didChange` publishes a fast current-file lane first, then a full
   project-aware lane after a 200ms debounce. Newer document versions cancel
   stale queued slow diagnostics before they publish.
-- Optional formatting consistency diagnostics can be enabled through
-  `tua.diagnostics.formattingLints` or `[diagnostics].formatting_lints`.
+- Formatting consistency diagnostics are enabled by default and can be
+  overridden through `tua.diagnostics.formattingLints` or
+  `[diagnostics].formatting_lints`.
 - Full-document formatting is provided through `textDocument/formatting` and
   uses `[format]` plus `tua.format.*` editor settings.
 - Optional inline diagnostic suppressions can be enabled through

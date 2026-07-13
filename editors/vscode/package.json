@@ -260,7 +260,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report conservative Lua/Tua formatting consistency issues such as trailing whitespace, indentation, keyword spacing, and simple token spacing."
+          "description": "Report opinionated Lua/Tua formatting consistency issues such as trailing whitespace, indentation, line width, keyword spacing, and token spacing. Null inherits [diagnostics].formatting_lints from tua.toml."
         },
         "tua.diagnostics.inlineIgnores": {
           "type": [

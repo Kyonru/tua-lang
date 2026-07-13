@@ -276,6 +276,21 @@ end
 }
 
 #[test]
+fn indents_leading_concat_continuation() {
+    let source = r#"local label =
+"alpha"
+.. "beta""#;
+
+    assert_eq!(
+        format(source),
+        r#"local label =
+  "alpha"
+  .. "beta"
+"#
+    );
+}
+
+#[test]
 fn avoids_extra_paren_indent_inside_call_table_and_function_blocks() {
     let source = r#"function update()
 table.insert(list, {

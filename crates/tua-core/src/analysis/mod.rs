@@ -43,7 +43,6 @@ use crate::{
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
     check::{
         check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
-        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
     complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
@@ -4165,6 +4164,7 @@ fn build_analysis_file(
                         &diagnostics_config,
                         &context.config.jit,
                         context.asset_index,
+                        &context.config.format.options(),
                     )
                 } else {
                     check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
@@ -4174,6 +4174,7 @@ fn build_analysis_file(
                         &context.config.jit,
                         &context.config.ecs,
                         context.asset_index,
+                        &context.config.format.options(),
                     )
                 }
                 .err()
@@ -4191,6 +4192,7 @@ fn build_analysis_file(
                             &context.config.jit,
                             &context.config.ecs,
                             context.asset_index,
+                            &context.config.format.options(),
                         )
                         .err()
                         .unwrap_or_default(),
@@ -4631,12 +4633,14 @@ fn fast_diagnostics_for_source(
         build_analysis_type_environment_with_diagnostics(&parsed, config);
     let fast_config = fast_diagnostics_config(&config.diagnostics);
     diagnostics.extend(
-        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
+        check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
             &parsed,
             &environment,
             &[],
             &fast_config,
             &crate::config::JitConfig::default(),
+            None,
+            &config.format.options(),
         )
         .err()
         .unwrap_or_default(),
@@ -4680,6 +4684,7 @@ fn fast_diagnostics_config(
     let mut fast = crate::config::DiagnosticsConfig::default();
 
     fast.undefined_variables = config.undefined_variables;
+    fast.formatting_lints = config.formatting_lints;
     fast.globals = config.globals.clone();
 
     fast
@@ -4703,6 +4708,11 @@ fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool {
             | crate::DiagnosticCode::TYPE_ARGUMENT_COUNT
             | crate::DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON
             | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
+            | crate::DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
+            | crate::DiagnosticCode::LINT_FORMAT_INDENTATION
+            | crate::DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING
+            | crate::DiagnosticCode::LINT_FORMAT_TOKEN_SPACING
+            | crate::DiagnosticCode::LINT_FORMAT_LINE_WIDTH
     )
 }
 

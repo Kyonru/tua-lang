@@ -23,8 +23,7 @@ cargo run -p tua-cli -- check
 ```
 
 Loads project config, parses sources, runs type checking and enabled lints, and
-prints diagnostics. Warnings are printed but do not make the command fail unless
-an error is also present.
+prints diagnostics. The command exits non-zero when any diagnostic is reported.
 
 ## `fmt`
 
@@ -45,9 +44,9 @@ cargo run -p tua-cli -- lint --strict
 ```
 
 Runs the same project diagnostic pipeline as `check`, but reports success as
-`linted N file(s)`. By default it respects `tua.toml`; `--strict` enables every
-lint diagnostic, including formatting lints, while keeping inline-ignore
-settings controlled by project/editor configuration.
+`linted N file(s)`. By default it respects `tua.toml`, including the default
+formatting lints; `--strict` enables every optional lint while keeping
+inline-ignore settings controlled by project/editor configuration.
 
 ## Diagnostic Timings
 

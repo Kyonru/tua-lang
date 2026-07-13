@@ -10,6 +10,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
 use crate::config::{DiagnosticsConfig, JitConfig};
+use crate::format::FormatOptions;
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::semantic::SemanticModel;
@@ -21,6 +22,7 @@ pub(crate) fn lint_parsed_source(
     config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     environment: &TypeEnvironment,
+    format_options: &FormatOptions,
 ) -> Vec<Diagnostic> {
     let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Lints);
 
@@ -55,7 +57,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.formatting_lints {
-        diagnostics.extend(formatting_lints(parsed));
+        diagnostics.extend(formatting_lints(parsed, format_options));
     }
 
     if symbol_lints_enabled(config) {
@@ -1988,8 +1990,8 @@ fn jit_hot_loop_dynamic_key_diagnostic(path: &Path, position: SourcePosition) ->
     .with_code(DiagnosticCode::LINT_JIT_HOT_LOOP_DYNAMIC_KEY)
 }
 
-fn formatting_lints(parsed: &ParsedSource) -> Vec<Diagnostic> {
-    let mut analyzer = FormattingAnalyzer::new(parsed);
+fn formatting_lints(parsed: &ParsedSource, format_options: &FormatOptions) -> Vec<Diagnostic> {
+    let mut analyzer = FormattingAnalyzer::new(parsed, format_options);
 
     analyzer.analyze();
     analyzer.diagnostics
@@ -1997,6 +1999,7 @@ fn formatting_lints(parsed: &ParsedSource) -> Vec<Diagnostic> {
 
 struct FormattingAnalyzer<'a> {
     parsed: &'a ParsedSource,
+    format_options: &'a FormatOptions,
     diagnostics: Vec<Diagnostic>,
     state: SourceMaskState,
 }
@@ -2010,9 +2013,10 @@ enum SourceMaskState {
 }
 
 impl<'a> FormattingAnalyzer<'a> {
-    fn new(parsed: &'a ParsedSource) -> Self {
+    fn new(parsed: &'a ParsedSource, format_options: &'a FormatOptions) -> Self {
         Self {
             parsed,
+            format_options,
             diagnostics: Vec::new(),
             state: SourceMaskState::Code,
         }
@@ -2038,8 +2042,10 @@ impl<'a> FormattingAnalyzer<'a> {
         let line = raw_line.trim_end_matches(['\n', '\r']);
         let mask = self.code_mask_for_line(line);
 
+        self.check_line_width(line_number, line);
         self.check_trailing_whitespace(line_number, line);
         self.check_indentation(line_number, line, &mask);
+        self.check_continuation_indentation(line_number, line, &mask);
         self.check_keyword_spacing(line_number, line.as_bytes(), &mask);
         self.check_separator_spacing(line_number, line.as_bytes(), &mask);
         self.check_bracket_spacing(line_number, line.as_bytes(), &mask);
@@ -2107,6 +2113,21 @@ impl<'a> FormattingAnalyzer<'a> {
         mask
     }
 
+    fn check_line_width(&mut self, line_number: usize, line: &str) {
+        let line_width = self.format_options.line_width;
+
+        if line_width == 0 || line.chars().count() <= line_width {
+            return;
+        }
+
+        self.push(
+            DiagnosticCode::LINT_FORMAT_LINE_WIDTH,
+            line_number,
+            line_width + 1,
+            format!("line should be at most {line_width} columns"),
+        );
+    }
+
     fn check_trailing_whitespace(&mut self, line_number: usize, line: &str) {
         let trimmed = line.trim_end_matches([' ', '\t']);
 
@@ -2159,6 +2180,35 @@ impl<'a> FormattingAnalyzer<'a> {
                 line_number,
                 1,
                 "indentation should use multiples of two spaces",
+            );
+        }
+    }
+
+    fn check_continuation_indentation(&mut self, line_number: usize, line: &str, mask: &[bool]) {
+        let bytes = line.as_bytes();
+        let Some(first_code) = mask
+            .iter()
+            .enumerate()
+            .position(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
+        else {
+            return;
+        };
+
+        if !bytes[first_code..].starts_with(b"..") {
+            return;
+        }
+
+        let spaces = bytes[..first_code]
+            .iter()
+            .take_while(|byte| **byte == b' ')
+            .count();
+
+        if spaces < self.format_options.indent_width {
+            self.push(
+                DiagnosticCode::LINT_FORMAT_INDENTATION,
+                line_number,
+                first_code + 1,
+                "continuation operators should be indented",
             );
         }
     }

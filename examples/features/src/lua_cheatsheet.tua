@@ -356,12 +356,9 @@ local lookupObject = {
   end,
 }
 local a =
-  "asasasasasasasasasasasasasasasasasasasasasasasasasasasasasasas"
-.. "asasasasasasasasasasasasasasasas"
+  "asasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasasas"
 local b = {
-  a = 1,
-  c = 4,
-  4,
+  a = 1, c = 4, 4,
   "1",
   1,
   4,

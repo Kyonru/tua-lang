@@ -9,6 +9,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
+use crate::format::FormatOptions;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::love_conf;
@@ -95,6 +96,7 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
         diagnostics_config,
         &JitConfig::default(),
         &EcsConfig::default(),
+        &FormatOptions::default(),
     )
 }
 
@@ -104,6 +106,7 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
+    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
         parsed,
@@ -112,6 +115,7 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
         jit_config,
         ecs_config,
         None,
+        format_options,
     )
 }
 
@@ -122,6 +126,7 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
     asset_index: Option<&asset::AssetIndex>,
+    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     let environment = {
         let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::TypeEnvironment);
@@ -147,23 +152,7 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
         diagnostics_config,
         jit_config,
         asset_index,
-    )
-}
-
-pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config(
-    parsed: &ParsedSource,
-    environment: &TypeEnvironment,
-    asset_roots: &[PathBuf],
-    diagnostics_config: &DiagnosticsConfig,
-    jit_config: &JitConfig,
-) -> Result<(), Vec<Diagnostic>> {
-    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
-        parsed,
-        environment,
-        asset_roots,
-        diagnostics_config,
-        jit_config,
-        None,
+        format_options,
     )
 }
 
@@ -174,6 +163,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     asset_index: Option<&asset::AssetIndex>,
+    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     let mut checker = Checker::new(parsed, environment, asset_roots, asset_index);
 
@@ -194,6 +184,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
         diagnostics_config,
         jit_config,
         &environment,
+        format_options,
     ));
 
     checker.diagnostics = apply_inline_ignores(

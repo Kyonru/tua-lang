@@ -54,7 +54,7 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-formatting_lints = false
+formatting_lints = true
 inline_ignores = false
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0
@@ -190,7 +190,10 @@ Dynamic ECS construction remains permissive.
 
 ## Diagnostics
 
-Optional lints are disabled by default.
+Formatting lints are enabled by default so `tua check`, `tua lint`, and editor
+diagnostics enforce the same baseline style as `tua fmt`. Other optional lints
+remain disabled until enabled here, by editor settings, or through
+`tua lint --strict`.
 
 ```toml
 [diagnostics]
@@ -309,12 +312,12 @@ called. Indirect callback patterns can stay quiet by leaving this opt-in lint
 disabled.
 
 `formatting_lints`
-: Reports conservative Lua/Tua formatting consistency issues. The baseline is
-intentionally small and opt-in: trailing whitespace, tabs or odd-space
-indentation, obvious spacing around `then`/`do`, comma spacing,
-parenthesis/bracket padding, and assignment-style token spacing. These lints
-help mixed `.lua` and `.tua` code stay readable across contributors. Use
-`tua fmt` or editor formatting when you want the formatter to rewrite files.
+: Reports opinionated Lua/Tua formatting consistency issues. This is enabled by
+default and follows `[format]`: trailing whitespace, tabs or odd-space
+indentation, unindented continuation operators, lines longer than
+`line_width`, obvious spacing around `then`/`do`, comma spacing,
+parenthesis/bracket padding, and assignment-style token spacing. Use `tua fmt`
+or editor formatting when you want the formatter to rewrite files.
 
 `inline_ignores`
 : Enables diagnostic suppression comments. This is disabled by default so

@@ -264,7 +264,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_assignments);
     assert!(!config.diagnostics.binary_operator_type_mismatches);
     assert!(!config.diagnostics.uncalled_local_functions);
-    assert!(!config.diagnostics.formatting_lints);
+    assert!(config.diagnostics.formatting_lints);
     assert!(!config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,

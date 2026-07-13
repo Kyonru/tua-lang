@@ -59,7 +59,7 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-formatting_lints = false
+formatting_lints = true
 inline_ignores = false
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\"]
 inline_ignore_max_per_file = 0
@@ -268,7 +268,7 @@ impl Default for DiagnosticsConfig {
             unused_assignments: false,
             binary_operator_type_mismatches: false,
             uncalled_local_functions: false,
-            formatting_lints: false,
+            formatting_lints: true,
             inline_ignores: false,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),

@@ -85,6 +85,7 @@ impl DiagnosticCode {
     pub const LINT_JIT_TYPE_DRIFT: Self = Self(4032);
     pub const LINT_JIT_TABLE_SHAPE_DRIFT: Self = Self(4033);
     pub const LINT_JIT_HOT_LOOP_DYNAMIC_KEY: Self = Self(4034);
+    pub const LINT_FORMAT_LINE_WIDTH: Self = Self(4035);
     pub const PLUGIN_DIAGNOSTIC: Self = Self(5001);
     pub const PLUGIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const PLUGIN_ECS_QUERY: Self = Self(5003);
@@ -167,6 +168,7 @@ impl DiagnosticCode {
                 | Self::LINT_JIT_TYPE_DRIFT
                 | Self::LINT_JIT_TABLE_SHAPE_DRIFT
                 | Self::LINT_JIT_HOT_LOOP_DYNAMIC_KEY
+                | Self::LINT_FORMAT_LINE_WIDTH
                 | Self::PLUGIN_DIAGNOSTIC
                 | Self::PLUGIN_ECS_COMPONENT_VALUE
                 | Self::PLUGIN_ECS_QUERY

@@ -582,8 +582,9 @@ Parses and type-checks the project without writing `.lua` output.
 
 Expected behavior:
 
-- returns exit code `0` when no errors are found, even if warnings are printed;
-- returns non-zero when parse or type errors are found;
+- returns exit code `0` when no diagnostics are found;
+- returns non-zero when parse, type, project, or enabled lint diagnostics are
+  found;
 - prints diagnostics with file, line, column, severity, and message.
 
 ### `tua fmt`
@@ -610,12 +611,13 @@ Expected behavior:
 
 - shares project discovery and config loading with `tua check`;
 - respects configured diagnostics and inline-ignore settings;
+- runs default formatting lints unless `[diagnostics].formatting_lints = false`;
 - reports success as `linted N file(s)`.
 
 ### `tua lint --strict`
 
-Enables the full lint set, including formatting lints, while preserving the
-configured inline-ignore policy.
+Enables the full optional lint set while preserving the configured inline-ignore
+policy.
 
 ### `tua build`
 

@@ -5,20 +5,29 @@ use crate::{
 };
 
 #[test]
-fn configured_lints_are_disabled_by_default() {
+fn configured_non_style_lints_are_disabled_by_default() {
     check_tua_source(
         "src/main.tua",
-        concat!(
-            r#"
+        r#"
 local config = { hp = 10, hp = 20 }
 local hp = 10
 hp = hp
 local Missing = require("definitely_missing_lint_module")
-local cramped={1,2,3}"#,
-            "   \n",
-        ),
+local spaced = { 1, 2, 3 }
+"#,
     )
-    .expect("lint-only issues should be disabled by default");
+    .expect("non-style lint-only issues should be disabled by default");
+}
+
+#[test]
+fn formatting_lints_are_enabled_by_default() {
+    let diagnostics = check_tua_source("src/main.tua", "local value=1\n")
+        .expect_err("formatting lints should be enabled by default");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_TOKEN_SPACING),
+        1
+    );
 }
 
 #[test]
@@ -367,7 +376,7 @@ damage("bad")
 fn reports_formatting_lints_when_enabled() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
-        "local hp=10   \n\tlocal values = {1,2,3}\nif hp > 0  then  print( hp ) end\n",
+        "local hp=10   \n\tlocal values = {1,2,3}\nlocal text =\n\"alpha\"\n.. \"beta\"\nlocal longText = \"this line is deliberately long enough to cross the default one hundred column width limit\"\nif hp > 0  then  print( hp ) end\n",
         &DiagnosticsConfig {
             formatting_lints: true,
             ..DiagnosticsConfig::default()
@@ -384,7 +393,7 @@ fn reports_formatting_lints_when_enabled() {
     );
     assert_eq!(
         count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_INDENTATION),
-        1
+        2
     );
     assert_eq!(
         count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING),
@@ -392,6 +401,10 @@ fn reports_formatting_lints_when_enabled() {
     );
     assert!(
         count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_TOKEN_SPACING) >= 5,
+        "{diagnostics:?}"
+    );
+    assert!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_LINE_WIDTH) >= 1,
         "{diagnostics:?}"
     );
     assert!(diagnostics
@@ -405,6 +418,9 @@ fn formatting_lints_accept_baseline_style() {
         "src/main.tua",
         r#"
 local values = { 1, 2, 3 }
+local text =
+  "alpha"
+  .. "beta"
 
 if values[1] > 0 then
   print(values[1])
@@ -977,6 +993,7 @@ fn check_jit_source(source: &str, jit_config: JitConfig) -> Vec<crate::Diagnosti
         &DiagnosticsConfig::default(),
         &jit_config,
         &EcsConfig::default(),
+        &crate::FormatOptions::default(),
     )
     .err()
     .unwrap_or_default()

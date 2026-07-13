@@ -1551,7 +1551,7 @@ unused_locals = false
 }
 
 #[test]
-fn did_change_configuration_can_enable_formatting_lints() {
+fn did_change_configuration_can_disable_default_formatting_lints() {
     let temp = TempProject::new("configuration-formatting-lints");
     let source = "local value=1   \n";
 
@@ -1564,19 +1564,6 @@ fn did_change_configuration_can_enable_formatting_lints() {
     server.send(did_open(&uri, source));
     let diagnostics = last_published_diagnostics(server.output(), &uri);
 
-    assert!(
-        diagnostics.is_empty(),
-        "unexpected diagnostics: {diagnostics:#?}"
-    );
-
-    server.send(did_change_configuration(json!({
-        "diagnostics": {
-            "formattingLints": true
-        }
-    })));
-
-    let diagnostics = last_published_diagnostics(server.output(), &uri);
-
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic["code"] == "TL4021"
             && diagnostic["message"]
@@ -1586,6 +1573,19 @@ fn did_change_configuration_can_enable_formatting_lints() {
     assert!(diagnostics
         .iter()
         .any(|diagnostic| diagnostic["code"] == "TL4024"));
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "formattingLints": false
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
 }
 
 #[test]

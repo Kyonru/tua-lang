@@ -132,6 +132,7 @@ impl<'a> Formatter<'a> {
         let normalized = normalize_spacing(trimmed);
         let closes_paren = code.trim_start().starts_with(')');
         let closes_brace = code.trim_start().starts_with('}');
+        let starts_with_continuation = line_starts_with_continuation(code);
         let suppress_paren_for_brace = self.brace_depth > 0 || closes_brace;
         let paren_indent = if suppress_paren_for_brace || suppress_paren_for_block {
             0
@@ -139,8 +140,12 @@ impl<'a> Formatter<'a> {
             self.paren_depth.saturating_sub(usize::from(closes_paren))
         };
         let paren_extra = self.paren_continuation_indents.iter().sum::<usize>();
-        let continuation_indent =
-            usize::from(self.pending_continuation && paren_indent == 0 && !dedent && !closes_paren);
+        let continuation_indent = usize::from(
+            (self.pending_continuation || starts_with_continuation)
+                && paren_indent == 0
+                && !dedent
+                && !closes_paren,
+        );
         let indent_level = self.indent_level + paren_indent + paren_extra + continuation_indent;
         let indent = " ".repeat(indent_level * self.options.indent_width);
         let formatted = break_long_groups(&normalized, &indent, self.options);
@@ -797,6 +802,10 @@ fn line_ends_with_continuation(code: &str) -> bool {
     code.as_bytes()
         .last()
         .is_some_and(|byte| matches!(byte, b'=' | b'+' | b'-' | b'*' | b'/' | b'%' | b'^'))
+}
+
+fn line_starts_with_continuation(code: &str) -> bool {
+    code.trim_start().starts_with("..")
 }
 
 fn starts_with_word(value: &str, word: &str) -> bool {

@@ -48,8 +48,8 @@ make build-features
   libraries, coroutines, environments, debug/GC APIs, LuaJIT boundaries, and
   LÖVE helper surfaces, with comments describing how Tua should interpret each
   feature.
-- `src/formatting_lints.tua` demonstrates the clean baseline expected by the
-  opt-in `formatting_lints` diagnostic profile.
+- `src/formatting_lints.tua` demonstrates the clean baseline enforced by the
+  default `formatting_lints` diagnostic profile.
 - `src/luacats_emit.tua` demonstrates the optional LuaCATS emission mode for
   aliases, annotated locals, function signatures, and stable module exports.
 - `src/luals_provider.lua` and `src/luals_annotations.tua` demonstrate the
