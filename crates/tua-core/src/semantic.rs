@@ -8,6 +8,9 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::asset::{self, AssetLoaderKind};
+use crate::ast_utils::{
+    assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+};
 use crate::love_conf;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{
@@ -16,9 +19,10 @@ use crate::module_index::{
 };
 use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
 use crate::types::{
-    FunctionType, MetatableFacts, PrimitiveType, TableField, Type, TypeEnvironment, TypedFunction,
+    type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
+    TypeEnvironment, TypedFunction,
 };
-use crate::{vector, ParsedSource, SourcePosition, SourceSpan, TuaType, TypedParameter};
+use crate::{vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -1563,74 +1567,6 @@ fn collect_local_assignment_values<'a>(
     }
 }
 
-fn assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
-}
-
-fn type_from_tua_type(ty: &TuaType) -> Type {
-    match ty {
-        TuaType::Named(name) => Type::named(name.clone()),
-        TuaType::StringLiteral(value) => Type::string_literal(value),
-        TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
-        TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
-            (
-                field.name.clone(),
-                TableField {
-                    ty: type_from_tua_type(&field.ty),
-                    optional: field.optional,
-                },
-            )
-        })),
-        TuaType::Array(item) => Type::array(type_from_tua_type(item)),
-        TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_tua_type)),
-        TuaType::Dictionary { key, value } => {
-            Type::dictionary(type_from_tua_type(key), type_from_tua_type(value))
-        }
-        TuaType::Function {
-            parameters,
-            returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_tua_type(&parameter.ty);
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_tua_type),
-            )
-        }
-    }
-}
-
 fn index_type_from_expression(expression: &Expression) -> Option<Type> {
     let fields = index_fields_from_expression(expression);
 
@@ -1737,34 +1673,6 @@ fn contains_position(span: SourceSpan, position: SourcePosition) -> bool {
     let position = position_key(position);
 
     start <= position && position < end
-}
-
-pub(crate) fn plain_field_chain_from_var_expression(
-    expression: &ast::VarExpression,
-) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
-}
-
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
 }
 
 fn expression_is_name(expression: &Expression, expected: &str) -> bool {
@@ -1920,32 +1828,6 @@ fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
     };
 
     expression_is_name(meta, "self")
-}
-
-pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in function_call.suffixes() {
-        match suffix {
-            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
-            Suffix::Call(Call::MethodCall(method)) => {
-                parts.push(token_text(method.name()));
-                return Some(parts);
-            }
-            Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { .. }))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_)))
-            | Suffix::Call(Call::AnonymousCall(FunctionArgs::TableConstructor(_))) => {
-                return Some(parts);
-            }
-            _ => return None,
-        }
-    }
-
-    None
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {

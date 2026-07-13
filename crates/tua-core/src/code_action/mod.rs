@@ -3,12 +3,13 @@ use std::path::{Component, Path, PathBuf};
 
 use full_moon::ast::{
     self, Assignment, Expression, Field, FunctionArgs, FunctionCall, Index, Prefix, Suffix,
-    TableConstructor, Var,
+    TableConstructor,
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
+use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
 use crate::inlay_hints_parsed_source;
 use crate::source_text::line_at;
 use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourcePosition, SourceSpan, TextEdit};
@@ -674,43 +675,6 @@ fn is_single_self_assignment_at(assignment: &Assignment, position: SourcePositio
     plain_field_chain_from_var(variable)
         .zip(plain_field_chain_from_expression(expression))
         .is_some_and(|(left, right)| left == right)
-}
-
-fn plain_field_chain_from_expression(expression: &Expression) -> Option<Vec<String>> {
-    match expression {
-        Expression::Var(var) => plain_field_chain_from_var(var),
-        Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => {
-            plain_field_chain_from_expression(expression)
-        }
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
 }
 
 fn remove_single_line_stmt_edit(parsed: &ParsedSource, stmt: &ast::Stmt) -> Option<TextEdit> {

@@ -9,6 +9,7 @@ use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
+use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::format::FormatOptions;
 use crate::module_index::resolve_required_module;
@@ -1613,49 +1614,6 @@ fn callable_return_count(ty: &Type, context: &TypeContext) -> Option<usize> {
 
 fn expression_is_varargs(expression: &Expression) -> bool {
     matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "...")
-}
-
-fn plain_field_chain_from_expression(expression: &Expression) -> Option<Vec<String>> {
-    match expression {
-        Expression::Var(var) => plain_field_chain_from_var(var),
-        Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => {
-            plain_field_chain_from_expression(expression)
-        }
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var_expression(
-    expression: &full_moon::ast::VarExpression,
-) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(index) = suffix else {
-            return None;
-        };
-
-        let Index::Dot { name, .. } = index else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

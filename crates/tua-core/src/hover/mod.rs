@@ -11,12 +11,12 @@ use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
-    build_type_environment, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
+    build_type_environment, type_from_tua_type, FunctionType, Type, TypeEnvironment, TypedFunction,
     TypedFunctionOverload,
 };
 use crate::{
     definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
-    ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan, TuaType,
+    ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -611,52 +611,6 @@ fn format_type_list(types: &[Type]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn type_from_tua_type(ty: &TuaType) -> Type {
-    match ty {
-        TuaType::Named(name) => Type::named(name),
-        TuaType::StringLiteral(value) => Type::string_literal(value),
-        TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
-        TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
-            let ty = type_from_tua_type(&field.ty);
-            let table_field = if field.optional {
-                TableField::optional(ty)
-            } else {
-                TableField::required(ty)
-            };
-
-            (field.name.clone(), table_field)
-        })),
-        TuaType::Array(item) => Type::array(type_from_tua_type(item)),
-        TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_tua_type)),
-        TuaType::Dictionary { key, value } => {
-            Type::dictionary(type_from_tua_type(key), type_from_tua_type(value))
-        }
-        TuaType::Function {
-            parameters,
-            returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_tua_type(&parameter.ty);
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_tua_type),
-            )
-        }
-    }
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {

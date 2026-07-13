@@ -8,6 +8,10 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::ast_utils::{
+    assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+    plain_field_chain_from_var_expression,
+};
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
 use crate::format::FormatOptions;
 use crate::inline_ignore::apply_inline_ignores;
@@ -1789,36 +1793,6 @@ fn types_can_overlap(left: &Type, right: &Type) -> bool {
     }
 }
 
-fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(index) = suffix else {
-            return None;
-        };
-
-        let Index::Dot { name, .. } = index else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
-}
-
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
-}
-
 fn expression_is_name(expression: &Expression, expected: &str) -> bool {
     matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
 }
@@ -1840,51 +1814,6 @@ fn function_declaration_table_field(
 
     (!owner.is_empty() && !field.is_empty())
         .then(|| (owner.to_owned(), field.to_owned(), separator.1))
-}
-
-fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in function_call.suffixes() {
-        match suffix {
-            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
-            Suffix::Call(Call::MethodCall(method)) => {
-                parts.push(token_text(method.name()));
-                return Some(parts);
-            }
-            Suffix::Call(_) => return Some(parts),
-            _ => return None,
-        }
-    }
-
-    None
-}
-
-fn assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
 }
 
 fn lua_type_field_item(

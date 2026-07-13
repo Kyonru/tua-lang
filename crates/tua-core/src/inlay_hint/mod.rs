@@ -5,6 +5,7 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::ast_utils::assignment_expression_for_local;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment, Type, TypeEnvironment};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
@@ -295,29 +296,6 @@ impl<'a> InlayHintCollector<'a> {
 
         span_overlaps_range(span, range)
     }
-}
-
-fn assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
 }
 
 fn should_hint_type(ty: &Type) -> bool {

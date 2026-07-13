@@ -9,6 +9,7 @@ use full_moon::ast::luau::{TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
 use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 
+use crate::ast_utils::plain_field_chain_from_var;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
@@ -914,36 +915,6 @@ fn compound_operator_from_ast(operator: &ast::CompoundOp) -> Option<CompoundOper
         ast::CompoundOp::PercentEqual(_) => Some(CompoundOperator::Modulo),
         _ => None,
     }
-}
-
-fn plain_field_chain_from_var(var: &ast::Var) -> Option<Vec<String>> {
-    match var {
-        ast::Var::Name(name) => Some(vec![token_text(name)]),
-        ast::Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let ast::Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let ast::Suffix::Index(index) = suffix else {
-            return None;
-        };
-
-        let ast::Index::Dot { name, .. } = index else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
 }
 
 fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {

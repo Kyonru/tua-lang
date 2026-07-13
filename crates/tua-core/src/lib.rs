@@ -1,5 +1,6 @@
 pub mod analysis;
 mod asset;
+mod ast_utils;
 pub mod call_hierarchy;
 pub mod check;
 pub mod code_action;

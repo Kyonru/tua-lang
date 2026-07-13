@@ -7,6 +7,10 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::ast_utils::{
+    assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+    plain_field_chain_from_var_expression,
+};
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{
@@ -1561,14 +1565,6 @@ fn first_code_line_span(parsed: &ParsedSource, span: SourceSpan) -> Option<Sourc
     None
 }
 
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain(expression),
-        _ => None,
-    }
-}
-
 fn expression_is_name(expression: &Expression, expected: &str) -> bool {
     matches!(expression, Expression::Var(Var::Name(name)) if token_text(name) == expected)
 }
@@ -2618,7 +2614,7 @@ fn infer_var_type(
                 .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
         }
         Var::Expression(expression) => {
-            if let Some(parts) = plain_field_chain(expression) {
+            if let Some(parts) = plain_field_chain_from_var_expression(expression) {
                 if let Some(ty) = infer_field_chain_type(parsed, aliases, locals, &parts) {
                     return Some(ty);
                 }
@@ -3316,68 +3312,6 @@ fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: 
             .unwrap_or_else(|| ty.clone()),
         _ => ty.clone(),
     }
-}
-
-fn plain_field_chain(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
-}
-
-fn field_chain_before_first_call(function_call: &FunctionCall) -> Option<Vec<String>> {
-    let Prefix::Name(name) = function_call.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in function_call.suffixes() {
-        match suffix {
-            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
-            Suffix::Call(Call::MethodCall(method)) => {
-                parts.push(token_text(method.name()));
-                return Some(parts);
-            }
-            Suffix::Call(_) => return Some(parts),
-            _ => return None,
-        }
-    }
-
-    None
-}
-
-fn assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

@@ -7,9 +7,10 @@ use full_moon::node::Node;
 use crate::hir::{HirModule, HirSymbol, HirSymbolKind};
 use crate::module_link::module_specifier_at_position;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
+use crate::types::type_from_tua_type;
 use crate::{
-    lua, Definition, DefinitionKind, ParsedSource, SourcePosition, SourceSpan, TableField, TuaType,
-    Type, TypeEnvironment,
+    lua, Definition, DefinitionKind, ParsedSource, SourcePosition, SourceSpan, TuaType, Type,
+    TypeEnvironment,
 };
 
 const MAX_FIELD_DEPTH: usize = 64;
@@ -586,52 +587,6 @@ fn module_file_target(
             end: SourcePosition { line: 1, column: 2 },
         },
     })
-}
-
-fn type_from_tua_type(ty: &TuaType) -> Type {
-    match ty {
-        TuaType::Named(name) => Type::named(name),
-        TuaType::StringLiteral(value) => Type::string_literal(value),
-        TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
-        TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
-            let ty = type_from_tua_type(&field.ty);
-            let table_field = if field.optional {
-                TableField::optional(ty)
-            } else {
-                TableField::required(ty)
-            };
-
-            (field.name.clone(), table_field)
-        })),
-        TuaType::Array(item) => Type::array(type_from_tua_type(item)),
-        TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_tua_type)),
-        TuaType::Dictionary { key, value } => {
-            Type::dictionary(type_from_tua_type(key), type_from_tua_type(value))
-        }
-        TuaType::Function {
-            parameters,
-            returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_tua_type(&parameter.ty);
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_tua_type),
-            )
-        }
-    }
 }
 
 fn is_type_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {

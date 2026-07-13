@@ -6,10 +6,11 @@ use std::time::SystemTime;
 
 use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
-    self, Expression, Field, FunctionArgs, Index, LastStmt, Prefix, Suffix, TableConstructor, Var,
+    self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix, TableConstructor, Var,
 };
 use full_moon::node::Node;
 
+use crate::ast_utils::plain_field_chain_from_var;
 use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
@@ -1134,32 +1135,6 @@ fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
             .map(Type::union),
         _ => Some(Type::named(type_info.to_string())),
     }
-}
-
-fn plain_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        Var::Name(name) => Some(vec![token_text(name)]),
-        _ => None,
-    }
-}
-
-fn plain_field_chain_from_var_expression(expression: &ast::VarExpression) -> Option<Vec<String>> {
-    let Prefix::Name(name) = expression.prefix() else {
-        return None;
-    };
-
-    let mut parts = vec![token_text(name)];
-
-    for suffix in expression.suffixes() {
-        let Suffix::Index(Index::Dot { name, .. }) = suffix else {
-            return None;
-        };
-
-        parts.push(token_text(name));
-    }
-
-    Some(parts)
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {

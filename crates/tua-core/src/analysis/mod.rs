@@ -5,11 +5,14 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use full_moon::ast::{self, Expression, Var};
+use full_moon::ast::{self, Expression};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
 use crate::asset::{self, AssetMetadata};
+use crate::ast_utils::{
+    assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+};
 use crate::completion::{
     complete_field_access_in_source_with_environment, complete_parsed_source_with_environment,
     complete_source_with_parsed_environment,
@@ -29,9 +32,7 @@ use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
-use crate::semantic::{
-    field_chain_before_first_call, plain_field_chain_from_var_expression, SemanticModel,
-};
+use crate::semantic::SemanticModel;
 use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::types::{
@@ -2934,7 +2935,7 @@ impl AnalysisSnapshot {
             for (index, local_name) in local.names().iter().enumerate() {
                 let name = token_text(local_name);
                 let Some((expression, return_index)) =
-                    project_assignment_expression_for_local(&expressions, index)
+                    assignment_expression_for_local(&expressions, index)
                 else {
                     continue;
                 };
@@ -2999,7 +3000,7 @@ impl AnalysisSnapshot {
                 self.project_type_for_function_call_parts(parsed, &parts, return_index, local_types)
             }
             Expression::Var(var) if return_index == 0 => {
-                let parts = project_field_chain_from_var(var)?;
+                let parts = plain_field_chain_from_var(var)?;
 
                 self.project_type_for_field_chain(parsed, &parts)
                     .or_else(|| project_local_field_chain_type(local_types, &parts))
@@ -3088,7 +3089,7 @@ impl AnalysisSnapshot {
                 )
             }
             Expression::Var(var) if return_index == 0 => {
-                let parts = project_field_chain_from_var(var)?;
+                let parts = plain_field_chain_from_var(var)?;
                 let [root] = parts.as_slice() else {
                     return None;
                 };
@@ -3134,7 +3135,7 @@ impl AnalysisSnapshot {
     ) -> Option<ProjectAliasFieldOrigin> {
         match expression {
             Expression::Var(var) => {
-                let parts = project_field_chain_from_var(var)?;
+                let parts = plain_field_chain_from_var(var)?;
                 let (root, fields) = parts.split_first()?;
 
                 if fields.is_empty() {
@@ -3812,37 +3813,6 @@ fn token_span(token: &TokenReference) -> Option<SourceSpan> {
 
 fn token_text(token: &TokenReference) -> String {
     token.to_string().trim().to_owned()
-}
-
-fn project_assignment_expression_for_local<'a>(
-    expressions: &[&'a Expression],
-    index: usize,
-) -> Option<(&'a Expression, usize)> {
-    if expressions.is_empty() {
-        return None;
-    }
-
-    let fixed_expression_count = expressions.len().saturating_sub(1);
-
-    if index < fixed_expression_count {
-        return expressions
-            .get(index)
-            .copied()
-            .map(|expression| (expression, 0));
-    }
-
-    expressions
-        .last()
-        .copied()
-        .map(|expression| (expression, index - fixed_expression_count))
-}
-
-fn project_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
-    match var {
-        Var::Name(name) => Some(vec![token_text(name)]),
-        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
-        _ => None,
-    }
 }
 
 fn project_local_field_chain_type(

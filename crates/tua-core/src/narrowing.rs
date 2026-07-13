@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffix, Var};
 use full_moon::node::Node;
 
-use crate::semantic::plain_field_chain_from_var_expression;
+use crate::ast_utils::plain_field_chain_from_var_expression;
 use crate::{ParsedSource, PrimitiveType, SourcePosition, SourceSpan, Type};
 
 #[derive(Clone, Debug, Eq, PartialEq)]

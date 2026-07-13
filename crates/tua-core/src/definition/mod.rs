@@ -14,8 +14,7 @@ use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
 use crate::semantic::SemanticModel;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
-use crate::types::build_type_environment_with_diagnostics;
-use crate::types::{TableField, Type};
+use crate::types::{build_type_environment_with_diagnostics, type_from_tua_type, Type};
 use crate::{lua, parse_tua_source, Diagnostic};
 
 const MAX_FIELD_DEFINITION_DEPTH: usize = 64;
@@ -412,52 +411,6 @@ impl<'a> DefinitionResolver<'a> {
 struct FieldTarget {
     span: SourceSpan,
     ty: Type,
-}
-
-fn type_from_tua_type(ty: &TuaType) -> Type {
-    match ty {
-        TuaType::Named(name) => Type::named(name),
-        TuaType::StringLiteral(value) => Type::string_literal(value),
-        TuaType::Union(types) => Type::union(types.iter().map(type_from_tua_type)),
-        TuaType::Table(fields) => Type::table(fields.iter().map(|field| {
-            let field_type = type_from_tua_type(&field.ty);
-            let table_field = if field.optional {
-                TableField::optional(field_type)
-            } else {
-                TableField::required(field_type)
-            };
-
-            (field.name.clone(), table_field)
-        })),
-        TuaType::Array(item) => Type::array(type_from_tua_type(item)),
-        TuaType::Tuple(items) => Type::tuple(items.iter().map(type_from_tua_type)),
-        TuaType::Dictionary { key, value } => {
-            Type::dictionary(type_from_tua_type(key), type_from_tua_type(value))
-        }
-        TuaType::Function {
-            parameters,
-            returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_tua_type(&parameter.ty);
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_tua_type),
-            )
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
