@@ -355,7 +355,29 @@ local lookupObject = {
     return self.count
   end,
 }
-
+local a =
+  "asasasasasasasasasasasasasasasasasasasasasasasasasasasasasasas"
+.. "asasasasasasasasasasasasasasasas"
+local b = {
+  a = 1,
+  c = 4,
+  4,
+  "1",
+  1,
+  4,
+  5,
+  5,
+  6,
+  7,
+  8,
+  1,
+  2,
+  4,
+  12,
+  1,
+  1,
+  2,
+}
 local methodCallOne = lookupObject.y(lookupObject, 1)
 local methodCallTwo = lookupObject:y(2)
 local methodCallThree = lookupObject.y(lookupObject, 3)

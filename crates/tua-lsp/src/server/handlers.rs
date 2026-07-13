@@ -165,9 +165,10 @@ impl LspServer {
 
         self.analysis
             .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
-        self.bump_document_generation(&uri, version);
+        let generation = self.bump_document_generation(&uri, version);
+        self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
-        let diagnostics = self.diagnostics_for(&uri);
+        let diagnostics = self.fast_diagnostics_for(&uri);
 
         Some(vec![self.publish_tracked_diagnostics(&uri, diagnostics)])
     }
@@ -401,6 +402,7 @@ impl LspServer {
             .min()
     }
 
+    #[cfg(test)]
     pub(super) fn drain_due_slow_diagnostics(&mut self, now: Instant) -> Vec<Value> {
         let due = self
             .pending_slow_diagnostics
@@ -409,6 +411,19 @@ impl LspServer {
             .collect::<Vec<_>>();
 
         self.drain_slow_diagnostics_for(due)
+    }
+
+    pub(super) fn drain_next_due_slow_diagnostic(&mut self, now: Instant) -> Option<Value> {
+        let uri = self
+            .pending_slow_diagnostics
+            .iter()
+            .filter(|(_, pending)| pending.due_at <= now)
+            .min_by_key(|(_, pending)| pending.due_at)
+            .map(|(uri, _)| uri.clone())?;
+
+        self.drain_slow_diagnostics_for(vec![uri])
+            .into_iter()
+            .next()
     }
 
     pub(super) fn drain_all_pending_slow_diagnostics(&mut self) -> Vec<Value> {
@@ -717,10 +732,7 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let links = snapshot.document_links(&request.path);
+        let links = self.analysis.document_links(&request.path);
 
         Value::Array(links.into_iter().map(lsp_document_link_from_core).collect())
     }
@@ -732,10 +744,7 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let highlights = snapshot.document_highlights(&request.path, position);
+        let highlights = self.analysis.document_highlights(&request.path, position);
 
         Value::Array(
             highlights
@@ -749,10 +758,7 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let symbols = snapshot.document_symbols(&request.path);
+        let symbols = self.analysis.document_symbols(&request.path);
 
         Value::Array(
             symbols
@@ -777,10 +783,7 @@ impl LspServer {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let ranges = snapshot.selection_ranges(&request.path, &positions);
+        let ranges = self.analysis.selection_ranges(&request.path, &positions);
 
         Value::Array(
             ranges
@@ -795,10 +798,7 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!([]);
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let ranges = snapshot.folding_ranges(&request.path);
+        let ranges = self.analysis.folding_ranges(&request.path);
 
         Value::Array(
             ranges
@@ -964,10 +964,7 @@ impl LspServer {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
-        let snapshot = self
-            .analysis
-            .snapshot(&self.workspace_folders, &self.settings);
-        let tokens = snapshot.semantic_tokens(&request.path);
+        let tokens = self.analysis.semantic_tokens(&request.path);
 
         lsp_semantic_tokens_from_core(tokens)
     }

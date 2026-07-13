@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -189,6 +189,24 @@ impl VirtualFileSystem {
             .get(&path)
             .or_else(|| self.disk_files.get(&path))
             .map(|file| file.kind)
+    }
+
+    pub fn paths(&self) -> BTreeSet<PathBuf> {
+        let mut paths = self
+            .disk_files
+            .keys()
+            .filter(|path| !self.is_excluded(path))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        paths.extend(
+            self.open_files
+                .keys()
+                .filter(|path| !self.is_excluded(path))
+                .cloned(),
+        );
+
+        paths
     }
 
     pub fn snapshot(&self) -> VfsSnapshot {

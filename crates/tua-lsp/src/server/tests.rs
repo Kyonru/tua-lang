@@ -471,7 +471,7 @@ player:setFilter(123)
         initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
     ]);
-    let diagnostics = published_diagnostics(&output, &uri);
+    let diagnostics = last_published_diagnostics(&output, &uri);
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0]["severity"], 1);
@@ -539,7 +539,7 @@ local player = image "assets/missing.png"
         initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
     ]);
-    let diagnostics = published_diagnostics(&output, &uri);
+    let diagnostics = last_published_diagnostics(&output, &uri);
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0]["severity"], 1);
@@ -566,7 +566,7 @@ local player = image "assets/player.png"
         initialize_with_root(1, temp.uri()),
         did_open(&uri, source),
     ]);
-    let diagnostics = published_diagnostics(&output, &uri);
+    let diagnostics = last_published_diagnostics(&output, &uri);
 
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
@@ -700,7 +700,7 @@ fn did_open_publishes_impossible_comparison_warnings() {
 end
 "#;
     let output = run_messages(vec![did_open(uri, source)]);
-    let diagnostics = published_diagnostics(&output, uri);
+    let diagnostics = last_published_diagnostics(&output, uri);
 
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0]["severity"], 2);
@@ -731,7 +731,7 @@ undefined_variables = true
         initialize_with_root(1, temp.uri()),
         did_open(&uri, "local config = { hp = 10, hp = 20 }\nmissing()\n"),
     ]);
-    let diagnostics = published_diagnostics(&output, &uri);
+    let diagnostics = last_published_diagnostics(&output, &uri);
 
     assert_eq!(diagnostics.len(), 2);
     assert!(diagnostics.iter().any(|diagnostic| {
@@ -1350,6 +1350,72 @@ player.hp = player.hp - 1
     assert!(stats["scope"]["hits"].is_number());
     assert!(stats["symbolIndex"]["hits"].is_number());
     assert!(stats["invalidations"].is_number());
+}
+
+#[test]
+fn current_file_requests_do_not_force_project_snapshot() {
+    let main_uri = "file:///tmp/current-file-main.tua";
+    let other_uri = "file:///tmp/current-file-other.tua";
+    let main = r#"type Player = { hp: number }
+local function spawn()
+end
+"#;
+    let other = "local other: number = 2\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(main_uri, main));
+    server.send(did_open(other_uri, other));
+    server.send(cache_stats_request(2));
+    server.send(document_symbol_request(3, main_uri));
+    server.send(semantic_tokens_request(4, main_uri));
+    server.send(cache_stats_request(5));
+
+    let before = &response_with_id(server.output(), 2)["result"];
+    let after = &response_with_id(server.output(), 5)["result"];
+
+    assert_eq!(
+        after["parse"]["misses"].as_u64(),
+        before["parse"]["misses"].as_u64()
+    );
+    assert_eq!(
+        after["hir"]["misses"].as_u64(),
+        before["hir"]["misses"].as_u64()
+    );
+    assert_eq!(
+        after["parse"]["hits"].as_u64(),
+        before["parse"]["hits"].as_u64().map(|hits| hits + 2)
+    );
+    assert_eq!(
+        after["hir"]["hits"].as_u64(),
+        before["hir"]["hits"].as_u64().map(|hits| hits + 2)
+    );
+}
+
+#[test]
+fn did_open_queues_slow_diagnostics_without_forcing_project_snapshot() {
+    let main_uri = "file:///tmp/did-open-fast-main.tua";
+    let other_uri = "file:///tmp/did-open-fast-other.tua";
+    let mut server = TestServer::new();
+
+    server.send_without_drain(did_open(main_uri, "local main: number = 1\n"));
+    server.send_without_drain(did_open(other_uri, "local other: number = 2\n"));
+    server.send_without_drain(cache_stats_request(2));
+
+    let before = &response_with_id(server.output(), 2)["result"];
+
+    assert_eq!(before["parse"]["misses"].as_u64(), Some(0));
+    assert!(server.next_slow_diagnostics_due().is_some());
+
+    server.drain_due_diagnostics(
+        server
+            .next_slow_diagnostics_due()
+            .expect("slow diagnostics should be queued"),
+    );
+    server.send_without_drain(cache_stats_request(3));
+
+    let after = &response_with_id(server.output(), 3)["result"];
+
+    assert_eq!(after["parse"]["misses"].as_u64(), Some(2));
 }
 
 #[test]
@@ -2993,7 +3059,7 @@ end
         completion_request(3, uri, source, "t.modules.font"),
         inlay_hint_request(4, uri, 0, 0, 5, 0),
     ]);
-    let diagnostics = published_diagnostics(&output, uri);
+    let diagnostics = last_published_diagnostics(&output, uri);
     let hints = response_with_id(&output, 4)["result"]
         .as_array()
         .expect("inlay hints should be an array");

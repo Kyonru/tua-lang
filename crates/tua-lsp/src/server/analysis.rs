@@ -101,6 +101,38 @@ impl AnalysisHost {
         self.core.fast_diagnostics(path_from_uri(uri))
     }
 
+    pub(super) fn document_links(&self, path: &Path) -> Vec<ModuleLink> {
+        self.core.document_links(path)
+    }
+
+    pub(super) fn document_highlights(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Vec<DocumentHighlight> {
+        self.core.document_highlights(path, position)
+    }
+
+    pub(super) fn document_symbols(&self, path: &Path) -> Vec<DocumentSymbol> {
+        self.core.document_symbols(path)
+    }
+
+    pub(super) fn selection_ranges(
+        &self,
+        path: &Path,
+        positions: &[SourcePosition],
+    ) -> Vec<Option<SelectionRange>> {
+        self.core.selection_ranges(path, positions)
+    }
+
+    pub(super) fn folding_ranges(&self, path: &Path) -> Vec<FoldingRange> {
+        self.core.folding_ranges(path)
+    }
+
+    pub(super) fn semantic_tokens(&self, path: &Path) -> Vec<SemanticToken> {
+        self.core.semantic_tokens(path)
+    }
+
     pub(super) fn open_document(
         &mut self,
         uri: impl Into<String>,
@@ -652,34 +684,6 @@ impl AnalysisSnapshot {
         self.core.definition(path, position)
     }
 
-    pub(super) fn document_links(&self, path: &Path) -> Vec<ModuleLink> {
-        self.core.document_links(path)
-    }
-
-    pub(super) fn document_highlights(
-        &self,
-        path: &Path,
-        position: SourcePosition,
-    ) -> Vec<DocumentHighlight> {
-        self.core.document_highlights(path, position)
-    }
-
-    pub(super) fn document_symbols(&self, path: &Path) -> Vec<DocumentSymbol> {
-        self.core.document_symbols(path)
-    }
-
-    pub(super) fn selection_ranges(
-        &self,
-        path: &Path,
-        positions: &[SourcePosition],
-    ) -> Vec<Option<SelectionRange>> {
-        self.core.selection_ranges(path, positions)
-    }
-
-    pub(super) fn folding_ranges(&self, path: &Path) -> Vec<FoldingRange> {
-        self.core.folding_ranges(path)
-    }
-
     pub(super) fn prepare_call_hierarchy(
         &self,
         path: &Path,
@@ -755,10 +759,6 @@ impl AnalysisSnapshot {
 
     pub(super) fn inlay_hints_in_range(&self, path: &Path, range: SourceSpan) -> Vec<InlayHint> {
         self.core.inlay_hints_in_range(path, range)
-    }
-
-    pub(super) fn semantic_tokens(&self, path: &Path) -> Vec<SemanticToken> {
-        self.core.semantic_tokens(path)
     }
 
     pub(super) fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {

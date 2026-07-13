@@ -63,7 +63,8 @@ here. When a behavior must be shared by CLI and LSP, it belongs in this crate.
 `crates/tua-lsp` owns JSON-RPC/LSP transport, server state, capability
 advertising, protocol conversion, and workspace/document notifications. Request
 handlers should mostly convert LSP positions and URIs into core query inputs,
-read an `AnalysisSnapshot`, then convert core results back into LSP shapes.
+read an `AnalysisSnapshot` or a current-file `AnalysisHost` query, then convert
+core results back into LSP shapes.
 
 `editors/vscode` owns editor packaging: language registration, grammar,
 extension activation, bundled/server binary discovery, debug launch tasks,
@@ -72,7 +73,7 @@ language rules in TypeScript.
 
 ## Analysis Data Flow
 
-Most feature requests should follow the same path:
+Project-aware feature requests should follow the same path:
 
 1. The CLI or LSP updates `AnalysisHost` inputs: project config, workspace
    folders, source roots, ignored paths, disk files, open-document overlays, and
@@ -92,6 +93,14 @@ Most feature requests should follow the same path:
 Request handlers should be deterministic. If two handlers need the same
 semantic fact, that fact should move into `tua-core` or the analysis snapshot
 instead of being recomputed independently.
+
+Current-file IDE requests that do not need project indexes should stay on the
+lighter `AnalysisHost` path. Document symbols, document links, document
+highlights, selection ranges, folding ranges, and semantic tokens can reuse the
+same cached per-file analysis without building the module graph, project type
+database, workspace symbol index, or call-hierarchy maps. This keeps editor
+startup and typing-adjacent requests responsive while preserving the snapshot
+path for project-aware features.
 
 ## Where Code Belongs
 
@@ -133,6 +142,12 @@ resolve, hover, signature help, and inlay hints should prefer cached
 project-aware environments and only fall back to standalone helpers for
 parse-recovery or test-style source inputs.
 
+Open and changed documents should publish fast current-file diagnostics first,
+then queue full project-aware diagnostics behind a short debounce. The stdio
+server drains slow diagnostics one document at a time during idle ticks so
+foreground requests such as completion, hover, symbols, and semantic tokens can
+preempt background diagnostic work.
+
 `AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
 requests against unchanged inputs should reuse the warm snapshot, including
 shared lazy indexes such as semantic facts, completion lists, definition lookup
@@ -143,7 +158,8 @@ rebuild from the file-granular cache.
 ## Adding A Core Query
 
 1. Define the core result type near the domain that owns the behavior.
-2. Add a snapshot method when the query depends on project state or open files.
+2. Add a current-file host query for file-local IDE features, or a snapshot
+   method when the query depends on project indexes.
 3. Reuse HIR, scope maps, the module graph, the symbol index, the
    reverse-reference index, and the type database before adding a syntax walk.
 4. Return `any` or `None` consistently for dynamic Lua that cannot be proven.

@@ -884,6 +884,37 @@ fn cache_reuses_unedited_files_across_snapshots() {
 }
 
 #[test]
+fn current_file_queries_do_not_build_unrelated_files() {
+    let main = PathBuf::from("src/main.tua");
+    let other = PathBuf::from("src/other.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &main,
+        r#"type Player = { hp: number }
+local function spawn()
+end
+"#,
+    );
+    host.set_file(&other, "local other: number = 2\n");
+
+    let symbols = host.document_symbols(&main);
+    let stats_after_symbols = host.cache_stats();
+
+    assert!(symbols.iter().any(|symbol| symbol.name == "spawn"));
+    assert_eq!(stats_after_symbols.parse_misses, 1);
+    assert_eq!(stats_after_symbols.hir_misses, 1);
+
+    let tokens = host.semantic_tokens(&main);
+    let stats_after_tokens = host.cache_stats();
+
+    assert!(!tokens.is_empty());
+    assert_eq!(stats_after_tokens.parse_misses, 1);
+    assert_eq!(stats_after_tokens.hir_misses, 1);
+    assert_eq!(stats_after_tokens.parse_hits, 1);
+}
+
+#[test]
 fn editing_one_file_does_not_reparse_unrelated_files() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");

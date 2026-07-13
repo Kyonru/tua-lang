@@ -718,12 +718,113 @@ impl AnalysisHost {
         fast_diagnostics_for_source(&path, source, analysis_source_kind(kind), &self.config)
     }
 
+    pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {
+        self.current_analysis_file(path.as_ref())
+            .map(|file| file.require_edges)
+            .unwrap_or_default()
+    }
+
+    pub fn document_highlights(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Vec<DocumentHighlight> {
+        self.current_analysis_file(path.as_ref())
+            .and_then(|file| {
+                document_highlights_parsed_source(file.parsed.as_ref().ok()?, position).ok()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn document_symbols(&self, path: impl AsRef<Path>) -> Vec<DocumentSymbol> {
+        self.current_analysis_file(path.as_ref())
+            .and_then(|file| {
+                Some(document_symbols_parsed_source_with_hir(
+                    file.parsed.as_ref().ok()?,
+                    file.hir.as_ref()?,
+                ))
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn selection_ranges(
+        &self,
+        path: impl AsRef<Path>,
+        positions: &[SourcePosition],
+    ) -> Vec<Option<SelectionRange>> {
+        let Some(file) = self.current_analysis_file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let file_span = file.parsed.as_ref().ok().and_then(|parsed| parsed.span);
+
+        selection_ranges_source(&file.source, file_span, positions)
+    }
+
+    pub fn folding_ranges(&self, path: impl AsRef<Path>) -> Vec<FoldingRange> {
+        let Some(file) = self.current_analysis_file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let type_alias_spans = file
+            .parsed
+            .as_ref()
+            .ok()
+            .map(|parsed| {
+                parsed
+                    .type_aliases
+                    .iter()
+                    .filter_map(|alias| alias.span)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        folding_ranges_source(&file.source, &type_alias_spans)
+    }
+
+    pub fn semantic_tokens(&self, path: impl AsRef<Path>) -> Vec<SemanticToken> {
+        let path = normalize_path(path.as_ref());
+        let Some(file) = self.current_analysis_file(&path) else {
+            return Vec::new();
+        };
+
+        match &file.parsed {
+            Ok(parsed) => semantic_tokens_parsed_source(parsed).unwrap_or_default(),
+            Err(_) => semantic_tokens_tua_source(&path, file.source).unwrap_or_default(),
+        }
+    }
+
     pub fn revision(&self) -> u64 {
         self.revision
     }
 
     fn bump_revision(&mut self) {
         self.revision = self.revision.saturating_add(1);
+    }
+
+    fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {
+        let path = normalize_path(path);
+        let _profile = profile::span_for_path("analysis.current_file", &path);
+        let source = self.vfs.source(&path)?.to_owned();
+        let kind = analysis_source_kind(self.vfs.kind(&path)?);
+        let source_roots = self.vfs.options().source_roots.clone();
+        let output_roots = self.vfs.options().output_roots.clone();
+        let known_paths = self.vfs.paths();
+        let plugin_registry = self.effective_plugin_registry();
+
+        Some(self.cache.borrow_mut().cached_file(
+            &path,
+            &source,
+            kind,
+            AnalysisBuildContext {
+                config: &self.config,
+                source_roots: &source_roots,
+                output_roots: &output_roots,
+                known_paths: &known_paths,
+                require_path_separator: self.require_path_separator,
+                asset_roots: &self.asset_roots,
+                asset_index: self.asset_index.as_ref(),
+                plugin_registry: &plugin_registry,
+            },
+        ))
     }
 
     fn invalidate_all_analysis(&mut self) {

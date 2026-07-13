@@ -72,7 +72,9 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
                     Err(RecvTimeoutError::Timeout) => match reader_rx.try_recv() {
                         Ok(event) => Some(event),
                         Err(TryRecvError::Empty) => {
-                            for message in server.drain_due_slow_diagnostics(Instant::now()) {
+                            if let Some(message) =
+                                server.drain_next_due_slow_diagnostic(Instant::now())
+                            {
                                 write_message(&mut writer, &message)?;
                             }
 

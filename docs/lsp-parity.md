@@ -26,7 +26,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | --- | --- | --- | --- |
 | Stdio language server | `tua lsp` and `tua lsp --stdio` serve JSON-RPC over stdio. | Standard editor integration shape. | Landed before 30 |
 | Incremental document sync | Open, change, save, and close notifications update diagnostics and open-document state. | Basic live diagnostics behavior. | 22, 31 |
-| Diagnostics for `.tua` | Parser, checker, asset, and lint diagnostics publish for open `.tua` documents. `didChange` uses a fast current-file lane before 200ms-debounced full project-aware diagnostics, and newer document versions cancel stale slow diagnostics. | Comparable base diagnostic loop, with fewer Lua-specific checks than LuaHelper. | 36, 37, 48.6 |
+| Diagnostics for `.tua` | Parser, checker, asset, and lint diagnostics publish for open `.tua` documents. `didOpen` and `didChange` use a fast current-file lane before 200ms-debounced full project-aware diagnostics, and newer document versions cancel stale slow diagnostics. | Comparable base diagnostic loop, with fewer Lua-specific checks than LuaHelper. | 36, 37, 48.6 |
 | LuaJIT guidance diagnostics | Opt-in `[jit]` / `tua.jit.enabled` diagnostics report clear local type drift, table-shape drift, and dynamic table-key writes in loops. | Tua-specific LOVE/LuaJIT guidance rather than a general optimizer or profiler. | 73 |
 | LuaDoc annotation parsing | Parses/lower core LuaDoc tags plus practical LuaLS/LuaHelper forms such as literal unions, `---@overload`, `---@vararg`, and shallow metadata tags. | LuaHelper has a broader annotation ecosystem, but the common interop tags exist. | 33, 70.10, 70.25 |
 | Annotation-backed type environment | Supported annotations can provide aliases, function types, locals, docs, and simple module exports. | LuaHelper supports more patterns and library stubs. | 34 |
@@ -57,7 +57,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 
 | Feature | Tua today | Gap | Roadmap |
 | --- | --- | --- | --- |
-| Analysis architecture | Shared analysis host/snapshot, VFS overlays, cached project model, warmed asset index, HIR-like modules, module graph, scope maps, project type database, last-good semantic recovery, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
+| Analysis architecture | Shared analysis host/snapshot, VFS overlays, cached project model, current-file fast IDE queries, warmed asset index, HIR-like modules, module graph, scope maps, project type database, last-good semantic recovery, cache stats, and profiling exist. | It remains smaller and more file-granular than rust-analyzer's salsa-backed database. | 53-70 |
 | LuaDoc coverage | Common interop tags are parsed/lowered, including overload and vararg signatures. | No complete LuaLS compatibility, no full standard-library stub ingestion, and limited generic behavior. | 35, 49, 70.25 |
 | Type system | Supports primitives, `any`, aliases, scoped `Self`, unions, function types, table shapes, optional fields, selected inference, and multi-return paths. | No generics in Tua syntax, no metatable typing, no deep flow typing, and dynamic shape changes remain permissive. | 61, 62 |
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
