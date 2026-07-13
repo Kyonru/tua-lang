@@ -35,9 +35,9 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | LuaDoc annotation parsing | Parses/lower core LuaDoc tags plus practical LuaLS/LuaHelper forms such as literal unions, `---@overload`, `---@vararg`, and shallow metadata tags. | LuaHelper has a broader annotation ecosystem, but the common interop tags exist. | 33, 70.10, 70.25 |
 | Annotation-backed type environment | Supported annotations can provide aliases, function types, locals, docs, and simple module exports. | LuaHelper supports more patterns and library stubs. | 34 |
 | Hover | Shows aliases, locals, parameters, functions, table fields, Lua builtins, LOVE items, require/import literals, module bindings, annotation docs, and inferred returns. | Mature tools attach richer docs and more precise project context. | 40 |
-| Completion | Completes aliases, locals, fields, Lua builtins, LOVE items, LuaDoc tags/types/snippets, require paths, import paths, module fields, and auto-import candidates. | LuaHelper has deeper dynamic Lua/project completions. | 38, 45 |
+| Completion | Completes aliases, locals, fields, Lua builtins, LOVE items, LuaDoc tags/types/snippets, require paths, import paths, module fields, auto-import candidates, and concise label details. | LuaHelper has deeper dynamic Lua/project completions. | 38, 45, 90 |
 | Completion resolve | Completion items can resolve documentation/details from stable item data. | Mature tools use deeper incremental databases, but resolve is no longer just eager payload reuse. | 39 |
-| Signature help | Shows known function signatures, Lua/LOVE builtins, module-exported functions, LuaDoc overloads, generated LOVE overload variants, typed varargs, active parameters, return labels, and supported parameter docs. | Comparable shape, shallower type inference. | 41, 70.25 |
+| Signature help | Shows known function signatures, Lua/LOVE builtins, module-exported functions, LuaDoc overloads, generated LOVE overload variants, typed varargs, active parameters, return labels, supported parameter docs, and `)` retrigger support. | Comparable shape, shallower type inference. | 41, 70.25, 91 |
 | Go to definition | Resolves aliases, locals, functions, parameters, typed table fields, require/import literals, LOVE virtual stubs, and module exports. | Mature tools support more dynamic module patterns. | 22, 31 |
 | Document links | Resolved `require("...")` and static `import(...)` literals become module links. | Comparable Lua module navigation. | 31 |
 | Document symbols | Type aliases, functions, annotated locals, parameters, table fields, and simple returned exports appear in file outline. | Comparable file outline basics. | 23 |
@@ -56,6 +56,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, BrineVector-backed emission, and bundled runtime output. | Deeper vector-library-specific docs and richer overload presentation can still improve. | 73 |
 | ECS domain helper | Opt-in `[ecs]` / `tua.ecs.enabled` support adds typed `ecs` APIs, component/query diagnostics, and a tiny-ecs-compatible reference adapter. | Tua models clear static ECS patterns and leaves dynamic runtime composition permissive. | 74 |
 | Workspace folders and watchers | Workspace folders, folder changes, watched source files, watched LOVE assets, and `tua.toml` changes refresh cached project state, diagnostics, and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
+| VS Code lifecycle commands | The extension contributes restart, output-focus, settings, server-selection, debug-info copy, cache-stats copy, and report-issue commands, plus a language status item with server state, resolved path, version, and workspace detail. | TypeScript Go still has richer profiling and telemetry UX. | 78, 79, 80, 81 |
 
 ## Protocol Surface Supported But Shallow
 
@@ -68,6 +69,8 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
 | Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
+| Formatting protocol | Full-document formatting is advertised and implemented. | No range formatting or on-type formatting yet. | 84 |
+| Semantic token transport | Full and range semantic tokens are advertised and implemented. | No delta semantic token requests yet. | 87 |
 
 ## Missing And Planned
 
@@ -79,6 +82,16 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Rich project edge cases | Project roots, require paths, ignored paths, and targets are modeled. | Add more duplicate-candidate, cycle, generated-source, and multi-root regression coverage as real projects expose gaps. | 55, 59 |
 | Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
 | Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
+| VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, cache-stats copy, support commands, and a server status item. | Add trace/log verbosity and richer profile artifact commands. | 80 |
+| Type definition and implementation | Standard definition works for supported symbols. | Add `textDocument/typeDefinition` and `textDocument/implementation` using shared semantic origins and conservative empty results for ambiguous dynamic cases. | 82 |
+| Pull diagnostics | Tua publishes push diagnostics for open documents. | Add LSP pull diagnostics, workspace diagnostic refresh, and push/pull consistency. | 83 |
+| Range and on-type formatting | Tua supports full-document formatting. | Add range formatting and stable on-type formatting through the same formatter. | 84 |
+| Code lens | No code lens provider is advertised. | Add lazily resolved lenses for references and other proven project actions. | 86 |
+| Semantic token range/delta | Full and range semantic tokens are advertised. | Add delta token requests with versioned cache invalidation. | 87 |
+| File rename refactors | File renames do not request workspace edits. | Add `workspace.fileOperations.willRename` edits for static `require(...)` and `import(...)` paths. | 88 |
+| Source actions and fix-all | Tua has focused quick fixes but no broad source-action family. | Add organize imports, sort imports, remove unused imports, and safe fix-all. | 89 |
+| Proposed/custom VS Code features | Tua uses standard LSP surfaces and one builtin-document request. | Evaluate verbose hover, source definition, multi-document highlight, and auto insert; implement only Lua/Tua-useful stable or preview-gated behavior. | 92 |
+| External tooling bridge | Tua does not expose a separate local API session. | Design an optional, disabled-by-default bridge for project snapshots, diagnostics, asset metadata, and semantic facts after a concrete consumer exists. | 93 |
 
 ## Intentionally Out Of Scope
 
@@ -87,6 +100,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Full LuaHelper clone compatibility | Tua should match useful Lua project workflows, not replicate every LuaHelper diagnostic, setting, or internal behavior. |
 | Runtime execution or require side effects | Tua remains static source tooling. It should not run project code to discover symbols. |
 | Lua debugger/profiler integration | Debugging is outside the compiler/LSP v1 scope. External Lua/LOVE debuggers can be used separately. |
+| Linked editing for current Lua/Tua syntax | Plain Lua/Tua has no tag-like paired identifiers that benefit from synchronized editing. Revisit only if future domain syntax introduces paired names. |
 | Package manager ownership | Tua should understand project files and require paths, but package management is not part of the language server. |
 | Roblox/Luau runtime compatibility | Luau is a reference point for typed Lua ideas; Tua targets Lua 5.1/LuaJIT/LOVE output. |
 | Arbitrary dynamic table/metatable proof | Dynamic tables, metatables, `_G`, and `any` remain gradual escape hatches unless future specs define narrower support. |

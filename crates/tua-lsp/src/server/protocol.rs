@@ -170,6 +170,7 @@ pub(super) fn lsp_completion_from_core(
     let insert_text = completion.insert_text;
     let filter_text = completion.filter_text;
     let is_snippet = completion.is_snippet;
+    let detail = completion.detail;
     let core_kind = completion.kind.as_str();
     let module_path = completion
         .module_path
@@ -197,6 +198,12 @@ pub(super) fn lsp_completion_from_core(
 
     if is_snippet {
         item["insertTextFormat"] = json!(2);
+    }
+
+    if let Some(detail) = detail {
+        item["labelDetails"] = json!({
+            "description": detail
+        });
     }
 
     if let Some(module_path) = module_path {

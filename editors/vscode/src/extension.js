@@ -6,14 +6,100 @@ const path = require("path");
 const vscode = require("vscode");
 
 let client;
+let extensionContext;
+let languageClientModule;
+let outputChannel;
+let statusItem;
+let currentServerInfo;
+let starting = false;
+let suppressNextServerPathPrompt = false;
+
+const COMMANDS = {
+  restartServer: "tua.restartServer",
+  focusOutput: "tua.output.focus",
+  openSettings: "tua.openSettings",
+  selectServer: "tua.selectServer",
+  copyDebugInfo: "tua.copyDebugInfo",
+  copyCacheStats: "tua.copyCacheStats",
+  reportIssue: "tua.reportIssue",
+};
+
+const STATUS_SELECTOR = [
+  { scheme: "file", language: "tua" },
+  { scheme: "untitled", language: "tua" },
+];
 
 async function activate(context) {
-  const outputChannel = vscode.window.createOutputChannel("tua");
+  extensionContext = context;
+  outputChannel = vscode.window.createOutputChannel("tua");
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
+  context.subscriptions.push(registerLifecycleCommands());
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
+  statusItem = createStatusItem();
+  context.subscriptions.push(statusItem);
 
-  const serverCommand = configuredServerPath(context);
+  await startLanguageServer();
+}
+
+function registerLifecycleCommands() {
+  return vscode.Disposable.from(
+    vscode.commands.registerCommand(COMMANDS.restartServer, restartLanguageServer),
+    vscode.commands.registerCommand(COMMANDS.focusOutput, () => outputChannel?.show(true)),
+    vscode.commands.registerCommand(COMMANDS.openSettings, () =>
+      vscode.commands.executeCommand("workbench.action.openSettings", "tua"),
+    ),
+    vscode.commands.registerCommand(COMMANDS.selectServer, selectServerVersion),
+    vscode.commands.registerCommand(COMMANDS.copyDebugInfo, copyDebugInfo),
+    vscode.commands.registerCommand(COMMANDS.copyCacheStats, copyCacheStats),
+    vscode.commands.registerCommand(COMMANDS.reportIssue, reportIssue),
+  );
+}
+
+function createStatusItem() {
+  const item = vscode.languages.createLanguageStatusItem("tua.languageServer", STATUS_SELECTOR);
+  item.name = "Tua Language Server";
+  item.text = "$(circle-slash) Tua stopped";
+  item.detail = "Tua language server is stopped.";
+  item.busy = false;
+  item.severity = vscode.LanguageStatusSeverity.Warning;
+  item.command = {
+    command: COMMANDS.restartServer,
+    title: "Restart Tua Language Server",
+  };
+
+  return item;
+}
+
+async function startLanguageServer() {
+  if (starting || !extensionContext || !outputChannel) {
+    return;
+  }
+
+  starting = true;
+
+  const serverCommand = configuredServerPath(extensionContext);
   const cwd = workspaceCwd();
+  const baseDetail = serverDetail(serverCommand, cwd);
+  currentServerInfo = {
+    command: serverCommand,
+    cwd,
+    version: undefined,
+    state: "starting",
+  };
+
+  if (!vscode.workspace.isTrusted && isWorkspaceLocalPath(serverCommand)) {
+    const error = new Error("Workspace trust is required before running a workspace-local Tua server binary.");
+    showWorkspaceTrustWarning(error);
+    setServerStatus("failed", `${baseDetail}\n${formatError(error)}`);
+    currentServerInfo.state = "failed";
+    currentServerInfo.error = formatError(error);
+    starting = false;
+
+    return;
+  }
+
+  setServerStatus("starting", baseDetail);
   outputChannel.appendLine(`Starting tua language server: ${serverCommand}`);
   if (cwd) {
     outputChannel.appendLine(`Workspace cwd: ${cwd}`);
@@ -23,18 +109,23 @@ async function activate(context) {
 
   if (!preflight.ok) {
     showServerStartupWarning(serverCommand, preflight.error);
+    setServerStatus("failed", `${baseDetail}\n${formatError(preflight.error)}`);
+    currentServerInfo.state = "failed";
+    currentServerInfo.error = formatError(preflight.error);
+    starting = false;
+
     return;
   }
 
-  let languageClient;
+  outputChannel.appendLine(`Tua language server version: ${preflight.version || "unknown"}`);
+  currentServerInfo.version = preflight.version;
 
-  try {
-    languageClient = require("vscode-languageclient/node");
-  } catch (error) {
-    outputChannel.appendLine(`Failed to load vscode-languageclient: ${formatError(error)}`);
-    vscode.window.showErrorMessage(
-      "The tua extension is missing its language client dependency. Reinstall the extension or run npm install in editors/vscode.",
-    );
+  const languageClient = loadLanguageClient();
+  if (!languageClient) {
+    currentServerInfo.state = "failed";
+    currentServerInfo.error = "Missing vscode-languageclient dependency.";
+    starting = false;
+
     return;
   }
 
@@ -44,7 +135,7 @@ async function activate(context) {
     debug: serverExecutable(serverCommand, cwd),
   };
   const clientOptions = {
-    documentSelector: [{ scheme: "file", language: "tua" }],
+    documentSelector: STATUS_SELECTOR,
     outputChannel,
     synchronize: {
       configurationSection: "tua",
@@ -56,15 +147,304 @@ async function activate(context) {
   };
 
   client = new LanguageClient("tua", "tua language server", serverOptions, clientOptions);
-  context.subscriptions.push(client);
 
   try {
     await client.start();
+    currentServerInfo.state = "running";
+    setServerStatus("running", serverDetail(serverCommand, cwd, preflight.version));
   } catch (error) {
     outputChannel.appendLine(`Failed to start tua language server: ${formatError(error)}`);
     showServerStartupWarning(serverCommand, error);
     client = undefined;
+    currentServerInfo.state = "failed";
+    currentServerInfo.error = formatError(error);
+    setServerStatus("failed", `${baseDetail}\n${formatError(error)}`);
+  } finally {
+    starting = false;
   }
+}
+
+function loadLanguageClient() {
+  if (languageClientModule) {
+    return languageClientModule;
+  }
+
+  try {
+    languageClientModule = require("vscode-languageclient/node");
+
+    return languageClientModule;
+  } catch (error) {
+    outputChannel.appendLine(`Failed to load vscode-languageclient: ${formatError(error)}`);
+    vscode.window.showErrorMessage(
+      "The tua extension is missing its language client dependency. Reinstall the extension or run npm install in editors/vscode.",
+    );
+    setServerStatus("failed", `Missing language client dependency.\n${formatError(error)}`);
+
+    return undefined;
+  }
+}
+
+async function restartLanguageServer() {
+  if (!extensionContext) {
+    return;
+  }
+
+  outputChannel?.show(true);
+  outputChannel?.appendLine("Restarting tua language server...");
+  await stopLanguageServer({ restarting: true });
+  await startLanguageServer();
+}
+
+async function selectServerVersion() {
+  if (!extensionContext) {
+    return;
+  }
+
+  const picks = serverVersionPicks(extensionContext);
+  const selected = await vscode.window.showQuickPick(picks, {
+    placeHolder: "Select the Tua server binary to use",
+    ignoreFocusOut: true,
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  if (selected.kind === "trust") {
+    await vscode.commands.executeCommand("workbench.trust.manage");
+    return;
+  }
+
+  if (selected.kind === "settings") {
+    await vscode.commands.executeCommand(COMMANDS.openSettings);
+    return;
+  }
+
+  suppressNextServerPathPrompt = true;
+  await vscode.workspace
+    .getConfiguration("tua")
+    .update("server.path", selected.serverPath, configurationTarget());
+  await restartLanguageServer();
+}
+
+function handleConfigurationChange(event) {
+  if (!event.affectsConfiguration("tua.server.path")) {
+    return;
+  }
+
+  if (suppressNextServerPathPrompt) {
+    suppressNextServerPathPrompt = false;
+    return;
+  }
+
+  vscode.window
+    .showInformationMessage("Tua server path changed. Restart the language server?", "Restart")
+    .then((choice) => {
+      if (choice === "Restart") {
+        restartLanguageServer();
+      }
+    });
+}
+
+function serverVersionPicks(context) {
+  const picks = [];
+  const bundled = bundledServerPath(context);
+
+  if (bundled) {
+    picks.push({
+      label: "Bundled Tua server",
+      description: bundled,
+      detail: "Use the server packaged with this extension.",
+      kind: "server",
+      serverPath: "tua",
+    });
+  }
+
+  if (vscode.workspace.isTrusted) {
+    for (const candidate of workspaceServerPaths()) {
+      picks.push({
+        label: `Workspace Tua server (${path.basename(path.dirname(candidate))})`,
+        description: candidate,
+        detail: "Use a binary from this trusted workspace.",
+        kind: "server",
+        serverPath: candidate,
+      });
+    }
+  } else if (hasWorkspaceFolders()) {
+    picks.push({
+      label: "Trust workspace to use workspace binaries",
+      description: "Workspace trust required",
+      detail: "Tua will not execute workspace-local server binaries until the workspace is trusted.",
+      kind: "trust",
+    });
+  }
+
+  picks.push({
+    label: "Configure custom server path...",
+    description: "Open settings",
+    detail: "Set tua.server.path manually.",
+    kind: "settings",
+  });
+
+  return picks;
+}
+
+function workspaceServerPaths() {
+  const executable = platformExecutableName();
+  const candidates = [];
+
+  for (const folder of vscode.workspace.workspaceFolders || []) {
+    if (folder.uri.scheme !== "file") {
+      continue;
+    }
+
+    candidates.push(
+      path.join(folder.uri.fsPath, "target", "debug", executable),
+      path.join(folder.uri.fsPath, "target", "release", executable),
+      path.join(folder.uri.fsPath, "editors", "vscode", "bin", executable),
+    );
+  }
+
+  return [...new Set(candidates)].filter((candidate) => fs.existsSync(candidate));
+}
+
+function configurationTarget() {
+  return hasWorkspaceFolders() ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+}
+
+async function copyDebugInfo() {
+  const info = debugInfoText();
+  await vscode.env.clipboard.writeText(info);
+  vscode.window.showInformationMessage("Tua debug information copied to clipboard.");
+}
+
+async function copyCacheStats() {
+  if (!client) {
+    vscode.window.showWarningMessage("Tua language server is not running.");
+    return;
+  }
+
+  try {
+    const stats = await client.sendRequest("tua/cacheStats");
+    await vscode.env.clipboard.writeText(JSON.stringify(stats, null, 2));
+    vscode.window.showInformationMessage("Tua cache statistics copied to clipboard.");
+  } catch (error) {
+    outputChannel?.appendLine(`Failed to read tua cache stats: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Failed to read Tua cache stats: ${formatError(error)}`);
+  }
+}
+
+function debugInfoText() {
+  const packageInfo = extensionContext ? require(path.join(extensionContext.extensionPath, "package.json")) : {};
+  const lines = [
+    `Tua extension: ${packageInfo.version || "unknown"}`,
+    `VS Code: ${vscode.version}`,
+    `Platform: ${process.platform} ${process.arch}`,
+    `Workspace trusted: ${String(vscode.workspace.isTrusted)}`,
+    `Server state: ${currentServerInfo?.state || "unknown"}`,
+    `Server path: ${currentServerInfo?.command || configuredServerPath(extensionContext)}`,
+    `Server version: ${currentServerInfo?.version || "unknown"}`,
+  ];
+
+  if (currentServerInfo?.cwd) {
+    lines.push(`Workspace cwd: ${currentServerInfo.cwd}`);
+  }
+
+  if (currentServerInfo?.error) {
+    lines.push(`Last server error: ${currentServerInfo.error}`);
+  }
+
+  return lines.join("\n");
+}
+
+async function reportIssue() {
+  const body = encodeURIComponent(`<!-- Review before submitting. No source code is included. -->\n\n\`\`\`\n${debugInfoText()}\n\`\`\`\n`);
+  const uri = vscode.Uri.parse(`https://github.com/Kyonru/tua-lang/issues/new?body=${body}`);
+  await vscode.env.openExternal(uri);
+}
+
+async function stopLanguageServer(options = {}) {
+  const activeClient = client;
+  client = undefined;
+
+  if (!activeClient) {
+    if (!options.restarting) {
+      setServerStatus("stopped", "Tua language server is stopped.");
+    }
+
+    return undefined;
+  }
+
+  if (!options.restarting) {
+    setServerStatus("stopped", "Stopping Tua language server...");
+  }
+
+  try {
+    await activeClient.stop();
+  } catch (error) {
+    outputChannel?.appendLine(`Failed to stop tua language server: ${formatError(error)}`);
+  } finally {
+    if (!options.restarting) {
+      setServerStatus("stopped", "Tua language server is stopped.");
+    }
+  }
+
+  return undefined;
+}
+
+function setServerStatus(state, detail) {
+  if (!statusItem) {
+    return;
+  }
+
+  statusItem.detail = detail;
+  statusItem.command = statusCommand(state);
+
+  if (state === "starting") {
+    statusItem.text = "$(sync~spin) Tua starting";
+    statusItem.busy = true;
+    statusItem.severity = vscode.LanguageStatusSeverity.Information;
+  } else if (state === "running") {
+    statusItem.text = "$(check) Tua";
+    statusItem.busy = false;
+    statusItem.severity = vscode.LanguageStatusSeverity.Information;
+  } else if (state === "failed") {
+    statusItem.text = "$(error) Tua failed";
+    statusItem.busy = false;
+    statusItem.severity = vscode.LanguageStatusSeverity.Error;
+  } else {
+    statusItem.text = "$(circle-slash) Tua stopped";
+    statusItem.busy = false;
+    statusItem.severity = vscode.LanguageStatusSeverity.Warning;
+  }
+}
+
+function statusCommand(state) {
+  if (state === "failed") {
+    return {
+      command: COMMANDS.openSettings,
+      title: "Open Tua Settings",
+    };
+  }
+
+  return {
+    command: COMMANDS.restartServer,
+    title: "Restart Tua Language Server",
+  };
+}
+
+function serverDetail(command, cwd, version) {
+  const lines = [`Server: ${command}`];
+
+  if (version) {
+    lines.push(`Version: ${version}`);
+  }
+
+  if (cwd) {
+    lines.push(`Workspace: ${cwd}`);
+  }
+
+  return lines.join("\n");
 }
 
 function registerBuiltinDocumentProvider(outputChannel) {
@@ -85,14 +465,7 @@ function registerBuiltinDocumentProvider(outputChannel) {
 }
 
 async function deactivate() {
-  if (!client) {
-    return undefined;
-  }
-
-  const activeClient = client;
-  client = undefined;
-
-  return activeClient.stop();
+  return stopLanguageServer();
 }
 
 function configuredServerPath(context) {
@@ -117,7 +490,7 @@ function configuredServerPath(context) {
 }
 
 function bundledServerPath(context) {
-  const executable = process.platform === "win32" ? "tua.exe" : "tua";
+  const executable = platformExecutableName();
   const candidates = [
     path.join(context.extensionPath, "bin", executable),
     path.resolve(context.extensionPath, "..", "..", "target", "debug", executable),
@@ -126,10 +499,40 @@ function bundledServerPath(context) {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
+function platformExecutableName() {
+  return process.platform === "win32" ? "tua.exe" : "tua";
+}
+
 function workspaceCwd() {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   return workspaceFolder?.uri.scheme === "file" ? workspaceFolder.uri.fsPath : undefined;
+}
+
+function hasWorkspaceFolders() {
+  return Boolean(vscode.workspace.workspaceFolders?.length);
+}
+
+function isWorkspaceLocalPath(command) {
+  if (!command || isBareCommand(command)) {
+    return false;
+  }
+
+  const resolved = path.resolve(command);
+
+  return (vscode.workspace.workspaceFolders || []).some((folder) => {
+    if (folder.uri.scheme !== "file") {
+      return false;
+    }
+
+    return isPathInside(resolved, folder.uri.fsPath);
+  });
+}
+
+function isPathInside(child, parent) {
+  const relative = path.relative(parent, child);
+
+  return relative === "" || Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function resolveServerCommand(context, command) {
@@ -149,7 +552,7 @@ function isBareCommand(command) {
 
 function candidateRelativeServerPaths(context, command) {
   const bases = [
-    workspaceCwd(),
+    vscode.workspace.isTrusted ? workspaceCwd() : undefined,
     process.cwd(),
     context.extensionPath,
     path.resolve(context.extensionPath, "..", ".."),
@@ -171,27 +574,65 @@ function serverExecutable(command, cwd) {
 
 function checkServerCommand(command, cwd) {
   return new Promise((resolve) => {
+    let settled = false;
+    let stderr = "";
+    let stdout = "";
     const child = childProcess.spawn(command, ["--version"], {
       cwd,
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
 
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish({
+        ok: false,
+        error: new Error(`\`${command} --version\` timed out`),
+      });
+    }, 5000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+
     child.once("error", (error) => {
-      resolve({ ok: false, error });
+      finish({ ok: false, error });
     });
 
     child.once("exit", (code) => {
       if (code === 0) {
-        resolve({ ok: true });
+        finish({ ok: true, version: firstLine(stdout) || firstLine(stderr) });
       } else {
-        resolve({
+        finish({
           ok: false,
-          error: new Error(`\`${command} --version\` exited with status ${code}`),
+          error: new Error(
+            `\`${command} --version\` exited with status ${code}${stderr ? `: ${stderr.trim()}` : ""}`,
+          ),
         });
       }
     });
+
+    function finish(result) {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    }
   });
+}
+
+function firstLine(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 function showServerStartupWarning(command, error) {
@@ -205,6 +646,18 @@ function showServerStartupWarning(command, error) {
     .then((choice) => {
       if (choice === "Open Settings") {
         vscode.commands.executeCommand("workbench.action.openSettings", "tua.server.path");
+      }
+    });
+}
+
+function showWorkspaceTrustWarning(error) {
+  vscode.window
+    .showWarningMessage(formatError(error), "Manage Workspace Trust", "Open Settings")
+    .then((choice) => {
+      if (choice === "Manage Workspace Trust") {
+        vscode.commands.executeCommand("workbench.trust.manage");
+      } else if (choice === "Open Settings") {
+        vscode.commands.executeCommand(COMMANDS.openSettings);
       }
     });
 }

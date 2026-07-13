@@ -36,10 +36,14 @@ pub(super) fn initialize_result() -> Value {
             "hoverProvider": true,
             "completionProvider": {
                 "triggerCharacters": [":", ".", "\"", "'", "@", "-"],
-                "resolveProvider": true
+                "resolveProvider": true,
+                "completionItem": {
+                    "labelDetailsSupport": true
+                }
             },
             "signatureHelpProvider": {
-                "triggerCharacters": ["(", ","]
+                "triggerCharacters": ["(", ","],
+                "retriggerCharacters": [")"]
             },
             "definitionProvider": true,
             "callHierarchyProvider": true,
@@ -65,7 +69,8 @@ pub(super) fn initialize_result() -> Value {
                     "tokenTypes": SEMANTIC_TOKEN_TYPES,
                     "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
                 },
-                "full": true
+                "full": true,
+                "range": true
             },
             "workspace": {
                 "workspaceFolders": {

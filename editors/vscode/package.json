@@ -21,7 +21,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node --check src/extension.js"
+    "check": "node --check src/extension.js && node scripts/manifest-check.js"
   },
   "contributes": {
     "configuration": {
@@ -353,6 +353,43 @@
         }
       }
     },
+    "commands": [
+      {
+        "command": "tua.restartServer",
+        "title": "Restart Language Server",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.output.focus",
+        "title": "Focus Output",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.openSettings",
+        "title": "Open Settings",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.selectServer",
+        "title": "Select Server",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.copyDebugInfo",
+        "title": "Copy Debug Info",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.copyCacheStats",
+        "title": "Copy Cache Stats",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.reportIssue",
+        "title": "Report Issue",
+        "category": "Tua"
+      }
+    ],
     "languages": [
       {
         "id": "tua",

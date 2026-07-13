@@ -16,7 +16,7 @@ use super::protocol::{
     lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
     lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
     lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
-    response, source_position_from_lsp,
+    response, source_position_from_lsp, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{capabilities, LspServer, PendingDiagnostics, SLOW_DIAGNOSTICS_DEBOUNCE};
@@ -117,7 +117,15 @@ impl LspServer {
             }
             "textDocument/inlayHint" => response(id, self.inlay_hint_response(&message)),
             "textDocument/semanticTokens/full" => {
-                response(id, self.semantic_tokens_response(&message))
+                response(id, self.semantic_tokens_response(&message, None))
+            }
+            "textDocument/semanticTokens/range" => {
+                let range = message
+                    .get("params")
+                    .and_then(|params| params.get("range"))
+                    .and_then(lsp_source_range);
+
+                response(id, self.semantic_tokens_response(&message, range))
             }
             "workspace/symbol" => response(id, self.workspace_symbol_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
@@ -960,11 +968,14 @@ impl LspServer {
         )
     }
 
-    fn semantic_tokens_response(&self, message: &Value) -> Value {
+    fn semantic_tokens_response(&self, message: &Value, range: Option<SourceRange>) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
-        let tokens = self.analysis.semantic_tokens(&request.path);
+        let mut tokens = self.analysis.semantic_tokens(&request.path);
+        if let Some(range) = range {
+            tokens.retain(|token| source_span_intersects_range(token.span, range));
+        }
 
         lsp_semantic_tokens_from_core(tokens)
     }
@@ -1121,6 +1132,15 @@ fn register_watched_files_request(id: u64) -> Value {
             ]
         }
     })
+}
+
+fn source_span_intersects_range(span: SourceSpan, range: SourceRange) -> bool {
+    position_key(span.start) < position_key(range.end)
+        && position_key(range.start) < position_key(span.end)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn apply_content_changes(current: &str, changes: &[Value]) -> Option<String> {

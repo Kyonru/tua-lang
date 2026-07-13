@@ -54,6 +54,24 @@ After that, Phase 13 explores LOVE domain extensions:
   slice now powering asset hovers and path completion;
 - optional Feather/tooling integration hooks.
 
+Phase 14 tracks completion intelligence as a compiler-first pipeline:
+
+- deterministic semantic candidate generation;
+- local/project ranking signals;
+- optional project-adaptive and model-assisted ranking paths behind explicit
+  configuration;
+- completion latency and ranking-overhead benchmarks.
+
+Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
+
+- editor lifecycle UX first: restart/output commands, status, server selection,
+  logging, profiling, and support commands;
+- performance-oriented protocol support next: pull diagnostics, range/on-type
+  formatting, and semantic token range/delta;
+- deeper navigation and refactor parity after that: type definition,
+  implementation, file-rename import updates, source actions, fix-all,
+  completion label details, and signature retriggers.
+
 ## Working Rule
 
 Each commit should leave the repository buildable and tested. Behavior changes

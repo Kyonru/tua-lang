@@ -71,8 +71,17 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["completionProvider"]["completionItem"]
+            ["labelDetailsSupport"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["signatureHelpProvider"]["triggerCharacters"],
         json!(["(", ","])
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["signatureHelpProvider"]["retriggerCharacters"],
+        json!([")"])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["definitionProvider"],
@@ -148,6 +157,10 @@ fn initialize_returns_server_capabilities() {
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["semanticTokensProvider"]["range"],
         true
     );
     assert_eq!(
@@ -2066,6 +2079,10 @@ local field = player.hp
 
     assert_completion_labels(&output, 2, ["Player"]);
     assert_completion_labels(&output, 3, ["alive", "hp", "pos"]);
+    assert_eq!(
+        completion_with_label(&output, 3, "hp")["labelDetails"]["description"],
+        "field: number"
+    );
 }
 
 #[test]
@@ -2693,6 +2710,28 @@ damage(player,
         response["result"]["signatures"][0]["parameters"][1]["documentation"]["value"],
         "damage amount"
     );
+}
+
+#[test]
+fn signature_help_accepts_retrigger_context() {
+    let uri = "file:///tmp/signature-help-retrigger.tua";
+    let source = r#"local function damage(target: number, amount: number): number
+  return target - amount
+end
+
+damage(10,
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_retrigger_request(2, uri, source, "damage(10,", ")"),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function damage(target: number, amount: number): number"
+    );
+    assert_eq!(response["result"]["activeParameter"], 1);
 }
 
 #[test]
@@ -4988,6 +5027,44 @@ return {
 }
 
 #[test]
+fn semantic_tokens_range_filters_to_requested_span() {
+    let uri = "file:///tmp/semantic-token-range.tua";
+    let source = r#"type Player = {
+  hp: number,
+}
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local function damage(player: Player, amount: number): Player
+  player.hp -= amount
+  player:heal()
+  return player
+end
+
+local MAX_HP = 10
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        semantic_tokens_range_request(
+            2,
+            uri,
+            lsp_position_of(source, "local function damage"),
+            lsp_position_of(source, "local MAX_HP"),
+        ),
+    ]);
+    let response = response_with_id(&output, 2);
+    let tokens = decoded_semantic_tokens(source, response);
+
+    assert_semantic_token(&tokens, "damage", 1, true);
+    assert_semantic_token(&tokens, "player", 3, true);
+    assert_semantic_token(&tokens, "hp", 4, false);
+    assert!(!tokens.iter().any(|token| token.text == "makePlayer"));
+    assert!(!tokens.iter().any(|token| token.text == "MAX_HP"));
+}
+
+#[test]
 fn semantic_tokens_fall_back_when_source_does_not_parse() {
     let uri = "file:///tmp/semantic-invalid.tua";
     let source = r#"type Player = {
@@ -5264,6 +5341,31 @@ fn signature_help_request(id: u64, uri: &str, source: &str, needle: &str) -> Val
                 "uri": uri
             },
             "position": lsp_position_after(source, needle)
+        }
+    })
+}
+
+fn signature_help_retrigger_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    trigger: &str,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/signatureHelp",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle),
+            "context": {
+                "triggerKind": 3,
+                "triggerCharacter": trigger,
+                "isRetrigger": true
+            }
         }
     })
 }
@@ -5563,6 +5665,23 @@ fn semantic_tokens_request(id: u64, uri: &str) -> Value {
         "params": {
             "textDocument": {
                 "uri": uri
+            }
+        }
+    })
+}
+
+fn semantic_tokens_range_request(id: u64, uri: &str, start: Value, end: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/semanticTokens/range",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "range": {
+                "start": start,
+                "end": end
             }
         }
     })

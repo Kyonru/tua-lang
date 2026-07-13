@@ -13,6 +13,12 @@ tua lsp
 The VS Code extension starts this server and surfaces editor features for
 `.tua` files.
 
+The extension also contributes command-palette actions to restart the language
+server, focus the Tua output channel, select a server binary, copy debug
+information, copy analysis cache statistics, report an issue, and open Tua
+settings. A language status item shows the server state, selected path, version,
+and workspace directory when available.
+
 ## Current Capabilities
 
 - Incremental document sync with open, change, save, and close notifications.
@@ -42,6 +48,8 @@ The VS Code extension starts this server and surfaces editor features for
   auto-import candidates.
 - Generated LOVE API function completions can insert signature-driven call
   snippets, including enum choice placeholders such as `"fill" | "line"`.
+- Completion items advertise label-details support and include concise labels
+  such as field types or symbol categories when known.
 - Completion item resolve includes LOVE wiki links for generated LOVE API
   functions and object methods when a matching page is known.
 - Asset path hovers show kind, relative path, inferred LOVE type, validation
@@ -62,12 +70,12 @@ The VS Code extension starts this server and surfaces editor features for
 - Open buffers retain their last valid semantic snapshot. During a temporary
   syntax error, hover and inlay hints keep using those facts, while completion
   combines the current cursor context with the last valid type environment.
-- Signature help triggered by `(` and `,`, including LuaDoc overloads,
-  generated LOVE overload variants, optional parameters, return labels, and
-  parameter documentation where catalog or annotations provide it.
+- Signature help triggered by `(` and `,`, retriggered by `)`, including LuaDoc
+  overloads, generated LOVE overload variants, optional parameters, return
+  labels, and parameter documentation where catalog or annotations provide it.
 - Definition, references, rename, document highlight, document symbols,
   workspace symbols, document links, code actions, call hierarchy, inlay hints,
-  and semantic tokens.
+  and full/range semantic tokens.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 

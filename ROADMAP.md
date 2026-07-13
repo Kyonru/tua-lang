@@ -2313,3 +2313,362 @@ Acceptance:
 - Ranking layer overhead is bounded and reportable in profiler output.
 - The roadmap includes at least one explicit metric where Phase 14 success is considered
   achieved.
+
+## Phase 15: TypeScript Go LSP And VS Code Parity
+
+This phase tracks the concrete gaps found by comparing Tua's LSP and VS Code
+extension against the TypeScript Go extension and server capability surface. The
+goal is not to clone TypeScript-specific behavior; it is to close useful
+protocol, editor UX, performance, and refactor gaps with Lua/Tua-appropriate
+semantics.
+
+Priority order:
+
+1. Ship editor lifecycle UX first so daily use is debuggable.
+2. Add performance-oriented protocol support next.
+3. Add deeper navigation and refactor parity after the shared semantic model can
+   prove safe results.
+
+### 78. `feat(vscode): add language-server lifecycle commands and status`
+
+Status: done. The VS Code extension now contributes restart, output-focus, and
+settings commands, tracks the language server in a status item, shows resolved
+server path/version/workspace details, and keeps startup failures actionable.
+
+Scope:
+
+- Add VS Code commands for:
+  - restarting the Tua language server;
+  - focusing the Tua output channel;
+  - opening the relevant Tua settings.
+- Add a language status item that shows whether the server is starting, running,
+  stopped, or failed.
+- Show the resolved server path and `tua --version` output in the status/detail
+  view.
+- Keep command registration active only while the extension is active.
+
+Acceptance:
+
+- The command palette exposes restart and output-focus actions.
+- Restart stops the old language client and starts a fresh one without requiring
+  an extension-host reload.
+- Startup failures leave a visible status item with a settings action.
+- A VS Code extension smoke test covers command registration.
+
+### 79. `feat(vscode): support bundled, workspace, and configured server selection`
+
+Status: done. The extension now offers `Tua: Select Server`, supports
+bundled/default and trusted workspace-local binaries, preserves `TUA_SERVER_PATH`
+as the development override, shows selected server details in status/output, and
+prompts for restart after manual `tua.server.path` changes.
+
+Scope:
+
+- Add a server-selection flow for:
+  - bundled extension binary;
+  - workspace-local binary;
+  - explicit `tua.server.path`.
+- Respect workspace trust before running workspace-provided binaries.
+- Show the selected binary version in status and output.
+- Preserve `TUA_SERVER_PATH` as the highest-priority development override.
+
+Acceptance:
+
+- Users can switch between bundled and workspace Tua versions from VS Code.
+- Untrusted workspaces do not silently execute workspace-local binaries.
+- Configuration changes that require restart produce an actionable prompt.
+- Server path resolution is covered by extension-side tests.
+
+### 80. `feat(vscode): add trace, log verbosity, and profiling commands`
+
+Status: partial. The extension now exposes `Tua: Copy Cache Stats`, backed by
+the existing `tua/cacheStats` request. Trace/log verbosity settings and richer
+profile artifact commands remain future work.
+
+Scope:
+
+- Add editor settings for LSP trace/log verbosity and pass them through
+  initialization options or configuration changes.
+- Add commands for saving Rust-relevant profile artifacts such as CPU traces,
+  heap/allocation summaries where supported, and current cache statistics.
+- Do not add TypeScript/Go-specific commands such as garbage collection unless
+  Tua has an equivalent runtime operation.
+- Surface profile output paths in the output channel and user messages.
+
+Acceptance:
+
+- Changing log verbosity updates server behavior without restarting when the
+  server supports it.
+- Profile commands fail gracefully when profiling is disabled or unsupported.
+- Generated profile files are written outside source trees by default.
+- Profiling behavior is documented in the VS Code README.
+
+### 81. `feat(vscode): add issue-reporting and support commands`
+
+Status: done. The extension now contributes commands to report an issue and copy
+debug information containing extension/server/version/platform/trust state
+without source content.
+
+Scope:
+
+- Add command-palette actions for:
+  - reporting a Tua issue;
+  - copying server version/path/debug information;
+  - opening the output channel.
+- Include recent startup failure details when available.
+- Avoid telemetry or external reporting unless explicitly configured later.
+
+Acceptance:
+
+- Users can copy a concise diagnostic bundle from VS Code.
+- Report-issue action opens the project issue URL with environment details the
+  user can review before submitting.
+- No source content is included in copied diagnostics.
+
+### 82. `feat(lsp): add type-definition and implementation requests`
+
+Scope:
+
+- Advertise and handle `textDocument/typeDefinition`.
+- Advertise and handle `textDocument/implementation`.
+- Route both through shared semantic facts instead of feature-specific type
+  inference.
+- For Lua/Tua, treat type definition as navigation to aliases, table-shape
+  declarations, annotation declarations, and virtual builtin or LOVE definitions
+  where available.
+- Treat implementation conservatively: return concrete function declarations,
+  module exports, typed receiver methods, or empty results when dynamic dispatch
+  is ambiguous.
+
+Acceptance:
+
+- Type definition works for aliases, annotated locals, module-exported types,
+  and inferred table-shape fields with origin spans.
+- Implementation works for known local/module functions and typed methods.
+- Dynamic `any`, metatable-only dispatch, and ambiguous globals return empty
+  results rather than guessed locations.
+- Core query tests and LSP JSON tests cover local and cross-file cases.
+
+### 83. `feat(lsp): add pull diagnostics and refresh support`
+
+Scope:
+
+- Advertise `diagnosticProvider` with inter-file dependencies when supported by
+  the client.
+- Keep push diagnostics as a compatibility path for clients that do not request
+  pull diagnostics.
+- Add workspace diagnostic refresh when config, watched files, or project graph
+  state changes.
+- Ensure open-file fast diagnostics remain responsive while pull diagnostics use
+  cached project snapshots.
+
+Acceptance:
+
+- VS Code can request document diagnostics through LSP pull diagnostics.
+- Project-level changes refresh stale diagnostics without requiring file edits.
+- Push and pull paths report the same diagnostic codes for the same snapshot.
+- Tests cover config changes, watched-file changes, and dependency changes.
+
+### 84. `feat(format): add range and on-type formatting`
+
+Scope:
+
+- Advertise and handle `textDocument/rangeFormatting`.
+- Advertise and handle `textDocument/onTypeFormatting`.
+- Reuse the standard Tua formatter and avoid a separate formatting engine.
+- Restrict on-type triggers to Lua/Tua-relevant characters such as newline,
+  `end`, `}`, `)`, `]`, and comma only when the formatter can produce local,
+  stable edits.
+
+Acceptance:
+
+- Formatting a selected range returns minimal edits inside the requested range.
+- On-type formatting never rewrites unrelated file regions.
+- Parse-error recovery avoids destructive edits.
+- Formatter tests cover full-document, range, and on-type entry points.
+
+### 85. `feat(lsp): evaluate linked-editing ranges for Lua/Tua syntax`
+
+Status: done as out of scope for current syntax. Plain Lua/Tua has no paired
+tag-like syntax where linked editing is useful today; revisit if future domain
+syntax introduces paired names that benefit from synchronized edits.
+
+Scope:
+
+- Decide whether `linkedEditingRangeProvider` has useful Lua/Tua semantics.
+- If useful, implement linked ranges for paired syntax that Tua owns, such as
+  future domain declarations or paired generated labels.
+- If not useful for current Lua/Tua syntax, document it as intentionally out of
+  scope in the parity matrix.
+
+Acceptance:
+
+- The commit either implements a small proven linked-editing surface with tests
+  or records a clear out-of-scope decision.
+- No HTML/JSX-style behavior is added unless Tua adds syntax that needs it.
+
+### 86. `feat(lsp): add code lens provider with resolve`
+
+Scope:
+
+- Advertise `codeLensProvider` with resolve support.
+- Add conservative lenses for high-value Tua workflows:
+  - references for exported functions and type aliases;
+  - run/check/build actions only when they can be represented without guessing
+    project intent;
+  - optional LOVE asset metadata lenses behind preview config if useful.
+- Reuse existing references, project model, and command plumbing.
+
+Acceptance:
+
+- Code lenses are cheap to compute and resolve expensive details lazily.
+- Reference lenses use the same result set as `textDocument/references`.
+- Lenses disappear cleanly when symbols become ambiguous or unsupported.
+- LSP tests cover unresolved and resolved lens payloads.
+
+### 87. `feat(semantic): add range and delta semantic tokens`
+
+Status: partial. Semantic token range requests are now advertised and handled by
+filtering the shared full-token stream. Full/delta support remains future work.
+
+Scope:
+
+- Advertise semantic token range support.
+- Add full/delta support when the client supports it.
+- Reuse the same semantic token builder for full, range, and delta requests.
+- Invalidate token caches by document version and semantic snapshot identity.
+
+Acceptance:
+
+- Range requests only return tokens intersecting the requested range.
+- Delta requests return correct edits after small document changes.
+- Full, range, and delta outputs agree for the same snapshot.
+- Token latency is covered by LSP feature smoke or profiling fixtures.
+
+### 88. `feat(lsp): update imports and module paths on file rename`
+
+Scope:
+
+- Advertise `workspace.fileOperations.willRename` for `.tua` and configured
+  Lua/Tua-associated files.
+- Update affected `require(...)` and static `import(...)` literals when a file
+  move can be proven from the project require-path model.
+- Return no edits for ambiguous module paths, generated files, ignored paths, or
+  dynamic require/import expressions.
+- Preserve the configured require path separator.
+
+Acceptance:
+
+- Renaming a module updates dependent static imports/requires.
+- Ambiguous or dynamic cases are skipped without corrupting source.
+- Multi-root workspaces only edit files in the affected project graph.
+- Tests cover same-folder, nested-folder, and ignored-path renames.
+
+### 89. `feat(code-action): add source actions and fix-all support`
+
+Scope:
+
+- Advertise supported code action kinds explicitly.
+- Add source actions for:
+  - organize imports;
+  - sort imports;
+  - remove unused imports;
+  - fix all safe diagnostics in a file.
+- Reuse existing import/module analysis and diagnostic quick fixes.
+- Keep bulk fixes conservative: only apply edits with non-overlapping ranges and
+  stable diagnostics for the current document version.
+
+Acceptance:
+
+- VS Code source-action commands can organize, sort, and remove imports.
+- Fix-all applies only safe known fixes and reports no edit when safety cannot
+  be proven.
+- Code-action tests cover each advertised kind.
+- The VS Code extension exposes matching command-palette actions where useful.
+
+### 90. `feat(completion): add label details and richer resolve payloads`
+
+Status: done. Completion items now advertise label-details support and populate
+concise label descriptions from existing completion detail metadata while
+keeping documentation, edits, and heavier payloads lazy through
+`completionItem/resolve`.
+
+Scope:
+
+- Advertise `completionItem.labelDetailsSupport` when the client supports it.
+- Fill label details for functions, methods, fields, modules, LOVE APIs, and
+  auto-import candidates.
+- Keep large docs and edit payloads lazy through `completionItem/resolve`.
+- Ensure unresolved and resolved items remain stable across cache refreshes.
+
+Acceptance:
+
+- Completion items show concise signatures/details without bloating initial
+  completion responses.
+- Resolve attaches docs, source/module info, and edits only when requested.
+- Existing completion tests assert both initial and resolved payload shape.
+
+### 91. `feat(signature): add retrigger characters and active-signature refresh`
+
+Status: done. The LSP now advertises `)` as a signature-help retrigger, and the
+existing signature-help handler accepts retrigger request contexts while
+recomputing active signature and parameter from the current call context.
+
+Scope:
+
+- Advertise signature help retrigger characters where the protocol/client
+  supports them.
+- Add retriggers for Lua/Tua-relevant characters such as `)`, `]`, and typed
+  generic or annotation delimiters if future syntax needs them.
+- Recompute active signature and parameter from shared call context without
+  reparsing more than necessary.
+
+Acceptance:
+
+- Signature help updates correctly when users close arguments or move across
+  overloads.
+- Existing LOVE, LuaDoc overload, module-function, and colon-call signatures
+  continue to work.
+- Tests cover trigger and retrigger request shapes.
+
+### 92. `feat(vscode): evaluate proposed custom editor features`
+
+Scope:
+
+- Evaluate TypeScript Go-style custom/proposed editor features for Tua:
+  - verbose hover;
+  - source definition;
+  - multi-document highlight;
+  - auto insert.
+- Implement only features that are useful for Lua/Tua and safe on stable VS Code
+  APIs, or gate proposed API usage behind preview configuration.
+- Prefer standard LSP requests when they can express the same behavior.
+
+Acceptance:
+
+- Verbose hover either has a concrete level-based design or is rejected as not
+  worth custom protocol.
+- Source definition maps cleanly to generated/builtin/LOVE stubs or is rejected
+  as redundant with definition/type-definition.
+- Multi-document highlight reuses references/index data when implemented.
+- Auto insert is documented as out of scope unless a Lua/Tua syntax trigger is
+  identified.
+
+### 93. `feat(tooling): design optional external API session bridge`
+
+Scope:
+
+- Design an optional local API bridge for tools that need direct access to Tua
+  project snapshots, diagnostics, asset metadata, or semantic facts.
+- Keep the bridge disabled by default and separate from the core LSP path.
+- Define security boundaries for workspace trust, local sockets/pipes, and
+  exposed data.
+- Prefer a design document first; implementation should follow only after a
+  concrete consumer exists.
+
+Acceptance:
+
+- The design names supported requests, authentication/trust assumptions, and
+  lifecycle behavior.
+- No external bridge starts unless explicitly requested.
+- The LSP remains fully functional without the bridge.
