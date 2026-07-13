@@ -1,4 +1,4 @@
-local Functions = import("./functions")
+local Functions = require("functions")
 local Legacy = import("legacy")
 
 -- Feature: child-relative and project-module imports emit plain Lua require

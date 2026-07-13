@@ -753,6 +753,101 @@ undefined_variables = true
 }
 
 #[test]
+fn did_open_resolves_imports_from_nested_project_config() {
+    let temp = TempProject::new("nested-import-config");
+
+    temp.write(
+        "examples/features/tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write(
+        "examples/features/src/imports.tua",
+        "local Functions = import(\"./functions\")\n",
+    );
+    temp.write("examples/features/src/functions.tua", "return {}\n");
+
+    let uri = temp.uri_for("examples/features/src/imports.tua");
+    let source = fs::read_to_string(temp.path.join("examples/features/src/imports.tua"))
+        .expect("fixture source should exist");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, &source));
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics, Vec::<Value>::new());
+}
+
+#[test]
+fn did_open_resolves_imports_from_nearest_config_without_workspace_root() {
+    let temp = TempProject::new("open-file-import-config");
+
+    temp.write(
+        "examples/features/tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write(
+        "examples/features/src/imports.tua",
+        "local Functions = import(\"./functions\")\n",
+    );
+    temp.write("examples/features/src/functions.tua", "return {}\n");
+
+    let uri = temp.uri_for("examples/features/src/imports.tua");
+    let source = fs::read_to_string(temp.path.join("examples/features/src/imports.tua"))
+        .expect("fixture source should exist");
+    let mut server = TestServer::new();
+
+    server.send(did_open(&uri, &source));
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(diagnostics, Vec::<Value>::new());
+}
+
+#[test]
+fn watched_child_import_create_clears_missing_import_diagnostic() {
+    let temp = TempProject::new("watched-child-import-create");
+    let main = "local Functions = import(\"./functions\")\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write("src/imports.tua", main);
+
+    let imports_uri = temp.uri_for("src/imports.tua");
+    let functions_uri = temp.uri_for("src/functions.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&imports_uri, main));
+
+    let initial = last_published_diagnostics(server.output(), &imports_uri);
+    assert!(initial
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL4002"));
+
+    temp.write("src/functions.tua", "return {}\n");
+    server.send(watched_files_changed([(&functions_uri, 1)]));
+
+    assert_eq!(
+        last_published_diagnostics(server.output(), &imports_uri),
+        Vec::<Value>::new()
+    );
+}
+
+#[test]
 fn did_change_republishes_empty_diagnostics_for_clean_document() {
     let uri = "file:///tmp/player.tua";
     let output = run_messages(vec![
@@ -3353,6 +3448,107 @@ return {
 
     assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
     assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
+}
+
+#[test]
+fn completion_and_definition_use_imported_function_return_alias_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Functions = require("functions")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("static import")
+local direct = Functions.makePlayer("direct import")
+local hp = player.h
+local directHp = direct.h
+local usage = player.hp
+-- file: src/functions.tua
+type Player = {
+  name: string,
+  hp: number,
+  alive?: boolean,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+    alive = true,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("imported-return-alias-fields")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let functions = fixture.source("src/functions.tua");
+
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let functions_uri = path_uri(&temp.join("src/functions.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        completion_request(2, &main_uri, main, "player."),
+        completion_request(3, &main_uri, main, "direct."),
+        definition_request(4, &main_uri, main, "player.hp", "player.".len()),
+    ]);
+
+    completion_with_label(&output, 2, "hp");
+    completion_with_label(&output, 2, "name");
+    completion_with_label(&output, 3, "hp");
+    assert_definition_text(&output, 4, &functions_uri, functions, "hp");
+}
+
+#[test]
+fn completion_recovers_imported_function_return_alias_fields_while_typing() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Functions = require("functions")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("static import")
+local hp = player.
+-- file: src/functions.tua
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("imported-return-alias-fields-recovery")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        completion_request(2, &main_uri, main, "player."),
+    ]);
+
+    completion_with_label(&output, 2, "hp");
+    completion_with_label(&output, 2, "name");
 }
 
 #[test]

@@ -455,7 +455,7 @@ fn child_relative_import_candidates(
     for candidate in import_candidates {
         let candidate = normalize_path(candidate);
 
-        if indexed_paths.contains(&candidate)
+        if module_candidate_exists(&candidate, indexed_paths)
             && module_name_for_any_root(&search_roots, &candidate, separator).is_some()
             && !candidates.contains(&candidate)
         {
@@ -523,7 +523,9 @@ fn existing_candidates(
         for candidate in module_candidates(root, &relative, &extensions) {
             let candidate = normalize_path(candidate);
 
-            if indexed_paths.contains(&candidate) && !candidates.contains(&candidate) {
+            if module_candidate_exists(&candidate, indexed_paths)
+                && !candidates.contains(&candidate)
+            {
                 candidates.push(candidate);
             }
         }
@@ -656,6 +658,10 @@ fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<P
     }
 
     candidates
+}
+
+fn module_candidate_exists(candidate: &Path, indexed_paths: &BTreeSet<PathBuf>) -> bool {
+    indexed_paths.contains(candidate) || candidate.is_file()
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {

@@ -381,6 +381,33 @@ fn pipeline_diagnostics_deduplicate_overlapping_project_require_diagnostics() {
 }
 
 #[test]
+fn pipeline_diagnostics_resolve_imports_from_existing_disk_siblings() {
+    let project = TempProject::new("disk-sibling-import");
+    let main = project.write(
+        "src/imports.tua",
+        "local Functions = import(\"./functions\")\n",
+    );
+
+    project.write("src/functions.tua", "return {}\n");
+
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([project.path().join("src")]);
+    host.set_file(
+        &main,
+        fs::read_to_string(&main).expect("source should be readable"),
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&main);
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::LINT_MISSING_REQUIRE)),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn pipeline_diagnostics_use_configured_asset_roots() {
     let temp = TempProject::new("asset-roots");
     let path = temp.write(
@@ -1423,6 +1450,105 @@ return {
     assert!(literal_labels.contains(&"type".to_owned()));
     assert!(field_labels.contains(&"hp".to_owned()));
     assert!(field_labels.contains(&"name".to_owned()));
+}
+
+#[test]
+fn snapshot_uses_imported_return_alias_fields_for_inferred_local_completion_and_definition() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Functions = require("functions")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("static import")
+local direct = Functions.makePlayer("direct import")
+local hp = player.<|complete|>h
+local directHp = direct.<|direct_complete|>h
+player.<|hp_ref|>hp = 12
+-- file: src/functions.tua
+type Player = {
+  name: string,
+  <|hp_def|>hp<|/hp_def|>: number,
+  alive?: boolean,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+    alive = true,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    let direct_labels = completion_labels(
+        &snapshot.completion("src/main.tua", fixture.position("direct_complete")),
+    );
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("hp_ref"))
+        .expect("imported return alias field should resolve to provider alias field");
+
+    assert!(labels.contains(&"hp".to_owned()));
+    assert!(labels.contains(&"name".to_owned()));
+    assert!(direct_labels.contains(&"hp".to_owned()));
+    assert_eq!(definition.kind, DefinitionKind::TableField);
+    assert_eq!(definition.path, PathBuf::from("src/functions.tua"));
+    assert_eq!(definition.span, fixture.range("hp_def"));
+}
+
+#[test]
+fn snapshot_recovers_imported_return_alias_field_completion_while_typing() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Functions = require("functions")
+
+local makePlayer = Functions.makePlayer
+local player = makePlayer("static import")
+local hp = player.<|complete|>
+-- file: src/functions.tua
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local function makePlayer(name: string): Player
+  return {
+    name = name,
+    hp = 100,
+  }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+
+    assert!(labels.contains(&"hp".to_owned()));
+    assert!(labels.contains(&"name".to_owned()));
 }
 
 #[test]

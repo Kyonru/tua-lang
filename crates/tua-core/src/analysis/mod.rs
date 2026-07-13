@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use full_moon::ast::{self, Expression, Var};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
@@ -28,7 +29,9 @@ use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
-use crate::semantic::SemanticModel;
+use crate::semantic::{
+    field_chain_before_first_call, plain_field_chain_from_var_expression, SemanticModel,
+};
 use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
 use crate::types::{
@@ -172,6 +175,18 @@ struct RecoveredSemanticFacts {
     hir: Option<HirModule>,
     environment: TypeEnvironment,
     semantic_index: SemanticIndex,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ProjectLocalInference {
+    local_types: Vec<(String, Type)>,
+    field_origins: BTreeMap<String, ProjectAliasFieldOrigin>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProjectAliasFieldOrigin {
+    module_path: PathBuf,
+    alias_name: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1152,6 +1167,12 @@ impl AnalysisSnapshot {
 
         if self.is_module_reference(parsed, position) {
             return None;
+        }
+
+        if let Some(definition) =
+            self.project_imported_return_alias_field_definition(parsed, position)
+        {
+            return Some(definition);
         }
 
         if let Some(definition) = recovered_index.and_then(|index| index.definition_at(position)) {
@@ -2821,7 +2842,9 @@ impl AnalysisSnapshot {
             diagnostics.is_empty().then_some(environment)
         })?;
 
-        let environment = environment.with_local_types(self.project_local_annotation_types(parsed));
+        let environment = environment
+            .with_local_types(self.project_local_inference(parsed).local_types)
+            .with_local_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {
             Some(
@@ -2845,7 +2868,9 @@ impl AnalysisSnapshot {
             build_type_environment_with_diagnostics(parsed)
         };
         let environment = base_environment.unwrap_or(fallback);
-        let environment = environment.with_local_types(self.project_local_annotation_types(parsed));
+        let environment = environment
+            .with_local_types(self.project_local_inference(parsed).local_types)
+            .with_local_types(self.project_local_annotation_types(parsed));
 
         if self.config.ecs.enabled {
             environment
@@ -2866,6 +2891,313 @@ impl AnalysisSnapshot {
                     .map(|ty| (annotation.name.clone(), ty))
             })
             .collect()
+    }
+
+    fn project_local_inference(&self, parsed: &ParsedSource) -> ProjectLocalInference {
+        let mut local_types = BTreeMap::<String, Type>::new();
+        let mut field_origins = BTreeMap::<String, ProjectAliasFieldOrigin>::new();
+        let mut function_return_origins = BTreeMap::<String, ProjectAliasFieldOrigin>::new();
+
+        for stmt in parsed.ast.nodes().stmts() {
+            let ast::Stmt::LocalAssignment(local) = stmt else {
+                continue;
+            };
+            let expressions = local.expressions().iter().collect::<Vec<_>>();
+            let mut pending_types = Vec::new();
+            let mut pending_field_origins = Vec::new();
+            let mut pending_function_return_origins = Vec::new();
+
+            for (index, local_name) in local.names().iter().enumerate() {
+                let name = token_text(local_name);
+                let Some((expression, return_index)) =
+                    project_assignment_expression_for_local(&expressions, index)
+                else {
+                    continue;
+                };
+
+                if let Some(ty) =
+                    self.project_type_for_expression(parsed, expression, return_index, &local_types)
+                {
+                    pending_types.push((name.clone(), ty));
+                }
+
+                if let Some(origin) = self.project_field_origin_for_expression(
+                    parsed,
+                    expression,
+                    return_index,
+                    &field_origins,
+                    &function_return_origins,
+                ) {
+                    pending_field_origins.push((name.clone(), origin));
+                }
+
+                if return_index == 0 {
+                    if let Some(origin) = self.project_function_return_alias_origin_for_expression(
+                        parsed,
+                        expression,
+                        &function_return_origins,
+                    ) {
+                        pending_function_return_origins.push((name, origin));
+                    }
+                }
+            }
+
+            for (name, ty) in pending_types {
+                local_types.insert(name, ty);
+            }
+
+            for (name, origin) in pending_field_origins {
+                field_origins.insert(name, origin);
+            }
+
+            for (name, origin) in pending_function_return_origins {
+                function_return_origins.insert(name, origin);
+            }
+        }
+
+        ProjectLocalInference {
+            local_types: local_types.into_iter().collect(),
+            field_origins,
+        }
+    }
+
+    fn project_type_for_expression(
+        &self,
+        parsed: &ParsedSource,
+        expression: &Expression,
+        return_index: usize,
+        local_types: &BTreeMap<String, Type>,
+    ) -> Option<Type> {
+        match expression {
+            Expression::FunctionCall(function_call) => {
+                let parts = field_chain_before_first_call(function_call)?;
+
+                self.project_type_for_function_call_parts(parsed, &parts, return_index, local_types)
+            }
+            Expression::Var(var) if return_index == 0 => {
+                let parts = project_field_chain_from_var(var)?;
+
+                self.project_type_for_field_chain(parsed, &parts)
+                    .or_else(|| project_local_field_chain_type(local_types, &parts))
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => {
+                self.project_type_for_expression(parsed, expression, return_index, local_types)
+            }
+            _ => None,
+        }
+    }
+
+    fn project_type_for_function_call_parts(
+        &self,
+        parsed: &ParsedSource,
+        parts: &[String],
+        return_index: usize,
+        local_types: &BTreeMap<String, Type>,
+    ) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let ty = if fields.is_empty() {
+            local_types.get(root).cloned()
+        } else {
+            self.project_type_for_field_chain(parsed, parts)
+        }?;
+
+        match ty {
+            Type::Function(function) => function.return_types_or_any().get(return_index).cloned(),
+            _ => None,
+        }
+    }
+
+    fn project_type_for_field_chain(
+        &self,
+        parsed: &ParsedSource,
+        parts: &[String],
+    ) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+
+        if fields.is_empty() {
+            return None;
+        }
+
+        self.type_database
+            .module_export_type(&self.module_graph, &parsed.path, root, fields)
+            .or_else(|| self.project_indexed_module_export_type(parsed, root, fields))
+    }
+
+    fn project_indexed_module_export_type(
+        &self,
+        parsed: &ParsedSource,
+        root: &str,
+        fields: &[String],
+    ) -> Option<Type> {
+        let (first, rest) = fields.split_first()?;
+        let module_path = self.indexed_required_module_path(parsed, root)?;
+        let entry = self.module_graph.export(module_path, first)?;
+        let mut current =
+            self.type_database
+                .resolve_type(&self.module_graph, module_path, &entry.field.ty);
+
+        for field in rest {
+            current = project_table_field_type(&current, field)?;
+        }
+
+        Some(current)
+    }
+
+    fn project_field_origin_for_expression(
+        &self,
+        parsed: &ParsedSource,
+        expression: &Expression,
+        return_index: usize,
+        field_origins: &BTreeMap<String, ProjectAliasFieldOrigin>,
+        function_return_origins: &BTreeMap<String, ProjectAliasFieldOrigin>,
+    ) -> Option<ProjectAliasFieldOrigin> {
+        match expression {
+            Expression::FunctionCall(function_call) => {
+                let parts = field_chain_before_first_call(function_call)?;
+
+                self.project_field_origin_for_call_parts(
+                    parsed,
+                    &parts,
+                    return_index,
+                    function_return_origins,
+                )
+            }
+            Expression::Var(var) if return_index == 0 => {
+                let parts = project_field_chain_from_var(var)?;
+                let [root] = parts.as_slice() else {
+                    return None;
+                };
+
+                field_origins.get(root).cloned()
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => self
+                .project_field_origin_for_expression(
+                    parsed,
+                    expression,
+                    return_index,
+                    field_origins,
+                    function_return_origins,
+                ),
+            _ => None,
+        }
+    }
+
+    fn project_field_origin_for_call_parts(
+        &self,
+        parsed: &ParsedSource,
+        parts: &[String],
+        return_index: usize,
+        function_return_origins: &BTreeMap<String, ProjectAliasFieldOrigin>,
+    ) -> Option<ProjectAliasFieldOrigin> {
+        let (root, fields) = parts.split_first()?;
+
+        if fields.is_empty() {
+            return (return_index == 0)
+                .then(|| function_return_origins.get(root).cloned())
+                .flatten();
+        }
+
+        self.project_module_return_alias_origin(parsed, parts, return_index)
+    }
+
+    fn project_function_return_alias_origin_for_expression(
+        &self,
+        parsed: &ParsedSource,
+        expression: &Expression,
+        function_return_origins: &BTreeMap<String, ProjectAliasFieldOrigin>,
+    ) -> Option<ProjectAliasFieldOrigin> {
+        match expression {
+            Expression::Var(var) => {
+                let parts = project_field_chain_from_var(var)?;
+                let (root, fields) = parts.split_first()?;
+
+                if fields.is_empty() {
+                    return function_return_origins.get(root).cloned();
+                }
+
+                self.project_module_return_alias_origin(parsed, &parts, 0)
+            }
+            Expression::Parentheses { expression, .. }
+            | Expression::TypeAssertion { expression, .. } => self
+                .project_function_return_alias_origin_for_expression(
+                    parsed,
+                    expression,
+                    function_return_origins,
+                ),
+            _ => None,
+        }
+    }
+
+    fn project_module_return_alias_origin(
+        &self,
+        parsed: &ParsedSource,
+        parts: &[String],
+        return_index: usize,
+    ) -> Option<ProjectAliasFieldOrigin> {
+        let (root, fields) = parts.split_first()?;
+        let [export] = fields else {
+            return None;
+        };
+        let module_path = self
+            .indexed_required_module_path(parsed, root)?
+            .to_path_buf();
+        let entry = self.module_graph.export(&module_path, export)?;
+        let Type::Function(function) = &entry.field.ty else {
+            return None;
+        };
+        let Type::Alias(alias_name) = function.return_types_or_any().get(return_index)? else {
+            return None;
+        };
+
+        Some(ProjectAliasFieldOrigin {
+            module_path,
+            alias_name: alias_name.clone(),
+        })
+    }
+
+    fn project_imported_return_alias_field_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index == 0 {
+            return None;
+        }
+
+        let field = &chain.parts.get(chain.cursor_index)?.text;
+        let receiver_parts = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index)
+            .map(|part| part.text.clone())
+            .collect::<Vec<_>>();
+        let [receiver] = receiver_parts.as_slice() else {
+            return None;
+        };
+        let inference = self.project_local_inference(parsed);
+        let origin = inference.field_origins.get(receiver)?;
+
+        self.project_alias_field_definition(origin, field)
+    }
+
+    fn project_alias_field_definition(
+        &self,
+        origin: &ProjectAliasFieldOrigin,
+        field: &str,
+    ) -> Option<Definition> {
+        let file = self.file(&origin.module_path)?;
+        let parsed = file.parsed.as_ref().ok()?;
+        let span = project_alias_field_span(parsed, &origin.alias_name, field, 0)?;
+
+        Some(Definition {
+            path: origin.module_path.clone(),
+            span,
+            kind: DefinitionKind::TableField,
+        })
     }
 
     fn project_type_from_tua_type(&self, parsed: &ParsedSource, ty: &TuaType) -> Option<Type> {
@@ -3448,6 +3780,114 @@ fn token_span(token: &TokenReference) -> Option<SourceSpan> {
 
 fn token_text(token: &TokenReference) -> String {
     token.to_string().trim().to_owned()
+}
+
+fn project_assignment_expression_for_local<'a>(
+    expressions: &[&'a Expression],
+    index: usize,
+) -> Option<(&'a Expression, usize)> {
+    if expressions.is_empty() {
+        return None;
+    }
+
+    let fixed_expression_count = expressions.len().saturating_sub(1);
+
+    if index < fixed_expression_count {
+        return expressions
+            .get(index)
+            .copied()
+            .map(|expression| (expression, 0));
+    }
+
+    expressions
+        .last()
+        .copied()
+        .map(|expression| (expression, index - fixed_expression_count))
+}
+
+fn project_field_chain_from_var(var: &Var) -> Option<Vec<String>> {
+    match var {
+        Var::Name(name) => Some(vec![token_text(name)]),
+        Var::Expression(expression) => plain_field_chain_from_var_expression(expression),
+        _ => None,
+    }
+}
+
+fn project_local_field_chain_type(
+    local_types: &BTreeMap<String, Type>,
+    parts: &[String],
+) -> Option<Type> {
+    let (root, fields) = parts.split_first()?;
+    let mut current = local_types.get(root)?.clone();
+
+    for field in fields {
+        current = project_table_field_type(&current, field)?;
+    }
+
+    Some(current)
+}
+
+fn project_table_field_type(ty: &Type, field: &str) -> Option<Type> {
+    match ty {
+        Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
+        Type::Union(types) => {
+            let fields = types
+                .iter()
+                .filter_map(|ty| project_table_field_type(ty, field))
+                .collect::<Vec<_>>();
+
+            match fields.len() {
+                0 => None,
+                1 => fields.into_iter().next(),
+                _ => Some(Type::union(fields)),
+            }
+        }
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
+    }
+}
+
+fn project_alias_field_span(
+    parsed: &ParsedSource,
+    alias_name: &str,
+    field: &str,
+    depth: usize,
+) -> Option<SourceSpan> {
+    if depth >= 64 {
+        return None;
+    }
+
+    let alias = parsed
+        .type_aliases
+        .iter()
+        .find(|alias| alias.name == alias_name)?;
+
+    match &alias.ty {
+        TuaType::Table(fields) => fields
+            .iter()
+            .find(|candidate| candidate.name == field)
+            .and_then(|candidate| candidate.name_span.or(candidate.span)),
+        TuaType::Named(name) => project_alias_field_span(parsed, name, field, depth + 1),
+        TuaType::Union(types) => types.iter().find_map(|ty| match ty {
+            TuaType::Named(name) => project_alias_field_span(parsed, name, field, depth + 1),
+            TuaType::Table(fields) => fields
+                .iter()
+                .find(|candidate| candidate.name == field)
+                .and_then(|candidate| candidate.name_span.or(candidate.span)),
+            _ => None,
+        }),
+        TuaType::StringLiteral(_)
+        | TuaType::Array(_)
+        | TuaType::Tuple(_)
+        | TuaType::Dictionary { .. }
+        | TuaType::Function { .. } => None,
+    }
 }
 
 fn is_module_export_candidate(
@@ -4369,7 +4809,7 @@ fn module_name_for_project_import(
         for candidate in module_candidates(root, &relative, &extensions) {
             let candidate = normalize_path(candidate);
 
-            if !known_paths.contains(&candidate) {
+            if !module_candidate_exists(&candidate, known_paths) {
                 continue;
             }
 
@@ -4408,7 +4848,7 @@ fn module_name_for_import_base(
     for candidate in candidates {
         let candidate = normalize_path(candidate);
 
-        if !known_paths.contains(&candidate) {
+        if !module_candidate_exists(&candidate, known_paths) {
             continue;
         }
 
@@ -4479,6 +4919,10 @@ fn module_name_for_import_candidate(
         .filter(|root| path.starts_with(root))
         .max_by_key(|root| root.components().count())
         .and_then(|root| module_name_for_path(root, path, separator))
+}
+
+fn module_candidate_exists(candidate: &Path, known_paths: &BTreeSet<PathBuf>) -> bool {
+    known_paths.contains(candidate) || candidate.is_file()
 }
 
 fn module_extensions(project_extension: &str) -> Vec<&str> {
