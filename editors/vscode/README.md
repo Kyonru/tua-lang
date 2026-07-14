@@ -77,3 +77,14 @@ support those artifact kinds; unsupported or disabled profiling reports a
 warning instead of failing the extension host. The extension intentionally does
 not expose runtime operations that Tua does not have, such as a TypeScript/Go
 garbage-collection command.
+
+## Support
+
+`Tua: Copy Debug Info` copies extension version, VS Code version, platform,
+workspace trust, server state, resolved server path, server version, workspace
+directory, and recent startup failure text when available. It does not read or
+copy source file contents.
+
+`Tua: Report Issue` opens the project issue URL with the same diagnostic bundle
+pre-filled for review before submission. The extension does not send telemetry
+or submit external reports automatically.

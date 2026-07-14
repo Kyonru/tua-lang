@@ -56,7 +56,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | LOVE vector helper | Built-in `Vec2` and `vec2(x, y)` provide completion, hover, signature help, checking, BrineVector-backed emission, and bundled runtime output. | Deeper vector-library-specific docs and richer overload presentation can still improve. | 73 |
 | ECS domain helper | Opt-in `[ecs]` / `tua.ecs.enabled` support adds typed `ecs` APIs, component/query diagnostics, and a tiny-ecs-compatible reference adapter. | Tua models clear static ECS patterns and leaves dynamic runtime composition permissive. | 74 |
 | Workspace folders and watchers | Workspace folders, folder changes, watched source files, watched LOVE assets, and `tua.toml` changes refresh cached project state, diagnostics, and editor results. | Similar shape to mature LSP servers, with simpler caching. | 32, 46 |
-| VS Code lifecycle commands | The extension contributes restart, output-focus, settings, server-selection, debug-info copy, cache-stats copy, and report-issue commands, plus a language status item with server state, resolved path, version, and workspace detail. | TypeScript Go still has richer profiling and telemetry UX. | 78, 79, 80, 81 |
+| VS Code lifecycle commands | The extension contributes restart, output-focus, settings, server-selection, trace/log configuration, debug-info copy, cache-stats copy/save, profile artifact probes, and report-issue commands, plus a language status item with server state, resolved path, version, and workspace detail. | Tua intentionally avoids telemetry and runtime operations it does not support. | 78, 79, 80, 81 |
 
 ## Protocol Surface Supported But Shallow
 

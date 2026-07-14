@@ -42,6 +42,9 @@ async function main() {
 async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
   const state = createMockState(workspace);
   const previousServerPath = process.env.TUA_SERVER_PATH;
+  const sourceSentinel = "DO_NOT_COPY_TUA_SOURCE_CONTENT";
+
+  fs.writeFileSync(path.join(workspace, "private.tua"), `local secret = "${sourceSentinel}"\n`);
 
   process.env.TUA_SERVER_PATH = mockServer;
 
@@ -79,6 +82,39 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       },
       "activation should pass trace defaults to initialization options",
     );
+
+    await state.commands.get("tua.output.focus")();
+    assert.deepStrictEqual(state.outputShows, [true], "output focus command should show the output channel");
+
+    await state.commands.get("tua.copyDebugInfo")();
+
+    const copiedDebugInfo = state.clipboardWrites.at(-1);
+
+    assert(copiedDebugInfo.includes("Server path:"), "debug info should include server path");
+    assert(
+      copiedDebugInfo.includes("Server version: tua 0.0.0-smoke"),
+      "debug info should include server version",
+    );
+    assert(
+      !copiedDebugInfo.includes(sourceSentinel),
+      "debug info should not include source file contents",
+    );
+
+    await state.commands.get("tua.reportIssue")();
+
+    const issueUrl = state.openedExternals.at(-1).toString();
+    const issueBody = decodeURIComponent(issueUrl.split("body=")[1] || "");
+
+    assert(
+      issueUrl.startsWith("https://github.com/Kyonru/tua-lang/issues/new?body="),
+      "report issue should open the project issue URL",
+    );
+    assert(
+      issueBody.includes("No source code is included."),
+      "issue body should tell the user no source code is included",
+    );
+    assert(issueBody.includes("Server path:"), "issue body should include debug info");
+    assert(!issueBody.includes(sourceSentinel), "issue body should not include source file contents");
 
     await state.commands.get("tua.restartServer")();
 
@@ -295,6 +331,16 @@ async function smokeStartupFailure(missingServer, workspace) {
       "tua.openSettings",
       "failed status should open settings",
     );
+
+    await state.commands.get("tua.copyDebugInfo")();
+
+    const copiedDebugInfo = state.clipboardWrites.at(-1);
+
+    assert(copiedDebugInfo.includes(missingServer), "failed startup debug info should include server path");
+    assert(
+      copiedDebugInfo.includes("Last server error:"),
+      "failed startup debug info should include the startup failure",
+    );
   } finally {
     if (previousServerPath === undefined) {
       delete process.env.TUA_SERVER_PATH;
@@ -352,6 +398,7 @@ function loadExtension(state) {
 function createMockState(workspace, options = {}) {
   const commands = new Map();
   const clients = [];
+  const clipboardWrites = [];
   const configuration = new Map([
     ["server.path", options.serverPath ?? "tua"],
     ["trace.server", options.traceServer ?? "off"],
@@ -361,6 +408,8 @@ function createMockState(workspace, options = {}) {
   const configurationUpdates = [];
   const executedCommands = [];
   const informationMessages = [];
+  const openedExternals = [];
+  const outputShows = [];
   const quickPickCalls = [];
   const warningMessages = [];
   let statusItem;
@@ -404,11 +453,13 @@ function createMockState(workspace, options = {}) {
     },
     env: {
       clipboard: {
-        writeText() {
+        writeText(value) {
+          clipboardWrites.push(value);
           return Promise.resolve();
         },
       },
-      openExternal() {
+      openExternal(uri) {
+        openedExternals.push(uri);
         return Promise.resolve(true);
       },
     },
@@ -427,7 +478,9 @@ function createMockState(workspace, options = {}) {
         return {
           appendLine() {},
           dispose() {},
-          show() {},
+          show(preserveFocus) {
+            outputShows.push(preserveFocus);
+          },
         };
       },
       showErrorMessage() {
@@ -539,6 +592,7 @@ function createMockState(workspace, options = {}) {
     get statusItem() {
       return statusItem;
     },
+    clipboardWrites,
     clients,
     configurationListeners,
     configurationUpdates,
@@ -546,6 +600,8 @@ function createMockState(workspace, options = {}) {
     executedCommands,
     informationMessages,
     LanguageClient,
+    openedExternals,
+    outputShows,
     quickPickCalls,
     setConfiguration(key, value) {
       configuration.set(key, value);
