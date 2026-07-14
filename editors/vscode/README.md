@@ -19,6 +19,10 @@ Minimal VS Code language support for tua source files.
   running source actions, reporting an issue, and opening Tua settings.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
+- Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
+  features such as verbose hover, source definition, multi-document highlight,
+  and auto insert are intentionally not exposed until a concrete Lua/Tua workflow
+  needs preview-gated behavior.
 
 ## Configuration
 
@@ -92,3 +96,17 @@ copy source file contents.
 `Tua: Report Issue` opens the project issue URL with the same diagnostic bundle
 pre-filled for review before submission. The extension does not send telemetry
 or submit external reports automatically.
+
+## Proposed Feature Policy
+
+Tua prefers standard LSP requests over TypeScript-specific custom protocol:
+
+- Hover uses `textDocument/hover`; no separate verbose-hover command exists.
+- Source navigation uses definition, type-definition, and `tua:/builtins`
+  virtual documents for generated builtin or LOVE stubs.
+- Project-wide occurrences use references instead of automatic multi-document
+  highlights.
+- Auto insert is out of scope until Tua has a safe syntax trigger; snippets and
+  standard completion are the preferred path for block helpers.
+- The optional external API bridge is design-only. The extension does not start
+  a bridge session today.

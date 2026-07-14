@@ -75,6 +75,12 @@ extension activation, bundled/server binary discovery, debug launch tasks,
 configuration settings, and VS Code smoke scripts. It should not duplicate core
 language rules in TypeScript.
 
+External tooling that needs structured project facts should follow the
+[external API bridge design](external-api-bridge.md). That bridge is not
+implemented today; any future implementation should stay disabled by default,
+local-only, and backed by the same `AnalysisHost` / `AnalysisSnapshot` queries as
+CLI and LSP features.
+
 ## Analysis Data Flow
 
 Project-aware feature requests should follow the same path:

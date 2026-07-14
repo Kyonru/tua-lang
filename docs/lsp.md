@@ -91,6 +91,25 @@ and workspace directory when available.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 
+## Custom VS Code Feature Evaluation
+
+The VS Code extension intentionally stays on stable VS Code APIs plus standard
+LSP requests. The only custom document surface is the `tua:/builtins` virtual
+document provider used for generated builtin and LOVE stubs.
+
+TypeScript Go-style proposed editor features were evaluated and are not exposed
+today:
+
+- Verbose hover is not a separate protocol. Standard hover already carries type
+  labels, docs, declaration context, module context, and LOVE wiki links.
+- Source definition is redundant with `textDocument/definition`,
+  `textDocument/typeDefinition`, and `tua:/builtins` virtual documents.
+- Multi-document highlight is not automatic. Use references for project-wide
+  occurrences; any future preview command must reuse the same references/index
+  data rather than introduce a parallel query.
+- Auto insert is out of scope until Tua has a precise Lua/Tua syntax trigger.
+  Block helpers should use snippets or standard completion first.
+
 ## LOVE Method Guidance
 
 The language server warns when a known LOVE object method is called with `.`

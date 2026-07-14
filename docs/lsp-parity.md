@@ -88,8 +88,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, trace/log settings with live `tua/setTrace` updates, cache-stats copy/save, profile artifact probes, support commands, and a server status item. | Expand CPU/heap artifact generation only when the Tua server/runtime supports those outputs. | 80 |
 | File rename refactors | `workspace.fileOperations.willRename` updates static `require(...)` and `import(...)` paths for safe same-project module moves. | Dynamic specifiers, ignored/generated files, ambiguous module names, and cross-project moves return no edits. | 88 |
 | Source actions and fix-all | `source.organizeImports`, `source.sortImports`, `source.removeUnusedImports`, and `source.fixAll` are advertised and implemented conservatively. | Broader source actions such as fix-all across workspaces, organize exports, and refactor menus remain future work. | 89 |
-| Proposed/custom VS Code features | Tua uses standard LSP surfaces and one builtin-document request. | Evaluate verbose hover, source definition, multi-document highlight, and auto insert; implement only Lua/Tua-useful stable or preview-gated behavior. | 92 |
-| External tooling bridge | Tua does not expose a separate local API session. | Design an optional, disabled-by-default bridge for project snapshots, diagnostics, asset metadata, and semantic facts after a concrete consumer exists. | 93 |
+| External tooling bridge | A design exists for an optional local JSON-RPC bridge, but Tua does not expose or start a separate API session today. | Implement only after a concrete consumer exists; the bridge must stay disabled by default, authenticated for pipe/socket use, local-only, and independent of LSP startup. | 93 |
 
 ## Intentionally Out Of Scope
 
@@ -99,6 +98,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Runtime execution or require side effects | Tua remains static source tooling. It should not run project code to discover symbols. |
 | Lua debugger/profiler integration | Debugging is outside the compiler/LSP v1 scope. External Lua/LOVE debuggers can be used separately. |
 | Linked editing for current Lua/Tua syntax | Plain Lua/Tua has no tag-like paired identifiers that benefit from synchronized editing. Revisit only if future domain syntax introduces paired names. |
+| Custom/proposed VS Code feature forks | Verbose hover, source definition, multi-document highlight, and auto insert were evaluated in roadmap item 92. Tua keeps hover, definition/type-definition, references, document highlight, completion snippets, and `tua:/builtins` on stable standard LSP/VS Code APIs until a concrete Lua/Tua workflow needs a preview-gated custom feature. |
 | Package manager ownership | Tua should understand project files and require paths, but package management is not part of the language server. |
 | Roblox/Luau runtime compatibility | Luau is a reference point for typed Lua ideas; Tua targets Lua 5.1/LuaJIT/LOVE output. |
 | Arbitrary dynamic table/metatable proof | Dynamic tables, metatables, `_G`, and `any` remain gradual escape hatches unless future specs define narrower support. |

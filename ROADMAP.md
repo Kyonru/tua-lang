@@ -2675,6 +2675,28 @@ Acceptance:
 
 ### 92. `feat(vscode): evaluate proposed custom editor features`
 
+Status: done as an evaluation. No custom or proposed VS Code API was added.
+The current extension should stay on stable VS Code APIs and standard LSP
+requests for this class of behavior.
+
+Decision:
+
+- Verbose hover: rejected for now. Tua hover already carries type, docs,
+  declaration context, module context, and LOVE wiki links through standard
+  `textDocument/hover`. A level-based custom protocol is not worth the extra
+  client/server surface until there is a concrete missing hover payload that
+  cannot be expressed as markdown.
+- Source definition: rejected as redundant. Generated builtin and LOVE stubs
+  already navigate through `textDocument/definition`,
+  `textDocument/typeDefinition`, and the existing stable `tua:/builtins`
+  virtual-document provider.
+- Multi-document highlight: not implemented. If needed later, it must reuse the
+  existing `textDocument/references` and project index paths and be exposed as an
+  explicit preview command, not as automatic editor highlighting.
+- Auto insert: out of scope. Current Lua/Tua syntax does not have a safe,
+  universal custom auto-insert trigger; block helpers should be handled through
+  snippets or standard completion until a precise trigger is identified.
+
 Scope:
 
 - Evaluate TypeScript Go-style custom/proposed editor features for Tua:
@@ -2697,6 +2719,10 @@ Acceptance:
   identified.
 
 ### 93. `feat(tooling): design optional external API session bridge`
+
+Status: done as a design. `docs/external-api-bridge.md` defines an optional,
+disabled-by-default local JSON-RPC bridge for future tools that need structured
+Tua analysis facts. No bridge implementation or startup path was added.
 
 Scope:
 

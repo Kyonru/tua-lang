@@ -395,4 +395,6 @@ Supported editor settings:
   `/`. Static `import(...)` lowering uses the same separator when mapping a
   source path back to the emitted Lua `require("...")` module name.
 - `tua.preview.enabled`: reserves an editor-facing preview toggle for
-  experimental features.
+  experimental features. It does not currently enable proposed VS Code APIs or
+  custom hover/source-definition/multi-document-highlight/auto-insert behavior,
+  and it does not start the external API bridge design.

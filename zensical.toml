@@ -29,6 +29,7 @@ nav = [
     { "Language Server" = "lsp.md" },
     { "LSP Parity Matrix" = "lsp-parity.md" },
     { "LuaHelper Code Matrix" = "luahelper-code-matrix.md" },
+    { "External API Bridge" = "external-api-bridge.md" },
   ] },
   { "Project" = [
     { "Roadmap" = "roadmap.md" },

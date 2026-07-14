@@ -71,7 +71,14 @@ Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
 - deeper navigation and refactor parity after that: type definition,
   implementation, code lens references, completion label details, signature
   retriggers, and broader refactor/source-action families beyond the safe import
-  and fix-all actions already implemented.
+  and fix-all actions already implemented;
+- TypeScript Go-style proposed editor features are evaluated conservatively:
+  Tua keeps verbose hover, source definition, multi-document highlight, and auto
+  insert off custom/proposed protocols unless a stable or preview-gated Lua/Tua
+  workflow is proven.
+- The optional external API bridge is design-only today. It should remain
+  disabled by default, local-only, authenticated for pipe/socket use, and
+  separate from LSP startup until a concrete consumer exists.
 
 ## Working Rule
 
