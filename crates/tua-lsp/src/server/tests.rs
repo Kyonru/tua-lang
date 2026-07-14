@@ -179,6 +179,23 @@ fn initialize_returns_server_capabilities() {
         output[0]["result"]["capabilities"]["workspace"]["workspaceFolders"]["changeNotifications"],
         true
     );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["diagnosticProvider"],
+        Value::Null
+    );
+}
+
+#[test]
+fn initialize_advertises_pull_diagnostics_when_supported() {
+    let output = run_messages(vec![initialize_with_pull_diagnostics(
+        1,
+        "file:///tmp".to_owned(),
+        true,
+    )]);
+    let provider = &output[0]["result"]["capabilities"]["diagnosticProvider"];
+
+    assert_eq!(provider["interFileDependencies"], true);
+    assert_eq!(provider["workspaceDiagnostics"], false);
 }
 
 #[test]
@@ -914,6 +931,122 @@ fn did_change_republishes_empty_diagnostics_for_clean_document() {
             .len(),
         0
     );
+}
+
+#[test]
+fn text_document_diagnostic_returns_same_codes_as_push_diagnostics() {
+    let uri = "file:///tmp/pull-diagnostics.tua";
+    let source = "local hp: number = \"full\"\n";
+    let push_output = run_messages(vec![did_open(uri, source)]);
+    let push_codes = diagnostic_codes(&last_published_diagnostics(&push_output, uri));
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(
+        1,
+        "file:///tmp".to_owned(),
+        true,
+    ));
+    server.send(did_open(uri, source));
+
+    assert!(
+        diagnostics_publications(server.output(), uri).is_empty(),
+        "pull-capable clients should not receive push diagnostics"
+    );
+
+    server.send(text_document_diagnostic_request(2, uri));
+
+    assert_eq!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 2)),
+        push_codes
+    );
+}
+
+#[test]
+fn pull_diagnostics_refresh_after_configuration_change() {
+    let temp = TempProject::new("pull-configuration-refresh");
+    let source = "local unused = 1\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+unused_locals = false
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&uri, source));
+    server.send(text_document_diagnostic_request(2, &uri));
+
+    assert!(document_diagnostic_items(server.output(), 2).is_empty());
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "unusedLocals": true
+        }
+    })));
+
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 1);
+
+    server.send(text_document_diagnostic_request(3, &uri));
+
+    assert_eq!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 3)),
+        vec!["TL4005"]
+    );
+}
+
+#[test]
+fn pull_diagnostics_refresh_after_watched_dependency_change() {
+    let temp = TempProject::new("pull-watched-dependency-refresh");
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+    let player = r#"local function makePlayer(name)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+missing_requires = true
+"#,
+    );
+    temp.write("src/main.tua", main);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&main_uri, main));
+    server.send(text_document_diagnostic_request(2, &main_uri));
+
+    assert_eq!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 2)),
+        vec!["TL4002"]
+    );
+
+    temp.write("src/player.tua", player);
+    server.send(watched_files_changed([(&player_uri, 1)]));
+
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 1);
+
+    server.send(text_document_diagnostic_request(3, &main_uri));
+
+    assert!(document_diagnostic_items(server.output(), 3).is_empty());
 }
 
 #[test]
@@ -5390,6 +5523,30 @@ fn initialize_with_root(id: u64, root_uri: String) -> Value {
     })
 }
 
+fn initialize_with_pull_diagnostics(id: u64, root_uri: String, refresh_support: bool) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "rootUri": root_uri,
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {
+                        "dynamicRegistration": false,
+                        "relatedDocumentSupport": true
+                    }
+                },
+                "workspace": {
+                    "diagnostics": {
+                        "refreshSupport": refresh_support
+                    }
+                }
+            }
+        }
+    })
+}
+
 fn initialize_with_workspace_folders<const N: usize>(id: u64, roots: [String; N]) -> Value {
     let folders = roots
         .into_iter()
@@ -5656,6 +5813,19 @@ fn cache_stats_request(id: u64) -> Value {
         "id": id,
         "method": "tua/cacheStats",
         "params": null
+    })
+}
+
+fn text_document_diagnostic_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/diagnostic",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
+        }
     })
 }
 
@@ -6043,6 +6213,31 @@ fn last_published_diagnostics(output: &[Value], uri: &str) -> Vec<Value> {
         .and_then(|message| message["params"]["diagnostics"].as_array())
         .cloned()
         .expect("diagnostics publication should exist")
+}
+
+fn document_diagnostic_items(output: &[Value], id: u64) -> Vec<Value> {
+    let response = response_with_id(output, id);
+
+    assert_eq!(response["result"]["kind"], "full");
+
+    response["result"]["items"]
+        .as_array()
+        .expect("document diagnostic items should be an array")
+        .clone()
+}
+
+fn diagnostic_refresh_requests(output: &[Value]) -> Vec<&Value> {
+    output
+        .iter()
+        .filter(|message| message["method"] == "workspace/diagnostic/refresh")
+        .collect()
+}
+
+fn diagnostic_codes(diagnostics: &[Value]) -> Vec<String> {
+    diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic["code"].as_str().map(str::to_owned))
+        .collect()
 }
 
 fn assert_hover_contains(output: &[Value], id: u64, expected: &str) {

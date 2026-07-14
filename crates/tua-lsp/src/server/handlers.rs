@@ -16,7 +16,7 @@ use super::protocol::{
     lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
     lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
     lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
-    response, source_position_from_lsp, SourceRange,
+    response, source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
@@ -67,8 +67,13 @@ impl LspServer {
                     .reindex_workspace(&self.workspace_folders, &self.settings);
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
+                self.client_pull_diagnostics = client_supports_pull_diagnostics(&message);
+                self.client_diagnostic_refresh = client_supports_diagnostic_refresh(&message);
 
-                response(id, capabilities::initialize_result())
+                response(
+                    id,
+                    capabilities::initialize_result(self.client_pull_diagnostics),
+                )
             }
             "shutdown" => {
                 self.shutdown_requested = true;
@@ -95,6 +100,7 @@ impl LspServer {
                     .unwrap_or(Value::Null),
             ),
             "textDocument/implementation" => response(id, self.implementation_response(&message)),
+            "textDocument/diagnostic" => response(id, self.document_diagnostic_response(&message)),
             "tua/builtinDocument" => response(
                 id,
                 self.builtin_document_response(&message)
@@ -223,6 +229,10 @@ impl LspServer {
         let generation = self.bump_document_generation(&uri, version);
         self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
+        if self.client_pull_diagnostics {
+            return None;
+        }
+
         let diagnostics = self.fast_diagnostics_for(&uri);
 
         Some(vec![self.publish_tracked_diagnostics(&uri, diagnostics)])
@@ -240,6 +250,10 @@ impl LspServer {
             .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
         let generation = self.bump_document_generation(&uri, version);
         self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
+
+        if self.client_pull_diagnostics {
+            return None;
+        }
 
         let diagnostics = self.fast_diagnostics_for(&uri);
 
@@ -267,6 +281,10 @@ impl LspServer {
 
         self.pending_slow_diagnostics.remove(&uri);
 
+        if self.client_pull_diagnostics {
+            return None;
+        }
+
         self.analysis.contains_document(&uri).then(|| {
             let diagnostics = self.diagnostics_for(&uri);
 
@@ -283,6 +301,10 @@ impl LspServer {
         self.last_published_diagnostics.remove(&uri);
         self.document_generations.remove(&uri);
         self.document_versions.remove(&uri);
+
+        if self.client_pull_diagnostics {
+            return None;
+        }
 
         Some(vec![publish_diagnostics(&uri, Vec::new())])
     }
@@ -334,14 +356,21 @@ impl LspServer {
                 .reindex_workspace(&self.workspace_folders, &self.settings);
         }
 
-        if should_reindex
+        let diagnostics_may_have_changed = should_reindex
             || asset_changed
             || !source_changes.is_empty()
-            || !deleted_sources.is_empty()
-        {
+            || !deleted_sources.is_empty();
+
+        if diagnostics_may_have_changed {
             self.pending_slow_diagnostics.clear();
             self.analysis
                 .refresh_open_documents(&self.workspace_folders, &self.settings);
+        }
+
+        if self.client_pull_diagnostics {
+            return diagnostics_may_have_changed
+                .then(|| self.diagnostic_refresh_notifications())
+                .flatten();
         }
 
         let mut publications = Vec::new();
@@ -387,7 +416,7 @@ impl LspServer {
         self.analysis
             .reindex_workspace(&self.workspace_folders, &self.settings);
 
-        None
+        self.diagnostic_refresh_notifications()
     }
 
     fn did_change_configuration_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
@@ -398,7 +427,16 @@ impl LspServer {
             .refresh_open_documents(&self.workspace_folders, &self.settings);
         self.pending_slow_diagnostics.clear();
 
+        if self.client_pull_diagnostics {
+            return self.diagnostic_refresh_notifications();
+        }
+
         Some(self.publish_all_open_diagnostics())
+    }
+
+    fn diagnostic_refresh_notifications(&mut self) -> Option<Vec<Value>> {
+        (self.client_pull_diagnostics && self.client_diagnostic_refresh)
+            .then(|| vec![workspace_diagnostic_refresh_request(self.next_request_id())])
     }
 
     fn publish_all_open_diagnostics(&self) -> Vec<Value> {
@@ -440,6 +478,10 @@ impl LspServer {
         version: Option<i64>,
         now: Instant,
     ) {
+        if self.client_pull_diagnostics {
+            return;
+        }
+
         self.pending_slow_diagnostics.insert(
             uri,
             PendingDiagnostics {
@@ -566,6 +608,24 @@ impl LspServer {
             .into_iter()
             .map(lsp_diagnostic_from_core)
             .collect()
+    }
+
+    fn document_diagnostic_response(&self, message: &Value) -> Value {
+        let diagnostics = message
+            .get("params")
+            .and_then(document_uri)
+            .map(|uri| self.diagnostics_for_uri(uri))
+            .unwrap_or_default();
+
+        super::protocol::document_diagnostic_report(diagnostics)
+    }
+
+    fn diagnostics_for_uri(&self, uri: &str) -> Vec<Value> {
+        if self.analysis.contains_document(uri) {
+            self.diagnostics_for(uri)
+        } else {
+            self.diagnostics_for_disk_file(uri)
+        }
     }
 
     fn hover_response(&self, message: &Value) -> Option<Value> {
@@ -1173,6 +1233,26 @@ fn client_supports_watched_files_dynamic_registration(message: &Value) -> bool {
         .and_then(|capabilities| capabilities.get("workspace"))
         .and_then(|workspace| workspace.get("didChangeWatchedFiles"))
         .and_then(|watched| watched.get("dynamicRegistration"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn client_supports_pull_diagnostics(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("capabilities"))
+        .and_then(|capabilities| capabilities.get("textDocument"))
+        .and_then(|text_document| text_document.get("diagnostic"))
+        .is_some()
+}
+
+fn client_supports_diagnostic_refresh(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("capabilities"))
+        .and_then(|capabilities| capabilities.get("workspace"))
+        .and_then(|workspace| workspace.get("diagnostics"))
+        .and_then(|diagnostics| diagnostics.get("refreshSupport"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
 }

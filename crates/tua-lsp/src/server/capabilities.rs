@@ -23,8 +23,8 @@ pub(super) fn server_description() -> String {
     format!("{} language server", project_description())
 }
 
-pub(super) fn initialize_result() -> Value {
-    json!({
+pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
+    let mut result = json!({
         "capabilities": {
             "textDocumentSync": {
                 "openClose": true,
@@ -85,5 +85,14 @@ pub(super) fn initialize_result() -> Value {
             "name": SERVER_NAME,
             "version": tua_core::VERSION
         }
-    })
+    });
+
+    if client_pull_diagnostics {
+        result["capabilities"]["diagnosticProvider"] = json!({
+            "interFileDependencies": true,
+            "workspaceDiagnostics": false
+        });
+    }
+
+    result
 }

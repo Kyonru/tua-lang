@@ -128,6 +128,8 @@ struct LspServer {
     document_generations: BTreeMap<String, u64>,
     document_versions: BTreeMap<String, i64>,
     client_watched_files_dynamic_registration: bool,
+    client_pull_diagnostics: bool,
+    client_diagnostic_refresh: bool,
     next_server_request_id: u64,
     trace_config: TraceConfig,
     shutdown_requested: bool,

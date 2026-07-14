@@ -47,6 +47,22 @@ pub(super) fn publish_diagnostics(uri: &str, diagnostics: Vec<Value>) -> Value {
     })
 }
 
+pub(super) fn document_diagnostic_report(diagnostics: Vec<Value>) -> Value {
+    json!({
+        "kind": "full",
+        "items": diagnostics
+    })
+}
+
+pub(super) fn workspace_diagnostic_refresh_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "workspace/diagnostic/refresh",
+        "params": null
+    })
+}
+
 pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
     let start_line = diagnostic.line.saturating_sub(1);
     let start_character = diagnostic.column.saturating_sub(1);

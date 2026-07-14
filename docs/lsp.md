@@ -22,10 +22,15 @@ and workspace directory when available.
 ## Current Capabilities
 
 - Incremental document sync with open, change, save, and close notifications.
-- Diagnostics on open, change, save, and watched-file updates. While typing,
-  `didChange` publishes a fast current-file lane first, then a full
+- Diagnostics on open, change, save, and watched-file updates. Clients without
+  pull-diagnostic support receive `textDocument/publishDiagnostics`; while
+  typing, `didChange` publishes a fast current-file lane first, then a full
   project-aware lane after a 200ms debounce. Newer document versions cancel
   stale queued slow diagnostics before they publish.
+- Pull-diagnostic clients receive `diagnosticProvider`, can request
+  `textDocument/diagnostic`, and receive `workspace/diagnostic/refresh` after
+  configuration, watched-file, or workspace graph changes. Pull and push
+  diagnostics use the same cached project snapshot for final results.
 - Formatting consistency diagnostics are enabled by default and can be
   overridden through `tua.diagnostics.formattingLints` or
   `[diagnostics].formatting_lints`.

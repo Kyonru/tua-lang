@@ -2462,6 +2462,11 @@ Acceptance:
 
 ### 83. `feat(lsp): add pull diagnostics and refresh support`
 
+Status: done. Pull-capable clients now get a `diagnosticProvider`, can request
+`textDocument/diagnostic`, and receive `workspace/diagnostic/refresh` requests
+after configuration, watched-file, or workspace graph changes. Push diagnostics
+remain the compatibility path for clients without pull diagnostic support.
+
 Scope:
 
 - Advertise `diagnosticProvider` with inter-file dependencies when supported by
