@@ -7,6 +7,7 @@ use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use serde_json::Value;
 use tua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT};
 
 fn tua() -> Command {
@@ -52,13 +53,23 @@ fn help_prints_command_list() {
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
 
-    for command in ["init", "check", "fmt", "lint", "build", "watch", "lsp"] {
+    for command in [
+        "init",
+        "check",
+        "fmt",
+        "lint",
+        "build",
+        "traceback",
+        "watch",
+        "lsp",
+    ] {
         assert!(stdout.contains(command), "missing command `{command}`");
     }
 
     assert!(stdout.contains("--emit-on-error"));
     assert!(stdout.contains("--check"));
     assert!(stdout.contains("--strict"));
+    assert!(stdout.contains("--maps"));
 }
 
 #[test]
@@ -412,6 +423,104 @@ return {
     assert!(nested_output.contains("player.hp = player.hp - amount"));
     assert!(!nested_output.contains("type Player"));
     assert_eq!(lua_output, "return { ignored = true }\n");
+
+    let nested_map = fs::read_to_string(temp.path().join("build/systems/player/core.lua.map.json"))
+        .expect("failed to read nested source map");
+    let nested_map: Value = serde_json::from_str(&nested_map).expect("source map should be JSON");
+
+    assert_eq!(nested_map["version"], 1);
+    assert_eq!(nested_map["generated"], "build/systems/player/core.lua");
+    assert_eq!(nested_map["source"], "src/systems/player/core.tua");
+    assert!(nested_map["lineMappings"]
+        .as_array()
+        .is_some_and(|mappings| !mappings.is_empty()));
+}
+
+#[test]
+fn build_respects_disabled_source_maps() {
+    let temp = TempDir::new("build-no-source-maps");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = false
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.tua"), "return 1\n").expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(!temp.path().join("build/main.lua.map.json").exists());
+}
+
+#[test]
+fn traceback_remaps_generated_lua_locations_from_source_maps() {
+    let temp = TempDir::new("traceback-source-map");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"type Player = {
+  hp: number,
+}
+
+local player: Player = { hp = 10 }
+player.hp += 1
+"#,
+    )
+    .expect("failed to write source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    fs::write(
+        temp.path().join("sentry-traceback.txt"),
+        "build/main.lua:2: attempt to index nil\nstack traceback:\n",
+    )
+    .expect("failed to write traceback");
+
+    let output = tua()
+        .args(["traceback", "--maps", "build", "sentry-traceback.txt"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua traceback");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert_eq!(
+        stdout,
+        "src/main.tua:6 (generated build/main.lua:2): attempt to index nil\nstack traceback:\n"
+    );
 }
 
 #[test]

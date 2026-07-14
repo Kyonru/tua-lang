@@ -69,7 +69,9 @@ cargo run -p tua-cli -- build
 ```
 
 This writes Lua output under `build/`, preserves ordinary `require(...)` calls,
-and lowers static `import(...)` bindings to runtime `require(...)` calls.
+lowers static `import(...)` bindings to runtime `require(...)` calls, and writes
+optional `*.lua.map.json` line maps for traceback remapping when `emit_maps` is
+enabled.
 
 ## Watch
 

@@ -84,12 +84,35 @@ Build output mirrors the configured source tree:
 - collisions between generated `.lua` and sibling/copied `.lua` files are
   reported as warnings.
 
+When `emit_maps = true`, build also writes `*.lua.map.json` sidecars next to
+generated Lua files. Map files are metadata only and are not counted as emitted
+runtime files.
+
 Use `--emit-on-error` when you want parseable/lowerable files to emit while the
 command still exits non-zero:
 
 ```bash
 cargo run -p tua-cli -- build --emit-on-error
 ```
+
+## `traceback`
+
+```bash
+cargo run -p tua-cli -- traceback --maps build sentry-traceback.txt
+cat sentry-traceback.txt | cargo run -p tua-cli -- traceback --maps build
+```
+
+Remaps generated Lua traceback locations back to Tua source using
+`*.lua.map.json` sidecars from `tua build`. If `--maps` is omitted, the command
+uses the configured output directory.
+
+For example, `build/main.lua:12` can become:
+
+```text
+src/main.tua:18 (generated build/main.lua:12)
+```
+
+Ambiguous basename-only frames are left unchanged instead of guessed.
 
 ## `watch`
 

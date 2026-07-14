@@ -327,6 +327,7 @@ cargo run -p tua-cli -- build
 - `.tua` files become `.lua`;
 - `.lua` files are copied unchanged;
 - assets are copied unchanged;
+- `*.lua.map.json` sidecars are written when `emit_maps = true`;
 - `require(...)` calls stay as Lua requires.
 
 That makes the output folder a runnable LOVE distribution folder.

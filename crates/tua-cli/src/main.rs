@@ -45,7 +45,12 @@ fn main() -> ExitCode {
         Ok(CliAction::Command { name, options }) => match env::current_dir() {
             Ok(cwd) => match run_command(name, options, cwd) {
                 Ok(message) => {
-                    println!("{message}");
+                    if name == CommandName::Traceback {
+                        print!("{message}");
+                    } else {
+                        println!("{message}");
+                    }
+
                     ExitCode::SUCCESS
                 }
                 Err(error) => {

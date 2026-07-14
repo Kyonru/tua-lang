@@ -6,6 +6,7 @@ use crate::check::run_check;
 use crate::error::CliError;
 use crate::fmt::run_fmt;
 use crate::lint::run_lint;
+use crate::traceback::run_traceback;
 use crate::watch::run_watch;
 
 pub fn run_command(
@@ -22,6 +23,12 @@ pub fn run_command(
                 tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
 
             run_build(cwd, loaded, options.emit_on_error)
+        }
+        CommandName::Traceback => {
+            let loaded =
+                tua_core::load_config_from_dir(&cwd).map_err(CliError::from_config_error)?;
+
+            run_traceback(cwd, loaded, options)
         }
         CommandName::Check => {
             let loaded =

@@ -7,6 +7,8 @@ mod error;
 mod fmt;
 mod lint;
 mod source;
+mod source_map;
+mod traceback;
 mod watch;
 
 pub use args::{parse_args, version_text, CliAction, CommandName, CommandOptions, HELP};

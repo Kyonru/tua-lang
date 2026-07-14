@@ -8,6 +8,7 @@ use crate::source::{
     discover_build_files, io_diagnostic, paths_same_location, read_source_file, SourceFile,
     SourceKind,
 };
+use crate::source_map::write_source_map;
 use tua_core::{
     brinevector_runtime_source, emit_tua_source_with_workspace, format_diagnostics_for_cli,
     AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory,
@@ -158,19 +159,32 @@ pub(crate) fn build_changed_files(
 
         push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
 
-        let output =
-            match emit_tua_source_with_workspace(&source_path, source, annotation_mode, &workspace)
-            {
-                Ok(output) => output,
-                Err(mut source_diagnostics) => {
-                    outcome.diagnostics.append(&mut source_diagnostics);
-                    continue;
-                }
-            };
+        let output = match emit_tua_source_with_workspace(
+            &source_path,
+            source.as_str(),
+            annotation_mode,
+            &workspace,
+        ) {
+            Ok(output) => output,
+            Err(mut source_diagnostics) => {
+                outcome.diagnostics.append(&mut source_diagnostics);
+                continue;
+            }
+        };
         needs_brinevector_runtime |= requires_brinevector_runtime(&output);
 
-        match write_output(&output_path, output) {
-            Ok(()) => outcome.emitted += 1,
+        match write_output(&output_path, output.clone()) {
+            Ok(()) => {
+                outcome.emitted += 1;
+
+                if workspace.config().emit_maps {
+                    if let Err(diagnostic) =
+                        write_source_map(cwd, &source_path, &output_path, &source, &output)
+                    {
+                        outcome.diagnostics.push(diagnostic);
+                    }
+                }
+            }
             Err(diagnostic) => outcome.diagnostics.push(diagnostic),
         }
     }
@@ -321,7 +335,7 @@ fn build_project_files(
 
                 let output = match emit_tua_source_with_workspace(
                     &source_path,
-                    source,
+                    source.as_str(),
                     annotation_mode,
                     &workspace,
                 ) {
@@ -333,8 +347,18 @@ fn build_project_files(
                 };
                 needs_brinevector_runtime |= requires_brinevector_runtime(&output);
 
-                match write_output(&output_path, output) {
-                    Ok(()) => emitted += 1,
+                match write_output(&output_path, output.clone()) {
+                    Ok(()) => {
+                        emitted += 1;
+
+                        if workspace.config().emit_maps {
+                            if let Err(diagnostic) =
+                                write_source_map(cwd, &source_path, &output_path, &source, &output)
+                            {
+                                diagnostics.push(diagnostic);
+                            }
+                        }
+                    }
                     Err(diagnostic) => diagnostics.push(diagnostic),
                 }
             }

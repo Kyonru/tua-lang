@@ -413,7 +413,7 @@ The compiler pipeline is:
 7. Erase type aliases and type annotations.
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
 9. Copy non-`.tua` files unchanged into the configured output directory.
-10. Optionally emit source maps or line maps when `emit_maps = true`.
+10. Emit optional `*.lua.map.json` line-map sidecars when `emit_maps = true`.
 
 Emitted Lua should be readable and line-stable where practical. Readability is
 more important than aggressive minification or optimization.
@@ -640,12 +640,27 @@ Expected behavior:
 - lowers supported sugar;
 - preserves `require`;
 - lowers static `import("./...")` and `import("module")` bindings to `require`;
+- writes `.lua.map.json` sidecars for generated Lua when `emit_maps = true`;
 - fails without emission when blocking errors are found.
 
 ### `tua build --emit-on-error`
 
 Reports diagnostics but still emits Lua for files that can be parsed and lowered.
 The command should return a non-zero exit code if any error was reported.
+
+### `tua traceback`
+
+Remaps generated Lua traceback text back to `.tua` source locations using build
+source maps.
+
+Expected behavior:
+
+- reads a traceback file argument or stdin;
+- uses the configured output directory by default, or `--maps <path>` when
+  provided;
+- rewrites proven `file.lua:line` frames as
+  `source.tua:line (generated file.lua:line)`;
+- leaves dynamic, missing, or ambiguous frames unchanged instead of guessing.
 
 ### `tua watch`
 
@@ -850,6 +865,6 @@ The v1 implementation is acceptable when:
 - `require` calls are preserved;
 - static `import("./...")` and `import("module")` module bindings lower to
   `require`;
-- `tua check`, `tua fmt`, `tua lint`, `tua build`, `tua watch`, and `tua lsp`
-  exist;
+- `tua check`, `tua fmt`, `tua lint`, `tua build`, `tua traceback`,
+  `tua watch`, and `tua lsp` exist;
 - the VS Code extension can surface diagnostics from `tua lsp`.

@@ -25,6 +25,7 @@ fn parses_known_commands() {
         ("fmt", CommandName::Fmt),
         ("lint", CommandName::Lint),
         ("build", CommandName::Build),
+        ("traceback", CommandName::Traceback),
         ("watch", CommandName::Watch),
         ("lsp", CommandName::Lsp),
     ];
@@ -48,6 +49,35 @@ fn build_accepts_emit_on_error() {
             name: CommandName::Build,
             options: CommandOptions {
                 emit_on_error: true,
+                ..CommandOptions::default()
+            },
+        })
+    );
+}
+
+#[test]
+fn traceback_accepts_maps_and_input_file() {
+    assert_eq!(
+        parse_args(["traceback", "--maps", "build", "sentry.txt"]),
+        Ok(CliAction::Command {
+            name: CommandName::Traceback,
+            options: CommandOptions {
+                traceback_maps: Some("build".into()),
+                traceback_input: Some("sentry.txt".into()),
+                ..CommandOptions::default()
+            },
+        })
+    );
+}
+
+#[test]
+fn traceback_accepts_maps_equals() {
+    assert_eq!(
+        parse_args(["traceback", "--maps=build"]),
+        Ok(CliAction::Command {
+            name: CommandName::Traceback,
+            options: CommandOptions {
+                traceback_maps: Some("build".into()),
                 ..CommandOptions::default()
             },
         })
@@ -112,6 +142,20 @@ fn other_commands_reject_strict() {
     let error = parse_args(["check", "--strict"]).unwrap_err();
 
     assert!(error.message.contains("only valid"));
+}
+
+#[test]
+fn other_commands_reject_maps() {
+    let error = parse_args(["build", "--maps", "build"]).unwrap_err();
+
+    assert!(error.message.contains("only valid"));
+}
+
+#[test]
+fn traceback_rejects_multiple_input_files() {
+    let error = parse_args(["traceback", "one.txt", "two.txt"]).unwrap_err();
+
+    assert!(error.message.contains("at most one"));
 }
 
 #[test]

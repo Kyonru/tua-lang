@@ -80,8 +80,10 @@ globals = []
 : Source extension to discover. The default is `tua`.
 
 `emit_maps`
-: Reserved for source-map-style output. Current emitted Lua stays readable even
-without runtime metadata.
+: When `true`, `tua build` writes a `*.lua.map.json` sidecar next to each
+generated `.lua` file. These line maps are optional metadata for remapping Lua
+traceback lines back to `.tua` source with `tua traceback`; they are not loaded
+by the game at runtime.
 
 ## Emit
 
