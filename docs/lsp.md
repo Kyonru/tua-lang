@@ -260,6 +260,20 @@ session with:
 TUA_PROFILE=1 tua lsp
 ```
 
+The VS Code extension also exposes runtime-facing profiling commands:
+`Tua: Save Cache Stats` writes the current `tua/cacheStats` response as JSON
+under the extension's global `profiles` directory outside the workspace by
+default, while `Tua: Save CPU Profile` and `Tua: Save Heap Summary` ask the
+server for Rust-relevant profile artifacts in that same output directory.
+Servers without those profile artifact capabilities return a warning instead
+of failing the extension host.
+
+For editor-side trace logging, set `tua.trace.server` to `off`, `messages`, or
+`verbose`, and set `tua.log.verbosity` to `off`, `error`, `info`, `debug`, or
+`trace`. The extension passes those values in initialization options and sends
+`tua/setTrace` on configuration changes so supporting servers update without a
+restart.
+
 Current lookup regression targets from the checked-in fixtures are intentionally
 small: `definitionAgain`, `references`, `prepareRename`, and `rename` should
 stay in the low single-digit millisecond range on the large fixture after

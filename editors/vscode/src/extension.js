@@ -2,6 +2,7 @@
 
 const childProcess = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
 
@@ -21,6 +22,9 @@ const COMMANDS = {
   selectServer: "tua.selectServer",
   copyDebugInfo: "tua.copyDebugInfo",
   copyCacheStats: "tua.copyCacheStats",
+  saveCacheStats: "tua.saveCacheStats",
+  saveCpuProfile: "tua.saveCpuProfile",
+  saveHeapSummary: "tua.saveHeapSummary",
   reportIssue: "tua.reportIssue",
 };
 
@@ -52,6 +56,13 @@ function registerLifecycleCommands() {
     vscode.commands.registerCommand(COMMANDS.selectServer, selectServerVersion),
     vscode.commands.registerCommand(COMMANDS.copyDebugInfo, copyDebugInfo),
     vscode.commands.registerCommand(COMMANDS.copyCacheStats, copyCacheStats),
+    vscode.commands.registerCommand(COMMANDS.saveCacheStats, saveCacheStats),
+    vscode.commands.registerCommand(COMMANDS.saveCpuProfile, () =>
+      saveServerProfileArtifact("cpuProfile", "CPU profile"),
+    ),
+    vscode.commands.registerCommand(COMMANDS.saveHeapSummary, () =>
+      saveServerProfileArtifact("heapSummary", "heap/allocation summary"),
+    ),
     vscode.commands.registerCommand(COMMANDS.reportIssue, reportIssue),
   );
 }
@@ -136,6 +147,7 @@ async function startLanguageServer() {
   };
   const clientOptions = {
     documentSelector: STATUS_SELECTOR,
+    initializationOptions: traceConfiguration(),
     outputChannel,
     synchronize: {
       configurationSection: "tua",
@@ -228,7 +240,16 @@ async function selectServerVersion() {
 }
 
 function handleConfigurationChange(event) {
-  if (!event.affectsConfiguration("tua.server.path")) {
+  const serverPathChanged = event.affectsConfiguration("tua.server.path");
+  const traceChanged =
+    event.affectsConfiguration("tua.trace.server") ||
+    event.affectsConfiguration("tua.log.verbosity");
+
+  if (traceChanged) {
+    sendTraceConfiguration();
+  }
+
+  if (!serverPathChanged) {
     return;
   }
 
@@ -319,19 +340,129 @@ async function copyDebugInfo() {
 }
 
 async function copyCacheStats() {
+  try {
+    const stats = await requestCacheStats();
+    await vscode.env.clipboard.writeText(JSON.stringify(stats, null, 2));
+    vscode.window.showInformationMessage("Tua cache statistics copied to clipboard.");
+  } catch (error) {
+    if (!client) {
+      vscode.window.showWarningMessage("Tua language server is not running.");
+      return;
+    }
+
+    outputChannel?.appendLine(`Failed to read tua cache stats: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Failed to read Tua cache stats: ${formatError(error)}`);
+  }
+}
+
+async function saveCacheStats() {
+  try {
+    const stats = await requestCacheStats();
+    const directory = profileOutputDirectory();
+    const filename = `cache-stats-${timestampForFilename(new Date())}.json`;
+    const outputPath = path.join(directory, filename);
+
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(outputPath, `${JSON.stringify(stats, null, 2)}\n`, "utf8");
+    outputChannel?.appendLine(`Tua cache statistics saved to: ${outputPath}`);
+    vscode.window.showInformationMessage(`Tua cache statistics saved to ${outputPath}`);
+  } catch (error) {
+    if (!client) {
+      vscode.window.showWarningMessage("Tua language server is not running.");
+      return;
+    }
+
+    outputChannel?.appendLine(`Failed to save tua cache stats: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Failed to save Tua cache stats: ${formatError(error)}`);
+  }
+}
+
+function requestCacheStats() {
+  if (!client) {
+    return Promise.reject(new Error("Tua language server is not running."));
+  }
+
+  return client.sendRequest("tua/cacheStats");
+}
+
+async function saveServerProfileArtifact(kind, label) {
   if (!client) {
     vscode.window.showWarningMessage("Tua language server is not running.");
     return;
   }
 
+  const directory = profileOutputDirectory();
+
   try {
-    const stats = await client.sendRequest("tua/cacheStats");
-    await vscode.env.clipboard.writeText(JSON.stringify(stats, null, 2));
-    vscode.window.showInformationMessage("Tua cache statistics copied to clipboard.");
+    fs.mkdirSync(directory, { recursive: true });
+
+    const result = await client.sendRequest("tua/profileArtifact", {
+      kind,
+      outputDirectory: directory,
+    });
+    const outputPaths = profileArtifactPaths(result);
+    const outputLabel = outputPaths.length > 0 ? outputPaths.join(", ") : directory;
+
+    outputChannel?.appendLine(`Tua ${label} saved to: ${outputLabel}`);
+    vscode.window.showInformationMessage(`Tua ${label} saved to ${outputLabel}`);
   } catch (error) {
-    outputChannel?.appendLine(`Failed to read tua cache stats: ${formatError(error)}`);
-    vscode.window.showErrorMessage(`Failed to read Tua cache stats: ${formatError(error)}`);
+    outputChannel?.appendLine(`Tua ${label} unavailable: ${formatError(error)}`);
+    vscode.window.showWarningMessage(`Tua ${label} is not available from this server: ${formatError(error)}`);
   }
+}
+
+function profileArtifactPaths(result) {
+  if (typeof result === "string" && result.trim()) {
+    return [result.trim()];
+  }
+
+  if (!result || typeof result !== "object") {
+    return [];
+  }
+
+  if (typeof result.path === "string" && result.path.trim()) {
+    return [result.path.trim()];
+  }
+
+  if (Array.isArray(result.paths)) {
+    return result.paths.filter((entry) => typeof entry === "string" && entry.trim());
+  }
+
+  return [];
+}
+
+function profileOutputDirectory() {
+  if (extensionContext?.globalStorageUri?.scheme === "file" && extensionContext.globalStorageUri.fsPath) {
+    return path.join(extensionContext.globalStorageUri.fsPath, "profiles");
+  }
+
+  return path.join(os.tmpdir(), "tua-vscode-profiles");
+}
+
+function timestampForFilename(date) {
+  return date.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+}
+
+function traceConfiguration() {
+  const config = vscode.workspace.getConfiguration("tua");
+
+  return {
+    trace: {
+      server: config.get("trace.server", "off"),
+    },
+    logVerbosity: config.get("log.verbosity", "off"),
+  };
+}
+
+function sendTraceConfiguration() {
+  if (!client) {
+    return;
+  }
+
+  Promise.resolve(client.sendNotification("tua/setTrace", traceConfiguration())).catch((error) => {
+    outputChannel?.appendLine(`Failed to update tua trace settings: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Failed to update Tua trace settings: ${formatError(error)}`);
+  });
 }
 
 function debugInfoText() {

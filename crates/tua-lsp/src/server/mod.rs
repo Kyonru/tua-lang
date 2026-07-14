@@ -129,6 +129,7 @@ struct LspServer {
     document_versions: BTreeMap<String, i64>,
     client_watched_files_dynamic_registration: bool,
     next_server_request_id: u64,
+    trace_config: TraceConfig,
     shutdown_requested: bool,
     should_exit: bool,
 }
@@ -138,6 +139,30 @@ struct PendingDiagnostics {
     generation: u64,
     version: Option<i64>,
     due_at: Instant,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct TraceConfig {
+    server: ServerTraceLevel,
+    log_verbosity: LogVerbosity,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ServerTraceLevel {
+    #[default]
+    Off,
+    Messages,
+    Verbose,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+enum LogVerbosity {
+    #[default]
+    Off,
+    Error,
+    Info,
+    Debug,
+    Trace,
 }
 
 impl LspServer {

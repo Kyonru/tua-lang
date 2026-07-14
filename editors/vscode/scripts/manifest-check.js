@@ -13,6 +13,9 @@ const expected = [
   "tua.selectServer",
   "tua.copyDebugInfo",
   "tua.copyCacheStats",
+  "tua.saveCacheStats",
+  "tua.saveCpuProfile",
+  "tua.saveHeapSummary",
   "tua.reportIssue",
 ];
 const missing = expected.filter((command) => !commands.has(command));

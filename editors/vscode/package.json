@@ -21,7 +21,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node --check src/extension.js && node scripts/manifest-check.js"
+    "check": "node --check src/extension.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
   },
   "contributes": {
     "configuration": {
@@ -31,6 +31,28 @@
           "type": "string",
           "default": "tua",
           "description": "Path to the tua executable used to launch the language server."
+        },
+        "tua.trace.server": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "description": "Controls Tua language-server trace messages. Changes apply without restarting when supported by the server."
+        },
+        "tua.log.verbosity": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "error",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "description": "Controls Tua language-server log verbosity. Changes apply without restarting when supported by the server."
         },
         "tua.format.indentWidth": {
           "type": [
@@ -382,6 +404,21 @@
       {
         "command": "tua.copyCacheStats",
         "title": "Copy Cache Stats",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.saveCacheStats",
+        "title": "Save Cache Stats",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.saveCpuProfile",
+        "title": "Save CPU Profile",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.saveHeapSummary",
+        "title": "Save Heap Summary",
         "category": "Tua"
       },
       {

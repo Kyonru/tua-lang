@@ -2333,7 +2333,9 @@ Priority order:
 
 Status: done. The VS Code extension now contributes restart, output-focus, and
 settings commands, tracks the language server in a status item, shows resolved
-server path/version/workspace details, and keeps startup failures actionable.
+server path/version/workspace details, keeps startup failures actionable, and
+has a mocked activation smoke test for command registration, restart, and
+failure-status behavior.
 
 Scope:
 
@@ -2360,7 +2362,10 @@ Acceptance:
 Status: done. The extension now offers `Tua: Select Server`, supports
 bundled/default and trusted workspace-local binaries, preserves `TUA_SERVER_PATH`
 as the development override, shows selected server details in status/output, and
-prompts for restart after manual `tua.server.path` changes.
+prompts for restart after manual `tua.server.path` changes. The mocked VS Code
+activation smoke covers environment override resolution, bundled fallback,
+workspace selection, untrusted workspace blocking, and configuration-change
+restart prompting.
 
 Scope:
 
@@ -2381,9 +2386,10 @@ Acceptance:
 
 ### 80. `feat(vscode): add trace, log verbosity, and profiling commands`
 
-Status: partial. The extension now exposes `Tua: Copy Cache Stats`, backed by
-the existing `tua/cacheStats` request. Trace/log verbosity settings and richer
-profile artifact commands remain future work.
+Status: done. The extension now exposes trace/log verbosity settings, sends
+live `tua/setTrace` updates for supported servers, saves `tua/cacheStats`
+artifacts outside the workspace by default, and probes CPU/heap profile
+artifact commands with graceful unsupported-server warnings.
 
 Scope:
 

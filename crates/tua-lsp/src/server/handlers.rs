@@ -19,7 +19,10 @@ use super::protocol::{
     response, source_position_from_lsp, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
-use super::{capabilities, LspServer, PendingDiagnostics, SLOW_DIAGNOSTICS_DEBOUNCE};
+use super::{
+    capabilities, LogVerbosity, LspServer, PendingDiagnostics, ServerTraceLevel, TraceConfig,
+    SLOW_DIAGNOSTICS_DEBOUNCE,
+};
 
 struct DocumentRequest<'a> {
     params: &'a Value,
@@ -40,10 +43,16 @@ impl LspServer {
         let method = message.get("method").and_then(Value::as_str)?.to_owned();
 
         if message.get("id").is_some() {
-            return Some(vec![self.handle_request(message, &method)]);
+            let trace = self.trace_log_message(&message, &method, true);
+            let response = self.handle_request(message, &method);
+
+            return Some(prepend_optional(trace, vec![response]));
         }
 
-        self.handle_notification(&message, &method)
+        let trace = self.trace_log_message(&message, &method, false);
+        let notifications = self.handle_notification(&message, &method);
+
+        merge_optional_trace(trace, notifications)
     }
 
     fn handle_request(&mut self, message: Value, method: &str) -> Value {
@@ -52,6 +61,7 @@ impl LspServer {
 
         match method {
             "initialize" => {
+                self.trace_config = trace_config_from_initialize(&message);
                 self.workspace_folders = workspace_folders_from_initialize(&message);
                 self.analysis
                     .reindex_workspace(&self.workspace_folders, &self.settings);
@@ -153,8 +163,39 @@ impl LspServer {
             "workspace/didChangeConfiguration" => {
                 self.did_change_configuration_notification(message)
             }
+            "tua/setTrace" => self.set_trace_notification(message),
             _ => None,
         }
+    }
+
+    fn set_trace_notification(&mut self, message: &Value) -> Option<Vec<Value>> {
+        self.trace_config = trace_config_from_params(message.get("params"));
+
+        Some(vec![log_message_notification(
+            4,
+            format!(
+                "tua trace updated: server={}, logVerbosity={}",
+                self.trace_config.server.as_str(),
+                self.trace_config.log_verbosity.as_str()
+            ),
+        )])
+    }
+
+    fn trace_log_message(&self, message: &Value, method: &str, request: bool) -> Option<Value> {
+        if !self.trace_config.enabled() {
+            return None;
+        }
+
+        let direction = if request { "request" } else { "notification" };
+        let mut parts = vec![format!("tua lsp {direction}: {method}")];
+
+        if self.trace_config.verbose() {
+            if let Some(id) = message.get("id") {
+                parts.push(format!("id={id}"));
+            }
+        }
+
+        Some(log_message_notification(4, parts.join(" ")))
     }
 
     fn initialized_notifications(&mut self) -> Option<Vec<Value>> {
@@ -1132,6 +1173,115 @@ fn register_watched_files_request(id: u64) -> Value {
             ]
         }
     })
+}
+
+fn prepend_optional(head: Option<Value>, mut tail: Vec<Value>) -> Vec<Value> {
+    if let Some(head) = head {
+        tail.insert(0, head);
+    }
+
+    tail
+}
+
+fn merge_optional_trace(
+    trace: Option<Value>,
+    notifications: Option<Vec<Value>>,
+) -> Option<Vec<Value>> {
+    match (trace, notifications) {
+        (Some(trace), Some(notifications)) => Some(prepend_optional(Some(trace), notifications)),
+        (Some(trace), None) => Some(vec![trace]),
+        (None, notifications) => notifications,
+    }
+}
+
+fn log_message_notification(message_type: u8, message: impl Into<String>) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "window/logMessage",
+        "params": {
+            "type": message_type,
+            "message": message.into()
+        }
+    })
+}
+
+fn trace_config_from_initialize(message: &Value) -> TraceConfig {
+    trace_config_from_params(
+        message
+            .get("params")
+            .and_then(|params| params.get("initializationOptions")),
+    )
+}
+
+fn trace_config_from_params(params: Option<&Value>) -> TraceConfig {
+    let server = params
+        .and_then(|params| params.get("trace"))
+        .and_then(|trace| trace.get("server"))
+        .and_then(Value::as_str)
+        .and_then(ServerTraceLevel::parse)
+        .unwrap_or_default();
+    let log_verbosity = params
+        .and_then(|params| params.get("logVerbosity"))
+        .and_then(Value::as_str)
+        .and_then(LogVerbosity::parse)
+        .unwrap_or_default();
+
+    TraceConfig {
+        server,
+        log_verbosity,
+    }
+}
+
+impl TraceConfig {
+    fn enabled(self) -> bool {
+        self.server != ServerTraceLevel::Off || self.log_verbosity >= LogVerbosity::Info
+    }
+
+    fn verbose(self) -> bool {
+        self.server == ServerTraceLevel::Verbose || self.log_verbosity >= LogVerbosity::Debug
+    }
+}
+
+impl ServerTraceLevel {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "messages" => Some(Self::Messages),
+            "verbose" => Some(Self::Verbose),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Messages => "messages",
+            Self::Verbose => "verbose",
+        }
+    }
+}
+
+impl LogVerbosity {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "error" => Some(Self::Error),
+            "info" => Some(Self::Info),
+            "debug" => Some(Self::Debug),
+            "trace" => Some(Self::Trace),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Error => "error",
+            Self::Info => "info",
+            Self::Debug => "debug",
+            Self::Trace => "trace",
+        }
+    }
 }
 
 fn source_span_intersects_range(span: SourceSpan, range: SourceRange) -> bool {

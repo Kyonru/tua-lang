@@ -1461,6 +1461,73 @@ player.hp = player.hp - 1
 }
 
 #[test]
+fn trace_initialization_options_emit_lsp_log_messages() {
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "messages"
+            },
+            "logVerbosity": "off"
+        }),
+    ));
+    server.send(cache_stats_request(2));
+
+    assert!(server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("tua/cacheStats"))
+    }));
+}
+
+#[test]
+fn trace_notification_updates_logging_without_restart() {
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "off"
+            },
+            "logVerbosity": "off"
+        }),
+    ));
+    server.send(cache_stats_request(2));
+
+    assert!(!server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("tua/cacheStats"))
+    }));
+
+    server.send(set_trace_notification(json!({
+        "trace": {
+            "server": "off"
+        },
+        "logVerbosity": "info"
+    })));
+    server.send(cache_stats_request(3));
+
+    assert!(server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("trace updated"))
+    }));
+    assert!(server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("tua/cacheStats"))
+    }));
+}
+
+#[test]
 fn current_file_requests_do_not_force_project_snapshot() {
     let main_uri = "file:///tmp/current-file-main.tua";
     let other_uri = "file:///tmp/current-file-other.tua";
@@ -5215,6 +5282,25 @@ fn initialize_with_workspace_folders<const N: usize>(id: u64, roots: [String; N]
         "params": {
             "workspaceFolders": folders
         }
+    })
+}
+
+fn initialize_with_trace_options(id: u64, initialization_options: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "initializationOptions": initialization_options
+        }
+    })
+}
+
+fn set_trace_notification(settings: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "tua/setTrace",
+        "params": settings
     })
 }
 
