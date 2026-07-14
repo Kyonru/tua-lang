@@ -78,10 +78,15 @@ impl LspServer {
                     client_supports_watched_files_dynamic_registration(&message);
                 self.client_pull_diagnostics = client_supports_pull_diagnostics(&message);
                 self.client_diagnostic_refresh = client_supports_diagnostic_refresh(&message);
+                self.client_completion_label_details =
+                    client_supports_completion_label_details(&message);
 
                 response(
                     id,
-                    capabilities::initialize_result(self.client_pull_diagnostics),
+                    capabilities::initialize_result(
+                        self.client_pull_diagnostics,
+                        self.client_completion_label_details,
+                    ),
                 )
             }
             "shutdown" => {
@@ -695,7 +700,14 @@ impl LspServer {
         Value::Array(
             completions
                 .into_iter()
-                .map(|completion| lsp_completion_from_core(request.uri, position, completion))
+                .map(|completion| {
+                    lsp_completion_from_core(
+                        request.uri,
+                        position,
+                        completion,
+                        self.client_completion_label_details,
+                    )
+                })
                 .collect(),
         )
     }
@@ -1547,6 +1559,18 @@ fn client_supports_pull_diagnostics(message: &Value) -> bool {
         .and_then(|capabilities| capabilities.get("textDocument"))
         .and_then(|text_document| text_document.get("diagnostic"))
         .is_some()
+}
+
+fn client_supports_completion_label_details(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("capabilities"))
+        .and_then(|capabilities| capabilities.get("textDocument"))
+        .and_then(|text_document| text_document.get("completion"))
+        .and_then(|completion| completion.get("completionItem"))
+        .and_then(|completion_item| completion_item.get("labelDetailsSupport"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn client_supports_diagnostic_refresh(message: &Value) -> bool {

@@ -181,6 +181,7 @@ pub(super) fn lsp_completion_from_core(
     uri: &str,
     position: SourcePosition,
     completion: Completion,
+    label_details_support: bool,
 ) -> Value {
     let kind = lsp_completion_kind(completion.kind);
     let label = completion.label;
@@ -217,10 +218,12 @@ pub(super) fn lsp_completion_from_core(
         item["insertTextFormat"] = json!(2);
     }
 
-    if let Some(detail) = detail {
-        item["labelDetails"] = json!({
-            "description": detail
-        });
+    if label_details_support {
+        if let Some(detail) = detail {
+            item["labelDetails"] = json!({
+                "description": detail
+            });
+        }
     }
 
     if let Some(module_path) = module_path {

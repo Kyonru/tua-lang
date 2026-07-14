@@ -71,9 +71,8 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
-        output[0]["result"]["capabilities"]["completionProvider"]["completionItem"]
-            ["labelDetailsSupport"],
-        true
+        output[0]["result"]["capabilities"]["completionProvider"]["completionItem"],
+        Value::Null
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["signatureHelpProvider"]["triggerCharacters"],
@@ -215,6 +214,17 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(
         output[0]["result"]["capabilities"]["diagnosticProvider"],
         Value::Null
+    );
+}
+
+#[test]
+fn initialize_advertises_completion_label_details_when_supported() {
+    let output = run_messages(vec![initialize_with_completion_label_details(1)]);
+
+    assert_eq!(
+        output[0]["result"]["capabilities"]["completionProvider"]["completionItem"]
+            ["labelDetailsSupport"],
+        true
     );
 }
 
@@ -2432,17 +2442,43 @@ local typed: Pl = nil
 local field = player.hp
 "#;
     let output = run_messages(vec![
+        initialize_with_completion_label_details(1),
         did_open(uri, source),
         completion_request(2, uri, source, "typed: Pl"),
         completion_request(3, uri, source, "player."),
     ]);
 
     assert_completion_labels(&output, 2, ["Player"]);
+    assert_eq!(
+        completion_with_label(&output, 2, "Player")["labelDetails"]["description"],
+        "type alias"
+    );
     assert_completion_labels(&output, 3, ["alive", "hp", "pos"]);
     assert_eq!(
         completion_with_label(&output, 3, "hp")["labelDetails"]["description"],
         "field: number"
     );
+}
+
+#[test]
+fn completion_returns_module_label_details() {
+    let temp = TempProject::new("module-label-details");
+    let source = r#"local Module = require("pla")"#;
+    let uri = temp.uri_for("src/main.tua");
+
+    temp.write("src/main.tua", source);
+    temp.write("src/player.tua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_completion_label_details(1),
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "pla"),
+    ]);
+    let completion = completion_with_label(&output, 2, "player");
+
+    assert_eq!(completion["kind"], 9);
+    assert_eq!(completion["labelDetails"]["description"], "module");
+    assert!(completion.get("detail").is_none());
 }
 
 #[test]
@@ -2611,6 +2647,7 @@ fn completion_returns_love_function_call_snippets_from_signatures() {
     let source = "love.graphics.cir\n";
     let mut server = TestServer::new();
 
+    server.send(initialize_with_completion_label_details(1));
     server.send(did_open(uri, source));
     server.send(completion_request(2, uri, source, "love.graphics.cir"));
 
@@ -2618,6 +2655,10 @@ fn completion_returns_love_function_call_snippets_from_signatures() {
     let circle = completion_with_label(server.output(), 2, "circle");
 
     assert_eq!(circle["kind"], 3);
+    assert_eq!(
+        circle["labelDetails"]["description"],
+        "function love.graphics.circle(mode: DrawMode, x: number, y: number, radius: number)"
+    );
     assert_eq!(circle["insertTextFormat"], 2);
     assert_eq!(
         circle["insertText"],
@@ -2706,6 +2747,7 @@ fn completion_items_can_be_resolved_for_documentation() {
     let source = "local value = math.si\n";
     let mut server = TestServer::new();
 
+    server.send(initialize_with_completion_label_details(1));
     server.send(did_open(uri, source));
     server.send(completion_request(2, uri, source, "math.si"));
 
@@ -2721,6 +2763,10 @@ fn completion_items_can_be_resolved_for_documentation() {
     assert_eq!(sin["data"]["uri"], uri);
     assert_eq!(sin["data"]["label"], "sin");
     assert_eq!(sin["data"]["kind"], "function");
+    assert_eq!(
+        sin["labelDetails"]["description"],
+        "function math.sin(x: number): number"
+    );
     assert!(sin.get("detail").is_none());
     assert!(sin.get("documentation").is_none());
     assert!(sin["data"].get("detail").is_none());
@@ -2789,6 +2835,7 @@ end
 "#;
     let mut server = TestServer::new();
 
+    server.send(initialize_with_completion_label_details(1));
     server.send(did_open(uri, source));
     server.send(completion_request(2, uri, source, "typed: Pl"));
     server.send(completion_request(3, uri, source, "value = sco"));
@@ -2800,6 +2847,13 @@ end
     let function = response_with_id(server.output(), 4)["result"][0].clone();
     let snippet = response_with_id(server.output(), 5)["result"][0].clone();
 
+    assert_eq!(alias["labelDetails"]["description"], "type alias");
+    assert_eq!(local["labelDetails"]["description"], "local");
+    assert_eq!(function["labelDetails"]["description"], "function");
+    assert_eq!(
+        snippet["labelDetails"]["description"],
+        "LuaDoc function documentation"
+    );
     assert!(alias.get("detail").is_none());
     assert!(local.get("detail").is_none());
     assert!(function.get("detail").is_none());
@@ -2850,7 +2904,10 @@ return {
     let module_path = temp.path.join("src/player.tua");
     let mut server = TestServer::new();
 
-    server.send(initialize_with_root(1, temp.uri()));
+    server.send(initialize_with_root_and_completion_label_details(
+        1,
+        temp.uri(),
+    ));
     server.send(did_open(&main_uri, main));
     server.send(completion_request(2, &main_uri, main, "make"));
 
@@ -2862,6 +2919,10 @@ return {
     assert_eq!(
         completion["data"]["modulePath"],
         module_path.to_string_lossy().as_ref()
+    );
+    assert_eq!(
+        completion["labelDetails"]["description"],
+        "auto import from player: function(string): { name: string }"
     );
     assert!(completion.get("detail").is_none());
 }
@@ -6171,6 +6232,41 @@ fn initialize_with_root(id: u64, root_uri: String) -> Value {
         "method": "initialize",
         "params": {
             "rootUri": root_uri
+        }
+    })
+}
+
+fn initialize_with_completion_label_details(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "capabilities": completion_label_details_capabilities()
+        }
+    })
+}
+
+fn initialize_with_root_and_completion_label_details(id: u64, root_uri: String) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "rootUri": root_uri,
+            "capabilities": completion_label_details_capabilities()
+        }
+    })
+}
+
+fn completion_label_details_capabilities() -> Value {
+    json!({
+        "textDocument": {
+            "completion": {
+                "completionItem": {
+                    "labelDetailsSupport": true
+                }
+            }
         }
     })
 }

@@ -23,7 +23,10 @@ pub(super) fn server_description() -> String {
     format!("{} language server", project_description())
 }
 
-pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
+pub(super) fn initialize_result(
+    client_pull_diagnostics: bool,
+    client_completion_label_details: bool,
+) -> Value {
     let mut result = json!({
         "capabilities": {
             "textDocumentSync": {
@@ -36,10 +39,7 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
             "hoverProvider": true,
             "completionProvider": {
                 "triggerCharacters": [":", ".", "\"", "'", "@", "-"],
-                "resolveProvider": true,
-                "completionItem": {
-                    "labelDetailsSupport": true
-                }
+                "resolveProvider": true
             },
             "signatureHelpProvider": {
                 "triggerCharacters": ["(", ","],
@@ -121,6 +121,12 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
         result["capabilities"]["diagnosticProvider"] = json!({
             "interFileDependencies": true,
             "workspaceDiagnostics": false
+        });
+    }
+
+    if client_completion_label_details {
+        result["capabilities"]["completionProvider"]["completionItem"] = json!({
+            "labelDetailsSupport": true
         });
     }
 

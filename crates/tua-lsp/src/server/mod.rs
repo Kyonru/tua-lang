@@ -132,6 +132,7 @@ struct LspServer {
     client_watched_files_dynamic_registration: bool,
     client_pull_diagnostics: bool,
     client_diagnostic_refresh: bool,
+    client_completion_label_details: bool,
     next_server_request_id: u64,
     trace_config: TraceConfig,
     shutdown_requested: bool,
