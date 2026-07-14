@@ -761,8 +761,10 @@ impl AnalysisSnapshot {
         path: &Path,
         range: CodeActionRange,
         diagnostics: &[Diagnostic],
+        requested_kinds: &[tua_core::AssistKind],
     ) -> Vec<CodeAction> {
-        self.core.code_actions(path, range, diagnostics)
+        self.core
+            .code_actions(path, range, diagnostics, requested_kinds)
     }
 
     pub(super) fn code_lenses(&self, path: &Path) -> Vec<CodeLens> {

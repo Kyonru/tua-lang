@@ -25,6 +25,10 @@ const COMMANDS = {
   saveCacheStats: "tua.saveCacheStats",
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
+  organizeImports: "tua.source.organizeImports",
+  sortImports: "tua.source.sortImports",
+  removeUnusedImports: "tua.source.removeUnusedImports",
+  fixAll: "tua.source.fixAll",
   reportIssue: "tua.reportIssue",
 };
 
@@ -63,8 +67,23 @@ function registerLifecycleCommands() {
     vscode.commands.registerCommand(COMMANDS.saveHeapSummary, () =>
       saveServerProfileArtifact("heapSummary", "heap/allocation summary"),
     ),
+    vscode.commands.registerCommand(COMMANDS.organizeImports, () =>
+      runSourceAction("source.organizeImports"),
+    ),
+    vscode.commands.registerCommand(COMMANDS.sortImports, () => runSourceAction("source.sortImports")),
+    vscode.commands.registerCommand(COMMANDS.removeUnusedImports, () =>
+      runSourceAction("source.removeUnusedImports"),
+    ),
+    vscode.commands.registerCommand(COMMANDS.fixAll, () => runSourceAction("source.fixAll")),
     vscode.commands.registerCommand(COMMANDS.reportIssue, reportIssue),
   );
+}
+
+function runSourceAction(kind) {
+  return vscode.commands.executeCommand("editor.action.codeAction", {
+    kind,
+    apply: "first",
+  });
 }
 
 function createStatusItem() {

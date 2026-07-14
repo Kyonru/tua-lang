@@ -422,6 +422,26 @@
         "category": "Tua"
       },
       {
+        "command": "tua.source.organizeImports",
+        "title": "Organize Imports",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.source.sortImports",
+        "title": "Sort Imports",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.source.removeUnusedImports",
+        "title": "Remove Unused Imports",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.source.fixAll",
+        "title": "Fix All Safe Diagnostics",
+        "category": "Tua"
+      },
+      {
         "command": "tua.reportIssue",
         "title": "Report Issue",
         "category": "Tua"

@@ -2603,6 +2603,11 @@ Acceptance:
 
 ### 89. `feat(code-action): add source actions and fix-all support`
 
+Status: done. The LSP now advertises explicit code-action kinds and provides
+source actions for organizing imports, sorting imports, removing unused static
+import bindings, and fixing all safe diagnostics in the current file. VS Code
+also exposes matching command-palette wrappers.
+
 Scope:
 
 - Advertise supported code action kinds explicitly.

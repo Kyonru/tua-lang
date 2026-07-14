@@ -71,7 +71,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Required Lua module typing | Simple returned module tables and supported LuaDoc annotations contribute exports. | Complex runtime module construction, side effects, and metatable exports are not modeled. | 59, 61 |
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
-| Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
+| Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. Source actions organize/sort imports, remove unused static import bindings, and fix all safe diagnostics in a file. | Still intentionally conservative: dynamic imports, unsafe creates, overlapping edits, and broader refactor menus are skipped. | 66, 70.9, 89 |
 | Code lens | Lazily resolved reference lenses are provided for exported functions and unambiguous type aliases. | No run/check/build or LOVE asset lenses until project intent and command behavior are explicit. | 86 |
 | Semantic token transport | Full, range, and full/delta semantic token requests are advertised and implemented with cached result IDs. | Delta edits are intentionally array-based and conservative rather than a deeper incremental semantic-token engine. | 87 |
 
@@ -87,7 +87,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
 | VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, trace/log settings with live `tua/setTrace` updates, cache-stats copy/save, profile artifact probes, support commands, and a server status item. | Expand CPU/heap artifact generation only when the Tua server/runtime supports those outputs. | 80 |
 | File rename refactors | `workspace.fileOperations.willRename` updates static `require(...)` and `import(...)` paths for safe same-project module moves. | Dynamic specifiers, ignored/generated files, ambiguous module names, and cross-project moves return no edits. | 88 |
-| Source actions and fix-all | Tua has focused quick fixes but no broad source-action family. | Add organize imports, sort imports, remove unused imports, and safe fix-all. | 89 |
+| Source actions and fix-all | `source.organizeImports`, `source.sortImports`, `source.removeUnusedImports`, and `source.fixAll` are advertised and implemented conservatively. | Broader source actions such as fix-all across workspaces, organize exports, and refactor menus remain future work. | 89 |
 | Proposed/custom VS Code features | Tua uses standard LSP surfaces and one builtin-document request. | Evaluate verbose hover, source definition, multi-document highlight, and auto insert; implement only Lua/Tua-useful stable or preview-gated behavior. | 92 |
 | External tooling bridge | Tua does not expose a separate local API session. | Design an optional, disabled-by-default bridge for project snapshots, diagnostics, asset metadata, and semantic facts after a concrete consumer exists. | 93 |
 

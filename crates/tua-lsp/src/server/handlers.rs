@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use serde_json::{json, Value};
-use tua_core::{RenameEdit, SourcePosition, SourceSpan};
+use tua_core::{AssistKind, RenameEdit, SourcePosition, SourceSpan};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -1014,9 +1014,15 @@ impl LspServer {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        let requested_kinds = code_action_kinds_from_request(message);
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);
+        let diagnostics = if requested_kinds.contains(&AssistKind::SourceFixAll) {
+            snapshot.diagnostics_for_uri(request.uri)
+        } else {
+            diagnostics
+        };
         let actions = snapshot.code_actions(
             &request.path,
             tua_core::CodeActionRange {
@@ -1024,6 +1030,7 @@ impl LspServer {
                 end: range.end,
             },
             &diagnostics,
+            &requested_kinds,
         );
 
         Value::Array(actions.into_iter().map(lsp_code_action_from_core).collect())
@@ -1458,6 +1465,48 @@ fn file_renames_from_request(message: &Value) -> Vec<FileRename> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn code_action_kinds_from_request(message: &Value) -> Vec<AssistKind> {
+    let Some(only) = message
+        .get("params")
+        .and_then(|params| params.get("context"))
+        .and_then(|context| context.get("only"))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+
+    let mut kinds = BTreeSet::new();
+
+    for kind in only.iter().filter_map(Value::as_str) {
+        match kind {
+            "quickfix" => {
+                kinds.insert(AssistKind::QuickFix);
+            }
+            "source" => {
+                kinds.insert(AssistKind::SourceOrganizeImports);
+                kinds.insert(AssistKind::SourceSortImports);
+                kinds.insert(AssistKind::SourceRemoveUnusedImports);
+                kinds.insert(AssistKind::SourceFixAll);
+            }
+            "source.organizeImports" => {
+                kinds.insert(AssistKind::SourceOrganizeImports);
+            }
+            "source.sortImports" => {
+                kinds.insert(AssistKind::SourceSortImports);
+            }
+            "source.removeUnusedImports" => {
+                kinds.insert(AssistKind::SourceRemoveUnusedImports);
+            }
+            "source.fixAll" | "source.fixAll.tua" => {
+                kinds.insert(AssistKind::SourceFixAll);
+            }
+            _ => {}
+        }
+    }
+
+    kinds.into_iter().collect()
 }
 
 fn file_change_kind(value: u64) -> Option<FileChangeKind> {

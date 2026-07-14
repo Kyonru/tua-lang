@@ -131,7 +131,10 @@ Tua currently has conservative code actions for:
 - remove unused local (`TL4005`);
 - rename duplicate table key (`TL4001`);
 - remove self-assignment (`TL4003`);
-- remove trailing whitespace (`TL4021`).
+- remove trailing whitespace (`TL4021`);
+- apply the LOVE dot-method colon fix (`TL4018`);
+- organize/sort imports, remove unused static import bindings, and fix all safe
+  diagnostics in a file through source actions.
 
 Any future LuaHelper-style quick fix should be added through the analysis
 snapshot assist framework from roadmap 66, with exact workspace-edit tests.

@@ -71,8 +71,9 @@ pub use check::{
     check_tua_source_with_diagnostics_config,
 };
 pub use code_action::{
-    assists_parsed_source, code_actions_parsed_source, Assist, AssistEdit, AssistKind, AssistRange,
-    CodeAction, CodeActionEdit, CodeActionKind, CodeActionRange, CreateFile,
+    assists_parsed_source, code_actions_parsed_source, code_actions_parsed_source_with_kinds,
+    Assist, AssistEdit, AssistKind, AssistRange, CodeAction, CodeActionEdit, CodeActionKind,
+    CodeActionRange, CreateFile,
 };
 pub use code_lens::{CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget, CodeLensTarget};
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};

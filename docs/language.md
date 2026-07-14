@@ -429,6 +429,8 @@ after `function love.` can insert callback snippets such as `love.update(dt)`,
 such as `t.window.title`, `t.window.width`, and `t.modules.physics` complete.
 Code actions can apply the TL4018 colon-call fix and can rewrite obvious
 constructors such as `love.graphics.newImage("path")` to `image "path"`.
+Source actions can also organize/sort static imports, remove unused static
+import bindings, and fix all safe diagnostics in the current file.
 
 ## Practical Metatable Typing
 

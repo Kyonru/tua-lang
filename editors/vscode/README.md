@@ -16,7 +16,7 @@ Minimal VS Code language support for tua source files.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, probing server profile artifacts,
-  reporting an issue, and opening Tua settings.
+  running source actions, reporting an issue, and opening Tua settings.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
 
@@ -62,6 +62,10 @@ the setting.
 - `Tua: Save Cache Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
+- `Tua: Organize Imports`
+- `Tua: Sort Imports`
+- `Tua: Remove Unused Imports`
+- `Tua: Fix All Safe Diagnostics`
 - `Tua: Report Issue`
 
 ## Profiling

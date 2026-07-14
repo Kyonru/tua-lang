@@ -69,8 +69,9 @@ Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
 - performance-oriented protocol support includes pull diagnostics,
   range/on-type formatting, and semantic token delta;
 - deeper navigation and refactor parity after that: type definition,
-  implementation, code lens references, source actions, fix-all, completion
-  label details, and signature retriggers.
+  implementation, code lens references, completion label details, signature
+  retriggers, and broader refactor/source-action families beyond the safe import
+  and fix-all actions already implemented.
 
 ## Working Rule
 

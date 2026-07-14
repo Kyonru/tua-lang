@@ -86,6 +86,34 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     await state.commands.get("tua.output.focus")();
     assert.deepStrictEqual(state.outputShows, [true], "output focus command should show the output channel");
 
+    await state.commands.get("tua.source.organizeImports")();
+    await state.commands.get("tua.source.sortImports")();
+    await state.commands.get("tua.source.removeUnusedImports")();
+    await state.commands.get("tua.source.fixAll")();
+
+    assert.deepStrictEqual(
+      state.executedCommands.slice(-4),
+      [
+        {
+          command: "editor.action.codeAction",
+          args: [{ kind: "source.organizeImports", apply: "first" }],
+        },
+        {
+          command: "editor.action.codeAction",
+          args: [{ kind: "source.sortImports", apply: "first" }],
+        },
+        {
+          command: "editor.action.codeAction",
+          args: [{ kind: "source.removeUnusedImports", apply: "first" }],
+        },
+        {
+          command: "editor.action.codeAction",
+          args: [{ kind: "source.fixAll", apply: "first" }],
+        },
+      ],
+      "source-action commands should dispatch matching VS Code code actions",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -633,6 +661,10 @@ function assertRegisteredCommands(state) {
     "tua.saveCacheStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.source.organizeImports",
+    "tua.source.sortImports",
+    "tua.source.removeUnusedImports",
+    "tua.source.fixAll",
     "tua.reportIssue",
   ]) {
     assert(state.commands.has(command), `${command} should be registered on activation`);

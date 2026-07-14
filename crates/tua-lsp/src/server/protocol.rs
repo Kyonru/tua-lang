@@ -582,6 +582,10 @@ pub(super) fn lsp_code_action_from_core(action: CodeAction) -> Value {
 fn lsp_code_action_kind(kind: CodeActionKind) -> &'static str {
     match kind {
         CodeActionKind::QuickFix => "quickfix",
+        CodeActionKind::SourceOrganizeImports => "source.organizeImports",
+        CodeActionKind::SourceSortImports => "source.sortImports",
+        CodeActionKind::SourceRemoveUnusedImports => "source.removeUnusedImports",
+        CodeActionKind::SourceFixAll => "source.fixAll",
     }
 }
 

@@ -556,6 +556,12 @@ constructors to helper syntax, such as `love.graphics.newImage("path")` to
 `image "path"` and `love.audio.newSource("path", "static" | "stream")` to
 `sound "path"` or `music "path"`.
 
+Source actions should advertise their supported kinds explicitly. Tua source
+actions may organize imports, sort imports, remove unused static import
+bindings, and fix all safe diagnostics in a file. Bulk edits must stay
+conservative: unsupported diagnostics, file-creation fixes, and overlapping
+edits are skipped instead of guessed.
+
 ### LOVE Callback Editing
 
 The language server should make common LOVE callbacks easy to declare. In a
@@ -684,6 +690,8 @@ The extension should provide:
   call hierarchy, inlay hints, and full/range/delta semantic tokens;
 - safe file-rename edits for static `require(...)` and `import(...)` module
   specifiers;
+- source actions for organizing imports, sorting imports, removing unused static
+  import bindings, and fixing all safe diagnostics in a file;
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
 - workspace folder initialization and workspace folder change notifications.

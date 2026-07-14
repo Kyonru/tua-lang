@@ -84,6 +84,8 @@ and workspace directory when available.
   workspace symbols, document links, type definition, implementation, code
   actions, code lens references, call hierarchy, inlay hints, and full, range,
   and delta semantic tokens.
+- Source actions for organizing imports, sorting imports, removing unused static
+  import bindings, and fixing all safe diagnostics in the current file.
 - Workspace file-rename edits for static `require(...)` and `import(...)`
   module specifiers when the move is unambiguous in the project model.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,

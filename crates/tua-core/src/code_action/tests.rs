@@ -287,6 +287,119 @@ local theme = love.audio.newSource("assets/theme.ogg", "stream")
     );
 }
 
+#[test]
+fn source_actions_sort_remove_and_organize_imports() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"local Z = require("z")
+local A = require("a")
+local Unused = import("unused")
+print(A, Z)
+"#,
+    )
+    .expect("source should parse");
+    let sort = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceSortImports],
+    );
+    let remove = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceRemoveUnusedImports],
+    );
+    let organize = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceOrganizeImports],
+    );
+
+    assert_eq!(sort[0].kind, AssistKind::SourceSortImports);
+    assert_eq!(
+        action_document_text(&sort[0], "src/main.tua"),
+        r#"local A = require("a")
+local Unused = import("unused")
+local Z = require("z")
+print(A, Z)
+"#
+    );
+    assert_eq!(remove[0].kind, AssistKind::SourceRemoveUnusedImports);
+    assert_eq!(
+        action_document_text(&remove[0], "src/main.tua"),
+        r#"local Z = require("z")
+local A = require("a")
+print(A, Z)
+"#
+    );
+    assert_eq!(organize[0].kind, AssistKind::SourceOrganizeImports);
+    assert_eq!(
+        action_document_text(&organize[0], "src/main.tua"),
+        r#"local A = require("a")
+local Z = require("z")
+print(A, Z)
+"#
+    );
+}
+
+#[test]
+fn source_fix_all_applies_only_safe_non_overlapping_diagnostic_fixes() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local unused = 1\nhp = hp\nlocal used = 2\nprint(used)\n",
+    )
+    .expect("source should parse");
+    let fix_diagnostics = diagnostics(
+        &parsed,
+        DiagnosticsConfig {
+            unused_locals: true,
+            self_assignments: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+    let actions = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &fix_diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+    let edits = &actions[0].edit.changes[&std::path::PathBuf::from("src/main.tua")];
+
+    assert_eq!(actions[0].kind, AssistKind::SourceFixAll);
+    assert_eq!(edits.len(), 2);
+    assert!(edits.iter().all(|edit| edit.new_text.is_empty()));
+
+    let parsed_missing = parse_tua_source("src/main.tua", "local Player = require(\"player\")\n")
+        .expect("source should parse");
+    let missing_require = diagnostics(
+        &parsed_missing,
+        DiagnosticsConfig {
+            missing_requires: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+    let unsafe_actions = code_actions_parsed_source_with_kinds(
+        &parsed_missing,
+        &missing_require,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+
+    assert!(unsafe_actions.is_empty());
+}
+
 fn diagnostics(parsed: &ParsedSource, config: DiagnosticsConfig) -> Vec<Diagnostic> {
     check_parsed_source_with_diagnostics_config(parsed, &config)
         .err()
@@ -321,4 +434,8 @@ fn range_line(line: usize) -> CodeActionRange {
         start: SourcePosition { line, column: 1 },
         end: SourcePosition { line, column: 200 },
     }
+}
+
+fn action_document_text<'a>(action: &'a Assist, path: &str) -> &'a str {
+    &action.edit.changes[&std::path::PathBuf::from(path)][0].new_text
 }

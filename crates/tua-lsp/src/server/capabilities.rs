@@ -56,7 +56,15 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
             "documentSymbolProvider": true,
             "selectionRangeProvider": true,
             "foldingRangeProvider": true,
-            "codeActionProvider": true,
+            "codeActionProvider": {
+                "codeActionKinds": [
+                    "quickfix",
+                    "source.organizeImports",
+                    "source.sortImports",
+                    "source.removeUnusedImports",
+                    "source.fixAll"
+                ]
+            },
             "codeLensProvider": {
                 "resolveProvider": true
             },

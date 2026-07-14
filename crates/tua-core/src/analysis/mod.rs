@@ -53,27 +53,27 @@ use crate::{
         check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
-    complete_parsed_source, complete_tua_source, definition_parsed_source_with_hir,
-    document_highlights_parsed_source, document_symbols_parsed_source_with_hir,
-    exported_field_for_fields, global_function_definition_count,
-    global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
-    global_type_alias_name_for_definition,
+    code_actions_parsed_source_with_kinds, complete_parsed_source, complete_tua_source,
+    definition_parsed_source_with_hir, document_highlights_parsed_source,
+    document_symbols_parsed_source_with_hir, exported_field_for_fields,
+    global_function_definition_count, global_function_name_for_definition,
+    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source_with_hir, hover_parsed_source,
     inlay_hints_parsed_source, is_valid_rename_identifier, lower_parsed_source,
     module_links_tua_source, parse_lua_source, parse_tua_source, reference_kind_for_rename,
     references_to_definition_parsed_source_with_artifacts, rename_target_for_definition,
     require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
     signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count, Assist,
-    AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyIncomingCall,
-    CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens,
-    CodeLensReferenceKind, CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind,
-    Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover,
-    InlayHint, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
-    ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput,
-    Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
-    SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
-    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypedFunction,
-    WorkspaceSymbol,
+    AssistKind, AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget,
+    CallHierarchyIncomingCall, CallHierarchyOutgoingCall, CallHierarchySymbol,
+    CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget,
+    CodeLensTarget, Completion, CompletionKind, Definition, DefinitionKind, Diagnostic,
+    DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint, ModuleExportField,
+    ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource,
+    ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind,
+    RenameEdit, RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex,
+    SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit,
+    TuaType, Type, TypeEnvironment, TypedFunction, WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2111,8 +2111,22 @@ impl AnalysisSnapshot {
         path: impl AsRef<Path>,
         range: AssistRange,
         diagnostics: &[Diagnostic],
+        requested_kinds: &[AssistKind],
     ) -> Vec<Assist> {
-        self.assists(path, range, diagnostics)
+        let path = path.as_ref();
+        let Some(parsed) = self.file(path).and_then(|file| file.parsed.as_ref().ok()) else {
+            return Vec::new();
+        };
+        let source_dir = self.assist_source_root_for_path(path);
+
+        code_actions_parsed_source_with_kinds(
+            parsed,
+            diagnostics,
+            range,
+            &source_dir,
+            &self.config.extension,
+            requested_kinds,
+        )
     }
 
     pub fn references(
