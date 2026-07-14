@@ -18,6 +18,7 @@ use crate::parser::{
     LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
+use crate::source_text::function_name_table_field;
 use crate::{asset, lua, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
@@ -421,22 +422,6 @@ fn receiver_type_for_owner(owner: &str, alias_names: &BTreeSet<String>) -> Type 
     } else {
         Type::Any
     }
-}
-
-fn function_name_table_field(name: &str) -> Option<(String, String, bool)> {
-    let colon = name.rfind(':');
-    let dot = name.rfind('.');
-    let separator = match (colon, dot) {
-        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
-        (Some(colon), None) => Some((colon, true)),
-        (None, Some(dot)) => Some((dot, false)),
-        (None, None) => None,
-    }?;
-    let owner = name[..separator.0].trim();
-    let field = name[separator.0 + 1..].trim();
-
-    (!owner.is_empty() && !field.is_empty())
-        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
 }
 
 #[derive(Clone, Debug)]

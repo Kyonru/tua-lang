@@ -88,6 +88,14 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["typeDefinitionProvider"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["implementationProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["callHierarchyProvider"],
         true
     );
@@ -3613,6 +3621,125 @@ return {
 }
 
 #[test]
+fn type_definition_returns_local_and_cross_file_type_locations() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Types = require("types")
+
+type Player = {
+  <|local_hp_def|>hp<|/local_hp_def|>: number,
+}
+
+local <|local_decl|>player: <|local_annotation|>Player = { hp = 10 }
+local copied = <|local_usage|>player
+player.<|local_hp_ref|>hp = 12
+local imported: Types.<|remote_type|>Enemy = { hp = 20 }
+-- file: src/types.tua
+type Enemy = {
+  hp: number,
+}
+
+return {}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("type-definition-lsp")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let types = fixture.source("src/types.tua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let types_uri = path_uri(&temp.join("src/types.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        type_definition_request_at(2, &main_uri, fixture.position("local_decl")),
+        type_definition_request_at(3, &main_uri, fixture.position("local_annotation")),
+        type_definition_request_at(4, &main_uri, fixture.position("local_usage")),
+        type_definition_request_at(5, &main_uri, fixture.position("local_hp_ref")),
+        type_definition_request_at(6, &main_uri, fixture.position("remote_type")),
+    ]);
+
+    assert_definition_text(&output, 2, &main_uri, main, "Player");
+    assert_definition_text(&output, 3, &main_uri, main, "Player");
+    assert_definition_text(&output, 4, &main_uri, main, "Player");
+    assert_definition_text(&output, 5, &main_uri, main, "hp");
+    assert_definition_text(&output, 6, &types_uri, types, "Enemy");
+}
+
+#[test]
+fn implementation_returns_functions_methods_exports_and_empty_for_dynamic_cases() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Functions = require("functions")
+
+type Account = { balance: number }
+
+local function damage(player: Account)
+  return player.balance
+end
+
+function Account:deposit(amount: number)
+  self.balance = self.balance + amount
+end
+
+local account: Account = { balance = 1 }
+<|local_call|>damage(account)
+account:<|method_call|>deposit(1)
+Functions.<|module_call|>makePlayer()
+
+local payload: any = {}
+payload.<|any_call|>missing()
+
+local Meta = {}
+Meta.__index = Meta
+function Meta:onlyRuntime() end
+local runtime = setmetatable({}, Meta)
+runtime:<|meta_call|>onlyRuntime()
+
+function run() end
+function run() end
+<|global_call|>run()
+-- file: src/functions.tua
+local function makePlayer()
+  return {}
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("implementation-lsp")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let functions = fixture.source("src/functions.tua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let functions_uri = path_uri(&temp.join("src/functions.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        implementation_request_at(2, &main_uri, fixture.position("local_call")),
+        implementation_request_at(3, &main_uri, fixture.position("method_call")),
+        implementation_request_at(4, &main_uri, fixture.position("module_call")),
+        implementation_request_at(5, &main_uri, fixture.position("any_call")),
+        implementation_request_at(6, &main_uri, fixture.position("meta_call")),
+        implementation_request_at(7, &main_uri, fixture.position("global_call")),
+    ]);
+
+    assert_first_location_text(&output, 2, &main_uri, main, "damage");
+    assert_first_location_text(&output, 3, &main_uri, main, "Account:deposit");
+    assert_first_location_text(&output, 4, &functions_uri, functions, "makePlayer");
+    assert_empty_locations(&output, 5);
+    assert_empty_locations(&output, 6);
+    assert_empty_locations(&output, 7);
+}
+
+#[test]
 fn completion_recovers_imported_function_return_alias_fields_while_typing() {
     let fixture = Fixture::parse(
         r#"-- file: tua.toml
@@ -5484,6 +5611,34 @@ fn definition_request_at(id: u64, uri: &str, position: SourcePosition) -> Value 
     })
 }
 
+fn type_definition_request_at(id: u64, uri: &str, position: SourcePosition) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/typeDefinition",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position(position)
+        }
+    })
+}
+
+fn implementation_request_at(id: u64, uri: &str, position: SourcePosition) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/implementation",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position(position)
+        }
+    })
+}
+
 fn builtin_document_request(id: u64, uri: &str) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -5942,7 +6097,10 @@ fn assert_signature_label(output: &[Value], id: u64, expected: &str) {
 fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, expected: &str) {
     let response = response_with_id(output, id);
 
-    assert_eq!(response["result"]["uri"], uri);
+    assert_eq!(
+        response["result"]["uri"], uri,
+        "location URI mismatch for response id {id}"
+    );
 
     let range = &response["result"]["range"];
     let line = range["start"]["line"]
@@ -5960,6 +6118,31 @@ fn assert_definition_text(output: &[Value], id: u64, uri: &str, source: &str, ex
         .expect("definition line should exist");
 
     assert_eq!(&text[start..end], expected);
+}
+
+fn assert_first_location_text(output: &[Value], id: u64, uri: &str, source: &str, expected: &str) {
+    let response = response_with_id(output, id);
+    let locations = response["result"]
+        .as_array()
+        .expect("implementation result should be an array");
+    let location = locations
+        .first()
+        .expect("implementation result should contain a location");
+
+    assert_eq!(location["uri"], uri);
+    assert_eq!(range_text(source, &location["range"]), expected);
+}
+
+fn assert_empty_locations(output: &[Value], id: u64) {
+    let response = response_with_id(output, id);
+    let locations = response["result"]
+        .as_array()
+        .expect("implementation result should be an array");
+
+    assert!(
+        locations.is_empty(),
+        "expected empty locations, got {locations:#?}"
+    );
 }
 
 fn first_call_hierarchy_item(output: &[Value], id: u64) -> Value {

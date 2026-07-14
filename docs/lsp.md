@@ -74,8 +74,8 @@ and workspace directory when available.
   overloads, generated LOVE overload variants, optional parameters, return
   labels, and parameter documentation where catalog or annotations provide it.
 - Definition, references, rename, document highlight, document symbols,
-  workspace symbols, document links, code actions, call hierarchy, inlay hints,
-  and full/range semantic tokens.
+  workspace symbols, document links, type definition, implementation, code
+  actions, call hierarchy, inlay hints, and full/range semantic tokens.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 
@@ -170,6 +170,9 @@ modules such as a tiny-ecs adapter required by the project.
 Tua has broad LSP surface coverage, but it stays conservative. Unknown symbols,
 dynamic table shapes, calls through `any`, and unresolved module patterns should
 usually produce no speculative editor result instead of a guessed one.
+Type-definition and implementation requests follow the same rule: known aliases,
+table shapes, module exports, and typed receiver methods navigate to concrete
+origins, while ambiguous dynamic dispatch returns no locations.
 
 The current gap breakdown lives in the [LSP parity matrix](lsp-parity.md).
 

@@ -6,7 +6,9 @@ use full_moon::node::Node;
 
 use crate::hir::{HirModule, HirSymbol, HirSymbolKind};
 use crate::module_link::module_specifier_at_position;
-use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
+use crate::source_text::{
+    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+};
 use crate::types::type_from_tua_type;
 use crate::{
     lua, Definition, DefinitionKind, ParsedSource, SourcePosition, SourceSpan, TuaType, Type,
@@ -607,22 +609,6 @@ fn is_type_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {
         b'=' => before_marker.contains("type "),
         _ => false,
     }
-}
-
-fn function_name_table_field(name: &str) -> Option<(String, String, bool)> {
-    let colon = name.rfind(':');
-    let dot = name.rfind('.');
-    let separator = match (colon, dot) {
-        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
-        (Some(colon), None) => Some((colon, true)),
-        (None, Some(dot)) => Some((dot, false)),
-        (None, None) => None,
-    }?;
-    let owner = name[..separator.0].trim();
-    let field = name[separator.0 + 1..].trim();
-
-    (!owner.is_empty() && !field.is_empty())
-        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
 }
 
 fn setmetatable_arguments(

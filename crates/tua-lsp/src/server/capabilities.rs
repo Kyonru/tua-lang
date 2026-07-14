@@ -46,6 +46,8 @@ pub(super) fn initialize_result() -> Value {
                 "retriggerCharacters": [")"]
             },
             "definitionProvider": true,
+            "typeDefinitionProvider": true,
+            "implementationProvider": true,
             "callHierarchyProvider": true,
             "documentLinkProvider": {
                 "resolveProvider": false

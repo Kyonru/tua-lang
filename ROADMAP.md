@@ -2433,6 +2433,11 @@ Acceptance:
 
 ### 82. `feat(lsp): add type-definition and implementation requests`
 
+Status: done. The core analysis snapshot and LSP server now support
+`textDocument/typeDefinition` and `textDocument/implementation` through shared
+semantic facts, including cross-file module aliases and conservative empty
+results for ambiguous dynamic dispatch.
+
 Scope:
 
 - Advertise and handle `textDocument/typeDefinition`.

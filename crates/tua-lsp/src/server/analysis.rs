@@ -684,6 +684,22 @@ impl AnalysisSnapshot {
         self.core.definition(path, position)
     }
 
+    pub(super) fn type_definition(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<tua_core::Definition> {
+        self.core.type_definition(path, position)
+    }
+
+    pub(super) fn implementation(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Vec<tua_core::Definition> {
+        self.core.implementation(path, position)
+    }
+
     pub(super) fn prepare_call_hierarchy(
         &self,
         path: &Path,

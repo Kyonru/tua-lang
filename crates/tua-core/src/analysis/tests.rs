@@ -1523,6 +1523,152 @@ return {
 }
 
 #[test]
+fn snapshot_type_definition_resolves_alias_origins_and_field_shapes() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Player = {
+  <|hp_def|>hp<|/hp_def|>: number,
+}
+
+local <|decl|>player: <|annotation|>Player = { hp = 10 }
+local copied = <|usage|>player
+player.<|hp_ref|>hp = 12
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+
+    for marker in ["decl", "annotation", "usage"] {
+        let definition = snapshot
+            .type_definition("src/main.tua", fixture.position(marker))
+            .expect("player type definition should resolve to alias");
+
+        assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+        assert_eq!(definition.path, PathBuf::from("src/main.tua"));
+        assert_eq!(source_text(&fixture, &definition), "Player");
+    }
+
+    let field = snapshot
+        .type_definition("src/main.tua", fixture.position("hp_ref"))
+        .expect("field type definition should resolve to shape origin");
+
+    assert_eq!(field.kind, DefinitionKind::TableField);
+    assert_eq!(field.path, PathBuf::from("src/main.tua"));
+    assert_eq!(field.span, fixture.range("hp_def"));
+}
+
+#[test]
+fn snapshot_type_definition_resolves_required_module_aliases() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Types = require("types")
+local player: Types.<|type_ref|>Player = { hp = 10 }
+-- file: src/types.tua
+type Player = {
+  hp: number,
+}
+
+return {}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .type_definition("src/main.tua", fixture.position("type_ref"))
+        .expect("required module type alias should resolve");
+
+    assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+    assert_eq!(definition.path, PathBuf::from("src/types.tua"));
+    assert_eq!(source_text(&fixture, &definition), "Player");
+}
+
+#[test]
+fn snapshot_implementation_resolves_functions_and_stays_conservative() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Functions = require("functions")
+
+type Account = { balance: number }
+
+local function <|local_def|>damage<|/local_def|>(player: Account)
+  return player.balance
+end
+
+function <|method_def|>Account:deposit<|/method_def|>(amount: number)
+  self.balance = self.balance + amount
+end
+
+local account: Account = { balance = 1 }
+<|local_call|>damage(account)
+account:<|method_call|>deposit(1)
+Functions.<|module_call|>makePlayer()
+
+local payload: any = {}
+payload.<|any_call|>missing()
+
+local Meta = {}
+Meta.__index = Meta
+function Meta:onlyRuntime() end
+local runtime = setmetatable({}, Meta)
+runtime:<|meta_call|>onlyRuntime()
+
+function <|first_global|>run() end
+function <|second_global|>run() end
+<|global_call|>run()
+-- file: src/functions.tua
+local function <|module_def|>makePlayer<|/module_def|>()
+  return {}
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let local =
+        only_definition(snapshot.implementation("src/main.tua", fixture.position("local_call")));
+    let method =
+        only_definition(snapshot.implementation("src/main.tua", fixture.position("method_call")));
+    let module =
+        only_definition(snapshot.implementation("src/main.tua", fixture.position("module_call")));
+
+    assert_eq!(local.path, PathBuf::from("src/main.tua"));
+    assert_eq!(local.span, fixture.range("local_def"));
+    assert_eq!(method.path, PathBuf::from("src/main.tua"));
+    assert_eq!(method.span, fixture.range("method_def"));
+    assert_eq!(module.path, PathBuf::from("src/functions.tua"));
+    assert_eq!(module.span, fixture.range("module_def"));
+    assert!(snapshot
+        .implementation("src/main.tua", fixture.position("any_call"))
+        .is_empty());
+    assert!(snapshot
+        .implementation("src/main.tua", fixture.position("meta_call"))
+        .is_empty());
+    assert!(snapshot
+        .implementation("src/main.tua", fixture.position("global_call"))
+        .is_empty());
+}
+
+#[test]
 fn snapshot_recovers_imported_return_alias_field_completion_while_typing() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
@@ -1942,6 +2088,32 @@ type Enemy = { hp: number }
         .workspace_symbols("Player")
         .iter()
         .any(|symbol| symbol.name == "Player"));
+}
+
+fn only_definition(definitions: Vec<Definition>) -> Definition {
+    assert_eq!(definitions.len(), 1, "expected exactly one definition");
+
+    definitions.into_iter().next().unwrap()
+}
+
+fn source_text(fixture: &Fixture, definition: &Definition) -> String {
+    let path = definition
+        .path
+        .to_str()
+        .expect("fixture paths should be UTF-8");
+    let source = fixture.source(path);
+    let line = source
+        .lines()
+        .nth(definition.span.start.line.saturating_sub(1))
+        .expect("definition line should exist");
+    let start = definition.span.start.column.saturating_sub(1);
+    let len = definition
+        .span
+        .end
+        .column
+        .saturating_sub(definition.span.start.column);
+
+    line.chars().skip(start).take(len).collect()
 }
 
 fn png_header(width: u32, height: u32) -> Vec<u8> {

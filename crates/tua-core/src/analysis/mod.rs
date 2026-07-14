@@ -34,7 +34,9 @@ use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
 use crate::signature_help::signature_help_parsed_source_with_environment;
-use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
+use crate::source_text::{
+    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+};
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
@@ -1196,6 +1198,338 @@ impl AnalysisSnapshot {
         definition_parsed_source_with_hir(parsed, hir, position)
             .ok()
             .flatten()
+    }
+
+    pub fn type_definition(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let _profile = profile::span("analysis.query.type_definition");
+        let path = path.as_ref();
+        let file = self.file(path)?;
+
+        match &file.parsed {
+            Ok(parsed) => {
+                self.type_definition_parsed_snapshot(parsed, file.hir.as_ref(), position, None)
+            }
+            Err(_) => {
+                let facts = self.recovered_semantic_facts(path, file)?;
+
+                self.type_definition_parsed_snapshot(
+                    &facts.parsed,
+                    facts.hir.as_ref(),
+                    position,
+                    Some(&facts),
+                )
+            }
+        }
+    }
+
+    fn type_definition_parsed_snapshot(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        position: SourcePosition,
+        recovered_facts: Option<&RecoveredSemanticFacts>,
+    ) -> Option<Definition> {
+        if is_type_reference_position(parsed, position) {
+            if let Some(definition) = self.type_alias_definition_at_position(parsed, hir, position)
+            {
+                return Some(definition);
+            }
+        }
+
+        let definition =
+            self.definition_parsed_snapshot_with_facts(parsed, hir, position, recovered_facts);
+
+        if definition.as_ref().is_some_and(is_type_definition_kind) {
+            return definition;
+        }
+
+        let environment = self.semantic_query_environment(parsed, recovered_facts);
+        let ty = self.type_at_position(parsed, &environment, position)?;
+
+        self.type_origin_definition(parsed, hir, &ty)
+    }
+
+    pub fn implementation(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Vec<Definition> {
+        let _profile = profile::span("analysis.query.implementation");
+        let path = path.as_ref();
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+
+        let definition = match &file.parsed {
+            Ok(parsed) => {
+                self.implementation_parsed_snapshot(parsed, file.hir.as_ref(), position, None)
+            }
+            Err(_) => {
+                let Some(facts) = self.recovered_semantic_facts(path, file) else {
+                    return Vec::new();
+                };
+
+                self.implementation_parsed_snapshot(
+                    &facts.parsed,
+                    facts.hir.as_ref(),
+                    position,
+                    Some(&facts),
+                )
+            }
+        };
+
+        definition.into_iter().collect()
+    }
+
+    fn implementation_parsed_snapshot(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        position: SourcePosition,
+        recovered_facts: Option<&RecoveredSemanticFacts>,
+    ) -> Option<Definition> {
+        let environment = self.semantic_query_environment(parsed, recovered_facts);
+
+        if let Some(definition) =
+            self.typed_receiver_method_implementation(parsed, &environment, position)
+        {
+            return Some(definition);
+        }
+
+        if let Some(definition) = self.module_export_definition_at_position(parsed, position) {
+            return (definition.kind == DefinitionKind::Function).then_some(definition);
+        }
+
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index > 0 {
+            return None;
+        }
+
+        let definition =
+            self.definition_parsed_snapshot_with_facts(parsed, hir, position, recovered_facts)?;
+
+        if definition.kind != DefinitionKind::Function {
+            return None;
+        }
+
+        if let Some(name) = global_function_name_for_definition(parsed, &definition) {
+            return (global_function_definition_count(parsed, &name) == 1).then_some(definition);
+        }
+
+        Some(definition)
+    }
+
+    fn type_alias_definition_at_position(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let name = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index + 1)
+            .map(|part| part.text.as_str())
+            .collect::<Vec<_>>()
+            .join(".");
+
+        self.type_alias_definition_for_name(parsed, hir, &name)
+    }
+
+    fn type_origin_definition(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        ty: &Type,
+    ) -> Option<Definition> {
+        match ty {
+            Type::Alias(name) => self.type_alias_definition_for_name(parsed, hir, name),
+            Type::Union(types) => {
+                let mut definitions = types
+                    .iter()
+                    .filter(|ty| !matches!(ty, Type::Primitive(crate::PrimitiveType::Nil)))
+                    .filter_map(|ty| self.type_origin_definition(parsed, hir, ty))
+                    .collect::<Vec<_>>();
+
+                (definitions.len() == 1).then(|| definitions.remove(0))
+            }
+            Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_)
+            | Type::Function(_)
+            | Type::Table(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
+        }
+    }
+
+    fn type_alias_definition_for_name(
+        &self,
+        parsed: &ParsedSource,
+        hir: Option<&HirModule>,
+        name: &str,
+    ) -> Option<Definition> {
+        if !name.contains('.') {
+            if let Some(definition) = type_alias_definition_in_parsed(parsed, hir, name) {
+                return Some(definition);
+            }
+        }
+
+        let binding =
+            self.type_database
+                .resolve_type_name(&self.module_graph, &parsed.path, name)?;
+        let file = self.file(&binding.module_path)?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        type_alias_definition_in_parsed(parsed, file.hir.as_ref(), &binding.name).or_else(|| {
+            self.module_graph
+                .export(&binding.module_path, &binding.name)
+                .map(|entry| Definition {
+                    path: binding.module_path.clone(),
+                    span: entry.definition_span,
+                    kind: DefinitionKind::TableField,
+                })
+        })
+    }
+
+    fn type_at_position(
+        &self,
+        parsed: &ParsedSource,
+        environment: &TypeEnvironment,
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let parts = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index + 1)
+            .map(|part| part.text.clone())
+            .collect::<Vec<_>>();
+
+        self.type_for_parts(parsed, environment, &parts, position)
+    }
+
+    fn type_for_parts(
+        &self,
+        parsed: &ParsedSource,
+        environment: &TypeEnvironment,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<Type> {
+        let (root, fields) = parts.split_first()?;
+        let mut current = environment
+            .local(root)
+            .cloned()
+            .or_else(|| parameter_type_before_position(parsed, root, position))?;
+
+        for field in fields {
+            current = self.field_type_for_type(&parsed.path, &current, field)?;
+        }
+
+        Some(current)
+    }
+
+    fn field_type_for_type(&self, source_path: &Path, ty: &Type, field: &str) -> Option<Type> {
+        match self
+            .type_database
+            .resolve_type(&self.module_graph, source_path, ty)
+        {
+            Type::Table(table) => table.semantic_field(field).map(|field| field.ty.clone()),
+            Type::Union(types) => {
+                let mut fields = types
+                    .iter()
+                    .filter_map(|ty| self.field_type_for_type(source_path, ty, field))
+                    .collect::<Vec<_>>();
+
+                match fields.len() {
+                    0 => None,
+                    1 => fields.pop(),
+                    _ => Some(Type::union(fields)),
+                }
+            }
+            Type::Alias(_)
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_)
+            | Type::Function(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
+        }
+    }
+
+    fn typed_receiver_method_implementation(
+        &self,
+        parsed: &ParsedSource,
+        environment: &TypeEnvironment,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index == 0 {
+            return None;
+        }
+
+        let method = chain.parts.get(chain.cursor_index)?.text.as_str();
+        let receiver_parts = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index)
+            .map(|part| part.text.clone())
+            .collect::<Vec<_>>();
+        let receiver_type = self.type_for_parts(parsed, environment, &receiver_parts, position)?;
+        let alias = receiver_alias_name(&receiver_type)?;
+
+        self.method_implementation_for_alias(parsed, &alias, method)
+    }
+
+    fn method_implementation_for_alias(
+        &self,
+        parsed: &ParsedSource,
+        alias: &str,
+        method: &str,
+    ) -> Option<Definition> {
+        let (path, owner) = self
+            .type_database
+            .resolve_type_name(&self.module_graph, &parsed.path, alias)
+            .map(|binding| (binding.module_path, binding.name))
+            .unwrap_or_else(|| (parsed.path.clone(), alias.to_owned()));
+        let file = self.file(&path)?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        method_implementation_in_parsed(parsed, &owner, method)
+    }
+
+    fn semantic_query_environment(
+        &self,
+        parsed: &ParsedSource,
+        recovered_facts: Option<&RecoveredSemanticFacts>,
+    ) -> TypeEnvironment {
+        if let Some(facts) = recovered_facts {
+            return facts.environment.clone();
+        }
+
+        if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
+            return facts.environment.clone();
+        }
+
+        let project_inference = self.project_local_inference(parsed);
+        let base_environment = self
+            .file(&parsed.path)
+            .and_then(|file| file.environment.clone());
+
+        self.recovered_project_type_environment_for_parsed(
+            parsed,
+            base_environment,
+            &project_inference,
+        )
     }
 
     pub fn resolve_completion(
@@ -3935,6 +4269,103 @@ fn is_type_reference_position(parsed: &ParsedSource, position: SourcePosition) -
         b'=' => before_marker.contains("type "),
         _ => false,
     }
+}
+
+fn is_type_definition_kind(definition: &Definition) -> bool {
+    matches!(
+        definition.kind,
+        DefinitionKind::TypeAlias
+            | DefinitionKind::TableField
+            | DefinitionKind::Builtin
+            | DefinitionKind::Module
+    )
+}
+
+fn type_alias_definition_in_parsed(
+    parsed: &ParsedSource,
+    hir: Option<&HirModule>,
+    name: &str,
+) -> Option<Definition> {
+    hir.and_then(|hir| hir.definition_for_type_alias(name))
+        .map(|symbol| Definition {
+            path: parsed.path.clone(),
+            span: symbol.name_span,
+            kind: DefinitionKind::TypeAlias,
+        })
+        .or_else(|| {
+            parsed.type_aliases.iter().find_map(|alias| {
+                let span = alias.name_span.or(alias.span)?;
+
+                (alias.name == name).then_some(Definition {
+                    path: parsed.path.clone(),
+                    span,
+                    kind: DefinitionKind::TypeAlias,
+                })
+            })
+        })
+}
+
+fn parameter_type_before_position(
+    parsed: &ParsedSource,
+    name: &str,
+    position: SourcePosition,
+) -> Option<Type> {
+    parsed
+        .function_annotations
+        .iter()
+        .flat_map(|function| function.parameters.iter())
+        .filter(|parameter| parameter.name == name)
+        .filter_map(|parameter| {
+            let span = parameter.name_span.or(parameter.span)?;
+
+            (position_key(span.start) <= position_key(position))
+                .then(|| crate::types::type_from_tua_type(&parameter.ty))
+        })
+        .last()
+}
+
+fn receiver_alias_name(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Alias(name) => Some(name.clone()),
+        Type::Union(types) => {
+            let mut aliases = types
+                .iter()
+                .filter(|ty| !matches!(ty, Type::Primitive(crate::PrimitiveType::Nil)))
+                .filter_map(receiver_alias_name)
+                .collect::<Vec<_>>();
+
+            (aliases.len() == 1).then(|| aliases.remove(0))
+        }
+        Type::Primitive(_)
+        | Type::Any
+        | Type::StringLiteral(_)
+        | Type::Function(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
+    }
+}
+
+fn method_implementation_in_parsed(
+    parsed: &ParsedSource,
+    owner: &str,
+    method: &str,
+) -> Option<Definition> {
+    parsed.function_annotations.iter().find_map(|function| {
+        let name = function.name.as_deref()?;
+        let (candidate_owner, candidate_method, _) = function_name_table_field(name)?;
+
+        if candidate_owner != owner || candidate_method != method {
+            return None;
+        }
+
+        Some(Definition {
+            path: parsed.path.clone(),
+            span: function.name_span.or(function.span)?,
+            kind: DefinitionKind::Function,
+        })
+    })
 }
 
 fn unknown_type_name(message: &str) -> Option<&str> {

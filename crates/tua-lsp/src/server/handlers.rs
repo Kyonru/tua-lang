@@ -89,6 +89,12 @@ impl LspServer {
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
+            "textDocument/typeDefinition" => response(
+                id,
+                self.type_definition_response(&message)
+                    .unwrap_or(Value::Null),
+            ),
+            "textDocument/implementation" => response(id, self.implementation_response(&message)),
             "tua/builtinDocument" => response(
                 id,
                 self.builtin_document_response(&message)
@@ -672,6 +678,51 @@ impl LspServer {
         };
 
         Some(lsp_location_from_core(definition))
+    }
+
+    fn type_definition_response(&self, message: &Value) -> Option<Value> {
+        let request = self.document_request(message)?;
+        let position = request.position()?;
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.type_definition.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let definition = {
+            let _profile = tua_core::profile::span("lsp.type_definition.query");
+
+            snapshot.type_definition(&request.path, position)?
+        };
+
+        Some(lsp_location_from_core(definition))
+    }
+
+    fn implementation_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let Some(position) = request.position() else {
+            return json!([]);
+        };
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.implementation.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let definitions = {
+            let _profile = tua_core::profile::span("lsp.implementation.query");
+
+            snapshot.implementation(&request.path, position)
+        };
+
+        Value::Array(
+            definitions
+                .into_iter()
+                .map(lsp_location_from_core)
+                .collect(),
+        )
     }
 
     fn builtin_document_response(&self, message: &Value) -> Option<Value> {

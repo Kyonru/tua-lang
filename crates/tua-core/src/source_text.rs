@@ -115,6 +115,22 @@ pub(crate) fn dotted_chain_at_position(
     None
 }
 
+pub(crate) fn function_name_table_field(name: &str) -> Option<(String, String, bool)> {
+    let colon = name.rfind(':');
+    let dot = name.rfind('.');
+    let separator = match (colon, dot) {
+        (Some(colon), Some(dot)) => Some((colon.max(dot), colon > dot)),
+        (Some(colon), None) => Some((colon, true)),
+        (None, Some(dot)) => Some((dot, false)),
+        (None, None) => None,
+    }?;
+    let owner = name[..separator.0].trim();
+    let field = name[separator.0 + 1..].trim();
+
+    (!owner.is_empty() && !field.is_empty())
+        .then(|| (owner.to_owned(), field.to_owned(), separator.1))
+}
+
 #[cfg(test)]
 pub(crate) fn position_at(source: &str, needle: &str) -> SourcePosition {
     let index = source.find(needle).expect("needle should exist in source");

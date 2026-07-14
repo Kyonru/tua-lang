@@ -13,7 +13,9 @@ use crate::module_index::resolve_module_specifier;
 use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
 use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
 use crate::semantic::SemanticModel;
-use crate::source_text::{byte_for_column, dotted_chain_at_position, line_at};
+use crate::source_text::{
+    byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+};
 use crate::types::{build_type_environment_with_diagnostics, type_from_tua_type, Type};
 use crate::{lua, parse_tua_source, Diagnostic};
 
@@ -722,7 +724,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
                 kind: DefinitionKind::Function,
             };
 
-            if let Some((table, field)) = function_name_table_field(name) {
+            if let Some((table, field, _)) = function_name_table_field(name) {
                 self.table_members
                     .entry((table, field))
                     .or_insert(definition);
@@ -800,7 +802,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
                         kind: DefinitionKind::Function,
                     };
 
-                    if let Some((table, field)) = function_name_table_field(&name) {
+                    if let Some((table, field, _)) = function_name_table_field(&name) {
                         self.table_members
                             .entry((table, field))
                             .or_insert(definition);
@@ -942,21 +944,6 @@ fn table_field_spans(table: &TableConstructor) -> BTreeMap<String, SourceSpan> {
             Some((token_text(key), node_span(key)?))
         })
         .collect()
-}
-
-fn function_name_table_field(name: &str) -> Option<(String, String)> {
-    let colon = name.rfind(':');
-    let dot = name.rfind('.');
-    let separator = match (colon, dot) {
-        (Some(colon), Some(dot)) => colon.max(dot),
-        (Some(colon), None) => colon,
-        (None, Some(dot)) => dot,
-        (None, None) => return None,
-    };
-    let owner = name[..separator].trim();
-    let field = name[separator + 1..].trim();
-
-    (!owner.is_empty() && !field.is_empty()).then(|| (owner.to_owned(), field.to_owned()))
 }
 
 fn setmetatable_prototype_from_expression(expression: &Expression) -> Option<String> {
