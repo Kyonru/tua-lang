@@ -101,8 +101,9 @@ LuaCATS output includes:
 
 ## Format
 
-The built-in formatter is Rust-native and is used by `tua fmt` and LSP
-`textDocument/formatting`.
+The built-in formatter is Rust-native and is used by `tua fmt` plus LSP
+`textDocument/formatting`, `textDocument/rangeFormatting`, and
+`textDocument/onTypeFormatting`.
 
 ```toml
 [format]

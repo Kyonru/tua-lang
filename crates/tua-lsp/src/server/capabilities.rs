@@ -58,6 +58,11 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
             "foldingRangeProvider": true,
             "codeActionProvider": true,
             "documentFormattingProvider": true,
+            "documentRangeFormattingProvider": true,
+            "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "\n",
+                "moreTriggerCharacter": ["}", ")", "]", ",", "d"]
+            },
             "referencesProvider": true,
             "workspaceSymbolProvider": true,
             "renameProvider": {

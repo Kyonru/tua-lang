@@ -66,8 +66,8 @@ Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
 
 - editor lifecycle UX first: restart/output commands, status, server selection,
   logging, profiling, and support commands;
-- performance-oriented protocol support next: pull diagnostics, range/on-type
-  formatting, and semantic token range/delta;
+- performance-oriented protocol support includes pull diagnostics and
+  range/on-type formatting, with semantic token delta still ahead;
 - deeper navigation and refactor parity after that: type definition,
   implementation, file-rename import updates, source actions, fix-all,
   completion label details, and signature retriggers.

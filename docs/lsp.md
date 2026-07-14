@@ -34,8 +34,10 @@ and workspace directory when available.
 - Formatting consistency diagnostics are enabled by default and can be
   overridden through `tua.diagnostics.formattingLints` or
   `[diagnostics].formatting_lints`.
-- Full-document formatting is provided through `textDocument/formatting` and
-  uses `[format]` plus `tua.format.*` editor settings.
+- Full-document, range, and on-type formatting are provided through
+  `textDocument/formatting`, `textDocument/rangeFormatting`, and
+  `textDocument/onTypeFormatting`. All three use `[format]` plus
+  `tua.format.*` editor settings.
 - Optional inline diagnostic suppressions can be enabled through
   `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
 - Optional LuaJIT shape guidance can be enabled through `tua.jit.enabled` or
@@ -127,10 +129,13 @@ types, or emitted Lua.
 
 ## Formatting
 
-The language server advertises `documentFormattingProvider: true` for Tua files.
-Formatting returns one full-document edit when the file would change, an empty
-edit list when the buffer is already formatted, and no edit for syntax-invalid
-buffers.
+The language server advertises full-document, range, and on-type formatting for
+Tua files. Full-document formatting returns one full-document edit when the file
+would change, an empty edit list when the buffer is already formatted, and no
+edit for syntax-invalid buffers. Range formatting returns local edits that stay
+inside the requested range. On-type formatting uses the same formatter but only
+returns stable local edits for Lua/Tua-relevant triggers such as newline,
+braces/brackets/parens, comma, and `end`.
 
 Formatter defaults come from `[format]` in `tua.toml`:
 

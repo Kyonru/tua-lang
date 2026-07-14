@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{parse_tua_source, Diagnostic, ParsedSource};
+use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QuoteStyle {
@@ -45,8 +45,322 @@ pub fn format_tua_source(
     Ok(format_parsed_source(&parsed, options))
 }
 
+pub fn format_tua_source_range(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    options: &FormatOptions,
+    range: SourceSpan,
+) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
+    let path = path.as_ref().to_owned();
+    let source = source.into();
+    let formatted = format_tua_source(&path, source.clone(), options)?;
+
+    Ok(local_format_edits(path, &source, &formatted, range, true))
+}
+
+pub fn format_tua_source_on_type(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    options: &FormatOptions,
+    position: SourcePosition,
+    trigger: &str,
+) -> Result<Vec<TextEdit>, Vec<Diagnostic>> {
+    let source = source.into();
+    if !is_on_type_format_trigger(&source, position, trigger) {
+        return Ok(Vec::new());
+    }
+
+    let path = path.as_ref().to_owned();
+    let formatted = format_tua_source(&path, source.clone(), options)?;
+    let line = on_type_target_line(position, trigger);
+    let range = SourceSpan {
+        start: SourcePosition { line, column: 1 },
+        end: SourcePosition {
+            line: line + 1,
+            column: 1,
+        },
+    };
+
+    Ok(local_format_edits(path, &source, &formatted, range, false))
+}
+
 pub fn format_parsed_source(parsed: &ParsedSource, options: &FormatOptions) -> String {
     Formatter::new(options).format(&parsed.source)
+}
+
+fn local_format_edits(
+    path: std::path::PathBuf,
+    source: &str,
+    formatted: &str,
+    range: SourceSpan,
+    allow_line_count_change: bool,
+) -> Vec<TextEdit> {
+    if source == formatted {
+        return Vec::new();
+    }
+
+    let Some((start_line, end_line)) = selected_line_interval(range) else {
+        return Vec::new();
+    };
+    let source_lines = line_segments(source);
+    let formatted_lines = line_segments(formatted);
+
+    if source_lines.len() == formatted_lines.len() {
+        return changed_line_edits(
+            path,
+            &source_lines,
+            &formatted_lines,
+            start_line,
+            end_line,
+            range,
+        );
+    }
+
+    if !allow_line_count_change || range.start.column != 1 || range.end.column != 1 {
+        return Vec::new();
+    }
+
+    changed_line_block_edit(
+        path,
+        source,
+        &source_lines,
+        &formatted_lines,
+        start_line,
+        end_line,
+    )
+    .into_iter()
+    .collect()
+}
+
+fn selected_line_interval(range: SourceSpan) -> Option<(usize, usize)> {
+    if position_key(range.end) < position_key(range.start) {
+        return None;
+    }
+
+    let start = range.start.line.checked_sub(1)?;
+    let end = if range.end.column == 1 && range.end.line > range.start.line {
+        range.end.line - 1
+    } else {
+        range.end.line
+    };
+
+    (start < end).then_some((start, end))
+}
+
+fn changed_line_edits(
+    path: std::path::PathBuf,
+    source_lines: &[&str],
+    formatted_lines: &[&str],
+    start_line: usize,
+    end_line: usize,
+    range: SourceSpan,
+) -> Vec<TextEdit> {
+    let mut edits = Vec::new();
+
+    for index in start_line..end_line.min(source_lines.len()).min(formatted_lines.len()) {
+        let source_line = line_body(source_lines[index]);
+        let formatted_line = line_body(formatted_lines[index]);
+
+        let Some((span, new_text)) = changed_line_edit(index, source_line, formatted_line) else {
+            continue;
+        };
+        if range_contains_span(range, span) {
+            edits.push(TextEdit {
+                path: path.clone(),
+                span,
+                new_text,
+            });
+        }
+    }
+
+    edits
+}
+
+fn changed_line_edit(
+    line_index: usize,
+    source: &str,
+    formatted: &str,
+) -> Option<(SourceSpan, String)> {
+    if source == formatted {
+        return None;
+    }
+
+    let prefix = common_prefix_chars(source, formatted);
+    let suffix = common_suffix_chars(&source[prefix..], &formatted[prefix..]);
+    let source_end = source.len().saturating_sub(suffix);
+    let formatted_end = formatted.len().saturating_sub(suffix);
+
+    Some((
+        SourceSpan {
+            start: SourcePosition {
+                line: line_index + 1,
+                column: source[..prefix].chars().count() + 1,
+            },
+            end: SourcePosition {
+                line: line_index + 1,
+                column: source[..source_end].chars().count() + 1,
+            },
+        },
+        formatted[prefix..formatted_end].to_owned(),
+    ))
+}
+
+fn changed_line_block_edit(
+    path: std::path::PathBuf,
+    source: &str,
+    source_lines: &[&str],
+    formatted_lines: &[&str],
+    start_line: usize,
+    end_line: usize,
+) -> Option<TextEdit> {
+    let prefix = common_prefix_lines(source_lines, formatted_lines);
+    let suffix = common_suffix_lines(&source_lines[prefix..], &formatted_lines[prefix..]);
+    let source_end = source_lines.len().saturating_sub(suffix);
+    let formatted_end = formatted_lines.len().saturating_sub(suffix);
+
+    if prefix < start_line || source_end > end_line {
+        return None;
+    }
+
+    Some(TextEdit {
+        path,
+        span: full_line_span(source, prefix, source_end),
+        new_text: formatted_lines[prefix..formatted_end].concat(),
+    })
+}
+
+fn full_line_span(source: &str, start: usize, end: usize) -> SourceSpan {
+    let document_end = document_end_position(source);
+    let span_end = if end < line_segments(source).len() {
+        SourcePosition {
+            line: end + 1,
+            column: 1,
+        }
+    } else {
+        document_end
+    };
+
+    SourceSpan {
+        start: SourcePosition {
+            line: start + 1,
+            column: 1,
+        },
+        end: span_end,
+    }
+}
+
+fn line_segments(source: &str) -> Vec<&str> {
+    if source.is_empty() {
+        Vec::new()
+    } else {
+        source.split_inclusive('\n').collect()
+    }
+}
+
+fn line_body(line: &str) -> &str {
+    line.trim_end_matches(['\n', '\r'])
+}
+
+fn common_prefix_lines(left: &[&str], right: &[&str]) -> usize {
+    left.iter()
+        .zip(right.iter())
+        .take_while(|(left, right)| left == right)
+        .count()
+}
+
+fn common_suffix_lines(left: &[&str], right: &[&str]) -> usize {
+    left.iter()
+        .rev()
+        .zip(right.iter().rev())
+        .take_while(|(left, right)| left == right)
+        .count()
+}
+
+fn common_prefix_chars(left: &str, right: &str) -> usize {
+    let mut prefix = 0;
+
+    for ((left_index, left_char), (_, right_char)) in left.char_indices().zip(right.char_indices())
+    {
+        if left_char != right_char {
+            break;
+        }
+        prefix = left_index + left_char.len_utf8();
+    }
+
+    prefix
+}
+
+fn common_suffix_chars(left: &str, right: &str) -> usize {
+    let mut suffix = 0;
+
+    for ((_, left_char), (_, right_char)) in
+        left.char_indices().rev().zip(right.char_indices().rev())
+    {
+        if left_char != right_char {
+            break;
+        }
+        suffix += left_char.len_utf8();
+    }
+
+    suffix
+}
+
+fn document_end_position(source: &str) -> SourcePosition {
+    let mut line = 1usize;
+    let mut column = 1usize;
+
+    for ch in source.chars() {
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    SourcePosition { line, column }
+}
+
+fn range_contains_span(range: SourceSpan, span: SourceSpan) -> bool {
+    position_key(range.start) <= position_key(span.start)
+        && position_key(span.end) <= position_key(range.end)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
+}
+
+fn is_on_type_format_trigger(source: &str, position: SourcePosition, trigger: &str) -> bool {
+    match trigger {
+        "\n" | "}" | ")" | "]" | "," => true,
+        "d" => line_prefix_before_position(source, position)
+            .is_some_and(|prefix| prefix.trim_end().ends_with("end")),
+        _ => false,
+    }
+}
+
+fn on_type_target_line(position: SourcePosition, trigger: &str) -> usize {
+    if trigger == "\n" {
+        position.line.saturating_sub(1).max(1)
+    } else {
+        position.line
+    }
+}
+
+fn line_prefix_before_position(source: &str, position: SourcePosition) -> Option<&str> {
+    let line = source.lines().nth(position.line.checked_sub(1)?)?;
+    let byte = byte_for_column(line, position.column);
+
+    Some(&line[..byte.min(line.len())])
+}
+
+fn byte_for_column(line: &str, column: usize) -> usize {
+    let target = column.saturating_sub(1);
+
+    line.char_indices()
+        .nth(target)
+        .map(|(index, _)| index)
+        .unwrap_or(line.len())
 }
 
 struct Formatter<'a> {

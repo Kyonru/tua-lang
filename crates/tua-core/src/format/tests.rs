@@ -341,3 +341,132 @@ fn returns_parse_diagnostics_without_formatting_invalid_source() {
 
     assert!(!diagnostics.is_empty());
 }
+
+#[test]
+fn range_formatting_returns_minimal_line_edits_inside_selection() {
+    let source = r#"local before=1
+function draw()
+local value=call(1,2)
+local after=3
+end
+"#;
+    let edits = format_tua_source_range(
+        "src/main.tua",
+        source,
+        &FormatOptions::default(),
+        SourceSpan {
+            start: SourcePosition { line: 3, column: 1 },
+            end: SourcePosition { line: 4, column: 1 },
+        },
+    )
+    .expect("range should format");
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].span.start.line, 3);
+    assert_eq!(edits[0].span.end.line, 3);
+    assert_eq!(edits[0].new_text, "  local value = call(1, ");
+}
+
+#[test]
+fn range_formatting_can_replace_selected_wrapped_line() {
+    let source =
+        "local values = { alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5, zeta = 6 }\n";
+    let options = FormatOptions {
+        line_width: 60,
+        ..FormatOptions::default()
+    };
+    let edits = format_tua_source_range(
+        "src/main.tua",
+        source,
+        &options,
+        SourceSpan {
+            start: SourcePosition { line: 1, column: 1 },
+            end: SourcePosition { line: 2, column: 1 },
+        },
+    )
+    .expect("range should format");
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].span.start, SourcePosition { line: 1, column: 1 });
+    assert_eq!(edits[0].span.end, SourcePosition { line: 2, column: 1 });
+    assert_eq!(
+        edits[0].new_text,
+        r#"local values = {
+  alpha = 1,
+  beta = 2,
+  gamma = 3,
+  delta = 4,
+  epsilon = 5,
+  zeta = 6,
+}
+"#
+    );
+}
+
+#[test]
+fn on_type_formatting_rewrites_only_trigger_line() {
+    let source = r#"local before=1
+function draw()
+local value=call(1,2)
+local after=3
+end
+"#;
+    let edits = format_tua_source_on_type(
+        "src/main.tua",
+        source,
+        &FormatOptions::default(),
+        SourcePosition {
+            line: 3,
+            column: 22,
+        },
+        ")",
+    )
+    .expect("on-type should format");
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].span.start.line, 3);
+    assert_eq!(edits[0].span.end.line, 3);
+    assert_eq!(edits[0].new_text, "  local value = call(1, ");
+}
+
+#[test]
+fn on_type_formatting_ignores_unstable_triggers() {
+    let edits = format_tua_source_on_type(
+        "src/main.tua",
+        "local value=1\n",
+        &FormatOptions::default(),
+        SourcePosition { line: 1, column: 6 },
+        "x",
+    )
+    .expect("unknown trigger should be safe");
+
+    assert!(edits.is_empty());
+}
+
+#[test]
+fn range_and_on_type_formatting_avoid_invalid_sources() {
+    let range_error = format_tua_source_range(
+        "src/main.tua",
+        "function broken(\n",
+        &FormatOptions::default(),
+        SourceSpan {
+            start: SourcePosition { line: 1, column: 1 },
+            end: SourcePosition { line: 2, column: 1 },
+        },
+    )
+    .expect_err("invalid source should not range format");
+    let on_type_error = format_tua_source_on_type(
+        "src/main.tua",
+        "function broken(\n",
+        &FormatOptions::default(),
+        SourcePosition {
+            line: 1,
+            column: 17,
+        },
+        "\n",
+    )
+    .expect_err("invalid source should not on-type format");
+
+    assert!(!range_error.is_empty());
+    assert!(!on_type_error.is_empty());
+}

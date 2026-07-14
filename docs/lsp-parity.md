@@ -48,6 +48,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Rename | Supports same-file rename and safe cross-file rename for project-identity symbols such as exported functions and type aliases. | Dynamic globals, `any`, and ambiguous fields are rejected. | 43 |
 | Workspace symbols | Uses configured workspace indexes for modules, aliases, and functions with fuzzy matching. | Smaller than rust-analyzer's global index, but it no longer has to behave like a raw scan. | 24, 64 |
 | Code actions | Provides conservative fixes for missing require targets, inferred local annotations, unused locals, duplicate table keys, self-assignments, trailing whitespace, LOVE dot-method calls, and obvious LOVE constructor-to-helper rewrites. | Smaller action set than rust-analyzer assists. | 44, 70.9 |
+| Formatting protocol | Full-document, range, and on-type formatting are advertised and implemented through the same standard Tua formatter. Range edits stay inside the requested range, and on-type edits are limited to stable local line changes. | Less aggressive than mature servers for unstable partial syntax; parse errors produce no destructive edits. | 84 |
 | Auto-import completion | Unresolved exported functions can complete with a static import insertion or reuse of an existing require/import alias. | Narrower than rust-analyzer auto-imports, but the workflow exists. | 45 |
 | Call hierarchy | Incoming and outgoing calls work for known local functions, module-exported functions, and typed receiver methods. | Dynamic calls through `any` are ignored instead of guessed. | 48 |
 | Inlay hints | Provides local type hints and parameter-name hints for supported known expressions. | Shallower than rust-analyzer expression-chain hints. | 60, 64 |
@@ -71,7 +72,6 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
 | Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
-| Formatting protocol | Full-document formatting is advertised and implemented. | No range formatting or on-type formatting yet. | 84 |
 | Semantic token transport | Full and range semantic tokens are advertised and implemented. | No delta semantic token requests yet. | 87 |
 
 ## Missing And Planned
@@ -85,7 +85,6 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
 | Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
 | VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, trace/log settings with live `tua/setTrace` updates, cache-stats copy/save, profile artifact probes, support commands, and a server status item. | Expand CPU/heap artifact generation only when the Tua server/runtime supports those outputs. | 80 |
-| Range and on-type formatting | Tua supports full-document formatting. | Add range formatting and stable on-type formatting through the same formatter. | 84 |
 | Code lens | No code lens provider is advertised. | Add lazily resolved lenses for references and other proven project actions. | 86 |
 | Semantic token range/delta | Full and range semantic tokens are advertised. | Add delta token requests with versioned cache invalidation. | 87 |
 | File rename refactors | File renames do not request workspace edits. | Add `workspace.fileOperations.willRename` edits for static `require(...)` and `import(...)` paths. | 88 |

@@ -2487,6 +2487,11 @@ Acceptance:
 
 ### 84. `feat(format): add range and on-type formatting`
 
+Status: done. The LSP now advertises and handles full-document, range, and
+on-type formatting through the standard Tua formatter. Range formatting returns
+local edits inside the requested range, and on-type formatting is limited to
+stable Lua/Tua trigger characters without rewriting unrelated regions.
+
 Scope:
 
 - Advertise and handle `textDocument/rangeFormatting`.

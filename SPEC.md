@@ -676,7 +676,8 @@ The extension should provide:
 - completion for known aliases, locals, table fields, Lua builtins, LOVE API
   items, LuaDoc tags/types/snippets, require/import paths, module fields, and
   auto-import candidates;
-- full-document formatting through the language server formatter;
+- full-document, range, and on-type formatting through the language server
+  formatter;
 - signature help for known function calls, including supported parameter docs;
 - go to definition, references, rename, document links, document symbols,
   workspace symbols, document highlights, code actions, call hierarchy, inlay

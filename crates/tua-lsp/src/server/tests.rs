@@ -128,6 +128,20 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["documentRangeFormattingProvider"],
+        true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["documentOnTypeFormattingProvider"]
+            ["firstTriggerCharacter"],
+        "\n"
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["documentOnTypeFormattingProvider"]
+            ["moreTriggerCharacter"],
+        json!(["}", ")", "]", ",", "d"])
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["referencesProvider"],
         true
     );
@@ -256,6 +270,125 @@ fn formatting_returns_null_for_parse_errors() {
     server.send(formatting_request(2, &uri));
 
     assert_eq!(response_with_id(server.output(), 2)["result"], Value::Null);
+}
+
+#[test]
+fn range_formatting_returns_local_edits_inside_selection() {
+    let temp = TempProject::new("range-formatting-edit");
+    let source = r#"local before=1
+function draw()
+local value=call(1,2)
+local after=3
+end
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(range_formatting_request(
+        2,
+        &uri,
+        lsp_position_of(source, "local value"),
+        lsp_position_of(source, "local after"),
+    ));
+
+    let result = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("range formatting result should be an array");
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0]["range"]["start"]["line"], 2);
+    assert_eq!(result[0]["range"]["start"]["character"], 0);
+    assert_eq!(result[0]["range"]["end"]["line"], 2);
+    assert_eq!(result[0]["newText"], "  local value = call(1, ");
+}
+
+#[test]
+fn range_formatting_returns_null_for_parse_errors() {
+    let temp = TempProject::new("range-formatting-parse-error");
+    let source = "local value = \n";
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(range_formatting_request(
+        2,
+        &uri,
+        lsp_position_of(source, "local value"),
+        lsp_position_after(source, "local value = "),
+    ));
+
+    assert_eq!(response_with_id(server.output(), 2)["result"], Value::Null);
+}
+
+#[test]
+fn on_type_formatting_returns_local_edits_for_trigger_line() {
+    let temp = TempProject::new("on-type-formatting-edit");
+    let source = r#"local before=1
+function draw()
+local value=call(1,2)
+local after=3
+end
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(on_type_formatting_request(
+        2,
+        &uri,
+        lsp_position_after(source, "call(1,2)"),
+        ")",
+    ));
+
+    let result = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("on-type formatting result should be an array");
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0]["range"]["start"]["line"], 2);
+    assert_eq!(result[0]["range"]["end"]["line"], 2);
+    assert_eq!(result[0]["newText"], "  local value = call(1, ");
+}
+
+#[test]
+fn on_type_formatting_ignores_unstable_triggers_and_parse_errors() {
+    let temp = TempProject::new("on-type-formatting-safety");
+    let source = "local value=1\n";
+    let invalid = "local value = \n";
+    let uri = temp.uri_for("src/main.tua");
+    let invalid_uri = temp.uri_for("src/invalid.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(on_type_formatting_request(
+        2,
+        &uri,
+        lsp_position_after(source, "value"),
+        "x",
+    ));
+    server.send(did_open(&invalid_uri, invalid));
+    server.send(on_type_formatting_request(
+        3,
+        &invalid_uri,
+        lsp_position_after(invalid, "local value = "),
+        "\n",
+    ));
+
+    assert_eq!(response_with_id(server.output(), 2)["result"], json!([]));
+    assert_eq!(response_with_id(server.output(), 3)["result"], Value::Null);
 }
 
 #[test]
@@ -5693,6 +5826,46 @@ fn formatting_request(id: u64, uri: &str) -> Value {
             "textDocument": {
                 "uri": uri
             },
+            "options": {
+                "tabSize": 2,
+                "insertSpaces": true
+            }
+        }
+    })
+}
+
+fn range_formatting_request(id: u64, uri: &str, start: Value, end: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/rangeFormatting",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "range": {
+                "start": start,
+                "end": end
+            },
+            "options": {
+                "tabSize": 2,
+                "insertSpaces": true
+            }
+        }
+    })
+}
+
+fn on_type_formatting_request(id: u64, uri: &str, position: Value, trigger: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/onTypeFormatting",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": position,
+            "ch": trigger,
             "options": {
                 "tabSize": 2,
                 "insertSpaces": true

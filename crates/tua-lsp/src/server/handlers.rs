@@ -15,8 +15,9 @@ use super::protocol::{
     lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_location_from_core,
     lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
     lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics,
-    response, source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
+    lsp_source_range, lsp_text_edit, lsp_workspace_edit, lsp_workspace_symbol_from_core,
+    publish_diagnostics, response, source_position_from_lsp, workspace_diagnostic_refresh_request,
+    SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
@@ -127,6 +128,16 @@ impl LspServer {
             "textDocument/formatting" => response(
                 id,
                 self.formatting_response(&message).unwrap_or(Value::Null),
+            ),
+            "textDocument/rangeFormatting" => response(
+                id,
+                self.range_formatting_response(&message)
+                    .unwrap_or(Value::Null),
+            ),
+            "textDocument/onTypeFormatting" => response(
+                id,
+                self.on_type_formatting_response(&message)
+                    .unwrap_or(Value::Null),
             ),
             "textDocument/references" => response(id, self.references_response(&message)),
             "textDocument/prepareRename" => response(
@@ -1013,6 +1024,38 @@ impl LspServer {
         } else {
             Some(json!([lsp_full_document_text_edit(source, formatted)]))
         }
+    }
+
+    fn range_formatting_response(&self, message: &Value) -> Option<Value> {
+        let request = self.document_request(message)?;
+        let range = request.params.get("range").and_then(lsp_source_range)?;
+        let source = self.analysis.document_text(request.uri)?;
+        let options = self.format_options_for_path(&request.path);
+        let edits = tua_core::format_tua_source_range(
+            &request.path,
+            source,
+            &options,
+            SourceSpan {
+                start: range.start,
+                end: range.end,
+            },
+        )
+        .ok()?;
+
+        Some(Value::Array(edits.into_iter().map(lsp_text_edit).collect()))
+    }
+
+    fn on_type_formatting_response(&self, message: &Value) -> Option<Value> {
+        let request = self.document_request(message)?;
+        let position = request.position()?;
+        let trigger = request.params.get("ch").and_then(Value::as_str)?;
+        let source = self.analysis.document_text(request.uri)?;
+        let options = self.format_options_for_path(&request.path);
+        let edits =
+            tua_core::format_tua_source_on_type(&request.path, source, &options, position, trigger)
+                .ok()?;
+
+        Some(Value::Array(edits.into_iter().map(lsp_text_edit).collect()))
     }
 
     fn references_response(&self, message: &Value) -> Value {

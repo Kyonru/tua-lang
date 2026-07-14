@@ -103,7 +103,10 @@ pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, Fixtu
 pub use folding_range::{
     folding_ranges_parsed_source, folding_ranges_tua_source, FoldingRange, FoldingRangeKind,
 };
-pub use format::{format_parsed_source, format_tua_source, FormatOptions, QuoteStyle};
+pub use format::{
+    format_parsed_source, format_tua_source, format_tua_source_on_type, format_tua_source_range,
+    FormatOptions, QuoteStyle,
+};
 pub use hir::{
     lower_parsed_source, HirDeclaration, HirDeclarationKind, HirExportValue, HirModule,
     HirModuleExport, HirRequireBinding, HirSymbol, HirSymbolId, HirSymbolKind,

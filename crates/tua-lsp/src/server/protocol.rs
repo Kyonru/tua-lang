@@ -574,7 +574,7 @@ fn changes_for_document_changes(
     lsp_changes(changes).into_iter().collect()
 }
 
-fn lsp_text_edit(edit: TextEdit) -> Value {
+pub(super) fn lsp_text_edit(edit: TextEdit) -> Value {
     json!({
         "range": lsp_range(edit.span),
         "newText": edit.new_text
