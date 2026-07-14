@@ -3134,6 +3134,29 @@ damage(player,
 }
 
 #[test]
+fn signature_help_accepts_trigger_context() {
+    let uri = "file:///tmp/signature-help-trigger.tua";
+    let source = r#"local function damage(target: number, amount: number): number
+  return target - amount
+end
+
+local result = damage(
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_trigger_request(2, uri, source, "result = damage(", "("),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function damage(target: number, amount: number): number"
+    );
+    assert_eq!(response["result"]["activeSignature"], 0);
+    assert_eq!(response["result"]["activeParameter"], 0);
+}
+
+#[test]
 fn signature_help_accepts_retrigger_context() {
     let uri = "file:///tmp/signature-help-retrigger.tua";
     let source = r#"local function damage(target: number, amount: number): number
@@ -3153,6 +3176,39 @@ damage(10,
         "function damage(target: number, amount: number): number"
     );
     assert_eq!(response["result"]["activeParameter"], 1);
+}
+
+#[test]
+fn signature_help_retrigger_recomputes_outer_call_after_nested_close() {
+    let uri = "file:///tmp/signature-help-retrigger-nested-close.tua";
+    let source = r#"local function load(path: string): string
+  return path
+end
+
+---@overload fun(value: string): string
+---@overload fun(value: string, amount: number): string
+local function wrap(value, amount)
+  return value
+end
+
+wrap(load("asset.png")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_retrigger_request(2, uri, source, r#"load("asset.png")"#, ")"),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function wrap(value: string): string"
+    );
+    assert_eq!(
+        response["result"]["signatures"][1]["label"],
+        "function wrap(value: string, amount: number): string"
+    );
+    assert_eq!(response["result"]["activeSignature"], 0);
+    assert_eq!(response["result"]["activeParameter"], 0);
 }
 
 #[test]
@@ -6522,6 +6578,31 @@ fn signature_help_request(id: u64, uri: &str, source: &str, needle: &str) -> Val
     })
 }
 
+fn signature_help_trigger_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    trigger: &str,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/signatureHelp",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle),
+            "context": {
+                "triggerKind": 2,
+                "triggerCharacter": trigger,
+                "isRetrigger": false
+            }
+        }
+    })
+}
+
 fn signature_help_retrigger_request(
     id: u64,
     uri: &str,
@@ -6539,7 +6620,7 @@ fn signature_help_retrigger_request(
             },
             "position": lsp_position_after(source, needle),
             "context": {
-                "triggerKind": 3,
+                "triggerKind": 2,
                 "triggerCharacter": trigger,
                 "isRetrigger": true
             }
