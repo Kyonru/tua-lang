@@ -682,6 +682,8 @@ The extension should provide:
 - go to definition, references, rename, document links, document symbols,
   workspace symbols, document highlights, code actions, code lens references,
   call hierarchy, inlay hints, and full/range/delta semantic tokens;
+- safe file-rename edits for static `require(...)` and `import(...)` module
+  specifiers;
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
 - workspace folder initialization and workspace folder change notifications.

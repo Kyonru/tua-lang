@@ -11,7 +11,7 @@ use tua_core::{
     DocumentHighlight, DocumentSymbol, FoldingRange, FormatOptions, InlayHint, ModuleLink,
     ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
     RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
-    SourceSpan, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
+    SourceSpan, TextEdit, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -519,6 +519,29 @@ impl AnalysisSnapshot {
         }
 
         Vec::new()
+    }
+
+    pub(super) fn file_rename_edits(&self, old_path: &Path, new_path: &Path) -> Vec<TextEdit> {
+        let Some(model) = self.project_model.as_ref() else {
+            return Vec::new();
+        };
+        let Some(old_workspace) = model.workspace_for_path(old_path) else {
+            return Vec::new();
+        };
+        let Some(new_workspace) = model.workspace_for_path(new_path) else {
+            return Vec::new();
+        };
+
+        if old_workspace.root() != new_workspace.root()
+            || old_workspace.is_ignored(old_path)
+            || new_workspace.is_ignored(new_path)
+            || old_workspace.source_kind_for_path(old_path).is_none()
+            || new_workspace.source_kind_for_path(new_path).is_none()
+        {
+            return Vec::new();
+        }
+
+        self.core.file_rename_edits(old_path, new_path)
     }
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {

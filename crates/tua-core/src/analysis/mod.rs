@@ -26,7 +26,9 @@ use crate::inlay_hint::{
 };
 use crate::inline_ignore::apply_inline_ignores;
 use crate::module_index::infer_module_exports_with_optional_environment;
-use crate::module_link::module_specifier_at_position;
+use crate::module_link::{
+    module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
+};
 use crate::plugin::{PluginContext, PluginRegistry};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
@@ -123,6 +125,7 @@ pub struct AnalysisSnapshot {
     asset_roots: Vec<PathBuf>,
     asset_index: Option<asset::AssetIndex>,
     files: BTreeMap<PathBuf, AnalysisFile>,
+    require_path_separator: ModulePathSeparator,
     builtin_catalogs: BuiltinCatalogs,
     plugin_registry: PluginRegistry,
     module_graph: ModuleGraph,
@@ -181,6 +184,14 @@ struct RecoveredSemanticFacts {
     environment: TypeEnvironment,
     semantic_index: SemanticIndex,
     project_inference: ProjectLocalInference,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ModuleFileRenamePlan {
+    old_path: PathBuf,
+    new_path: PathBuf,
+    source_root: PathBuf,
+    new_module_name: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -694,6 +705,7 @@ impl AnalysisHost {
             asset_roots: self.asset_roots.clone(),
             asset_index: self.asset_index.clone(),
             files,
+            require_path_separator: self.require_path_separator,
             builtin_catalogs: self.builtin_catalogs.clone(),
             plugin_registry,
             module_graph,
@@ -1600,6 +1612,242 @@ impl AnalysisSnapshot {
         self.file(path.as_ref())
             .map(|file| file.require_edges.clone())
             .unwrap_or_default()
+    }
+
+    pub fn file_rename_edits(
+        &self,
+        old_path: impl AsRef<Path>,
+        new_path: impl AsRef<Path>,
+    ) -> Vec<TextEdit> {
+        let old_path = normalize_path(old_path.as_ref());
+        let new_path = normalize_path(new_path.as_ref());
+        let Some(plan) = self.module_file_rename_plan(&old_path, &new_path) else {
+            return Vec::new();
+        };
+        let mut edits = Vec::new();
+
+        for (path, file) in &self.files {
+            if !path.starts_with(&plan.source_root) || self.is_generated_path(path) {
+                continue;
+            }
+
+            for literal in module_specifier_literals(&file.source) {
+                let candidates =
+                    self.module_specifier_candidates(path, &literal.module, literal.kind);
+
+                if candidates.len() != 1 || candidates.first() != Some(&plan.old_path) {
+                    continue;
+                }
+
+                let Some(new_text) =
+                    self.renamed_module_specifier(path, &literal.module, literal.kind, &plan)
+                else {
+                    continue;
+                };
+
+                if new_text == literal.module {
+                    continue;
+                }
+
+                edits.push(TextEdit {
+                    path: path.clone(),
+                    span: literal.span,
+                    new_text,
+                });
+            }
+        }
+
+        edits.sort_by_key(text_edit_key);
+        edits.dedup_by_key(|edit| text_edit_key(edit));
+        edits
+    }
+
+    fn module_file_rename_plan(
+        &self,
+        old_path: &Path,
+        new_path: &Path,
+    ) -> Option<ModuleFileRenamePlan> {
+        if old_path == new_path
+            || self.vfs.file(old_path).is_none()
+            || self.vfs.is_excluded(new_path)
+            || self.is_generated_path(old_path)
+            || self.is_generated_path(new_path)
+        {
+            return None;
+        }
+
+        let old_root = self.source_root_for_path(old_path)?;
+        let new_root = self.source_root_for_path(new_path)?;
+
+        if old_root != new_root {
+            return None;
+        }
+
+        let old_module_name = self.module_name_for_known_path(old_path)?;
+        let new_module_name = self.module_name_for_known_path(new_path)?;
+        let old_candidates = self.known_module_paths_for_name(&old_module_name, &old_root);
+        let new_conflicts = self
+            .known_module_paths_for_name(&new_module_name, &old_root)
+            .into_iter()
+            .filter(|path| path != old_path && path != new_path)
+            .collect::<Vec<_>>();
+
+        if old_candidates != vec![old_path.to_path_buf()] || !new_conflicts.is_empty() {
+            return None;
+        }
+
+        Some(ModuleFileRenamePlan {
+            old_path: old_path.to_path_buf(),
+            new_path: new_path.to_path_buf(),
+            source_root: old_root,
+            new_module_name,
+        })
+    }
+
+    fn source_root_for_path(&self, path: &Path) -> Option<PathBuf> {
+        self.source_roots()
+            .iter()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+    }
+
+    fn module_name_for_known_path(&self, path: &Path) -> Option<String> {
+        module_name_for_path(
+            self.source_root_for_path(path)?,
+            path,
+            self.require_path_separator,
+        )
+    }
+
+    fn known_module_paths_for_name(&self, name: &str, source_root: &Path) -> Vec<PathBuf> {
+        self.files
+            .keys()
+            .filter(|path| path.starts_with(source_root))
+            .filter(|path| self.module_name_for_known_path(path).as_deref() == Some(name))
+            .cloned()
+            .collect()
+    }
+
+    fn is_generated_path(&self, path: &Path) -> bool {
+        self.vfs
+            .options()
+            .output_roots
+            .iter()
+            .any(|root| path.starts_with(root))
+    }
+
+    fn module_specifier_candidates(
+        &self,
+        current_path: &Path,
+        specifier: &str,
+        kind: ModuleSpecifierKind,
+    ) -> Vec<PathBuf> {
+        match kind {
+            ModuleSpecifierKind::Require => self.project_module_candidates(current_path, specifier),
+            ModuleSpecifierKind::Import => {
+                if is_child_relative_import_specifier(specifier) {
+                    self.child_import_module_candidates(current_path, specifier)
+                } else if is_project_import_specifier(specifier) {
+                    self.project_module_candidates(current_path, specifier)
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    fn project_module_candidates(&self, current_path: &Path, specifier: &str) -> Vec<PathBuf> {
+        if specifier.is_empty() || has_parent_path_component(specifier) {
+            return Vec::new();
+        }
+
+        let Some(source_root) = self.source_root_for_path(current_path) else {
+            return Vec::new();
+        };
+        let relative = module_relative_path(specifier, self.require_path_separator);
+        let extensions = module_extensions(&self.config.extension);
+
+        module_candidates(&source_root, &relative, &extensions)
+            .into_iter()
+            .map(normalize_path)
+            .filter(|candidate| {
+                self.vfs.file(candidate).is_some()
+                    && self.module_name_for_known_path(candidate).is_some()
+            })
+            .collect()
+    }
+
+    fn child_import_module_candidates(&self, current_path: &Path, specifier: &str) -> Vec<PathBuf> {
+        let Some(parent) = current_path.parent() else {
+            return Vec::new();
+        };
+        let base = normalize_path(parent.join(specifier));
+
+        if let Some(extension) = base.extension().and_then(|extension| extension.to_str()) {
+            if extension != "lua" && extension != self.config.extension {
+                return Vec::new();
+            }
+        }
+
+        let extensions = module_extensions(&self.config.extension);
+        let candidates = if base.extension().is_some() {
+            vec![base]
+        } else {
+            import_module_candidates(&base, &extensions)
+        };
+
+        candidates
+            .into_iter()
+            .map(normalize_path)
+            .filter(|candidate| {
+                self.vfs.file(candidate).is_some()
+                    && self.module_name_for_known_path(candidate).is_some()
+            })
+            .collect()
+    }
+
+    fn renamed_module_specifier(
+        &self,
+        current_path: &Path,
+        old_specifier: &str,
+        kind: ModuleSpecifierKind,
+        plan: &ModuleFileRenamePlan,
+    ) -> Option<String> {
+        match kind {
+            ModuleSpecifierKind::Require => Some(plan.new_module_name.clone()),
+            ModuleSpecifierKind::Import => {
+                if is_child_relative_import_specifier(old_specifier) {
+                    self.import_specifier_for_new_path(current_path, &plan.new_path)
+                } else {
+                    Some(plan.new_module_name.clone())
+                }
+            }
+        }
+    }
+
+    fn import_specifier_for_new_path(
+        &self,
+        current_path: &Path,
+        target_path: &Path,
+    ) -> Option<String> {
+        self.module_name_for_known_path(target_path)?;
+
+        let current_dir = normalize_path(current_path.parent()?);
+        let target_module_path = module_path_without_runtime_suffix(target_path);
+        let mut parts = relative_path_parts(&current_dir, &target_module_path)?;
+
+        if parts.is_empty() {
+            return None;
+        }
+
+        if parts.first().is_some_and(|part| part == "..") {
+            return self.module_name_for_known_path(target_path);
+        }
+
+        parts.insert(0, ".".to_owned());
+
+        Some(parts.join("/"))
     }
 
     pub fn document_highlights(
@@ -5501,6 +5749,66 @@ fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
     }
 
     candidates
+}
+
+fn module_path_without_runtime_suffix(path: &Path) -> PathBuf {
+    let without_extension = path.with_extension("");
+
+    if without_extension
+        .file_name()
+        .is_some_and(|name| name == "init")
+    {
+        return without_extension
+            .parent()
+            .map(normalize_path)
+            .unwrap_or(without_extension);
+    }
+
+    without_extension
+}
+
+fn relative_path_parts(from_dir: &Path, target: &Path) -> Option<Vec<String>> {
+    let from = normalized_component_strings(from_dir)?;
+    let target = normalized_component_strings(target)?;
+    let mut common = 0usize;
+
+    while from.get(common).is_some()
+        && target.get(common).is_some()
+        && from[common] == target[common]
+    {
+        common += 1;
+    }
+
+    let mut parts = Vec::new();
+
+    for _ in common..from.len() {
+        parts.push("..".to_owned());
+    }
+    parts.extend(target.into_iter().skip(common));
+
+    Some(parts)
+}
+
+fn normalized_component_strings(path: &Path) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+
+    for component in normalize_path(path).components() {
+        match component {
+            std::path::Component::Normal(part) => {
+                parts.push(part.to_string_lossy().to_string());
+            }
+            std::path::Component::Prefix(prefix) => {
+                parts.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            std::path::Component::RootDir => {
+                parts.push(String::new());
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => return None,
+        }
+    }
+
+    Some(parts)
 }
 
 fn module_file_definition(path: &Path, span: SourceSpan) -> Definition {

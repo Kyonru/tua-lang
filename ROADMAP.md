@@ -2578,6 +2578,12 @@ Acceptance:
 
 ### 88. `feat(lsp): update imports and module paths on file rename`
 
+Status: done. The LSP now advertises `workspace.fileOperations.willRename` and
+returns workspace edits for static `require(...)` and `import(...)` literals
+when a file move can be proven from the same project source root. Ambiguous
+module names, ignored/generated files, dynamic specifiers, and cross-project
+moves return no edits.
+
 Scope:
 
 - Advertise `workspace.fileOperations.willRename` for `.tua` and configured

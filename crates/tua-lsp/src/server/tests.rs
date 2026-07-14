@@ -104,6 +104,10 @@ fn initialize_returns_server_capabilities() {
         false
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["linkedEditingRangeProvider"],
+        Value::Null
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["documentHighlightProvider"],
         true
     );
@@ -196,6 +200,11 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(
         output[0]["result"]["capabilities"]["workspace"]["workspaceFolders"]["changeNotifications"],
         true
+    );
+    assert_eq!(
+        output[0]["result"]["capabilities"]["workspace"]["fileOperations"]["willRename"]["filters"]
+            [0]["pattern"]["glob"],
+        "**/*"
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["diagnosticProvider"],
@@ -4228,6 +4237,204 @@ local Missing = require("missing")
 }
 
 #[test]
+fn will_rename_files_updates_same_folder_require() {
+    let temp = TempProject::new("file-rename-require");
+    let main = r#"local Player = require("player")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", "return {}\n");
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        will_rename_files_request(
+            2,
+            [(
+                temp.uri_for("src/player.tua"),
+                temp.uri_for("src/actor.tua"),
+            )],
+        ),
+    ]);
+    let edits = workspace_edit_changes_for_uri(&output, 2, &main_uri);
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(range_text(main, &edits[0]["range"]), "player");
+    assert_eq!(edits[0]["newText"], "actor");
+}
+
+#[test]
+fn will_rename_files_updates_nested_child_import_to_project_import() {
+    let temp = TempProject::new("file-rename-import");
+    let combat = r#"local Enemy = import("./enemy")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/systems/combat.tua", combat);
+    temp.write("src/systems/enemy.tua", "return {}\n");
+
+    let combat_uri = temp.uri_for("src/systems/combat.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        will_rename_files_request(
+            2,
+            [(
+                temp.uri_for("src/systems/enemy.tua"),
+                temp.uri_for("src/entities/enemy.tua"),
+            )],
+        ),
+    ]);
+    let edits = workspace_edit_changes_for_uri(&output, 2, &combat_uri);
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(range_text(combat, &edits[0]["range"]), "./enemy");
+    assert_eq!(edits[0]["newText"], "entities.enemy");
+}
+
+#[test]
+fn will_rename_files_preserves_configured_require_separator() {
+    let temp = TempProject::new("file-rename-separator");
+    let main = r#"local Player = require("entities/player")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/entities/player.tua", "return {}\n");
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_change_configuration(json!({
+        "requirePathSeparator": "/"
+    })));
+    server.send(will_rename_files_request(
+        2,
+        [(
+            temp.uri_for("src/entities/player.tua"),
+            temp.uri_for("src/actors/player.tua"),
+        )],
+    ));
+
+    let edits = workspace_edit_changes_for_uri(server.output(), 2, &main_uri);
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(range_text(main, &edits[0]["range"]), "entities/player");
+    assert_eq!(edits[0]["newText"], "actors/player");
+}
+
+#[test]
+fn will_rename_files_skips_ignored_and_ambiguous_modules() {
+    let ignored = TempProject::new("file-rename-ignored");
+    let ignored_main = r#"local Player = require("generated.player")
+"#;
+
+    ignored.write("tua.toml", "source = \"src\"\n");
+    ignored.write("src/main.tua", ignored_main);
+    ignored.write("src/generated/player.tua", "return {}\n");
+
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, ignored.uri()));
+    server.send(did_change_configuration(json!({
+        "ignoredPaths": ["generated/**"]
+    })));
+    server.send(will_rename_files_request(
+        2,
+        [(
+            ignored.uri_for("src/generated/player.tua"),
+            ignored.uri_for("src/generated/actor.tua"),
+        )],
+    ));
+
+    assert_eq!(response_with_id(server.output(), 2)["result"], Value::Null);
+
+    let ambiguous = TempProject::new("file-rename-ambiguous");
+    let ambiguous_main = r#"local Player = require("player")
+"#;
+
+    ambiguous.write("tua.toml", "source = \"src\"\n");
+    ambiguous.write("src/main.tua", ambiguous_main);
+    ambiguous.write("src/player.tua", "return {}\n");
+    ambiguous.write("src/player.lua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_root(1, ambiguous.uri()),
+        will_rename_files_request(
+            2,
+            [(
+                ambiguous.uri_for("src/player.tua"),
+                ambiguous.uri_for("src/actor.tua"),
+            )],
+        ),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"], Value::Null);
+}
+
+#[test]
+fn will_rename_files_skips_dynamic_module_specifiers() {
+    let temp = TempProject::new("file-rename-dynamic");
+    let main = r#"local module_name = "player"
+local Player = require(module_name)
+local Legacy = import(module_name)
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/player.tua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        will_rename_files_request(
+            2,
+            [(
+                temp.uri_for("src/player.tua"),
+                temp.uri_for("src/actor.tua"),
+            )],
+        ),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"], Value::Null);
+}
+
+#[test]
+fn will_rename_files_only_edits_the_affected_workspace_root() {
+    let game = TempProject::new("file-rename-game");
+    let tools = TempProject::new("file-rename-tools");
+    let main = r#"local Player = require("player")
+"#;
+
+    game.write("tua.toml", "source = \"src\"\n");
+    game.write("src/main.tua", main);
+    game.write("src/player.tua", "return {}\n");
+    tools.write("tua.toml", "source = \"src\"\n");
+    tools.write("src/main.tua", main);
+    tools.write("src/player.tua", "return {}\n");
+
+    let game_main_uri = game.uri_for("src/main.tua");
+    let tools_main_uri = tools.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, game.uri()),
+        workspace_folders_changed([tools.uri()], []),
+        will_rename_files_request(
+            2,
+            [(
+                game.uri_for("src/player.tua"),
+                game.uri_for("src/actor.tua"),
+            )],
+        ),
+    ]);
+
+    let edits = workspace_edit_changes_for_uri(&output, 2, &game_main_uri);
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["newText"], "actor");
+    assert!(workspace_edit_changes_for_uri_optional(&output, 2, &tools_main_uri).is_none());
+}
+
+#[test]
 fn document_highlight_returns_symbol_usages() {
     let uri = "file:///tmp/document-highlight.tua";
     let source = r#"type Player = { hp: number }
@@ -5946,6 +6153,25 @@ fn watched_files_changed<const N: usize>(changes: [(&str, u8); N]) -> Value {
     })
 }
 
+fn will_rename_files_request<const N: usize>(id: u64, files: [(String, String); N]) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "workspace/willRenameFiles",
+        "params": {
+            "files": files
+                .into_iter()
+                .map(|(old_uri, new_uri)| {
+                    json!({
+                        "oldUri": old_uri,
+                        "newUri": new_uri
+                    })
+                })
+                .collect::<Vec<_>>()
+        }
+    })
+}
+
 fn did_change_configuration(settings: Value) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -6898,6 +7124,21 @@ fn code_action_result(output: &[Value], id: u64, index: usize) -> &Value {
     &response_with_id(output, id)["result"]
         .as_array()
         .expect("code actions should be an array")[index]
+}
+
+fn workspace_edit_changes_for_uri<'a>(output: &'a [Value], id: u64, uri: &str) -> &'a [Value] {
+    workspace_edit_changes_for_uri_optional(output, id, uri)
+        .unwrap_or_else(|| panic!("workspace edit should contain changes for {uri}"))
+}
+
+fn workspace_edit_changes_for_uri_optional<'a>(
+    output: &'a [Value],
+    id: u64,
+    uri: &str,
+) -> Option<&'a [Value]> {
+    response_with_id(output, id)["result"]["changes"][uri]
+        .as_array()
+        .map(Vec::as_slice)
 }
 
 fn code_lens_result(output: &[Value], id: u64) -> &[Value] {

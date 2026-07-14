@@ -272,6 +272,10 @@ impl VfsSnapshot {
     pub fn file_id(&self, path: impl AsRef<Path>) -> Option<&VfsFileId> {
         self.file(path).map(VfsFile::id)
     }
+
+    pub fn is_excluded(&self, path: impl AsRef<Path>) -> bool {
+        is_excluded_with_options(&normalize_path(path), &self.options)
+    }
 }
 
 impl VfsFile {

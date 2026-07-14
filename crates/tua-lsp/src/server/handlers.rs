@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use serde_json::{json, Value};
-use tua_core::{SourcePosition, SourceSpan};
+use tua_core::{RenameEdit, SourcePosition, SourceSpan};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -31,6 +31,12 @@ struct DocumentRequest<'a> {
     params: &'a Value,
     uri: &'a str,
     path: PathBuf,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FileRename {
+    old_path: PathBuf,
+    new_path: PathBuf,
 }
 
 impl<'a> DocumentRequest<'a> {
@@ -168,6 +174,7 @@ impl LspServer {
                 response(id, self.semantic_tokens_range_response(&message, range))
             }
             "workspace/symbol" => response(id, self.workspace_symbol_response(&message)),
+            "workspace/willRenameFiles" => response(id, self.will_rename_files_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
         }
     }
@@ -1355,6 +1362,29 @@ impl LspServer {
         )
     }
 
+    fn will_rename_files_response(&self, message: &Value) -> Value {
+        let file_renames = file_renames_from_request(message);
+
+        if file_renames.is_empty() {
+            return Value::Null;
+        }
+
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let mut edits = Vec::new();
+
+        for rename in file_renames {
+            edits.extend(snapshot.file_rename_edits(&rename.old_path, &rename.new_path));
+        }
+
+        if edits.is_empty() {
+            return Value::Null;
+        }
+
+        lsp_workspace_edit(RenameEdit { edits })
+    }
+
     fn document_request<'a>(&'a self, message: &'a Value) -> Option<DocumentRequest<'a>> {
         let params = message.get("params")?;
         let uri = document_uri(params)?;
@@ -1404,6 +1434,25 @@ fn watched_file_changes(message: &Value) -> Vec<WatchedFileChange> {
                     Some(WatchedFileChange {
                         uri: change.get("uri")?.as_str()?.to_owned(),
                         kind: file_change_kind(change.get("type")?.as_u64()?)?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn file_renames_from_request(message: &Value) -> Vec<FileRename> {
+    message
+        .get("params")
+        .and_then(|params| params.get("files"))
+        .and_then(Value::as_array)
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(|file| {
+                    Some(FileRename {
+                        old_path: path_from_uri(file.get("oldUri")?.as_str()?),
+                        new_path: path_from_uri(file.get("newUri")?.as_str()?),
                     })
                 })
                 .collect()

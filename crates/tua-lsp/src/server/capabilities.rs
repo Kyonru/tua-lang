@@ -88,6 +88,18 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
                 "workspaceFolders": {
                     "supported": true,
                     "changeNotifications": true
+                },
+                "fileOperations": {
+                    "willRename": {
+                        "filters": [
+                            {
+                                "scheme": "file",
+                                "pattern": {
+                                    "glob": "**/*"
+                                }
+                            }
+                        ]
+                    }
                 }
             }
         },
