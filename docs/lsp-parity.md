@@ -72,6 +72,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Workspace symbols | Uses indexed aliases, functions, modules, and exports across configured workspaces. | Symbol classes are still smaller than rust-analyzer's project-wide index. | 64 |
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
 | Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. | No larger assist framework, refactor menu, imports organizer, or bulk fixes. | 66, 70.9 |
+| Code lens | Lazily resolved reference lenses are provided for exported functions and unambiguous type aliases. | No run/check/build or LOVE asset lenses until project intent and command behavior are explicit. | 86 |
 | Semantic token transport | Full and range semantic tokens are advertised and implemented. | No delta semantic token requests yet. | 87 |
 
 ## Missing And Planned
@@ -85,7 +86,6 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures and cache stats reporting. | Expand profiling only when new hot paths appear. | 69 |
 | Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
 | VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, trace/log settings with live `tua/setTrace` updates, cache-stats copy/save, profile artifact probes, support commands, and a server status item. | Expand CPU/heap artifact generation only when the Tua server/runtime supports those outputs. | 80 |
-| Code lens | No code lens provider is advertised. | Add lazily resolved lenses for references and other proven project actions. | 86 |
 | Semantic token range/delta | Full and range semantic tokens are advertised. | Add delta token requests with versioned cache invalidation. | 87 |
 | File rename refactors | File renames do not request workspace edits. | Add `workspace.fileOperations.willRename` edits for static `require(...)` and `import(...)` paths. | 88 |
 | Source actions and fix-all | Tua has focused quick fixes but no broad source-action family. | Add organize imports, sort imports, remove unused imports, and safe fix-all. | 89 |

@@ -2530,6 +2530,13 @@ Acceptance:
 
 ### 86. `feat(lsp): add code lens provider with resolve`
 
+Status: done. The language server now advertises `codeLensProvider` with
+resolve support and returns cheap, unresolved reference lenses for exported
+functions and unambiguous type aliases. Resolving a lens lazily reuses
+`textDocument/references` and returns the same location set. Run/check/build
+and LOVE asset lenses remain deferred until project intent and command wiring
+can be represented without guessing.
+
 Scope:
 
 - Advertise `codeLensProvider` with resolve support.

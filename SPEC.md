@@ -680,8 +680,8 @@ The extension should provide:
   formatter;
 - signature help for known function calls, including supported parameter docs;
 - go to definition, references, rename, document links, document symbols,
-  workspace symbols, document highlights, code actions, call hierarchy, inlay
-  hints, and semantic tokens;
+  workspace symbols, document highlights, code actions, code lens references,
+  call hierarchy, inlay hints, and semantic tokens;
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
 - workspace folder initialization and workspace folder change notifications.

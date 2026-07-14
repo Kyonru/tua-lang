@@ -4,6 +4,7 @@ mod ast_utils;
 pub mod call_hierarchy;
 pub mod check;
 pub mod code_action;
+pub mod code_lens;
 pub mod completion;
 pub mod config;
 pub mod definition;
@@ -73,6 +74,7 @@ pub use code_action::{
     assists_parsed_source, code_actions_parsed_source, Assist, AssistEdit, AssistKind, AssistRange,
     CodeAction, CodeActionEdit, CodeActionKind, CodeActionRange, CreateFile,
 };
+pub use code_lens::{CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget, CodeLensTarget};
 pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,

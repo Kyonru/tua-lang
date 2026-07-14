@@ -32,8 +32,8 @@ leaving the normal Lua and LOVE workflow.
 - CLI commands for init, check, fmt, lint, build, watch, and LSP.
 - A language server with diagnostics, hover, completion, signature help,
   document highlights, definition, references, rename, document symbols,
-  workspace symbols, document links, code actions, call hierarchy, inlay hints,
-  semantic tokens, watched files, and workspace folders.
+  workspace symbols, document links, code actions, code lens references, call
+  hierarchy, inlay hints, semantic tokens, watched files, and workspace folders.
 - VS Code support for syntax highlighting, file icons, and LSP integration.
 
 ## Quick Start

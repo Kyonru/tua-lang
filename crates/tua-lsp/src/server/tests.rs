@@ -124,6 +124,10 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(
+        output[0]["result"]["capabilities"]["codeLensProvider"]["resolveProvider"],
+        true
+    );
+    assert_eq!(
         output[0]["result"]["capabilities"]["documentFormattingProvider"],
         true
     );
@@ -4930,6 +4934,138 @@ local value = greet()
 }
 
 #[test]
+fn code_lens_returns_unresolved_reference_lenses_for_exports_and_aliases() {
+    let temp = TempProject::new("code-lens-unresolved");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+local function helper()
+  return makePlayer("local")
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main = r#"local Player = require("player")
+
+local made: Player = Player.makePlayer("Ada")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&player_uri, player),
+        code_lens_request(2, &player_uri),
+    ]);
+    let lenses = code_lens_result(&output, 2);
+
+    assert_eq!(code_lens_names(lenses), vec!["Player", "makePlayer"]);
+    assert!(lenses.iter().all(|lens| lens.get("command").is_none()));
+    assert!(lenses
+        .iter()
+        .all(|lens| lens["data"]["kind"] == "references"));
+    assert_eq!(lenses[0]["data"]["symbolKind"], "typeAlias");
+    assert_eq!(range_text(player, &lenses[0]["range"]), "Player");
+    assert_eq!(lenses[1]["data"]["symbolKind"], "exportedFunction");
+    assert_eq!(range_text(player, &lenses[1]["range"]), "makePlayer");
+}
+
+#[test]
+fn code_lens_resolve_uses_text_document_references_result_set() {
+    let temp = TempProject::new("code-lens-resolve");
+    let player = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+    let main = r#"local Player = require("player")
+
+local made = Player.makePlayer("Ada")
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/main.tua", main);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let mut server = TestServer::new();
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&player_uri, player));
+    server.send(code_lens_request(2, &player_uri));
+
+    let lens = code_lens_with_name(server.output(), 2, "makePlayer");
+
+    server.send(code_lens_resolve_request(3, lens));
+    server.send(references_request(
+        4,
+        &player_uri,
+        player,
+        "makePlayer(name",
+        0,
+        false,
+    ));
+
+    let resolved = &response_with_id(server.output(), 3)["result"];
+    let references = &response_with_id(server.output(), 4)["result"];
+    let locations = &resolved["command"]["arguments"][2];
+    let reference_count = references
+        .as_array()
+        .expect("references result should be an array")
+        .len();
+
+    assert_eq!(
+        resolved["command"]["title"],
+        format!("{reference_count} references")
+    );
+    assert_eq!(
+        resolved["command"]["command"],
+        "editor.action.showReferences"
+    );
+    assert_eq!(locations, references);
+}
+
+#[test]
+fn code_lens_omits_ambiguous_aliases_and_non_exported_functions() {
+    let temp = TempProject::new("code-lens-ambiguous");
+    let player = r#"type Player = { name: string }
+
+local function helper(): Player
+  return { name = "Ada" }
+end
+
+local cached = helper()
+"#;
+    let enemy = r#"type Player = { hp: number }
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+    temp.write("src/enemy.tua", enemy);
+
+    let player_uri = temp.uri_for("src/player.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&player_uri, player),
+        code_lens_request(2, &player_uri),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["result"], json!([]));
+}
+
+#[test]
 fn references_unknown_document_returns_empty_array() {
     let uri = "file:///tmp/missing-references.tua";
     let output = run_messages(vec![references_request(
@@ -6151,6 +6287,28 @@ fn code_action_request(
     })
 }
 
+fn code_lens_request(id: u64, uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/codeLens",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
+        }
+    })
+}
+
+fn code_lens_resolve_request(id: u64, lens: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "codeLens/resolve",
+        "params": lens
+    })
+}
+
 fn references_request(
     id: u64,
     uri: &str,
@@ -6671,6 +6829,31 @@ fn code_action_result(output: &[Value], id: u64, index: usize) -> &Value {
     &response_with_id(output, id)["result"]
         .as_array()
         .expect("code actions should be an array")[index]
+}
+
+fn code_lens_result(output: &[Value], id: u64) -> &[Value] {
+    response_with_id(output, id)["result"]
+        .as_array()
+        .expect("code lenses should be an array")
+}
+
+fn code_lens_with_name(output: &[Value], id: u64, name: &str) -> Value {
+    code_lens_result(output, id)
+        .iter()
+        .find(|lens| lens["data"]["name"] == name)
+        .unwrap_or_else(|| panic!("code lens for {name:?} should exist"))
+        .clone()
+}
+
+fn code_lens_names(lenses: &[Value]) -> Vec<&str> {
+    lenses
+        .iter()
+        .map(|lens| {
+            lens["data"]["name"]
+                .as_str()
+                .expect("code lens name should be a string")
+        })
+        .collect()
 }
 
 fn assert_rename_edit_texts<const N: usize>(

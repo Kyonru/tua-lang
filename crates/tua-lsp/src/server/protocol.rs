@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tua_core::{
-    CodeAction, CodeActionEdit, CodeActionKind, Completion, CompletionKind, Definition, Diagnostic,
+    CodeAction, CodeActionEdit, CodeActionKind, CodeLens, CodeLensReferenceKind,
+    CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
     ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
@@ -473,6 +474,94 @@ fn lsp_document_highlight_kind(kind: DocumentHighlightKind) -> u8 {
 
 pub(super) fn lsp_reference_location(reference: Reference) -> Value {
     lsp_location(&uri_from_path(&reference.path), reference.span)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct CodeLensResolveData {
+    pub(super) target: CodeLensReferenceTarget,
+}
+
+pub(super) fn lsp_code_lens_from_core(lens: CodeLens) -> Value {
+    match lens.target {
+        CodeLensTarget::References(target) => json!({
+            "range": lsp_range(lens.range),
+            "data": {
+                "kind": "references",
+                "symbolKind": code_lens_reference_kind(target.kind),
+                "uri": uri_from_path(&target.path),
+                "position": lsp_position(target.position),
+                "name": target.name
+            }
+        }),
+    }
+}
+
+pub(super) fn code_lens_resolve_data(lens: &Value) -> Option<CodeLensResolveData> {
+    let data = lens.get("data")?;
+
+    if data.get("kind")?.as_str()? != "references" {
+        return None;
+    }
+
+    let uri = data.get("uri")?.as_str()?;
+    let position = source_position_from_lsp(data.get("position")?)?;
+    let name = data.get("name")?.as_str()?.to_owned();
+    let kind = code_lens_reference_kind_from_str(data.get("symbolKind")?.as_str()?)?;
+
+    Some(CodeLensResolveData {
+        target: CodeLensReferenceTarget {
+            path: super::uri::path_from_uri(uri),
+            position,
+            name,
+            kind,
+        },
+    })
+}
+
+pub(super) fn lsp_resolved_reference_code_lens(
+    mut lens: Value,
+    target: &CodeLensReferenceTarget,
+    references: Vec<Reference>,
+) -> Value {
+    let title = reference_code_lens_title(references.len());
+    let locations = references
+        .into_iter()
+        .map(lsp_reference_location)
+        .collect::<Vec<_>>();
+
+    lens["command"] = json!({
+        "title": title,
+        "command": "editor.action.showReferences",
+        "arguments": [
+            uri_from_path(&target.path),
+            lsp_position(target.position),
+            locations
+        ]
+    });
+
+    lens
+}
+
+fn code_lens_reference_kind(kind: CodeLensReferenceKind) -> &'static str {
+    match kind {
+        CodeLensReferenceKind::ExportedFunction => "exportedFunction",
+        CodeLensReferenceKind::TypeAlias => "typeAlias",
+    }
+}
+
+fn code_lens_reference_kind_from_str(kind: &str) -> Option<CodeLensReferenceKind> {
+    match kind {
+        "exportedFunction" => Some(CodeLensReferenceKind::ExportedFunction),
+        "typeAlias" => Some(CodeLensReferenceKind::TypeAlias),
+        _ => None,
+    }
+}
+
+fn reference_code_lens_title(count: usize) -> String {
+    match count {
+        1 => "1 reference".to_owned(),
+        _ => format!("{count} references"),
+    }
 }
 
 pub(super) fn lsp_prepare_rename_from_core(target: RenameTarget) -> Value {

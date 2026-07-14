@@ -7,13 +7,14 @@ use tua_core::{SourcePosition, SourceSpan};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
-    call_hierarchy_identity_from_lsp, completion_resolve_data, core_diagnostic_from_lsp,
-    error_response, lsp_call_hierarchy_incoming_call, lsp_call_hierarchy_item,
-    lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core, lsp_completion_from_core,
-    lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
-    lsp_document_symbol_from_core, lsp_folding_range_from_core, lsp_full_document_text_edit,
-    lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_location_from_core,
-    lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
+    call_hierarchy_identity_from_lsp, code_lens_resolve_data, completion_resolve_data,
+    core_diagnostic_from_lsp, error_response, lsp_call_hierarchy_incoming_call,
+    lsp_call_hierarchy_item, lsp_call_hierarchy_outgoing_call, lsp_code_action_from_core,
+    lsp_code_lens_from_core, lsp_completion_from_core, lsp_diagnostic_from_core,
+    lsp_document_highlight_from_core, lsp_document_link_from_core, lsp_document_symbol_from_core,
+    lsp_folding_range_from_core, lsp_full_document_text_edit, lsp_hover_from_core,
+    lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
     lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
     lsp_source_range, lsp_text_edit, lsp_workspace_edit, lsp_workspace_symbol_from_core,
     publish_diagnostics, response, source_position_from_lsp, workspace_diagnostic_refresh_request,
@@ -125,6 +126,8 @@ impl LspServer {
             "textDocument/selectionRange" => response(id, self.selection_range_response(&message)),
             "textDocument/foldingRange" => response(id, self.folding_range_response(&message)),
             "textDocument/codeAction" => response(id, self.code_action_response(&message)),
+            "textDocument/codeLens" => response(id, self.code_lens_response(&message)),
+            "codeLens/resolve" => response(id, self.code_lens_resolve_response(message)),
             "textDocument/formatting" => response(
                 id,
                 self.formatting_response(&message).unwrap_or(Value::Null),
@@ -1084,6 +1087,47 @@ impl LspServer {
         };
 
         Value::Array(references.into_iter().map(lsp_reference_location).collect())
+    }
+
+    fn code_lens_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!([]);
+        };
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.code_lens.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let lenses = {
+            let _profile = tua_core::profile::span("lsp.code_lens.query");
+
+            snapshot.code_lenses(&request.path)
+        };
+
+        Value::Array(lenses.into_iter().map(lsp_code_lens_from_core).collect())
+    }
+
+    fn code_lens_resolve_response(&self, message: Value) -> Value {
+        let Some(lens) = message.get("params").cloned() else {
+            return Value::Null;
+        };
+        let Some(data) = code_lens_resolve_data(&lens) else {
+            return lens;
+        };
+        let snapshot = {
+            let _profile = tua_core::profile::span("lsp.code_lens.resolve.snapshot");
+
+            self.analysis
+                .snapshot(&self.workspace_folders, &self.settings)
+        };
+        let references = {
+            let _profile = tua_core::profile::span("lsp.code_lens.resolve.references");
+
+            snapshot.references(&data.target.path, data.target.position, false)
+        };
+
+        lsp_resolved_reference_code_lens(lens, &data.target, references)
     }
 
     fn prepare_rename_response(&self, message: &Value) -> Option<Value> {

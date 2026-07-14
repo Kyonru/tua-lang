@@ -57,6 +57,9 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
             "selectionRangeProvider": true,
             "foldingRangeProvider": true,
             "codeActionProvider": true,
+            "codeLensProvider": {
+                "resolveProvider": true
+            },
             "documentFormattingProvider": true,
             "documentRangeFormattingProvider": true,
             "documentOnTypeFormattingProvider": {

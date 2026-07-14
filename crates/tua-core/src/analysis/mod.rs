@@ -63,14 +63,15 @@ use crate::{
     require_bindings_for_parsed_source, semantic_tokens_parsed_source, semantic_tokens_tua_source,
     signature_help_parsed_source, signature_help_tua_source, type_alias_definition_count, Assist,
     AssistRange, CallHierarchyCallSite, CallHierarchyCallTarget, CallHierarchyIncomingCall,
-    CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolTarget, Completion,
-    CompletionKind, Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol,
-    FoldingRange, Hover, InlayHint, ModuleExportField, ModuleExports, ModuleGraph,
-    ModuleGraphInput, ModuleGraphOptions, ModuleLink, ParsedSource, ProjectConfig,
-    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
-    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex, SemanticToken,
-    SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type,
-    TypeEnvironment, TypedFunction, WorkspaceSymbol,
+    CallHierarchyOutgoingCall, CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens,
+    CodeLensReferenceKind, CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind,
+    Definition, DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover,
+    InlayHint, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
+    ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput,
+    Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
+    SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
+    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypedFunction,
+    WorkspaceSymbol,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1621,6 +1622,86 @@ impl AnalysisSnapshot {
                 ))
             })
             .unwrap_or_default()
+    }
+
+    pub fn code_lenses(&self, path: impl AsRef<Path>) -> Vec<CodeLens> {
+        let path = normalize_path(path.as_ref());
+        let Some(file) = self.file(&path) else {
+            return Vec::new();
+        };
+        let Some(hir) = file.hir.as_ref() else {
+            return Vec::new();
+        };
+        if file.parsed.is_err() {
+            return Vec::new();
+        }
+
+        let mut lenses = Vec::new();
+
+        lenses.extend(self.exported_function_code_lenses(&path, hir));
+        lenses.extend(self.type_alias_code_lenses(&path));
+        lenses.sort_by_key(code_lens_key);
+        lenses
+    }
+
+    fn exported_function_code_lenses(&self, path: &Path, hir: &HirModule) -> Vec<CodeLens> {
+        let mut exported_symbols = BTreeSet::new();
+
+        for export in &hir.exports {
+            let HirExportValue::Symbol(symbol_id) = export.value else {
+                continue;
+            };
+            exported_symbols.insert(symbol_id);
+        }
+
+        hir.symbols()
+            .iter()
+            .filter(|symbol| symbol.kind == HirSymbolKind::Function)
+            .filter(|symbol| exported_symbols.contains(&symbol.id))
+            .map(|symbol| {
+                reference_code_lens(
+                    symbol.name_span,
+                    path,
+                    symbol.name_span.start,
+                    symbol.name.clone(),
+                    CodeLensReferenceKind::ExportedFunction,
+                )
+            })
+            .collect()
+    }
+
+    fn type_alias_code_lenses(&self, path: &Path) -> Vec<CodeLens> {
+        let alias_counts = self.type_alias_name_counts();
+
+        self.symbol_index
+            .entries_for_path(path)
+            .into_iter()
+            .filter(|entry| entry.kind == SymbolIndexKind::TypeAlias)
+            .filter(|entry| alias_counts.get(&entry.name).copied().unwrap_or_default() == 1)
+            .map(|entry| {
+                reference_code_lens(
+                    entry.selection_range,
+                    &entry.path,
+                    entry.selection_range.start,
+                    entry.name.clone(),
+                    CodeLensReferenceKind::TypeAlias,
+                )
+            })
+            .collect()
+    }
+
+    fn type_alias_name_counts(&self) -> BTreeMap<String, usize> {
+        let mut counts = BTreeMap::new();
+
+        for entry in self.symbol_index.entries() {
+            if entry.kind != SymbolIndexKind::TypeAlias {
+                continue;
+            }
+
+            *counts.entry(entry.name.clone()).or_insert(0) += 1;
+        }
+
+        counts
     }
 
     pub fn selection_ranges(
@@ -4005,6 +4086,49 @@ fn reference_kind_key(kind: crate::ReferenceKind) -> u8 {
         crate::ReferenceKind::Function => 3,
         crate::ReferenceKind::Parameter => 4,
         crate::ReferenceKind::TableField => 5,
+    }
+}
+
+fn reference_code_lens(
+    range: SourceSpan,
+    path: &Path,
+    position: SourcePosition,
+    name: String,
+    kind: CodeLensReferenceKind,
+) -> CodeLens {
+    CodeLens {
+        range,
+        target: CodeLensTarget::References(CodeLensReferenceTarget {
+            path: path.to_path_buf(),
+            position,
+            name,
+            kind,
+        }),
+    }
+}
+
+fn code_lens_key(lens: &CodeLens) -> (usize, usize, usize, usize, u8, String) {
+    let (kind, name) = match &lens.target {
+        CodeLensTarget::References(target) => (
+            code_lens_reference_kind_key(target.kind),
+            target.name.clone(),
+        ),
+    };
+
+    (
+        lens.range.start.line,
+        lens.range.start.column,
+        lens.range.end.line,
+        lens.range.end.column,
+        kind,
+        name,
+    )
+}
+
+fn code_lens_reference_kind_key(kind: CodeLensReferenceKind) -> u8 {
+    match kind {
+        CodeLensReferenceKind::ExportedFunction => 1,
+        CodeLensReferenceKind::TypeAlias => 2,
     }
 }
 

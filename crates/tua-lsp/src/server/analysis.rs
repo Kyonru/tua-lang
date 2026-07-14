@@ -7,7 +7,7 @@ use tua_core::{
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AssetLoaderKind,
     CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
-    CallHierarchySymbolKind, CodeAction, CodeActionRange, Completion, Diagnostic,
+    CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion, Diagnostic,
     DocumentHighlight, DocumentSymbol, FoldingRange, FormatOptions, InlayHint, ModuleLink,
     ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
     RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
@@ -741,6 +741,10 @@ impl AnalysisSnapshot {
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeAction> {
         self.core.code_actions(path, range, diagnostics)
+    }
+
+    pub(super) fn code_lenses(&self, path: &Path) -> Vec<CodeLens> {
+        self.core.code_lenses(path)
     }
 
     pub(super) fn references(

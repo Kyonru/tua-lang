@@ -82,7 +82,8 @@ and workspace directory when available.
   labels, and parameter documentation where catalog or annotations provide it.
 - Definition, references, rename, document highlight, document symbols,
   workspace symbols, document links, type definition, implementation, code
-  actions, call hierarchy, inlay hints, and full/range semantic tokens.
+  actions, code lens references, call hierarchy, inlay hints, and full/range
+  semantic tokens.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 
