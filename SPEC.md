@@ -681,7 +681,7 @@ The extension should provide:
 - signature help for known function calls, including supported parameter docs;
 - go to definition, references, rename, document links, document symbols,
   workspace symbols, document highlights, code actions, code lens references,
-  call hierarchy, inlay hints, and semantic tokens;
+  call hierarchy, inlay hints, and full/range/delta semantic tokens;
 - incremental document sync with open, change, save, close, and watched-file
   update handling.
 - workspace folder initialization and workspace folder change notifications.

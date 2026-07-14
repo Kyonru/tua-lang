@@ -505,8 +505,7 @@ impl AnalysisHost {
         effective
     }
 
-    #[cfg(test)]
-    fn core_revision(&self) -> u64 {
+    pub(super) fn revision(&self) -> u64 {
         self.core.revision()
     }
 }
@@ -985,7 +984,7 @@ mod tests {
         host.open_document(player_uri, "local hp: number = 1\n", &roots, &settings);
         host.open_document(enemy_uri, "local hp: number = 2\n", &roots, &settings);
 
-        let before = host.core_revision();
+        let before = host.revision();
         let snapshot = host.snapshot(&roots, &settings);
 
         assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
@@ -994,11 +993,11 @@ mod tests {
         assert_eq!(host.cache_stats().parse_hits, 0);
 
         host.update_document(player_uri, "local hp: number = 1\n", &roots, &settings);
-        assert_eq!(host.core_revision(), before);
+        assert_eq!(host.revision(), before);
 
         host.update_document(player_uri, "local hp: number = 3\n", &roots, &settings);
 
-        let after = host.core_revision();
+        let after = host.revision();
         let snapshot = host.snapshot(&roots, &settings);
 
         assert!(after > before);

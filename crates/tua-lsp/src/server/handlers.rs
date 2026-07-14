@@ -15,7 +15,8 @@ use super::protocol::{
     lsp_folding_range_from_core, lsp_full_document_text_edit, lsp_hover_from_core,
     lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
     lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
-    lsp_selection_range_from_core, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
+    lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
+    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
     lsp_source_range, lsp_text_edit, lsp_workspace_edit, lsp_workspace_symbol_from_core,
     publish_diagnostics, response, source_position_from_lsp, workspace_diagnostic_refresh_request,
     SourceRange,
@@ -153,7 +154,10 @@ impl LspServer {
             }
             "textDocument/inlayHint" => response(id, self.inlay_hint_response(&message)),
             "textDocument/semanticTokens/full" => {
-                response(id, self.semantic_tokens_response(&message, None))
+                response(id, self.semantic_tokens_full_response(&message))
+            }
+            "textDocument/semanticTokens/full/delta" => {
+                response(id, self.semantic_tokens_delta_response(&message))
             }
             "textDocument/semanticTokens/range" => {
                 let range = message
@@ -161,7 +165,7 @@ impl LspServer {
                     .and_then(|params| params.get("range"))
                     .and_then(lsp_source_range);
 
-                response(id, self.semantic_tokens_response(&message, range))
+                response(id, self.semantic_tokens_range_response(&message, range))
             }
             "workspace/symbol" => response(id, self.workspace_symbol_response(&message)),
             _ => error_response(id, -32601, format!("method not found: {method}")),
@@ -240,6 +244,7 @@ impl LspServer {
 
         self.analysis
             .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        self.clear_semantic_token_results(&uri);
         let generation = self.bump_document_generation(&uri, version);
         self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
@@ -315,6 +320,7 @@ impl LspServer {
         self.last_published_diagnostics.remove(&uri);
         self.document_generations.remove(&uri);
         self.document_versions.remove(&uri);
+        self.clear_semantic_token_results(&uri);
 
         if self.client_pull_diagnostics {
             return None;
@@ -1207,16 +1213,128 @@ impl LspServer {
         )
     }
 
-    fn semantic_tokens_response(&self, message: &Value, range: Option<SourceRange>) -> Value {
+    fn semantic_tokens_full_response(&mut self, message: &Value) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!({ "data": [] });
         };
-        let mut tokens = self.analysis.semantic_tokens(&request.path);
+        let uri = request.uri.to_owned();
+        let path = request.path.clone();
+
+        if !self.analysis.contains_document(&uri) {
+            return json!({ "data": [] });
+        }
+
+        let data = self.semantic_token_data(&path, None);
+        let result_id = self.store_semantic_token_result(&uri, &data);
+
+        lsp_semantic_tokens(data, Some(&result_id))
+    }
+
+    fn semantic_tokens_delta_response(&mut self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!({ "data": [] });
+        };
+        let uri = request.uri.to_owned();
+        let path = request.path.clone();
+
+        if !self.analysis.contains_document(&uri) {
+            return json!({ "data": [] });
+        }
+
+        let previous_result_id = request
+            .params
+            .get("previousResultId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let previous_data = previous_result_id
+            .as_ref()
+            .and_then(|result_id| self.semantic_token_results.get(result_id))
+            .filter(|entry| entry.uri == uri)
+            .map(|entry| entry.data.clone());
+        let data = self.semantic_token_data(&path, None);
+        let result_id = self.store_semantic_token_result(&uri, &data);
+
+        match previous_data {
+            Some(previous_data) => lsp_semantic_token_delta(&previous_data, data, &result_id),
+            None => lsp_semantic_tokens(data, Some(&result_id)),
+        }
+    }
+
+    fn semantic_tokens_range_response(&self, message: &Value, range: Option<SourceRange>) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!({ "data": [] });
+        };
+
+        lsp_semantic_tokens_from_core(self.semantic_tokens_for_range(&request.path, range))
+    }
+
+    fn semantic_token_data(&self, path: &PathBuf, range: Option<SourceRange>) -> Vec<usize> {
+        lsp_semantic_token_data_from_core(self.semantic_tokens_for_range(path, range))
+    }
+
+    fn semantic_tokens_for_range(
+        &self,
+        path: &PathBuf,
+        range: Option<SourceRange>,
+    ) -> Vec<tua_core::SemanticToken> {
+        let mut tokens = self.analysis.semantic_tokens(path);
+
         if let Some(range) = range {
             tokens.retain(|token| source_span_intersects_range(token.span, range));
         }
 
-        lsp_semantic_tokens_from_core(tokens)
+        tokens
+    }
+
+    fn store_semantic_token_result(&mut self, uri: &str, data: &[usize]) -> String {
+        self.next_semantic_token_result_id = self.next_semantic_token_result_id.saturating_add(1);
+        let sequence = self.next_semantic_token_result_id;
+        let document_version = self.document_versions.get(uri).copied();
+        let analysis_revision = self.analysis.revision();
+        let version = document_version
+            .map(|version| version.to_string())
+            .unwrap_or_else(|| "none".to_owned());
+        let result_id = format!("{analysis_revision}:{version}:{sequence}");
+
+        self.semantic_token_results.insert(
+            result_id.clone(),
+            super::SemanticTokensCacheEntry {
+                uri: uri.to_owned(),
+                data: data.to_vec(),
+                document_version,
+                analysis_revision,
+                sequence,
+            },
+        );
+        self.prune_semantic_token_results(uri);
+
+        result_id
+    }
+
+    fn prune_semantic_token_results(&mut self, uri: &str) {
+        const MAX_SEMANTIC_TOKEN_RESULTS_PER_DOCUMENT: usize = 8;
+
+        let mut result_ids = self
+            .semantic_token_results
+            .iter()
+            .filter(|(_, entry)| entry.uri == uri)
+            .map(|(result_id, entry)| (entry.sequence, result_id.clone()))
+            .collect::<Vec<_>>();
+
+        result_ids.sort();
+
+        let remove_count = result_ids
+            .len()
+            .saturating_sub(MAX_SEMANTIC_TOKEN_RESULTS_PER_DOCUMENT);
+
+        for (_, result_id) in result_ids.into_iter().take(remove_count) {
+            self.semantic_token_results.remove(&result_id);
+        }
+    }
+
+    fn clear_semantic_token_results(&mut self, uri: &str) {
+        self.semantic_token_results
+            .retain(|_, entry| entry.uri != uri);
     }
 
     fn workspace_symbol_response(&self, message: &Value) -> Value {

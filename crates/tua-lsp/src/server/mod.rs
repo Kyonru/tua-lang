@@ -127,6 +127,8 @@ struct LspServer {
     last_published_diagnostics: BTreeMap<String, Vec<serde_json::Value>>,
     document_generations: BTreeMap<String, u64>,
     document_versions: BTreeMap<String, i64>,
+    semantic_token_results: BTreeMap<String, SemanticTokensCacheEntry>,
+    next_semantic_token_result_id: u64,
     client_watched_files_dynamic_registration: bool,
     client_pull_diagnostics: bool,
     client_diagnostic_refresh: bool,
@@ -141,6 +143,15 @@ struct PendingDiagnostics {
     generation: u64,
     version: Option<i64>,
     due_at: Instant,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SemanticTokensCacheEntry {
+    uri: String,
+    data: Vec<usize>,
+    document_version: Option<i64>,
+    analysis_revision: u64,
+    sequence: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

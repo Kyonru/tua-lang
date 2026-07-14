@@ -79,7 +79,9 @@ pub(super) fn initialize_result(client_pull_diagnostics: bool) -> Value {
                     "tokenTypes": SEMANTIC_TOKEN_TYPES,
                     "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS
                 },
-                "full": true,
+                "full": {
+                    "delta": true
+                },
                 "range": true
             },
             "workspace": {

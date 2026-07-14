@@ -182,7 +182,7 @@ fn initialize_returns_server_capabilities() {
         json!(["declaration", "readonly", "deprecated"])
     );
     assert_eq!(
-        output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
+        output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"]["delta"],
         true
     );
     assert_eq!(
@@ -5661,6 +5661,61 @@ local MAX_HP = 10
 }
 
 #[test]
+fn semantic_tokens_delta_returns_edits_matching_next_full_result() {
+    let uri = "file:///tmp/semantic-token-delta.tua";
+    let before = r#"type Player = { hp: number }
+
+local player: Player = { hp = 10 }
+player.hp = player.hp - 1
+"#;
+    let after = r#"type Player = { hp: number }
+
+local player: Player = { hp = 10 }
+local damage: number = 1
+player.hp = player.hp - damage
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, before));
+    server.send(semantic_tokens_request(2, uri));
+
+    let first = &response_with_id(server.output(), 2)["result"];
+    let first_result_id = semantic_tokens_result_id(first);
+    let first_data = semantic_token_data(first);
+
+    server.send(did_change(uri, after, 2));
+    server.send(semantic_tokens_delta_request(3, uri, &first_result_id));
+    server.send(semantic_tokens_request(4, uri));
+
+    let delta = &response_with_id(server.output(), 3)["result"];
+    let next_full = &response_with_id(server.output(), 4)["result"];
+    let patched_data = apply_semantic_token_edits(first_data, semantic_token_edits(delta));
+
+    assert_ne!(delta["resultId"], first_result_id);
+    assert_eq!(patched_data, semantic_token_data(next_full));
+}
+
+#[test]
+fn semantic_tokens_delta_falls_back_to_full_for_unknown_result_id() {
+    let uri = "file:///tmp/semantic-token-delta-fallback.tua";
+    let source = r#"type Player = { hp: number }
+
+local player: Player = { hp = 10 }
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        semantic_tokens_delta_request(2, uri, "missing-result"),
+    ]);
+    let response = &response_with_id(&output, 2)["result"];
+
+    assert!(response["resultId"].is_string());
+    assert!(response["data"]
+        .as_array()
+        .is_some_and(|data| !data.is_empty()));
+    assert!(response.get("edits").is_none());
+}
+
+#[test]
 fn semantic_tokens_fall_back_when_source_does_not_parse() {
     let uri = "file:///tmp/semantic-invalid.tua";
     let source = r#"type Player = {
@@ -6412,6 +6467,20 @@ fn semantic_tokens_request(id: u64, uri: &str) -> Value {
     })
 }
 
+fn semantic_tokens_delta_request(id: u64, uri: &str, previous_result_id: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/semanticTokens/full/delta",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "previousResultId": previous_result_id
+        }
+    })
+}
+
 fn semantic_tokens_range_request(id: u64, uri: &str, start: Value, end: Value) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -6945,6 +7014,48 @@ fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<Decoded
     }
 
     tokens
+}
+
+fn semantic_tokens_result_id(result: &Value) -> String {
+    result["resultId"]
+        .as_str()
+        .expect("semantic token result id should be present")
+        .to_owned()
+}
+
+fn semantic_token_data(result: &Value) -> Vec<Value> {
+    result["data"]
+        .as_array()
+        .expect("semantic token data should be an array")
+        .clone()
+}
+
+fn semantic_token_edits(result: &Value) -> &[Value] {
+    result["edits"]
+        .as_array()
+        .expect("semantic token delta edits should be an array")
+}
+
+fn apply_semantic_token_edits(mut data: Vec<Value>, edits: &[Value]) -> Vec<Value> {
+    for edit in edits {
+        let start = edit["start"]
+            .as_u64()
+            .expect("semantic token edit start should be numeric") as usize;
+        let delete_count = edit["deleteCount"]
+            .as_u64()
+            .expect("semantic token edit deleteCount should be numeric")
+            as usize;
+        let inserted = edit
+            .get("data")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let end = start + delete_count;
+
+        data.splice(start..end, inserted);
+    }
+
+    data
 }
 
 fn assert_semantic_token(

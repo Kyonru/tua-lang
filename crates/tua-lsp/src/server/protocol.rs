@@ -733,7 +733,7 @@ fn lsp_workspace_symbol_kind(kind: WorkspaceSymbolKind) -> u8 {
     }
 }
 
-pub(super) fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>) -> Value {
+pub(super) fn lsp_semantic_token_data_from_core(tokens: Vec<SemanticToken>) -> Vec<usize> {
     let mut data = Vec::with_capacity(tokens.len() * 5);
     let mut previous_line = 0usize;
     let mut previous_start = 0usize;
@@ -769,7 +769,69 @@ pub(super) fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>) -> Value
         previous_start = start;
     }
 
-    json!({ "data": data })
+    data
+}
+
+pub(super) fn lsp_semantic_tokens_from_core(tokens: Vec<SemanticToken>) -> Value {
+    lsp_semantic_tokens(lsp_semantic_token_data_from_core(tokens), None)
+}
+
+pub(super) fn lsp_semantic_tokens(data: Vec<usize>, result_id: Option<&str>) -> Value {
+    let mut result = json!({ "data": data });
+
+    if let Some(result_id) = result_id {
+        result["resultId"] = json!(result_id);
+    }
+
+    result
+}
+
+pub(super) fn lsp_semantic_token_delta(
+    previous_data: &[usize],
+    current_data: Vec<usize>,
+    result_id: &str,
+) -> Value {
+    let edits = semantic_token_delta_edits(previous_data, &current_data);
+
+    json!({
+        "resultId": result_id,
+        "edits": edits,
+    })
+}
+
+fn semantic_token_delta_edits(previous_data: &[usize], current_data: &[usize]) -> Vec<Value> {
+    if previous_data == current_data {
+        return Vec::new();
+    }
+
+    let prefix = previous_data
+        .iter()
+        .zip(current_data.iter())
+        .take_while(|(previous, current)| previous == current)
+        .count();
+    let mut suffix = 0usize;
+
+    while suffix < previous_data.len().saturating_sub(prefix)
+        && suffix < current_data.len().saturating_sub(prefix)
+        && previous_data[previous_data.len() - 1 - suffix]
+            == current_data[current_data.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+
+    let delete_count = previous_data.len() - prefix - suffix;
+    let insert_end = current_data.len() - suffix;
+    let inserted = current_data[prefix..insert_end].to_vec();
+    let mut edit = json!({
+        "start": prefix,
+        "deleteCount": delete_count,
+    });
+
+    if !inserted.is_empty() {
+        edit["data"] = json!(inserted);
+    }
+
+    vec![edit]
 }
 
 fn semantic_token_type_index(kind: SemanticTokenKind) -> usize {

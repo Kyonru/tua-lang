@@ -2556,8 +2556,11 @@ Acceptance:
 
 ### 87. `feat(semantic): add range and delta semantic tokens`
 
-Status: partial. Semantic token range requests are now advertised and handled by
-filtering the shared full-token stream. Full/delta support remains future work.
+Status: done. Semantic token range requests filter the shared full-token stream,
+and full requests now return versioned result IDs with delta support advertised.
+`textDocument/semanticTokens/full/delta` reuses the same encoded token data and
+returns minimal data edits against cached previous results, falling back to a
+full token payload when a previous result ID is unavailable.
 
 Scope:
 

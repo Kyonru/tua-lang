@@ -119,7 +119,23 @@ request("initialize", {
       if (!Array.isArray(message.result?.data) || message.result.data.length === 0) {
         fail("semantic tokens returned no data");
       }
-    }),
+      if (typeof message.result?.resultId !== "string") {
+        fail("semantic tokens returned no resultId");
+      }
+    }).then((message) =>
+      request(
+        "textDocument/semanticTokens/full/delta",
+        {
+          textDocument: { uri: inference.uri },
+          previousResultId: message.result.resultId,
+        },
+        (delta) => {
+          if (!Array.isArray(delta.result?.edits)) {
+            fail("semantic token delta returned no edits array");
+          }
+        },
+      ),
+    ),
   );
 
   expected.push(
@@ -299,7 +315,7 @@ function request(method, params, validate) {
       }
 
       validate(message);
-      resolve();
+      resolve(message);
     });
   });
 }

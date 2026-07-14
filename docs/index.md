@@ -33,7 +33,8 @@ leaving the normal Lua and LOVE workflow.
 - A language server with diagnostics, hover, completion, signature help,
   document highlights, definition, references, rename, document symbols,
   workspace symbols, document links, code actions, code lens references, call
-  hierarchy, inlay hints, semantic tokens, watched files, and workspace folders.
+  hierarchy, inlay hints, full/range/delta semantic tokens, watched files, and
+  workspace folders.
 - VS Code support for syntax highlighting, file icons, and LSP integration.
 
 ## Quick Start
