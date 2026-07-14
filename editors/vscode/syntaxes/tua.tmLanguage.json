@@ -99,11 +99,11 @@
       "patterns": [
         {
           "name": "keyword.control.tua",
-          "match": "\\b(?:break|do|else|elseif|end|for|function|goto|if|in|repeat|return|then|until|while)\\b"
+          "match": "\\b(?:break|class|do|else|elseif|end|extends|for|function|goto|if|in|override|repeat|return|super|then|until|while)\\b"
         },
         {
           "name": "storage.modifier.local.tua",
-          "match": "\\blocal\\b"
+          "match": "\\b(?:final|local|open)\\b"
         },
         {
           "name": "keyword.operator.word.tua",

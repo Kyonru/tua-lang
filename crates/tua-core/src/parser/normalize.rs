@@ -1,6 +1,7 @@
-use crate::runtime_type::IS_CHECK_HELPER;
+use crate::{classes, runtime_type::IS_CHECK_HELPER};
 
 pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
+    let source = classes::lower_classes_for_parser(source);
     let chars: Vec<char> = source.chars().collect();
     let mut normalized = String::with_capacity(source.len());
     let mut index = 0;

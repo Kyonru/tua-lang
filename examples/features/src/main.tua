@@ -18,6 +18,7 @@ local InlineIgnores = require("inline_ignores")
 local LuaHelperLints = require("luahelper_lints")
 local LuaJit = require("luajit")
 local Ecs = require("ecs")
+local Classes = require("classes")
 
 return {
   types = Types,
@@ -40,4 +41,5 @@ return {
   luahelper_lints = LuaHelperLints,
   luajit = LuaJit,
   ecs = Ecs,
+  classes = Classes,
 }

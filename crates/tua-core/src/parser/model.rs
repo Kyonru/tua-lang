@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use full_moon::tokenizer::Position;
 
+use crate::classes::ClassDeclaration;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SourcePosition {
     pub line: usize,
@@ -46,6 +48,7 @@ pub struct ParsedSource {
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
+    pub(crate) class_declarations: Vec<ClassDeclaration>,
 }
 
 impl ParsedSource {
@@ -61,6 +64,7 @@ impl ParsedSource {
             local_annotations: typed.local_annotations.clone(),
             function_annotations: typed.function_annotations.clone(),
             compound_assignments: typed.compound_assignments.clone(),
+            class_declarations: typed.class_declarations.clone(),
             raw,
             typed,
         }
@@ -99,6 +103,7 @@ pub struct TypedSourceModel {
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
+    pub(crate) class_declarations: Vec<ClassDeclaration>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

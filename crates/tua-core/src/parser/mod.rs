@@ -10,6 +10,7 @@ use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var;
+use crate::classes;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
@@ -102,10 +103,15 @@ pub fn extract_tua_source_model(
     raw: &RawParsedSource,
 ) -> Result<TypedSourceModel, Vec<Diagnostic>> {
     let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
+    let (class_declarations, class_diagnostics) =
+        classes::parse_class_declarations(&raw.path, &raw.source);
     let syntax = collect_tua_syntax(&raw.path, &raw.source, &raw.ast);
 
-    if !syntax.diagnostics.is_empty() {
-        return Err(syntax.diagnostics);
+    let mut diagnostics = class_diagnostics;
+    diagnostics.extend(syntax.diagnostics);
+
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
     }
 
     Ok(TypedSourceModel {
@@ -115,6 +121,7 @@ pub fn extract_tua_source_model(
         local_annotations: syntax.local_annotations,
         function_annotations: syntax.function_annotations,
         compound_assignments: syntax.compound_assignments,
+        class_declarations,
     })
 }
 

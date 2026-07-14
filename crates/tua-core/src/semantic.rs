@@ -363,6 +363,7 @@ impl<'a> SemanticModel<'a> {
                 required_module_exports_for_receiver(self.parsed, name)
                     .map(module_exports_table_type)
             })
+            .or_else(|| self.class_instance_local_type(name, position))
             .or_else(|| {
                 let local = self.local_assignment_value(name, position)?;
 
@@ -379,6 +380,37 @@ impl<'a> SemanticModel<'a> {
             .or_else(|| self.parameter_type_at_position(name, position))?;
 
         Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
+    }
+
+    fn class_instance_local_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        let prefix = format!("local {name} = ");
+        let previous_lines = self
+            .parsed
+            .source
+            .lines()
+            .take(position.line.saturating_sub(1))
+            .collect::<Vec<_>>();
+
+        for line in previous_lines.into_iter().rev() {
+            let trimmed = line.trim();
+            let Some(expression) = trimmed.strip_prefix(&prefix) else {
+                continue;
+            };
+            let expression = expression.trim();
+
+            for class in &self.parsed.class_declarations {
+                let constructor = format!("{}.new", class.name);
+                if expression.starts_with(&constructor)
+                    && expression[constructor.len()..]
+                        .trim_start()
+                        .starts_with('(')
+                {
+                    return Some(class_instance_type(self.parsed, &class.name));
+                }
+            }
+        }
+
+        None
     }
 
     fn setmetatable_return_type(
@@ -1434,6 +1466,43 @@ fn module_exports_table_type(exports: ModuleExports) -> Type {
             .into_iter()
             .map(|(name, field)| (name, TableField::required(field.ty))),
     )
+}
+
+fn class_instance_type(parsed: &ParsedSource, class_name: &str) -> Type {
+    let mut fields = BTreeMap::<String, TableField>::new();
+
+    collect_class_instance_fields(parsed, class_name, &mut fields);
+
+    Type::table(fields)
+}
+
+fn collect_class_instance_fields(
+    parsed: &ParsedSource,
+    class_name: &str,
+    fields: &mut BTreeMap<String, TableField>,
+) {
+    let Some(class) = parsed
+        .class_declarations
+        .iter()
+        .find(|candidate| candidate.name == class_name)
+    else {
+        return;
+    };
+
+    if let Some(parent) = &class.parent {
+        collect_class_instance_fields(parsed, parent, fields);
+    }
+
+    for field in &class.fields {
+        fields.insert(
+            field.name.clone(),
+            TableField::required(Type::named(field.ty.clone())),
+        );
+    }
+
+    for method in &class.methods {
+        fields.insert(method.name.clone(), TableField::required(Type::Any));
+    }
 }
 
 fn local_assignment_value_in_block<'a>(

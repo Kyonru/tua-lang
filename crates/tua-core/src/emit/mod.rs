@@ -5,6 +5,7 @@ use full_moon::ast::span::ContainedSpan;
 use full_moon::ast::{self, Expression, Field, LastStmt, Var};
 use full_moon::tokenizer::TokenReference;
 
+use crate::classes;
 use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
@@ -71,6 +72,7 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
         let output = lower_builtin_calls_text(&output);
         let output = lower_import_calls_text(&output, parsed, import_resolver)?;
         let output = lower_runtime_type_checks_text(&output, parsed)?;
+        let output = lower_final_class_method_calls_text(&output, parsed);
         let output = lower_compound_assignments_text(&output);
 
         Ok(match annotation_mode {
@@ -197,7 +199,9 @@ fn lower_runtime_type_check_call(
                 column: diagnostic_position.1,
             });
 
-            if let Some(lua_type) =
+            if classes::class_by_name(&parsed.class_declarations, &target).is_some() {
+                Ok(class_runtime_is_check(value, &target))
+            } else if let Some(lua_type) =
                 runtime_type_lua_type_name(environment, semantic, &target, lookup_position)
             {
                 Ok(format!("type({value}) == {}", lua_string_literal(lua_type)))
@@ -264,6 +268,140 @@ fn runtime_type_check_sites(parsed: &ParsedSource) -> Vec<SourcePosition> {
     }
 
     sites
+}
+
+fn class_runtime_is_check(value: &str, target: &str) -> String {
+    format!(
+        "(getmetatable({value}) ~= nil and getmetatable({value}).__is ~= nil and getmetatable({value}).__is[{target}.__type_id] == true)"
+    )
+}
+
+fn lower_final_class_method_calls_text(output: &str, parsed: &ParsedSource) -> String {
+    if parsed.class_declarations.is_empty() {
+        return output.to_owned();
+    }
+
+    let local_classes = inferred_class_locals(output, parsed);
+    if local_classes.is_empty() {
+        return output.to_owned();
+    }
+
+    let mut lowered = String::with_capacity(output.len());
+    let mut index = 0usize;
+
+    while index < output.len() {
+        if output[index..].starts_with("--") {
+            let end = consume_comment(output, index);
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(output, index) {
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(identifier_end) = consume_identifier(&output[index..]) {
+            let receiver = &output[index..index + identifier_end];
+
+            if let Some(class_name) = local_classes.get(receiver) {
+                if let Some((replacement, end)) =
+                    final_class_method_call_replacement(output, index, receiver, class_name, parsed)
+                {
+                    lowered.push_str(&replacement);
+                    index = end;
+                    continue;
+                }
+            }
+
+            lowered.push_str(receiver);
+            index += identifier_end;
+            continue;
+        }
+
+        let character = output[index..]
+            .chars()
+            .next()
+            .expect("loop only runs at valid string boundaries");
+        lowered.push(character);
+        index += character.len_utf8();
+    }
+
+    lowered
+}
+
+fn inferred_class_locals(output: &str, parsed: &ParsedSource) -> BTreeMap<String, String> {
+    let mut locals = BTreeMap::new();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("local ") else {
+            continue;
+        };
+        let Some((name, expression)) = rest.split_once('=') else {
+            continue;
+        };
+        let name = name.trim();
+        let expression = expression.trim();
+
+        if !is_identifier(name) {
+            continue;
+        }
+
+        for class in &parsed.class_declarations {
+            let prefix = format!("{}.new", class.name);
+            if expression.starts_with(&prefix)
+                && expression[prefix.len()..].trim_start().starts_with('(')
+            {
+                locals.insert(name.to_owned(), class.name.clone());
+            }
+        }
+    }
+
+    locals
+}
+
+fn final_class_method_call_replacement(
+    output: &str,
+    receiver_start: usize,
+    receiver: &str,
+    class_name: &str,
+    parsed: &ParsedSource,
+) -> Option<(String, usize)> {
+    let mut cursor = receiver_start + receiver.len();
+    cursor = skip_whitespace(output, cursor);
+    let separator = output[cursor..].chars().next()?;
+
+    if separator != '.' && separator != ':' {
+        return None;
+    }
+
+    cursor += separator.len_utf8();
+    cursor = skip_whitespace(output, cursor);
+    let method_start = cursor;
+    let method_end = consume_identifier(&output[method_start..])?;
+    let method = &output[method_start..method_start + method_end];
+
+    if !classes::class_method_is_final(&parsed.class_declarations, class_name, method) {
+        return None;
+    }
+
+    cursor = skip_whitespace(output, method_start + method_end);
+    if !output[cursor..].starts_with('(') {
+        return None;
+    }
+
+    let close = find_matching_paren(output, cursor)?;
+    let args = output[cursor + 1..close].trim();
+    let replacement = if args.is_empty() {
+        format!("{class_name}_{method}({receiver})")
+    } else {
+        format!("{class_name}_{method}({receiver}, {args})")
+    };
+
+    Some((replacement, close + 1))
 }
 
 fn runtime_type_lua_type_name<'a>(

@@ -1274,6 +1274,42 @@ end
 }
 
 #[test]
+fn snapshot_completion_uses_class_constructor_instance_fields() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+final class Particle {
+  x: number
+  speed: number = 120
+
+  init(x: number) {
+    self.x = x
+  }
+
+  final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+
+local particle = Particle.new(1)
+particle.s<|complete|>peed
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion("src/main.tua", fixture.position("complete")),
+    );
+
+    assert!(labels.contains(&"speed".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

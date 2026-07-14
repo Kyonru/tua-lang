@@ -368,9 +368,59 @@ end
 ```
 
 Aliases are erased at runtime, so `is` only accepts an alias when it resolves to
-a supported primitive. Erased table-shape aliases produce `TL1007`. Structural
-checks, inheritance checks, and generic targets such as `Array<string>` are not
-runtime-checkable in v1 and are rejected before Lua is emitted.
+a supported primitive. Class targets use generated `__type_id` / `__is`
+metadata, so inherited class checks are supported for class syntax. Erased
+table-shape aliases, structural checks, manual-metatable inheritance checks, and
+generic targets such as `Array<string>` are not runtime-checkable in v1 and are
+rejected before Lua is emitted.
+
+## Classes
+
+Classes are optimized syntax for common Lua metatable patterns:
+
+```tua
+open class Entity {
+  x: number
+  y: number
+
+  init(x: number, y: number) {
+    self.x = x
+    self.y = y
+  }
+
+  update(dt: number) {
+  }
+}
+
+final class Particle extends Entity {
+  speed: number = 120
+
+  init(x: number, y: number) {
+    super(x, y)
+  }
+
+  override final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+
+local particle = Particle.new(10, 20)
+particle.update(0.016)
+```
+
+`class` is final by default; `open class` is required for inheritance.
+`final class` may be written explicitly. Instance fields, `init`, methods,
+`override`, `final` methods, and `super(...)` are supported. Static members,
+private members, getters/setters, generic classes, mixins, and multiple
+inheritance are not part of v1.
+
+Generated Lua uses ordinary tables, `__index`, local method functions, and
+per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
+When a constructor is proven to contain only field defaults, `self.field = ...`,
+and a flattenable `super(...)`, Tua emits a direct table constructor. Otherwise
+it preserves explicit init calls. Calls to known final methods on known class
+instances can lower to direct local function calls; non-final calls keep normal
+virtual dispatch.
 
 ## Function Annotations
 

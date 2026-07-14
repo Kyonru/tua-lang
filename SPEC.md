@@ -215,10 +215,49 @@ getmetatable(value) == Player
 ```
 
 Erased aliases are allowed only when they resolve to a supported primitive.
-Erased table-shape aliases produce `TL1007`. Arrays, dictionaries, tuples,
-functions, structural checks, inheritance checks, and generic targets such as
-`Array<string>` are not runtime-checkable in v1 and are rejected before Lua is
-emitted.
+Class targets use generated `__type_id` / `__is` metadata, so inherited class
+checks are supported for class syntax. Erased table-shape aliases produce
+`TL1007`. Arrays, dictionaries, tuples, functions, structural checks,
+manual-metatable inheritance checks, and generic targets such as `Array<string>`
+are not runtime-checkable in v1 and are rejected before Lua is emitted.
+
+### Classes
+
+Tua classes are optimized syntax over portable Lua tables and metatables.
+
+```tua
+open class Entity {
+  x: number
+
+  init(x: number) {
+    self.x = x
+  }
+
+  update(dt: number) {
+  }
+}
+
+final class Particle extends Entity {
+  speed: number = 120
+
+  override final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+```
+
+`class` and `final class` are final by default and cannot be extended. `open
+class` explicitly allows subclasses. Methods are virtual unless the class or
+method is final. Overriding an inherited method requires `override`, and
+overriding a final method is an error.
+
+Constructors are exposed as `Class.new(...)`. Generated Lua uses self-index
+metatables, local method functions, per-class `__type_id` / `__is` metadata,
+and no runtime support library. The compiler may flatten constructors when
+initialization is proven to be only field defaults, `self.field = value`, and a
+flattenable `super(...)`; otherwise it preserves explicit init calls. Known
+calls to final methods on known class instances may be devirtualized to direct
+local function calls.
 
 ### Enums
 
@@ -775,6 +814,7 @@ Suggested diagnostic code ranges:
 The current type-specific codes include:
 
 - `TL1007`: unsupported runtime `is` check target;
+- `TL1008`: invalid class inheritance, override, or member declaration;
 
 LuaJIT-oriented guidance uses the lint/style range and is disabled by default.
 The initial codes are:
@@ -821,7 +861,7 @@ change type inference, lowering, emitted Lua, or runtime behavior.
 tua v1 does not include:
 
 - structural runtime validation for erased table shapes;
-- inheritance-aware runtime type checks;
+- inheritance-aware runtime type checks for manual metatable patterns;
 - reified generic runtime type checks;
 - a custom runtime library;
 - a new VM;

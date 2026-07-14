@@ -1748,6 +1748,71 @@ end
 }
 
 #[test]
+fn accepts_optimized_class_constructor_fields_and_final_dot_calls() {
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+open class Entity {
+  x: number
+  y: number
+
+  init(x: number, y: number) {
+    self.x = x
+    self.y = y
+  }
+
+  update(dt: number) {
+  }
+}
+
+final class Particle extends Entity {
+  speed: number = 120
+
+  init(x: number, y: number) {
+    super(x, y)
+  }
+
+  override final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+
+local particle = Particle.new(1, 2)
+particle.update(0.1)
+particle:update(0.2)
+particle.x = particle.speed
+"#,
+    )
+    .expect("optimized class calls and fields should type-check");
+}
+
+#[test]
+fn rejects_extending_final_classes_and_overriding_final_methods() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+class Base {
+  final update(dt: number) {
+  }
+}
+
+class Child extends Base {
+  override update(dt: number) {
+  }
+}
+"#,
+    )
+    .expect_err("class inheritance violations should be reported");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_CLASS)));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("extends final class")));
+}
+
+#[test]
 fn mutation_inside_guard_clears_narrowed_assignment_target() {
     let diagnostics = check_tua_source(
         "src/narrowing_mutation.tua",

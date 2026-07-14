@@ -40,6 +40,9 @@ make build-features
 - `src/project_types.tua` covers the project-aware type database: aliases
   resolved through `require` aliases and LuaDoc-provided types from `.lua`
   files, including LuaDoc overload and typed-vararg examples.
+- `src/classes.tua` covers optimized class syntax, open/final inheritance,
+  `super`, constructor lowering, final-method devirtualization, and class
+  runtime `is` checks.
 - `src/lua_cheatsheet.tua` is an extensive Lua-in-Tua cheatsheet based on the
   referenced Lua cheatsheet. It covers comments, primitives, tables, operators,
   shorthand function calls, lookups, control flow, functions, closures,

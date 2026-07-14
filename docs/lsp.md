@@ -69,6 +69,8 @@ and workspace directory when available.
   formats, and source type mismatches before the game runs.
 - Supported `value is Type` checks narrow true branches for hover, completion,
   and diagnostics; unsupported runtime targets report `TL1007`.
+- Class constructor locals expose class fields and methods for completion,
+  hover, diagnostics, and optimized final-method calls.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
 - LOVE callback completions can insert declaration snippets for callbacks such

@@ -12,6 +12,7 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
     plain_field_chain_from_var_expression,
 };
+use crate::classes;
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
 use crate::format::FormatOptions;
 use crate::inline_ignore::apply_inline_ignores;
@@ -1244,6 +1245,9 @@ impl<'a> Checker<'a> {
         let mut arguments = call_arguments(function_call).unwrap_or_default();
 
         if !is_method_call(function_call) {
+            if let Some(receiver_type) = self.final_class_dot_call_receiver_type(function_call) {
+                arguments.insert(0, CallArgument::Inferred(receiver_type));
+            }
             return arguments;
         }
 
@@ -1259,6 +1263,66 @@ impl<'a> Checker<'a> {
 
         arguments.insert(0, CallArgument::Inferred(receiver_type));
         arguments
+    }
+
+    fn final_class_dot_call_receiver_type(&self, function_call: &FunctionCall) -> Option<Type> {
+        let dot_call = dot_method_call(function_call)?;
+        let class_name = self.class_name_for_receiver(&dot_call.receiver, dot_call.position)?;
+
+        if !classes::class_method_is_final(
+            &self.parsed.class_declarations,
+            &class_name,
+            &dot_call.method,
+        ) {
+            return None;
+        }
+
+        let parts = dot_call
+            .receiver
+            .split('.')
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+
+        self.resolve_field_chain_type(&parts)
+    }
+
+    fn class_name_for_receiver(&self, receiver: &str, position: SourcePosition) -> Option<String> {
+        if receiver.contains('.') {
+            return None;
+        }
+
+        let prefix = format!("local {receiver} = ");
+        let max_line = position.line.saturating_sub(1);
+
+        let previous_lines = self
+            .parsed
+            .raw
+            .parser_source
+            .lines()
+            .take(max_line)
+            .collect::<Vec<_>>();
+
+        for line in previous_lines.into_iter().rev() {
+            let trimmed = line.trim();
+            let Some(expression) = trimmed.strip_prefix(&prefix) else {
+                continue;
+            };
+            let expression = expression.trim();
+
+            for class in &self.parsed.class_declarations {
+                let constructor = format!("{}.new", class.name);
+
+                if expression.starts_with(&constructor)
+                    && expression[constructor.len()..]
+                        .trim_start()
+                        .starts_with('(')
+                {
+                    return Some(class.name.clone());
+                }
+            }
+        }
+
+        None
     }
 
     fn check_external_call_arguments(

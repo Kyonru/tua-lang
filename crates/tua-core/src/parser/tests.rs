@@ -128,6 +128,49 @@ end
 }
 
 #[test]
+fn normalized_source_lowers_class_syntax_to_metatable_lua() {
+    let source = r#"open class Entity {
+  x: number
+  y: number
+
+  init(x: number, y: number) {
+    self.x = x
+    self.y = y
+  }
+
+  update(dt: number) {
+  }
+}
+
+final class Player extends Entity {
+  speed: number = 120
+
+  init(x: number, y: number) {
+    super(x, y)
+  }
+
+  override final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+"#;
+    let normalized = normalize_tua_source(source);
+
+    assert!(normalized.parser_source.contains("local Entity = {}"));
+    assert!(normalized.parser_source.contains("Entity.__type_id = 1"));
+    assert!(normalized
+        .parser_source
+        .contains("setmetatable(Player, { __index = Entity })"));
+    assert!(normalized
+        .parser_source
+        .contains("local function Player_update(self: Player, dt: number)"));
+    assert!(normalized
+        .parser_source
+        .contains("Player.update = Player_update"));
+    parse_tua_source("src/classes.tua", source).expect("class syntax should parse after lowering");
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",

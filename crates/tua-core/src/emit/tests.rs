@@ -190,6 +190,61 @@ local Player = {}
 }
 
 #[test]
+fn snapshot_lowers_classes_to_optimized_metatable_lua() {
+    let emitted = emit_tua_source(
+        "src/classes.tua",
+        r#"
+open class Entity {
+  x: number
+  y: number
+
+  init(x: number, y: number) {
+    self.x = x
+    self.y = y
+  }
+
+  update(dt: number) {
+  }
+}
+
+final class Particle extends Entity {
+  speed: number = 120
+
+  init(x: number, y: number) {
+    super(x, y)
+  }
+
+  override final update(dt: number) {
+    self.x += self.speed * dt
+  }
+}
+
+local particle = Particle.new(1, 2)
+particle.update(0.1)
+particle:update(0.2)
+local entity = Entity.new(0, 0)
+entity:update(0.3)
+
+if particle is Entity then
+  particle.x = 3
+end
+"#,
+    )
+    .expect("class syntax should emit optimized Lua");
+
+    assert!(emitted.contains("Entity.__type_id = 1"));
+    assert!(emitted.contains("Particle.__is = {\n  [1] = true,\n  [2] = true,\n}"));
+    assert!(emitted.contains("local function Particle_update(self, dt)"));
+    assert!(emitted.contains(
+        "return setmetatable({\n    x = x,\n    y = y,\n    speed = 120,\n  }, Particle)"
+    ));
+    assert!(emitted.contains("Particle_update(particle, 0.1)"));
+    assert!(emitted.contains("Particle_update(particle, 0.2)"));
+    assert!(emitted.contains("entity:update(0.3)"));
+    assert!(emitted.contains(".__is[Entity.__type_id] == true"));
+}
+
+#[test]
 fn snapshot_emits_luacats_annotations() {
     let emitted = emit_tua_source_with_mode(
         "src/functions.tua",
