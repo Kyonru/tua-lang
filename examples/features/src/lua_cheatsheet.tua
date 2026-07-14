@@ -328,6 +328,18 @@ local account = setmetatable({ name = "checking", balance = 50 }, Account)
 local accountAfterDeposit: Account = account:deposit(25)
 account:withdraw(10)
 
+-- Feature: runtime `is` checks for visible metatable types.
+-- `maybeRuntimeValue is RuntimeMarker` emits a direct getmetatable check and
+-- narrows the true branch to the known self-index RuntimeMarker fields.
+local RuntimeMarker = {
+  kind = "marker",
+}
+RuntimeMarker.__index = RuntimeMarker
+local maybeRuntimeValue: any = setmetatable({}, RuntimeMarker)
+if maybeRuntimeValue is RuntimeMarker then
+  maybeRuntimeValue.kind = "checked"
+end
+
 -- Feature: prototype-style metatable inheritance.
 -- Static setmetatable(Sub, { __index = Base }) links let inherited methods
 -- flow through later instances for hover, completion, and call checking.

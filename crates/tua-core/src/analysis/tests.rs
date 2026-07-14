@@ -1243,6 +1243,37 @@ lookupObject.<|field_ref|>count<|/field_ref|> = 1
 }
 
 #[test]
+fn snapshot_completion_uses_is_metatable_narrowing_inside_branch() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Player = {
+  health = 0,
+}
+Player.__index = Player
+
+local value: any = {}
+
+if value is Player then
+  local health = value.h<|complete|>ealth
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion("src/main.tua", fixture.position("complete")),
+    );
+
+    assert!(labels.contains(&"health".to_owned()), "{labels:?}");
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

@@ -89,12 +89,12 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
 
-        if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
-            return Some(ty);
-        }
-
         if fields.is_empty() {
             return self.type_of_name(root, position);
+        }
+
+        if let Some(ty) = resolve_field_chain_type(self.environment, parts) {
+            return Some(ty);
         }
 
         if let Some(ty) = required_module_export_type_for_fields(self.parsed, root, fields) {

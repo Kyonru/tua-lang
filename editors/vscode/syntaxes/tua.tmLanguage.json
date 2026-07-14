@@ -107,7 +107,7 @@
         },
         {
           "name": "keyword.operator.word.tua",
-          "match": "\\b(?:and|not|or)\\b"
+          "match": "\\b(?:and|is|not|or)\\b"
         },
         {
           "name": "constant.language.tua",

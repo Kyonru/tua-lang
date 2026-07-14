@@ -64,6 +64,70 @@ local mode: FilterMode = "linear"
 }
 
 #[test]
+fn normalized_source_rewrites_condition_is_checks_for_luau_parser() {
+    let normalized = normalize_tua_source(
+        r#"if value is Player then
+  print(value)
+elseif other is string then
+  print(other)
+while current is table do
+  current = nil
+end
+end
+"#,
+    );
+
+    assert!(normalized
+        .parser_source
+        .contains(r#"if __tua_is(value, "Player") then"#));
+    assert!(normalized
+        .parser_source
+        .contains(r#"elseif __tua_is(other, "string") then"#));
+    assert!(normalized
+        .parser_source
+        .contains(r#"while __tua_is(current, "table") do"#));
+    parse_tua_source("src/runtime_is.tua", normalized.original)
+        .expect("normalized is checks should parse");
+}
+
+#[test]
+fn normalized_source_does_not_treat_keyword_suffixes_as_condition_keywords() {
+    let source = r#"local stiff = 1
+local whiled = 2
+local ended = 3
+if value is string then
+  print(stiff, whiled, ended)
+end
+"#;
+    let normalized = normalize_tua_source(source);
+
+    assert!(normalized.parser_source.contains("local stiff = 1"));
+    assert!(normalized.parser_source.contains("local whiled = 2"));
+    assert!(normalized.parser_source.contains("local ended = 3"));
+    assert!(normalized
+        .parser_source
+        .contains(r#"if __tua_is(value, "string") then"#));
+    parse_tua_source("src/runtime_is_keywords.tua", source)
+        .expect("identifiers ending in keyword text should parse");
+}
+
+#[test]
+fn normalized_source_keeps_unsupported_is_target_text_for_diagnostics() {
+    let normalized = normalize_tua_source(
+        r#"if value is Array<string> then
+  print(value)
+end
+"#,
+    );
+
+    assert!(normalized
+        .parser_source
+        .contains(r#"if __tua_is(value, "Array<string>") then"#));
+    parse_tua_source("src/runtime_is.tua", normalized.original)
+        .expect("unsupported is target should still parse for checker diagnostics");
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",

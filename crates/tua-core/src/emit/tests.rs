@@ -102,6 +102,94 @@ end
 }
 
 #[test]
+fn snapshot_lowers_runtime_is_checks_to_lua_type_and_metatable_checks() {
+    let emitted = emit_tua_source(
+        "src/runtime_is.tua",
+        r#"
+type UserId = number
+
+local Player = {
+  health = 0,
+}
+Player.__index = Player
+
+if value is string then
+  print(value)
+end
+
+if value is UserId then
+  print(value)
+end
+
+if value is Player then
+  value.health = value.health - 1
+end
+"#,
+    )
+    .expect("runtime is checks should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local Player = {
+  health = 0,
+}
+Player.__index = Player
+
+if type(value) == "string" then
+  print(value)
+end
+
+if type(value) == "number" then
+  print(value)
+end
+
+if getmetatable(value) == Player then
+  value.health = value.health - 1
+end
+"#
+    );
+}
+
+#[test]
+fn unsupported_runtime_is_target_emits_diagnostic() {
+    let diagnostics = emit_tua_source(
+        "src/runtime_is.tua",
+        r#"
+if value is Array<string> then
+  print(value)
+end
+"#,
+    )
+    .expect_err("unsupported runtime is target should not lower");
+
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
+    );
+    assert!(diagnostics[0].format_cli().contains("error TL1007"));
+}
+
+#[test]
+fn runtime_is_target_must_be_visible_at_check_site() {
+    let diagnostics = emit_tua_source(
+        "src/runtime_is_scope.tua",
+        r#"
+if value is Player then
+  print(value)
+end
+
+local Player = {}
+"#,
+    )
+    .expect_err("runtime is target declared after the check should not lower");
+
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
+    );
+}
+
+#[test]
 fn snapshot_emits_luacats_annotations() {
     let emitted = emit_tua_source_with_mode(
         "src/functions.tua",

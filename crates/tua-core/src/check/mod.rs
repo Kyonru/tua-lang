@@ -21,6 +21,8 @@ use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
+use crate::runtime_type;
+use crate::semantic::SemanticModel;
 use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
     MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
@@ -321,7 +323,8 @@ impl<'a> Checker<'a> {
             }
             ast::Stmt::While(while_stmt) => {
                 self.check_condition_expression(while_stmt.condition());
-                self.check_block(while_stmt.block(), current_return);
+                let narrowed_locals = self.narrowed_locals_for_condition(while_stmt.condition());
+                self.check_block_with_locals(while_stmt.block(), current_return, narrowed_locals);
             }
             _ => {}
         }
@@ -340,6 +343,11 @@ impl<'a> Checker<'a> {
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. } => {
                 self.check_condition_expression(expression);
+            }
+            Expression::FunctionCall(function_call)
+                if runtime_type::is_check_call(function_call) =>
+            {
+                self.check_runtime_type_check(function_call);
             }
             Expression::FunctionCall(function_call) => {
                 self.check_function_call(function_call);
@@ -675,6 +683,11 @@ impl<'a> Checker<'a> {
         return_index: usize,
     ) -> Option<Type> {
         match expression {
+            Expression::FunctionCall(function_call)
+                if runtime_type::is_check_call(function_call) =>
+            {
+                (return_index == 0).then(Type::boolean)
+            }
             Expression::FunctionCall(function_call) => self
                 .check_function_call_returns(function_call)
                 .get(return_index)
@@ -1460,6 +1473,65 @@ impl<'a> Checker<'a> {
             .collect::<BTreeMap<_, _>>();
 
         narrowed_locals_for_condition(condition, &aliases, |name| self.infer_named_value(name))
+    }
+
+    fn check_runtime_type_check(&mut self, function_call: &FunctionCall) {
+        let Some(call) = runtime_type::is_check_call_parts(function_call) else {
+            self.diagnostics.push(unsupported_runtime_check_diagnostic(
+                &self.parsed.path,
+                function_call,
+                "`is` checks must use a local value and one runtime-checkable type target",
+            ));
+            return;
+        };
+
+        if let Err(message) =
+            self.validate_runtime_type_target(&call.target, node_position(function_call))
+        {
+            self.diagnostics.push(unsupported_runtime_check_diagnostic(
+                &self.parsed.path,
+                function_call,
+                message,
+            ));
+        }
+    }
+
+    fn validate_runtime_type_target(
+        &self,
+        target: &str,
+        position: SourcePosition,
+    ) -> Result<(), String> {
+        let target = target.trim();
+
+        if runtime_type::target_lua_type_name(target).is_some() {
+            return Ok(());
+        }
+
+        if !runtime_type::is_identifier(target) {
+            return Ok(());
+        }
+
+        if let Some(runtime_target) = self.infer_named_value(target).or_else(|| {
+            SemanticModel::new(self.parsed, self.environment).type_of_name(target, position)
+        }) {
+            return match resolve_aliases(&runtime_target, self.environment, 0) {
+                Type::Table(_) => Ok(()),
+                other => Err(format!(
+                    "unsupported `is` target `{target}`: expected a metatable table, found {other}"
+                )),
+            };
+        }
+
+        if let Some(alias) = self.environment.alias(target) {
+            return match resolve_aliases(alias, self.environment, 0) {
+                Type::Primitive(_) => Ok(()),
+                other => Err(format!(
+                    "unsupported `is` target `{target}`: {other} is erased at runtime"
+                )),
+            };
+        }
+
+        Ok(())
     }
 
     fn infer_binary_operator_type(
@@ -2657,6 +2729,17 @@ fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &T
         format!("type mismatch: expected {expected}, found {found}"),
     )
     .with_code(DiagnosticCode::TYPE_MISMATCH)
+}
+
+fn unsupported_runtime_check_diagnostic(
+    path: &Path,
+    node: &impl Node,
+    message: impl Into<String>,
+) -> Diagnostic {
+    let position = node_position(node);
+
+    Diagnostic::error(path, position.line, position.column, message)
+        .with_code(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
 }
 
 fn mismatch_found_label(expected: &Type, found: &Type) -> String {

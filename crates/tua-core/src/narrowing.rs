@@ -4,6 +4,8 @@ use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Prefix,
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var_expression;
+use crate::runtime_type;
+use crate::types::MetatableFacts;
 use crate::{ParsedSource, PrimitiveType, SourcePosition, SourceSpan, Type};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,12 +19,14 @@ pub(crate) enum TypeNarrowingKind {
     NonNil,
     Nil,
     Primitive(PrimitiveType),
+    Table,
+    RuntimeType(String),
 }
 
 pub(crate) fn narrowed_locals_for_condition(
     condition: &Expression,
     aliases: &BTreeMap<String, Type>,
-    lookup: impl Fn(&str) -> Option<Type>,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
 ) -> BTreeMap<String, Type> {
     let mut locals = BTreeMap::new();
 
@@ -30,7 +34,7 @@ pub(crate) fn narrowed_locals_for_condition(
         let Some(base) = lookup(&narrowing.name) else {
             continue;
         };
-        let Some(narrowed) = apply_narrowing(aliases, &base, &narrowing.kind) else {
+        let Some(narrowed) = apply_narrowing(aliases, &base, &narrowing.kind, lookup) else {
             continue;
         };
 
@@ -175,7 +179,8 @@ fn collect_narrowed_type_at_position(
                 lookup,
                 narrowed,
             ),
-            ast::Stmt::While(while_stmt) => collect_narrowed_type_at_position(
+            ast::Stmt::While(while_stmt) => collect_if_branch_narrowing(
+                while_stmt.condition(),
                 while_stmt.block(),
                 aliases,
                 name,
@@ -212,7 +217,7 @@ fn collect_if_branch_narrowing(
             .and_then(|narrowing| {
                 let base = lookup(name)?;
 
-                apply_narrowing(aliases, &base, &narrowing.kind)
+                apply_narrowing(aliases, &base, &narrowing.kind, lookup)
             });
 
         if let Some(branch_narrowing) = branch_narrowing {
@@ -280,10 +285,22 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
                 .chain(equality_narrowing(rhs, binop, lhs))
                 .collect()
         }
+        Expression::FunctionCall(function_call) => runtime_type_check_narrowing(function_call)
+            .into_iter()
+            .collect(),
         Expression::Parentheses { expression, .. }
         | Expression::TypeAssertion { expression, .. } => condition_narrowings(expression),
         _ => Vec::new(),
     }
+}
+
+fn runtime_type_check_narrowing(function_call: &FunctionCall) -> Option<TypeNarrowing> {
+    let call = runtime_type::is_check_call_parts(function_call)?;
+
+    Some(TypeNarrowing {
+        name: call.value_name,
+        kind: TypeNarrowingKind::RuntimeType(call.target),
+    })
 }
 
 fn equality_narrowing(
@@ -328,6 +345,7 @@ fn type_call_string_target(expression: &Expression) -> Option<TypeNarrowingKind>
         "nil" => TypeNarrowingKind::Nil,
         "number" => TypeNarrowingKind::Primitive(PrimitiveType::Number),
         "string" => TypeNarrowingKind::Primitive(PrimitiveType::String),
+        "table" => TypeNarrowingKind::Table,
         _ => return None,
     })
 }
@@ -408,6 +426,7 @@ fn apply_narrowing(
     aliases: &BTreeMap<String, Type>,
     base: &Type,
     kind: &TypeNarrowingKind,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
 ) -> Option<Type> {
     let resolved = resolve_aliases_from_map(aliases, base, 0);
 
@@ -419,7 +438,93 @@ fn apply_narrowing(
         TypeNarrowingKind::Primitive(primitive) => type_contains_primitive(&resolved, *primitive)
             .then_some(Type::Primitive(*primitive))
             .or_else(|| matches!(resolved, Type::Any).then_some(Type::Primitive(*primitive))),
+        TypeNarrowingKind::Table => apply_table_narrowing(&resolved),
+        TypeNarrowingKind::RuntimeType(target) => {
+            apply_runtime_type_narrowing(aliases, &resolved, target, lookup)
+        }
     }
+}
+
+fn apply_runtime_type_narrowing(
+    aliases: &BTreeMap<String, Type>,
+    base: &Type,
+    target: &str,
+    lookup: impl Fn(&str) -> Option<Type> + Copy,
+) -> Option<Type> {
+    if runtime_type::is_table_target(target) {
+        return apply_table_narrowing(base);
+    }
+
+    if let Some(primitive) = runtime_type::target_primitive(target) {
+        let kind = match primitive {
+            PrimitiveType::Nil => TypeNarrowingKind::Nil,
+            primitive => TypeNarrowingKind::Primitive(primitive),
+        };
+
+        return apply_narrowing(aliases, base, &kind, lookup);
+    }
+
+    if let Some(runtime_target) = lookup(target) {
+        return metatable_instance_type(aliases, target, &runtime_target);
+    }
+
+    let alias = aliases.get(target)?;
+    match resolve_aliases_from_map(aliases, alias, 0) {
+        Type::Primitive(PrimitiveType::Nil) => {
+            apply_narrowing(aliases, base, &TypeNarrowingKind::Nil, lookup)
+        }
+        Type::Primitive(primitive) => apply_narrowing(
+            aliases,
+            base,
+            &TypeNarrowingKind::Primitive(primitive),
+            lookup,
+        ),
+        _ => None,
+    }
+}
+
+fn apply_table_narrowing(base: &Type) -> Option<Type> {
+    match base {
+        Type::Any => Some(Type::empty_table()),
+        Type::Table(_) => Some(base.clone()),
+        Type::Union(types) => {
+            let narrowed = types
+                .iter()
+                .filter_map(|ty| match ty {
+                    Type::Any => Some(Type::empty_table()),
+                    Type::Table(_) => Some(ty.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            match narrowed.len() {
+                0 => None,
+                1 => narrowed.into_iter().next(),
+                _ => Some(Type::union(narrowed)),
+            }
+        }
+        _ => None,
+    }
+}
+
+fn metatable_instance_type(
+    aliases: &BTreeMap<String, Type>,
+    target_name: &str,
+    target: &Type,
+) -> Option<Type> {
+    let resolved = resolve_aliases_from_map(aliases, target, 0);
+
+    if !matches!(resolved, Type::Table(_)) {
+        return None;
+    }
+
+    let base = aliases
+        .get(target_name)
+        .map(|alias| resolve_aliases_from_map(aliases, alias, 0))
+        .filter(|alias| matches!(alias, Type::Table(_)))
+        .unwrap_or_else(Type::empty_table);
+
+    Some(MetatableFacts::from_type(&resolved).apply_to_type(base))
 }
 
 fn remove_nil(ty: &Type) -> Type {
@@ -444,6 +549,7 @@ fn remove_nil(ty: &Type) -> Type {
 fn type_contains_primitive(ty: &Type, primitive: PrimitiveType) -> bool {
     match ty {
         Type::Primitive(current) => *current == primitive,
+        Type::StringLiteral(_) => primitive == PrimitiveType::String,
         Type::Union(types) => types
             .iter()
             .any(|ty| type_contains_primitive(ty, primitive)),
@@ -451,7 +557,6 @@ fn type_contains_primitive(ty: &Type, primitive: PrimitiveType) -> bool {
         Type::Alias(_)
         | Type::Function(_)
         | Type::Table(_)
-        | Type::StringLiteral(_)
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => false,

@@ -5,9 +5,13 @@ use full_moon::ast::span::ContainedSpan;
 use full_moon::ast::{self, Expression, Field, LastStmt, Var};
 use full_moon::tokenizer::TokenReference;
 
+use crate::runtime_type;
+use crate::semantic::SemanticModel;
+use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
     asset, infer_module_exports, parse_tua_source, vector, AnnotationMode, Diagnostic,
-    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, TuaType, Type,
+    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, TuaType,
+    Type,
 };
 
 pub fn emit_tua_source(
@@ -66,6 +70,7 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
         let output = lower_default_parameter_guards_text(&output, parsed);
         let output = lower_builtin_calls_text(&output);
         let output = lower_import_calls_text(&output, parsed, import_resolver)?;
+        let output = lower_runtime_type_checks_text(&output, parsed)?;
         let output = lower_compound_assignments_text(&output);
 
         Ok(match annotation_mode {
@@ -75,6 +80,250 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
     } else {
         Err(diagnostics)
     }
+}
+
+fn lower_runtime_type_checks_text(
+    output: &str,
+    parsed: &ParsedSource,
+) -> Result<String, Vec<Diagnostic>> {
+    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+    let semantic = SemanticModel::new(parsed, &environment);
+    let runtime_check_sites = runtime_type_check_sites(parsed);
+    let mut runtime_check_site_index = 0usize;
+    let mut lowered = String::with_capacity(output.len());
+    let mut diagnostics = Vec::new();
+    let mut index = 0;
+
+    while index < output.len() {
+        let rest = &output[index..];
+
+        if rest.starts_with("--") {
+            let end = consume_comment(output, index);
+
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(output, index) {
+            lowered.push_str(&output[index..end]);
+            index = end;
+            continue;
+        }
+
+        if let Some(identifier_end) = consume_identifier(rest) {
+            let name = &output[index..index + identifier_end];
+
+            if name == runtime_type::IS_CHECK_HELPER && can_start_builtin_call(output, index) {
+                let argument_start = skip_whitespace(output, index + identifier_end);
+
+                if let Some((replacement, end)) = lower_runtime_type_check_call(
+                    output,
+                    argument_start,
+                    parsed,
+                    &environment,
+                    &semantic,
+                    runtime_check_sites.get(runtime_check_site_index).copied(),
+                ) {
+                    runtime_check_site_index += 1;
+
+                    match replacement {
+                        Ok(replacement) => lowered.push_str(&replacement),
+                        Err(diagnostic) => {
+                            diagnostics.push(diagnostic);
+                            lowered.push_str(&output[index..end]);
+                        }
+                    }
+
+                    index = end;
+                    continue;
+                }
+            }
+
+            lowered.push_str(name);
+            index += identifier_end;
+            continue;
+        }
+
+        let character = rest
+            .chars()
+            .next()
+            .expect("loop only runs at valid string boundaries");
+
+        lowered.push(character);
+        index += character.len_utf8();
+    }
+
+    if diagnostics.is_empty() {
+        Ok(lowered)
+    } else {
+        Err(diagnostics)
+    }
+}
+
+fn lower_runtime_type_check_call(
+    output: &str,
+    argument_start: usize,
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    semantic: &SemanticModel<'_>,
+    source_position: Option<SourcePosition>,
+) -> Option<(Result<String, Diagnostic>, usize)> {
+    if !output[argument_start..].starts_with('(') {
+        return None;
+    }
+
+    let close = find_matching_paren(output, argument_start)?;
+    let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
+    let diagnostic_position = source_position
+        .map(source_position_tuple)
+        .unwrap_or_else(|| source_position_for_byte(output, argument_start));
+
+    let replacement = match arguments.as_slice() {
+        [value, target] if !value.is_empty() => {
+            let Some(target) = short_string_literal_value(target) else {
+                return Some((
+                    Err(runtime_type_emit_diagnostic(
+                        parsed,
+                        diagnostic_position,
+                        "`is` checks require one static type target",
+                    )),
+                    close + 1,
+                ));
+            };
+
+            let lookup_position = source_position.unwrap_or_else(|| SourcePosition {
+                line: diagnostic_position.0,
+                column: diagnostic_position.1,
+            });
+
+            if let Some(lua_type) =
+                runtime_type_lua_type_name(environment, semantic, &target, lookup_position)
+            {
+                Ok(format!("type({value}) == {}", lua_string_literal(lua_type)))
+            } else if visible_metatable_target(semantic, &target, lookup_position) {
+                Ok(format!("getmetatable({value}) == {target}"))
+            } else {
+                Err(runtime_type_emit_diagnostic(
+                    parsed,
+                    diagnostic_position,
+                    format!(
+                        "unsupported `is` target `{target}`: expected a primitive Lua type or visible metatable table"
+                    ),
+                ))
+            }
+        }
+        _ => Err(runtime_type_emit_diagnostic(
+            parsed,
+            diagnostic_position,
+            "`is` checks require a value and one runtime-checkable type target",
+        )),
+    };
+
+    Some((replacement, close + 1))
+}
+
+fn runtime_type_check_sites(parsed: &ParsedSource) -> Vec<SourcePosition> {
+    let source = &parsed.raw.parser_source;
+    let mut sites = Vec::new();
+    let mut index = 0usize;
+
+    while index < source.len() {
+        if source[index..].starts_with("--") {
+            index = consume_comment(source, index);
+            continue;
+        }
+
+        if let Some(end) = consume_string_literal(source, index) {
+            index = end;
+            continue;
+        }
+
+        if let Some(identifier_end) = consume_identifier(&source[index..]) {
+            let name = &source[index..index + identifier_end];
+
+            if name == runtime_type::IS_CHECK_HELPER && can_start_builtin_call(source, index) {
+                let argument_start = skip_whitespace(source, index + identifier_end);
+
+                if source[argument_start..].starts_with('(')
+                    && find_matching_paren(source, argument_start).is_some()
+                {
+                    sites.push(source_position_from_byte(source, argument_start));
+                }
+            }
+
+            index += identifier_end;
+            continue;
+        }
+
+        let character = source[index..]
+            .chars()
+            .next()
+            .expect("loop only runs at valid string boundaries");
+        index += character.len_utf8();
+    }
+
+    sites
+}
+
+fn runtime_type_lua_type_name<'a>(
+    environment: &'a TypeEnvironment,
+    semantic: &SemanticModel<'_>,
+    target: &'a str,
+    position: SourcePosition,
+) -> Option<&'static str> {
+    if let Some(lua_type) = runtime_type::target_lua_type_name(target) {
+        return Some(lua_type);
+    }
+
+    if semantic.type_of_name(target, position).is_some() {
+        return None;
+    }
+
+    alias_lua_type_name(environment, environment.alias(target)?, 0)
+}
+
+fn alias_lua_type_name(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    depth: usize,
+) -> Option<&'static str> {
+    if depth >= 64 {
+        return None;
+    }
+
+    match ty {
+        Type::Primitive(crate::PrimitiveType::Boolean) => Some("boolean"),
+        Type::Primitive(crate::PrimitiveType::Nil) => Some("nil"),
+        Type::Primitive(crate::PrimitiveType::Number) => Some("number"),
+        Type::Primitive(crate::PrimitiveType::String) => Some("string"),
+        Type::Alias(name) => alias_lua_type_name(environment, environment.alias(name)?, depth + 1),
+        _ => None,
+    }
+}
+
+fn visible_metatable_target(
+    semantic: &SemanticModel<'_>,
+    target: &str,
+    position: SourcePosition,
+) -> bool {
+    if !runtime_type::is_identifier(target) {
+        return false;
+    }
+
+    matches!(
+        semantic.type_of_name(target, position),
+        Some(Type::Table(_))
+    )
+}
+
+fn runtime_type_emit_diagnostic(
+    parsed: &ParsedSource,
+    position: (usize, usize),
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::error(parsed.path.clone(), position.0, position.1, message)
+        .with_code(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
 }
 
 fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> String {
@@ -1283,6 +1532,10 @@ fn import_emit_diagnostic(
 }
 
 fn source_position_for_byte(source: &str, byte: usize) -> (usize, usize) {
+    source_position_tuple(source_position_from_byte(source, byte))
+}
+
+fn source_position_from_byte(source: &str, byte: usize) -> SourcePosition {
     let mut line = 1usize;
     let mut column = 1usize;
 
@@ -1299,7 +1552,11 @@ fn source_position_for_byte(source: &str, byte: usize) -> (usize, usize) {
         }
     }
 
-    (line, column)
+    SourcePosition { line, column }
+}
+
+fn source_position_tuple(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {

@@ -1,3 +1,5 @@
+use crate::runtime_type::IS_CHECK_HELPER;
+
 pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
     let mut normalized = String::with_capacity(source.len());
@@ -21,6 +23,29 @@ pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
 
         if starts_enum_declaration(&chars, index) {
             index = push_erased_enum_block(&chars, index, &mut normalized);
+            continue;
+        }
+
+        if starts_keyword(&chars, index, "if") {
+            index =
+                push_condition_header_with_is_checks(&chars, index, "if", "then", &mut normalized);
+            continue;
+        }
+
+        if starts_keyword(&chars, index, "elseif") {
+            index = push_condition_header_with_is_checks(
+                &chars,
+                index,
+                "elseif",
+                "then",
+                &mut normalized,
+            );
+            continue;
+        }
+
+        if starts_keyword(&chars, index, "while") {
+            index =
+                push_condition_header_with_is_checks(&chars, index, "while", "do", &mut normalized);
             continue;
         }
 
@@ -85,6 +110,14 @@ fn starts_enum_declaration(chars: &[char], index: usize) -> bool {
 }
 
 fn starts_keyword(chars: &[char], index: usize, keyword: &str) -> bool {
+    if index
+        .checked_sub(1)
+        .and_then(|previous| chars.get(previous))
+        .is_some_and(|character| is_identifier_char(*character))
+    {
+        return false;
+    }
+
     for (offset, expected) in keyword.chars().enumerate() {
         if chars.get(index + offset) != Some(&expected) {
             return false;
@@ -94,6 +127,214 @@ fn starts_keyword(chars: &[char], index: usize, keyword: &str) -> bool {
     !chars
         .get(index + keyword.chars().count())
         .is_some_and(|character| is_identifier_char(*character))
+}
+
+fn push_condition_header_with_is_checks(
+    chars: &[char],
+    mut index: usize,
+    keyword: &str,
+    terminator: &str,
+    output: &mut String,
+) -> usize {
+    for character in keyword.chars() {
+        output.push(character);
+        index += 1;
+    }
+
+    let mut depth = 0usize;
+
+    while index < chars.len() {
+        if starts_line_comment(chars, index) {
+            return push_until_line_end(chars, index, output);
+        }
+
+        if chars[index] == '"' || chars[index] == '\'' {
+            index = push_short_string(chars, index, output);
+            continue;
+        }
+
+        if chars[index] == '[' && chars.get(index + 1) == Some(&'[') {
+            index = push_long_bracket(chars, index, output);
+            continue;
+        }
+
+        if depth == 0 && starts_keyword(chars, index, terminator) {
+            for character in terminator.chars() {
+                output.push(character);
+                index += 1;
+            }
+
+            return index;
+        }
+
+        if let Some((replacement, end)) = runtime_is_check_replacement(chars, index, terminator) {
+            output.push_str(&replacement);
+            index = end;
+            continue;
+        }
+
+        let character = chars[index];
+
+        match character {
+            '(' | '{' | '[' => depth += 1,
+            ')' | '}' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+
+        output.push(character);
+        index += 1;
+    }
+
+    index
+}
+
+fn runtime_is_check_replacement(
+    chars: &[char],
+    index: usize,
+    terminator: &str,
+) -> Option<(String, usize)> {
+    if !can_start_runtime_is_lhs(chars, index) {
+        return None;
+    }
+
+    let lhs_end = consume_identifier_chars(chars, index)?;
+    let is_start = skip_inline_whitespace(chars, lhs_end);
+
+    if is_start == lhs_end || !starts_keyword(chars, is_start, "is") {
+        return None;
+    }
+
+    let target_start = skip_inline_whitespace(chars, is_start + "is".len());
+
+    if target_start == is_start + "is".len() {
+        return None;
+    }
+
+    let target_end = consume_runtime_is_target(chars, target_start, terminator)?;
+    let target_text = chars[target_start..target_end]
+        .iter()
+        .collect::<String>()
+        .trim()
+        .to_owned();
+
+    if target_text.is_empty() {
+        return None;
+    }
+
+    let lhs = chars[index..lhs_end].iter().collect::<String>();
+    let replacement = format!(
+        "{IS_CHECK_HELPER}({lhs}, \"{}\")",
+        lua_short_string_inner(&target_text)
+    );
+
+    Some((replacement, target_end))
+}
+
+fn can_start_runtime_is_lhs(chars: &[char], index: usize) -> bool {
+    if !chars
+        .get(index)
+        .is_some_and(|character| is_identifier_start(*character))
+    {
+        return false;
+    }
+
+    !index
+        .checked_sub(1)
+        .and_then(|previous| chars.get(previous))
+        .is_some_and(|character| {
+            is_identifier_char(*character) || *character == '.' || *character == ':'
+        })
+}
+
+fn consume_identifier_chars(chars: &[char], mut index: usize) -> Option<usize> {
+    if !chars
+        .get(index)
+        .is_some_and(|character| is_identifier_start(*character))
+    {
+        return None;
+    }
+
+    index += 1;
+
+    while chars
+        .get(index)
+        .is_some_and(|character| is_identifier_char(*character))
+    {
+        index += 1;
+    }
+
+    Some(index)
+}
+
+fn skip_inline_whitespace(chars: &[char], mut index: usize) -> usize {
+    while chars
+        .get(index)
+        .is_some_and(|character| *character == ' ' || *character == '\t')
+    {
+        index += 1;
+    }
+
+    index
+}
+
+fn consume_runtime_is_target(chars: &[char], mut index: usize, terminator: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut end = index;
+
+    while index < chars.len() {
+        if depth == 0
+            && (starts_keyword(chars, index, terminator)
+                || starts_keyword(chars, index, "and")
+                || starts_keyword(chars, index, "or"))
+        {
+            break;
+        }
+
+        let character = chars[index];
+
+        if depth == 0 && (character == ')' || character == ',') {
+            break;
+        }
+
+        if character == '\n' {
+            break;
+        }
+
+        match character {
+            '(' | '{' | '[' | '<' => depth += 1,
+            ')' | '}' | ']' | '>' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+
+        if !character.is_whitespace() {
+            end = index + 1;
+        }
+
+        index += 1;
+    }
+
+    (end > 0).then_some(end)
+}
+
+fn is_identifier_start(character: char) -> bool {
+    character == '_' || character.is_ascii_alphabetic()
+}
+
+fn lua_short_string_inner(input: &str) -> String {
+    let mut output = String::new();
+
+    for character in input.chars() {
+        match character {
+            '\\' => output.push_str("\\\\"),
+            '"' => output.push_str("\\\""),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            _ => output.push(character),
+        }
+    }
+
+    output
 }
 
 fn push_function_header_with_erased_parameter_defaults(

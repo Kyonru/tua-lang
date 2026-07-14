@@ -44,10 +44,10 @@ make build-features
   referenced Lua cheatsheet. It covers comments, primitives, tables, operators,
   shorthand function calls, lookups, control flow, functions, closures,
   varargs, modules, metatables, prototype inheritance, typed iterator hooks,
-  OOP-style methods, scoped `Self` annotations, error handling, standard
-  libraries, coroutines, environments, debug/GC APIs, LuaJIT boundaries, and
-  LÖVE helper surfaces, with comments describing how Tua should interpret each
-  feature.
+  runtime `is` checks, OOP-style methods, scoped `Self` annotations, error
+  handling, standard libraries, coroutines, environments, debug/GC APIs, LuaJIT
+  boundaries, and LÖVE helper surfaces, with comments describing how Tua should
+  interpret each feature.
 - `src/formatting_lints.tua` demonstrates the clean baseline enforced by the
   default `formatting_lints` diagnostic profile.
 - `src/luacats_emit.tua` demonstrates the optional LuaCATS emission mode for

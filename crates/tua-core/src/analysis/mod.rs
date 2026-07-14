@@ -6035,6 +6035,7 @@ fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool {
             | crate::DiagnosticCode::TYPE_MISMATCH
             | crate::DiagnosticCode::TYPE_ARGUMENT_COUNT
             | crate::DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON
+            | crate::DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK
             | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
             | crate::DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
             | crate::DiagnosticCode::LINT_FORMAT_INDENTATION

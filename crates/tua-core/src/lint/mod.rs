@@ -14,6 +14,7 @@ use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::format::FormatOptions;
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
+use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
@@ -813,6 +814,11 @@ impl<'a> SymbolAnalyzer<'a> {
 
     fn analyze_function_call(&mut self, function_call: &FunctionCall) {
         self.mark_direct_local_function_call(function_call);
+        if runtime_type::is_check_call(function_call) {
+            self.analyze_suffixes(function_call.suffixes());
+            return;
+        }
+
         self.analyze_prefix(function_call.prefix());
         self.analyze_suffixes(function_call.suffixes());
     }

@@ -1609,6 +1609,145 @@ end
 }
 
 #[test]
+fn accepts_is_primitive_and_alias_narrowing_inside_conditions() {
+    check_tua_source(
+        "src/runtime_is.tua",
+        r#"
+type UserId = number
+
+local function from_string(value: string | number): string
+  if value is string then
+    return value
+  end
+
+  return ""
+end
+
+local function from_alias(value: any): number
+  if value is UserId then
+    return value
+  end
+
+  return 0
+end
+"#,
+    )
+    .expect("primitive and primitive-alias is checks should narrow true branches");
+}
+
+#[test]
+fn accepts_is_metatable_narrowing_inside_conditions() {
+    check_tua_source(
+        "src/runtime_is.tua",
+        r#"
+local Player = {
+  health = 0,
+}
+Player.__index = Player
+
+local function damage(value: any): number
+  if value is Player then
+    value.health = value.health - 1
+    return value.health
+  end
+
+  return 0
+end
+"#,
+    )
+    .expect("visible self-index metatable targets should narrow to instance fields");
+}
+
+#[test]
+fn accepts_is_metatable_narrowing_with_same_name_shape_alias() {
+    let source = r#"
+type Account = {
+  name: string,
+  balance: number,
+}
+
+local Account = {}
+Account.__index = Account
+
+function Account:deposit(amount: number): Self
+  self.balance = self.balance + amount
+
+  return self
+end
+
+function Account:withdraw(amount: number): number
+  self.balance = self.balance - amount
+
+  return self.balance
+end
+
+local account = setmetatable({ name = "checking", balance = 50 }, Account)
+local accountAfterDeposit: Account = account:deposit(25)
+account:withdraw(10)
+local value: any = account
+
+if value is Account then
+  value:deposit(5)
+  value.balance = value.balance - 1
+end
+"#;
+
+    check_tua_source("src/runtime_is.tua", source)
+        .expect("runtime metatable checks should merge same-name table aliases");
+
+    let mut ecs_config = EcsConfig::default();
+    ecs_config.enabled = true;
+    let parsed = parse_tua_source("src/runtime_is.tua", source).expect("source should parse");
+    let mut diagnostics_config = DiagnosticsConfig::default();
+    diagnostics_config.inline_ignores = true;
+    diagnostics_config.undefined_variables = true;
+
+    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+        &parsed,
+        &[],
+        &diagnostics_config,
+        &JitConfig::default(),
+        &ecs_config,
+        &FormatOptions::default(),
+    )
+    .expect("ECS-enabled diagnostics should preserve runtime metatable narrowing");
+}
+
+#[test]
+fn rejects_unsupported_is_targets() {
+    let diagnostics = check_tua_source(
+        "src/runtime_is.tua",
+        r#"
+type Player = {
+  health: number,
+}
+
+local value: any = {}
+
+if value is Player then
+  value = value
+end
+
+if value is Array<string> then
+  value = value
+end
+"#,
+    )
+    .expect_err("erased runtime is targets should be rejected");
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
+            })
+            .count(),
+        1
+    );
+    assert!(diagnostics[0].format_cli().contains("error TL1007"));
+}
+
+#[test]
 fn mutation_inside_guard_clears_narrowed_assignment_target() {
     let diagnostics = check_tua_source(
         "src/narrowing_mutation.tua",

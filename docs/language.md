@@ -330,6 +330,48 @@ type MaybeNumber = number | nil
 A value can be assigned to a union when it is compatible with at least one union
 member.
 
+## Runtime `is` Checks
+
+Use `value is Type` in `if`, `elseif`, and `while` conditions when a cheap
+runtime check should also narrow the true branch:
+
+```tua
+local function label(value: string | number): string
+  if value is string then
+    return value
+  end
+
+  return "" .. value
+end
+```
+
+Primitive targets compile to `type(value) == "..."`. The supported runtime
+names are `string`, `number`, `boolean`, `nil`, and `table`.
+
+For visible metatable class tables, Tua emits a direct identity check:
+
+```tua
+local Player = { health = 0 }
+Player.__index = Player
+
+if value is Player then
+  value.health -= 1
+end
+```
+
+Emitted Lua:
+
+```lua
+if getmetatable(value) == Player then
+  value.health = value.health - 1
+end
+```
+
+Aliases are erased at runtime, so `is` only accepts an alias when it resolves to
+a supported primitive. Erased table-shape aliases produce `TL1007`. Structural
+checks, inheritance checks, and generic targets such as `Array<string>` are not
+runtime-checkable in v1 and are rejected before Lua is emitted.
+
 ## Function Annotations
 
 ```tua

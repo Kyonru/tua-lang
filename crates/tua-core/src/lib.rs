@@ -39,6 +39,7 @@ mod project;
 pub mod project_model;
 pub mod references;
 pub mod rename;
+mod runtime_type;
 pub mod scope;
 pub mod selection_range;
 mod semantic;

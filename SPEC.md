@@ -193,6 +193,33 @@ type LoadMode = "static" | "stream"
 Unions are checked structurally: assigning a value to a union is allowed when the
 value is compatible with at least one member of the union.
 
+### Runtime `is` Checks
+
+`value is Type` is available in `if`, `elseif`, and `while` conditions for
+cheap runtime checks that also narrow the true branch.
+
+```tua
+if value is string then
+  return value
+end
+```
+
+Primitive targets compile directly to `type(value) == "..."`. The supported
+primitive/runtime names are `string`, `number`, `boolean`, `nil`, and `table`.
+
+For visible self-index/metatable class tables, `value is Player` compiles to a
+direct metatable identity check:
+
+```lua
+getmetatable(value) == Player
+```
+
+Erased aliases are allowed only when they resolve to a supported primitive.
+Erased table-shape aliases produce `TL1007`. Arrays, dictionaries, tuples,
+functions, structural checks, inheritance checks, and generic targets such as
+`Array<string>` are not runtime-checkable in v1 and are rejected before Lua is
+emitted.
+
 ### Enums
 
 Enums are erased sugar for a string literal union. They exist to make long mode
@@ -375,6 +402,7 @@ The checker must:
   iterated value is statically known;
 - use visible `__pairs` and `__ipairs` tuple return facts for generic loop
   variables when a metatable is statically known;
+- narrow true branches for supported `value is Type` runtime checks;
 - allow `any` to flow to and from all types;
 - preserve permissive behavior for unannotated dynamic Lua code.
 
@@ -744,6 +772,10 @@ Suggested diagnostic code ranges:
 - `TL4000`-`TL4999`: lint and style guidance diagnostics;
 - `TL5000`-`TL5999`: built-in domain plugin diagnostics.
 
+The current type-specific codes include:
+
+- `TL1007`: unsupported runtime `is` check target;
+
 LuaJIT-oriented guidance uses the lint/style range and is disabled by default.
 The initial codes are:
 
@@ -788,7 +820,9 @@ change type inference, lowering, emitted Lua, or runtime behavior.
 
 tua v1 does not include:
 
-- runtime type checks;
+- structural runtime validation for erased table shapes;
+- inheritance-aware runtime type checks;
+- reified generic runtime type checks;
 - a custom runtime library;
 - a new VM;
 - new module syntax;
