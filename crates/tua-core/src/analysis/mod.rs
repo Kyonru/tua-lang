@@ -14,8 +14,9 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::completion::{
-    complete_field_access_in_source_with_environment, complete_source_with_parsed_environment,
-    filter_and_rank_completions,
+    complete_field_access_in_source_with_environment_and_project_sources,
+    complete_source_with_parsed_environment,
+    complete_source_with_parsed_environment_and_project_sources, filter_and_rank_completions,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -541,8 +542,9 @@ impl AnalysisHost {
             self.cache
                 .borrow_mut()
                 .invalidate_changed_file(&path, &source, kind, &self.config);
+        self.clear_completion_cache();
         if invalidated_dependents {
-            self.clear_query_caches();
+            self.clear_definition_cache();
         }
         self.vfs.set_disk_file(path, source, vfs_kind);
         self.bump_revision();
@@ -591,8 +593,9 @@ impl AnalysisHost {
             self.cache
                 .borrow_mut()
                 .invalidate_changed_file(&path, &source, kind, &self.config);
+        self.clear_completion_cache();
         if invalidated_dependents {
-            self.clear_query_caches();
+            self.clear_definition_cache();
         }
         self.vfs.open_file(path, source, vfs_kind);
         self.bump_revision();
@@ -939,7 +942,15 @@ impl AnalysisHost {
     }
 
     fn clear_query_caches(&self) {
+        self.clear_completion_cache();
+        self.clear_definition_cache();
+    }
+
+    fn clear_completion_cache(&self) {
         self.completion_cache.borrow_mut().clear();
+    }
+
+    fn clear_definition_cache(&self) {
         self.definition_cache.borrow_mut().clear();
     }
 
@@ -1175,9 +1186,11 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Vec<Completion> {
         let source = source_override.unwrap_or(&file.source);
+        let project_sources = self.project_completion_sources(path);
         let completions = match &file.parsed {
             Ok(parsed) => {
-                let completions = self.project_completions(parsed, source, position);
+                let completions =
+                    self.project_completions(parsed, source, position, &project_sources);
 
                 if !completions.is_empty() {
                     completions
@@ -1191,18 +1204,31 @@ impl AnalysisSnapshot {
                         environment
                     });
 
-                    complete_source_with_parsed_environment(source, parsed, position, &environment)
+                    complete_source_with_parsed_environment_and_project_sources(
+                        source,
+                        parsed,
+                        position,
+                        &environment,
+                        &project_sources,
+                    )
                 } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
-                    complete_source_with_parsed_environment(
+                    complete_source_with_parsed_environment_and_project_sources(
                         source,
                         parsed,
                         position,
                         &facts.environment,
+                        &project_sources,
                     )
                 } else {
                     let (environment, _) = build_type_environment_with_diagnostics(parsed);
 
-                    complete_source_with_parsed_environment(source, parsed, position, &environment)
+                    complete_source_with_parsed_environment_and_project_sources(
+                        source,
+                        parsed,
+                        position,
+                        &environment,
+                        &project_sources,
+                    )
                 }
             }
             Err(_) => {
@@ -1212,17 +1238,20 @@ impl AnalysisSnapshot {
                         source,
                         position,
                         &facts.environment,
+                        &project_sources,
                     );
 
                     if !completions.is_empty() {
                         completions
                     } else {
-                        let completions = complete_source_with_parsed_environment(
-                            source,
-                            &facts.parsed,
-                            position,
-                            &facts.environment,
-                        );
+                        let completions =
+                            complete_source_with_parsed_environment_and_project_sources(
+                                source,
+                                &facts.parsed,
+                                position,
+                                &facts.environment,
+                                &project_sources,
+                            );
 
                         if !completions.is_empty() {
                             completions
@@ -1238,6 +1267,16 @@ impl AnalysisSnapshot {
         };
 
         completions
+    }
+
+    fn project_completion_sources<'a>(&'a self, current_path: &Path) -> Vec<&'a str> {
+        let current_path = normalize_path(current_path);
+
+        self.files
+            .iter()
+            .filter(|(path, _)| **path != current_path)
+            .map(|(_, file)| file.source.as_str())
+            .collect()
     }
 
     pub fn definition(
@@ -3460,6 +3499,7 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         source: &str,
         position: SourcePosition,
+        project_sources: &[&str],
     ) -> Vec<Completion> {
         let asset_completions = self.project_asset_path_completions(source, position);
 
@@ -3493,12 +3533,14 @@ impl AnalysisSnapshot {
             environment.with_local_types(self.project_local_annotation_types(parsed))
         });
 
-        let field_completions = complete_field_access_in_source_with_environment(
-            source,
-            parsed,
-            position,
-            &environment,
-        );
+        let field_completions =
+            complete_field_access_in_source_with_environment_and_project_sources(
+                source,
+                parsed,
+                position,
+                &environment,
+                project_sources,
+            );
 
         if !field_completions.is_empty() {
             field_completions
@@ -3513,6 +3555,7 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
         environment: &TypeEnvironment,
+        project_sources: &[&str],
     ) -> Vec<Completion> {
         let _profile = profile::span("analysis.completion.render");
 
@@ -3529,7 +3572,13 @@ impl AnalysisSnapshot {
         }
 
         let field_completions =
-            complete_field_access_in_source_with_environment(source, parsed, position, environment);
+            complete_field_access_in_source_with_environment_and_project_sources(
+                source,
+                parsed,
+                position,
+                environment,
+                project_sources,
+            );
 
         if !field_completions.is_empty() {
             return field_completions;

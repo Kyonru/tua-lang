@@ -246,11 +246,55 @@ fn completes_table_fields_after_dot_access() {
 
     assert_eq!(
         labels(&completions),
-        vec!["alive".to_owned(), "hp".to_owned(), "pos".to_owned()]
+        vec!["hp".to_owned(), "alive".to_owned(), "pos".to_owned()]
     );
     assert!(completions
         .iter()
         .all(|item| item.kind == CompletionKind::Field));
+}
+
+#[test]
+fn field_completion_ranking_degrades_to_alphabetical_without_usage() {
+    let source = r#"type Player = { zeta: number, alpha: number, middle: number }
+local player: Player = {}
+player.
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "player."))
+            .expect("field completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec!["alpha".to_owned(), "middle".to_owned(), "zeta".to_owned()]
+    );
+}
+
+#[test]
+fn project_member_usage_ranks_field_completions() {
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local sprite: Sprite = {}
+local current = sprite.pause
+"#;
+    let project_source = r#"
+sprite.stop()
+sprite.stop()
+sprite.play()
+"#;
+    let parsed = parse_tua_source("src/main.tua", source.to_owned())
+        .expect("source should parse for completion");
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+    let completions = complete_source_with_parsed_environment_and_project_sources(
+        source,
+        &parsed,
+        position_after(source, "sprite."),
+        &environment,
+        &[project_source],
+    );
+
+    assert_eq!(
+        labels(&completions),
+        vec!["stop".to_owned(), "play".to_owned(), "pause".to_owned()]
+    );
 }
 
 #[test]
@@ -1350,7 +1394,7 @@ local value = utils.clamp
 
     assert_eq!(
         labels(&player_completions),
-        vec!["damage".to_owned(), "hp".to_owned(), "pos".to_owned()]
+        vec!["hp".to_owned(), "damage".to_owned(), "pos".to_owned()]
     );
     assert_eq!(
         labels(&utils_completions),
@@ -1394,7 +1438,7 @@ local volume = settings.audio.volume
 
     assert_eq!(
         labels(&completions),
-        vec!["muted".to_owned(), "volume".to_owned()]
+        vec!["volume".to_owned(), "muted".to_owned()]
     );
 
     fs::remove_dir_all(root).expect("test dir should be removed");

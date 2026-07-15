@@ -9,7 +9,7 @@ use crate::module_index::{exported_field_for_fields, required_module_exports_for
 use crate::profile;
 use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
 use crate::semantic::{resolve_aliases, SemanticModel};
-use crate::source_text::line_at;
+use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{asset, love_conf, vector};
@@ -81,7 +81,15 @@ pub(crate) fn filter_and_rank_completions(
     completions: Vec<Completion>,
     prefix: &str,
 ) -> Vec<Completion> {
-    if prefix.is_empty() {
+    filter_and_rank_completions_with_context(completions, prefix, None)
+}
+
+fn filter_and_rank_completions_with_context(
+    completions: Vec<Completion>,
+    prefix: &str,
+    ranking_context: Option<&CompletionRankingContext>,
+) -> Vec<Completion> {
+    if prefix.is_empty() && ranking_context.is_none() {
         return completions;
     }
 
@@ -91,25 +99,54 @@ pub(crate) fn filter_and_rank_completions(
         .filter_map(|completion| {
             let (index, completion) = completion;
 
-            completion_match_rank(&completion, prefix)
-                .map(|rank| (rank, completion_priority(&completion), index, completion))
+            completion_match_rank(&completion, prefix).map(|rank| {
+                (
+                    rank,
+                    ranking_context
+                        .map(|context| context.score(&completion))
+                        .unwrap_or_default(),
+                    completion_priority(&completion),
+                    index,
+                    completion,
+                )
+            })
         })
         .collect::<Vec<_>>();
 
+    if prefix.is_empty() && ranked.iter().all(|(_, score, _, _, _)| *score == 0) {
+        return ranked
+            .into_iter()
+            .map(|(_, _, _, _, completion)| completion)
+            .collect();
+    }
+
     ranked.sort_by(
-        |(left_rank, left_priority, left_index, left),
-         (right_rank, right_priority, right_index, right)| {
+        |(left_rank, left_score, left_priority, left_index, left),
+         (right_rank, right_score, right_priority, right_index, right)| {
             let base_order = left_rank
                 .category
                 .cmp(&right_rank.category)
-                .then_with(|| left_rank.index.cmp(&right_rank.index))
-                .then_with(|| left_priority.cmp(right_priority));
+                .then_with(|| left_rank.index.cmp(&right_rank.index));
 
             if base_order != std::cmp::Ordering::Equal {
                 return base_order;
             }
 
-            if completion_uses_source_order(left) && completion_uses_source_order(right) {
+            let score_order = right_score.cmp(left_score);
+
+            if score_order != std::cmp::Ordering::Equal {
+                return score_order;
+            }
+
+            let priority_order = left_priority.cmp(right_priority);
+
+            if priority_order != std::cmp::Ordering::Equal {
+                return priority_order;
+            }
+
+            if (*left_score > 0 || *right_score > 0)
+                || (completion_uses_source_order(left) && completion_uses_source_order(right))
+            {
                 left_index
                     .cmp(right_index)
                     .then_with(|| left_rank.len.cmp(&right_rank.len))
@@ -126,7 +163,7 @@ pub(crate) fn filter_and_rank_completions(
 
     ranked
         .into_iter()
-        .map(|(_, _, _, mut completion)| {
+        .map(|(_, _, _, _, mut completion)| {
             if completion.filter_text.is_none()
                 && !completion
                     .label
@@ -163,6 +200,252 @@ fn completion_uses_source_order(completion: &Completion) -> bool {
         completion.detail.as_deref(),
         Some("parameter" | "local" | "local function" | "module" | "function")
     )
+}
+
+#[derive(Clone, Debug)]
+struct CompletionRankingContext {
+    member_usage: Option<MemberUsageRanking>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct MemberUsageRanking {
+    member_counts: BTreeMap<String, usize>,
+    receiver_member_counts: BTreeMap<String, usize>,
+    call_counts: BTreeMap<String, usize>,
+    proximity_scores: BTreeMap<String, usize>,
+}
+
+impl CompletionRankingContext {
+    fn from_context(
+        source: &str,
+        context: &CompletionContext,
+        project_sources: &[&str],
+    ) -> Option<Self> {
+        let CompletionContext::FieldAccess {
+            receiver_parts,
+            position,
+            ..
+        } = context
+        else {
+            return None;
+        };
+
+        Some(Self {
+            member_usage: Some(MemberUsageRanking::collect(
+                source,
+                project_sources,
+                receiver_parts,
+                *position,
+            )),
+        })
+    }
+
+    fn score(&self, completion: &Completion) -> usize {
+        self.member_usage
+            .as_ref()
+            .map(|usage| usage.score(completion))
+            .unwrap_or_default()
+    }
+}
+
+impl MemberUsageRanking {
+    fn collect(
+        source: &str,
+        project_sources: &[&str],
+        receiver_parts: &[String],
+        position: SourcePosition,
+    ) -> Self {
+        let mut ranking = Self::default();
+        let receiver = receiver_parts.last().map(String::as_str);
+
+        ranking.collect_from_source(source, receiver, Some(position));
+
+        for project_source in project_sources {
+            ranking.collect_from_source(project_source, receiver, None);
+        }
+
+        ranking
+    }
+
+    fn collect_from_source(
+        &mut self,
+        source: &str,
+        receiver: Option<&str>,
+        position: Option<SourcePosition>,
+    ) {
+        let bytes = source.as_bytes();
+        let mut index = 0;
+        let mut line = 1;
+        let mut quote = None;
+        let mut escaped = false;
+        let mut line_comment = false;
+
+        while index < bytes.len() {
+            let byte = bytes[index];
+
+            if byte == b'\n' {
+                line += 1;
+                line_comment = false;
+                index += 1;
+                continue;
+            }
+
+            if line_comment {
+                index += 1;
+                continue;
+            }
+
+            if let Some(quote_byte) = quote {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == quote_byte {
+                    quote = None;
+                }
+                index += 1;
+                continue;
+            }
+
+            if byte == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                line_comment = true;
+                index += 2;
+                continue;
+            }
+
+            if matches!(byte, b'\'' | b'"') {
+                quote = Some(byte);
+                index += 1;
+                continue;
+            }
+
+            if matches!(byte, b'.' | b':') {
+                if let Some((member, end)) = identifier_at(source, index + 1) {
+                    *self.member_counts.entry(member.to_owned()).or_default() += 1;
+
+                    if next_code_byte_after(bytes, end) == Some(b'(') {
+                        *self.call_counts.entry(member.to_owned()).or_default() += 1;
+                    }
+
+                    if receiver.is_some_and(|receiver| {
+                        identifier_before(source, index).as_deref() == Some(receiver)
+                    }) {
+                        *self
+                            .receiver_member_counts
+                            .entry(member.to_owned())
+                            .or_default() += 1;
+                    }
+
+                    if let Some(position) = position {
+                        let score = proximity_score(line, position.line);
+
+                        if score > 0 {
+                            *self.proximity_scores.entry(member.to_owned()).or_default() += score;
+                        }
+                    }
+
+                    index = end;
+                    continue;
+                }
+            }
+
+            index += 1;
+        }
+    }
+
+    fn score(&self, completion: &Completion) -> usize {
+        let label = completion.label.as_str();
+        let receiver_count = self
+            .receiver_member_counts
+            .get(label)
+            .copied()
+            .unwrap_or_default();
+        let call_count = self.call_counts.get(label).copied().unwrap_or_default();
+        let member_count = self.member_counts.get(label).copied().unwrap_or_default();
+        let proximity = self
+            .proximity_scores
+            .get(label)
+            .copied()
+            .unwrap_or_default();
+        let contextual_score =
+            receiver_count * 1_000 + call_count * 200 + member_count * 50 + proximity;
+
+        if contextual_score == 0 {
+            return 0;
+        }
+
+        contextual_score + completion_quality_score(completion)
+    }
+}
+
+fn completion_quality_score(completion: &Completion) -> usize {
+    let documentation = usize::from(completion.documentation.is_some()) * 4;
+    let precise_detail = completion
+        .detail
+        .as_deref()
+        .filter(|detail| {
+            let lower = detail.to_ascii_lowercase();
+
+            !lower.contains("any") && !lower.contains("unknown")
+        })
+        .map(|_| 2)
+        .unwrap_or_default();
+    let callable = usize::from(completion.kind == CompletionKind::Function);
+
+    documentation + precise_detail + callable
+}
+
+fn proximity_score(line: usize, cursor_line: usize) -> usize {
+    let distance = line.abs_diff(cursor_line);
+
+    if distance > 50 {
+        0
+    } else {
+        50 - distance + usize::from(line <= cursor_line) * 10
+    }
+}
+
+fn identifier_at(source: &str, start: usize) -> Option<(&str, usize)> {
+    let bytes = source.as_bytes();
+
+    if !bytes
+        .get(start)
+        .is_some_and(|byte| is_identifier_start(*byte))
+    {
+        return None;
+    }
+
+    let mut end = start + 1;
+
+    while end < bytes.len() && is_identifier_continue(bytes[end]) {
+        end += 1;
+    }
+
+    Some((&source[start..end], end))
+}
+
+fn identifier_before(source: &str, end: usize) -> Option<String> {
+    let bytes = source.as_bytes();
+
+    if end == 0 || !is_identifier_continue(*bytes.get(end - 1)?) {
+        return None;
+    }
+
+    let mut start = end - 1;
+
+    while start > 0 && is_identifier_continue(bytes[start - 1]) {
+        start -= 1;
+    }
+
+    Some(source[start..end].to_owned())
+}
+
+fn next_code_byte_after(bytes: &[u8], mut index: usize) -> Option<u8> {
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+
+    bytes.get(index).copied()
 }
 
 fn completion_match_rank(completion: &Completion, prefix: &str) -> Option<TextMatchRank> {
@@ -250,18 +533,41 @@ pub(crate) fn complete_source_with_parsed_environment(
     position: SourcePosition,
     environment: &TypeEnvironment,
 ) -> Vec<Completion> {
-    let Some(context) = completion_context(source, position) else {
-        return Vec::new();
-    };
-
-    complete_parsed_source_with_context(parsed, source, context, environment)
+    complete_source_with_parsed_environment_and_project_sources(
+        source,
+        parsed,
+        position,
+        environment,
+        &[],
+    )
 }
 
-pub(crate) fn complete_field_access_in_source_with_environment(
+pub(crate) fn complete_source_with_parsed_environment_and_project_sources(
     source: &str,
     parsed: &ParsedSource,
     position: SourcePosition,
     environment: &TypeEnvironment,
+    project_sources: &[&str],
+) -> Vec<Completion> {
+    let Some(context) = completion_context(source, position) else {
+        return Vec::new();
+    };
+
+    complete_parsed_source_with_context_and_project_sources(
+        parsed,
+        source,
+        context,
+        environment,
+        project_sources,
+    )
+}
+
+pub(crate) fn complete_field_access_in_source_with_environment_and_project_sources(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    project_sources: &[&str],
 ) -> Vec<Completion> {
     let Some(CompletionContext::FieldAccess {
         receiver_parts,
@@ -274,7 +580,14 @@ pub(crate) fn complete_field_access_in_source_with_environment(
         return Vec::new();
     };
 
-    complete_fields(
+    let context = CompletionContext::FieldAccess {
+        receiver_parts: receiver_parts.clone(),
+        prefix: prefix.clone(),
+        position,
+        separator,
+        separator_span,
+    };
+    let completions = complete_fields(
         parsed,
         source,
         environment,
@@ -283,7 +596,10 @@ pub(crate) fn complete_field_access_in_source_with_environment(
         position,
         separator,
         separator_span,
-    )
+    );
+    let ranking_context = CompletionRankingContext::from_context(source, &context, project_sources);
+
+    rank_completions_for_context(completions, Some(prefix.as_str()), ranking_context.as_ref())
 }
 
 fn complete_parsed_source_with_context(
@@ -292,7 +608,24 @@ fn complete_parsed_source_with_context(
     context: CompletionContext,
     environment: &TypeEnvironment,
 ) -> Vec<Completion> {
+    complete_parsed_source_with_context_and_project_sources(
+        parsed,
+        source,
+        context,
+        environment,
+        &[],
+    )
+}
+
+fn complete_parsed_source_with_context_and_project_sources(
+    parsed: &ParsedSource,
+    source: &str,
+    context: CompletionContext,
+    environment: &TypeEnvironment,
+    project_sources: &[&str],
+) -> Vec<Completion> {
     let prefix = context.filter_prefix().map(str::to_owned);
+    let ranking_context = CompletionRankingContext::from_context(source, &context, project_sources);
     let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
         CompletionContext::DocumentationSnippet { position } => {
@@ -356,7 +689,7 @@ fn complete_parsed_source_with_context(
         }
     };
 
-    rank_completions_for_prefix(completions, prefix.as_deref())
+    rank_completions_for_context(completions, prefix.as_deref(), ranking_context.as_ref())
 }
 
 fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) -> Vec<Completion> {
@@ -388,8 +721,18 @@ fn rank_completions_for_prefix(
     completions: Vec<Completion>,
     prefix: Option<&str>,
 ) -> Vec<Completion> {
+    rank_completions_for_context(completions, prefix, None)
+}
+
+fn rank_completions_for_context(
+    completions: Vec<Completion>,
+    prefix: Option<&str>,
+    ranking_context: Option<&CompletionRankingContext>,
+) -> Vec<Completion> {
     match prefix {
-        Some(prefix) => filter_and_rank_completions(completions, prefix),
+        Some(prefix) => {
+            filter_and_rank_completions_with_context(completions, prefix, ranking_context)
+        }
         None => completions,
     }
 }

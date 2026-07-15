@@ -2230,6 +2230,8 @@ Acceptance:
 
 ### 77.1 `feat(completion): add ranking features from local context + project usage`
 
+Status: done.
+
 Scope:
 
 - Add a ranking layer that scores existing compiler candidates with low-latency signals:

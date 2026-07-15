@@ -2779,7 +2779,7 @@ local field = player.hp
         completion_with_label(&output, 2, "Player")["labelDetails"]["description"],
         "type alias"
     );
-    assert_completion_labels(&output, 3, ["alive", "hp", "pos"]);
+    assert_completion_labels(&output, 3, ["hp", "pos", "alive"]);
     assert_eq!(
         completion_with_label(&output, 3, "hp")["labelDetails"]["description"],
         "field: number"
