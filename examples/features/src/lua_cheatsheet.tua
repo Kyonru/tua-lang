@@ -469,6 +469,10 @@ local vectorMetatable = {
   __newindex = setVectorLabel,
 }
 
+vectorA.y = 1
+
+local b = 13
+
 setmetatable(vectorA, vectorMetatable)
 setmetatable(vectorB, vectorMetatable)
 

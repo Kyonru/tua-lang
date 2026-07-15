@@ -1,18 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall};
-use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
-use full_moon::visitors::Visitor;
-
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::{complete_import_paths, complete_require_paths};
 use self::sequence::{
     score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
 };
 use self::symbol::lua_symbols_before_position;
-use crate::ast_utils::field_chain_before_first_call;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::profile;
@@ -1810,17 +1804,17 @@ fn collect_signal_event_candidates(
     source_rank: usize,
     source_order_offset: usize,
 ) -> Vec<SignalEventCandidate> {
-    let mut visitor = SignalEventVisitor {
-        environment,
-        semantic: SemanticModel::new(parsed, environment),
-        skip_position,
-        source_rank,
-        source_order_offset,
-        candidates: Vec::new(),
-    };
-
-    visitor.visit_ast(&parsed.ast);
-    visitor.candidates
+    signal::collect_event_mentions(parsed, environment, skip_position)
+        .into_iter()
+        .enumerate()
+        .map(|(index, mention)| SignalEventCandidate {
+            name: mention.name,
+            receiver_parts: mention.receiver_parts,
+            position: mention.position,
+            source_rank,
+            source_order: source_order_offset + index,
+        })
+        .collect()
 }
 
 fn signal_event_completions(
@@ -1859,93 +1853,6 @@ fn signal_event_completions(
     completions
 }
 
-struct SignalEventVisitor<'a> {
-    environment: &'a TypeEnvironment,
-    semantic: SemanticModel<'a>,
-    skip_position: Option<SourcePosition>,
-    source_rank: usize,
-    source_order_offset: usize,
-    candidates: Vec<SignalEventCandidate>,
-}
-
-impl Visitor for SignalEventVisitor<'_> {
-    fn visit_function_call(&mut self, function_call: &FunctionCall) {
-        let Some(callee_parts) = field_chain_before_first_call(function_call) else {
-            return;
-        };
-        let Some(method) = callee_parts.last() else {
-            return;
-        };
-
-        if callee_parts.len() < 2 || !signal::is_event_name_method(method) {
-            return;
-        }
-
-        let receiver_parts = &callee_parts[..callee_parts.len() - 1];
-        let position = node_start(function_call);
-        let Some(receiver_type) = self.semantic.type_of_field_chain(receiver_parts, position)
-        else {
-            return;
-        };
-
-        if !signal::type_is_signal_bus(self.environment, &receiver_type) {
-            return;
-        }
-
-        let Some((name, span)) = first_string_argument(function_call) else {
-            return;
-        };
-
-        if name.is_empty()
-            || self
-                .skip_position
-                .is_some_and(|position| span_contains_position(span, position))
-        {
-            return;
-        }
-
-        self.candidates.push(SignalEventCandidate {
-            name,
-            receiver_parts: receiver_parts.to_vec(),
-            position: span.start,
-            source_rank: self.source_rank,
-            source_order: self.source_order_offset + self.candidates.len(),
-        });
-    }
-}
-
-fn first_string_argument(function_call: &FunctionCall) -> Option<(String, crate::SourceSpan)> {
-    let call = function_call.suffixes().find_map(|suffix| match suffix {
-        full_moon::ast::Suffix::Call(call) => Some(call),
-        _ => None,
-    })?;
-
-    match call {
-        Call::AnonymousCall(FunctionArgs::String(value)) => {
-            Some((string_literal_value(value)?, node_span(value)?))
-        }
-        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
-            let Expression::String(value) = arguments.iter().next()? else {
-                return None;
-            };
-
-            Some((string_literal_value(value)?, node_span(value)?))
-        }
-        Call::MethodCall(method) => match method.args() {
-            FunctionArgs::String(value) => Some((string_literal_value(value)?, node_span(value)?)),
-            FunctionArgs::Parentheses { arguments, .. } => {
-                let Expression::String(value) = arguments.iter().next()? else {
-                    return None;
-                };
-
-                Some((string_literal_value(value)?, node_span(value)?))
-            }
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
 fn source_may_contain_signal_event(source: &str) -> bool {
     (source.contains("signal") || source.contains("SignalBus"))
         && (source.contains(":on")
@@ -1954,6 +1861,8 @@ fn source_may_contain_signal_event(source: &str) -> bool {
             || source.contains(".once")
             || source.contains(":register")
             || source.contains(".register")
+            || source.contains(":declare")
+            || source.contains(".declare")
             || source.contains(":emit")
             || source.contains(".emit")
             || source.contains(":off")
@@ -1966,24 +1875,6 @@ fn source_may_contain_signal_event(source: &str) -> bool {
             || source.contains(".has")
             || source.contains(":listeners")
             || source.contains(".listeners"))
-}
-
-fn string_literal_value(token: &TokenReference) -> Option<String> {
-    match token.token().token_type() {
-        TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
-        _ => None,
-    }
-}
-
-fn node_start(node: &impl Node) -> SourcePosition {
-    node.range()
-        .map(|(start, _)| SourcePosition::from_full_moon(start))
-        .unwrap_or(SourcePosition { line: 1, column: 1 })
-}
-
-fn node_span(node: &impl Node) -> Option<crate::SourceSpan> {
-    node.range()
-        .map(|(start, end)| crate::SourceSpan::from_range(start, end))
 }
 
 fn line_distance(left: SourcePosition, right: SourcePosition) -> usize {

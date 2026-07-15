@@ -217,6 +217,7 @@ events:
     let field_labels = labels(&field_completions);
     assert!(field_labels.contains(&"on".to_owned()));
     assert!(field_labels.contains(&"once".to_owned()));
+    assert!(field_labels.contains(&"declare".to_owned()));
     assert!(field_labels.contains(&"emit".to_owned()));
     assert!(field_labels.contains(&"off".to_owned()));
     assert!(field_labels.contains(&"clear".to_owned()));
@@ -272,6 +273,23 @@ events:emit("")
     assert!(completions
         .iter()
         .all(|completion| completion.detail.as_deref() == Some("SignalBus event")));
+}
+
+#[test]
+fn completes_signal_event_names_from_declare_calls() {
+    let source = r#"
+local events = signal()
+events:declare("player.hit", function() end)
+events:emit("")
+"#;
+    let completions = complete_tua_source(
+        "src/events.tua",
+        source,
+        position_after_last(source, "emit(\""),
+    )
+    .expect("SignalBus declare event completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["player.hit".to_owned()]);
 }
 
 #[test]

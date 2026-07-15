@@ -55,6 +55,17 @@ function SignalBus:once(name, handler)
   return self:on(name, wrapped)
 end
 
+function SignalBus:declare(name, handler)
+  assert_name(name)
+
+  if handler == nil then
+    return self
+  end
+
+  assert_handler(handler)
+  return handler
+end
+
 function SignalBus:emit(name, ...)
   assert_name(name)
 

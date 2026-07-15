@@ -879,6 +879,7 @@ impl<'a> Checker<'a> {
             Callable::TypedFunction(function) => {
                 let return_types =
                     self.check_typed_function_call_arguments(function_call, &function);
+                self.check_signal_emit_payload_call(function_call);
 
                 if let Some(ty) = self.constructor_call_return_type(function_call) {
                     return vec![ty];
@@ -1193,6 +1194,93 @@ impl<'a> Checker<'a> {
         }
 
         vec![Type::Any]
+    }
+
+    fn check_signal_emit_payload_call(&mut self, function_call: &FunctionCall) {
+        if !is_method_call(function_call) {
+            return;
+        }
+
+        let Some(parts) = field_chain_before_first_call(function_call) else {
+            return;
+        };
+        let Some(method) = parts.last() else {
+            return;
+        };
+
+        if method != "emit" {
+            return;
+        }
+
+        let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) else {
+            return;
+        };
+        let Some(receiver_type) = self.resolve_field_chain_type(receiver_parts) else {
+            return;
+        };
+
+        if !signal::type_is_signal_bus(self.environment, &receiver_type) {
+            return;
+        }
+
+        let arguments = call_arguments(function_call).unwrap_or_default();
+        let Some(name) = arguments.first().and_then(signal_event_name_argument) else {
+            return;
+        };
+        let Some(schema) = signal::event_schema_for_receiver(
+            self.parsed,
+            self.environment,
+            receiver_parts,
+            &name,
+            node_position(function_call),
+        ) else {
+            return;
+        };
+        let payload_arguments = arguments.iter().skip(1).collect::<Vec<_>>();
+
+        if payload_arguments.len() != schema.payload.len() {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                schema.payload.len() + 1,
+                arguments.len(),
+            ));
+            return;
+        }
+
+        for (argument, parameter) in payload_arguments.into_iter().zip(&schema.payload) {
+            let argument_type = match argument {
+                CallArgument::Expression(argument) => self.infer_expression(argument),
+                CallArgument::Inferred(argument_type) => Some(argument_type.clone()),
+            };
+            let Some(argument_type) = argument_type else {
+                continue;
+            };
+
+            if self.context.is_assignable(&argument_type, &parameter.ty) {
+                continue;
+            }
+
+            match argument {
+                CallArgument::Expression(argument) => {
+                    self.diagnostics.push(mismatch_diagnostic(
+                        &self.parsed.path,
+                        *argument,
+                        &parameter.ty,
+                        &argument_type,
+                    ));
+                }
+                CallArgument::Inferred(_) => {
+                    self.diagnostics.push(mismatch_diagnostic(
+                        &self.parsed.path,
+                        function_call,
+                        &parameter.ty,
+                        &argument_type,
+                    ));
+                }
+            }
+            return;
+        }
     }
 
     fn infer_call_argument_types(&mut self, arguments: &[CallArgument<'_>]) -> Vec<Option<Type>> {
@@ -2125,6 +2213,16 @@ fn call_arguments(function_call: &FunctionCall) -> Option<Vec<CallArgument<'_>>>
             }
             _ => None,
         },
+        _ => None,
+    }
+}
+
+fn signal_event_name_argument(argument: &CallArgument<'_>) -> Option<String> {
+    match argument {
+        CallArgument::Expression(Expression::String(value)) => {
+            Some(unquote_string(&value.to_string()))
+        }
+        CallArgument::Inferred(Type::StringLiteral(value)) => Some(value.clone()),
         _ => None,
     }
 }

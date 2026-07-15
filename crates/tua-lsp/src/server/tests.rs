@@ -3764,6 +3764,39 @@ damage(player,
 }
 
 #[test]
+fn signature_help_returns_signal_event_payload_signature() {
+    let uri = "file:///tmp/signal-signature-help.tua";
+    let source = r#"type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+end)
+
+events:emit("player.hit",
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "events:emit(\"player.hit\","),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function events:emit(\"player.hit\", player: Player, damage: number): nil"
+    );
+    assert_eq!(response["result"]["activeSignature"], 0);
+    assert_eq!(response["result"]["activeParameter"], 1);
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][1]["label"],
+        "player: Player"
+    );
+}
+
+#[test]
 fn signature_help_accepts_trigger_context() {
     let uri = "file:///tmp/signature-help-trigger.tua";
     let source = r#"local function damage(target: number, amount: number): number

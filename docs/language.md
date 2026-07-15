@@ -205,12 +205,21 @@ local sparks = particles(player, 64)
 local position: Vec2 = vec2(100, 200)
 local events = signal()
 
+type PlayerState = {
+  name: string,
+  hp: number,
+}
+
+local hero: PlayerState = { name = "Ada", hp = 10 }
+
 player:setFilter("nearest")
 jump:play()
-events:on("player.hit", function(playerName, damage)
-  print(playerName, damage)
+events:on("player.hit", function(player: PlayerState, damage: number)
+  print(player.name, damage)
 end)
-events:emit("player.hit", "Ada", 4)
+events:declare("game.paused", function(reason: string) end)
+events:emit("player.hit", hero, 4)
+events:emit("game.paused", "menu")
 ```
 
 Asset helpers lower to ordinary LOVE calls and infer LOVE object types for
@@ -233,21 +242,30 @@ local position = __tua_vec2(100, 200)
 local __tua_signal = require("tuasignal")
 local events = __tua_signal()
 
+local hero = { name = "Ada", hp = 10 }
+
 player:setFilter("nearest")
 jump:play()
-events:on("player.hit", function(playerName, damage)
-  print(playerName, damage)
+events:on("player.hit", function(player, damage)
+  print(player.name, damage)
 end)
-events:emit("player.hit", "Ada", 4)
+events:declare("game.paused", function(reason) end)
+events:emit("player.hit", hero, 4)
+events:emit("game.paused", "menu")
 ```
 
 When generated Lua needs `brinevector` or `tuasignal`, `tua build` writes the
 bundled runtime file into the output directory unless the project already
-provides one. `SignalBus` completions include `on`, `once`, `emit`, `off`,
-`clear`, `has`, `listeners`, and Hump-style aliases such as `register` and
-`remove`. In the first string argument of those event-name methods, the language
-server suggests known event names from existing `SignalBus` calls, preferring
-the same receiver and nearby declarations before weaker project-wide matches.
+provides one. `SignalBus` completions include `on`, `once`, `declare`, `emit`,
+`off`, `clear`, `has`, `listeners`, and Hump-style aliases such as `register`
+and `remove`. In the first string argument of those event-name methods, the
+language server suggests known event names from existing `SignalBus` calls,
+preferring the same receiver and nearby declarations before weaker project-wide
+matches. Typed listener callbacks and `declare(name, function(...) end)` schema
+callbacks define event payload signatures for `emit` signature help and type
+checking; untyped listeners keep `emit` permissive. At runtime, `declare`
+validates the event name and optional handler shape, then returns the handler or
+bus without registering a listener.
 
 ## Boundaries
 

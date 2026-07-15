@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
 use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
+use crate::signal;
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
     build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
@@ -181,6 +182,13 @@ impl<'a> SignatureResolver<'a> {
                 }
             }
 
+            if let Some(function) = self.signal_emit_payload_function(context) {
+                return Some(signatures_from_typed_function(
+                    &function,
+                    Some(&qualified_name),
+                ));
+            }
+
             if let Some(item) = self
                 .semantic
                 .lua_function_item_for_call_parts(parts, position)
@@ -215,6 +223,41 @@ impl<'a> SignatureResolver<'a> {
             .typed_function_for_call_parts(parts, position)
             .map(|function| signatures_from_typed_function(&function, Some(&qualified_name)))
     }
+
+    fn signal_emit_payload_function(&self, context: &CallContext) -> Option<TypedFunction> {
+        if !context.is_method_call || context.callee_parts.len() < 2 {
+            return None;
+        }
+
+        let method = context.callee_parts.last()?;
+
+        if method != "emit" {
+            return None;
+        }
+
+        let receiver_parts = &context.callee_parts[..context.callee_parts.len() - 1];
+        let receiver_type = self
+            .semantic
+            .type_of_field_chain(receiver_parts, context.position)?;
+
+        if !signal::type_is_signal_bus(self.environment, &receiver_type) {
+            return None;
+        }
+
+        let event_name = context.first_string_argument.as_ref()?;
+        let schema = signal::event_schema_for_receiver(
+            self.parsed,
+            self.environment,
+            receiver_parts,
+            event_name,
+            context.position,
+        )?;
+
+        Some(signal::event_emit_typed_function(
+            &schema.name,
+            &schema.payload,
+        ))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -223,6 +266,7 @@ struct CallContext {
     active_parameter: usize,
     position: SourcePosition,
     is_method_call: bool,
+    first_string_argument: Option<String>,
 }
 
 fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
@@ -230,12 +274,14 @@ fn call_context(source: &str, position: SourcePosition) -> Option<CallContext> {
     let open = active_call_open(source, cursor)?;
     let (callee_parts, is_method_call) = callee_info_before(source, open)?;
     let active_parameter = active_parameter_index(source, open + 1, cursor);
+    let first_string_argument = first_string_argument_after_open(source, open);
 
     Some(CallContext {
         callee_parts,
         active_parameter,
         position,
         is_method_call,
+        first_string_argument,
     })
 }
 
@@ -304,6 +350,34 @@ fn active_parameter_index(source: &str, start: usize, cursor: usize) -> usize {
     }
 
     active
+}
+
+fn first_string_argument_after_open(source: &str, open: usize) -> Option<String> {
+    let bytes = source.as_bytes();
+    let mut index = open.checked_add(1)?.min(bytes.len());
+
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+
+    let quote = *bytes.get(index)?;
+
+    if quote != b'"' && quote != b'\'' {
+        return None;
+    }
+
+    let start = index + 1;
+    index = start;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' => index = index.saturating_add(2),
+            byte if byte == quote => return Some(source[start..index].to_owned()),
+            _ => index += 1,
+        }
+    }
+
+    None
 }
 
 struct Scanner<'a> {

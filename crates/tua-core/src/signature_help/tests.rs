@@ -368,6 +368,59 @@ events:onPattern("player%.",
 }
 
 #[test]
+fn returns_signal_emit_payload_signature_from_typed_listener() {
+    let source = r#"
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+end)
+events:emit("player.hit",
+"#;
+    let help = signature_at(source, "events:emit(\"player.hit\",")
+        .expect("typed SignalBus event should have payload signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function events:emit(\"player.hit\", player: Player, damage: number): nil"
+    );
+    assert_eq!(
+        parameter_labels(&help),
+        vec!["\"player.hit\"", "player: Player", "damage: number"]
+    );
+    assert_eq!(help.active_parameter, 1);
+}
+
+#[test]
+fn returns_signal_emit_payload_signature_from_declare_schema() {
+    let source = r#"
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+events:declare("player.hit", function(player: Player, damage: number) end)
+events:emit("player.hit",
+"#;
+    let help = signature_at(source, "events:emit(\"player.hit\",")
+        .expect("declared SignalBus event should have payload signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function events:emit(\"player.hit\", player: Player, damage: number): nil"
+    );
+    assert_eq!(
+        parameter_labels(&help),
+        vec!["\"player.hit\"", "player: Player", "damage: number"]
+    );
+}
+
+#[test]
 fn returns_love_object_method_signature_from_inferred_asset_loader_return() {
     let source = r#"
 local function loadPlayerImage()

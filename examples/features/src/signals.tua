@@ -1,22 +1,33 @@
 -- Feature: built-in signal buses for LOVE/gameplay events.
 -- `signal()` infers SignalBus, completes methods such as on/emit/off, and
 -- emits a bundled tuasignal.lua runtime only when the helper is used.
--- After an event is used, typing in another event-name string suggests it.
+-- After an event is used or declared, typing in another event-name string
+-- suggests it and typed listener callbacks define emit payload signatures.
+
+type Player = {
+  name: string,
+  hp: number,
+}
 
 local events = signal()
+local player: Player = { name = "Ada", hp = 10 }
 local score = 0
 
-local hitHandler = events:on("player.hit", function(playerName, damage)
-  print(playerName .. " took damage", damage)
+local hitHandler = events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+  print(player.name .. " took damage", damage)
   score += damage
 end)
+
+events:declare("game.paused", function(reason: string) end)
 
 events:once("game.ready", function()
   print("ready")
 end)
 
-events:emit("player.hit", "Ada", 4)
+events:emit("player.hit", player, 4)
 events:emit("game.ready")
+events:emit("game.paused", "menu")
 
 local hasHitListeners: boolean = events:has("player.hit")
 local listeners = events:listeners("player.hit")

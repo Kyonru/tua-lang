@@ -806,6 +806,12 @@ const SIGNAL_BUS_ITEMS: &[LuaItem] = &[
         "Register a handler that removes itself after the next matching emit.",
     ),
     item(
+        "declare",
+        LuaItemKind::Function,
+        "function SignalBus:declare(name: string, handler?: function): any",
+        "Declare a typed event payload schema without registering runtime behavior.",
+    ),
+    item(
         "emit",
         LuaItemKind::Function,
         "function SignalBus:emit(name: string, ...: any): nil",

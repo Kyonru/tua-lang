@@ -118,6 +118,7 @@ events:once("ready", function()
   print("ready")
 end)
 
+events:declare("game.ready")
 events:emit("player.hit", { hp = 10 }, 4, true)
 events:off("player.hit", handler)
 events:off("player.hit")
@@ -129,6 +130,92 @@ local currentListeners: any = events:listeners("player.hit")
 "#,
     )
     .expect("built-in signal bus should accept common event operations");
+}
+
+#[test]
+fn checks_signal_emit_payloads_from_typed_listener_callbacks() {
+    check_tua_source(
+        "src/signals.tua",
+        r#"
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+local player: Player = { name = "Ada", hp = 10 }
+
+events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+end)
+
+events:emit("player.hit", player, 12)
+"#,
+    )
+    .expect("matching SignalBus payload should type-check");
+
+    let diagnostics = check_tua_source(
+        "src/signals.tua",
+        r#"
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+
+events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+end)
+events:on("player.hit", function(target: Player, amount: number)
+  print(target.name, amount)
+end)
+
+events:emit("player.hit", "Ada", 12)
+"#,
+    )
+    .expect_err("mismatched SignalBus payload should be reported");
+
+    assert_single_mismatch(&diagnostics, "expected Player, found string");
+}
+
+#[test]
+fn checks_signal_emit_payloads_from_declare_schema() {
+    let diagnostics = check_tua_source(
+        "src/signals.tua",
+        r#"
+type Player = {
+  name: string,
+  hp: number,
+}
+
+local events = signal()
+local player: Player = { name = "Ada", hp = 10 }
+
+events:declare("player.hit", function(player: Player, damage: number) end)
+events:emit("player.hit", player, "hard")
+"#,
+    )
+    .expect_err("declare schema should validate emit payloads");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
+fn leaves_untyped_signal_listener_payloads_permissive() {
+    check_tua_source(
+        "src/signals.tua",
+        r#"
+local events = signal()
+
+events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+
+events:emit("player.hit", "Ada", "hard", true)
+"#,
+    )
+    .expect("untyped SignalBus listeners should not create a payload schema");
 }
 
 #[test]
