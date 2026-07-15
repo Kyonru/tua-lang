@@ -50,20 +50,19 @@ to completion on its worker before its result is dropped.
 
 ### P0: Remove the extension suggestion race
 
-[`suggestions.js`](editors/vscode/src/editor/suggestions.js) invokes
-`editor.action.triggerSuggest` after a fixed 25 ms timer for nearly every typed
-identifier. This can issue duplicate completion requests and request results
-for a stale document version or cursor position.
+Status: done on 2026-07-15.
 
-Improvements:
+The extension now relies exclusively on VS Code's language-scoped zero-delay
+quick suggestions and the normal LSP completion provider. The fixed 25 ms edit
+listener, forced `editor.action.triggerSuggest` command, and its edit-debug
+helpers were removed, so one edit state no longer receives a native request and
+a second extension-forced request.
 
-- Prefer VS Code quick suggestions and the normal LSP completion provider.
-- Remove the forced trigger or gate it behind an explicit compatibility
-  setting.
-- If a workaround remains necessary, wait for document synchronization rather
-  than using a blind timer.
-- Add real VS Code tests that type into a document and assert request version,
-  cursor position, result freshness, and visible suggestions.
+`make extension-test` launches a real isolated VS Code Extension Development
+Host with a controlled LSP server. It types through an incomplete completion
+list and asserts the synchronized document version, cursor position, one
+request for the latest edit state, fresh replacement results, and acceptance
+from the visible suggestion widget.
 
 ## Core Architecture
 

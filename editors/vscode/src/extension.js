@@ -6,11 +6,10 @@ const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("./constants");
-const { registerSuggestTrigger } = require("./editor/suggestions");
 const { registerLoveDevex } = require("./love");
 const { registerSignalDevex } = require("./signals");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
-const { isActiveDocument, isTuaDocument } = require("./shared/documents");
+const { isTuaDocument } = require("./shared/documents");
 
 let client;
 let extensionContext;
@@ -30,20 +29,12 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
-  context.subscriptions.push(
-    registerSuggestTrigger({
-      debugLog,
-      getServerState: () => currentServerInfo?.state || "unknown",
-      isActiveDocument,
-      isTuaDocument,
-    }),
-  );
   context.subscriptions.push(registerLoveDevex({ configurationTarget, isTuaDocument }));
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);
-  debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP typing trace is active.`);
+  debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP trace is active.`);
 
   await startLanguageServer();
 }

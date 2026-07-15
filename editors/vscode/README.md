@@ -52,9 +52,21 @@ Use the workspace `Run Extension (Features Example)` launch profile to open
 bundled server. `Run Extension (Debug Server)` opens `examples/love-full` with
 the debug server.
 
-`Run Extension (All Examples)` enables `TUA_DEBUG_LSP=1`, which writes
-extension typing/suggestion trace lines and server completion trace messages to
-the Tua output channel.
+`Run Extension (All Examples)` enables `TUA_DEBUG_LSP=1`, which writes language
+client setup details and server completion trace messages to the Tua output
+channel. Automatic suggestions use VS Code's native zero-delay quick-suggestion
+flow; the extension does not run a second timer or execute
+`editor.action.triggerSuggest` after edits.
+
+Run the real Extension Development Host typing test with:
+
+```bash
+make extension-test
+```
+
+The test drives the editor suggestion widget against a controlled LSP server
+and checks document-version synchronization, cursor position, duplicate
+requests, result freshness, and visible suggestion acceptance.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.

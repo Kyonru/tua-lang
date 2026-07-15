@@ -58,7 +58,14 @@ Install dependencies and check the activation script:
 ```bash
 make extension-deps
 make extension-check
+make extension-test
 ```
+
+`extension-test` launches an isolated VS Code Extension Development Host and
+verifies native quick suggestions against a controlled LSP server. Set
+`VSCODE_EXECUTABLE_PATH` to use a specific VS Code installation; otherwise the
+test uses the standard macOS installation when present or downloads the latest
+stable test build.
 
 Build a VSIX with the current platform's Tua server binary:
 

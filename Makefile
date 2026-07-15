@@ -204,6 +204,10 @@ extension-clean-server: ## Remove the staged VS Code extension server binary.
 extension-check: ## Syntax-check the VS Code extension activation script.
 	$(NPM) --prefix $(VSCODE_DIR) run check
 
+.PHONY: extension-test
+extension-test: extension-deps ## Run the VS Code extension-host integration tests.
+	$(NPM) --prefix $(VSCODE_DIR) run test:vscode
+
 .PHONY: json-check
 json-check: ## Validate extension and workspace JSON metadata parse.
 	node -e "for (const file of ['$(VSCODE_DIR)/package.json','$(VSCODE_DIR)/package-lock.json','$(VSCODE_DIR)/language-configuration.json','$(VSCODE_DIR)/icons/tua-icon-theme.json','$(VSCODE_DIR)/syntaxes/tua.tmLanguage.json','.vscode/launch.json','.vscode/tasks.json','.vscode/extensions.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'));"

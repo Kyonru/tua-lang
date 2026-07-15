@@ -69,31 +69,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "document selector should cover .tua files even when VS Code language mode is wrong",
     );
 
-    const tuaDocumentWithWrongLanguage = mockDocument(path.join(workspace, "private.tua"), "lua");
-    const commandCountBeforeTyping = state.executedCommands.length;
-
-    state.fireTextDocumentChange(tuaDocumentWithWrongLanguage, "o");
-
     assert.strictEqual(
-      state.executedCommands.length,
-      commandCountBeforeTyping,
-      "typing should schedule suggestions instead of triggering synchronously",
-    );
-
-    await waitUntil(() => state.executedCommands.length === commandCountBeforeTyping + 1);
-    assert.strictEqual(
-      state.executedCommands.at(-1)?.command,
-      "editor.action.triggerSuggest",
-      "typing an identifier character in a .tua file should open suggestions immediately after sync",
-    );
-
-    state.fireTextDocumentChange(tuaDocumentWithWrongLanguage, " ");
-
-    await delay(35);
-    assert.strictEqual(
-      state.executedCommands.length,
-      commandCountBeforeTyping + 1,
-      "typing a non-trigger character should not reopen suggestions",
+      state.documentChangeListeners.length,
+      0,
+      "activation should leave automatic suggestions to VS Code instead of observing every edit",
     );
 
     assert.strictEqual(
@@ -402,56 +381,10 @@ async function smokeDebugLspLogging(mockServer, workspace) {
       "debug LSP env flag should log the trace settings sent to the server",
     );
 
-    const outputLineCount = state.outputLines.length;
-    const outputDocument = mockDocument("extension-output-tua-lang.tua", "Log", "output");
-
-    state.fireTextDocumentChange(outputDocument, "log line");
-    await delay(35);
     assert.strictEqual(
-      state.outputLines.length,
-      outputLineCount,
-      "debug logging should ignore output-channel document changes instead of feeding itself",
-    );
-
-    const document = mockDocument(path.join(workspace, "private.tua"), "lua");
-
-    state.fireTextDocumentChange(document, "o");
-
-    await waitUntil(() =>
-      state.executedCommands.some((entry) => entry.command === "editor.action.triggerSuggest"),
-    );
-    assert(
-      state.outputLines.some((line) => line.includes("suggest scheduled")),
-      "debug LSP env flag should log suggestion scheduling",
-    );
-    assert(
-      state.outputLines.some((line) => line.includes("suggest trigger command")),
-      "debug LSP env flag should log suggestion trigger execution",
-    );
-
-    const repeatStart = state.outputLines.length;
-    document.version = 1;
-    state.fireTextDocumentChange(document, " ");
-    document.version = 2;
-    state.fireTextDocumentChange(document, " ");
-    document.version = 3;
-    state.fireTextDocumentChange(document, " ");
-
-    await waitUntil(() =>
-      state.outputLines
-        .slice(repeatStart)
-        .some((line) => line.includes("debug repeat: suggest skip non-trigger change count=3")),
-    );
-
-    const repeatedLines = state.outputLines.slice(repeatStart);
-    assert.strictEqual(
-      repeatedLines.filter((line) => line.includes("suggest skip non-trigger change")).length,
-      2,
-      "repeated debug logs should emit the first line plus one count summary",
-    );
-    assert(
-      repeatedLines.some((line) => line.includes("version=3")),
-      "repeat summary should keep the latest repeated log details",
+      state.documentChangeListeners.length,
+      0,
+      "debug logging should not restore the removed suggestion edit listener",
     );
 
     await extension.deactivate();

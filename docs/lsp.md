@@ -234,8 +234,16 @@ Useful development commands:
 ```bash
 make extension-deps
 make extension-check
+make extension-test
 make extension-package
 ```
+
+Tua relies on VS Code's language-scoped, zero-delay quick suggestions. The
+extension does not observe every text edit or invoke
+`editor.action.triggerSuggest`; this avoids duplicate completion requests and
+stale timer callbacks. `make extension-test` types through a real editor host
+and verifies request version, cursor position, freshness, and suggestion-widget
+acceptance.
 
 For local smoke tests:
 
