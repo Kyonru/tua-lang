@@ -39,6 +39,27 @@ verification does not create or mutate fixture-local `.tua/completion-stats.json
 files. Set `TUA_COMPLETION_STATS=1` when you intentionally want a benchmark run
 to include persisted adaptive completion stats.
 
+## Contextual Sequence Ranking
+
+The optional contextual sequence ranking lane is disabled by default. Enable it
+with `tua.completion.sequenceRanking.enabled` to let the local sequence ranker
+add score hints on top of compiler-generated candidates. It never creates new
+completion candidates.
+
+The ranker protocol is:
+
+- input: normalized context before the cursor, normalized current-line prefix,
+  receiver parts when available, typed prefix, and a bounded compiler candidate
+  list;
+- output: per-candidate confidence scores plus optional rationale tokens;
+- fallback: timeout, provider error, or disabled config returns zero score
+  hints and preserves the pre-sequence ordering.
+
+The first provider is local-only and uses normalized token frequency near the
+cursor. No network calls are made. Tune the bounded request with
+`tua.completion.sequenceRanking.timeoutMs` and
+`tua.completion.sequenceRanking.maxCandidates`.
+
 ## Targets
 
 The fixed Phase 14 success targets are:

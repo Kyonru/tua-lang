@@ -2252,6 +2252,8 @@ Acceptance:
 
 ### 77.2 `feat(completion): optional contextual sequence ranking engine`
 
+Status: done.
+
 Scope:
 
 - Add a minimal pluggable ranking interface that can call into an external local or
@@ -2270,6 +2272,13 @@ Acceptance:
 - Ranking calls never block completion on external failure.
 - External ranking can be disabled by config and defaults off.
 - A hard timeout or error returns original compiler ordering with no user-visible failure.
+
+Notes:
+
+- The first provider is local-only and uses normalized token-frequency context
+  hints under `tua.completion.sequenceRanking.*`.
+- The protocol is represented in `tua-core` as normalized context + compiler
+  candidate input and per-candidate score/rationale output.
 
 ### 77.3 `feat(completion): add project-adaptive learning surface`
 

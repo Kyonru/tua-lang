@@ -350,6 +350,25 @@
           "default": null,
           "description": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ecs APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
         },
+        "tua.completion.sequenceRanking.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the experimental local contextual sequence ranking lane for completion ordering. Compiler candidates remain the only returned candidates."
+        },
+        "tua.completion.sequenceRanking.timeoutMs": {
+          "type": "number",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 25,
+          "description": "Maximum time budget in milliseconds for contextual sequence ranking. Timeout returns the pre-sequence completion ordering."
+        },
+        "tua.completion.sequenceRanking.maxCandidates": {
+          "type": "number",
+          "default": 64,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Maximum number of compiler candidates sent to the contextual sequence ranking lane."
+        },
         "tua.fileAssociations": {
           "type": "object",
           "default": {},

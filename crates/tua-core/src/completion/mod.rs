@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::{complete_import_paths, complete_require_paths};
+use self::sequence::{
+    score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
+};
 use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
@@ -21,9 +24,15 @@ use crate::{
 pub mod adaptive;
 pub(crate) mod context;
 mod require;
+pub mod sequence;
 mod symbol;
 
 pub use adaptive::{CompletionAdaptiveKey, CompletionAdaptiveMemberStats, CompletionAdaptiveStats};
+pub use sequence::{
+    CompletionSequenceRanker, CompletionSequenceRankingBudget, CompletionSequenceRankingConfig,
+    CompletionSequenceRankingError, CompletionSequenceRankingInput,
+    CompletionSequenceRankingProvider,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Completion {
@@ -98,23 +107,41 @@ fn filter_and_rank_completions_with_context(
         return completions;
     }
 
-    let mut ranked = completions
+    let matched = completions
         .into_iter()
         .enumerate()
         .filter_map(|completion| {
             let (index, completion) = completion;
 
-            completion_match_rank(&completion, prefix).map(|rank| {
-                (
-                    rank,
-                    ranking_context
-                        .map(|context| context.score(&completion))
-                        .unwrap_or_default(),
-                    completion_priority(&completion),
-                    index,
-                    completion,
-                )
-            })
+            completion_match_rank(&completion, prefix)
+                .map(|rank| (rank, completion_priority(&completion), index, completion))
+        })
+        .collect::<Vec<_>>();
+    let sequence_scores = ranking_context
+        .map(|context| {
+            context.sequence_scores(
+                &matched
+                    .iter()
+                    .map(|(_, _, index, completion)| (*index, completion))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .unwrap_or_default();
+    let mut ranked = matched
+        .into_iter()
+        .map(|(rank, priority, index, completion)| {
+            let context_score = ranking_context
+                .map(|context| context.score(&completion))
+                .unwrap_or_default();
+            let sequence_score = sequence_scores.get(&index).copied().unwrap_or_default();
+
+            (
+                rank,
+                context_score.saturating_add(sequence_score),
+                priority,
+                index,
+                completion,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -213,6 +240,8 @@ struct CompletionRankingContext<'a> {
     adaptive_stats: Option<&'a CompletionAdaptiveStats>,
     file_scope_hash: u64,
     receiver_parts: Vec<String>,
+    sequence_ranking: CompletionSequenceRankingConfig,
+    sequence_context: CompletionSequenceContextSnapshot,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -230,26 +259,43 @@ impl<'a> CompletionRankingContext<'a> {
         project_sources: &[&str],
         adaptive_stats: Option<&'a CompletionAdaptiveStats>,
         file_scope_hash: u64,
+        sequence_ranking: &CompletionSequenceRankingConfig,
     ) -> Option<Self> {
-        let CompletionContext::FieldAccess {
-            receiver_parts,
-            position,
-            ..
-        } = context
-        else {
-            return None;
+        let (receiver_parts, position, prefix, member_usage) = match context {
+            CompletionContext::FieldAccess {
+                receiver_parts,
+                prefix,
+                position,
+                ..
+            } => (
+                receiver_parts.clone(),
+                *position,
+                prefix.as_str(),
+                Some(MemberUsageRanking::collect(
+                    source,
+                    project_sources,
+                    receiver_parts,
+                    *position,
+                )),
+            ),
+            CompletionContext::Identifier { prefix, position } => {
+                (Vec::new(), *position, prefix.as_str(), None)
+            }
+            _ => return None,
         };
 
         Some(Self {
-            member_usage: Some(MemberUsageRanking::collect(
-                source,
-                project_sources,
-                receiver_parts,
-                *position,
-            )),
+            member_usage,
             adaptive_stats,
             file_scope_hash,
             receiver_parts: receiver_parts.clone(),
+            sequence_ranking: sequence_ranking.clone(),
+            sequence_context: CompletionSequenceContextSnapshot::from_source(
+                source,
+                position,
+                prefix,
+                &receiver_parts,
+            ),
         })
     }
 
@@ -271,6 +317,31 @@ impl<'a> CompletionRankingContext<'a> {
             .unwrap_or_default();
 
         usage_score + adaptive_score
+    }
+
+    fn sequence_scores(&self, completions: &[(usize, &Completion)]) -> BTreeMap<usize, usize> {
+        let scores = score_completion_sequence(
+            &self.sequence_ranking,
+            CompletionSequenceRankingInput {
+                context: self.sequence_context.clone(),
+                candidates: completions
+                    .iter()
+                    .map(|(index, completion)| {
+                        CompletionSequenceCandidate::from_completion(*index, completion)
+                    })
+                    .collect(),
+            },
+        );
+
+        scores
+            .into_iter()
+            .filter_map(|score| {
+                (score.score > 0).then_some((
+                    score.candidate_index,
+                    usize::try_from(score.score).unwrap_or(usize::MAX),
+                ))
+            })
+            .collect()
     }
 }
 
@@ -595,22 +666,19 @@ pub(crate) fn complete_source_with_parsed_environment_and_ranking(
     adaptive_stats: Option<&CompletionAdaptiveStats>,
     file_scope_hash: u64,
 ) -> Vec<Completion> {
-    let Some(context) = completion_context(source, position) else {
-        return Vec::new();
-    };
-
-    complete_parsed_source_with_context_and_ranking(
-        parsed,
+    complete_source_with_parsed_environment_and_ranking_options(
         source,
-        context,
+        parsed,
+        position,
         environment,
         project_sources,
         adaptive_stats,
         file_scope_hash,
+        &CompletionSequenceRankingConfig::default(),
     )
 }
 
-pub(crate) fn complete_field_access_in_source_with_environment_and_ranking(
+pub(crate) fn complete_source_with_parsed_environment_and_ranking_options(
     source: &str,
     parsed: &ParsedSource,
     position: SourcePosition,
@@ -618,6 +686,33 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking(
     project_sources: &[&str],
     adaptive_stats: Option<&CompletionAdaptiveStats>,
     file_scope_hash: u64,
+    sequence_ranking: &CompletionSequenceRankingConfig,
+) -> Vec<Completion> {
+    let Some(context) = completion_context(source, position) else {
+        return Vec::new();
+    };
+
+    complete_parsed_source_with_context_and_ranking_options(
+        parsed,
+        source,
+        context,
+        environment,
+        project_sources,
+        adaptive_stats,
+        file_scope_hash,
+        sequence_ranking,
+    )
+}
+
+pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_options(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    project_sources: &[&str],
+    adaptive_stats: Option<&CompletionAdaptiveStats>,
+    file_scope_hash: u64,
+    sequence_ranking: &CompletionSequenceRankingConfig,
 ) -> Vec<Completion> {
     let Some(CompletionContext::FieldAccess {
         receiver_parts,
@@ -653,6 +748,7 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking(
         project_sources,
         adaptive_stats,
         file_scope_hash,
+        sequence_ranking,
     );
 
     rank_completions_for_context(completions, Some(prefix.as_str()), ranking_context.as_ref())
@@ -700,6 +796,28 @@ fn complete_parsed_source_with_context_and_ranking(
     adaptive_stats: Option<&CompletionAdaptiveStats>,
     file_scope_hash: u64,
 ) -> Vec<Completion> {
+    complete_parsed_source_with_context_and_ranking_options(
+        parsed,
+        source,
+        context,
+        environment,
+        project_sources,
+        adaptive_stats,
+        file_scope_hash,
+        &CompletionSequenceRankingConfig::default(),
+    )
+}
+
+fn complete_parsed_source_with_context_and_ranking_options(
+    parsed: &ParsedSource,
+    source: &str,
+    context: CompletionContext,
+    environment: &TypeEnvironment,
+    project_sources: &[&str],
+    adaptive_stats: Option<&CompletionAdaptiveStats>,
+    file_scope_hash: u64,
+    sequence_ranking: &CompletionSequenceRankingConfig,
+) -> Vec<Completion> {
     let prefix = context.filter_prefix().map(str::to_owned);
     let ranking_context = CompletionRankingContext::from_context(
         source,
@@ -707,6 +825,7 @@ fn complete_parsed_source_with_context_and_ranking(
         project_sources,
         adaptive_stats,
         file_scope_hash,
+        sequence_ranking,
     );
     let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),

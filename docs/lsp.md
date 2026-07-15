@@ -278,6 +278,12 @@ prints completion p50/p95/p99, completion-context cache hit rate,
 frequency. See [Completion Benchmarks](completion-benchmarks.md) for latency
 targets, baseline comparison, ranking diagnostics, and known failure modes.
 
+Experimental contextual sequence ranking can be enabled with
+`tua.completion.sequenceRanking.enabled`. The initial provider is local-only,
+bounded by `tua.completion.sequenceRanking.timeoutMs`, and receives only a
+normalized context snapshot plus compiler candidates. Timeout or provider error
+returns zero score hints and keeps the pre-sequence completion ordering.
+
 To profile the real bundled examples across both CLI commands and editor
 requests:
 

@@ -58,14 +58,16 @@ Phase 14 tracks completion intelligence as a compiler-first pipeline. It now
 generates parsed identifier candidates from scope visibility, keeps field
 completions backed by type, module, LOVE catalog, and table-shape facts, and
 ranks semantic candidates with local/project usage signals plus local
-project-adaptive learning when the receiver is known:
+project-adaptive learning when the receiver is known, and includes a default-off
+bounded contextual sequence ranking lane for local score hints:
 
 - deterministic semantic candidate generation;
 - same-file proximity, call-site frequency, project member usage, and
   declaration-quality ranking signals;
 - persisted privacy-safe workspace usage statistics for member access and call
   patterns, with reset support;
-- optional model-assisted ranking paths behind explicit configuration;
+- optional local contextual sequence ranking behind explicit editor
+  configuration, with timeout/error fallback to pre-sequence ordering;
 - completion latency, ranking-overhead, completion-cache, and model-lane
   fallback benchmarks. Phase 14 is considered successful when
   `make profile-completion` reports medium-fixture completion p95 at or below

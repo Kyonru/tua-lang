@@ -601,6 +601,8 @@ impl AnalysisHost {
         self.core.set_output_roots(output_roots);
         self.core
             .set_require_path_separator(settings.module_path_separator());
+        self.core
+            .set_completion_sequence_ranking(settings.completion_sequence_ranking_config());
         self.core.set_ignored_paths(ignored_paths);
         self.core.set_asset_roots(asset_roots);
 

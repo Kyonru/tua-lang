@@ -336,6 +336,88 @@ sprite.play()
 }
 
 #[test]
+fn sequence_ranking_reorders_candidates_when_enabled() {
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local stop = 1
+local stopAgain = stop
+local sprite: Sprite = {}
+local current = sprite.pause
+"#;
+    let completion_source = source.replace("sprite.pause", "sprite.");
+    let parsed = parse_tua_source("src/main.tua", source.to_owned())
+        .expect("source should parse for completion");
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+    let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(Path::new("src/main.tua"));
+    let default_completions = complete_source_with_parsed_environment_and_ranking(
+        &completion_source,
+        &parsed,
+        position_after(&completion_source, "sprite."),
+        &environment,
+        &[],
+        None,
+        file_scope_hash,
+    );
+    let config = CompletionSequenceRankingConfig {
+        enabled: true,
+        ..CompletionSequenceRankingConfig::default()
+    };
+    let ranked = complete_source_with_parsed_environment_and_ranking_options(
+        &completion_source,
+        &parsed,
+        position_after(&completion_source, "sprite."),
+        &environment,
+        &[],
+        None,
+        file_scope_hash,
+        &config,
+    );
+
+    assert_eq!(
+        labels(&default_completions),
+        vec!["pause".to_owned(), "play".to_owned(), "stop".to_owned()]
+    );
+    assert_eq!(
+        labels(&ranked),
+        vec!["stop".to_owned(), "pause".to_owned(), "play".to_owned()]
+    );
+}
+
+#[test]
+fn sequence_ranking_timeout_preserves_existing_order() {
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local stop = 1
+local stopAgain = stop
+local sprite: Sprite = {}
+local current = sprite.pause
+"#;
+    let completion_source = source.replace("sprite.pause", "sprite.");
+    let parsed = parse_tua_source("src/main.tua", source.to_owned())
+        .expect("source should parse for completion");
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+    let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(Path::new("src/main.tua"));
+    let config = CompletionSequenceRankingConfig {
+        enabled: true,
+        timeout_ms: 0,
+        ..CompletionSequenceRankingConfig::default()
+    };
+    let completions = complete_source_with_parsed_environment_and_ranking_options(
+        &completion_source,
+        &parsed,
+        position_after(&completion_source, "sprite."),
+        &environment,
+        &[],
+        None,
+        file_scope_hash,
+        &config,
+    );
+
+    assert_eq!(
+        labels(&completions),
+        vec!["pause".to_owned(), "play".to_owned(), "stop".to_owned()]
+    );
+}
+
+#[test]
 fn filters_table_fields_by_partial_prefix() {
     let completions = complete_at("player.a").expect("field completion should succeed");
 

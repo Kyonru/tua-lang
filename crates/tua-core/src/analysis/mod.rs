@@ -14,9 +14,9 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::completion::{
-    complete_field_access_in_source_with_environment_and_ranking,
-    complete_source_with_parsed_environment, complete_source_with_parsed_environment_and_ranking,
-    filter_and_rank_completions, CompletionAdaptiveStats,
+    complete_field_access_in_source_with_environment_and_ranking_options,
+    complete_source_with_parsed_environment_and_ranking_options, filter_and_rank_completions,
+    CompletionAdaptiveStats, CompletionSequenceRankingConfig,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -117,6 +117,7 @@ pub struct AnalysisHost {
     cache: RefCell<AnalysisQueryCache>,
     last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
     completion_adaptive_stats: CompletionAdaptiveStats,
+    completion_sequence_ranking: CompletionSequenceRankingConfig,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
@@ -139,6 +140,7 @@ pub struct AnalysisSnapshot {
     symbol_index: SymbolIndex,
     last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
     completion_adaptive_stats: CompletionAdaptiveStats,
+    completion_sequence_ranking: CompletionSequenceRankingConfig,
     semantic_facts: Rc<RefCell<BTreeMap<PathBuf, Rc<AnalysisSemanticFacts>>>>,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
@@ -460,6 +462,16 @@ impl AnalysisHost {
         }
 
         self.completion_adaptive_stats = stats;
+        self.clear_completion_cache();
+        self.bump_revision();
+    }
+
+    pub fn set_completion_sequence_ranking(&mut self, config: CompletionSequenceRankingConfig) {
+        if self.completion_sequence_ranking == config {
+            return;
+        }
+
+        self.completion_sequence_ranking = config;
         self.clear_completion_cache();
         self.bump_revision();
     }
@@ -789,6 +801,7 @@ impl AnalysisHost {
             symbol_index,
             last_good_files: self.last_good_files.borrow().clone(),
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
+            completion_sequence_ranking: self.completion_sequence_ranking.clone(),
             semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
             completion_cache: Rc::clone(&self.completion_cache),
             completion_cache_stats: Rc::clone(&self.completion_cache_stats),
@@ -877,11 +890,15 @@ impl AnalysisHost {
                     environment
                 });
 
-                complete_source_with_parsed_environment(
+                complete_source_with_parsed_environment_and_ranking_options(
                     &file.source,
                     parsed,
                     position,
                     &environment,
+                    &[],
+                    None,
+                    CompletionAdaptiveStats::file_scope_hash(path),
+                    &self.completion_sequence_ranking,
                 )
             }
             Err(_) => complete_tua_source(path, file.source, position).unwrap_or_default(),
@@ -1288,7 +1305,7 @@ impl AnalysisSnapshot {
                         environment
                     });
 
-                    complete_source_with_parsed_environment_and_ranking(
+                    complete_source_with_parsed_environment_and_ranking_options(
                         source,
                         parsed,
                         position,
@@ -1296,9 +1313,10 @@ impl AnalysisSnapshot {
                         &project_sources,
                         Some(&self.completion_adaptive_stats),
                         file_scope_hash,
+                        &self.completion_sequence_ranking,
                     )
                 } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
-                    complete_source_with_parsed_environment_and_ranking(
+                    complete_source_with_parsed_environment_and_ranking_options(
                         source,
                         parsed,
                         position,
@@ -1306,11 +1324,12 @@ impl AnalysisSnapshot {
                         &project_sources,
                         Some(&self.completion_adaptive_stats),
                         file_scope_hash,
+                        &self.completion_sequence_ranking,
                     )
                 } else {
                     let (environment, _) = build_type_environment_with_diagnostics(parsed);
 
-                    complete_source_with_parsed_environment_and_ranking(
+                    complete_source_with_parsed_environment_and_ranking_options(
                         source,
                         parsed,
                         position,
@@ -1318,6 +1337,7 @@ impl AnalysisSnapshot {
                         &project_sources,
                         Some(&self.completion_adaptive_stats),
                         file_scope_hash,
+                        &self.completion_sequence_ranking,
                     )
                 }
             }
@@ -1335,15 +1355,17 @@ impl AnalysisSnapshot {
                     if !completions.is_empty() {
                         completions
                     } else {
-                        let completions = complete_source_with_parsed_environment_and_ranking(
-                            source,
-                            &facts.parsed,
-                            position,
-                            &facts.environment,
-                            &project_sources,
-                            Some(&self.completion_adaptive_stats),
-                            file_scope_hash,
-                        );
+                        let completions =
+                            complete_source_with_parsed_environment_and_ranking_options(
+                                source,
+                                &facts.parsed,
+                                position,
+                                &facts.environment,
+                                &project_sources,
+                                Some(&self.completion_adaptive_stats),
+                                file_scope_hash,
+                                &self.completion_sequence_ranking,
+                            );
 
                         if !completions.is_empty() {
                             completions
@@ -3626,15 +3648,17 @@ impl AnalysisSnapshot {
             environment.with_local_types(self.project_local_annotation_types(parsed))
         });
 
-        let field_completions = complete_field_access_in_source_with_environment_and_ranking(
-            source,
-            parsed,
-            position,
-            &environment,
-            project_sources,
-            Some(&self.completion_adaptive_stats),
-            file_scope_hash,
-        );
+        let field_completions =
+            complete_field_access_in_source_with_environment_and_ranking_options(
+                source,
+                parsed,
+                position,
+                &environment,
+                project_sources,
+                Some(&self.completion_adaptive_stats),
+                file_scope_hash,
+                &self.completion_sequence_ranking,
+            );
 
         if !field_completions.is_empty() {
             field_completions
@@ -3666,15 +3690,17 @@ impl AnalysisSnapshot {
             return module_completions;
         }
 
-        let field_completions = complete_field_access_in_source_with_environment_and_ranking(
-            source,
-            parsed,
-            position,
-            environment,
-            project_sources,
-            Some(&self.completion_adaptive_stats),
-            file_scope_hash,
-        );
+        let field_completions =
+            complete_field_access_in_source_with_environment_and_ranking_options(
+                source,
+                parsed,
+                position,
+                environment,
+                project_sources,
+                Some(&self.completion_adaptive_stats),
+                file_scope_hash,
+                &self.completion_sequence_ranking,
+            );
 
         if !field_completions.is_empty() {
             return field_completions;

@@ -2500,6 +2500,41 @@ world:add(entity, Position, { x = 1 })
 }
 
 #[test]
+fn did_change_configuration_can_enable_completion_sequence_ranking() {
+    let temp = TempProject::new("configuration-completion-sequence-ranking");
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local stop = 1
+local stopAgain = stop
+local sprite: Sprite = {}
+local current = sprite.
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "sprite."));
+
+    assert_completion_labels(server.output(), 2, ["pause", "play", "stop"]);
+
+    server.send(did_change_configuration(json!({
+        "completion": {
+            "sequenceRanking": {
+                "enabled": true,
+                "timeoutMs": 4,
+                "maxCandidates": 64
+            }
+        }
+    })));
+    server.send(completion_request(3, &uri, source, "sprite."));
+
+    assert_completion_labels(server.output(), 3, ["stop", "pause", "play"]);
+}
+
+#[test]
 fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003

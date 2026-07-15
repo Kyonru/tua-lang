@@ -83,6 +83,7 @@ pub use code_lens::{CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget, Co
 pub use completion::{
     complete_lossy_identifier_source, complete_parsed_source, complete_tua_source, Completion,
     CompletionAdaptiveKey, CompletionAdaptiveMemberStats, CompletionAdaptiveStats, CompletionKind,
+    CompletionSequenceRankingConfig,
 };
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,

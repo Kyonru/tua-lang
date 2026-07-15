@@ -392,6 +392,13 @@ Supported editor settings:
   extensions can be indexed.
 - `tua.jit.enabled`: overrides `[jit].enabled` for opt-in LuaJIT guidance.
 - `tua.ecs.enabled`: overrides `[ecs].enabled` for opt-in ECS domain support.
+- `tua.completion.sequenceRanking.enabled`: enables the experimental local
+  contextual sequence ranker for completion ordering. It defaults to `false`
+  and never adds non-compiler candidates.
+- `tua.completion.sequenceRanking.timeoutMs`: maximum sequence-ranking budget
+  in milliseconds. A timeout keeps the pre-sequence completion order.
+- `tua.completion.sequenceRanking.maxCandidates`: maximum compiler candidates
+  sent to the sequence ranker.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`. Static `import(...)` lowering uses the same separator when mapping a

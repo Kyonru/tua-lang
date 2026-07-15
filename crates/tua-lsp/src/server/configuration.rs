@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tua_core::{
-    DiagnosticsConfig, EcsConfig, FormatConfig, FormatOptions, JitConfig, ModulePathSeparator,
-    ProjectConfig, ProjectFileAssociation, QuoteStyle, VfsSourceKind,
+    CompletionSequenceRankingConfig, DiagnosticsConfig, EcsConfig, FormatConfig, FormatOptions,
+    JitConfig, ModulePathSeparator, ProjectConfig, ProjectFileAssociation, QuoteStyle,
+    VfsSourceKind,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -12,6 +13,7 @@ pub(super) struct WorkspaceSettings {
     pub(super) format: FormatOverrides,
     pub(super) jit: JitOverrides,
     pub(super) ecs: EcsOverrides,
+    pub(super) completion: CompletionOverrides,
     pub(super) file_associations: Vec<FileAssociation>,
     pub(super) ignored_paths: Vec<String>,
     pub(super) require_path_separator: RequirePathSeparator,
@@ -68,6 +70,18 @@ pub(super) struct EcsOverrides {
     pub(super) enabled: Option<bool>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct CompletionOverrides {
+    pub(super) sequence_ranking: CompletionSequenceRankingOverrides,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct CompletionSequenceRankingOverrides {
+    pub(super) enabled: Option<bool>,
+    pub(super) timeout_ms: Option<u64>,
+    pub(super) max_candidates: Option<usize>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FileAssociation {
     pattern: String,
@@ -113,6 +127,7 @@ impl WorkspaceSettings {
             format: FormatOverrides::from_settings(settings.get("format")),
             jit: JitOverrides::from_settings(settings.get("jit")),
             ecs: EcsOverrides::from_settings(settings.get("ecs")),
+            completion: CompletionOverrides::from_settings(settings.get("completion")),
             file_associations: file_associations_from_settings(settings),
             ignored_paths: string_array_setting(settings, &["ignoredPaths", "ignored_paths"]),
             require_path_separator: require_path_separator_from_settings(settings),
@@ -163,6 +178,13 @@ impl WorkspaceSettings {
             RequirePathSeparator::Dot => ModulePathSeparator::Dot,
             RequirePathSeparator::Slash => ModulePathSeparator::Slash,
         }
+    }
+
+    pub(super) fn completion_sequence_ranking_config(&self) -> CompletionSequenceRankingConfig {
+        let mut config = CompletionSequenceRankingConfig::default();
+
+        self.completion.sequence_ranking.apply(&mut config);
+        config
     }
 }
 
@@ -400,6 +422,49 @@ impl EcsOverrides {
     }
 }
 
+impl CompletionOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+        let sequence_ranking = settings
+            .get("sequenceRanking")
+            .or_else(|| settings.get("sequence_ranking"));
+
+        Self {
+            sequence_ranking: CompletionSequenceRankingOverrides::from_settings(sequence_ranking),
+        }
+    }
+}
+
+impl CompletionSequenceRankingOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+
+        Self {
+            enabled: bool_setting(settings, "enabled", "enabled"),
+            timeout_ms: u64_setting(settings, "timeout_ms", "timeoutMs"),
+            max_candidates: usize_setting(settings, "max_candidates", "maxCandidates"),
+        }
+    }
+
+    fn apply(&self, config: &mut CompletionSequenceRankingConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+
+        if let Some(timeout_ms) = self.timeout_ms {
+            config.timeout_ms = timeout_ms;
+        }
+
+        if let Some(max_candidates) = self.max_candidates {
+            config.max_candidates = max_candidates;
+        }
+    }
+}
+
 impl PreviewSettings {
     fn from_settings(value: Option<&Value>) -> Self {
         let Some(settings) = value.and_then(Value::as_object) else {
@@ -491,6 +556,17 @@ fn usize_setting(
         .or_else(|| settings.get(snake_case))
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
+}
+
+fn u64_setting(
+    settings: &serde_json::Map<String, Value>,
+    snake_case: &str,
+    camel_case: &str,
+) -> Option<u64> {
+    settings
+        .get(camel_case)
+        .or_else(|| settings.get(snake_case))
+        .and_then(Value::as_u64)
 }
 
 fn quote_style_setting(
