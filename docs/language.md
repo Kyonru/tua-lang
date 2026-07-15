@@ -245,7 +245,9 @@ When generated Lua needs `brinevector` or `tuasignal`, `tua build` writes the
 bundled runtime file into the output directory unless the project already
 provides one. `SignalBus` completions include `on`, `once`, `emit`, `off`,
 `clear`, `has`, `listeners`, and Hump-style aliases such as `register` and
-`remove`.
+`remove`. In the first string argument of those event-name methods, the language
+server suggests known event names from existing `SignalBus` calls, preferring
+the same receiver and nearby declarations before weaker project-wide matches.
 
 ## Boundaries
 

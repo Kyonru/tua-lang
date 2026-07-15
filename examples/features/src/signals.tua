@@ -1,6 +1,7 @@
 -- Feature: built-in signal buses for LOVE/gameplay events.
 -- `signal()` infers SignalBus, completes methods such as on/emit/off, and
 -- emits a bundled tuasignal.lua runtime only when the helper is used.
+-- After an event is used, typing in another event-name string suggests it.
 
 local events = signal()
 local score = 0

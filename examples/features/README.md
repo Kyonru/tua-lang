@@ -98,8 +98,8 @@ make build-features
   bundled `anim8.lua` build output.
 - `src/signals.tua` covers the built-in `signal()` helper: inferred
   `SignalBus` locals, method completion/hover/signature help for event
-  registration and emission, payload-friendly `emit(...)` calls, and bundled
-  `tuasignal.lua` build output.
+  registration and emission, known event-name string completion,
+  payload-friendly `emit(...)` calls, and bundled `tuasignal.lua` build output.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

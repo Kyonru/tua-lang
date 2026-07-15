@@ -241,6 +241,101 @@ events:
 }
 
 #[test]
+fn completes_signal_event_names_from_existing_signal_calls() {
+    let source = r#"
+local events = signal()
+local ui = signal()
+
+ui:on("ui.ready", function() end)
+events:on("player.hit", function() end)
+events:on("player.dead", function() end)
+events:emit("")
+"#;
+    let completions = complete_tua_source(
+        "src/events.tua",
+        source,
+        position_after_last(source, "emit(\""),
+    )
+    .expect("SignalBus event completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec![
+            "player.dead".to_owned(),
+            "player.hit".to_owned(),
+            "ui.ready".to_owned()
+        ]
+    );
+    assert!(completions
+        .iter()
+        .all(|completion| completion.kind == CompletionKind::Value));
+    assert!(completions
+        .iter()
+        .all(|completion| completion.detail.as_deref() == Some("SignalBus event")));
+}
+
+#[test]
+fn recovers_signal_event_names_for_typoed_string_arguments() {
+    let source = r#"
+local events = signal()
+events:on("player.hit", function() end)
+events:emit("plyer.h")
+"#;
+    let completions = complete_tua_source(
+        "src/events.tua",
+        source,
+        position_after_last(source, "\"plyer.h"),
+    )
+    .expect("SignalBus event typo recovery should succeed");
+
+    assert_eq!(labels(&completions), vec!["player.hit".to_owned()]);
+    assert_eq!(completions[0].filter_text.as_deref(), Some("plyer.h"));
+}
+
+#[test]
+fn signal_event_completion_skips_pattern_methods() {
+    let source = r#"
+local events = signal()
+events:on("player.hit", function() end)
+events:emitPattern("pla")
+"#;
+    let completions = complete_tua_source(
+        "src/events.tua",
+        source,
+        position_after_last(source, "\"pla"),
+    )
+    .expect("SignalBus pattern completion should stay quiet");
+
+    assert!(completions.is_empty(), "{completions:?}");
+}
+
+#[test]
+fn completes_signal_event_names_from_project_sources() {
+    let source = r#"
+local events = signal()
+events:emit("")
+"#;
+    let project_source = r#"
+local bus = signal()
+bus:on("enemy.spawn", function() end)
+"#;
+    let parsed = parse_tua_source("src/events.tua", source).expect("source should parse");
+    let (environment, diagnostics) = build_type_environment_with_diagnostics(&parsed);
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+    let completions = complete_source_with_parsed_environment_and_project_sources(
+        source,
+        &parsed,
+        position_after_last(source, "emit(\""),
+        &environment,
+        &[project_source],
+    );
+
+    assert_eq!(labels(&completions), vec!["enemy.spawn".to_owned()]);
+}
+
+#[test]
 fn generates_function_documentation_snippet_from_tua_signature() {
     let source = r#"type Player = { hp: number }
 ---

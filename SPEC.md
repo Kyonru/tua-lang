@@ -578,10 +578,13 @@ statically.
 
 `signal` returns `SignalBus`. The language server should complete, hover, and
 show signatures for `SignalBus` methods including `on`, `once`, `emit`, `off`,
-`clear`, `has`, `listeners`, `register`, and `remove`. `emit` accepts any
-payload values after the signal name. `tua build` writes bundled
-`tuasignal.lua` when emitted Lua requires it, without overwriting a project
-provided `tuasignal.lua`.
+`clear`, `has`, `listeners`, `register`, and `remove`. In the first string
+argument of event-name methods, completion should suggest known event names
+collected from existing typed `SignalBus` calls, ranking same-receiver and
+nearby events ahead of weaker project-wide matches. `emit` accepts any payload
+values after the signal name. `tua build` writes bundled `tuasignal.lua` when
+emitted Lua requires it, without overwriting a project provided
+`tuasignal.lua`.
 
 The compiler should collect reusable asset metadata for these calls:
 

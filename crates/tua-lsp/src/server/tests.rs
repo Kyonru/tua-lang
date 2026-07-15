@@ -3240,6 +3240,22 @@ end
 }
 
 #[test]
+fn completion_returns_signal_event_names_in_string_arguments() {
+    let uri = "file:///tmp/signal-event-completion.tua";
+    let source = r#"
+local events = signal()
+events:on("player.hit", function() end)
+events:emit("pla")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "events:emit(\"pla"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["player.hit"]);
+}
+
+#[test]
 fn completion_returns_generated_love_api_enum_and_type_items() {
     let uri = "file:///tmp/generated-love-api-completion.tua";
     let source = r#"local file = love.filesystem.newFile("save.txt")

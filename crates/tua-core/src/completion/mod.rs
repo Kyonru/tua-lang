@@ -1,12 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall};
+use full_moon::node::Node;
+use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::visitors::Visitor;
+
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
 use self::require::{complete_import_paths, complete_require_paths};
 use self::sequence::{
     score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
 };
 use self::symbol::lua_symbols_before_position;
+use crate::ast_utils::field_chain_before_first_call;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::profile;
@@ -232,7 +238,7 @@ fn completion_priority(completion: &Completion) -> u8 {
 fn completion_uses_source_order(completion: &Completion) -> bool {
     matches!(
         completion.detail.as_deref(),
-        Some("parameter" | "local" | "local function" | "module" | "function")
+        Some("parameter" | "local" | "local function" | "module" | "function" | "SignalBus event")
     )
 }
 
@@ -880,6 +886,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
             active_parameter,
             prefix.as_str(),
             position,
+            project_sources,
         ),
         CompletionContext::RequirePath { prefix } => {
             complete_require_paths(&parsed.path, prefix.as_str())
@@ -1674,9 +1681,23 @@ fn complete_string_argument_values(
     active_parameter: usize,
     prefix: &str,
     position: SourcePosition,
+    project_sources: &[&str],
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
     let semantic = SemanticModel::new(parsed, environment);
+
+    if let Some(completions) = complete_signal_event_names(
+        parsed,
+        environment,
+        callee_parts,
+        active_parameter,
+        prefix,
+        position,
+        project_sources,
+    ) {
+        return completions;
+    }
+
     if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
         let Some(parameter) = function.parameters.get(active_parameter) else {
             return Vec::new();
@@ -1695,6 +1716,278 @@ fn complete_string_argument_values(
     };
 
     complete_lua_enum_values(&parameter_type, prefix)
+}
+
+#[derive(Clone, Debug)]
+struct SignalEventCandidate {
+    name: String,
+    receiver_parts: Vec<String>,
+    position: SourcePosition,
+    source_rank: usize,
+    source_order: usize,
+}
+
+fn complete_signal_event_names(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    callee_parts: &[String],
+    active_parameter: usize,
+    prefix: &str,
+    position: SourcePosition,
+    project_sources: &[&str],
+) -> Option<Vec<Completion>> {
+    if active_parameter != 0 || callee_parts.len() < 2 {
+        return None;
+    }
+
+    let method = callee_parts.last()?;
+
+    if !signal::is_event_name_method(method) {
+        return None;
+    }
+
+    let receiver_parts = &callee_parts[..callee_parts.len() - 1];
+    let semantic = SemanticModel::new(parsed, environment);
+    let receiver_type = semantic.type_of_field_chain(receiver_parts, position)?;
+
+    if !signal::type_is_signal_bus(environment, &receiver_type) {
+        return None;
+    }
+
+    let mut candidates = collect_signal_event_candidates(parsed, environment, Some(position), 0, 0);
+
+    for (index, source) in project_sources.iter().enumerate() {
+        if !source_may_contain_signal_event(source) {
+            continue;
+        }
+
+        let Ok(project_parsed) =
+            parse_tua_source(format!("__project_signal_events_{index}.tua"), *source)
+        else {
+            continue;
+        };
+        let (project_environment, _) = build_type_environment_with_diagnostics(&project_parsed);
+
+        candidates.extend(collect_signal_event_candidates(
+            &project_parsed,
+            &project_environment,
+            None,
+            1,
+            candidates.len(),
+        ));
+    }
+
+    if candidates.is_empty() {
+        return Some(Vec::new());
+    }
+
+    candidates.sort_by(|left, right| {
+        let left_same_receiver = left.receiver_parts == receiver_parts;
+        let right_same_receiver = right.receiver_parts == receiver_parts;
+        right_same_receiver
+            .cmp(&left_same_receiver)
+            .then_with(|| left.source_rank.cmp(&right.source_rank))
+            .then_with(|| {
+                line_distance(left.position, position).cmp(&line_distance(right.position, position))
+            })
+            .then_with(|| left.source_order.cmp(&right.source_order))
+            .then_with(|| left.name.cmp(&right.name))
+    });
+
+    let mut completions = signal_event_completions(candidates.clone(), prefix, None);
+
+    if completions.is_empty() && !prefix.is_empty() {
+        completions = signal_event_completions(candidates, "", Some(prefix));
+    }
+
+    Some(completions)
+}
+
+fn collect_signal_event_candidates(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    skip_position: Option<SourcePosition>,
+    source_rank: usize,
+    source_order_offset: usize,
+) -> Vec<SignalEventCandidate> {
+    let mut visitor = SignalEventVisitor {
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
+        skip_position,
+        source_rank,
+        source_order_offset,
+        candidates: Vec::new(),
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.candidates
+}
+
+fn signal_event_completions(
+    candidates: Vec<SignalEventCandidate>,
+    prefix: &str,
+    filter_text: Option<&str>,
+) -> Vec<Completion> {
+    let mut completions = Vec::new();
+    let mut labels = BTreeSet::new();
+
+    for candidate in candidates {
+        if !completion_text_matches(&candidate.name, prefix) {
+            continue;
+        }
+
+        if !labels.insert(candidate.name.clone()) {
+            continue;
+        }
+
+        completions.push(Completion {
+            label: candidate.name,
+            kind: CompletionKind::Value,
+            detail: Some("SignalBus event".to_owned()),
+            documentation: Some(
+                "Known SignalBus event name from existing signal calls.".to_owned(),
+            ),
+            insert_text: None,
+            filter_text: filter_text.map(str::to_owned),
+            is_snippet: false,
+            module_path: None,
+            source_module: None,
+            additional_text_edits: Vec::new(),
+        });
+    }
+
+    completions
+}
+
+struct SignalEventVisitor<'a> {
+    environment: &'a TypeEnvironment,
+    semantic: SemanticModel<'a>,
+    skip_position: Option<SourcePosition>,
+    source_rank: usize,
+    source_order_offset: usize,
+    candidates: Vec<SignalEventCandidate>,
+}
+
+impl Visitor for SignalEventVisitor<'_> {
+    fn visit_function_call(&mut self, function_call: &FunctionCall) {
+        let Some(callee_parts) = field_chain_before_first_call(function_call) else {
+            return;
+        };
+        let Some(method) = callee_parts.last() else {
+            return;
+        };
+
+        if callee_parts.len() < 2 || !signal::is_event_name_method(method) {
+            return;
+        }
+
+        let receiver_parts = &callee_parts[..callee_parts.len() - 1];
+        let position = node_start(function_call);
+        let Some(receiver_type) = self.semantic.type_of_field_chain(receiver_parts, position)
+        else {
+            return;
+        };
+
+        if !signal::type_is_signal_bus(self.environment, &receiver_type) {
+            return;
+        }
+
+        let Some((name, span)) = first_string_argument(function_call) else {
+            return;
+        };
+
+        if name.is_empty()
+            || self
+                .skip_position
+                .is_some_and(|position| span_contains_position(span, position))
+        {
+            return;
+        }
+
+        self.candidates.push(SignalEventCandidate {
+            name,
+            receiver_parts: receiver_parts.to_vec(),
+            position: span.start,
+            source_rank: self.source_rank,
+            source_order: self.source_order_offset + self.candidates.len(),
+        });
+    }
+}
+
+fn first_string_argument(function_call: &FunctionCall) -> Option<(String, crate::SourceSpan)> {
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        full_moon::ast::Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+
+    match call {
+        Call::AnonymousCall(FunctionArgs::String(value)) => {
+            Some((string_literal_value(value)?, node_span(value)?))
+        }
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            let Expression::String(value) = arguments.iter().next()? else {
+                return None;
+            };
+
+            Some((string_literal_value(value)?, node_span(value)?))
+        }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::String(value) => Some((string_literal_value(value)?, node_span(value)?)),
+            FunctionArgs::Parentheses { arguments, .. } => {
+                let Expression::String(value) = arguments.iter().next()? else {
+                    return None;
+                };
+
+                Some((string_literal_value(value)?, node_span(value)?))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn source_may_contain_signal_event(source: &str) -> bool {
+    (source.contains("signal") || source.contains("SignalBus"))
+        && (source.contains(":on")
+            || source.contains(".on")
+            || source.contains(":once")
+            || source.contains(".once")
+            || source.contains(":register")
+            || source.contains(".register")
+            || source.contains(":emit")
+            || source.contains(".emit")
+            || source.contains(":off")
+            || source.contains(".off")
+            || source.contains(":remove")
+            || source.contains(".remove")
+            || source.contains(":clear")
+            || source.contains(".clear")
+            || source.contains(":has")
+            || source.contains(".has")
+            || source.contains(":listeners")
+            || source.contains(".listeners"))
+}
+
+fn string_literal_value(token: &TokenReference) -> Option<String> {
+    match token.token().token_type() {
+        TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
+        _ => None,
+    }
+}
+
+fn node_start(node: &impl Node) -> SourcePosition {
+    node.range()
+        .map(|(start, _)| SourcePosition::from_full_moon(start))
+        .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn node_span(node: &impl Node) -> Option<crate::SourceSpan> {
+    node.range()
+        .map(|(start, end)| crate::SourceSpan::from_range(start, end))
+}
+
+fn line_distance(left: SourcePosition, right: SourcePosition) -> usize {
+    left.line.abs_diff(right.line)
 }
 
 fn parameter_type_from_lua_item(item: LuaItem, index: usize) -> Option<String> {

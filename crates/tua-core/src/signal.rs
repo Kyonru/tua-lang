@@ -1,4 +1,4 @@
-use crate::types::{FunctionType, TableField, Type};
+use crate::types::{FunctionType, TableField, Type, TypeEnvironment};
 use crate::{TypedFunction, TypedParameter};
 
 pub(crate) const TYPE_NAME: &str = "SignalBus";
@@ -7,6 +7,17 @@ pub(crate) const RUNTIME_MODULE: &str = "tuasignal";
 pub(crate) const EMITTED_CONSTRUCTOR_LOCAL: &str = "__tua_signal";
 
 const BUILTIN_TYPE_NAMES: &[&str] = &[TYPE_NAME];
+const EVENT_NAME_METHODS: &[&str] = &[
+    "on",
+    "once",
+    "register",
+    "emit",
+    "off",
+    "remove",
+    "clear",
+    "has",
+    "listeners",
+];
 
 pub(crate) fn builtin_type_names() -> &'static [&'static str] {
     BUILTIN_TYPE_NAMES
@@ -178,6 +189,23 @@ pub(crate) fn is_constructor(name: &str) -> bool {
     name == CONSTRUCTOR_NAME
 }
 
+pub(crate) fn is_event_name_method(name: &str) -> bool {
+    EVENT_NAME_METHODS.contains(&name)
+}
+
+pub(crate) fn type_is_signal_bus(environment: &TypeEnvironment, ty: &Type) -> bool {
+    match ty {
+        Type::Alias(name) if name == TYPE_NAME => true,
+        Type::Union(types) => types.iter().any(|ty| type_is_signal_bus(environment, ty)),
+        _ => match resolve_aliases(environment, ty, 0) {
+            Type::Table(table) => environment
+                .alias(TYPE_NAME)
+                .is_some_and(|signal_type| signal_type == &Type::Table(table)),
+            _ => false,
+        },
+    }
+}
+
 pub(crate) const fn detail() -> &'static str {
     "function signal(): SignalBus"
 }
@@ -255,5 +283,24 @@ fn typed_parameter(name: &str, ty: Type) -> TypedParameter {
         name: name.to_owned(),
         ty,
         documentation: None,
+    }
+}
+
+fn resolve_aliases(environment: &TypeEnvironment, ty: &Type, depth: usize) -> Type {
+    if depth > 16 {
+        return ty.clone();
+    }
+
+    match ty {
+        Type::Alias(name) => environment
+            .alias(name)
+            .map(|resolved| resolve_aliases(environment, resolved, depth + 1))
+            .unwrap_or_else(|| ty.clone()),
+        Type::Union(types) => Type::union(
+            types
+                .iter()
+                .map(|member| resolve_aliases(environment, member, depth + 1)),
+        ),
+        _ => ty.clone(),
     }
 }

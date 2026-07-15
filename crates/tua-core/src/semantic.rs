@@ -1960,25 +1960,10 @@ fn signal_typed_method_for_receiver(
     receiver_type: &Type,
     method: &str,
 ) -> Option<TypedFunction> {
-    if receiver_is_signal_bus(environment, receiver_type) {
+    if signal::type_is_signal_bus(environment, receiver_type) {
         signal::typed_method(method)
     } else {
         None
-    }
-}
-
-fn receiver_is_signal_bus(environment: &TypeEnvironment, receiver_type: &Type) -> bool {
-    match receiver_type {
-        Type::Alias(name) if name == signal::TYPE_NAME => true,
-        Type::Union(types) => types
-            .iter()
-            .any(|ty| receiver_is_signal_bus(environment, ty)),
-        _ => match resolve_aliases(environment, receiver_type, 0) {
-            Type::Table(table) => environment
-                .alias(signal::TYPE_NAME)
-                .is_some_and(|signal_type| signal_type == &Type::Table(table)),
-            _ => false,
-        },
     }
 }
 
