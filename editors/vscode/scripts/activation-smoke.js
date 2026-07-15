@@ -664,7 +664,7 @@ function writeMockServer(filename) {
 }
 
 function loadExtension(state) {
-  delete require.cache[extensionPath];
+  clearExtensionModuleCache();
 
   Module._load = function load(request, parent, isMain) {
     if (request === "vscode") {
@@ -681,6 +681,16 @@ function loadExtension(state) {
   };
 
   return require(extensionPath);
+}
+
+function clearExtensionModuleCache() {
+  const sourceRoot = path.join(extensionRoot, "src") + path.sep;
+
+  for (const modulePath of Object.keys(require.cache)) {
+    if (modulePath === extensionPath || modulePath.startsWith(sourceRoot)) {
+      delete require.cache[modulePath];
+    }
+  }
 }
 
 function createMockState(workspace, options = {}) {
