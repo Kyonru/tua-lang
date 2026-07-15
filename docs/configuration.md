@@ -396,7 +396,7 @@ Supported editor settings:
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`. Static `import(...)` lowering uses the same separator when mapping a
   source path back to the emitted Lua `require("...")` module name.
-- `tua.preview.enabled`: reserves an editor-facing preview toggle for
-  experimental features. It does not currently enable proposed VS Code APIs or
-  custom hover/source-definition/multi-document-highlight/auto-insert behavior,
-  and it does not start the external API bridge design.
+- `tua.preview.enabled`: enables explicit experimental editor previews such as
+  `Tua: Preview Sprite Animations`. It does not enable proposed VS Code APIs,
+  source-definition/multi-document-highlight/auto-insert behavior, or the
+  external API bridge design.

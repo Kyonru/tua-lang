@@ -4,7 +4,7 @@
 -- `tua build` writes bundled anim8.lua when generated Lua requires it.
 local Player = spriteSheet({
   image = "assets/player.png",
-  frame = { width = 16, height = 16 },
+  frame = { width = 128, height = 128 },
   animations = {
     idle = { from = 0, to = 3, fps = 8 },
     run = { from = 4, to = 9, fps = 12, loop = false },

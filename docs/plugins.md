@@ -257,7 +257,9 @@ Editor examples:
 - sprite image paths participate in asset metadata hovers;
 - normal parser-native syntax keeps inlay hints, hover, formatting, rename, and
   document symbols on ordinary Tua nodes;
-- future editor metadata can add animation completions and preview panels.
+- VS Code can preview animations from the active document with the
+  preview-gated `Tua: Preview Sprite Animations` command, including the command
+  link shown when hovering a parsed sprite sheet binding.
 
 Possible structured lowering:
 

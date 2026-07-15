@@ -98,8 +98,11 @@ and workspace directory when available.
 ## Custom VS Code Feature Evaluation
 
 The VS Code extension intentionally stays on stable VS Code APIs plus standard
-LSP requests. The only custom document surface is the `tua:/builtins` virtual
-document provider used for generated builtin and LOVE stubs.
+LSP requests. The `tua:/builtins` virtual document provider is used for
+generated builtin and LOVE stubs. Experimental visual tooling, such as the
+sprite animation preview command, is explicit and gated by `tua.preview.enabled`;
+sprite sheet hovers may offer a trusted command link, but the preview itself is
+still a command/webview rather than an LSP hover payload.
 
 TypeScript Go-style proposed editor features were evaluated and are not exposed
 today:

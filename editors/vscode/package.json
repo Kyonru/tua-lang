@@ -433,6 +433,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.previewSprites",
+        "title": "Preview Sprite Animations",
+        "category": "Tua"
+      },
+      {
         "command": "tua.source.organizeImports",
         "title": "Organize Imports",
         "category": "Tua"

@@ -2108,7 +2108,8 @@ Status: done for the first built-in plugin prototype. Tua recognizes one
 parser-native `spriteSheet({...})` helper form, records structured sprite
 metadata, reports plugin diagnostics for missing image assets and invalid
 ranges/FPS, emits readable anim8-backed Lua, and bundles `anim8.lua` into build
-output when needed.
+output when needed. The VS Code extension also includes a preview-gated command
+to visualize active-file sprite animations from local sprite sheet images.
 
 Scope:
 

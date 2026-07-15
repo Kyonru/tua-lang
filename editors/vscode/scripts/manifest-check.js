@@ -17,6 +17,7 @@ const expected = [
   "tua.saveCacheStats",
   "tua.saveCpuProfile",
   "tua.saveHeapSummary",
+  "tua.previewSprites",
   "tua.source.organizeImports",
   "tua.source.sortImports",
   "tua.source.removeUnusedImports",

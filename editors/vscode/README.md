@@ -22,7 +22,8 @@ Minimal VS Code language support for tua source files.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, probing server profile artifacts,
-  running source actions, reporting an issue, and opening Tua settings.
+  previewing `spriteSheet` animations, running source actions, reporting an
+  issue, and opening Tua settings.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
 - Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
@@ -37,6 +38,8 @@ Minimal VS Code language support for tua source files.
   `off`, `messages`, and `verbose`.
 - `tua.log.verbosity`: language-server log verbosity. Supported values are
   `off`, `error`, `info`, `debug`, and `trace`.
+- `tua.preview.enabled`: enables experimental editor previews such as
+  `Tua: Preview Sprite Animations`.
 
 VSIX packages built with `make extension-package` include the current platform's
 `tua` server binary and use it by default.
@@ -76,6 +79,7 @@ the setting.
 - `Tua: Save Cache Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
+- `Tua: Preview Sprite Animations`
 - `Tua: Organize Imports`
 - `Tua: Sort Imports`
 - `Tua: Remove Unused Imports`
@@ -118,5 +122,10 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   highlights.
 - Auto insert is out of scope until Tua has a safe syntax trigger; snippets and
   standard completion are the preferred path for block helpers.
+- Sprite animation previews are exposed as an explicit command gated by
+  `tua.preview.enabled`; they read `spriteSheet({...})` metadata from the active
+  document and draw local image frames in a sticky webview preview without
+  executing project code. Hovering a parsed sprite sheet binding also offers a
+  trusted command link to open the same preview.
 - The optional external API bridge is design-only. The extension does not start
   a bridge session today.

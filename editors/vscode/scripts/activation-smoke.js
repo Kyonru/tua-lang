@@ -153,6 +153,61 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "source-action commands should dispatch matching VS Code code actions",
     );
 
+    state.setConfiguration("preview.enabled", true);
+    fs.mkdirSync(path.join(workspace, "src", "assets"), { recursive: true });
+    fs.writeFileSync(path.join(workspace, "src", "assets", "player.png"), Buffer.from([0x89, b("P"), b("N"), b("G")]));
+    const spriteDocument = mockDocument(
+      path.join(workspace, "src", "sprites.tua"),
+      "tua",
+      "file",
+      `local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+`,
+    );
+    state.setActiveDocument(spriteDocument);
+
+    await state.commands.get("tua.previewSprites")();
+
+    assert.strictEqual(
+      state.webviewPanels.length,
+      1,
+      `sprite preview command should open one webview panel; warnings=${state.warningMessages.join(" | ")} information=${state.informationMessages.join(" | ")}`,
+    );
+    assert(
+      state.webviewPanels[0].html.includes("Player") &&
+        state.webviewPanels[0].html.includes("assets/player.png") &&
+        state.webviewPanels[0].html.includes("Sprite sheet") &&
+        state.webviewPanels[0].html.includes("animation-tabs") &&
+        state.webviewPanels[0].html.includes("Fit") &&
+        state.webviewPanels[0].html.includes("Reload"),
+      "sprite preview webview should include parsed sprite metadata and preview controls",
+    );
+    assert.strictEqual(
+      typeof state.webviewPanels[0].messageListener,
+      "function",
+      "sprite preview webview should handle reload messages",
+    );
+
+    const spriteHover = state.hoverProviders
+      .at(-1)
+      ?.provider.provideHover(spriteDocument, { line: 0, character: 8 });
+
+    assert(
+      spriteHover?.contents?.[0]?.value.includes("command:tua.previewSprites") &&
+        spriteHover.contents[0].value.includes("Preview Player"),
+      "sprite sheet variable hover should link to the preview command",
+    );
+    assert.deepStrictEqual(
+      spriteHover.contents[0].isTrusted,
+      { enabledCommands: ["tua.previewSprites"] },
+      "sprite preview hover should trust only the preview command",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -518,10 +573,45 @@ async function smokeStartupFailure(missingServer, workspace) {
   }
 }
 
-function mockDocument(filename, languageId = "tua", scheme = "file") {
+function mockDocument(filename, languageId = "tua", scheme = "file", text = "") {
   return {
     fileName: filename,
     languageId,
+    getText(range) {
+      if (!range) {
+        return text;
+      }
+
+      return text.slice(positionOffset(text, range.start), positionOffset(text, range.end));
+    },
+    getWordRangeAtPosition(position) {
+      const line = text.split(/\r?\n/)[position.line] || "";
+      let start = Math.max(0, Math.min(position.character, line.length));
+      let end = start;
+
+      while (start > 0 && /[A-Za-z0-9_]/.test(line[start - 1])) {
+        start -= 1;
+      }
+
+      while (end < line.length && /[A-Za-z0-9_]/.test(line[end])) {
+        end += 1;
+      }
+
+      if (start === end) {
+        return undefined;
+      }
+
+      return {
+        start: { line: position.line, character: start },
+        end: { line: position.line, character: end },
+      };
+    },
+    setText(value) {
+      text = value;
+    },
+    getTextContent() {
+      return text;
+    },
     uri: {
       fsPath: filename,
       path: filename,
@@ -531,6 +621,21 @@ function mockDocument(filename, languageId = "tua", scheme = "file") {
       },
     },
   };
+}
+
+function positionOffset(text, position) {
+  const lines = text.split(/\r?\n/);
+  let offset = 0;
+
+  for (let line = 0; line < position.line; line += 1) {
+    offset += (lines[line] || "").length + 1;
+  }
+
+  return offset + position.character;
+}
+
+function b(character) {
+  return character.charCodeAt(0);
 }
 
 function platformExecutableName() {
@@ -586,6 +691,7 @@ function createMockState(workspace, options = {}) {
     ["server.path", options.serverPath ?? "tua"],
     ["trace.server", options.traceServer ?? "off"],
     ["log.verbosity", options.logVerbosity ?? "off"],
+    ["preview.enabled", options.previewEnabled ?? false],
   ]);
   const configurationListeners = [];
   const documentChangeListeners = [];
@@ -596,6 +702,8 @@ function createMockState(workspace, options = {}) {
   const outputLines = [];
   const outputShows = [];
   const quickPickCalls = [];
+  const hoverProviders = [];
+  const webviewPanels = [];
   const warningMessages = [];
   let activeTextEditor;
   let statusItem;
@@ -622,10 +730,35 @@ function createMockState(workspace, options = {}) {
       Warning: 2,
       Error: 3,
     },
+    Hover: class Hover {
+      constructor(contents, range) {
+        this.contents = Array.isArray(contents) ? contents : [contents];
+        this.range = range;
+      }
+    },
+    MarkdownString: class MarkdownString {
+      constructor(value = "", supportThemeIcons = false) {
+        this.value = value;
+        this.supportThemeIcons = supportThemeIcons;
+      }
+    },
     Uri: {
+      file(filename) {
+        return {
+          fsPath: filename,
+          path: filename,
+          scheme: "file",
+          toString() {
+            return `file://${filename}`;
+          },
+        };
+      },
       parse(value) {
         return { toString: () => value };
       },
+    },
+    ViewColumn: {
+      Beside: 2,
     },
     commands: {
       registerCommand(command, callback) {
@@ -658,6 +791,10 @@ function createMockState(workspace, options = {}) {
         };
         return statusItem;
       },
+      registerHoverProvider(selector, provider) {
+        hoverProviders.push({ selector, provider });
+        return { dispose() {} };
+      },
     },
     window: {
       get activeTextEditor() {
@@ -673,6 +810,41 @@ function createMockState(workspace, options = {}) {
             outputShows.push(preserveFocus);
           },
         };
+      },
+      createWebviewPanel(viewType, title, column, options) {
+        const panel = {
+          viewType,
+          title,
+          column,
+          options,
+          html: "",
+          webview: {
+            cspSource: "mock-csp",
+            asWebviewUri(uri) {
+              return {
+                toString() {
+                  return `webview:${uri.fsPath}`;
+                },
+              };
+            },
+            onDidReceiveMessage(listener) {
+              panel.messageListener = listener;
+              return { dispose() {} };
+            },
+          },
+        };
+
+        Object.defineProperty(panel.webview, "html", {
+          get() {
+            return panel.html;
+          },
+          set(value) {
+            panel.html = value;
+          },
+        });
+
+        webviewPanels.push(panel);
+        return panel;
       },
       showErrorMessage() {
         return Promise.resolve(undefined);
@@ -795,11 +967,15 @@ function createMockState(workspace, options = {}) {
     documentChangeListeners,
     executedCommands,
     informationMessages,
+    hoverProviders,
     LanguageClient,
     openedExternals,
     outputLines,
     outputShows,
     quickPickCalls,
+    setActiveDocument(document) {
+      activeTextEditor = { document };
+    },
     setConfiguration(key, value) {
       configuration.set(key, value);
     },
@@ -814,6 +990,7 @@ function createMockState(workspace, options = {}) {
       }
     },
     vscode,
+    webviewPanels,
     warningMessages,
   };
 }
@@ -840,6 +1017,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCacheStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.previewSprites",
     "tua.source.organizeImports",
     "tua.source.sortImports",
     "tua.source.removeUnusedImports",
