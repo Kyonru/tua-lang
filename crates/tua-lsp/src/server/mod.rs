@@ -5,6 +5,7 @@ mod completion_stats;
 mod configuration;
 mod handlers;
 mod protocol;
+mod scheduler;
 mod transport;
 mod uri;
 
@@ -12,6 +13,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,6 +21,7 @@ use serde_json::Value;
 
 use analysis::AnalysisHost;
 use configuration::WorkspaceSettings;
+use scheduler::{request_runs_on_coordinator, RequestScheduler, ServerEvent};
 use transport::{read_message, write_message};
 
 const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
@@ -41,7 +44,8 @@ pub fn run_stdio() -> io::Result<()> {
 pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io::Result<()> {
     let mut server = LspServer::default();
     let mut writer = writer;
-    let (reader_tx, reader_rx) = mpsc::channel();
+    let (event_tx, event_rx) = mpsc::channel();
+    let mut scheduler = RequestScheduler::new(event_tx.clone());
     let mut pending_messages = VecDeque::new();
     let mut reader_closed = false;
 
@@ -51,16 +55,19 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
         loop {
             match read_message(&mut reader) {
                 Ok(Some(message)) => {
-                    if reader_tx.send(Ok(Some(message))).is_err() {
+                    if event_tx
+                        .send(ServerEvent::Input(Ok(Some(message))))
+                        .is_err()
+                    {
                         break;
                     }
                 }
                 Ok(None) => {
-                    let _ = reader_tx.send(Ok(None));
+                    let _ = event_tx.send(ServerEvent::Input(Ok(None)));
                     break;
                 }
                 Err(error) => {
-                    let _ = reader_tx.send(Err(error));
+                    let _ = event_tx.send(ServerEvent::Input(Err(error)));
                     break;
                 }
             }
@@ -68,24 +75,45 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     });
 
     loop {
-        if pending_messages.is_empty() && !reader_closed {
+        if pending_messages.is_empty() && server.should_exit && !scheduler.has_in_flight() {
+            break;
+        }
+
+        if pending_messages.is_empty() {
+            if reader_closed && !scheduler.has_in_flight() {
+                for message in server.drain_all_pending_slow_diagnostics() {
+                    write_message(&mut writer, &message)?;
+                }
+
+                break;
+            }
+
             match server.next_slow_diagnostics_due() {
-                Some(deadline) => {
+                Some(deadline) if !reader_closed => {
                     let timeout = deadline.saturating_duration_since(Instant::now());
 
-                    match reader_rx.recv_timeout(timeout) {
-                        Ok(event) => match event? {
-                            Some(message) => pending_messages.push_back(message),
-                            None => reader_closed = true,
-                        },
-                        Err(RecvTimeoutError::Timeout) => match reader_rx.try_recv() {
-                            Ok(event) => match event? {
-                                Some(message) => pending_messages.push_back(message),
-                                None => reader_closed = true,
-                            },
+                    match event_rx.recv_timeout(timeout) {
+                        Ok(event) => process_server_event(
+                            event,
+                            &mut server,
+                            &mut scheduler,
+                            &mut pending_messages,
+                            &mut reader_closed,
+                            &mut writer,
+                        )?,
+                        Err(RecvTimeoutError::Timeout) => match event_rx.try_recv() {
+                            Ok(event) => process_server_event(
+                                event,
+                                &mut server,
+                                &mut scheduler,
+                                &mut pending_messages,
+                                &mut reader_closed,
+                                &mut writer,
+                            )?,
                             Err(TryRecvError::Empty) => {
-                                if let Some(message) =
-                                    server.drain_next_due_slow_diagnostic(Instant::now())
+                                let now = Instant::now();
+                                scheduler.dispatch_due_slow_diagnostic(&mut server, now);
+                                if let Some(message) = server.drain_due_pull_diagnostic_refresh(now)
                                 {
                                     write_message(&mut writer, &message)?;
                                 }
@@ -97,25 +125,30 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
                         Err(RecvTimeoutError::Disconnected) => reader_closed = true,
                     }
                 }
-                None => match reader_rx.recv() {
-                    Ok(event) => match event? {
-                        Some(message) => pending_messages.push_back(message),
-                        None => reader_closed = true,
-                    },
+                _ => match event_rx.recv() {
+                    Ok(event) => process_server_event(
+                        event,
+                        &mut server,
+                        &mut scheduler,
+                        &mut pending_messages,
+                        &mut reader_closed,
+                        &mut writer,
+                    )?,
                     Err(_) => reader_closed = true,
                 },
             }
         }
 
-        while !reader_closed {
-            match reader_rx.try_recv() {
-                Ok(event) => match event? {
-                    Some(message) => pending_messages.push_back(message),
-                    None => {
-                        reader_closed = true;
-                        break;
-                    }
-                },
+        loop {
+            match event_rx.try_recv() {
+                Ok(event) => process_server_event(
+                    event,
+                    &mut server,
+                    &mut scheduler,
+                    &mut pending_messages,
+                    &mut reader_closed,
+                    &mut writer,
+                )?,
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     reader_closed = true;
@@ -125,26 +158,44 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
         }
 
         let Some(message) = pop_next_pending_message(&mut pending_messages) else {
-            if reader_closed {
-                for message in server.drain_all_pending_slow_diagnostics() {
-                    write_message(&mut writer, &message)?;
-                }
-
-                break;
-            }
-
             continue;
         };
 
         server.input_backlog_active = !pending_messages.is_empty();
-        if let Some(outbound) = server.handle_message(message) {
-            for message in outbound {
-                write_message(&mut writer, &message)?;
+        let method = message
+            .get("method")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        let request = message.get("id").is_some();
+        let changed_uri = (method == "textDocument/didChange")
+            .then(|| document_uri_from_message(&message).map(str::to_owned))
+            .flatten();
+
+        let outbound = if request && !request_runs_on_coordinator(&method) {
+            scheduler.dispatch(&mut server, message)
+        } else {
+            let cancelled_id = (method == "$/cancelRequest")
+                .then(|| message.get("params")?.get("id").cloned())
+                .flatten();
+            let mut outbound = server.handle_message(message).unwrap_or_default();
+
+            if let Some(id) = cancelled_id {
+                outbound.extend(scheduler.cancel(&id));
             }
+            if let Some(uri) = changed_uri {
+                let generation = server.document_generations.get(&uri).copied();
+                outbound.extend(scheduler.cancel_stale_background(&uri, generation));
+            }
+
+            outbound
+        };
+        for message in outbound {
+            write_message(&mut writer, &message)?;
         }
         server.input_backlog_active = false;
 
-        if server.should_exit {
+        if server.should_exit && !scheduler.has_in_flight() {
             break;
         }
     }
@@ -152,7 +203,38 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     Ok(())
 }
 
-#[derive(Default)]
+fn process_server_event(
+    event: ServerEvent,
+    server: &mut LspServer,
+    scheduler: &mut RequestScheduler,
+    pending_messages: &mut VecDeque<Value>,
+    reader_closed: &mut bool,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    match event {
+        ServerEvent::Input(event) => match event? {
+            Some(message) => pending_messages.push_back(message),
+            None => *reader_closed = true,
+        },
+        ServerEvent::RequestFinished(result) => {
+            for message in scheduler.finish(server, result) {
+                write_message(writer, &message)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn document_uri_from_message(message: &Value) -> Option<&str> {
+    message
+        .get("params")?
+        .get("textDocument")?
+        .get("uri")?
+        .as_str()
+}
+
+#[derive(Clone, Default)]
 struct LspServer {
     analysis: AnalysisHost,
     workspace_folders: Vec<PathBuf>,
@@ -163,8 +245,7 @@ struct LspServer {
     document_generations: BTreeMap<String, u64>,
     document_versions: BTreeMap<String, i64>,
     recent_document_changes: BTreeMap<String, Instant>,
-    semantic_token_results: BTreeMap<String, SemanticTokensCacheEntry>,
-    next_semantic_token_result_id: u64,
+    semantic_tokens: Arc<Mutex<SemanticTokensState>>,
     client_watched_files_dynamic_registration: bool,
     client_pull_diagnostics: bool,
     client_diagnostic_refresh: bool,
@@ -191,6 +272,12 @@ struct SemanticTokensCacheEntry {
     document_version: Option<i64>,
     analysis_revision: u64,
     sequence: u64,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct SemanticTokensState {
+    results: BTreeMap<String, SemanticTokensCacheEntry>,
+    next_result_id: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -311,6 +398,7 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "textDocument/semanticTokens/full"
             | "textDocument/semanticTokens/full/delta"
             | "textDocument/semanticTokens/range"
+            | "workspace/symbol"
     )
 }
 

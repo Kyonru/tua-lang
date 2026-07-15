@@ -27,7 +27,7 @@ use super::uri::path_from_uri;
 
 const MIN_AUTO_IMPORT_PREFIX_CHARS: usize = 2;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct AnalysisHost {
     core: CoreAnalysisHost,
     documents: HashMap<String, OpenDocument>,

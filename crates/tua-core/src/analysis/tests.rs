@@ -13,6 +13,13 @@ struct TempProject {
     path: PathBuf,
 }
 
+#[test]
+fn analysis_snapshots_are_send_and_sync() {
+    fn assert_send_and_sync<T: Send + Sync>() {}
+
+    assert_send_and_sync::<AnalysisSnapshot>();
+}
+
 impl TempProject {
     fn new(name: &str) -> Self {
         let unique = SystemTime::now()
@@ -321,29 +328,51 @@ local player: <|alias_ref|>Player = { hp = 10 }
     host.set_file(&path, fixture.source("src/main.tua"));
 
     let snapshot = host.snapshot();
-    assert!(snapshot.definition_cache.borrow().is_empty());
+    assert!(snapshot
+        .definition_cache
+        .lock()
+        .expect("definition cache lock poisoned")
+        .is_empty());
 
     let definition = snapshot
         .definition(&path, fixture.position("alias_ref"))
         .expect("alias definition should resolve");
     assert_eq!(definition.span, fixture.range("alias_def"));
-    let cache_len = snapshot.definition_cache.borrow().len();
+    let cache_len = snapshot
+        .definition_cache
+        .lock()
+        .expect("definition cache lock poisoned")
+        .len();
     assert!(cache_len > 0);
 
     let warm_snapshot = host.snapshot();
 
-    assert!(Rc::ptr_eq(
+    assert!(Arc::ptr_eq(
         &snapshot.definition_cache,
         &warm_snapshot.definition_cache
     ));
-    assert_eq!(warm_snapshot.definition_cache.borrow().len(), cache_len);
+    assert_eq!(
+        warm_snapshot
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .len(),
+        cache_len
+    );
 
     let repeated = warm_snapshot
         .definition(&path, fixture.position("alias_ref"))
         .expect("cached alias definition should resolve");
 
     assert_eq!(repeated.span, fixture.range("alias_def"));
-    assert_eq!(warm_snapshot.definition_cache.borrow().len(), cache_len);
+    assert_eq!(
+        warm_snapshot
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .len(),
+        cache_len
+    );
 }
 
 #[test]
@@ -368,29 +397,50 @@ local hp = enemy.hp
     );
 
     let snapshot = host.snapshot();
-    assert!(snapshot.semantic_facts.borrow().is_empty());
+    assert!(snapshot
+        .semantic_facts
+        .lock()
+        .expect("semantic facts lock poisoned")
+        .is_empty());
 
     let main_index = snapshot
         .semantic_index(&main)
         .expect("main semantic index should warm");
     assert!(main_index.cache_len() > 0);
-    assert_eq!(snapshot.semantic_facts.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .len(),
+        1
+    );
     assert!(snapshot
         .semantic_facts
-        .borrow()
+        .lock()
+        .expect("semantic facts lock poisoned")
         .contains_key(&normalize_path(&main)));
     assert!(!snapshot
         .semantic_facts
-        .borrow()
+        .lock()
+        .expect("semantic facts lock poisoned")
         .contains_key(&normalize_path(&other)));
 
     assert!(host.warm_file(&other, AnalysisWarmPriority::High));
     let warmed = host.snapshot();
 
-    assert_eq!(warmed.semantic_facts.borrow().len(), 2);
+    assert_eq!(
+        warmed
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .len(),
+        2
+    );
     assert!(warmed
         .semantic_facts
-        .borrow()
+        .lock()
+        .expect("semantic facts lock poisoned")
         .contains_key(&normalize_path(&other)));
 }
 
@@ -1664,13 +1714,18 @@ return {
     }
 
     let snapshot = host.snapshot();
-    assert!(snapshot.semantic_facts.borrow().is_empty());
+    assert!(snapshot
+        .semantic_facts
+        .lock()
+        .expect("semantic facts lock poisoned")
+        .is_empty());
 
     let labels =
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
     let facts = snapshot
         .semantic_facts
-        .borrow()
+        .lock()
+        .expect("semantic facts lock poisoned")
         .get(&normalize_path(Path::new("src/main.tua")))
         .cloned()
         .expect("completion should warm shared semantic facts");
@@ -1685,7 +1740,14 @@ return {
         .definition("src/main.tua", fixture.position("hp_ref"))
         .expect("imported return alias field should resolve to provider alias field");
 
-    assert_eq!(snapshot.semantic_facts.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .len(),
+        1
+    );
     assert!(labels.contains(&"hp".to_owned()));
     assert!(labels.contains(&"name".to_owned()));
     assert!(direct_labels.contains(&"hp".to_owned()));
@@ -1906,7 +1968,14 @@ player:<|complete|>setFilter(<|signature|>"nearest")
         .expect("inferred LOVE local should hover");
 
     assert_eq!(hover.contents, "local player: Image");
-    assert_eq!(snapshot.completion_cache.borrow().len(), 0);
+    assert_eq!(
+        snapshot
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .len(),
+        0
+    );
 
     let completions = snapshot.completion("src/main.tua", fixture.position("complete"));
     let labels = completions
@@ -1915,7 +1984,14 @@ player:<|complete|>setFilter(<|signature|>"nearest")
         .collect::<Vec<_>>();
 
     assert!(labels.contains(&"setFilter".to_owned()));
-    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .len(),
+        1
+    );
     assert_eq!(
         snapshot
             .completion("src/main.tua", fixture.position("complete"))
@@ -1924,7 +2000,14 @@ player:<|complete|>setFilter(<|signature|>"nearest")
             .collect::<Vec<_>>(),
         labels
     );
-    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .len(),
+        1
+    );
     assert!(snapshot
         .resolve_completion(
             "src/main.tua",
@@ -1935,7 +2018,14 @@ player:<|complete|>setFilter(<|signature|>"nearest")
             None,
         )
         .is_some());
-    assert_eq!(snapshot.completion_cache.borrow().len(), 1);
+    assert_eq!(
+        snapshot
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .len(),
+        1
+    );
 
     let hints = snapshot.inlay_hints("src/main.tua");
 
@@ -1982,7 +2072,11 @@ end
     let first = snapshot
         .definition("src/main.tua", first_position)
         .expect("field definition should resolve");
-    let cache_len = snapshot.definition_cache.borrow().len();
+    let cache_len = snapshot
+        .definition_cache
+        .lock()
+        .expect("definition cache lock poisoned")
+        .len();
     let second = snapshot
         .definition("src/main.tua", second_position)
         .expect("field definition should resolve from token cache");
@@ -1990,7 +2084,11 @@ end
     assert_eq!(first, second);
     assert_eq!(first.kind, DefinitionKind::TableField);
     assert_eq!(
-        snapshot.definition_cache.borrow().len(),
+        snapshot
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .len(),
         cache_len,
         "lookup inside the same identifier should reuse the warmed cache"
     );
@@ -2024,7 +2122,11 @@ local player: Player = { health = 10, score = 1 }
     assert!(base_labels.contains(&"health".to_owned()));
     assert!(base_labels.contains(&"score".to_owned()));
 
-    let warmed_cache_len = first.completion_cache.borrow().len();
+    let warmed_cache_len = first
+        .completion_cache
+        .lock()
+        .expect("completion cache lock poisoned")
+        .len();
 
     host.update_open_document(&path, typed.source("src/main.tua"));
 
@@ -2035,7 +2137,7 @@ local player: Player = { health = 10, score = 1 }
     assert_eq!(typed_labels, vec!["health".to_owned()]);
     assert_eq!(typed_completions[0].filter_text.as_deref(), Some("EA"));
     assert_eq!(
-        second.completion_cache.borrow().len(),
+        second.completion_cache.lock().expect("completion cache lock poisoned").len(),
         warmed_cache_len,
         "typing a case-insensitive contains prefix should reuse the warmed player. completion cache"
     );
@@ -2116,7 +2218,11 @@ end
     let first = snapshot
         .definition("src/main.tua", fixture.position("field_ref"))
         .expect("self field definition should resolve through synthetic receiver");
-    let cache_len = snapshot.definition_cache.borrow().len();
+    let cache_len = snapshot
+        .definition_cache
+        .lock()
+        .expect("definition cache lock poisoned")
+        .len();
     let second = snapshot
         .definition("src/main.tua", fixture.position("field_ref"))
         .expect("repeated self field definition should stay cached");
@@ -2124,7 +2230,14 @@ end
     assert_eq!(first, second);
     assert_eq!(first.kind, DefinitionKind::TableField);
     assert_eq!(first.span, fixture.range("field_def"));
-    assert_eq!(snapshot.definition_cache.borrow().len(), cache_len);
+    assert_eq!(
+        snapshot
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .len(),
+        cache_len
+    );
 }
 
 #[test]

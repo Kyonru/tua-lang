@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::{json, Value};
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1987,6 +1987,138 @@ fn shutdown_does_not_overtake_an_earlier_interactive_request() {
 
     assert_eq!(first["method"], "textDocument/hover");
     assert_eq!(second["method"], "shutdown");
+}
+
+#[test]
+fn typing_and_completion_preempt_a_running_background_request() {
+    let uri = "file:///tmp/preemptible-completion.tua";
+    let before = "local outside_function = 1\n";
+    let after = "local outside_function = 1\no";
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                did_open(uri, before),
+                slow_background_request(2, None, 300),
+            ],
+        ),
+        (
+            Duration::from_millis(50),
+            vec![
+                did_change(uri, after, 2),
+                invoked_completion_request(3, uri, after, "o"),
+            ],
+        ),
+    ]);
+    let completion_index = response_index_with_id(&output, 3);
+    let slow_index = response_index_with_id(&output, 2);
+
+    assert!(
+        completion_index < slow_index,
+        "completion should finish before an already-running background request: {output:#?}"
+    );
+    assert!(response_with_id(&output, 3)["result"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+}
+
+#[test]
+fn did_change_discards_a_stale_background_result() {
+    let uri = "file:///tmp/stale-background.tua";
+    let before = "local value = 1\n";
+    let after = "local value = 2\n";
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                did_open(uri, before),
+                slow_background_request(2, Some(uri), 250),
+            ],
+        ),
+        (Duration::from_millis(40), vec![did_change(uri, after, 2)]),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["error"]["code"], -32801);
+    assert!(!output
+        .iter()
+        .any(|message| message["id"] == 2 && message.get("result").is_some()));
+}
+
+#[test]
+fn cancel_request_cancels_a_running_analysis_request() {
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                slow_background_request(2, None, 250),
+            ],
+        ),
+        (
+            Duration::from_millis(40),
+            vec![json!({
+                "jsonrpc": "2.0",
+                "method": "$/cancelRequest",
+                "params": { "id": 2 }
+            })],
+        ),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["error"]["code"], -32800);
+    assert!(!output
+        .iter()
+        .any(|message| message["id"] == 2 && message.get("result").is_some()));
+}
+
+#[test]
+fn duplicate_background_requests_share_one_worker_job() {
+    let uri = "file:///tmp/coalesced-background.tua";
+    let output = run_messages(vec![
+        json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+        did_open(uri, "local value = 1\n"),
+        slow_background_request(2, Some(uri), 40),
+        slow_background_request(3, Some(uri), 40),
+    ]);
+
+    let first = &response_with_id(&output, 2)["result"];
+    let second = &response_with_id(&output, 3)["result"];
+
+    assert_eq!(first["slow"], true);
+    assert_eq!(
+        first, second,
+        "coalesced requests should share one execution"
+    );
+}
+
+#[test]
+fn a_new_duplicate_does_not_join_a_cancelled_worker_job() {
+    let uri = "file:///tmp/retry-cancelled-background.tua";
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                did_open(uri, "local value = 1\n"),
+                slow_background_request(2, Some(uri), 100),
+            ],
+        ),
+        (
+            Duration::from_millis(20),
+            vec![
+                json!({
+                    "jsonrpc": "2.0",
+                    "method": "$/cancelRequest",
+                    "params": { "id": 2 }
+                }),
+                slow_background_request(3, Some(uri), 100),
+            ],
+        ),
+    ]);
+
+    assert_eq!(response_with_id(&output, 2)["error"]["code"], -32800);
+    assert_eq!(response_with_id(&output, 3)["result"]["slow"], true);
 }
 
 #[test]
@@ -6894,6 +7026,27 @@ fn semantic_tokens_unknown_document_returns_empty_data() {
 }
 
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
+    let input = encode_messages(messages);
+    let mut output = Vec::new();
+
+    run(Cursor::new(input), &mut output).expect("server should run");
+
+    read_output_messages(&output)
+}
+
+fn run_chunked_messages(chunks: Vec<(Duration, Vec<Value>)>) -> Vec<Value> {
+    let chunks = chunks
+        .into_iter()
+        .map(|(delay, messages)| (delay, encode_messages(messages)))
+        .collect();
+    let mut output = Vec::new();
+
+    run(DelayedChunks::new(chunks), &mut output).expect("server should run");
+
+    read_output_messages(&output)
+}
+
+fn encode_messages(messages: Vec<Value>) -> Vec<u8> {
     let mut input = Vec::new();
 
     for message in messages {
@@ -6903,11 +7056,38 @@ fn run_messages(messages: Vec<Value>) -> Vec<Value> {
         input.extend_from_slice(&body);
     }
 
-    let mut output = Vec::new();
+    input
+}
 
-    run(Cursor::new(input), &mut output).expect("server should run");
+struct DelayedChunks {
+    chunks: std::collections::VecDeque<(Duration, Vec<u8>)>,
+    current: Cursor<Vec<u8>>,
+}
 
-    read_output_messages(&output)
+impl DelayedChunks {
+    fn new(chunks: Vec<(Duration, Vec<u8>)>) -> Self {
+        Self {
+            chunks: chunks.into(),
+            current: Cursor::new(Vec::new()),
+        }
+    }
+}
+
+impl Read for DelayedChunks {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            let read = self.current.read(buffer)?;
+            if read > 0 {
+                return Ok(read);
+            }
+            let Some((delay, chunk)) = self.chunks.pop_front() else {
+                return Ok(0);
+            };
+
+            std::thread::sleep(delay);
+            self.current = Cursor::new(chunk);
+        }
+    }
 }
 
 struct TestServer {
@@ -6963,6 +7143,27 @@ fn did_open(uri: &str, source: &str) -> Value {
             }
         }
     })
+}
+
+fn slow_background_request(id: u64, uri: Option<&str>, delay_ms: u64) -> Value {
+    let mut params = json!({ "delayMs": delay_ms });
+    if let Some(uri) = uri {
+        params["textDocument"] = json!({ "uri": uri });
+    }
+
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/testSlowBackground",
+        "params": params
+    })
+}
+
+fn response_index_with_id(messages: &[Value], id: u64) -> usize {
+    messages
+        .iter()
+        .position(|message| message.get("id").and_then(Value::as_u64) == Some(id))
+        .unwrap_or_else(|| panic!("response {id} should exist: {messages:#?}"))
 }
 
 fn did_change(uri: &str, source: &str, version: u64) -> Value {

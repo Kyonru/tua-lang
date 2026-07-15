@@ -1,9 +1,9 @@
-use std::cell::{OnceCell, RefCell};
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use full_moon::ast::{self, Expression};
 use full_moon::node::Node;
@@ -121,10 +121,10 @@ pub struct AnalysisHost {
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
     completion_multi_token: CompletionMultiTokenConfig,
-    completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
-    completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
-    definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
-    snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
+    completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
+    definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    snapshot_cache: Arc<Mutex<Option<CachedAnalysisSnapshot>>>,
     revision: u64,
 }
 
@@ -145,11 +145,11 @@ pub struct AnalysisSnapshot {
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
     completion_multi_token: CompletionMultiTokenConfig,
-    semantic_facts: Rc<RefCell<BTreeMap<PathBuf, Rc<AnalysisSemanticFacts>>>>,
-    completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
-    completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
-    definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
-    reverse_reference_index: Rc<OnceCell<ReverseReferenceIndex>>,
+    semantic_facts: Arc<Mutex<BTreeMap<PathBuf, Arc<AnalysisSemanticFacts>>>>,
+    completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
+    definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
 }
@@ -693,7 +693,12 @@ impl AnalysisHost {
 
     pub fn snapshot(&self) -> AnalysisSnapshot {
         let _profile = profile::span("analysis.snapshot");
-        if let Some(cached) = self.snapshot_cache.borrow().as_ref() {
+        if let Some(cached) = self
+            .snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned")
+            .as_ref()
+        {
             if cached.revision == self.revision {
                 return cached.snapshot.clone();
             }
@@ -816,21 +821,28 @@ impl AnalysisHost {
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
             completion_sequence_ranking: self.completion_sequence_ranking.clone(),
             completion_multi_token: self.completion_multi_token.clone(),
-            semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
-            completion_cache: Rc::clone(&self.completion_cache),
-            completion_cache_stats: Rc::clone(&self.completion_cache_stats),
-            definition_cache: Rc::clone(&self.definition_cache),
-            reverse_reference_index: Rc::new(OnceCell::new()),
+            semantic_facts: Arc::new(Mutex::new(BTreeMap::new())),
+            completion_cache: Arc::clone(&self.completion_cache),
+            completion_cache_stats: Arc::clone(&self.completion_cache_stats),
+            definition_cache: Arc::clone(&self.definition_cache),
+            reverse_reference_index: Arc::new(OnceLock::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
         };
 
-        self.snapshot_cache
-            .borrow_mut()
-            .replace(CachedAnalysisSnapshot {
+        let mut snapshot_cache = self
+            .snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned");
+        if snapshot_cache
+            .as_ref()
+            .is_none_or(|cached| cached.revision <= self.revision)
+        {
+            snapshot_cache.replace(CachedAnalysisSnapshot {
                 revision: self.revision,
                 snapshot: snapshot.clone(),
             });
+        }
 
         snapshot
     }
@@ -841,7 +853,10 @@ impl AnalysisHost {
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
         let mut stats = self.cache.borrow().stats.clone();
-        let completion_stats = self.completion_cache_stats.borrow();
+        let completion_stats = self
+            .completion_cache_stats
+            .lock()
+            .expect("completion cache stats lock poisoned");
 
         stats.completion_context_hits = completion_stats.hits;
         stats.completion_context_misses = completion_stats.misses;
@@ -1040,11 +1055,17 @@ impl AnalysisHost {
     }
 
     fn clear_completion_cache(&self) {
-        self.completion_cache.borrow_mut().clear();
+        self.completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .clear();
     }
 
     fn clear_definition_cache(&self) {
-        self.definition_cache.borrow_mut().clear();
+        self.definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .clear();
     }
 
     fn refresh_last_good_files(&self, files: &BTreeMap<PathBuf, AnalysisFile>) {
@@ -1239,7 +1260,13 @@ impl AnalysisSnapshot {
         };
 
         if let Some(request) = reusable_completion_request(path, &file.source, position) {
-            if let Some(completions) = self.completion_cache.borrow().get(&request.key).cloned() {
+            if let Some(completions) = self
+                .completion_cache
+                .lock()
+                .expect("completion cache lock poisoned")
+                .get(&request.key)
+                .cloned()
+            {
                 self.record_completion_cache_hit();
 
                 return filter_and_rank_completions(completions, &request.prefix);
@@ -1254,7 +1281,8 @@ impl AnalysisSnapshot {
                 request.position,
             );
             self.completion_cache
-                .borrow_mut()
+                .lock()
+                .expect("completion cache lock poisoned")
                 .insert(request.key, completions.clone());
 
             return filter_and_rank_completions(completions, &request.prefix);
@@ -1262,7 +1290,13 @@ impl AnalysisSnapshot {
 
         let key = completion_request_key(path, &file.source, position);
 
-        if let Some(completions) = self.completion_cache.borrow().get(&key).cloned() {
+        if let Some(completions) = self
+            .completion_cache
+            .lock()
+            .expect("completion cache lock poisoned")
+            .get(&key)
+            .cloned()
+        {
             self.record_completion_cache_hit();
 
             return completions;
@@ -1273,18 +1307,25 @@ impl AnalysisSnapshot {
         let completions = self.completion_uncached(path, file, None, position);
 
         self.completion_cache
-            .borrow_mut()
+            .lock()
+            .expect("completion cache lock poisoned")
             .insert(key, completions.clone());
 
         completions
     }
 
     fn record_completion_cache_hit(&self) {
-        self.completion_cache_stats.borrow_mut().hits += 1;
+        self.completion_cache_stats
+            .lock()
+            .expect("completion cache stats lock poisoned")
+            .hits += 1;
     }
 
     fn record_completion_cache_miss(&self) {
-        self.completion_cache_stats.borrow_mut().misses += 1;
+        self.completion_cache_stats
+            .lock()
+            .expect("completion cache stats lock poisoned")
+            .misses += 1;
     }
 
     fn completion_uncached(
@@ -1439,7 +1480,13 @@ impl AnalysisSnapshot {
         let file = self.file(path)?;
         let key = definition_request_key(path, &file.source, position);
 
-        if let Some(definition) = self.definition_cache.borrow().get(&key).cloned() {
+        if let Some(definition) = self
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned")
+            .get(&key)
+            .cloned()
+        {
             return definition;
         }
 
@@ -1457,7 +1504,10 @@ impl AnalysisSnapshot {
             }
         };
 
-        let mut cache = self.definition_cache.borrow_mut();
+        let mut cache = self
+            .definition_cache
+            .lock()
+            .expect("definition cache lock poisoned");
 
         if let Some(span) = definition_lookup_span(&file.source, position) {
             for column in span.start.column..=span.end.column {
@@ -3843,10 +3893,16 @@ impl AnalysisSnapshot {
     fn semantic_facts_for_parsed(
         &self,
         parsed: &ParsedSource,
-    ) -> Option<Rc<AnalysisSemanticFacts>> {
+    ) -> Option<Arc<AnalysisSemanticFacts>> {
         let path = normalize_path(&parsed.path);
 
-        if let Some(facts) = self.semantic_facts.borrow().get(&path).cloned() {
+        if let Some(facts) = self
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .get(&path)
+            .cloned()
+        {
             return Some(facts);
         }
 
@@ -3855,15 +3911,16 @@ impl AnalysisSnapshot {
         let project_inference = self.project_local_inference(parsed);
         let environment =
             self.project_type_environment_for_file(file, parsed, &project_inference)?;
-        let facts = Rc::new(AnalysisSemanticFacts {
+        let facts = Arc::new(AnalysisSemanticFacts {
             semantic_index: SemanticIndex::build(parsed, file.hir.as_ref(), &environment),
             environment,
             project_inference,
         });
 
         self.semantic_facts
-            .borrow_mut()
-            .insert(path, Rc::clone(&facts));
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .insert(path, Arc::clone(&facts));
 
         Some(facts)
     }

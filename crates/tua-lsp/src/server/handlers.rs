@@ -36,6 +36,14 @@ struct DocumentRequest<'a> {
     path: PathBuf,
 }
 
+pub(super) struct RequestTrace {
+    completion_context: Option<String>,
+    definition_context: Option<String>,
+    hover_context: Option<String>,
+    background_skip_context: Option<String>,
+    started: Option<Instant>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FileRename {
     old_path: PathBuf,
@@ -55,69 +63,10 @@ impl LspServer {
         let method = message.get("method").and_then(Value::as_str)?.to_owned();
 
         if message.get("id").is_some() {
-            let completion_context = self.completion_debug_context(&message, &method);
-            let definition_context = self.definition_debug_context(&message, &method);
-            let hover_context = self.hover_debug_context(&message, &method);
-            let background_skip_context =
-                self.background_request_skip_debug_context(&message, &method);
-            let debug_started = (completion_context.is_some()
-                || definition_context.is_some()
-                || hover_context.is_some())
-            .then(Instant::now);
-            let mut outbound = self.trace_log_messages(&message, &method, true);
-            let response = self.handle_request(message, &method);
-            let completion_trace = completion_context.and_then(|context| {
-                debug_started.map(|started| {
-                    log_message_notification(
-                        4,
-                        format!(
-                            "tua completion response: {context} items={} {} elapsedMs={}",
-                            completion_response_item_count(&response),
-                            completion_response_label_sample(&response),
-                            started.elapsed().as_millis()
-                        ),
-                    )
-                })
-            });
-            let definition_trace = definition_context.and_then(|context| {
-                debug_started.map(|started| {
-                    log_message_notification(
-                        4,
-                        format!(
-                            "tua definition response: {context} {} elapsedMs={}",
-                            definition_response_target(&response),
-                            started.elapsed().as_millis()
-                        ),
-                    )
-                })
-            });
-            let hover_trace = hover_context.and_then(|context| {
-                debug_started.map(|started| {
-                    log_message_notification(
-                        4,
-                        format!(
-                            "tua hover response: {context} {} elapsedMs={}",
-                            hover_response_summary(&response),
-                            started.elapsed().as_millis()
-                        ),
-                    )
-                })
-            });
+            let (mut outbound, trace) = self.begin_request_trace(&message, &method);
+            let response = self.execute_request(message, &method);
 
-            extend_optional(&mut outbound, completion_trace);
-            extend_optional(&mut outbound, definition_trace);
-            extend_optional(&mut outbound, hover_trace);
-            extend_optional(
-                &mut outbound,
-                background_skip_context.map(|context| {
-                    log_message_notification(
-                        4,
-                        format!(
-                            "tua background request fast response during input backlog: {context}"
-                        ),
-                    )
-                }),
-            );
+            outbound.extend(self.finish_request_trace(trace, &response));
             outbound.push(response);
 
             return Some(outbound);
@@ -135,7 +84,89 @@ impl LspServer {
         (!outbound.is_empty()).then_some(outbound)
     }
 
-    fn handle_request(&mut self, message: Value, method: &str) -> Value {
+    pub(super) fn begin_request_trace(
+        &mut self,
+        message: &Value,
+        method: &str,
+    ) -> (Vec<Value>, RequestTrace) {
+        let completion_context = self.completion_debug_context(message, method);
+        let definition_context = self.definition_debug_context(message, method);
+        let hover_context = self.hover_debug_context(message, method);
+        let background_skip_context = self.background_request_skip_debug_context(message, method);
+        let started = (completion_context.is_some()
+            || definition_context.is_some()
+            || hover_context.is_some())
+        .then(Instant::now);
+
+        (
+            self.trace_log_messages(message, method, true),
+            RequestTrace {
+                completion_context,
+                definition_context,
+                hover_context,
+                background_skip_context,
+                started,
+            },
+        )
+    }
+
+    pub(super) fn finish_request_trace(&self, trace: RequestTrace, response: &Value) -> Vec<Value> {
+        let mut outbound = Vec::new();
+        let completion_trace = trace.completion_context.and_then(|context| {
+            trace.started.map(|started| {
+                log_message_notification(
+                    4,
+                    format!(
+                        "tua completion response: {context} items={} {} elapsedMs={}",
+                        completion_response_item_count(response),
+                        completion_response_label_sample(response),
+                        started.elapsed().as_millis()
+                    ),
+                )
+            })
+        });
+        let definition_trace = trace.definition_context.and_then(|context| {
+            trace.started.map(|started| {
+                log_message_notification(
+                    4,
+                    format!(
+                        "tua definition response: {context} {} elapsedMs={}",
+                        definition_response_target(response),
+                        started.elapsed().as_millis()
+                    ),
+                )
+            })
+        });
+        let hover_trace = trace.hover_context.and_then(|context| {
+            trace.started.map(|started| {
+                log_message_notification(
+                    4,
+                    format!(
+                        "tua hover response: {context} {} elapsedMs={}",
+                        hover_response_summary(response),
+                        started.elapsed().as_millis()
+                    ),
+                )
+            })
+        });
+
+        extend_optional(&mut outbound, completion_trace);
+        extend_optional(&mut outbound, definition_trace);
+        extend_optional(&mut outbound, hover_trace);
+        extend_optional(
+            &mut outbound,
+            trace.background_skip_context.map(|context| {
+                log_message_notification(
+                    4,
+                    format!("tua background request fast response during input backlog: {context}"),
+                )
+            }),
+        );
+
+        outbound
+    }
+
+    pub(super) fn execute_request(&mut self, message: Value, method: &str) -> Value {
         let _profile = tua_core::profile::span(format!("lsp.request {method}"));
         let id = message.get("id").cloned().unwrap_or(Value::Null);
 
@@ -751,7 +782,7 @@ impl LspServer {
             .collect()
     }
 
-    fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
+    pub(super) fn diagnostics_for(&self, uri: &str) -> Vec<Value> {
         if !self.analysis.contains_document(uri) {
             return Vec::new();
         }
@@ -858,25 +889,39 @@ impl LspServer {
         messages
     }
 
-    pub(super) fn drain_next_due_slow_diagnostic(&mut self, now: Instant) -> Option<Value> {
-        let due_slow_uri = self
+    pub(super) fn take_next_due_slow_diagnostic(
+        &mut self,
+        now: Instant,
+    ) -> Option<(String, PendingDiagnostics)> {
+        let uri = self
             .pending_slow_diagnostics
             .iter()
             .filter(|(_, pending)| pending.due_at <= now)
             .min_by_key(|(_, pending)| pending.due_at)
-            .map(|(uri, _)| uri.clone());
+            .map(|(uri, _)| uri.clone())?;
+        let pending = self.pending_slow_diagnostics.remove(&uri)?;
 
-        if let Some(uri) = due_slow_uri {
-            if let Some(publication) = self
-                .drain_slow_diagnostics_for(vec![uri])
-                .into_iter()
-                .next()
-            {
-                return Some(publication);
-            }
+        Some((uri, pending))
+    }
+
+    pub(super) fn finish_slow_diagnostics(
+        &mut self,
+        uri: &str,
+        pending: PendingDiagnostics,
+        diagnostics: Vec<Value>,
+    ) -> Option<Value> {
+        if self.document_generations.get(uri).copied() != Some(pending.generation) {
+            return None;
+        }
+        if pending.version.is_some() && self.document_versions.get(uri).copied() != pending.version
+        {
+            return None;
+        }
+        if !self.analysis.contains_document(uri) {
+            return None;
         }
 
-        self.drain_due_pull_diagnostic_refresh(now)
+        self.publish_diagnostics_if_changed(uri, diagnostics)
     }
 
     pub(super) fn drain_all_pending_slow_diagnostics(&mut self) -> Vec<Value> {
@@ -915,7 +960,7 @@ impl LspServer {
         publications
     }
 
-    fn drain_due_pull_diagnostic_refresh(&mut self, now: Instant) -> Option<Value> {
+    pub(super) fn drain_due_pull_diagnostic_refresh(&mut self, now: Instant) -> Option<Value> {
         if !self.client_pull_diagnostics || !self.client_diagnostic_refresh {
             return None;
         }
@@ -1740,11 +1785,15 @@ impl LspServer {
             .get("previousResultId")
             .and_then(Value::as_str)
             .map(str::to_owned);
-        let previous_data = previous_result_id
-            .as_ref()
-            .and_then(|result_id| self.semantic_token_results.get(result_id))
-            .filter(|entry| entry.uri == uri)
-            .map(|entry| entry.data.clone());
+        let previous_data = previous_result_id.as_ref().and_then(|result_id| {
+            self.semantic_tokens
+                .lock()
+                .expect("semantic tokens lock poisoned")
+                .results
+                .get(result_id)
+                .filter(|entry| entry.uri == uri)
+                .map(|entry| entry.data.clone())
+        });
         let data = self.semantic_token_data(&path, None);
         let result_id = self.store_semantic_token_result(&uri, &data);
 
@@ -1780,9 +1829,13 @@ impl LspServer {
         tokens
     }
 
-    fn store_semantic_token_result(&mut self, uri: &str, data: &[usize]) -> String {
-        self.next_semantic_token_result_id = self.next_semantic_token_result_id.saturating_add(1);
-        let sequence = self.next_semantic_token_result_id;
+    fn store_semantic_token_result(&self, uri: &str, data: &[usize]) -> String {
+        let mut semantic_tokens = self
+            .semantic_tokens
+            .lock()
+            .expect("semantic tokens lock poisoned");
+        semantic_tokens.next_result_id = semantic_tokens.next_result_id.saturating_add(1);
+        let sequence = semantic_tokens.next_result_id;
         let document_version = self.document_versions.get(uri).copied();
         let analysis_revision = self.analysis.revision();
         let version = document_version
@@ -1790,7 +1843,7 @@ impl LspServer {
             .unwrap_or_else(|| "none".to_owned());
         let result_id = format!("{analysis_revision}:{version}:{sequence}");
 
-        self.semantic_token_results.insert(
+        semantic_tokens.results.insert(
             result_id.clone(),
             super::SemanticTokensCacheEntry {
                 uri: uri.to_owned(),
@@ -1800,16 +1853,16 @@ impl LspServer {
                 sequence,
             },
         );
-        self.prune_semantic_token_results(uri);
+        Self::prune_semantic_token_results(&mut semantic_tokens, uri);
 
         result_id
     }
 
-    fn prune_semantic_token_results(&mut self, uri: &str) {
+    fn prune_semantic_token_results(semantic_tokens: &mut super::SemanticTokensState, uri: &str) {
         const MAX_SEMANTIC_TOKEN_RESULTS_PER_DOCUMENT: usize = 8;
 
-        let mut result_ids = self
-            .semantic_token_results
+        let mut result_ids = semantic_tokens
+            .results
             .iter()
             .filter(|(_, entry)| entry.uri == uri)
             .map(|(result_id, entry)| (entry.sequence, result_id.clone()))
@@ -1822,12 +1875,15 @@ impl LspServer {
             .saturating_sub(MAX_SEMANTIC_TOKEN_RESULTS_PER_DOCUMENT);
 
         for (_, result_id) in result_ids.into_iter().take(remove_count) {
-            self.semantic_token_results.remove(&result_id);
+            semantic_tokens.results.remove(&result_id);
         }
     }
 
-    fn clear_semantic_token_results(&mut self, uri: &str) {
-        self.semantic_token_results
+    fn clear_semantic_token_results(&self, uri: &str) {
+        self.semantic_tokens
+            .lock()
+            .expect("semantic tokens lock poisoned")
+            .results
             .retain(|_, entry| entry.uri != uri);
     }
 

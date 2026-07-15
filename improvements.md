@@ -26,25 +26,27 @@ Regenerate or verify the catalog with `make generate-love-api` and
 
 ### P0: Make LSP work preemptible
 
-The server dequeues and handles each message synchronously in
-[`server/mod.rs`](crates/tua-lsp/src/server/mod.rs). Queue prioritization only
-affects requests that have not started. An expensive hover, inlay hint, symbol,
-or diagnostic request can therefore block an incoming document change and
-completion request for several seconds.
+Status: done on 2026-07-15.
 
-`$/cancelRequest` is not handled as an actual cancellation signal in
-[`handlers.rs`](crates/tua-lsp/src/server/handlers.rs), and inlay hints are
-currently exempted from part of the background-yield behavior.
+The stdio coordinator now keeps transport, document synchronization, revision
+tracking, and cancellation responsive while analysis requests run in separate
+interactive and background worker lanes:
 
-Improvements:
+- Completion, signature help, hover, definition, and other interactive queries
+  cannot be queued behind diagnostics, inlay hints, semantic tokens, or symbols.
+- Every worker request captures its document generation and owns a cancellation
+  token. `$/cancelRequest` returns `RequestCancelled`; document changes cancel
+  stale background work and stale foreground results return `ContentModified`.
+- Identical document diagnostic, inlay, semantic-token, symbol, and other
+  background requests at the same revision share one worker job.
+- Debounced full push diagnostics run on the background lane rather than the
+  transport loop.
+- Transport-level tests cover typing during a running slow request, stale-result
+  rejection, explicit cancellation, and duplicate request coalescing.
 
-- Separate transport/document synchronization from analysis workers.
-- Give every request a cancellation token and document revision.
-- Cancel or discard stale background results after a document change.
-- Prioritize `didChange`, completion, signature help, hover, and definition
-  over diagnostics and whole-document background features.
-- Coalesce duplicate inlay, semantic token, symbol, and diagnostic requests.
-- Add tests where typing arrives while a slow request is already executing.
+Cancellation is cooperative at the scheduler boundary. Queued work is skipped
+and completed stale work is discarded; a core query already executing may run
+to completion on its worker before its result is dropped.
 
 ### P0: Remove the extension suggestion race
 

@@ -154,9 +154,20 @@ parse-recovery or test-style source inputs.
 
 Open and changed documents should publish fast current-file diagnostics first,
 then queue full project-aware diagnostics behind a short debounce. The stdio
-server drains slow diagnostics one document at a time during idle ticks so
-foreground requests such as completion, hover, symbols, and semantic tokens can
-preempt background diagnostic work.
+coordinator keeps document synchronization and cancellation on the transport
+thread, while revision-captured analysis state runs on separate interactive and
+background worker lanes. Completion, signature help, hover, and definition do
+not queue behind diagnostics or whole-document refreshes. Identical background
+requests for the same document revision are coalesced, and stale results are
+discarded after document changes. Debounced full diagnostics also run on the
+background lane.
+
+Each worker request has a cancellation token and captured document generation.
+Cancellation is currently cooperative at the scheduler boundary: queued work
+is skipped and stale or cancelled results are suppressed, but a core query that
+has already entered may finish on its worker before being discarded. Core query
+implementations should remain pure and side-effect-free so deeper cancellation
+checkpoints can be added without changing protocol behavior.
 
 `AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
 requests against unchanged inputs should reuse the warm snapshot, including
