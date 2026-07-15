@@ -65,6 +65,7 @@ function registerLifecycleCommands() {
     vscode.commands.registerCommand(COMMANDS.copyDebugInfo, copyDebugInfo),
     vscode.commands.registerCommand(COMMANDS.copyCacheStats, copyCacheStats),
     vscode.commands.registerCommand(COMMANDS.saveCacheStats, saveCacheStats),
+    vscode.commands.registerCommand(COMMANDS.resetCompletionStats, resetCompletionStats),
     vscode.commands.registerCommand(COMMANDS.saveCpuProfile, () =>
       saveServerProfileArtifact("cpuProfile", "CPU profile"),
     ),
@@ -412,6 +413,31 @@ function requestCacheStats() {
   }
 
   return client.sendRequest("tua/cacheStats");
+}
+
+async function resetCompletionStats() {
+  if (!client) {
+    vscode.window.showWarningMessage("Tua language server is not running.");
+    return;
+  }
+
+  try {
+    const result = await client.sendRequest("tua/resetCompletionStats");
+    const removedFiles =
+      result && Number.isFinite(result.removedFiles) ? Number(result.removedFiles) : 0;
+    const message =
+      removedFiles === 1
+        ? "Tua completion learning stats reset. Removed 1 workspace stats file."
+        : `Tua completion learning stats reset. Removed ${removedFiles} workspace stats files.`;
+
+    outputChannel?.appendLine(message);
+    vscode.window.showInformationMessage(message);
+  } catch (error) {
+    outputChannel?.appendLine(`Failed to reset tua completion learning stats: ${formatError(error)}`);
+    vscode.window.showErrorMessage(
+      `Failed to reset Tua completion learning stats: ${formatError(error)}`,
+    );
+  }
 }
 
 async function saveServerProfileArtifact(kind, label) {

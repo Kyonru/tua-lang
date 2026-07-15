@@ -8,6 +8,7 @@ const COMMANDS = {
   copyDebugInfo: "tua.copyDebugInfo",
   copyCacheStats: "tua.copyCacheStats",
   saveCacheStats: "tua.saveCacheStats",
+  resetCompletionStats: "tua.resetCompletionStats",
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
   previewSprites: "tua.previewSprites",

@@ -57,14 +57,15 @@ After that, Phase 13 explores LOVE domain extensions:
 Phase 14 tracks completion intelligence as a compiler-first pipeline. It now
 generates parsed identifier candidates from scope visibility, keeps field
 completions backed by type, module, LOVE catalog, and table-shape facts, and
-ranks semantic candidates with local/project usage signals when the receiver is
-known:
+ranks semantic candidates with local/project usage signals plus local
+project-adaptive learning when the receiver is known:
 
 - deterministic semantic candidate generation;
 - same-file proximity, call-site frequency, project member usage, and
   declaration-quality ranking signals;
-- optional project-adaptive and model-assisted ranking paths behind explicit
-  configuration;
+- persisted privacy-safe workspace usage statistics for member access and call
+  patterns, with reset support;
+- optional model-assisted ranking paths behind explicit configuration;
 - completion latency and ranking-overhead benchmarks.
 
 Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:

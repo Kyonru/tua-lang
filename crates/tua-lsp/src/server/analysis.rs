@@ -7,15 +7,20 @@ use tua_core::{
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AssetLoaderKind,
     CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
-    CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion, Diagnostic,
-    DocumentHighlight, DocumentSymbol, FoldingRange, FormatOptions, InlayHint, ModuleLink,
-    ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
-    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignatureHelp, SourcePosition,
-    SourceSpan, TextEdit, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
+    CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
+    CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
+    FormatOptions, InlayHint, ModuleLink, ModuleSpecifierKind, ProjectModel, ProjectModelOptions,
+    ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
+    SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind, WorkspaceSymbol,
+    CONFIG_FILE,
 };
 
 use super::auto_import::{
     auto_import_completion, identifier_prefix_at, unique_import_alias, AutoImportCandidate,
+};
+use super::completion_stats::{
+    current_epoch, file_scope_hash, load_completion_stats, remove_completion_stats,
+    retain_observed_file_scopes, save_completion_stats,
 };
 use super::configuration::{SourceKind, WorkspaceSettings};
 use super::uri::path_from_uri;
@@ -93,6 +98,26 @@ impl AnalysisHost {
 
     pub(super) fn cache_stats(&self) -> AnalysisCacheStats {
         self.core.cache_stats()
+    }
+
+    pub(super) fn reset_completion_adaptive_stats(
+        &mut self,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> usize {
+        self.sync_core_project_inputs(roots, settings);
+        self.core.reset_completion_adaptive_stats();
+
+        let Some(model) = self.project_model.as_ref() else {
+            return 0;
+        };
+
+        model
+            .workspaces()
+            .iter()
+            .filter_map(|workspace| remove_completion_stats(workspace.root()).ok())
+            .filter(|removed| *removed)
+            .count()
     }
 
     pub(super) fn fast_identifier_completion_for_uri(
@@ -210,8 +235,9 @@ impl AnalysisHost {
         };
         if let Some(kind) = kind {
             self.core
-                .open_document_with_kind(path, source, core_source_kind(kind));
+                .open_document_with_kind(path.clone(), source.clone(), core_source_kind(kind));
         } else {
+            self.remove_completion_adaptive_source(&path);
             self.core.remove_file(path);
         }
     }
@@ -236,11 +262,13 @@ impl AnalysisHost {
         let effective_roots = self.effective_workspace_folders(roots);
 
         if settings.is_ignored(&path, &effective_roots) {
+            self.remove_completion_adaptive_source(&path);
             self.core.remove_file(path);
             return;
         }
 
         let Some(kind) = source_kind_for_path(&path, self.project_model.as_ref()) else {
+            self.remove_completion_adaptive_source(&path);
             self.core.remove_file(path);
             return;
         };
@@ -277,8 +305,10 @@ impl AnalysisHost {
 
         if let Some(kind) = kind {
             self.core
-                .open_document_with_kind(path, source, core_source_kind(kind));
+                .open_document_with_kind(path.clone(), source.clone(), core_source_kind(kind));
+            self.persist_completion_adaptive_source(&path, &source);
         } else {
+            self.remove_completion_adaptive_source(&path);
             self.core.remove_file(path);
         }
     }
@@ -293,6 +323,7 @@ impl AnalysisHost {
         let path = path_from_uri(uri);
 
         self.documents.remove(uri);
+        self.remove_completion_adaptive_source(&path);
         self.core.remove_file(&path);
     }
 
@@ -317,6 +348,7 @@ impl AnalysisHost {
         }
 
         if settings.is_ignored(&path, roots) {
+            self.remove_completion_adaptive_source(&path);
             self.core.remove_file(&path);
             return;
         }
@@ -324,7 +356,12 @@ impl AnalysisHost {
         if let Ok(source) = fs::read_to_string(&path) {
             let effective_roots = self.effective_workspace_folders(roots);
 
-            self.cache_source_after_sync(path, source, &effective_roots, settings);
+            if self
+                .cache_source_after_sync(path.clone(), source.clone(), &effective_roots, settings)
+                .is_some()
+            {
+                self.persist_completion_adaptive_source(&path, &source);
+            }
         }
     }
 
@@ -366,28 +403,39 @@ impl AnalysisHost {
     }
 
     pub(super) fn reindex_workspace(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
-        let (effective_roots, open_paths, model) = {
+        let (effective_roots, open_paths, open_documents, model) = {
             let _trace = tua_core::profile::diagnostics_span(
                 tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
             );
 
             self.sync_core_project_inputs(roots, settings);
             let effective_roots = self.effective_workspace_folders(roots);
-            let open_paths = self
+            let open_documents = self
                 .documents
                 .values()
-                .map(|document| document.path.clone())
+                .map(|document| (document.path.clone(), document.source.clone()))
+                .collect::<Vec<_>>();
+            let open_paths = open_documents
+                .iter()
+                .map(|(path, _)| path.clone())
                 .collect::<BTreeSet<_>>();
             let model = self.project_model.clone();
 
-            (effective_roots, open_paths, model)
+            (effective_roots, open_paths, open_documents, model)
         };
 
         let Some(model) = model else {
+            self.core.reset_completion_adaptive_stats();
             return;
         };
 
+        let now = current_epoch();
+        let mut combined_adaptive_stats = CompletionAdaptiveStats::default();
+
         for workspace in model.workspaces() {
+            let mut workspace_stats = load_completion_stats(workspace.root());
+            let mut observed_file_scopes = BTreeSet::new();
+
             for source_dir in workspace.source_roots() {
                 let sources = {
                     let _trace = tua_core::profile::diagnostics_span(
@@ -403,6 +451,10 @@ impl AnalysisHost {
                     }
 
                     if let Ok(source) = fs::read_to_string(&path) {
+                        let file_scope = file_scope_hash(workspace.root(), &path);
+
+                        observed_file_scopes.insert(file_scope);
+
                         let _trace = tua_core::profile::diagnostics_span(
                             tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
                         );
@@ -417,7 +469,66 @@ impl AnalysisHost {
                     }
                 }
             }
+
+            for (path, _source) in &open_documents {
+                if workspace.source_kind_for_path(path).is_none()
+                    || workspace.is_ignored(path)
+                    || settings.is_ignored(path, &effective_roots)
+                {
+                    continue;
+                }
+
+                let file_scope = file_scope_hash(workspace.root(), path);
+
+                observed_file_scopes.insert(file_scope);
+            }
+
+            retain_observed_file_scopes(&mut workspace_stats, &observed_file_scopes);
+            workspace_stats.evict(now);
+            let _ = save_completion_stats(workspace.root(), &workspace_stats);
+            combined_adaptive_stats.merge(workspace_stats);
         }
+
+        self.core
+            .set_completion_adaptive_stats(combined_adaptive_stats);
+    }
+
+    fn persist_completion_adaptive_source(&mut self, path: &Path, source: &str) {
+        let Some(root) = self.completion_stats_workspace_root(path) else {
+            return;
+        };
+        let file_scope = file_scope_hash(&root, path);
+        let now = current_epoch();
+
+        self.core
+            .replace_completion_adaptive_file_observations(file_scope, source, now);
+
+        let mut stats = load_completion_stats(&root);
+
+        stats.replace_file_observations(file_scope, source, now);
+        let _ = save_completion_stats(&root, &stats);
+    }
+
+    fn remove_completion_adaptive_source(&mut self, path: &Path) {
+        let Some(root) = self.completion_stats_workspace_root(path) else {
+            return;
+        };
+        let file_scope = file_scope_hash(&root, path);
+
+        self.core
+            .remove_completion_adaptive_file_observations(file_scope);
+
+        let mut stats = load_completion_stats(&root);
+
+        stats.remove_file_observations(file_scope);
+        let _ = save_completion_stats(&root, &stats);
+    }
+
+    fn completion_stats_workspace_root(&self, path: &Path) -> Option<PathBuf> {
+        self.project_model
+            .as_ref()?
+            .workspace_for_path(path)
+            .map(|workspace| workspace.root().to_path_buf())
     }
 
     fn cache_source_after_sync(

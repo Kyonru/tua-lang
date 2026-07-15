@@ -1,6 +1,7 @@
 mod analysis;
 mod auto_import;
 mod capabilities;
+mod completion_stats;
 mod configuration;
 mod handlers;
 mod protocol;

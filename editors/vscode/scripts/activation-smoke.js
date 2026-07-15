@@ -285,6 +285,27 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "saved cache stats should contain the server response",
     );
 
+    await state.commands.get("tua.resetCompletionStats")();
+
+    const resetRequest = state.clients[1].requests.find(
+      (request) => request.method === "tua/resetCompletionStats",
+    );
+
+    assert.deepStrictEqual(
+      resetRequest,
+      {
+        method: "tua/resetCompletionStats",
+        params: undefined,
+      },
+      "reset completion stats command should send the LSP reset request",
+    );
+    assert(
+      state.informationMessages.some((message) =>
+        message.includes("Tua completion learning stats reset"),
+      ),
+      "reset completion stats should report success",
+    );
+
     await state.commands.get("tua.saveCpuProfile")();
 
     const cpuProfileRequest = state.clients[1].requests.find(
@@ -952,6 +973,10 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve({ parse: { hits: 1, misses: 0 } });
       }
 
+      if (method === "tua/resetCompletionStats") {
+        return Promise.resolve({ removedFiles: 1 });
+      }
+
       if (method === "tua/profileArtifact") {
         return Promise.reject(new Error("unsupported profile artifact"));
       }
@@ -1025,6 +1050,7 @@ function assertRegisteredCommands(state) {
     "tua.copyDebugInfo",
     "tua.copyCacheStats",
     "tua.saveCacheStats",
+    "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.previewSprites",

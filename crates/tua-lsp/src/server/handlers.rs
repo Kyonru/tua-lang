@@ -196,6 +196,7 @@ impl LspServer {
                     .unwrap_or(Value::Null),
             ),
             "tua/cacheStats" => response(id, self.cache_stats_response()),
+            "tua/resetCompletionStats" => response(id, self.reset_completion_stats_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
             }
@@ -1306,6 +1307,16 @@ impl LspServer {
             },
             "invalidations": stats.invalidations,
             "dependentInvalidations": stats.dependent_invalidations
+        })
+    }
+
+    fn reset_completion_stats_response(&mut self) -> Value {
+        let removed_files = self
+            .analysis
+            .reset_completion_adaptive_stats(&self.workspace_folders, &self.settings);
+
+        json!({
+            "removedFiles": removed_files
         })
     }
 

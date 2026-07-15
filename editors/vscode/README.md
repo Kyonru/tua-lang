@@ -21,9 +21,9 @@ Minimal VS Code language support for tua source files.
   strings.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
-  copying or saving cache statistics, probing server profile artifacts,
-  previewing `spriteSheet` animations, running source actions, reporting an
-  issue, and opening Tua settings.
+  copying or saving cache statistics, resetting completion learning stats,
+  probing server profile artifacts, previewing `spriteSheet` animations, running
+  source actions, reporting an issue, and opening Tua settings.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
 - Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
@@ -77,6 +77,7 @@ the setting.
 - `Tua: Copy Debug Info`
 - `Tua: Copy Cache Stats`
 - `Tua: Save Cache Stats`
+- `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
 - `Tua: Preview Sprite Animations`
@@ -92,6 +93,11 @@ the setting.
 under VS Code global extension storage, in a `profiles` directory outside the
 workspace source tree by default. The saved path is printed in the Tua output
 channel and shown in the completion message.
+
+`Tua: Reset Completion Learning Stats` clears local project-adaptive completion
+ranking data for the current workspace. Tua stores only symbol-frequency counts
+and structural hashes under `.tua/completion-stats.json`; it does not send source
+content or ranking data off-device.
 
 `Tua: Save CPU Profile` and `Tua: Save Heap Summary` request a server-provided
 profile artifact directory outside the workspace. Current Tua servers may not

@@ -5,7 +5,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tua_core::{Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
+use tua_core::{CompletionAdaptiveStats, Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
 
 #[test]
 fn exposes_server_name() {
@@ -2784,6 +2784,79 @@ local field = player.hp
         completion_with_label(&output, 3, "hp")["labelDetails"]["description"],
         "field: number"
     );
+}
+
+#[test]
+fn completion_uses_persisted_adaptive_stats_and_can_reset_them() {
+    let temp = TempProject::new("adaptive-completion-stats");
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local sprite: Sprite = {}
+local current = sprite.pause
+"#;
+    let uri = temp.uri_for("src/main.tua");
+    let path = temp.path.join("src/main.tua");
+    let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(&path);
+    let receiver_hash = CompletionAdaptiveStats::receiver_hash(&["sprite".to_owned()]);
+    let stats_path = temp.path.join(".tua/completion-stats.json");
+    let now_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after epoch")
+        .as_secs();
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        ".tua/completion-stats.json",
+        &format!(
+            r#"{{
+  "version": 1,
+  "updated_at_epoch": {now_epoch},
+  "entries": [
+    {{
+      "file_scope_hash": {file_scope_hash},
+      "receiver_hash": {receiver_hash},
+      "member": "stop",
+      "access_count": 2,
+      "call_count": 2,
+      "assignment_rhs_count": 0,
+      "last_seen_epoch": {now_epoch}
+    }},
+    {{
+      "file_scope_hash": {file_scope_hash},
+      "receiver_hash": {receiver_hash},
+      "member": "play",
+      "access_count": 1,
+      "call_count": 1,
+      "assignment_rhs_count": 0,
+      "last_seen_epoch": {now_epoch}
+    }}
+  ]
+}}
+"#
+        ),
+    );
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "sprite."));
+
+    assert_completion_labels(server.output(), 2, ["stop", "play", "pause"]);
+
+    server.send(reset_completion_stats_request(3));
+
+    assert_eq!(
+        response_with_id(server.output(), 3)["result"]["removedFiles"],
+        1
+    );
+    assert!(
+        !stats_path.exists(),
+        "workspace completion stats file should be removed"
+    );
+
+    server.send(completion_request(4, &uri, source, "sprite."));
+
+    assert_completion_labels(server.output(), 4, ["pause", "play", "stop"]);
 }
 
 #[test]
@@ -7190,6 +7263,15 @@ fn cache_stats_request(id: u64) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "tua/cacheStats",
+        "params": null
+    })
+}
+
+fn reset_completion_stats_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/resetCompletionStats",
         "params": null
     })
 }

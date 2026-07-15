@@ -423,6 +423,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.resetCompletionStats",
+        "title": "Reset Completion Learning Stats",
+        "category": "Tua"
+      },
+      {
         "command": "tua.saveCpuProfile",
         "title": "Save CPU Profile",
         "category": "Tua"

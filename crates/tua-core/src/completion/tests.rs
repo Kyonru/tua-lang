@@ -2,7 +2,7 @@ use super::*;
 use crate::source_text::position_at;
 use crate::Fixture;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const SOURCE: &str = r#"type Vec2 = { x: number, y: number }
 type Player = { pos: Vec2, hp: number, alive?: boolean }
@@ -289,6 +289,44 @@ sprite.play()
         position_after(source, "sprite."),
         &environment,
         &[project_source],
+    );
+
+    assert_eq!(
+        labels(&completions),
+        vec!["stop".to_owned(), "play".to_owned(), "pause".to_owned()]
+    );
+}
+
+#[test]
+fn adaptive_stats_rank_field_completions_without_current_usage() {
+    let source = r#"type Sprite = { pause: number, play: number, stop: number }
+local sprite: Sprite = {}
+local current = sprite.pause
+"#;
+    let parsed = parse_tua_source("src/main.tua", source.to_owned())
+        .expect("source should parse for completion");
+    let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+    let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(Path::new("src/main.tua"));
+    let mut adaptive_stats = CompletionAdaptiveStats::default();
+
+    adaptive_stats.replace_file_observations(
+        file_scope_hash,
+        r#"
+sprite.stop()
+sprite.stop()
+sprite.play()
+"#,
+        100,
+    );
+
+    let completions = complete_source_with_parsed_environment_and_ranking(
+        source,
+        &parsed,
+        position_after(source, "sprite."),
+        &environment,
+        &[],
+        Some(&adaptive_stats),
+        file_scope_hash,
     );
 
     assert_eq!(

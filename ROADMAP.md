@@ -2273,6 +2273,8 @@ Acceptance:
 
 ### 77.3 `feat(completion): add project-adaptive learning surface`
 
+Status: done.
+
 Scope:
 
 - Persist anonymous, privacy-safe usage statistics over project history:

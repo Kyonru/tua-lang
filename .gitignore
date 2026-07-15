@@ -12,6 +12,7 @@
 /.venv/
 /site/
 /docs/_site/
+.tua/
 __pycache__/
 
 # General
