@@ -399,6 +399,14 @@ Supported editor settings:
   in milliseconds. A timeout keeps the pre-sequence completion order.
 - `tua.completion.sequenceRanking.maxCandidates`: maximum compiler candidates
   sent to the sequence ranker.
+- `tua.completion.multiToken.enabled`: enables the experimental multi-token
+  completion lane. It defaults to `false`.
+- `tua.completion.multiToken.advanced`: allows multi-token suggestions even when
+  normal compiler completion has ordinary confidence.
+- `tua.completion.multiToken.allowModelIntegration`: explicit policy gate for
+  future model-backed providers. The current implementation is local-only.
+- `tua.completion.multiToken.maxSuggestions`: maximum validated multi-token
+  suggestions appended to completion results.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`. Static `import(...)` lowering uses the same separator when mapping a

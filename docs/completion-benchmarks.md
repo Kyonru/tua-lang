@@ -60,6 +60,25 @@ cursor. No network calls are made. Tune the bounded request with
 `tua.completion.sequenceRanking.timeoutMs` and
 `tua.completion.sequenceRanking.maxCandidates`.
 
+## Multi-Token Completion
+
+The optional multi-token completion lane is also disabled by default. Enable it
+with `tua.completion.multiToken.enabled`; set
+`tua.completion.multiToken.advanced` when you want suggestions even when normal
+compiler completion has ordinary confidence.
+
+The first provider is local-only and covers narrow contexts:
+
+- assignment right-hand sides, such as vector-like locals;
+- expression tails, such as fallback expressions after `return value`;
+- method-chain endings for obvious audio/source-shaped expressions.
+
+Every proposed insertion is applied to the current source and parsed before it
+is converted to an LSP completion item. Unparsable insertions are rejected. The
+`tua.completion.multiToken.allowModelIntegration` setting is an explicit policy
+gate for future model-backed providers; no model or network provider is called
+by the current implementation.
+
 ## Targets
 
 The fixed Phase 14 success targets are:

@@ -16,7 +16,8 @@ use crate::ast_utils::{
 use crate::completion::{
     complete_field_access_in_source_with_environment_and_ranking_options,
     complete_source_with_parsed_environment_and_ranking_options, filter_and_rank_completions,
-    CompletionAdaptiveStats, CompletionSequenceRankingConfig,
+    multitoken::complete_multi_token_source, CompletionAdaptiveStats, CompletionMultiTokenConfig,
+    CompletionSequenceRankingConfig,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -118,6 +119,7 @@ pub struct AnalysisHost {
     last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
+    completion_multi_token: CompletionMultiTokenConfig,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
@@ -141,6 +143,7 @@ pub struct AnalysisSnapshot {
     last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
+    completion_multi_token: CompletionMultiTokenConfig,
     semantic_facts: Rc<RefCell<BTreeMap<PathBuf, Rc<AnalysisSemanticFacts>>>>,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
@@ -476,6 +479,15 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    pub fn set_completion_multi_token(&mut self, config: CompletionMultiTokenConfig) {
+        if self.completion_multi_token == config {
+            return;
+        }
+
+        self.completion_multi_token = config;
+        self.bump_revision();
+    }
+
     pub fn replace_completion_adaptive_file_observations(
         &mut self,
         file_scope_hash: u64,
@@ -802,6 +814,7 @@ impl AnalysisHost {
             last_good_files: self.last_good_files.borrow().clone(),
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
             completion_sequence_ranking: self.completion_sequence_ranking.clone(),
+            completion_multi_token: self.completion_multi_token.clone(),
             semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
             completion_cache: Rc::clone(&self.completion_cache),
             completion_cache_stats: Rc::clone(&self.completion_cache_stats),
@@ -1381,6 +1394,27 @@ impl AnalysisSnapshot {
         };
 
         completions
+    }
+
+    pub fn multi_token_completion(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+        primary_candidate_count: usize,
+    ) -> Vec<Completion> {
+        let _profile = profile::span("analysis.query.completion.multi_token");
+        let path = path.as_ref();
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+
+        complete_multi_token_source(
+            path,
+            &file.source,
+            position,
+            primary_candidate_count,
+            &self.completion_multi_token,
+        )
     }
 
     fn project_completion_sources<'a>(&'a self, current_path: &Path) -> Vec<&'a str> {

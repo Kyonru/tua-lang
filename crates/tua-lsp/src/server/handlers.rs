@@ -1136,11 +1136,18 @@ impl LspServer {
             self.analysis
                 .snapshot(&self.workspace_folders, &self.settings)
         };
-        let completions = {
+        let mut completions = {
             let _profile = tua_core::profile::span("lsp.completion.query");
 
             snapshot.completion(&request.path, position)
         };
+        let primary_candidate_count = completions.len();
+
+        completions.extend(snapshot.multi_token_completion(
+            &request.path,
+            position,
+            primary_candidate_count,
+        ));
 
         lsp_completion_array(
             request.uri,

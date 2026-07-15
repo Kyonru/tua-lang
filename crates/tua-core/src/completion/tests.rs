@@ -418,6 +418,108 @@ local current = sprite.pause
 }
 
 #[test]
+fn multi_token_completion_is_disabled_by_default() {
+    let source = "local velocity = \n";
+    let completions = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        source,
+        position_after(source, "local velocity = "),
+        0,
+        &CompletionMultiTokenConfig::default(),
+    );
+
+    assert!(completions.is_empty());
+}
+
+#[test]
+fn multi_token_completion_requires_low_confidence_or_advanced_path() {
+    let source = "local velocity = \n";
+    let enabled = CompletionMultiTokenConfig {
+        enabled: true,
+        ..CompletionMultiTokenConfig::default()
+    };
+    let advanced = CompletionMultiTokenConfig {
+        enabled: true,
+        advanced: true,
+        ..CompletionMultiTokenConfig::default()
+    };
+    let position = position_after(source, "local velocity = ");
+
+    let high_confidence = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        source,
+        position,
+        10,
+        &enabled,
+    );
+    let low_confidence = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        source,
+        position,
+        0,
+        &enabled,
+    );
+    let advanced_suggestions = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        source,
+        position,
+        10,
+        &advanced,
+    );
+
+    assert!(high_confidence.is_empty());
+    assert_eq!(labels(&low_confidence), vec!["vec2(0, 0)".to_owned()]);
+    assert_eq!(labels(&advanced_suggestions), vec!["vec2(0, 0)".to_owned()]);
+}
+
+#[test]
+fn multi_token_completion_rejects_unparsable_insertions() {
+    let source = "local velocity = \n)\n";
+    let config = CompletionMultiTokenConfig {
+        enabled: true,
+        advanced: true,
+        ..CompletionMultiTokenConfig::default()
+    };
+    let completions = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        source,
+        position_after(source, "local velocity = "),
+        0,
+        &config,
+    );
+
+    assert!(completions.is_empty());
+}
+
+#[test]
+fn multi_token_completion_supports_expression_tail_and_method_chain_contexts() {
+    let config = CompletionMultiTokenConfig {
+        enabled: true,
+        advanced: true,
+        ..CompletionMultiTokenConfig::default()
+    };
+    let tail_source = "return score\n";
+    let chain_source = "local result = audioSource()\n";
+    let tail = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        tail_source,
+        position_after(tail_source, "return score"),
+        0,
+        &config,
+    );
+    let chain = crate::completion::multitoken::complete_multi_token_source(
+        Path::new("src/main.tua"),
+        chain_source,
+        position_after(chain_source, "audioSource()"),
+        0,
+        &config,
+    );
+
+    assert_eq!(labels(&tail), vec!["or nil".to_owned()]);
+    assert_eq!(labels(&chain), vec![":play()".to_owned()]);
+}
+
+#[test]
 fn filters_table_fields_by_partial_prefix() {
     let completions = complete_at("player.a").expect("field completion should succeed");
 

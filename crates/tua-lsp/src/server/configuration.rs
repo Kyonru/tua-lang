@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tua_core::{
-    CompletionSequenceRankingConfig, DiagnosticsConfig, EcsConfig, FormatConfig, FormatOptions,
-    JitConfig, ModulePathSeparator, ProjectConfig, ProjectFileAssociation, QuoteStyle,
-    VfsSourceKind,
+    CompletionMultiTokenConfig, CompletionSequenceRankingConfig, DiagnosticsConfig, EcsConfig,
+    FormatConfig, FormatOptions, JitConfig, ModulePathSeparator, ProjectConfig,
+    ProjectFileAssociation, QuoteStyle, VfsSourceKind,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -73,6 +73,7 @@ pub(super) struct EcsOverrides {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct CompletionOverrides {
     pub(super) sequence_ranking: CompletionSequenceRankingOverrides,
+    pub(super) multi_token: CompletionMultiTokenOverrides,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -80,6 +81,14 @@ pub(super) struct CompletionSequenceRankingOverrides {
     pub(super) enabled: Option<bool>,
     pub(super) timeout_ms: Option<u64>,
     pub(super) max_candidates: Option<usize>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct CompletionMultiTokenOverrides {
+    pub(super) enabled: Option<bool>,
+    pub(super) advanced: Option<bool>,
+    pub(super) allow_model_integration: Option<bool>,
+    pub(super) max_suggestions: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -184,6 +193,13 @@ impl WorkspaceSettings {
         let mut config = CompletionSequenceRankingConfig::default();
 
         self.completion.sequence_ranking.apply(&mut config);
+        config
+    }
+
+    pub(super) fn completion_multi_token_config(&self) -> CompletionMultiTokenConfig {
+        let mut config = CompletionMultiTokenConfig::default();
+
+        self.completion.multi_token.apply(&mut config);
         config
     }
 }
@@ -430,9 +446,13 @@ impl CompletionOverrides {
         let sequence_ranking = settings
             .get("sequenceRanking")
             .or_else(|| settings.get("sequence_ranking"));
+        let multi_token = settings
+            .get("multiToken")
+            .or_else(|| settings.get("multi_token"));
 
         Self {
             sequence_ranking: CompletionSequenceRankingOverrides::from_settings(sequence_ranking),
+            multi_token: CompletionMultiTokenOverrides::from_settings(multi_token),
         }
     }
 }
@@ -461,6 +481,43 @@ impl CompletionSequenceRankingOverrides {
 
         if let Some(max_candidates) = self.max_candidates {
             config.max_candidates = max_candidates;
+        }
+    }
+}
+
+impl CompletionMultiTokenOverrides {
+    fn from_settings(value: Option<&Value>) -> Self {
+        let Some(settings) = value.and_then(Value::as_object) else {
+            return Self::default();
+        };
+
+        Self {
+            enabled: bool_setting(settings, "enabled", "enabled"),
+            advanced: bool_setting(settings, "advanced", "advanced"),
+            allow_model_integration: bool_setting(
+                settings,
+                "allow_model_integration",
+                "allowModelIntegration",
+            ),
+            max_suggestions: usize_setting(settings, "max_suggestions", "maxSuggestions"),
+        }
+    }
+
+    fn apply(&self, config: &mut CompletionMultiTokenConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+
+        if let Some(advanced) = self.advanced {
+            config.advanced = advanced;
+        }
+
+        if let Some(allow_model_integration) = self.allow_model_integration {
+            config.allow_model_integration = allow_model_integration;
+        }
+
+        if let Some(max_suggestions) = self.max_suggestions {
+            config.max_suggestions = max_suggestions;
         }
     }
 }

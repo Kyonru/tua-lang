@@ -2303,6 +2303,8 @@ Acceptance:
 
 ### 77.4 `feat(completion): optional LLM-assisted multi-token completion`
 
+Status: done.
+
 Scope:
 
 - Add a separate, opt-in completion lane for multi-token suggestions after strong local
@@ -2321,6 +2323,15 @@ Acceptance:
   advanced path.
 - Invalid or unparsable LLM insertions are rejected or downgraded.
 - Core completion remains usable with no network dependency.
+
+Notes:
+
+- The first implementation is local-only and exposes a separate multi-token
+  completion lane through `tua.completion.multiToken.*`.
+- Insertions are parsed after applying them to the current source; unparsable
+  suggestions are rejected before LSP conversion.
+- `allowModelIntegration` is an explicit future policy gate. No model or
+  network provider is called by the current implementation.
 
 ### 77.5 `feat(completion): add benchmark and telemetry plan`
 

@@ -603,6 +603,8 @@ impl AnalysisHost {
             .set_require_path_separator(settings.module_path_separator());
         self.core
             .set_completion_sequence_ranking(settings.completion_sequence_ranking_config());
+        self.core
+            .set_completion_multi_token(settings.completion_multi_token_config());
         self.core.set_ignored_paths(ignored_paths);
         self.core.set_asset_roots(asset_roots);
 
@@ -858,6 +860,20 @@ impl AnalysisSnapshot {
 
         completions.extend(self.auto_import_completions(path, position, &existing_labels));
         completions
+    }
+
+    pub(super) fn multi_token_completion(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        primary_candidate_count: usize,
+    ) -> Vec<Completion> {
+        if self.core.source(path).is_none() {
+            return Vec::new();
+        }
+
+        self.core
+            .multi_token_completion(path, position, primary_candidate_count)
     }
 
     pub(super) fn resolve_completion(

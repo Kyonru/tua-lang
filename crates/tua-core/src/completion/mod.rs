@@ -23,11 +23,13 @@ use crate::{
 
 pub mod adaptive;
 pub(crate) mod context;
+pub mod multitoken;
 mod require;
 pub mod sequence;
 mod symbol;
 
 pub use adaptive::{CompletionAdaptiveKey, CompletionAdaptiveMemberStats, CompletionAdaptiveStats};
+pub use multitoken::{CompletionMultiTokenConfig, CompletionMultiTokenContextKind};
 pub use sequence::{
     CompletionSequenceRanker, CompletionSequenceRankingBudget, CompletionSequenceRankingConfig,
     CompletionSequenceRankingError, CompletionSequenceRankingInput,

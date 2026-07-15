@@ -369,6 +369,28 @@
           "maximum": 500,
           "description": "Maximum number of compiler candidates sent to the contextual sequence ranking lane."
         },
+        "tua.completion.multiToken.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the experimental multi-token completion lane. Compiler token completions remain the primary path."
+        },
+        "tua.completion.multiToken.advanced": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow multi-token suggestions even when primary compiler completion has normal confidence. When false, suggestions only appear in low-confidence local contexts."
+        },
+        "tua.completion.multiToken.allowModelIntegration": {
+          "type": "boolean",
+          "default": false,
+          "description": "Explicit policy gate for any future model-backed multi-token completion provider. The current implementation remains local-only."
+        },
+        "tua.completion.multiToken.maxSuggestions": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum number of validated multi-token suggestions appended to completion results."
+        },
         "tua.fileAssociations": {
           "type": "object",
           "default": {},

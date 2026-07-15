@@ -2535,6 +2535,37 @@ local current = sprite.
 }
 
 #[test]
+fn did_change_configuration_can_enable_multi_token_completion() {
+    let temp = TempProject::new("configuration-completion-multi-token");
+    let source = "local velocity = \n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "local velocity = "));
+
+    assert!(!completion_labels(server.output(), 2).contains(&"vec2(0, 0)"));
+
+    server.send(did_change_configuration(json!({
+        "completion": {
+            "multiToken": {
+                "enabled": true,
+                "advanced": true,
+                "allowModelIntegration": false,
+                "maxSuggestions": 2
+            }
+        }
+    })));
+    server.send(completion_request(3, &uri, source, "local velocity = "));
+
+    assert!(completion_labels(server.output(), 3).contains(&"vec2(0, 0)"));
+}
+
+#[test]
 fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003
@@ -7823,8 +7854,13 @@ fn hover_contents(output: &[Value], id: u64) -> &str {
 }
 
 fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected: [&str; N]) {
-    let response = response_with_id(output, id);
-    let labels = response["result"]
+    let labels = completion_labels(output, id);
+
+    assert_eq!(labels, expected);
+}
+
+fn completion_labels(output: &[Value], id: u64) -> Vec<&str> {
+    response_with_id(output, id)["result"]
         .as_array()
         .expect("completion result should be an array")
         .iter()
@@ -7833,9 +7869,7 @@ fn assert_completion_labels<const N: usize>(output: &[Value], id: u64, expected:
                 .as_str()
                 .expect("completion label should be a string")
         })
-        .collect::<Vec<_>>();
-
-    assert_eq!(labels, expected);
+        .collect()
 }
 
 fn completion_with_label(output: &[Value], id: u64, label: &str) -> Value {

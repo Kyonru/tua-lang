@@ -284,6 +284,13 @@ bounded by `tua.completion.sequenceRanking.timeoutMs`, and receives only a
 normalized context snapshot plus compiler candidates. Timeout or provider error
 returns zero score hints and keeps the pre-sequence completion ordering.
 
+Experimental multi-token completion can be enabled with
+`tua.completion.multiToken.enabled`. It runs as a separate lane after compiler
+completion, validates each insertion by parsing the edited source, and appends
+only valid suggestions. `tua.completion.multiToken.allowModelIntegration` is a
+future policy gate; the current provider is local-only and performs no network
+or model calls.
+
 To profile the real bundled examples across both CLI commands and editor
 requests:
 
