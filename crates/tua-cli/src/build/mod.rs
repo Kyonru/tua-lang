@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,13 +10,29 @@ use crate::source::{
 };
 use crate::source_map::write_source_map;
 use tua_core::{
-    brinevector_runtime_source, emit_tua_source_with_workspace, format_diagnostics_for_cli,
-    AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory,
-    DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    anim8_runtime_source, brinevector_runtime_source, emit_tua_source_with_workspace,
+    format_diagnostics_for_cli, AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic,
+    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
-const BRINEVECTOR_RUNTIME_FILE: &str = "brinevector.lua";
-const BRINEVECTOR_RUNTIME_REQUIRE: &str = "require(\"brinevector\")";
+struct BundledRuntime {
+    file_name: &'static str,
+    require_literal: &'static str,
+    source: fn() -> &'static str,
+}
+
+const BUNDLED_RUNTIMES: &[BundledRuntime] = &[
+    BundledRuntime {
+        file_name: "brinevector.lua",
+        require_literal: "require(\"brinevector\")",
+        source: brinevector_runtime_source,
+    },
+    BundledRuntime {
+        file_name: "anim8.lua",
+        require_literal: "require(\"anim8\")",
+        source: anim8_runtime_source,
+    },
+];
 
 #[derive(Debug, Default)]
 pub(crate) struct BuildOutcome {
@@ -98,7 +114,7 @@ pub(crate) fn build_changed_files(
     let mut outcome = BuildOutcome::default();
     let mut units = Vec::new();
     let mut host = AnalysisHost::with_config(workspace.config().clone());
-    let mut needs_brinevector_runtime = false;
+    let mut required_bundled_runtimes = BTreeSet::new();
 
     host.set_source_roots(workspace.source_roots().iter().cloned());
     host.set_output_roots(workspace.output_roots().iter().cloned());
@@ -171,7 +187,7 @@ pub(crate) fn build_changed_files(
                 continue;
             }
         };
-        needs_brinevector_runtime |= requires_brinevector_runtime(&output);
+        collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
 
         match write_output(&output_path, output.clone()) {
             Ok(()) => {
@@ -189,9 +205,12 @@ pub(crate) fn build_changed_files(
         }
     }
 
-    if needs_brinevector_runtime {
-        write_brinevector_runtime(&out_dir, &mut outcome.emitted, &mut outcome.diagnostics);
-    }
+    write_required_bundled_runtimes(
+        &out_dir,
+        &required_bundled_runtimes,
+        &mut outcome.emitted,
+        &mut outcome.diagnostics,
+    );
 
     outcome
 }
@@ -319,7 +338,7 @@ fn build_project_files(
     }
 
     let mut emitted = 0usize;
-    let mut needs_brinevector_runtime = false;
+    let mut required_bundled_runtimes = BTreeSet::new();
 
     for unit in units {
         match unit {
@@ -345,7 +364,7 @@ fn build_project_files(
                         continue;
                     }
                 };
-                needs_brinevector_runtime |= requires_brinevector_runtime(&output);
+                collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
 
                 match write_output(&output_path, output.clone()) {
                     Ok(()) => {
@@ -372,9 +391,12 @@ fn build_project_files(
         }
     }
 
-    if needs_brinevector_runtime {
-        write_brinevector_runtime(&out_dir, &mut emitted, &mut diagnostics);
-    }
+    write_required_bundled_runtimes(
+        &out_dir,
+        &required_bundled_runtimes,
+        &mut emitted,
+        &mut diagnostics,
+    );
 
     BuildOutcome {
         emitted,
@@ -422,22 +444,40 @@ fn write_output(output_path: &Path, output: String) -> Result<(), Diagnostic> {
     fs::write(output_path, output).map_err(|source| io_diagnostic(output_path, source))
 }
 
-fn requires_brinevector_runtime(output: &str) -> bool {
-    output.contains(BRINEVECTOR_RUNTIME_REQUIRE)
+fn collect_required_bundled_runtimes(output: &str, required: &mut BTreeSet<&'static str>) {
+    for runtime in BUNDLED_RUNTIMES {
+        if output.contains(runtime.require_literal) {
+            required.insert(runtime.file_name);
+        }
+    }
 }
 
-fn write_brinevector_runtime(
+fn write_required_bundled_runtimes(
+    out_dir: &Path,
+    required: &BTreeSet<&'static str>,
+    emitted: &mut usize,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for runtime in BUNDLED_RUNTIMES {
+        if required.contains(runtime.file_name) {
+            write_bundled_runtime(runtime, out_dir, emitted, diagnostics);
+        }
+    }
+}
+
+fn write_bundled_runtime(
+    runtime: &BundledRuntime,
     out_dir: &Path,
     emitted: &mut usize,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let output_path = out_dir.join(BRINEVECTOR_RUNTIME_FILE);
+    let output_path = out_dir.join(runtime.file_name);
 
     if output_path.exists() {
         return;
     }
 
-    match write_output(&output_path, brinevector_runtime_source().to_owned()) {
+    match write_output(&output_path, (runtime.source)().to_owned()) {
         Ok(()) => *emitted += 1,
         Err(diagnostic) => diagnostics.push(diagnostic),
     }

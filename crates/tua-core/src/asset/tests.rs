@@ -205,6 +205,44 @@ fn finds_asset_metadata_at_source_position() {
     assert_eq!(asset.relative_path, "assets/player.png");
 }
 
+#[test]
+fn collects_sprite_image_asset_metadata() {
+    let temp = TempProject::new("sprite-metadata");
+    let source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+"#;
+    let path = temp.write("src/sprites.tua", source);
+
+    temp.write("assets/player.png", png_header(32, 16));
+
+    let parsed = parse_tua_source(&path, source).expect("sprite source should parse");
+    let assets = collect_asset_metadata(&parsed, std::slice::from_ref(&temp.path));
+    let asset = assets
+        .iter()
+        .find(|asset| asset.relative_path == "assets/player.png")
+        .expect("sprite image should be collected as asset metadata");
+
+    assert_eq!(asset.kind, AssetLoaderKind::Image);
+    assert_eq!(asset.status, AssetValidationStatus::Valid);
+    assert_eq!(asset.dimensions, Some((32, 16)));
+    assert_eq!(
+        asset_at_position(
+            &assets,
+            SourcePosition {
+                line: 2,
+                column: 11
+            },
+        )
+        .map(|asset| asset.relative_path.as_str()),
+        Some("assets/player.png")
+    );
+}
+
 fn png_header(width: u32, height: u32) -> Vec<u8> {
     let mut bytes = Vec::new();
 

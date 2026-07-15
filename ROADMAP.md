@@ -2104,9 +2104,15 @@ Acceptance:
 
 ### 74. `feat(sprite): prototype sprite animation DSL`
 
+Status: done for the first built-in plugin prototype. Tua recognizes one
+parser-native `spriteSheet({...})` helper form, records structured sprite
+metadata, reports plugin diagnostics for missing image assets and invalid
+ranges/FPS, emits readable anim8-backed Lua, and bundles `anim8.lua` into build
+output when needed.
+
 Scope:
 
-- Prototype a LOVE sprite/animation declaration, likely as a built-in plugin.
+- Prototype a LOVE sprite/animation helper, likely as a built-in plugin.
 - Explore syntax for:
   - image path;
   - frame size;
@@ -2115,24 +2121,26 @@ Scope:
   - FPS;
   - looping mode.
 - Prefer structured lowering metadata over raw Lua string emission.
-- Consider anim8-compatible output as the first target.
+- Consider bundled anim8-backed output as the first target.
 
 Example direction:
 
 ```tua
-sprite Player
-  image "assets/player.png"
-  frame 16x16
-  anim idle from 0..3 fps 8
-  anim run from 4..9 fps 12
-end
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+    run = { from = 4, to = 9, fps = 12, loop = true },
+  },
+})
 ```
 
 Acceptance:
 
-- The prototype parses one sprite declaration form.
+- The prototype recognizes one sprite helper form.
 - Missing image assets and invalid frame ranges produce diagnostics.
-- Emitted Lua can create an anim8-compatible grid/animation structure or a
+- Emitted Lua can create an anim8-backed grid/animation structure or a
   documented placeholder representation.
 - The feature remains isolated enough to change syntax before stabilization.
 

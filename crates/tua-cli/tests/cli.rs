@@ -831,6 +831,98 @@ fn build_does_not_overwrite_project_brinevector_runtime() {
 }
 
 #[test]
+fn build_writes_anim8_runtime_when_sprite_sheet_helper_is_used() {
+    let temp = TempDir::new("build-sprite-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+
+return Player
+"#,
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/assets/player.png"),
+        [0x89, b'P', b'N', b'G'],
+    )
+    .expect("failed to write asset");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime =
+        fs::read_to_string(temp.path().join("build/anim8.lua")).expect("failed to read anim8");
+
+    assert!(stdout.contains("built 3 file(s)"));
+    assert!(emitted.contains(r#"local anim8 = require("anim8")"#));
+    assert!(emitted.contains("idle = anim8.newAnimation(PlayerGrid(\"1-4\", 1), 1 / 8)"));
+    assert!(runtime.contains("_VERSION     = 'anim8 v2.3.1'"));
+    assert!(runtime.contains("_URL         = 'https://github.com/kikito/anim8'"));
+}
+
+#[test]
+fn build_does_not_overwrite_project_anim8_runtime() {
+    let temp = TempDir::new("build-custom-sprite-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+
+return Player
+"#,
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/assets/player.png"),
+        [0x89, b'P', b'N', b'G'],
+    )
+    .expect("failed to write asset");
+    fs::write(
+        temp.path().join("src/anim8.lua"),
+        "return { custom = true }\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let runtime =
+        fs::read_to_string(temp.path().join("build/anim8.lua")).expect("failed to read anim8");
+
+    assert_eq!(runtime, "return { custom = true }\n");
+}
+
+#[test]
 fn build_excludes_output_directory_when_source_is_project_root() {
     let temp = TempDir::new("build-root-excludes-dist");
 

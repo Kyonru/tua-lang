@@ -28,7 +28,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
     MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, lua, vector};
+use crate::{asset, lua, sprite, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -1027,6 +1027,10 @@ impl<'a> Checker<'a> {
 
             if vector::is_constructor(root) {
                 return Some(Callable::Function(vector::constructor_type()));
+            }
+
+            if sprite::is_helper(root) {
+                return Some(Callable::Function(sprite::constructor_type()));
             }
         }
 

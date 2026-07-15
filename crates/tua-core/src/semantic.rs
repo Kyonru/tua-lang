@@ -22,7 +22,7 @@ use crate::types::{
     type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
     TypeEnvironment, TypedFunction,
 };
-use crate::{vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
+use crate::{sprite, vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -148,6 +148,10 @@ impl<'a> SemanticModel<'a> {
                 return vector::constructor_type().return_types_or_any().to_vec();
             }
 
+            if sprite::is_helper(root) {
+                return sprite::constructor_type().return_types_or_any().to_vec();
+            }
+
             if let Some(returns) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_return_types(self.environment, &ty))
@@ -219,6 +223,10 @@ impl<'a> SemanticModel<'a> {
 
             if vector::is_constructor(root) {
                 return Some(typed_function_from_vector_constructor());
+            }
+
+            if sprite::is_helper(root) {
+                return Some(sprite::typed_function());
             }
 
             if let Some(function) = self

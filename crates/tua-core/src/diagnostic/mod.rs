@@ -91,6 +91,7 @@ impl DiagnosticCode {
     pub const PLUGIN_DIAGNOSTIC: Self = Self(5001);
     pub const PLUGIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const PLUGIN_ECS_QUERY: Self = Self(5003);
+    pub const PLUGIN_SPRITE: Self = Self(5004);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -176,6 +177,7 @@ impl DiagnosticCode {
                 | Self::PLUGIN_DIAGNOSTIC
                 | Self::PLUGIN_ECS_COMPONENT_VALUE
                 | Self::PLUGIN_ECS_QUERY
+                | Self::PLUGIN_SPRITE
         )
     }
 }

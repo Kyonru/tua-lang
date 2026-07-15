@@ -92,6 +92,10 @@ make build-features
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.
+- `src/sprites.tua` covers the experimental built-in `spriteSheet({...})`
+  helper plugin: sprite sheet image validation, frame size metadata, animation
+  frame ranges, FPS, non-looping animation mode, anim8-backed Lua emission, and
+  bundled `anim8.lua` build output.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

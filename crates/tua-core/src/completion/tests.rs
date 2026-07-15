@@ -289,6 +289,12 @@ fn completes_tua_and_lua_statement_snippets() {
             "function ${1:name}(${2})\n  ${0}\nend",
         ),
         ("loc", "loc", "local", "local ${1:name} = ${0:nil}"),
+        (
+            "spr",
+            "spr",
+            "spriteSheet",
+            "local ${1:Player} = spriteSheet({\n  image = \"${2:assets/player.png}\",\n  frame = { width = ${3:16}, height = ${4:16} },\n  animations = {\n    ${5:idle} = { from = ${6:0}, to = ${7:3}, fps = ${8:8} },\n  },\n})",
+        ),
     ] {
         let completions =
             complete_tua_source("src/main.tua", source, position_after(source, needle))

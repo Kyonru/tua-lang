@@ -15,8 +15,9 @@ Third-party executable plugins are not available today.
 ## Current Implementation
 
 Tua currently has an experimental Rust-only plugin registry in `tua-core`.
-`AnalysisHost` owns an optional `PluginRegistry`; the default registry is empty,
-so ordinary projects behave exactly as before.
+`AnalysisHost` owns an optional `PluginRegistry`; the effective default registry
+includes the built-in `tua.sprite` prototype, but ordinary projects behave as
+before unless they use recognized `spriteSheet({...})` helper calls.
 
 Registered Rust plugins can currently contribute:
 
@@ -26,17 +27,21 @@ Registered Rust plugins can currently contribute:
 - hover snippets;
 - structured lowering requests.
 
-Only diagnostics are wired into the default analysis pipeline today. The other
+Diagnostics are wired into the default analysis pipeline today. Sprite lowering
+also uses structured helper metadata when emitting Lua. The other
 contribution types are exposed by the registry so future built-in domain plugins
 can route them through completion, hover, and emission without inventing another
 plugin API. Plugin diagnostics use the reserved `TL5000`-`TL5999` range.
 
-The first built-in consumer is the opt-in ECS plugin. When `[ecs].enabled =
-true`, `AnalysisHost` adds the Rust `tua.ecs` plugin to the effective registry.
-That plugin contributes ECS declaration metadata and diagnostics, while the
-typed `ecs` API surface is provided through the shared type environment so
-completion, hover, and signature help use the same semantic path as other Tua
-builtins.
+The first always-on built-in consumer is the experimental `tua.sprite` plugin.
+It contributes the `spriteSheet` helper model, asset/range diagnostics,
+structured lowering metadata for anim8-backed output, and lazy bundled
+`anim8.lua` build output. The opt-in ECS plugin is also available. When
+`[ecs].enabled = true`,
+`AnalysisHost` adds the Rust `tua.ecs` plugin to the effective registry. That
+plugin contributes ECS declaration metadata and diagnostics, while the typed
+`ecs` API surface is provided through the shared type environment so completion,
+hover, and signature help use the same semantic path as other Tua builtins.
 
 ## Goals
 
@@ -64,12 +69,13 @@ Bad plugin features:
 
 ## V1 Extension Surface
 
-V1 plugins may extend only declaration-shaped parts of the language. This keeps
-the parser, type checker, LSP, and emitter deterministic.
+V1 plugins may extend only declaration-shaped or recognized helper-call parts of
+the language. This keeps the parser, type checker, LSP, and emitter
+deterministic.
 
 Allowed extension points:
 
-- **Top-level declarations**: for example `sprite Player ... end`.
+- **Recognized helper calls**: for example `local Player = spriteSheet({ ... })`.
 - **Domain blocks**: structured blocks owned by a registered declaration kind.
 - **Validation passes**: diagnostics over parsed plugin declarations and project
   metadata.
@@ -164,7 +170,7 @@ Lua plugins should return structured data, not raw Lua strings:
 return {
   name = "tua.anim8",
 
-  declarations = { "sprite" },
+  helpers = { "spriteSheet" },
 
   validate = function(node, ctx)
     if not ctx.asset_exists(node.image) then
@@ -214,41 +220,44 @@ and easy to make unsafe.
 
 ## Sprite And Animation Example
 
-A future sprite plugin could own a declaration like this:
+The built-in experimental sprite plugin owns one helper-call shape:
 
 ```tua
-sprite Player
-  image "assets/player.png"
-  frame 16x16
-  anim idle frames 0..3 fps 8
-  anim run frames 4..9 fps 12
-end
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+    run = { from = 4, to = 9, fps = 12, loop = false },
+  },
+})
 ```
 
 Static model:
 
-- declaration kind: `sprite`;
+- helper: `spriteSheet`;
 - symbol name: `Player`;
 - asset dependency: `assets/player.png`;
 - frame size: `16x16`;
 - animations: `idle`, `run`;
-- generated runtime dependency: a normal Lua module such as `anim8`.
+- generated runtime dependency: the bundled `anim8.lua` module, unless the
+  project provides its own `anim8.lua`.
 
 Validation examples:
 
 - `assets/player.png` must exist under configured asset roots;
 - image extension must be supported by LOVE;
 - frame width and height must be positive;
-- animation frame ranges must fit the image dimensions when metadata is known;
-- duplicate animation names produce deterministic diagnostics;
-- unknown animation references can power completions and diagnostics.
+- animation frame ranges must be ordered from low to high;
+- animation FPS must be greater than zero.
 
 Editor examples:
 
-- completion for animation names after `Player.animations.`;
-- hover showing frame size, fps, and source image;
-- document symbols for `Player`, `idle`, and `run`;
-- optional editor metadata for a future sprite preview panel.
+- top-level completion includes a `spriteSheet` helper snippet;
+- sprite image paths participate in asset metadata hovers;
+- normal parser-native syntax keeps inlay hints, hover, formatting, rename, and
+  document symbols on ordinary Tua nodes;
+- future editor metadata can add animation completions and preview panels.
 
 Possible structured lowering:
 
@@ -257,15 +266,19 @@ local PlayerImage = love.graphics.newImage("assets/player.png")
 local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:getHeight())
 local Player = {
   image = PlayerImage,
+  grid = PlayerGrid,
+  frame = { width = 16, height = 16 },
   animations = {
     idle = anim8.newAnimation(PlayerGrid("1-4", 1), 1 / 8),
-    run = anim8.newAnimation(PlayerGrid("5-10", 1), 1 / 12),
+    run = anim8.newAnimation(PlayerGrid("5-10", 1), 1 / 12, "pauseAtEnd"),
   },
 }
 ```
 
-The exact emitted Lua can change, but it must remain readable and ordinary. The
-plugin should not require a hidden Tua runtime.
+The exact emitted Lua can still change before stabilization, but it must remain
+readable and ordinary. When generated Lua needs `anim8`, `tua build` writes the
+bundled `anim8.lua` runtime into the output directory unless the project already
+provides that module. The plugin does not require a hidden Tua runtime.
 
 ## Asset Validation Example
 

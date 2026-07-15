@@ -105,9 +105,12 @@ pub fn extract_tua_source_model(
     let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
     let (class_declarations, class_diagnostics) =
         classes::parse_class_declarations(&raw.path, &raw.source);
+    let (sprite_declarations, sprite_diagnostics) =
+        crate::sprite::parse_sprite_declarations(&raw.ast);
     let syntax = collect_tua_syntax(&raw.path, &raw.source, &raw.ast);
 
     let mut diagnostics = class_diagnostics;
+    diagnostics.extend(sprite_diagnostics);
     diagnostics.extend(syntax.diagnostics);
 
     if !diagnostics.is_empty() {
@@ -121,6 +124,7 @@ pub fn extract_tua_source_model(
         local_annotations: syntax.local_annotations,
         function_annotations: syntax.function_annotations,
         compound_assignments: syntax.compound_assignments,
+        sprite_declarations,
         class_declarations,
     })
 }

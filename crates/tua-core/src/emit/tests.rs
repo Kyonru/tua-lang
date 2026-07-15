@@ -668,6 +668,41 @@ local ui = love.graphics.newImage("assets/ui.png")
 }
 
 #[test]
+fn snapshot_lowers_sprite_declarations_to_anim8_structure() {
+    let emitted = emit_tua_source(
+        "src/sprites.tua",
+        r#"local Player: SpriteSheet = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+    run = { from = 4, to = 9, fps = 12, loop = false },
+  },
+})
+"#,
+    )
+    .expect("sprite helper should emit");
+
+    assert_eq!(
+        emitted,
+        r#"-- Sprite helper: Player lowers to anim8-backed Lua.
+local anim8 = require("anim8")
+local PlayerImage = love.graphics.newImage("assets/player.png")
+local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:getHeight())
+local Player = {
+  image = PlayerImage,
+  grid = PlayerGrid,
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = anim8.newAnimation(PlayerGrid("1-4", 1), 1 / 8),
+    run = anim8.newAnimation(PlayerGrid("5-10", 1), 1 / 12, "pauseAtEnd"),
+  },
+}
+"#
+    );
+}
+
+#[test]
 fn snapshot_lowers_builtin_vec2_constructor_calls_to_brinevector() {
     let emitted = emit_tua_source(
         "src/vector.tua",

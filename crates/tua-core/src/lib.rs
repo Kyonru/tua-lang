@@ -48,6 +48,7 @@ pub mod semantic_index;
 pub mod semantic_token;
 pub mod signature_help;
 mod source_text;
+mod sprite;
 mod text_match;
 pub mod type_database;
 pub mod types;
@@ -152,9 +153,9 @@ pub use parser::{
     TypedSourceModel,
 };
 pub use plugin::{
-    PluginCompletionContext, PluginContext, PluginDeclaration, PluginDeclarationKind, PluginHover,
-    PluginHoverContext, PluginLoweringOperation, PluginLoweringRequest, PluginLoweringValue,
-    PluginRegistry, TuaPlugin,
+    PluginAnimationDefinition, PluginCompletionContext, PluginContext, PluginDeclaration,
+    PluginDeclarationKind, PluginHover, PluginHoverContext, PluginLoweringOperation,
+    PluginLoweringRequest, PluginLoweringValue, PluginRegistry, TuaPlugin,
 };
 pub use project::project_description;
 pub use project_model::{
@@ -214,4 +215,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn brinevector_runtime_source() -> &'static str {
     vector::runtime_source()
+}
+
+pub fn anim8_runtime_source() -> &'static str {
+    sprite::runtime_source()
 }

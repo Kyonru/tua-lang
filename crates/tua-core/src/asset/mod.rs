@@ -501,6 +501,13 @@ pub(crate) fn collect_asset_metadata_with_index(
     };
 
     visitor.visit_ast(&parsed.ast);
+    for declaration in &parsed.sprite_declarations {
+        if let Some(metadata) =
+            crate::sprite::asset_metadata_for_declaration(declaration, &visitor.roots, asset_index)
+        {
+            visitor.assets.push(metadata);
+        }
+    }
     visitor.assets
 }
 

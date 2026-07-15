@@ -507,6 +507,8 @@ impl AnalysisHost {
     fn effective_plugin_registry(&self) -> PluginRegistry {
         let mut registry = self.plugin_registry.clone();
 
+        registry.register(crate::sprite::SpritePlugin);
+
         if self.config.ecs.enabled {
             registry.register(crate::ecs::EcsPlugin);
         }

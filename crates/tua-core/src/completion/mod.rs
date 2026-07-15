@@ -445,6 +445,11 @@ fn syntax_snippet_completions(prefix: &str) -> Vec<Completion> {
             "Lua while loop",
             "while ${1:condition} do\n  ${0}\nend",
         ),
+        (
+            crate::sprite::HELPER_NAME,
+            "Tua sprite sheet helper",
+            crate::sprite::sprite_sheet_snippet(),
+        ),
     ]
     .into_iter()
     .filter(|(label, _, _)| completion_text_matches(label, prefix))

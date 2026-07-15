@@ -19,6 +19,7 @@ local LuaHelperLints = require("luahelper_lints")
 local LuaJit = require("luajit")
 local Ecs = require("ecs")
 local Classes = require("classes")
+local Sprites = require("sprites")
 
 return {
   types = Types,
@@ -42,4 +43,5 @@ return {
   luajit = LuaJit,
   ecs = Ecs,
   classes = Classes,
+  sprites = Sprites,
 }

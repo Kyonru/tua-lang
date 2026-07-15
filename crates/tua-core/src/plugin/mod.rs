@@ -114,6 +114,7 @@ impl PluginDeclaration {
 pub enum PluginDeclarationKind {
     TopLevelDeclaration,
     DomainBlock,
+    HelperCall,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -160,6 +161,13 @@ pub enum PluginLoweringOperation {
     RequireModule {
         module: String,
     },
+    DefineSprite {
+        name: String,
+        image_path: String,
+        frame_width: u32,
+        frame_height: u32,
+        animations: Vec<PluginAnimationDefinition>,
+    },
     Call {
         callee: String,
         arguments: Vec<PluginLoweringValue>,
@@ -175,6 +183,15 @@ pub enum PluginLoweringValue {
     Number(String),
     Boolean(bool),
     Identifier(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginAnimationDefinition {
+    pub name: String,
+    pub start_frame: u32,
+    pub end_frame: u32,
+    pub fps: String,
+    pub looping: bool,
 }
 
 #[cfg(test)]

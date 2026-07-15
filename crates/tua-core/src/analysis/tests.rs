@@ -109,7 +109,11 @@ fn plugin_registry_is_inert_until_registered_and_flows_into_diagnostics() {
 
     let snapshot = host.snapshot();
 
-    assert!(snapshot.plugin_registry().is_empty());
+    assert!(snapshot
+        .plugin_registry()
+        .declarations()
+        .iter()
+        .any(|declaration| declaration.keyword == "spriteSheet"));
     assert!(!snapshot
         .diagnostics(&path)
         .iter()
@@ -622,10 +626,60 @@ fn ecs_domain_support_is_disabled_by_default() {
 
     let snapshot = host.snapshot();
 
-    assert!(snapshot.plugin_registry().is_empty());
+    assert!(!snapshot
+        .plugin_registry()
+        .declarations()
+        .iter()
+        .any(|declaration| declaration.keyword == "ecs"));
     assert!(
         completion_labels(&snapshot.completion(&path, SourcePosition { line: 1, column: 5 }))
             .is_empty()
+    );
+}
+
+#[test]
+fn sprite_plugin_reports_missing_assets_and_invalid_ranges() {
+    let temp = TempProject::new("sprite-plugin-diagnostics");
+    let path = temp.path().join("src/sprites.tua");
+    let source = r#"local Player = spriteSheet({
+  image = "assets/missing.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 5, to = 3, fps = 0 },
+  },
+})
+"#;
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    host.set_file(&path, source);
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.pipeline_diagnostics(&path);
+
+    assert!(snapshot
+        .plugin_registry()
+        .declarations()
+        .iter()
+        .any(|declaration| declaration.keyword == "spriteSheet"));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::PLUGIN_SPRITE)
+            && diagnostic.message.contains("missing sprite image asset")
+            && diagnostic.line == 2
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::PLUGIN_SPRITE)
+            && diagnostic.message.contains("invalid frame range")
+            && diagnostic.line == 5
+    }));
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::PLUGIN_SPRITE)
+                && diagnostic.message.contains("fps must be greater than zero")
+                && diagnostic.line == 5
+        }),
+        "{diagnostics:#?}"
     );
 }
 

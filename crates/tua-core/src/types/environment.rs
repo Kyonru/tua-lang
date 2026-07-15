@@ -19,7 +19,7 @@ use crate::parser::{
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::source_text::function_name_table_field;
-use crate::{asset, lua, vector, Diagnostic, DiagnosticCode};
+use crate::{asset, lua, sprite, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::TypeContext;
@@ -214,6 +214,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            sprite::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -264,6 +269,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
     aliases
         .entry(vector::TYPE_NAME.to_owned())
         .or_insert_with(vector::vec2_type);
+    aliases
+        .entry(sprite::TYPE_NAME.to_owned())
+        .or_insert_with(sprite::sprite_sheet_type);
     for (name, ty) in builtin_aliases {
         aliases.entry(name).or_insert(ty);
     }
@@ -2712,6 +2720,9 @@ fn infer_function_call_return_types(
             .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
             .or_else(|| {
                 vector::is_constructor(name).then(|| Type::Function(vector::constructor_type()))
+            })
+            .or_else(|| {
+                sprite::is_helper(name).then(|| Type::Function(sprite::constructor_type()))
             });
 
         return function_type

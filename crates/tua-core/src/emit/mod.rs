@@ -74,6 +74,7 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
         let output = lower_runtime_type_checks_text(&output, parsed)?;
         let output = lower_final_class_method_calls_text(&output, parsed);
         let output = lower_compound_assignments_text(&output);
+        let output = crate::sprite::lower_sprite_sheet_calls_text(&output, parsed);
 
         Ok(match annotation_mode {
             AnnotationMode::Off => output,
