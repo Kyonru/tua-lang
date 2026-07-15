@@ -14,8 +14,8 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::completion::{
-    complete_field_access_in_source_with_environment, complete_parsed_source_with_environment,
-    complete_source_with_parsed_environment,
+    complete_field_access_in_source_with_environment, complete_source_with_parsed_environment,
+    filter_and_rank_completions,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -39,6 +39,7 @@ use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
 };
+use crate::text_match::text_matches;
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
@@ -53,11 +54,11 @@ use crate::{
         check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
-    code_actions_parsed_source_with_kinds, complete_parsed_source, complete_tua_source,
-    definition_parsed_source_with_hir, document_highlights_parsed_source,
-    document_symbols_parsed_source_with_hir, exported_field_for_fields,
-    global_function_definition_count, global_function_name_for_definition,
-    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
+    code_actions_parsed_source_with_kinds, complete_tua_source, definition_parsed_source_with_hir,
+    document_highlights_parsed_source, document_symbols_parsed_source_with_hir,
+    exported_field_for_fields, global_function_definition_count,
+    global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
+    global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source_with_hir, hover_parsed_source,
     inlay_hints_parsed_source, is_valid_rename_identifier, lower_parsed_source,
     module_links_tua_source, parse_lua_source, parse_tua_source, reference_kind_for_rename,
@@ -114,6 +115,8 @@ pub struct AnalysisHost {
     plugin_registry: PluginRegistry,
     cache: RefCell<AnalysisQueryCache>,
     last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
+    completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
     revision: u64,
 }
@@ -358,6 +361,7 @@ struct CompletionRequestKey {
     path: PathBuf,
     line: usize,
     column: usize,
+    fingerprint: SourceFingerprint,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -365,6 +369,7 @@ struct DefinitionRequestKey {
     path: PathBuf,
     line: usize,
     column: usize,
+    fingerprint: SourceFingerprint,
 }
 
 impl AnalysisHost {
@@ -459,6 +464,7 @@ impl AnalysisHost {
 
         self.asset_index = Some(index);
         self.cache.borrow_mut().invalidate_all();
+        self.clear_query_caches();
         self.bump_revision();
     }
 
@@ -529,15 +535,20 @@ impl AnalysisHost {
             return;
         }
 
-        self.cache
-            .borrow_mut()
-            .invalidate_changed_file(&path, &source, kind, &self.config);
+        let invalidated_dependents =
+            self.cache
+                .borrow_mut()
+                .invalidate_changed_file(&path, &source, kind, &self.config);
+        if invalidated_dependents {
+            self.clear_query_caches();
+        }
         self.vfs.set_disk_file(path, source, vfs_kind);
         self.bump_revision();
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
+        self.clear_query_caches();
         self.last_good_files
             .borrow_mut()
             .remove(&normalize_path(path.as_ref()));
@@ -549,6 +560,7 @@ impl AnalysisHost {
         self.cache
             .borrow_mut()
             .invalidate_file(path.as_ref(), false);
+        self.clear_query_caches();
         self.bump_revision();
     }
 
@@ -573,9 +585,13 @@ impl AnalysisHost {
             return;
         }
 
-        self.cache
-            .borrow_mut()
-            .invalidate_changed_file(&path, &source, kind, &self.config);
+        let invalidated_dependents =
+            self.cache
+                .borrow_mut()
+                .invalidate_changed_file(&path, &source, kind, &self.config);
+        if invalidated_dependents {
+            self.clear_query_caches();
+        }
         self.vfs.open_file(path, source, vfs_kind);
         self.bump_revision();
     }
@@ -586,6 +602,7 @@ impl AnalysisHost {
 
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
+        self.clear_query_caches();
         self.vfs.close_file(path);
         self.bump_revision();
     }
@@ -713,8 +730,8 @@ impl AnalysisHost {
             symbol_index,
             last_good_files: self.last_good_files.borrow().clone(),
             semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
-            completion_cache: Rc::new(RefCell::new(BTreeMap::new())),
-            definition_cache: Rc::new(RefCell::new(BTreeMap::new())),
+            completion_cache: Rc::clone(&self.completion_cache),
+            definition_cache: Rc::clone(&self.definition_cache),
             reverse_reference_index: Rc::new(OnceCell::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
@@ -862,6 +879,12 @@ impl AnalysisHost {
     fn invalidate_all_analysis(&mut self) {
         self.cache.borrow_mut().invalidate_all();
         self.last_good_files.borrow_mut().clear();
+        self.clear_query_caches();
+    }
+
+    fn clear_query_caches(&self) {
+        self.completion_cache.borrow_mut().clear();
+        self.definition_cache.borrow_mut().clear();
     }
 
     fn refresh_last_good_files(&self, files: &BTreeMap<PathBuf, AnalysisFile>) {
@@ -1051,33 +1074,75 @@ impl AnalysisSnapshot {
     pub fn completion(&self, path: impl AsRef<Path>, position: SourcePosition) -> Vec<Completion> {
         let _profile = profile::span("analysis.query.completion");
         let path = path.as_ref();
-        let key = completion_request_key(path, position);
+        let Some(file) = self.file(path) else {
+            return Vec::new();
+        };
+
+        if let Some(request) = reusable_completion_request(path, &file.source, position) {
+            if let Some(completions) = self.completion_cache.borrow().get(&request.key).cloned() {
+                return filter_and_rank_completions(completions, &request.prefix);
+            }
+
+            let completions = self.completion_uncached(
+                path,
+                file,
+                Some(request.source.as_str()),
+                request.position,
+            );
+            self.completion_cache
+                .borrow_mut()
+                .insert(request.key, completions.clone());
+
+            return filter_and_rank_completions(completions, &request.prefix);
+        }
+
+        let key = completion_request_key(path, &file.source, position);
 
         if let Some(completions) = self.completion_cache.borrow().get(&key).cloned() {
             return completions;
         }
 
-        let Some(file) = self.file(path) else {
-            return Vec::new();
-        };
+        let completions = self.completion_uncached(path, file, None, position);
 
+        self.completion_cache
+            .borrow_mut()
+            .insert(key, completions.clone());
+
+        completions
+    }
+
+    fn completion_uncached(
+        &self,
+        path: &Path,
+        file: &AnalysisFile,
+        source_override: Option<&str>,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let source = source_override.unwrap_or(&file.source);
         let completions = match &file.parsed {
             Ok(parsed) => {
-                let completions = self.project_completions(parsed, &file.source, position);
+                let completions = self.project_completions(parsed, source, position);
 
                 if !completions.is_empty() {
                     completions
                 } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
-                    complete_parsed_source_with_environment(parsed, position, &facts.environment)
+                    complete_source_with_parsed_environment(
+                        source,
+                        parsed,
+                        position,
+                        &facts.environment,
+                    )
                 } else {
-                    complete_parsed_source(parsed, position).unwrap_or_default()
+                    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+                    complete_source_with_parsed_environment(source, parsed, position, &environment)
                 }
             }
             Err(_) => {
                 if let Some(facts) = self.recovered_semantic_facts(path, file) {
                     let completions = self.project_completions_with_environment(
                         &facts.parsed,
-                        &file.source,
+                        source,
                         position,
                         &facts.environment,
                     );
@@ -1086,7 +1151,7 @@ impl AnalysisSnapshot {
                         completions
                     } else {
                         let completions = complete_source_with_parsed_environment(
-                            &file.source,
+                            source,
                             &facts.parsed,
                             position,
                             &facts.environment,
@@ -1095,19 +1160,15 @@ impl AnalysisSnapshot {
                         if !completions.is_empty() {
                             completions
                         } else {
-                            complete_tua_source(path, file.source.clone(), position)
+                            complete_tua_source(path, source.to_owned(), position)
                                 .unwrap_or_default()
                         }
                     }
                 } else {
-                    complete_tua_source(path, file.source.clone(), position).unwrap_or_default()
+                    complete_tua_source(path, source.to_owned(), position).unwrap_or_default()
                 }
             }
         };
-
-        self.completion_cache
-            .borrow_mut()
-            .insert(key, completions.clone());
 
         completions
     }
@@ -1119,13 +1180,13 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let _profile = profile::span("analysis.query.definition");
         let path = path.as_ref();
-        let key = definition_request_key(path, position);
+
+        let file = self.file(path)?;
+        let key = definition_request_key(path, &file.source, position);
 
         if let Some(definition) = self.definition_cache.borrow().get(&key).cloned() {
             return definition;
         }
-
-        let file = self.file(path)?;
 
         let definition = match &file.parsed {
             Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir.as_ref(), position),
@@ -1148,6 +1209,7 @@ impl AnalysisSnapshot {
                 cache.insert(
                     definition_request_key(
                         path,
+                        &file.source,
                         SourcePosition {
                             line: span.start.line,
                             column,
@@ -4057,7 +4119,7 @@ impl AnalysisSnapshot {
 
         fields
             .into_iter()
-            .filter(|(name, _)| name.starts_with(&prefix))
+            .filter(|(name, _)| text_matches(name, &prefix))
             .map(|(name, ty)| Completion {
                 label: name,
                 kind: CompletionKind::Field,
@@ -4127,7 +4189,7 @@ impl AnalysisSnapshot {
             return module
                 .exports
                 .iter()
-                .filter(|entry| entry.public_name.starts_with(&prefix))
+                .filter(|entry| text_matches(&entry.public_name, &prefix))
                 .map(|entry| Completion {
                     label: entry.public_name.clone(),
                     kind: completion_kind_for_type(&entry.field.ty),
@@ -4180,7 +4242,7 @@ impl AnalysisSnapshot {
 
         field_types
             .into_iter()
-            .filter(|(name, _)| name.starts_with(&prefix))
+            .filter(|(name, _)| text_matches(name, &prefix))
             .map(|(name, ty)| Completion {
                 kind: completion_kind_for_type(&ty),
                 detail: Some(format!("field: {ty}")),
@@ -4843,20 +4905,92 @@ fn completion_kind_for_type(ty: &Type) -> CompletionKind {
     }
 }
 
-fn completion_request_key(path: &Path, position: SourcePosition) -> CompletionRequestKey {
+#[derive(Clone, Debug)]
+struct ReusableCompletionRequest {
+    key: CompletionRequestKey,
+    prefix: String,
+    position: SourcePosition,
+    source: String,
+}
+
+fn reusable_completion_request(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+) -> Option<ReusableCompletionRequest> {
+    let prefix = crate::completion::context::completion_prefix(source, position)?;
+    let source = source_without_range(source, prefix.base_position, position)?;
+    let key = completion_request_key(path, &source, prefix.base_position);
+
+    Some(ReusableCompletionRequest {
+        key,
+        prefix: prefix.prefix,
+        position: prefix.base_position,
+        source,
+    })
+}
+
+fn completion_request_key(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+) -> CompletionRequestKey {
     CompletionRequestKey {
         path: normalize_path(path),
         line: position.line,
         column: position.column,
+        fingerprint: source_fingerprint(source),
     }
 }
 
-fn definition_request_key(path: &Path, position: SourcePosition) -> DefinitionRequestKey {
+fn definition_request_key(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+) -> DefinitionRequestKey {
     DefinitionRequestKey {
         path: normalize_path(path),
         line: position.line,
         column: position.column,
+        fingerprint: source_fingerprint(source),
     }
+}
+
+fn source_without_range(
+    source: &str,
+    start: SourcePosition,
+    end: SourcePosition,
+) -> Option<String> {
+    let start = byte_offset_for_position(source, start)?;
+    let end = byte_offset_for_position(source, end)?;
+
+    if start > end || !source.is_char_boundary(start) || !source.is_char_boundary(end) {
+        return None;
+    }
+
+    let mut stripped = String::with_capacity(source.len().saturating_sub(end - start));
+
+    stripped.push_str(&source[..start]);
+    stripped.push_str(&source[end..]);
+
+    Some(stripped)
+}
+
+fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0;
+
+    for (index, raw_line) in source.split('\n').enumerate() {
+        let line_number = index + 1;
+        let line = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+
+        if line_number == position.line {
+            return Some(offset + byte_for_column(line, position.column));
+        }
+
+        offset += raw_line.len() + 1;
+    }
+
+    None
 }
 
 fn definition_lookup_span(source: &str, position: SourcePosition) -> Option<SourceSpan> {
@@ -5196,11 +5330,12 @@ impl AnalysisQueryCache {
         source: &str,
         kind: AnalysisSourceKind,
         config: &ProjectConfig,
-    ) {
+    ) -> bool {
         let invalidate_dependents =
             self.changed_file_affects_dependents(path, source, kind, config);
 
         self.invalidate_file(path, invalidate_dependents);
+        invalidate_dependents
     }
 
     fn changed_file_affects_dependents(

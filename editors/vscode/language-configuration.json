@@ -77,5 +77,10 @@
       "start": "^\\s*--\\s*#region\\b",
       "end": "^\\s*--\\s*#endregion\\b"
     }
+  },
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([A-Za-z_][A-Za-z0-9_]*)",
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(?:(?:local\\s+)?function\\b.*|.*\\b(?:then|do|repeat|else)\\b|.*[\\{\\(\\[]\\s*(?:--.*)?)$",
+    "decreaseIndentPattern": "^\\s*(?:end|until\\b.*|else\\b|elseif\\b.*\\bthen|[\\}\\)\\]]).*$"
   }
 }

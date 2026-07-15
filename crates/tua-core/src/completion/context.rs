@@ -37,6 +37,12 @@ pub(crate) enum CompletionContext {
     },
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CompletionPrefix {
+    pub prefix: String,
+    pub base_position: SourcePosition,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FieldAccessSeparator {
     Dot,
@@ -58,6 +64,57 @@ pub(crate) fn completion_context(
         .or_else(|| field_access_context(line, cursor, position))
         .or_else(|| type_annotation_context(line, cursor))
         .or_else(|| identifier_context(line, cursor, position))
+}
+
+pub(crate) fn completion_prefix(
+    source: &str,
+    position: SourcePosition,
+) -> Option<CompletionPrefix> {
+    let context = completion_context(source, position)?;
+    let prefix = context.reusable_prefix()?;
+
+    if prefix.is_empty() {
+        return None;
+    }
+
+    Some(CompletionPrefix {
+        prefix: prefix.to_owned(),
+        base_position: SourcePosition {
+            line: position.line,
+            column: position
+                .column
+                .saturating_sub(prefix.chars().count())
+                .max(1),
+        },
+    })
+}
+
+impl CompletionContext {
+    pub(crate) fn filter_prefix(&self) -> Option<&str> {
+        match self {
+            CompletionContext::AnnotationTag { prefix }
+            | CompletionContext::TypeAnnotation { prefix }
+            | CompletionContext::FieldAccess { prefix, .. }
+            | CompletionContext::StringArgument { prefix, .. }
+            | CompletionContext::RequirePath { prefix }
+            | CompletionContext::ImportPath { prefix }
+            | CompletionContext::Identifier { prefix, .. } => Some(prefix),
+            CompletionContext::DocumentationSnippet { .. } => None,
+        }
+    }
+
+    fn reusable_prefix(&self) -> Option<&str> {
+        match self {
+            CompletionContext::AnnotationTag { prefix }
+            | CompletionContext::TypeAnnotation { prefix }
+            | CompletionContext::FieldAccess { prefix, .. }
+            | CompletionContext::Identifier { prefix, .. } => Some(prefix),
+            CompletionContext::DocumentationSnippet { .. }
+            | CompletionContext::StringArgument { .. }
+            | CompletionContext::RequirePath { .. }
+            | CompletionContext::ImportPath { .. } => None,
+        }
+    }
 }
 
 fn annotation_tag_context(line: &str, cursor: usize) -> Option<CompletionContext> {

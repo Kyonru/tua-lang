@@ -32,7 +32,7 @@ fn completes_type_aliases_in_annotation_positions() {
 fn completes_lua_doc_annotation_tags_after_marker() {
     let fixture = Fixture::parse(
         r#"---@p<|cursor|>
--- expect completions: param
+-- expect completions: param, type
 "#,
     );
     let source = fixture.source("src/main.tua");
@@ -52,7 +52,10 @@ fn completes_lua_doc_annotation_tags_after_marker() {
         crate::SourcePosition { line: 1, column: 6 },
     )
     .expect("overload annotation completion should succeed");
-    assert_eq!(labels(&overload), vec!["overload".to_owned()]);
+    assert_eq!(
+        labels(&overload),
+        vec!["overload".to_owned(), "version".to_owned()]
+    );
 
     let vararg = complete_tua_source(
         "src/main.tua",
@@ -62,7 +65,11 @@ fn completes_lua_doc_annotation_tags_after_marker() {
     .expect("vararg annotation completion should succeed");
     assert_eq!(
         labels(&vararg),
-        vec!["vararg".to_owned(), "version".to_owned()]
+        vec![
+            "vararg".to_owned(),
+            "version".to_owned(),
+            "overload".to_owned()
+        ]
     );
 }
 
@@ -114,7 +121,11 @@ fn completes_love_builtin_type_names() {
 
     assert_eq!(
         labels(&completions),
-        vec!["Image".to_owned(), "ImageData".to_owned()]
+        vec![
+            "Image".to_owned(),
+            "ImageData".to_owned(),
+            "CompressedImageData".to_owned()
+        ]
     );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
     assert_eq!(completions[0].detail.as_deref(), Some("built-in type"));
@@ -148,7 +159,10 @@ position.
     )
     .expect("Vec2 field completion should succeed");
 
-    assert_eq!(labels(&type_completions), vec!["Vec2".to_owned()]);
+    assert_eq!(
+        labels(&type_completions),
+        vec!["Vec2".to_owned(), "BezierCurve".to_owned()]
+    );
     assert_eq!(type_completions[0].kind, CompletionKind::TypeAlias);
     assert_eq!(type_completions[0].detail.as_deref(), Some("built-in type"));
     assert_eq!(labels(&constructor_completions), vec!["vec2".to_owned()]);
@@ -213,7 +227,17 @@ fn annotation_completions_work_while_source_is_temporarily_invalid() {
     let completions = complete_tua_source("src/main.tua", source, position_after(source, "---@r"))
         .expect("lossy annotation completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["return".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec![
+            "return".to_owned(),
+            "param".to_owned(),
+            "vararg".to_owned(),
+            "version".to_owned(),
+            "overload".to_owned(),
+            "generic".to_owned()
+        ]
+    );
 }
 
 #[test]
@@ -377,9 +401,9 @@ fn completes_love_fields() {
     assert_eq!(
         labels(&completions),
         vec![
-            "present".to_owned(),
             "print".to_owned(),
-            "printf".to_owned()
+            "printf".to_owned(),
+            "present".to_owned()
         ]
     );
 }
@@ -464,7 +488,10 @@ end
 
     assert_eq!(labels(&window), vec!["title".to_owned()]);
     assert_eq!(window[0].detail.as_deref(), Some("field optional: string"));
-    assert_eq!(labels(&modules), vec!["physics".to_owned()]);
+    assert_eq!(
+        labels(&modules),
+        vec!["physics".to_owned(), "graphics".to_owned()]
+    );
     assert_eq!(
         modules[0].detail.as_deref(),
         Some("field optional: boolean")
@@ -683,11 +710,11 @@ body.setP
 
     assert_eq!(
         labels(&canvas),
-        vec!["getWidth".to_owned(), "getWrap".to_owned()]
+        vec!["getWrap".to_owned(), "getWidth".to_owned()]
     );
     assert_eq!(
         labels(&font),
-        vec!["getWidth".to_owned(), "getWrap".to_owned()]
+        vec!["getWrap".to_owned(), "getWidth".to_owned()]
     );
     assert_eq!(labels(&quad), vec!["getViewport".to_owned()]);
     assert_eq!(labels(&data), vec!["setPixel".to_owned()]);
@@ -1029,7 +1056,7 @@ setFilter("ne")
             .expect("enum completion should succeed");
 
     assert_eq!(labels(&load_completions), vec!["static", "stream"]);
-    assert_eq!(labels(&filter_completions), vec!["nearest"]);
+    assert_eq!(labels(&filter_completions), vec!["nearest", "linear"]);
 }
 
 #[test]

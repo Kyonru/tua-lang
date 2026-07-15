@@ -9,6 +9,7 @@ use crate::module_index::{exported_field_for_fields, required_module_exports_for
 use crate::profile;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
+use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::{asset, love_conf, vector};
 use crate::{
@@ -73,6 +74,56 @@ impl CompletionKind {
             _ => None,
         }
     }
+}
+
+pub(crate) fn filter_and_rank_completions(
+    completions: Vec<Completion>,
+    prefix: &str,
+) -> Vec<Completion> {
+    if prefix.is_empty() {
+        return completions;
+    }
+
+    let mut ranked = completions
+        .into_iter()
+        .filter_map(|completion| {
+            completion_match_rank(&completion, prefix).map(|rank| (rank, completion))
+        })
+        .collect::<Vec<_>>();
+
+    ranked.sort_by(|(left_rank, left), (right_rank, right)| {
+        left_rank
+            .cmp(right_rank)
+            .then_with(|| left.label.cmp(&right.label))
+    });
+
+    ranked
+        .into_iter()
+        .map(|(_, mut completion)| {
+            completion
+                .filter_text
+                .get_or_insert_with(|| prefix.to_owned());
+            completion
+        })
+        .collect()
+}
+
+fn completion_match_rank(completion: &Completion, prefix: &str) -> Option<TextMatchRank> {
+    let label_rank = completion_text_rank(&completion.label, prefix);
+    let filter_rank = completion
+        .filter_text
+        .as_deref()
+        .and_then(|filter_text| completion_text_rank(filter_text, prefix));
+
+    label_rank.into_iter().chain(filter_rank).min()
+}
+
+fn completion_text_matches(value: &str, prefix: &str) -> bool {
+    text_matches(value, prefix)
+}
+
+fn completion_text_rank(value: &str, prefix: &str) -> Option<TextMatchRank> {
+    text_match_rank(value, prefix)
 }
 
 pub fn complete_tua_source(
@@ -168,7 +219,8 @@ fn complete_parsed_source_with_context(
     context: CompletionContext,
     environment: &TypeEnvironment,
 ) -> Vec<Completion> {
-    match context {
+    let prefix = context.filter_prefix().map(str::to_owned);
+    let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
         CompletionContext::DocumentationSnippet { position } => {
             complete_documentation_snippet(parsed, position)
@@ -187,29 +239,25 @@ fn complete_parsed_source_with_context(
                 complete_required_module_fields(parsed, &receiver_parts, prefix.as_str());
 
             if !module_fields.is_empty() {
-                return module_fields;
+                module_fields
+            } else {
+                let fields = complete_fields(
+                    parsed,
+                    source,
+                    environment,
+                    &receiver_parts,
+                    prefix.as_str(),
+                    position,
+                    separator,
+                    separator_span,
+                );
+
+                if !fields.is_empty() || environment.local(&receiver_parts[0]).is_some() {
+                    fields
+                } else {
+                    complete_lua_fields(source, &receiver_parts, prefix.as_str(), position)
+                }
             }
-
-            let fields = complete_fields(
-                parsed,
-                source,
-                environment,
-                &receiver_parts,
-                prefix.as_str(),
-                position,
-                separator,
-                separator_span,
-            );
-
-            if !fields.is_empty() {
-                return fields;
-            }
-
-            if environment.local(&receiver_parts[0]).is_some() {
-                return fields;
-            }
-
-            complete_lua_fields(source, &receiver_parts, prefix.as_str(), position)
         }
         CompletionContext::StringArgument {
             callee_parts,
@@ -233,11 +281,14 @@ fn complete_parsed_source_with_context(
         CompletionContext::Identifier { prefix, position } => {
             complete_identifier_items(parsed, prefix.as_str(), position)
         }
-    }
+    };
+
+    rank_completions_for_prefix(completions, prefix.as_deref())
 }
 
 fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) -> Vec<Completion> {
-    match context {
+    let prefix = context.filter_prefix().map(str::to_owned);
+    let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
         CompletionContext::DocumentationSnippet { position } => {
             complete_lossy_documentation_snippet(source, position)
@@ -255,6 +306,18 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
         CompletionContext::Identifier { prefix, position } => {
             complete_lossy_identifier_items(source, prefix.as_str(), position)
         }
+    };
+
+    rank_completions_for_prefix(completions, prefix.as_deref())
+}
+
+fn rank_completions_for_prefix(
+    completions: Vec<Completion>,
+    prefix: Option<&str>,
+) -> Vec<Completion> {
+    match prefix {
+        Some(prefix) => filter_and_rank_completions(completions, prefix),
+        None => completions,
     }
 }
 
@@ -272,7 +335,7 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         ("version", "version annotation"),
     ]
     .into_iter()
-    .filter(|(tag, _)| tag.starts_with(prefix))
+    .filter(|(tag, _)| completion_text_matches(tag, prefix))
     .map(|(tag, detail)| Completion {
         label: tag.to_owned(),
         kind: CompletionKind::Keyword,
@@ -308,7 +371,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
         .chain(asset::builtin_type_names().iter().copied())
         .chain(lua::love_type_names().iter().copied())
         .chain(vector::builtin_type_names().iter().copied())
-        .filter(|primitive| primitive.starts_with(prefix))
+        .filter(|primitive| completion_text_matches(primitive, prefix))
         .map(|primitive| Completion {
             label: primitive.to_owned(),
             kind: CompletionKind::TypeAlias,
@@ -327,7 +390,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
 fn complete_type_aliases(environment: &TypeEnvironment, prefix: &str) -> Vec<Completion> {
     environment
         .aliases()
-        .filter(|(name, _)| name.starts_with(prefix))
+        .filter(|(name, _)| completion_text_matches(name, prefix))
         .map(|(name, _)| Completion {
             label: name.to_owned(),
             kind: CompletionKind::TypeAlias,
@@ -661,7 +724,7 @@ fn complete_identifier_items(
     insert_lossy_identifier_items(&mut completions, &parsed.source, prefix, position);
 
     for local in &parsed.local_annotations {
-        if local.name.starts_with(prefix) {
+        if completion_text_matches(&local.name, prefix) {
             completions.insert(
                 local.name.clone(),
                 Completion {
@@ -685,7 +748,7 @@ fn complete_identifier_items(
             continue;
         };
 
-        if name.starts_with(prefix) {
+        if completion_text_matches(name, prefix) {
             completions.insert(
                 name.clone(),
                 Completion {
@@ -733,7 +796,7 @@ fn insert_lossy_identifier_items(
     }
 
     for symbol in lua_symbols_before_position(source, position) {
-        if symbol.name.starts_with(prefix) {
+        if completion_text_matches(&symbol.name, prefix) {
             completions.insert(symbol.name.clone(), symbol.into_completion());
         }
     }
@@ -763,7 +826,7 @@ fn complete_fields(
 
     for (name, detail) in fields
         .into_iter()
-        .filter(|(name, _)| name.starts_with(prefix))
+        .filter(|(name, _)| completion_text_matches(name, prefix))
     {
         completions.insert(
             name.clone(),
@@ -919,7 +982,7 @@ fn complete_lua_enum_value_candidates(type_label: &str, prefix: &str) -> Vec<Com
 fn literal_value_item(type_name: &str, prefix: &str) -> Option<Completion> {
     let value = quoted_string_literal_value(type_name)?;
 
-    if !value.starts_with(prefix) {
+    if !completion_text_matches(&value, prefix) {
         return None;
     }
 
@@ -1048,7 +1111,7 @@ fn complete_required_module_fields(
         return exports
             .fields
             .into_iter()
-            .filter(|(name, _)| name.starts_with(prefix))
+            .filter(|(name, _)| completion_text_matches(name, prefix))
             .map(|(name, field)| Completion {
                 kind: completion_kind_for_type(&field.ty),
                 detail: Some(format!("field: {}", field.ty)),
@@ -1074,7 +1137,7 @@ fn complete_required_module_fields(
 
     fields
         .into_iter()
-        .filter(|(name, _)| name.starts_with(prefix))
+        .filter(|(name, _)| completion_text_matches(name, prefix))
         .map(|(name, ty)| Completion {
             kind: completion_kind_for_type(&ty),
             detail: Some(format!("field: {ty}")),

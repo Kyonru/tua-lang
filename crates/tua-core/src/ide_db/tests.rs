@@ -187,6 +187,16 @@ return { makeEnemy = makeEnemy }
         vec![("makeEnemy", Some("enemy")), ("makePlayer", Some("player"))]
     );
     assert!(imports.iter().all(|entry| entry.export.is_some()));
+
+    let case_insensitive = index.importable_symbols("PLAYER");
+
+    assert_eq!(case_insensitive.len(), 1);
+    assert_eq!(case_insensitive[0].name, "makePlayer");
+
+    let contains = index.importable_symbols("Enemy");
+
+    assert_eq!(contains.len(), 1);
+    assert_eq!(contains[0].name, "makeEnemy");
 }
 
 #[test]

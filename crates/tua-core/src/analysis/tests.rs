@@ -1892,6 +1892,88 @@ end
 }
 
 #[test]
+fn snapshot_completion_reuses_prefix_stable_cache_across_typing_snapshots() {
+    let valid = r#"type Player = {
+  health: number,
+  score: number,
+}
+
+local player: Player = { health = 10, score = 1 }
+"#;
+    let base = Fixture::parse(&format!(
+        "-- file: src/main.tua\n{valid}player.<|complete|>\n"
+    ));
+    let typed = Fixture::parse(&format!(
+        "-- file: src/main.tua\n{valid}player.EA<|complete|>\n"
+    ));
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, valid);
+    let _ = host.snapshot();
+    host.update_open_document(&path, base.source("src/main.tua"));
+
+    let first = host.snapshot();
+    let base_labels = completion_labels(&first.completion(&path, base.position("complete")));
+
+    assert!(base_labels.contains(&"health".to_owned()));
+    assert!(base_labels.contains(&"score".to_owned()));
+
+    let warmed_cache_len = first.completion_cache.borrow().len();
+
+    host.update_open_document(&path, typed.source("src/main.tua"));
+
+    let second = host.snapshot();
+    let typed_labels = completion_labels(&second.completion(&path, typed.position("complete")));
+    let typed_completions = second.completion(&path, typed.position("complete"));
+
+    assert_eq!(typed_labels, vec!["health".to_owned()]);
+    assert_eq!(typed_completions[0].filter_text.as_deref(), Some("EA"));
+    assert_eq!(
+        second.completion_cache.borrow().len(),
+        warmed_cache_len,
+        "typing a case-insensitive contains prefix should reuse the warmed player. completion cache"
+    );
+}
+
+#[test]
+fn snapshot_completion_reuses_prefix_cache_for_plain_identifiers() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Player = { hp: number }
+local score = 1
+
+local function damage(player: Player): Player
+  return player
+end
+
+local typed: Pl = nil
+local value = sco<|complete|>
+local call = dam
+---
+local function heal(player: Player): Player
+  return player
+end
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, fixture.source("src/main.tua"));
+
+    let labels = completion_labels(
+        &host
+            .snapshot()
+            .completion(&path, fixture.position("complete")),
+    );
+
+    assert!(
+        labels.contains(&"score".to_owned()),
+        "plain identifier completion should reuse stripped-prefix source: {labels:?}"
+    );
+}
+
+#[test]
 fn snapshot_definition_resolves_colon_self_field_to_type_shape_field() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

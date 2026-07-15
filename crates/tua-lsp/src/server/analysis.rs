@@ -669,7 +669,7 @@ impl AnalysisSnapshot {
                 continue;
             }
 
-            completions.push(auto_import_completion(AutoImportCandidate {
+            let mut completion = auto_import_completion(AutoImportCandidate {
                 current_path: path,
                 current_source: source,
                 module_path: &symbol.module_path,
@@ -679,14 +679,11 @@ impl AnalysisSnapshot {
                 already_imported: existing_alias.is_some(),
                 name: &export.public_name,
                 field: &export.field,
-            }));
+            });
+            completion.filter_text.get_or_insert_with(|| prefix.clone());
+            completions.push(completion);
         }
 
-        completions.sort_by(|left, right| {
-            left.label
-                .cmp(&right.label)
-                .then_with(|| left.source_module.cmp(&right.source_module))
-        });
         completions
     }
 

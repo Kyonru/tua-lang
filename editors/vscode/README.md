@@ -10,6 +10,10 @@ Minimal VS Code language support for tua source files.
   packaged extension icon.
 - Adds TextMate grammar coverage for Lua keywords, comments, strings, numbers,
   operators, type aliases, and type annotations.
+- Adds language configuration for comments, brackets, auto-closing pairs,
+  region folding, word boundaries, and Lua/Tua indentation.
+- Bundles instant snippets for Lua functions, typed Tua declarations, classes,
+  loops, conditionals, and common LOVE callbacks.
 - Starts `tua lsp` over stdio and surfaces the language server's diagnostics,
   hover, completion, signature help, document highlights, navigation, rename,
   inlay hint, semantic token, and symbol features.

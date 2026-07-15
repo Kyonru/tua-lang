@@ -62,10 +62,18 @@ fn initialize_returns_server_capabilities() {
         true
     );
     assert_eq!(output[0]["result"]["capabilities"]["hoverProvider"], true);
-    assert_eq!(
-        output[0]["result"]["capabilities"]["completionProvider"]["triggerCharacters"],
-        json!([":", ".", "\"", "'", "@", "-"])
-    );
+    let completion_triggers = output[0]["result"]["capabilities"]["completionProvider"]
+        ["triggerCharacters"]
+        .as_array()
+        .expect("completion trigger characters should be an array");
+    for trigger in [":", ".", "\"", "'", "@", "-", "_", "a", "Z", "0"] {
+        assert!(
+            completion_triggers
+                .iter()
+                .any(|character| character == trigger),
+            "completion trigger characters should include {trigger:?}"
+        );
+    }
     assert_eq!(
         output[0]["result"]["capabilities"]["completionProvider"]["resolveProvider"],
         true
@@ -2574,7 +2582,7 @@ end
         completion_request(4, uri, source, "---"),
     ]);
 
-    assert_completion_labels(&output, 2, ["param"]);
+    assert_completion_labels(&output, 2, ["param", "type"]);
     assert_completion_labels(&output, 3, ["Player"]);
     assert_completion_labels(&output, 4, ["document function"]);
 
@@ -2636,9 +2644,17 @@ player:setFilter("")
         completion_request(4, uri, source, "setFilter(\""),
     ]);
 
-    assert_completion_labels(&output, 2, ["sin"]);
-    assert_completion_labels(&output, 3, ["present", "print", "printf"]);
+    assert_completion_labels(&output, 2, ["sin", "asin"]);
+    assert_completion_labels(&output, 3, ["print", "printf", "present", "newSpriteBatch"]);
     assert_completion_labels(&output, 4, ["linear", "nearest"]);
+    assert_eq!(
+        completion_with_label(&output, 2, "asin")["filterText"],
+        "si"
+    );
+    assert_eq!(
+        completion_with_label(&output, 3, "newSpriteBatch")["filterText"],
+        "pr"
+    );
 }
 
 #[test]
@@ -2709,7 +2725,7 @@ love.graphics.setBlendMode("scr")
         completion_request(3, uri, source, "\"scr"),
     ]);
 
-    assert_completion_labels(&output, 2, ["open"]);
+    assert_completion_labels(&output, 2, ["open", "isOpen"]);
     assert_completion_labels(&output, 3, ["screen"]);
 }
 
@@ -2843,8 +2859,8 @@ end
     server.send(completion_request(5, uri, source, "---"));
 
     let alias = response_with_id(server.output(), 2)["result"][0].clone();
-    let local = response_with_id(server.output(), 3)["result"][0].clone();
-    let function = response_with_id(server.output(), 4)["result"][0].clone();
+    let local = completion_with_label(server.output(), 3, "score");
+    let function = completion_with_label(server.output(), 4, "damage");
     let snippet = response_with_id(server.output(), 5)["result"][0].clone();
 
     assert_eq!(alias["labelDetails"]["description"], "type alias");

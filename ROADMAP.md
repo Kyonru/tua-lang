@@ -1810,6 +1810,10 @@ Scope:
   through cached semantic facts where possible.
 - Cache repeated completion requests within a snapshot so completion resolve and
   repeated editor requests do not rebuild the same item list.
+- Reuse prefix-stable completion caches across document revisions while typing,
+  keyed by a source fingerprint with the active typed prefix stripped.
+- Rank completion and auto-import candidates with shared case-insensitive
+  prefix/contains matching.
 - Add profiling spans for hover, completion, completion resolve, signature help,
   inlay hints, receiver resolution, module-export completion, LOVE field
   completion, and semantic fact construction.
@@ -1819,6 +1823,8 @@ Scope:
 Acceptance:
 
 - Repeated completion and completion resolve share cached snapshot results.
+- Typing additional characters after a warmed completion trigger reuses the base
+  candidate list instead of rebuilding it from a cold position-specific cache.
 - Hover, inlay hints, completion, and signature help agree on inferred LOVE
   object types through one project-aware semantic environment.
 - Existing parse-recovery behavior for incomplete completion input remains

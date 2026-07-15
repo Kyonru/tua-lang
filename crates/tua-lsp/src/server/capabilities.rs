@@ -27,6 +27,7 @@ pub(super) fn initialize_result(
     client_pull_diagnostics: bool,
     client_completion_label_details: bool,
 ) -> Value {
+    let completion_trigger_characters = completion_trigger_characters();
     let mut result = json!({
         "capabilities": {
             "textDocumentSync": {
@@ -38,7 +39,7 @@ pub(super) fn initialize_result(
             },
             "hoverProvider": true,
             "completionProvider": {
-                "triggerCharacters": [":", ".", "\"", "'", "@", "-"],
+                "triggerCharacters": completion_trigger_characters,
                 "resolveProvider": true
             },
             "signatureHelpProvider": {
@@ -131,4 +132,17 @@ pub(super) fn initialize_result(
     }
 
     result
+}
+
+fn completion_trigger_characters() -> Vec<String> {
+    let mut characters = [":", ".", "\"", "'", "@", "-", "_"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+    characters.extend(('a'..='z').map(|character| character.to_string()));
+    characters.extend(('A'..='Z').map(|character| character.to_string()));
+    characters.extend(('0'..='9').map(|character| character.to_string()));
+
+    characters
 }

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::hir::{HirModule, HirSymbolId, HirSymbolKind};
 use crate::module_graph::ModuleGraph;
 use crate::module_index::ModuleExportField;
+use crate::text_match::text_match_rank;
 use crate::vfs::{module_name_for_path, normalize_path, ModulePathSeparator};
 use crate::{SourcePosition, SourceSpan, WorkspaceSymbol, WorkspaceSymbolKind};
 
@@ -185,18 +186,19 @@ impl SymbolIndex {
             .entries
             .iter()
             .filter(|entry| entry.kind == SymbolIndexKind::Export)
-            .filter(|entry| entry.name.starts_with(prefix))
             .filter(|entry| entry.export.is_some())
+            .filter_map(|entry| text_match_rank(&entry.name, prefix).map(|rank| (rank, entry)))
             .collect::<Vec<_>>();
 
-        symbols.sort_by(|left, right| {
-            left.name
-                .cmp(&right.name)
+        symbols.sort_by(|(left_rank, left), (right_rank, right)| {
+            left_rank
+                .cmp(right_rank)
+                .then_with(|| left.name.cmp(&right.name))
                 .then_with(|| left.module_name.cmp(&right.module_name))
                 .then_with(|| left.path.cmp(&right.path))
         });
 
-        symbols
+        symbols.into_iter().map(|(_, symbol)| symbol).collect()
     }
 
     pub fn names_for_kind(&self, kind: SymbolIndexKind) -> BTreeSet<String> {

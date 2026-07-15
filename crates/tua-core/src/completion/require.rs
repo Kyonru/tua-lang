@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{Completion, CompletionKind};
+use super::{completion_text_matches, Completion, CompletionKind};
 use crate::project_model::ProjectModel;
 use crate::vfs::{module_name_for_path, ModulePathSeparator};
 
@@ -17,7 +17,7 @@ pub(super) fn complete_require_paths(path: &Path, prefix: &str) -> Vec<Completio
 
     completions
         .into_values()
-        .filter(|completion| completion.label.starts_with(prefix))
+        .filter(|completion| completion_text_matches(&completion.label, prefix))
         .collect()
 }
 
@@ -40,7 +40,7 @@ pub(super) fn complete_import_paths(path: &Path, prefix: &str) -> Vec<Completion
 
     completions
         .into_values()
-        .filter(|completion| completion.label.starts_with(prefix))
+        .filter(|completion| completion_text_matches(&completion.label, prefix))
         .collect()
 }
 

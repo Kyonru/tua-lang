@@ -48,6 +48,7 @@ pub mod semantic_index;
 pub mod semantic_token;
 pub mod signature_help;
 mod source_text;
+mod text_match;
 pub mod type_database;
 pub mod types;
 mod vector;
