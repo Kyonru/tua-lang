@@ -22,7 +22,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node --check src/extension.js && node --check scripts/lsp-completion-profile.js && node --check scripts/lsp-completion-ranking-smoke.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
+    "check": "node --check src/extension.js && node --check src/signals/signal-graph.js && node --check scripts/lsp-completion-profile.js && node --check scripts/lsp-completion-ranking-smoke.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
   },
   "contributes": {
     "configurationDefaults": {
@@ -484,6 +484,12 @@
         "category": "Tua"
       },
       {
+        "command": "tua.showSignalGraph",
+        "title": "Show Signal Graph",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "tua.source.organizeImports",
         "title": "Organize Imports",
         "category": "Tua"
@@ -509,6 +515,15 @@
         "category": "Tua"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "tua.showSignalGraph",
+          "when": "editorLangId == tua",
+          "group": "navigation@50"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "tua",

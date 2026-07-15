@@ -37,6 +37,7 @@ use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
+use crate::signal::{graph_call_from_mention, SignalGraph, SignalGraphEvent};
 use crate::signature_help::signature_help_parsed_source_with_environment;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
@@ -3151,6 +3152,47 @@ impl AnalysisSnapshot {
 
     pub fn workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         self.symbol_index.workspace_symbols(query)
+    }
+
+    pub fn signal_graph(&self) -> SignalGraph {
+        let mut events = BTreeMap::<String, Vec<_>>::new();
+
+        for (path, file) in &self.files {
+            let Ok(parsed) = &file.parsed else {
+                continue;
+            };
+            let semantic_facts = self.semantic_facts_for_parsed(parsed);
+            let Some(environment) = semantic_facts
+                .as_ref()
+                .map(|facts| &facts.environment)
+                .or(file.environment.as_ref())
+            else {
+                continue;
+            };
+
+            for mention in crate::signal::collect_event_mentions(parsed, environment, None) {
+                let call = graph_call_from_mention(path.clone(), mention);
+
+                events.entry(call.event.clone()).or_default().push(call);
+            }
+        }
+
+        SignalGraph {
+            events: events
+                .into_iter()
+                .map(|(name, mut calls)| {
+                    calls.sort_by(|left, right| {
+                        left.path
+                            .cmp(&right.path)
+                            .then_with(|| left.span.start.line.cmp(&right.span.start.line))
+                            .then_with(|| left.span.start.column.cmp(&right.span.start.column))
+                            .then_with(|| left.method.cmp(&right.method))
+                    });
+
+                    SignalGraphEvent { name, calls }
+                })
+                .collect(),
+        }
     }
 
     pub fn importable_symbols(&self, prefix: &str) -> Vec<&SymbolIndexEntry> {

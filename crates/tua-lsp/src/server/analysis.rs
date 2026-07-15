@@ -11,8 +11,8 @@ use tua_core::{
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
     FormatOptions, InlayHint, ModuleLink, ModuleSpecifierKind, ProjectModel, ProjectModelOptions,
     ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
-    SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind, WorkspaceSymbol,
-    CONFIG_FILE,
+    SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind,
+    WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -1128,6 +1128,10 @@ impl AnalysisSnapshot {
                         .is_ignored(&symbol.path, &self.workspace_folders)
             })
             .collect()
+    }
+
+    pub(super) fn signal_graph(&self) -> SignalGraph {
+        self.core.signal_graph()
     }
 }
 

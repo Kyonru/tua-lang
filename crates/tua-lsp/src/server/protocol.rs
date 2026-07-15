@@ -8,8 +8,9 @@ use tua_core::{
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
     ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
-    SemanticTokenKind, SemanticTokenModifier, SignatureHelp, SignatureInformation, SourcePosition,
-    SourceSpan, TextEdit, WorkspaceSymbol, WorkspaceSymbolKind,
+    SemanticTokenKind, SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
+    WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -165,6 +166,37 @@ pub(super) fn lsp_hover_from_core(hover: Hover) -> Value {
     }
 
     result
+}
+
+pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
+    json!({
+        "events": graph.events.into_iter().map(|event| {
+            json!({
+                "name": event.name,
+                "calls": event.calls.into_iter().map(|call| {
+                    json!({
+                        "uri": uri_from_path(&call.path),
+                        "receiver": call.receiver,
+                        "method": call.method,
+                        "role": match call.role {
+                            SignalGraphCallRole::Declaration => "declaration",
+                            SignalGraphCallRole::Listener => "listener",
+                            SignalGraphCallRole::Emit => "emit",
+                            SignalGraphCallRole::Cleanup => "cleanup",
+                            SignalGraphCallRole::Query => "query",
+                        },
+                        "range": lsp_range(call.span),
+                        "payload": call.payload.map(|parameters| parameters.into_iter().map(|parameter| {
+                            json!({
+                                "name": parameter.name,
+                                "type": parameter.type_label
+                            })
+                        }).collect::<Vec<_>>())
+                    })
+                }).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>()
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

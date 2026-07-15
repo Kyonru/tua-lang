@@ -12,6 +12,7 @@ const COMMANDS = {
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
   previewSprites: "tua.previewSprites",
+  showSignalGraph: "tua.showSignalGraph",
   organizeImports: "tua.source.organizeImports",
   sortImports: "tua.source.sortImports",
   removeUnusedImports: "tua.source.removeUnusedImports",

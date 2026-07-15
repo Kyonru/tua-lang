@@ -208,6 +208,35 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "sprite preview hover should trust only the preview command",
     );
 
+    await state.commands.get("tua.showSignalGraph")();
+
+    assert.strictEqual(state.webviewPanels.length, 2, "signal graph should open one webview panel");
+    const signalPanel = state.webviewPanels[1];
+    assert(
+      signalPanel.html.includes("Signal Graph") &&
+        signalPanel.html.includes("player.hit") &&
+        signalPanel.html.includes("Definitions") &&
+        signalPanel.html.includes("openLocation"),
+      "signal graph should render event, file, role, and navigation data",
+    );
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/signalGraph"),
+      "signal graph should request compiler-backed graph data",
+    );
+
+    await signalPanel.messageListener({
+      command: "openLocation",
+      uri: `file://${path.join(workspace, "src", "events.tua")}`,
+      range: {
+        start: { line: 1, character: 13 },
+        end: { line: 1, character: 25 },
+      },
+    });
+    assert(
+      state.executedCommands.some((entry) => entry.command === "vscode.open"),
+      "signal graph call locations should open in the editor",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -773,6 +802,18 @@ function createMockState(workspace, options = {}) {
         this.supportThemeIcons = supportThemeIcons;
       }
     },
+    Position: class Position {
+      constructor(line, character) {
+        this.line = line;
+        this.character = character;
+      }
+    },
+    Range: class Range {
+      constructor(start, end) {
+        this.start = start;
+        this.end = end;
+      }
+    },
     Uri: {
       file(filename) {
         return {
@@ -785,7 +826,14 @@ function createMockState(workspace, options = {}) {
         };
       },
       parse(value) {
-        return { toString: () => value };
+        const fsPath = value.startsWith("file://") ? decodeURIComponent(value.slice(7)) : undefined;
+
+        return {
+          fsPath,
+          path: fsPath,
+          scheme: value.split(":", 1)[0],
+          toString: () => value,
+        };
       },
     },
     ViewColumn: {
@@ -929,6 +977,9 @@ function createMockState(workspace, options = {}) {
           },
         };
       },
+      asRelativePath(uri) {
+        return uri.fsPath ? path.relative(workspace, uri.fsPath) : uri.toString();
+      },
       onDidChangeConfiguration(listener) {
         configurationListeners.push(listener);
         return { dispose() {} };
@@ -979,6 +1030,43 @@ function createMockState(workspace, options = {}) {
 
       if (method === "tua/profileArtifact") {
         return Promise.reject(new Error("unsupported profile artifact"));
+      }
+
+      if (method === "tua/signalGraph") {
+        return Promise.resolve({
+          events: [
+            {
+              name: "player.hit",
+              calls: [
+                {
+                  uri: `file://${path.join(workspace, "src", "events.tua")}`,
+                  receiver: "events",
+                  method: "declare",
+                  role: "declaration",
+                  range: {
+                    start: { line: 1, character: 13 },
+                    end: { line: 1, character: 25 },
+                  },
+                  payload: [
+                    { name: "player", type: "Player" },
+                    { name: "damage", type: "number" },
+                  ],
+                },
+                {
+                  uri: `file://${path.join(workspace, "src", "combat.tua")}`,
+                  receiver: "events",
+                  method: "emit",
+                  role: "emit",
+                  range: {
+                    start: { line: 8, character: 12 },
+                    end: { line: 8, character: 24 },
+                  },
+                  payload: null,
+                },
+              ],
+            },
+          ],
+        });
       }
 
       return Promise.resolve("");
@@ -1054,6 +1142,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.previewSprites",
+    "tua.showSignalGraph",
     "tua.source.organizeImports",
     "tua.source.sortImports",
     "tua.source.removeUnusedImports",

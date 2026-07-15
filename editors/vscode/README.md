@@ -22,8 +22,9 @@ Minimal VS Code language support for tua source files.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,
-  probing server profile artifacts, previewing `spriteSheet` animations, running
-  source actions, reporting an issue, and opening Tua settings.
+  probing server profile artifacts, previewing `spriteSheet` animations,
+  visualizing SignalBus events across files, running source actions, reporting
+  an issue, and opening Tua settings.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
 - Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
@@ -81,6 +82,7 @@ the setting.
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
 - `Tua: Preview Sprite Animations`
+- `Tua: Show Signal Graph`
 - `Tua: Organize Imports`
 - `Tua: Sort Imports`
 - `Tua: Remove Unused Imports`
@@ -133,5 +135,9 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   document and draw local image frames in a sticky webview preview without
   executing project code. Hovering a parsed sprite sheet binding also offers a
   trusted command link to open the same preview.
+- `Tua: Show Signal Graph` requests compiler-validated SignalBus calls from the
+  current project snapshot. The webview connects events to files, distinguishes
+  declarations, listeners, emits, cleanup, and query calls, and opens exact
+  source locations without parsing Tua source in the extension.
 - The optional external API bridge is design-only. The extension does not start
   a bridge session today.

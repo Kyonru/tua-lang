@@ -3,6 +3,7 @@ use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Suffix}
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
+use std::path::PathBuf;
 
 use crate::ast_utils::{field_chain_before_first_call, token_text};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
@@ -308,9 +309,82 @@ fn typed_parameter(name: &str, ty: Type) -> TypedParameter {
 pub(crate) struct SignalEventMention {
     pub name: String,
     pub receiver_parts: Vec<String>,
+    pub method: String,
     pub position: SourcePosition,
+    pub span: SourceSpan,
     pub source_order: usize,
     pub payload: Option<Vec<TypedParameter>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum SignalGraphCallRole {
+    Declaration,
+    Listener,
+    Emit,
+    Cleanup,
+    Query,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignalGraphParameter {
+    pub name: String,
+    pub type_label: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignalGraphCall {
+    pub path: PathBuf,
+    pub event: String,
+    pub receiver: String,
+    pub method: String,
+    pub role: SignalGraphCallRole,
+    pub span: SourceSpan,
+    pub payload: Option<Vec<SignalGraphParameter>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignalGraphEvent {
+    pub name: String,
+    pub calls: Vec<SignalGraphCall>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SignalGraph {
+    pub events: Vec<SignalGraphEvent>,
+}
+
+pub(crate) fn graph_call_from_mention(
+    path: PathBuf,
+    mention: SignalEventMention,
+) -> SignalGraphCall {
+    SignalGraphCall {
+        path,
+        event: mention.name,
+        receiver: mention.receiver_parts.join("."),
+        method: mention.method.clone(),
+        role: graph_call_role(&mention.method),
+        span: mention.span,
+        payload: mention.payload.map(|parameters| {
+            parameters
+                .into_iter()
+                .map(|parameter| SignalGraphParameter {
+                    name: parameter.name,
+                    type_label: parameter.ty.to_string(),
+                })
+                .collect()
+        }),
+    }
+}
+
+fn graph_call_role(method: &str) -> SignalGraphCallRole {
+    match method {
+        "declare" => SignalGraphCallRole::Declaration,
+        "on" | "once" | "register" => SignalGraphCallRole::Listener,
+        "emit" => SignalGraphCallRole::Emit,
+        "off" | "remove" | "clear" => SignalGraphCallRole::Cleanup,
+        "has" | "listeners" => SignalGraphCallRole::Query,
+        _ => SignalGraphCallRole::Query,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -470,7 +544,9 @@ impl Visitor for SignalEventVisitor<'_> {
         self.mentions.push(SignalEventMention {
             name,
             receiver_parts: receiver_parts.to_vec(),
+            method: method.clone(),
             position: span.start,
+            span,
             source_order: self.mentions.len(),
             payload,
         });

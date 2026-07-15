@@ -101,6 +101,57 @@ fn snapshot_prefers_open_document_over_file_contents() {
 }
 
 #[test]
+fn signal_graph_collects_typed_calls_across_files() {
+    let mut host = AnalysisHost::new();
+    let listeners = PathBuf::from("src/listeners.tua");
+    let emitters = PathBuf::from("src/emitters.tua");
+
+    host.set_file(
+        &listeners,
+        r#"local events = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:on("player.hit", function(player: string, damage: number) end)
+"#,
+    );
+    host.set_file(
+        &emitters,
+        r#"local events = signal()
+events:emit("player.hit", "Ada", 12)
+events:has("player.hit")
+"#,
+    );
+
+    let graph = host.snapshot().signal_graph();
+
+    assert_eq!(graph.events.len(), 1);
+    assert_eq!(graph.events[0].name, "player.hit");
+    assert_eq!(graph.events[0].calls.len(), 4);
+    assert_eq!(
+        graph.events[0]
+            .calls
+            .iter()
+            .map(|call| call.role)
+            .collect::<Vec<_>>(),
+        vec![
+            crate::SignalGraphCallRole::Emit,
+            crate::SignalGraphCallRole::Query,
+            crate::SignalGraphCallRole::Declaration,
+            crate::SignalGraphCallRole::Listener,
+        ]
+    );
+    assert_eq!(
+        graph.events[0].calls[2]
+            .payload
+            .as_ref()
+            .expect("declaration should expose a payload")
+            .iter()
+            .map(|parameter| (parameter.name.as_str(), parameter.type_label.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("player", "string"), ("damage", "number")]
+    );
+}
+
+#[test]
 fn plugin_registry_is_inert_until_registered_and_flows_into_diagnostics() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();

@@ -16,10 +16,10 @@ use super::protocol::{
     lsp_inlay_hint_from_core, lsp_location_from_core, lsp_prepare_rename_from_core,
     lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
     lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
-    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_text_edit, lsp_workspace_edit, lsp_workspace_symbol_from_core,
-    publish_diagnostics, response, source_position_from_lsp, workspace_diagnostic_refresh_request,
-    SourceRange,
+    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signal_graph_from_core,
+    lsp_signature_help_from_core, lsp_source_range, lsp_text_edit, lsp_workspace_edit,
+    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
@@ -197,6 +197,7 @@ impl LspServer {
             ),
             "tua/cacheStats" => response(id, self.cache_stats_response()),
             "tua/resetCompletionStats" => response(id, self.reset_completion_stats_response()),
+            "tua/signalGraph" => response(id, self.signal_graph_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
             }
@@ -1329,6 +1330,14 @@ impl LspServer {
         json!({
             "removedFiles": removed_files
         })
+    }
+
+    fn signal_graph_response(&self) -> Value {
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+
+        lsp_signal_graph_from_core(snapshot.signal_graph())
     }
 
     fn prepare_call_hierarchy_response(&self, message: &Value) -> Value {

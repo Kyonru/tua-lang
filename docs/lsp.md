@@ -15,9 +15,9 @@ The VS Code extension starts this server and surfaces editor features for
 
 The extension also contributes command-palette actions to restart the language
 server, focus the Tua output channel, select a server binary, copy debug
-information, copy analysis cache statistics, report an issue, and open Tua
-settings. A language status item shows the server state, selected path, version,
-and workspace directory when available.
+information, copy analysis cache statistics, visualize SignalBus events, report
+an issue, and open Tua settings. A language status item shows the server state,
+selected path, version, and workspace directory when available.
 
 ## Current Capabilities
 
@@ -94,6 +94,10 @@ and workspace directory when available.
   module specifiers when the move is unambiguous in the project model.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
+- The custom `tua/signalGraph` request returns typed SignalBus event calls from
+  the current analysis snapshot with call roles, bus expressions, payload
+  schemas, URIs, and source ranges. The VS Code `Tua: Show Signal Graph` command
+  uses this data for a filterable event-to-file graph and source navigation.
 
 ## Custom VS Code Feature Evaluation
 
@@ -103,6 +107,10 @@ generated builtin and LOVE stubs. Experimental visual tooling, such as the
 sprite animation preview command, is explicit and gated by `tua.preview.enabled`;
 sprite sheet hovers may offer a trusted command link, but the preview itself is
 still a command/webview rather than an LSP hover payload.
+
+Signal graph visualization is an explicit project-inspection command backed by
+`tua/signalGraph`. The extension renders semantic results and does not maintain
+a parallel SignalBus parser.
 
 TypeScript Go-style proposed editor features were evaluated and are not exposed
 today:

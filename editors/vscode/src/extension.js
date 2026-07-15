@@ -8,6 +8,7 @@ const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("./constants");
 const { registerSuggestTrigger } = require("./editor/suggestions");
 const { registerLoveDevex } = require("./love");
+const { registerSignalDevex } = require("./signals");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isActiveDocument, isTuaDocument } = require("./shared/documents");
 
@@ -38,6 +39,7 @@ async function activate(context) {
     }),
   );
   context.subscriptions.push(registerLoveDevex({ configurationTarget, isTuaDocument }));
+  context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);

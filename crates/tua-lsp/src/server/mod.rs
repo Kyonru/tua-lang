@@ -287,6 +287,7 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/rangeFormatting"
         | "textDocument/onTypeFormatting" => Some(2),
         "textDocument/hover" | "textDocument/documentHighlight" => Some(3),
+        "tua/signalGraph" => Some(3),
         _ => None,
     }
 }

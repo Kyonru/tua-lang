@@ -192,6 +192,9 @@ pub use semantic_token::{
     semantic_tokens_parsed_source, semantic_tokens_tua_source, SemanticToken, SemanticTokenKind,
     SemanticTokenModifier,
 };
+pub use signal::{
+    SignalGraph, SignalGraphCall, SignalGraphCallRole, SignalGraphEvent, SignalGraphParameter,
+};
 pub use signature_help::{
     signature_help_parsed_source, signature_help_tua_source, ParameterInformation, SignatureHelp,
     SignatureInformation,

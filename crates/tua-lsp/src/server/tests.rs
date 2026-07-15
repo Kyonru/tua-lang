@@ -3256,6 +3256,28 @@ events:emit("pla")
 }
 
 #[test]
+fn signal_graph_returns_typed_calls_and_source_locations() {
+    let uri = "file:///tmp/signal-graph.tua";
+    let source = r#"local events = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:on("player.hit", function(player: string, damage: number) end)
+events:emit("player.hit", "Ada", 12)
+"#;
+    let output = run_messages(vec![did_open(uri, source), signal_graph_request(2)]);
+    let response = response_with_id(&output, 2);
+    let event = &response["result"]["events"][0];
+
+    assert_eq!(event["name"], "player.hit");
+    assert_eq!(event["calls"].as_array().map(Vec::len), Some(3));
+    assert_eq!(event["calls"][0]["role"], "declaration");
+    assert_eq!(event["calls"][0]["payload"][0]["name"], "player");
+    assert_eq!(event["calls"][0]["payload"][0]["type"], "string");
+    assert_eq!(event["calls"][2]["role"], "emit");
+    assert_eq!(event["calls"][2]["uri"], uri);
+    assert_eq!(event["calls"][2]["range"]["start"]["line"], 3);
+}
+
+#[test]
 fn completion_returns_generated_love_api_enum_and_type_items() {
     let uri = "file:///tmp/generated-love-api-completion.tua";
     let source = r#"local file = love.filesystem.newFile("save.txt")
@@ -7389,6 +7411,15 @@ fn reset_completion_stats_request(id: u64) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "tua/resetCompletionStats",
+        "params": null
+    })
+}
+
+fn signal_graph_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/signalGraph",
         "params": null
     })
 }

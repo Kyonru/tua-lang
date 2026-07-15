@@ -245,6 +245,9 @@ Improvements:
 
 ### P2: Complete SignalBus intelligence
 
+The VS Code extension now provides a compiler-backed event-to-file graph with
+typed payload display and source navigation through `tua/signalGraph`.
+
 Improvements:
 
 - Maintain a semantic event index by bus identity and event name.
