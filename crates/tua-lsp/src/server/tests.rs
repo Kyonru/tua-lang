@@ -1973,6 +1973,23 @@ fn input_backlog_prioritizes_typing_and_completion_messages() {
 }
 
 #[test]
+fn shutdown_does_not_overtake_an_earlier_interactive_request() {
+    let uri = "file:///tmp/shutdown-order.tua";
+    let source = "local hp: number = 10\n";
+    let mut messages = std::collections::VecDeque::from([
+        hover_request(3, uri, source, "hp"),
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "shutdown" }),
+        json!({ "jsonrpc": "2.0", "method": "exit" }),
+    ]);
+
+    let first = pop_next_pending_message(&mut messages).expect("first message");
+    let second = pop_next_pending_message(&mut messages).expect("second message");
+
+    assert_eq!(first["method"], "textDocument/hover");
+    assert_eq!(second["method"], "shutdown");
+}
+
+#[test]
 fn active_typing_backlog_uses_fast_background_responses() {
     let mut server = TestServer::new();
     let uri = "file:///tmp/background-fast-response.tua";

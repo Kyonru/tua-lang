@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test workspace
+        run: cargo test --workspace
+      - name: Test bundled LOVE projects
+        run: cargo test -p tua-cli --test love_example -- --nocapture
+
+  love-api-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install Lua
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
+      - name: Check out pinned LOVE API
+        run: |
+          git clone --filter=blob:none https://github.com/love2d-community/love-api.git /tmp/love-api
+          git -C /tmp/love-api checkout "$(cat scripts/love-api-revision.txt)"
+      - name: Check generated LOVE catalog
+        run: make love-api-drift-check LOVE_API_ROOT=/tmp/love-api

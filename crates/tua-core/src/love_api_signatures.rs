@@ -1,6 +1,7 @@
 // Generated from love2d-community/love-api 11.5 function variants.
+// Source revision: 4b2d89510eabd320791c4a8157e6e6656c34ec09
 // Source data: https://github.com/love2d-community/love-api
-// Regenerate with: lua scripts/generate-love-api-signatures.lua /path/to/love-api
+// Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 
 use crate::lua::{LuaSignature, LuaSignatureParameter};
 

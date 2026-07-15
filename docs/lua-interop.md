@@ -84,6 +84,19 @@ LuaHelper/LuaLS-style annotation subset, so plain Lua files can provide typed
 functions, aliases, fields, documentation, and simple module exports to `.tua`
 callers.
 
+LOVE call diagnostics use the generated overload variants, and generated
+object supertypes participate in checking. For example, `Image` is accepted
+where LOVE expects `Drawable`, and overloads such as
+`love.graphics.newFont(path, size)` are checked directly from the catalog.
+
+The catalog is pinned by `scripts/love-api-revision.txt`. Maintainers can
+regenerate or verify all catalog surfaces with:
+
+```bash
+make generate-love-api LOVE_API_ROOT=/path/to/love-api
+make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
+```
+
 ## LuaDoc Annotations
 
 Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.lua` and

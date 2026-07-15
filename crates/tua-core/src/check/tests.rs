@@ -738,6 +738,57 @@ channel:push("ready")
 }
 
 #[test]
+fn accepts_love_object_subtypes_for_supertype_parameters() {
+    check_tua_source(
+        "src/draw.tua",
+        r#"
+local function drawImage(image: Image)
+  love.graphics.draw(image, 0, 0)
+end
+"#,
+    )
+    .expect("Image should be assignable to the generated Drawable supertype");
+}
+
+#[test]
+fn accepts_generated_love_api_overload_arguments() {
+    let temp = TempProject::new("love-api-overload");
+    let source = r#"
+local font: Font = love.graphics.newFont("assets/ui.ttf", 32)
+"#;
+
+    temp.write("src/font.tua", source);
+    temp.write("assets/ui.ttf", "");
+
+    check_tua_source(temp.path.join("src/font.tua"), source)
+        .expect("generated LOVE function overloads should participate in argument checking");
+}
+
+#[test]
+fn keeps_dynamic_love_variant_arguments_permissive() {
+    check_tua_source(
+        "src/events.tua",
+        r#"
+love.event.push("keypressed", 42, true, { ready = true })
+"#,
+    )
+    .expect("LOVE Variant parameters should accept ordinary Lua values");
+}
+
+#[test]
+fn rejects_arguments_that_match_no_generated_love_api_overload() {
+    let diagnostics = check_tua_source(
+        "src/font.tua",
+        r#"
+local font = love.graphics.newFont(true, false)
+"#,
+    )
+    .expect_err("arguments outside every generated LOVE overload should be rejected");
+
+    assert_single_mismatch(&diagnostics, "expected string, found boolean");
+}
+
+#[test]
 fn checks_lua_doc_literal_union_arguments() {
     check_tua_source(
         "src/mode.tua",

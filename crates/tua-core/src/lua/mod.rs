@@ -107,6 +107,10 @@ pub(crate) fn love_type_names() -> &'static [&'static str] {
     love_api_extra::type_names()
 }
 
+pub(crate) fn love_type_supertypes() -> &'static [(&'static str, &'static str)] {
+    love_api_extra::type_supertypes()
+}
+
 pub(crate) fn documentation_with_love_wiki_link(item: LuaItem) -> String {
     let mut documentation = item.documentation.to_owned();
 

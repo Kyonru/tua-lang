@@ -8,7 +8,7 @@ mod support;
 use support::{copy_dir_all, example_root, love_executable, tua, wait_for_child_output, TempDir};
 
 #[test]
-fn love_minimal_example_builds_and_runs_when_love_is_available() {
+fn love_minimal_example_builds_and_optionally_runs_with_love() {
     let temp = TempDir::new("love-minimal");
     let example = example_root("love-minimal");
 
@@ -41,7 +41,7 @@ fn love_minimal_example_builds_and_runs_when_love_is_available() {
     assert!(!main_output.contains(": DemoState"));
 
     let Some(love) = love_executable() else {
-        eprintln!("skipping LOVE runtime validation; no LOVE executable was found");
+        eprintln!("skipping LOVE runtime validation; set TUA_TEST_LOVE_RUNTIME=1 to enable it");
         return;
     };
 
@@ -63,7 +63,7 @@ fn love_minimal_example_builds_and_runs_when_love_is_available() {
 }
 
 #[test]
-fn love_full_example_builds_and_runs_when_love_is_available() {
+fn love_full_example_builds_and_optionally_runs_with_love() {
     let temp = TempDir::new("love-full");
     let example = example_root("love-full");
 
@@ -104,7 +104,9 @@ fn love_full_example_builds_and_runs_when_love_is_available() {
     assert!(!player_output.contains("type PlayerModule"));
 
     let Some(love) = love_executable() else {
-        eprintln!("skipping LOVE full runtime validation; no LOVE executable was found");
+        eprintln!(
+            "skipping LOVE full runtime validation; set TUA_TEST_LOVE_RUNTIME=1 to enable it"
+        );
         return;
     };
 

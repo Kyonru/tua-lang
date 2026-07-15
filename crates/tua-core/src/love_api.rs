@@ -1,6 +1,7 @@
 // Generated from love2d-community/love-api 11.5.
+// Source revision: 4b2d89510eabd320791c4a8157e6e6656c34ec09
 // Source data: https://github.com/love2d-community/love-api
-// Do not edit entries by hand; regenerate from love_api.lua when bumping LOVE API data.
+// Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 
 use crate::lua::{LuaItem, LuaItemKind};
 
@@ -686,28 +687,28 @@ Not all system supports audio effects. Use love.audio.isEffectsSupported to chec
         path: &["love", "data"],
         label: "compress",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.compress(container: ContainerType, format: CompressedDataFormat, rawstring: string, level?: number): CompressedData or string",
+        detail: r"function love.data.compress(container: ContainerType, format: CompressedDataFormat, rawstring: string, level?: number): CompressedData | string",
         documentation: r"Compresses a string or data using a specific compression algorithm.",
     },
     LoveApiItem {
         path: &["love", "data"],
         label: "decode",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.decode(container: ContainerType, format: EncodeFormat, sourceString: string): ByteData or string",
+        detail: r"function love.data.decode(container: ContainerType, format: EncodeFormat, sourceString: string): ByteData | string",
         documentation: r"Decode Data or a string from any of the EncodeFormats to Data or string.",
     },
     LoveApiItem {
         path: &["love", "data"],
         label: "decompress",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.decompress(container: ContainerType, compressedData: CompressedData): Data or string",
+        detail: r"function love.data.decompress(container: ContainerType, compressedData: CompressedData): Data | string",
         documentation: r"Decompresses a CompressedData or previously compressed string or Data object.",
     },
     LoveApiItem {
         path: &["love", "data"],
         label: "encode",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.encode(container: ContainerType, format: EncodeFormat, sourceString: string, linelength?: number): ByteData or string",
+        detail: r"function love.data.encode(container: ContainerType, format: EncodeFormat, sourceString: string, linelength?: number): ByteData | string",
         documentation: r"Encode Data or a string to a Data or string in one of the EncodeFormats.",
     },
     LoveApiItem {
@@ -746,7 +747,7 @@ Data:getPointer along with LuaJIT's FFI can be used to manipulate the contents o
         path: &["love", "data"],
         label: "pack",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.pack(container: ContainerType, format: string, v1: number or boolean or string, ...): Data or string",
+        detail: r"function love.data.pack(container: ContainerType, format: string, v1: number | boolean | string, ...: number | boolean | string): Data | string",
         documentation: r"Packs (serializes) simple Lua values.
 
 This function behaves the same as Lua 5.3's string.pack.",
@@ -755,7 +756,7 @@ This function behaves the same as Lua 5.3's string.pack.",
         path: &["love", "data"],
         label: "unpack",
         kind: LuaItemKind::Function,
-        detail: r"function love.data.unpack(format: string, datastring: string, pos?: number): number or boolean or string, number or boolean or string, number",
+        detail: r"function love.data.unpack(format: string, datastring: string, pos?: number): number | boolean | string, number | boolean | string, number",
         documentation: r"Unpacks (deserializes) a byte-string or Data into simple Lua values.
 
 This function behaves the same as Lua 5.3's string.unpack.",
@@ -791,7 +792,7 @@ and if you want to handle OS-generated events at all (think callbacks).",
         path: &["love", "event"],
         label: "push",
         kind: LuaItemKind::Function,
-        detail: r"function love.event.push(n: Event, a?: any, b?: any, c?: any, d?: any, e?: any, f?: any, ...)",
+        detail: r"function love.event.push(n: Event, a?: Variant, b?: Variant, c?: Variant, d?: Variant, e?: Variant, f?: Variant, ...: Variant)",
         documentation: r"Adds an event to the event queue.
 
 From 0.10.0 onwards, you may pass an arbitrary amount of arguments with this function, though the default callbacks don't ever use more than six.",
@@ -809,7 +810,7 @@ The quit event is a signal for the event handler to close LÖVE. It's possible t
         path: &["love", "event"],
         label: "wait",
         kind: LuaItemKind::Function,
-        detail: r"function love.event.wait(): Event, any, any, any, any, any, any, any",
+        detail: r"function love.event.wait(): Event, Variant, Variant, Variant, Variant, Variant, Variant, Variant",
         documentation: r"Like love.event.poll(), but blocks until there is an event in the queue.",
     },
     LoveApiItem {
@@ -1428,7 +1429,7 @@ The graphics coordinate system and DPI scale factor, rather than raw pixels. Use
         label: "getStats",
         kind: LuaItemKind::Function,
         detail: r"function love.graphics.getStats(): table",
-        documentation: r"Gets performance-related rendering statistics.",
+        documentation: r"Gets performance-related rendering statistics. ",
     },
     LoveApiItem {
         path: &["love", "graphics"],
@@ -1519,7 +1520,7 @@ Not all devices support gamma-correct rendering, in which case it will be automa
         path: &["love", "graphics"],
         label: "line",
         kind: LuaItemKind::Function,
-        detail: r"function love.graphics.line(x1: number, y1: number, x2: number, y2: number, ...)",
+        detail: r"function love.graphics.line(x1: number, y1: number, x2: number, y2: number, ...: number)",
         documentation: r"Draws lines between points.",
     },
     LoveApiItem {
@@ -1701,14 +1702,14 @@ This function is always used to reverse any previous calls to love.graphics.rota
         path: &["love", "graphics"],
         label: "points",
         kind: LuaItemKind::Function,
-        detail: r"function love.graphics.points(x: number, y: number, ...)",
+        detail: r"function love.graphics.points(x: number, y: number, ...: number)",
         documentation: r"Draws one or more points.",
     },
     LoveApiItem {
         path: &["love", "graphics"],
         label: "polygon",
         kind: LuaItemKind::Function,
-        detail: r"function love.graphics.polygon(mode: DrawMode, ...)",
+        detail: r"function love.graphics.polygon(mode: DrawMode, ...: number)",
         documentation: r"Draw a polygon.
 
 Following the mode argument, this function can accept multiple numeric arguments or a single table of numeric arguments. In either case the arguments are interpreted as alternating x and y coordinates of the polygon's vertices.",
@@ -2142,7 +2143,7 @@ Scancodes are useful for creating default controls that have the same physical l
         path: &["love", "keyboard"],
         label: "isScancodeDown",
         kind: LuaItemKind::Function,
-        detail: r"function love.keyboard.isScancodeDown(scancode: Scancode, ...): boolean",
+        detail: r"function love.keyboard.isScancodeDown(scancode: Scancode, ...: Scancode): boolean",
         documentation: r"Checks whether the specified Scancodes are pressed. Not to be confused with love.keypressed or love.keyreleased.
 
 Unlike regular KeyConstants, Scancodes are keyboard layout-independent. The scancode 'w' is used if the key in the same place as the 'w' key on an American keyboard is pressed, no matter what the key is labelled or what the user's operating system settings are.",
@@ -2360,10 +2361,10 @@ If it isn't supported, calling love.mouse.newCursor and love.mouse.getSystemCurs
         path: &["love", "mouse"],
         label: "isDown",
         kind: LuaItemKind::Function,
-        detail: r"function love.mouse.isDown(button: number, ...): boolean",
+        detail: r"function love.mouse.isDown(button: number, ...: number): boolean",
         documentation: r"Checks whether a certain mouse button is down.
 
-This function does not detect mouse wheel scrolling; you must use the love.wheelmoved (or love.mousepressed in version 0.9.2 and older) callback for that.",
+This function does not detect mouse wheel scrolling; you must use the love.wheelmoved (or love.mousepressed in version 0.9.2 and older) callback for that. ",
     },
     LoveApiItem {
         path: &["love", "mouse"],
@@ -2486,7 +2487,7 @@ The mass of the body gets calculated when a Fixture is attached or removed, but 
         path: &["love", "physics"],
         label: "newChainShape",
         kind: LuaItemKind::Function,
-        detail: r"function love.physics.newChainShape(loop: boolean, x1: number, y1: number, x2: number, y2: number, ...): ChainShape",
+        detail: r"function love.physics.newChainShape(loop: boolean, x1: number, y1: number, x2: number, y2: number, ...: number): ChainShape",
         documentation: r"Creates a new ChainShape.",
     },
     LoveApiItem {
@@ -2557,13 +2558,13 @@ Position and rotation offsets can be specified once the MotorJoint has been crea
 
 This joint actually connects the body to a fixed point in the world. To make it follow the mouse, the fixed point must be updated every timestep (example below).
 
-The advantage of using a MouseJoint instead of just changing a body position directly is that collisions and reactions to other joints are handled by the physics engine.",
+The advantage of using a MouseJoint instead of just changing a body position directly is that collisions and reactions to other joints are handled by the physics engine. ",
     },
     LoveApiItem {
         path: &["love", "physics"],
         label: "newPolygonShape",
         kind: LuaItemKind::Function,
-        detail: r"function love.physics.newPolygonShape(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, ...): PolygonShape",
+        detail: r"function love.physics.newPolygonShape(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, ...: number): PolygonShape",
         documentation: r"Creates a new PolygonShape.
 
 This shape can have 8 vertices at most, and must form a convex shape.",

@@ -7,6 +7,8 @@ CODE ?= code
 LOVE ?= love
 VSCE ?= $(NPX) --yes @vscode/vsce
 RSVG_CONVERT ?= rsvg-convert
+LOVE_API_ROOT ?=
+LOVE_API_REVISION := $(shell sed -n '1p' scripts/love-api-revision.txt)
 
 TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
@@ -33,6 +35,29 @@ fmt: ## Format the Rust workspace.
 .PHONY: test
 test: ## Run the full Rust test suite.
 	$(CARGO) test --workspace
+
+.PHONY: generate-love-api
+generate-love-api: ## Regenerate all LOVE catalogs from the pinned love-api checkout.
+	@test -n "$(LOVE_API_ROOT)" || { echo "error: set LOVE_API_ROOT=/path/to/love-api"; exit 1; }
+	@test "$$(git -C "$(LOVE_API_ROOT)" rev-parse HEAD)" = "$(LOVE_API_REVISION)" || { echo "error: LOVE API checkout must be at $(LOVE_API_REVISION)"; exit 1; }
+	lua scripts/generate-love-api.lua "$(LOVE_API_ROOT)"
+	lua scripts/generate-love-api-signatures.lua "$(LOVE_API_ROOT)"
+	lua scripts/generate-love-api-extra.lua "$(LOVE_API_ROOT)"
+	rustfmt crates/tua-core/src/love_api.rs crates/tua-core/src/love_api_signatures.rs crates/tua-core/src/love_api_extra.rs
+
+.PHONY: love-api-drift-check
+love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source checkout.
+	@test -n "$(LOVE_API_ROOT)" || { echo "error: set LOVE_API_ROOT=/path/to/love-api"; exit 1; }
+	@test "$$(git -C "$(LOVE_API_ROOT)" rev-parse HEAD)" = "$(LOVE_API_REVISION)" || { echo "error: LOVE API checkout must be at $(LOVE_API_REVISION)"; exit 1; }
+	@tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	lua scripts/generate-love-api.lua "$(LOVE_API_ROOT)" "$$tmp/love_api.rs"; \
+	lua scripts/generate-love-api-signatures.lua "$(LOVE_API_ROOT)" "$$tmp/love_api_signatures.rs"; \
+	lua scripts/generate-love-api-extra.lua "$(LOVE_API_ROOT)" "$$tmp/love_api_extra.rs"; \
+	rustfmt "$$tmp/love_api.rs" "$$tmp/love_api_signatures.rs" "$$tmp/love_api_extra.rs"; \
+	diff -u crates/tua-core/src/love_api.rs "$$tmp/love_api.rs"; \
+	diff -u crates/tua-core/src/love_api_signatures.rs "$$tmp/love_api_signatures.rs"; \
+	diff -u crates/tua-core/src/love_api_extra.rs "$$tmp/love_api_extra.rs"
 
 .PHONY: clippy
 clippy: ## Run clippy with warnings denied.
@@ -146,8 +171,12 @@ lua-syntax: ## Validate emitted example Lua syntax when LuaJIT/Lua is available.
 	$(CARGO) test -p tua-cli --test lua_syntax -- --nocapture
 
 .PHONY: love-test
-love-test: ## Run LOVE example tests; skips gracefully if LOVE is unavailable.
+love-test: ## Build-check LOVE examples; runtime validation is opt-in.
 	$(CARGO) test -p tua-cli --test love_example -- --nocapture
+
+.PHONY: love-runtime-test
+love-runtime-test: ## Build and run LOVE example smoke tests with an installed LOVE executable.
+	TUA_TEST_LOVE_RUNTIME=1 $(CARGO) test -p tua-cli --test love_example -- --nocapture
 
 .PHONY: run-love-minimal
 run-love-minimal: build-love-minimal ## Build and run the minimal LOVE example.

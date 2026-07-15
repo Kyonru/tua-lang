@@ -1,6 +1,7 @@
 // Generated from love2d-community/love-api 11.5 modules/enums and modules/types.
-// Source data: https://github.com/love2d-community/love-api/tree/master/modules
-// Regenerate with: lua scripts/generate-love-api-extra.lua /path/to/love-api
+// Source revision: 4b2d89510eabd320791c4a8157e6e6656c34ec09
+// Source data: https://github.com/love2d-community/love-api
+// Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 
 use crate::lua::{LuaItem, LuaItemKind};
 
@@ -12,6 +13,10 @@ struct LoveApiTypedItem {
 
 pub(crate) fn type_names() -> &'static [&'static str] {
     TYPE_NAMES
+}
+
+pub(crate) fn type_supertypes() -> &'static [(&'static str, &'static str)] {
+    TYPE_SUPERTYPES
 }
 
 pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
@@ -96,6 +101,97 @@ const TYPE_NAMES: &[&str] = &[
     r"WeldJoint",
     r"WheelJoint",
     r"World",
+];
+
+const TYPE_SUPERTYPES: &[(&str, &str)] = &[
+    (r"BezierCurve", r"Object"),
+    (r"Body", r"Object"),
+    (r"ByteData", r"Object"),
+    (r"ByteData", r"Data"),
+    (r"Canvas", r"Texture"),
+    (r"Canvas", r"Drawable"),
+    (r"Canvas", r"Object"),
+    (r"ChainShape", r"Shape"),
+    (r"ChainShape", r"Object"),
+    (r"Channel", r"Object"),
+    (r"CircleShape", r"Shape"),
+    (r"CircleShape", r"Object"),
+    (r"CompressedData", r"Data"),
+    (r"CompressedData", r"Object"),
+    (r"CompressedImageData", r"Data"),
+    (r"CompressedImageData", r"Object"),
+    (r"Contact", r"Object"),
+    (r"Cursor", r"Object"),
+    (r"Data", r"Object"),
+    (r"Decoder", r"Object"),
+    (r"DistanceJoint", r"Joint"),
+    (r"DistanceJoint", r"Object"),
+    (r"Drawable", r"Object"),
+    (r"DroppedFile", r"File"),
+    (r"DroppedFile", r"Object"),
+    (r"EdgeShape", r"Shape"),
+    (r"EdgeShape", r"Object"),
+    (r"File", r"Object"),
+    (r"FileData", r"Data"),
+    (r"FileData", r"Object"),
+    (r"Fixture", r"Object"),
+    (r"Font", r"Object"),
+    (r"FrictionJoint", r"Joint"),
+    (r"FrictionJoint", r"Object"),
+    (r"GearJoint", r"Joint"),
+    (r"GearJoint", r"Object"),
+    (r"GlyphData", r"Data"),
+    (r"GlyphData", r"Object"),
+    (r"Image", r"Texture"),
+    (r"Image", r"Drawable"),
+    (r"Image", r"Object"),
+    (r"ImageData", r"Data"),
+    (r"ImageData", r"Object"),
+    (r"Joint", r"Object"),
+    (r"Joystick", r"Object"),
+    (r"Mesh", r"Drawable"),
+    (r"Mesh", r"Object"),
+    (r"MotorJoint", r"Joint"),
+    (r"MotorJoint", r"Object"),
+    (r"MouseJoint", r"Joint"),
+    (r"MouseJoint", r"Object"),
+    (r"ParticleSystem", r"Drawable"),
+    (r"ParticleSystem", r"Object"),
+    (r"PolygonShape", r"Shape"),
+    (r"PolygonShape", r"Object"),
+    (r"PrismaticJoint", r"Joint"),
+    (r"PrismaticJoint", r"Object"),
+    (r"PulleyJoint", r"Joint"),
+    (r"PulleyJoint", r"Object"),
+    (r"Quad", r"Object"),
+    (r"RandomGenerator", r"Object"),
+    (r"Rasterizer", r"Object"),
+    (r"RecordingDevice", r"Object"),
+    (r"RevoluteJoint", r"Joint"),
+    (r"RevoluteJoint", r"Object"),
+    (r"RopeJoint", r"Joint"),
+    (r"RopeJoint", r"Object"),
+    (r"Shader", r"Object"),
+    (r"Shape", r"Object"),
+    (r"SoundData", r"Data"),
+    (r"SoundData", r"Object"),
+    (r"Source", r"Object"),
+    (r"SpriteBatch", r"Drawable"),
+    (r"SpriteBatch", r"Object"),
+    (r"Text", r"Drawable"),
+    (r"Text", r"Object"),
+    (r"Texture", r"Drawable"),
+    (r"Texture", r"Object"),
+    (r"Thread", r"Object"),
+    (r"Transform", r"Object"),
+    (r"Video", r"Drawable"),
+    (r"Video", r"Object"),
+    (r"VideoStream", r"Object"),
+    (r"WeldJoint", r"Joint"),
+    (r"WeldJoint", r"Object"),
+    (r"WheelJoint", r"Joint"),
+    (r"WheelJoint", r"Object"),
+    (r"World", r"Object"),
 ];
 
 const TYPE_ITEMS: &[LoveApiTypedItem] = &[

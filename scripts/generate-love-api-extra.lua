@@ -173,11 +173,16 @@ local types = collect_api_types()
 local type_names = sorted_type_names(types)
 local enums = collect_enums()
 
+local revision_file = assert(io.open("scripts/love-api-revision.txt", "r"))
+local revision = assert(revision_file:read("*l"))
+revision_file:close()
+
 local file = assert(io.open(out, "w"))
 
-file:write([[// Generated from love2d-community/love-api 11.5 modules/enums and modules/types.
-// Source data: https://github.com/love2d-community/love-api/tree/master/modules
-// Regenerate with: lua scripts/generate-love-api-extra.lua /path/to/love-api
+file:write("// Generated from love2d-community/love-api ", tostring(api.version or "unknown"), " modules/enums and modules/types.\n")
+file:write("// Source revision: ", revision, "\n")
+file:write([[// Source data: https://github.com/love2d-community/love-api
+// Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 
 use crate::lua::{LuaItem, LuaItemKind};
 
@@ -189,6 +194,10 @@ struct LoveApiTypedItem {
 
 pub(crate) fn type_names() -> &'static [&'static str] {
     TYPE_NAMES
+}
+
+pub(crate) fn type_supertypes() -> &'static [(&'static str, &'static str)] {
+    TYPE_SUPERTYPES
 }
 
 pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
@@ -221,6 +230,16 @@ pub(crate) fn all_items() -> impl Iterator<Item = LuaItem> {
 file:write("const TYPE_NAMES: &[&str] = &[\n")
 for _, entry in ipairs(type_names) do
   file:write("    ", rust_raw(entry.name), ",\n")
+end
+file:write("];\n\n")
+
+file:write("const TYPE_SUPERTYPES: &[(&str, &str)] = &[\n")
+for _, entry in ipairs(type_names) do
+  local type_item = types[entry.name]
+
+  for _, supertype in ipairs(type_item.supertypes or {}) do
+    file:write("    (", rust_raw(entry.name), ", ", rust_raw(supertype), "),\n")
+  end
 end
 file:write("];\n\n")
 

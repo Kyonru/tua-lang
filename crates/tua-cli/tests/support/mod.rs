@@ -69,6 +69,10 @@ pub fn copy_dir_all(source: &Path, destination: &Path) -> std::io::Result<()> {
 }
 
 pub fn love_executable() -> Option<OsString> {
+    if env::var("TUA_TEST_LOVE_RUNTIME").ok().as_deref() != Some("1") {
+        return None;
+    }
+
     if let Some(path) = env::var_os("TUA_LOVE_BIN") {
         return love_version_works(&path).then_some(path);
     }

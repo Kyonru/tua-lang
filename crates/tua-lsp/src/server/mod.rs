@@ -268,8 +268,6 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
     match method {
         "initialize"
         | "initialized"
-        | "shutdown"
-        | "exit"
         | "textDocument/didOpen"
         | "textDocument/didChange"
         | "textDocument/didSave"

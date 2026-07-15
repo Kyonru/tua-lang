@@ -4,6 +4,7 @@ use std::path::Path;
 use full_moon::ast::span::ContainedSpan;
 use full_moon::ast::{self, Expression, Field, LastStmt, Var};
 use full_moon::tokenizer::TokenReference;
+use full_moon::visitors::VisitorMut;
 
 use crate::classes;
 use crate::runtime_type;
@@ -961,9 +962,26 @@ fn luacats_type_from_type(ty: &Type) -> String {
 }
 
 fn erase_ast(path: &Path, ast: ast::Ast, diagnostics: &mut Vec<Diagnostic>) -> ast::Ast {
+    let ast = AnonymousFunctionEraser { path, diagnostics }.visit_ast(ast);
     let nodes = erase_block(path, ast.nodes().clone(), diagnostics);
 
     ast.with_nodes(nodes)
+}
+
+struct AnonymousFunctionEraser<'a> {
+    path: &'a Path,
+    diagnostics: &'a mut Vec<Diagnostic>,
+}
+
+impl VisitorMut for AnonymousFunctionEraser<'_> {
+    fn visit_anonymous_function_end(
+        &mut self,
+        function: ast::AnonymousFunction,
+    ) -> ast::AnonymousFunction {
+        let body = erase_function_body(self.path, function.body().clone(), self.diagnostics);
+
+        function.with_body(body)
+    }
 }
 
 fn erase_block(path: &Path, block: ast::Block, diagnostics: &mut Vec<Diagnostic>) -> ast::Block {

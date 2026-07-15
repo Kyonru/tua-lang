@@ -366,11 +366,16 @@ table.sort(enum_cases, function(left, right)
   return left.parameter_index < right.parameter_index
 end)
 
+local revision_file = assert(io.open("scripts/love-api-revision.txt", "r"))
+local revision = assert(revision_file:read("*l"))
+revision_file:close()
+
 local file = assert(io.open(out, "w"))
 
-file:write([[// Generated from love2d-community/love-api ]] .. tostring(api.version or "unknown") .. [[ function variants.
-// Source data: https://github.com/love2d-community/love-api
-// Regenerate with: lua scripts/generate-love-api-signatures.lua /path/to/love-api
+file:write("// Generated from love2d-community/love-api ", tostring(api.version or "unknown"), " function variants.\n")
+file:write("// Source revision: ", revision, "\n")
+file:write([[// Source data: https://github.com/love2d-community/love-api
+// Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 
 use crate::lua::{LuaSignature, LuaSignatureParameter};
 

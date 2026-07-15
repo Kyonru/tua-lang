@@ -56,6 +56,28 @@ fn unknown_aliases_are_only_assignable_to_themselves() {
 }
 
 #[test]
+fn nominal_supertypes_are_assignable_transitively() {
+    let context = TypeContext::new()
+        .with_alias(TypeAlias::new("Renderable", Type::alias("Drawable")))
+        .with_nominal_supertype("Image", "Texture")
+        .with_nominal_supertype("Texture", "Drawable");
+
+    assert!(context.is_assignable(&Type::alias("Image"), &Type::alias("Texture")));
+    assert!(context.is_assignable(&Type::alias("Image"), &Type::alias("Drawable")));
+    assert!(context.is_assignable(&Type::alias("Image"), &Type::alias("Renderable")));
+    assert!(!context.is_assignable(&Type::alias("Drawable"), &Type::alias("Image")));
+}
+
+#[test]
+fn declared_aliases_do_not_inherit_nominal_type_relations() {
+    let context = TypeContext::new()
+        .with_alias(TypeAlias::new("Image", Type::string()))
+        .with_nominal_supertype("Image", "Drawable");
+
+    assert!(!context.is_assignable(&Type::alias("Image"), &Type::alias("Drawable")));
+}
+
+#[test]
 fn table_shape_compatibility_is_structural() {
     let source = Type::table([
         ("x", TableField::required(Type::number())),

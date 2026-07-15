@@ -102,6 +102,33 @@ end
 }
 
 #[test]
+fn snapshot_erases_anonymous_function_annotations() {
+    let emitted = emit_tua_source(
+        "src/functions.tua",
+        r#"
+local callbacks = {
+  add = function(self: any, amount: number): number
+    self.count = self.count + amount
+    return self.count
+  end,
+}
+"#,
+    )
+    .expect("annotated anonymous functions should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local callbacks = {
+  add = function(self, amount)
+    self.count = self.count + amount
+    return self.count
+  end,
+}
+"#
+    );
+}
+
+#[test]
 fn snapshot_lowers_runtime_is_checks_to_lua_type_and_metatable_checks() {
     let emitted = emit_tua_source(
         "src/runtime_is.tua",

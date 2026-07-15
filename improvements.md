@@ -7,26 +7,22 @@ correctness risk, architectural leverage, and release readiness.
 
 ### P0: Fix the bundled LOVE project regression
 
-`cargo test --workspace` currently rejects valid LOVE calls in the bundled
-`love-full` example:
+Status: done on 2026-07-15.
 
-- `love.graphics.draw(Image, ...)` is rejected because `Image` is not treated
-  as assignable to `Drawable`.
-- Two-argument `love.graphics.newFont(path, size)` calls are rejected even
-  though the generated signature catalog contains the overload.
+The bundled `love-full` regression was fixed through shared catalog data:
 
-Likely causes are missing LOVE inheritance in
-[`assignability.rs`](crates/tua-core/src/types/assignability.rs) and checker/API
-catalog drift between [`love_api.rs`](crates/tua-core/src/love_api.rs) and
-[`love_api_signatures.rs`](crates/tua-core/src/love_api_signatures.rs).
+- LOVE object supertypes now participate in nominal assignability, including
+  `Image` to `Drawable`.
+- Call checking now selects from the same generated overload variants used by
+  signature help, including `love.graphics.newFont(path, size)`.
+- Functions, overloads, enums, object methods, and type hierarchy are generated
+  from pinned `love-api` revision
+  `4b2d89510eabd320791c4a8157e6e6656c34ec09`.
+- CI runs the workspace and bundled LOVE tests and checks generated catalog
+  drift.
 
-Improvements:
-
-- Represent LOVE type inheritance in the shared type database.
-- Make argument checking consume the authoritative overload catalog.
-- Generate functions, overloads, enums, and type hierarchy from one pinned
-  LOVE API source.
-- Add generated-catalog drift checks and the LOVE example test to CI.
+Regenerate or verify the catalog with `make generate-love-api` and
+`make love-api-drift-check`, passing `LOVE_API_ROOT=/path/to/love-api`.
 
 ### P0: Make LSP work preemptible
 
@@ -328,12 +324,8 @@ Improvements:
 
 ### P2: Make generated LOVE data reproducible
 
-Improvements:
+Status: core reproducibility work is done. Remaining improvement:
 
-- Pin the upstream LOVE API revision.
-- Provide one documented generation command.
-- Generate functions, overloads, types, hierarchy, enums, and tests together.
-- Check generated output for drift in CI.
 - Consider compact generated data instead of tens of thousands of Rust source
   lines if compile time or maintenance becomes a problem.
 

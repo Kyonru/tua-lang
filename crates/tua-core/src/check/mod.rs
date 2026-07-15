@@ -888,9 +888,7 @@ impl<'a> Checker<'a> {
                 return_types
             }
             Callable::ExternalFunction(function) => {
-                self.check_external_call_arguments(function_call, &function);
-
-                function.return_types
+                self.check_external_call_arguments(function_call, &function)
             }
         }
     }
@@ -1437,44 +1435,85 @@ impl<'a> Checker<'a> {
         &mut self,
         function_call: &FunctionCall,
         function: &ExternalFunctionType,
-    ) {
+    ) -> Vec<Type> {
         let arguments = call_arguments(function_call).unwrap_or_default();
-        let required_parameter_count = function.required_parameter_count();
+        let argument_types = self.infer_call_argument_types(&arguments);
 
-        if arguments.len() < required_parameter_count {
-            self.diagnostics.push(argument_count_diagnostic(
-                &self.parsed.path,
-                function_call,
-                required_parameter_count,
-                arguments.len(),
-            ));
-            return;
-        }
-
-        if arguments.len() > function.parameters.len() {
-            self.diagnostics.push(argument_count_diagnostic(
-                &self.parsed.path,
-                function_call,
-                function.parameters.len(),
-                arguments.len(),
-            ));
-            return;
-        }
-
-        for (argument, parameter) in arguments.into_iter().zip(&function.parameters) {
-            match argument {
-                CallArgument::Expression(argument) => {
-                    let Some(argument_type) = self.infer_expression(argument) else {
-                        continue;
-                    };
-
-                    self.check_external_argument_type(argument, &argument_type, &parameter.ty);
-                }
-                CallArgument::Inferred(argument_type) => {
-                    self.check_external_argument_type(function_call, &argument_type, &parameter.ty);
-                }
+        for variant in &function.variants {
+            if self.external_call_variant_matches(&argument_types, variant) {
+                return variant.return_types.clone();
             }
         }
+
+        let best_variant = function
+            .variants
+            .iter()
+            .find(|variant| variant.expected_argument_count(arguments.len()).is_none())
+            .or_else(|| function.variants.first());
+
+        let Some(variant) = best_variant else {
+            return vec![Type::Any];
+        };
+
+        if let Some(expected) = variant.expected_argument_count(arguments.len()) {
+            self.diagnostics.push(argument_count_diagnostic(
+                &self.parsed.path,
+                function_call,
+                expected,
+                arguments.len(),
+            ));
+
+            return variant.return_types.clone();
+        }
+
+        for (index, argument_type) in argument_types.iter().enumerate() {
+            let Some(argument_type) = argument_type else {
+                continue;
+            };
+            let Some(parameter_type) = variant.parameter_type(index) else {
+                continue;
+            };
+
+            if self.external_argument_assignable(argument_type, parameter_type) {
+                continue;
+            }
+
+            match arguments.get(index) {
+                Some(CallArgument::Expression(argument)) => {
+                    self.check_external_argument_type(*argument, argument_type, parameter_type);
+                }
+                Some(CallArgument::Inferred(_)) | None => {
+                    self.check_external_argument_type(function_call, argument_type, parameter_type);
+                }
+            }
+
+            break;
+        }
+
+        variant.return_types.clone()
+    }
+
+    fn external_call_variant_matches(
+        &self,
+        argument_types: &[Option<Type>],
+        variant: &ExternalFunctionVariant,
+    ) -> bool {
+        variant
+            .expected_argument_count(argument_types.len())
+            .is_none()
+            && argument_types
+                .iter()
+                .enumerate()
+                .all(|(index, argument_type)| {
+                    let Some(argument_type) = argument_type else {
+                        return true;
+                    };
+                    let Some(parameter_type) = variant.parameter_type(index) else {
+                        return true;
+                    };
+
+                    self.external_argument_assignable(argument_type, parameter_type)
+                })
     }
 
     fn check_external_argument_type(&mut self, node: &impl Node, source: &Type, target: &Type) {
@@ -1841,16 +1880,43 @@ struct DotMethodCall {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ExternalFunctionType {
+    variants: Vec<ExternalFunctionVariant>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ExternalFunctionVariant {
     parameters: Vec<ExternalParameter>,
+    vararg_type: Option<Type>,
     return_types: Vec<Type>,
 }
 
-impl ExternalFunctionType {
+impl ExternalFunctionVariant {
     fn required_parameter_count(&self) -> usize {
         self.parameters
             .iter()
             .filter(|parameter| !parameter.optional)
             .count()
+    }
+
+    fn expected_argument_count(&self, actual: usize) -> Option<usize> {
+        let required = self.required_parameter_count();
+
+        if actual < required {
+            return Some(required);
+        }
+
+        if self.vararg_type.is_none() && actual > self.parameters.len() {
+            return Some(self.parameters.len());
+        }
+
+        None
+    }
+
+    fn parameter_type(&self, index: usize) -> Option<&Type> {
+        self.parameters
+            .get(index)
+            .map(|parameter| &parameter.ty)
+            .or(self.vararg_type.as_ref())
     }
 }
 
@@ -2105,46 +2171,76 @@ fn signal_typed_method_for_receiver(
 }
 
 fn external_function_type_from_lua_item(item: lua::LuaItem) -> Option<ExternalFunctionType> {
-    let parameters = parameters_from_function_detail(item.detail)?;
-    let mut return_types = return_types_from_function_detail(item.detail);
+    let variants = lua::signature_variants(item)
+        .map(|signatures| {
+            signatures
+                .iter()
+                .filter_map(|signature| external_function_variant_from_detail(signature.label))
+                .collect::<Vec<_>>()
+        })
+        .filter(|variants| !variants.is_empty())
+        .or_else(|| {
+            external_function_variant_from_detail(item.detail).map(|variant| vec![variant])
+        })?;
+
+    Some(ExternalFunctionType { variants })
+}
+
+fn external_function_variant_from_detail(detail: &str) -> Option<ExternalFunctionVariant> {
+    let (parameters, vararg_type) = parameters_from_function_detail(detail)?;
+    let mut return_types = return_types_from_function_detail(detail);
 
     if return_types.is_empty() {
         return_types.push(Type::Any);
     }
 
-    Some(ExternalFunctionType {
+    Some(ExternalFunctionVariant {
         parameters,
+        vararg_type,
         return_types,
     })
 }
 
-fn parameters_from_function_detail(detail: &str) -> Option<Vec<ExternalParameter>> {
+fn parameters_from_function_detail(detail: &str) -> Option<(Vec<ExternalParameter>, Option<Type>)> {
     let start = detail.find('(')? + 1;
     let end = detail[start..].find(')')? + start;
     let parameters = detail[start..end].trim();
 
     if parameters.is_empty() {
-        return Some(Vec::new());
+        return Some((Vec::new(), None));
     }
 
-    Some(
-        parameters
-            .split(',')
-            .map(str::trim)
-            .filter(|parameter| !parameter.is_empty())
-            .map(|parameter| {
-                let (name, ty) = parameter
-                    .split_once(':')
-                    .map(|(name, ty)| (name.trim(), ty.trim()))
-                    .unwrap_or(("", parameter));
+    let mut fixed = Vec::new();
+    let mut vararg_type = None;
 
-                ExternalParameter {
-                    ty: type_from_lua_label(ty).unwrap_or(Type::Any),
-                    optional: name.ends_with('?'),
-                }
-            })
-            .collect(),
-    )
+    for parameter in parameters
+        .split(',')
+        .map(str::trim)
+        .filter(|parameter| !parameter.is_empty())
+    {
+        if parameter == "..." {
+            vararg_type = Some(Type::Any);
+            continue;
+        }
+
+        let (name, ty) = parameter
+            .split_once(':')
+            .map(|(name, ty)| (name.trim(), ty.trim()))
+            .unwrap_or(("", parameter));
+        let ty = type_from_lua_label(ty).unwrap_or(Type::Any);
+
+        if name == "..." {
+            vararg_type = Some(ty);
+            continue;
+        }
+
+        fixed.push(ExternalParameter {
+            ty,
+            optional: name.ends_with('?'),
+        });
+    }
+
+    Some((fixed, vararg_type))
 }
 
 fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
@@ -2176,7 +2272,7 @@ fn type_from_lua_label(label: &str) -> Option<Type> {
     }
 
     match label {
-        "any" => Some(Type::Any),
+        "any" | "function" | "light userdata" | "Variant" => Some(Type::Any),
         "boolean" => Some(Type::boolean()),
         "nil" => Some(Type::nil()),
         "number" => Some(Type::number()),

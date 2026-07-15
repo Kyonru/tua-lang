@@ -78,11 +78,18 @@ impl TypeEnvironment {
     }
 
     pub fn to_type_context(&self) -> TypeContext {
-        self.aliases
+        let mut context = self
+            .aliases
             .iter()
             .fold(TypeContext::new(), |context, (name, ty)| {
                 context.with_alias(TypeAlias::new(name.clone(), ty.clone()))
-            })
+            });
+
+        for &(type_name, supertype) in lua::love_type_supertypes() {
+            context.insert_nominal_supertype(type_name, supertype);
+        }
+
+        context
     }
 
     pub(crate) fn with_local_types(
