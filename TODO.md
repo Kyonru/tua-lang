@@ -1,4 +1,5 @@
 - [ ] Large files take too long for suggestions
+- [ ] Signal calls/definitions code/file graph visualization
 - [ ] Changing type should show warn
 - [ ] Concept of Fuctions as type
 - [ ] Basic generic support (i want to discourage this)
