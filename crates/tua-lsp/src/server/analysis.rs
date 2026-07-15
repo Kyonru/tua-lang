@@ -100,13 +100,17 @@ impl AnalysisHost {
         uri: &str,
         position: SourcePosition,
     ) -> Option<(SourcePosition, Vec<Completion>)> {
-        let source = self.document_text(uri)?;
+        let document = self.documents.get(uri)?;
+        let source = &document.source;
         let position = identifier_completion_position(source, position);
-        let (_, completions) = tua_core::complete_lossy_identifier_source(source, position)?;
+
+        identifier_prefix_at(source, position)?;
 
         if position_is_inside_open_table(source, position) {
             return None;
         }
+
+        let completions = self.core.current_file_completion(&document.path, position);
 
         Some((position, completions))
     }

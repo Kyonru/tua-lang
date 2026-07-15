@@ -54,7 +54,7 @@ After that, Phase 13 explores LOVE domain extensions:
   slice now powering asset hovers and path completion;
 - optional Feather/tooling integration hooks.
 
-Phase 14 tracks completion intelligence as a compiler-first pipeline:
+Phase 14 tracks completion intelligence as a compiler-first pipeline. The first slice now generates parsed identifier candidates from scope visibility and keeps field completions backed by type, module, LOVE catalog, and table-shape facts:
 
 - deterministic semantic candidate generation;
 - local/project ranking signals;

@@ -7,6 +7,7 @@ use self::symbol::lua_symbols_before_position;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::profile;
+use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
@@ -142,7 +143,7 @@ pub(crate) fn filter_and_rank_completions(
 fn completion_priority(completion: &Completion) -> u8 {
     match completion.detail.as_deref() {
         Some("parameter") => 0,
-        Some("local") | Some("local function") => 1,
+        Some("local") | Some("local function") | Some("module") => 1,
         Some("function") => 2,
         _ => match completion.kind {
             CompletionKind::Snippet => 3,
@@ -160,7 +161,7 @@ fn completion_priority(completion: &Completion) -> u8 {
 fn completion_uses_source_order(completion: &Completion) -> bool {
     matches!(
         completion.detail.as_deref(),
-        Some("parameter" | "local" | "local function" | "function")
+        Some("parameter" | "local" | "local function" | "module" | "function")
     )
 }
 
@@ -869,59 +870,10 @@ fn complete_identifier_items(
     let mut completions = Vec::new();
     let mut labels = BTreeSet::new();
 
-    insert_lossy_identifier_items(
-        &mut completions,
-        &mut labels,
-        &parsed.source,
-        prefix,
-        position,
-    );
+    insert_scope_identifier_items(&mut completions, &mut labels, parsed, prefix, position);
 
-    for local in &parsed.local_annotations {
-        if completion_text_matches(&local.name, prefix) {
-            push_unique_completion(
-                &mut completions,
-                &mut labels,
-                Completion {
-                    label: local.name.clone(),
-                    kind: CompletionKind::Variable,
-                    detail: Some("local".to_owned()),
-                    documentation: None,
-                    insert_text: None,
-                    filter_text: None,
-                    is_snippet: false,
-                    module_path: None,
-                    source_module: None,
-                    additional_text_edits: Vec::new(),
-                },
-            );
-        }
-    }
-
-    for function in &parsed.function_annotations {
-        let Some(name) = &function.name else {
-            continue;
-        };
-
-        if completion_text_matches(name, prefix) {
-            push_unique_completion(
-                &mut completions,
-                &mut labels,
-                Completion {
-                    label: name.clone(),
-                    kind: CompletionKind::Function,
-                    detail: Some("function".to_owned()),
-                    documentation: None,
-                    insert_text: None,
-                    filter_text: None,
-                    is_snippet: false,
-                    module_path: None,
-                    source_module: None,
-                    additional_text_edits: Vec::new(),
-                },
-            );
-        }
-    }
+    insert_visible_global_function_items(&mut completions, &mut labels, parsed, prefix, position);
+    insert_keyword_and_builtin_identifier_items(&mut completions, &mut labels, prefix);
 
     completions
 }
@@ -939,6 +891,140 @@ fn complete_lossy_identifier_items(
     completions
 }
 
+fn insert_scope_identifier_items(
+    completions: &mut Vec<Completion>,
+    labels: &mut BTreeSet<String>,
+    parsed: &ParsedSource,
+    prefix: &str,
+    position: SourcePosition,
+) {
+    let scope = scope_map_parsed_source(parsed);
+    let mut declarations = scope
+        .declarations()
+        .iter()
+        .filter(|declaration| scope_declaration_visible_at(declaration, position))
+        .filter(|declaration| {
+            matches!(
+                declaration.kind,
+                ScopeDeclarationKind::Local
+                    | ScopeDeclarationKind::Parameter
+                    | ScopeDeclarationKind::Function
+                    | ScopeDeclarationKind::ModuleAlias { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+
+    declarations.sort_by(|left, right| {
+        position_key(right.name_span.start)
+            .cmp(&position_key(left.name_span.start))
+            .then_with(|| left.name.cmp(&right.name))
+    });
+
+    for declaration in declarations {
+        if completion_text_matches(&declaration.name, prefix) {
+            push_unique_completion(
+                completions,
+                labels,
+                completion_from_scope_declaration(declaration),
+            );
+        }
+    }
+}
+
+fn scope_declaration_visible_at(declaration: &ScopeDeclaration, position: SourcePosition) -> bool {
+    position_key(declaration.name_span.start) <= position_key(position)
+        && span_contains_position(declaration.scope_span, position)
+}
+
+fn span_contains_position(span: crate::SourceSpan, position: SourcePosition) -> bool {
+    position_key(span.start) <= position_key(position)
+        && position_key(position) <= position_key(span.end)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
+}
+
+fn completion_from_scope_declaration(declaration: &ScopeDeclaration) -> Completion {
+    let (kind, detail) = match &declaration.kind {
+        ScopeDeclarationKind::Parameter => (CompletionKind::Variable, "parameter"),
+        ScopeDeclarationKind::Function => (CompletionKind::Function, "local function"),
+        ScopeDeclarationKind::ModuleAlias { .. } => (CompletionKind::Module, "module"),
+        ScopeDeclarationKind::Local => (CompletionKind::Variable, "local"),
+        ScopeDeclarationKind::TableField => (CompletionKind::Field, "field"),
+    };
+
+    Completion {
+        label: declaration.name.clone(),
+        kind,
+        detail: Some(detail.to_owned()),
+        documentation: None,
+        insert_text: None,
+        filter_text: None,
+        is_snippet: false,
+        module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
+    }
+}
+
+fn insert_visible_global_function_items(
+    completions: &mut Vec<Completion>,
+    labels: &mut BTreeSet<String>,
+    parsed: &ParsedSource,
+    prefix: &str,
+    position: SourcePosition,
+) {
+    for function in &parsed.function_annotations {
+        let Some(name) = &function.name else {
+            continue;
+        };
+        if name.contains(['.', ':']) || !completion_text_matches(name, prefix) {
+            continue;
+        }
+        if function
+            .name_span
+            .is_some_and(|span| position_key(span.start) > position_key(position))
+        {
+            continue;
+        }
+
+        push_unique_completion(
+            completions,
+            labels,
+            Completion {
+                label: name.clone(),
+                kind: CompletionKind::Function,
+                detail: Some("function".to_owned()),
+                documentation: None,
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            },
+        );
+    }
+}
+
+fn insert_keyword_and_builtin_identifier_items(
+    completions: &mut Vec<Completion>,
+    labels: &mut BTreeSet<String>,
+    prefix: &str,
+) {
+    for completion in syntax_snippet_completions(prefix) {
+        push_unique_completion(completions, labels, completion);
+    }
+
+    for item in lua::keyword_items(prefix)
+        .into_iter()
+        .chain(lua::top_level_items(prefix))
+    {
+        push_unique_completion(completions, labels, completion_from_lua_item(item));
+    }
+}
+
 fn insert_lossy_identifier_items(
     completions: &mut Vec<Completion>,
     labels: &mut BTreeSet<String>,
@@ -952,16 +1038,7 @@ fn insert_lossy_identifier_items(
         }
     }
 
-    for completion in syntax_snippet_completions(prefix) {
-        push_unique_completion(completions, labels, completion);
-    }
-
-    for item in lua::keyword_items(prefix)
-        .into_iter()
-        .chain(lua::top_level_items(prefix))
-    {
-        push_unique_completion(completions, labels, completion_from_lua_item(item));
-    }
+    insert_keyword_and_builtin_identifier_items(completions, labels, prefix);
 }
 
 fn push_unique_completion(

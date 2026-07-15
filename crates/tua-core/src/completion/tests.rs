@@ -334,6 +334,63 @@ local value = cl
 }
 
 #[test]
+fn parsed_identifier_completion_excludes_out_of_scope_locals() {
+    let source = r#"do
+  local insideChoice = 1
+end
+
+local visibleChoice = 2
+local value = Choice
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "local value = Choice"),
+    )
+    .expect("identifier completion should succeed");
+    let labels = labels(&completions);
+
+    assert!(labels.contains(&"visibleChoice".to_owned()), "{labels:?}");
+    assert!(!labels.contains(&"insideChoice".to_owned()), "{labels:?}");
+}
+
+#[test]
+fn parsed_identifier_completion_is_reproducible() {
+    let source = r#"local classFar = 1
+local classNear = 2
+local value = cl
+"#;
+    let position = position_after(source, "local value = cl");
+    let first = complete_tua_source("src/main.tua", source, position)
+        .expect("first completion should succeed");
+    let second = complete_tua_source("src/main.tua", source, position)
+        .expect("second completion should succeed");
+
+    assert_eq!(labels(&first), labels(&second));
+}
+
+#[test]
+fn parsed_identifier_completion_prioritizes_visible_module_aliases() {
+    let source = r#"local classAssets = require("assets")
+local value = cl
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "local value = cl"),
+    )
+    .expect("identifier completion should succeed");
+    let labels = labels(&completions);
+    let class_index = labels
+        .iter()
+        .position(|label| label == "class")
+        .expect("class snippet should complete");
+
+    assert_eq!(labels[0], "classAssets");
+    assert!(class_index > 0, "{labels:?}");
+}
+
+#[test]
 fn completes_love_asset_loader_globals() {
     let source = "local player = \n";
     let position = position_after(source, "= ");

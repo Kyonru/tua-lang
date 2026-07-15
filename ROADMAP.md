@@ -2202,6 +2202,8 @@ Acceptance:
 
 ### 77. `feat(completion): switch to compiler-first candidate generation`
 
+Status: done.
+
 Scope:
 
 - Replace any fallback-heavy or string-only completion behavior with a compiler-driven

@@ -794,6 +794,35 @@ impl AnalysisHost {
             .or_else(|| hover_parsed_source(parsed, position).ok().flatten())
     }
 
+    pub fn current_file_completion(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let path = path.as_ref();
+        let Some(file) = self.current_analysis_file(path) else {
+            return Vec::new();
+        };
+
+        match &file.parsed {
+            Ok(parsed) => {
+                let environment = file.environment.clone().unwrap_or_else(|| {
+                    let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+                    environment
+                });
+
+                complete_source_with_parsed_environment(
+                    &file.source,
+                    parsed,
+                    position,
+                    &environment,
+                )
+            }
+            Err(_) => complete_tua_source(path, file.source, position).unwrap_or_default(),
+        }
+    }
+
     pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {
         self.current_analysis_file(path.as_ref())
             .map(|file| file.require_edges)

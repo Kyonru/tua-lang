@@ -2837,8 +2837,9 @@ fn identifier_completion_uses_open_document_fast_path() {
     let after = &response_with_id(server.output(), 5)["result"];
 
     assert_eq!(
-        after["parse"]["misses"], before["parse"]["misses"],
-        "plain identifier completion should not force a snapshot parse while typing"
+        after["parse"]["misses"].as_u64(),
+        Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 1),
+        "plain identifier completion should parse only the active document once while typing"
     );
 }
 
