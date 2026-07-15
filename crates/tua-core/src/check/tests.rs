@@ -105,6 +105,33 @@ local distanceSquared: number = position:dot(velocity)
 }
 
 #[test]
+fn accepts_builtin_signal_bus_methods_and_payloads() {
+    check_tua_source(
+        "src/signals.tua",
+        r#"
+local events: SignalBus = signal()
+local handler = events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+
+events:once("ready", function()
+  print("ready")
+end)
+
+events:emit("player.hit", { hp = 10 }, 4, true)
+events:off("player.hit", handler)
+events:off("player.hit")
+events:clear("player.hit")
+events:clear()
+
+local hasHit: boolean = events:has("player.hit")
+local currentListeners: any = events:listeners("player.hit")
+"#,
+    )
+    .expect("built-in signal bus should accept common event operations");
+}
+
+#[test]
 fn rejects_builtin_vec2_constructor_argument_mismatch() {
     let diagnostics = check_tua_source(
         "src/vector.tua",

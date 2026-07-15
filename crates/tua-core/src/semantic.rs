@@ -22,7 +22,7 @@ use crate::types::{
     type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
     TypeEnvironment, TypedFunction,
 };
-use crate::{sprite, vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
+use crate::{signal, sprite, vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -152,6 +152,10 @@ impl<'a> SemanticModel<'a> {
                 return sprite::constructor_type().return_types_or_any().to_vec();
             }
 
+            if signal::is_constructor(root) {
+                return signal::constructor_type().return_types_or_any().to_vec();
+            }
+
             if let Some(returns) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_return_types(self.environment, &ty))
@@ -229,6 +233,10 @@ impl<'a> SemanticModel<'a> {
                 return Some(sprite::typed_function());
             }
 
+            if signal::is_constructor(root) {
+                return Some(signal::constructor_typed_function());
+            }
+
             if let Some(function) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_function(self.environment, &ty))
@@ -242,6 +250,18 @@ impl<'a> SemanticModel<'a> {
 
         if let Some(function) = self.prototype_typed_function_for_call_parts(parts, position) {
             return Some(function);
+        }
+
+        if !fields.is_empty() {
+            let method = parts.last()?;
+            let receiver_parts = parts.get(..parts.len().saturating_sub(1))?;
+            let receiver_type = self.type_of_field_chain(receiver_parts, position)?;
+
+            if let Some(function) =
+                signal_typed_method_for_receiver(self.environment, &receiver_type, method)
+            {
+                return Some(function);
+            }
         }
 
         if !fields.is_empty() {
@@ -1908,6 +1928,15 @@ fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    if let Type::Alias(name) = ty {
+        if let Some(item) = lua::type_field_items(name, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
     match resolve_aliases(environment, ty, 0) {
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
@@ -1923,6 +1952,33 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => None,
+    }
+}
+
+fn signal_typed_method_for_receiver(
+    environment: &TypeEnvironment,
+    receiver_type: &Type,
+    method: &str,
+) -> Option<TypedFunction> {
+    if receiver_is_signal_bus(environment, receiver_type) {
+        signal::typed_method(method)
+    } else {
+        None
+    }
+}
+
+fn receiver_is_signal_bus(environment: &TypeEnvironment, receiver_type: &Type) -> bool {
+    match receiver_type {
+        Type::Alias(name) if name == signal::TYPE_NAME => true,
+        Type::Union(types) => types
+            .iter()
+            .any(|ty| receiver_is_signal_bus(environment, ty)),
+        _ => match resolve_aliases(environment, receiver_type, 0) {
+            Type::Table(table) => environment
+                .alias(signal::TYPE_NAME)
+                .is_some_and(|signal_type| signal_type == &Type::Table(table)),
+            _ => false,
+        },
     }
 }
 

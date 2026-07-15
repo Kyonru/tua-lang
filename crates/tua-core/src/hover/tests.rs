@@ -939,6 +939,37 @@ local direction = position.normalized
 }
 
 #[test]
+fn hovers_builtin_signal_constructor_local_and_methods() {
+    let source = r#"
+local events = signal()
+events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+events:emit("player.hit", "ada", 4)
+"#;
+    let constructor = hover_tua_source("src/main.tua", source, position_at(source, "signal"))
+        .expect("hover should not fail")
+        .expect("signal constructor should hover");
+    let events = hover_tua_source("src/main.tua", source, position_at(source, "events ="))
+        .expect("hover should not fail")
+        .expect("inferred SignalBus local should hover");
+    let emit = hover_tua_source("src/main.tua", source, position_at(source, "emit"))
+        .expect("hover should not fail")
+        .expect("SignalBus emit method should hover");
+
+    assert_eq!(constructor.contents, "function signal(): SignalBus");
+    assert_eq!(events.contents, "local events: SignalBus");
+    assert_eq!(
+        emit.contents,
+        "function SignalBus:emit(name: string, ...: any): nil"
+    );
+    assert!(emit
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("Emit a named signal")));
+}
+
+#[test]
 fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
     let source = r#"
 local function loadPlayerImage()

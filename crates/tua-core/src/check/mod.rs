@@ -28,7 +28,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
     MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, lua, sprite, vector};
+use crate::{asset, lua, signal, sprite, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -1032,9 +1032,17 @@ impl<'a> Checker<'a> {
             if sprite::is_helper(root) {
                 return Some(Callable::Function(sprite::constructor_type()));
             }
+
+            if signal::is_constructor(root) {
+                return Some(Callable::Function(signal::constructor_type()));
+            }
         }
 
         if !fields.is_empty() {
+            if let Some(function) = self.signal_bus_method_call_target(&parts) {
+                return Some(Callable::from_typed_function(&function));
+            }
+
             if let Some(function) = self.love_object_method_call_target(&parts) {
                 return Some(Callable::ExternalFunction(function));
             }
@@ -1066,6 +1074,14 @@ impl<'a> Checker<'a> {
         let item = lua_type_field_item(self.environment, &receiver_type, method)?;
 
         external_function_type_from_lua_item(item)
+    }
+
+    fn signal_bus_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
+        let method = parts.last()?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+
+        signal_typed_method_for_receiver(self.environment, &receiver_type, method)
     }
 
     fn constructor_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
@@ -1961,6 +1977,15 @@ fn lua_type_field_item(
     ty: &Type,
     field: &str,
 ) -> Option<lua::LuaItem> {
+    if let Type::Alias(name) = ty {
+        if let Some(item) = lua::type_field_items(name, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
     match resolve_aliases(ty, environment, 0) {
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()
@@ -1976,6 +2001,33 @@ fn lua_type_field_item(
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => None,
+    }
+}
+
+fn signal_typed_method_for_receiver(
+    environment: &TypeEnvironment,
+    receiver_type: &Type,
+    method: &str,
+) -> Option<TypedFunction> {
+    if receiver_is_signal_bus(environment, receiver_type) {
+        signal::typed_method(method)
+    } else {
+        None
+    }
+}
+
+fn receiver_is_signal_bus(environment: &TypeEnvironment, receiver_type: &Type) -> bool {
+    match receiver_type {
+        Type::Alias(name) if name == signal::TYPE_NAME => true,
+        Type::Union(types) => types
+            .iter()
+            .any(|ty| receiver_is_signal_bus(environment, ty)),
+        _ => match resolve_aliases(receiver_type, environment, 0) {
+            Type::Table(table) => environment
+                .alias(signal::TYPE_NAME)
+                .is_some_and(|signal_type| signal_type == &Type::Table(table)),
+            _ => false,
+        },
     }
 }
 

@@ -543,10 +543,12 @@ local target = canvas(320, 180)
 local frame = quad(0, 0, 16, 16, 64, 64)
 local batch = spriteBatch(player, 128)
 local sparks = particles(player, 64)
+local events = signal()
 ```
 
 These helpers are syntax sugar for ordinary LOVE calls and are lowered during
-emission.
+emission. `signal()` creates a lightweight `SignalBus` for gameplay and LOVE
+event messages.
 
 Emitted Lua:
 
@@ -561,6 +563,8 @@ local target = love.graphics.newCanvas(320, 180)
 local frame = love.graphics.newQuad(0, 0, 16, 16, 64, 64)
 local batch = love.graphics.newSpriteBatch(player, 128)
 local sparks = love.graphics.newParticleSystem(player, 64)
+local __tua_signal = require("tuasignal")
+local events = __tua_signal()
 ```
 
 `image` returns `Image`; `sound` and `music` return `Source`; `font` returns
@@ -571,6 +575,13 @@ missing paths, unsupported formats, and wrong asset source types for helpers
 and native LOVE constructors with static asset path arguments when the project
 file exists on disk. It should stay permissive when a path cannot be proven
 statically.
+
+`signal` returns `SignalBus`. The language server should complete, hover, and
+show signatures for `SignalBus` methods including `on`, `once`, `emit`, `off`,
+`clear`, `has`, `listeners`, `register`, and `remove`. `emit` accepts any
+payload values after the signal name. `tua build` writes bundled
+`tuasignal.lua` when emitted Lua requires it, without overwriting a project
+provided `tuasignal.lua`.
 
 The compiler should collect reusable asset metadata for these calls:
 

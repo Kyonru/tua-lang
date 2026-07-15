@@ -20,6 +20,7 @@ local LuaJit = require("luajit")
 local Ecs = require("ecs")
 local Classes = require("classes")
 local Sprites = require("sprites")
+local Signals = require("signals")
 
 return {
   types = Types,
@@ -44,4 +45,5 @@ return {
   ecs = Ecs,
   classes = Classes,
   sprites = Sprites,
+  signals = Signals,
 }

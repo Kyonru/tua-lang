@@ -96,6 +96,10 @@ make build-features
   helper plugin: sprite sheet image validation, frame size metadata, animation
   frame ranges, FPS, non-looping animation mode, anim8-backed Lua emission, and
   bundled `anim8.lua` build output.
+- `src/signals.tua` covers the built-in `signal()` helper: inferred
+  `SignalBus` locals, method completion/hover/signature help for event
+  registration and emission, payload-friendly `emit(...)` calls, and bundled
+  `tuasignal.lua` build output.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

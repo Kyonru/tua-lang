@@ -10,6 +10,7 @@ use crate::source::io_diagnostic;
 
 const SOURCE_MAP_VERSION: u64 = 1;
 const VECTOR_RUNTIME_REQUIRE: &str = "local __tua_vec2 = require(\"brinevector\")";
+const SIGNAL_RUNTIME_REQUIRE: &str = "local __tua_signal = require(\"tuasignal\")";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TracebackSourceMap {
@@ -219,6 +220,7 @@ fn line_mappings(source: &str, output: &str, parsed: Option<&ParsedSource>) -> V
     let skipped_source_lines = parsed.map(skipped_lines).unwrap_or_default();
     let mut default_guards = parsed.map(default_guards).unwrap_or_default();
     let vector_source_line = first_source_line_containing(&source_lines, "vec2(").unwrap_or(1);
+    let signal_source_line = first_source_line_containing(&source_lines, "signal(").unwrap_or(1);
     let mut active_default_guard = None::<(usize, usize)>;
     let mut source_line = 1usize;
     let mut mappings = Vec::new();
@@ -239,6 +241,14 @@ fn line_mappings(source: &str, output: &str, parsed: Option<&ParsedSource>) -> V
             mappings.push(LineMapping {
                 generated_line: generated_line_number,
                 source_line: vector_source_line,
+            });
+            continue;
+        }
+
+        if trimmed == SIGNAL_RUNTIME_REQUIRE {
+            mappings.push(LineMapping {
+                generated_line: generated_line_number,
+                source_line: signal_source_line,
             });
             continue;
         }

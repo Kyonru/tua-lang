@@ -1,4 +1,4 @@
-use crate::{asset, love_api, love_api_extra, love_api_signatures, sprite, vector};
+use crate::{asset, love_api, love_api_extra, love_api_signatures, signal, sprite, vector};
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
@@ -44,6 +44,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .iter()
         .chain(ASSET_LOADERS.iter())
         .chain(VECTOR_ITEMS.iter())
+        .chain(SIGNAL_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -136,6 +137,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .iter()
             .chain(ASSET_LOADERS.iter())
             .chain(VECTOR_ITEMS.iter())
+            .chain(SIGNAL_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -225,6 +227,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         "ImageData" => Some(IMAGE_DATA_ITEMS),
         "Quad" => Some(QUAD_ITEMS),
         "Shader" => Some(SHADER_ITEMS),
+        signal::TYPE_NAME => Some(SIGNAL_BUS_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
         "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
         "World" => Some(WORLD_ITEMS),
@@ -237,6 +240,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .iter()
         .chain(ASSET_LOADERS.iter())
         .chain(VECTOR_ITEMS.iter())
+        .chain(SIGNAL_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
@@ -758,6 +762,7 @@ const ASSET_LOADERS: &[LuaItem] = &[
 ];
 
 const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];
+const SIGNAL_ITEMS: &[LuaItem] = &[signal_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -769,6 +774,15 @@ const fn vector_item() -> LuaItem {
     }
 }
 
+const fn signal_item() -> LuaItem {
+    LuaItem {
+        label: signal::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: signal::detail(),
+        documentation: signal::documentation(),
+    }
+}
+
 const fn sprite_item() -> LuaItem {
     LuaItem {
         label: sprite::HELPER_NAME,
@@ -777,6 +791,99 @@ const fn sprite_item() -> LuaItem {
         documentation: sprite::documentation(),
     }
 }
+
+const SIGNAL_BUS_ITEMS: &[LuaItem] = &[
+    item(
+        "on",
+        LuaItemKind::Function,
+        "function SignalBus:on(name: string, handler: function): function",
+        "Register a handler for a named signal and return the handler for later removal.",
+    ),
+    item(
+        "once",
+        LuaItemKind::Function,
+        "function SignalBus:once(name: string, handler: function): function",
+        "Register a handler that removes itself after the next matching emit.",
+    ),
+    item(
+        "emit",
+        LuaItemKind::Function,
+        "function SignalBus:emit(name: string, ...: any): nil",
+        "Emit a named signal and pass any payload values to each handler.",
+    ),
+    item(
+        "off",
+        LuaItemKind::Function,
+        "function SignalBus:off(name: string, handler?: function): nil",
+        "Remove one handler from a signal, or clear the signal when no handler is provided.",
+    ),
+    item(
+        "clear",
+        LuaItemKind::Function,
+        "function SignalBus:clear(name?: string): nil",
+        "Clear one named signal, or every signal when no name is provided.",
+    ),
+    item(
+        "has",
+        LuaItemKind::Function,
+        "function SignalBus:has(name: string): boolean",
+        "Return true when a named signal has at least one handler.",
+    ),
+    item(
+        "listeners",
+        LuaItemKind::Function,
+        "function SignalBus:listeners(name: string): table",
+        "Return a copy of handlers currently registered for a signal.",
+    ),
+    item(
+        "register",
+        LuaItemKind::Function,
+        "function SignalBus:register(name: string, handler: function): function",
+        "Alias for on, kept for Hump-style signal familiarity.",
+    ),
+    item(
+        "remove",
+        LuaItemKind::Function,
+        "function SignalBus:remove(name: string, handler?: function): nil",
+        "Alias for off, kept for Hump-style signal familiarity.",
+    ),
+    item(
+        "onPattern",
+        LuaItemKind::Function,
+        "function SignalBus:onPattern(pattern: string, handler: function): function",
+        "Register a handler for existing signal names that match a Lua pattern.",
+    ),
+    item(
+        "registerPattern",
+        LuaItemKind::Function,
+        "function SignalBus:registerPattern(pattern: string, handler: function): function",
+        "Alias for onPattern.",
+    ),
+    item(
+        "emitPattern",
+        LuaItemKind::Function,
+        "function SignalBus:emitPattern(pattern: string, ...: any): nil",
+        "Emit every existing signal whose name matches a Lua pattern.",
+    ),
+    item(
+        "offPattern",
+        LuaItemKind::Function,
+        "function SignalBus:offPattern(pattern: string, handler?: function): nil",
+        "Remove a handler from every signal whose name matches a Lua pattern.",
+    ),
+    item(
+        "removePattern",
+        LuaItemKind::Function,
+        "function SignalBus:removePattern(pattern: string, handler?: function): nil",
+        "Alias for offPattern.",
+    ),
+    item(
+        "clearPattern",
+        LuaItemKind::Function,
+        "function SignalBus:clearPattern(pattern: string): nil",
+        "Clear every signal whose name matches a Lua pattern.",
+    ),
+];
 
 const CANVAS_ITEMS: &[LuaItem] = &[
     item(

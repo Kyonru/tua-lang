@@ -203,13 +203,19 @@ local frame = quad(0, 0, 16, 16, 64, 64)
 local batch = spriteBatch(player, 128)
 local sparks = particles(player, 64)
 local position: Vec2 = vec2(100, 200)
+local events = signal()
 
 player:setFilter("nearest")
 jump:play()
+events:on("player.hit", function(playerName, damage)
+  print(playerName, damage)
+end)
+events:emit("player.hit", "Ada", 4)
 ```
 
 Asset helpers lower to ordinary LOVE calls and infer LOVE object types for
-editor tooling. `vec2(x, y)` lowers to a cached BrineVector constructor:
+editor tooling. `vec2(x, y)` lowers to a cached BrineVector constructor, and
+`signal()` lowers to a cached lightweight signal-bus constructor:
 
 ```lua
 local player = love.graphics.newImage("assets/player.png")
@@ -224,14 +230,22 @@ local batch = love.graphics.newSpriteBatch(player, 128)
 local sparks = love.graphics.newParticleSystem(player, 64)
 local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
+local __tua_signal = require("tuasignal")
+local events = __tua_signal()
 
 player:setFilter("nearest")
 jump:play()
+events:on("player.hit", function(playerName, damage)
+  print(playerName, damage)
+end)
+events:emit("player.hit", "Ada", 4)
 ```
 
-When generated Lua needs `brinevector`, `tua build` writes a bundled
-`brinevector.lua` into the output directory unless the project already provides
-one.
+When generated Lua needs `brinevector` or `tuasignal`, `tua build` writes the
+bundled runtime file into the output directory unless the project already
+provides one. `SignalBus` completions include `on`, `once`, `emit`, `off`,
+`clear`, `has`, `listeners`, and Hump-style aliases such as `register` and
+`remove`.
 
 ## Boundaries
 

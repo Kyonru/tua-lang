@@ -923,6 +923,74 @@ return Player
 }
 
 #[test]
+fn build_writes_tuasignal_runtime_when_signal_helper_is_used() {
+    let temp = TempDir::new("build-signal-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local events = signal()
+events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+events:emit("player.hit", "ada", 4)
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime = fs::read_to_string(temp.path().join("build/tuasignal.lua"))
+        .expect("failed to read tuasignal");
+
+    assert!(stdout.contains("built 2 file(s)"));
+    assert!(emitted.contains(r#"local __tua_signal = require("tuasignal")"#));
+    assert!(emitted.contains("local events = __tua_signal()"));
+    assert!(runtime.contains("function SignalBus:emit(name, ...)"));
+}
+
+#[test]
+fn build_does_not_overwrite_project_tuasignal_runtime() {
+    let temp = TempDir::new("build-custom-signal-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local events = signal()\nreturn events\n",
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/tuasignal.lua"),
+        "return function() return { custom = true } end\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let runtime = fs::read_to_string(temp.path().join("build/tuasignal.lua"))
+        .expect("failed to read tuasignal");
+
+    assert_eq!(runtime, "return function() return { custom = true } end\n");
+}
+
+#[test]
 fn build_excludes_output_directory_when_source_is_project_root() {
     let temp = TempDir::new("build-root-excludes-dist");
 

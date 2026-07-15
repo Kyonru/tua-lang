@@ -185,6 +185,62 @@ position.
 }
 
 #[test]
+fn completes_builtin_signal_type_constructor_and_methods() {
+    let type_source = "local events: Sig\n";
+    let type_completions = complete_tua_source(
+        "src/main.tua",
+        type_source,
+        position_after(type_source, "Sig"),
+    )
+    .expect("SignalBus type completion should succeed");
+    let constructor_source = "local events = sig\n";
+    let constructor_completions = complete_tua_source(
+        "src/main.tua",
+        constructor_source,
+        position_after(constructor_source, "sig"),
+    )
+    .expect("signal constructor completion should succeed");
+    let field_source = r#"
+local events = signal()
+events:
+"#;
+    let field_completions = complete_tua_source(
+        "src/main.tua",
+        field_source,
+        position_after(field_source, "events:"),
+    )
+    .expect("SignalBus method completion should succeed");
+
+    assert!(labels(&type_completions).contains(&"SignalBus".to_owned()));
+    assert!(labels(&constructor_completions).contains(&"signal".to_owned()));
+
+    let field_labels = labels(&field_completions);
+    assert!(field_labels.contains(&"on".to_owned()));
+    assert!(field_labels.contains(&"once".to_owned()));
+    assert!(field_labels.contains(&"emit".to_owned()));
+    assert!(field_labels.contains(&"off".to_owned()));
+    assert!(field_labels.contains(&"clear".to_owned()));
+
+    let emit = field_completions
+        .iter()
+        .find(|completion| completion.label == "emit")
+        .expect("emit should complete");
+    assert_eq!(
+        emit.detail.as_deref(),
+        Some("function SignalBus:emit(name: string, ...: any): nil")
+    );
+    assert!(emit
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("Emit a named signal")));
+    assert_eq!(
+        emit.insert_text.as_deref(),
+        Some("emit(${1:name}, ${2:...})$0")
+    );
+    assert!(emit.is_snippet);
+}
+
+#[test]
 fn generates_function_documentation_snippet_from_tua_signature() {
     let source = r#"type Player = { hp: number }
 ---
@@ -560,6 +616,12 @@ fn completes_tua_and_lua_statement_snippets() {
             "spr",
             "spriteSheet",
             "local ${1:Player} = spriteSheet({\n  image = \"${2:assets/player.png}\",\n  frame = { width = ${3:16}, height = ${4:16} },\n  animations = {\n    ${5:idle} = { from = ${6:0}, to = ${7:3}, fps = ${8:8} },\n  },\n})",
+        ),
+        (
+            "sig",
+            "sig",
+            "signal",
+            "local ${1:signals} = signal()\n${1:signals}:on(\"${2:event}\", function(${3})\n  ${0}\nend)",
         ),
     ] {
         let completions =

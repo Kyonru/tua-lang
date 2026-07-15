@@ -10,7 +10,7 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, infer_module_exports, parse_tua_source, vector, AnnotationMode, Diagnostic,
+    asset, infer_module_exports, parse_tua_source, signal, vector, AnnotationMode, Diagnostic,
     DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, TuaType,
     Type,
 };
@@ -1228,6 +1228,7 @@ fn lower_builtin_calls_text(output: &str) -> String {
     let mut lowered = String::with_capacity(output.len());
     let mut index = 0;
     let mut requires_brinevector = false;
+    let mut requires_tuasignal = false;
 
     while index < output.len() {
         let rest = &output[index..];
@@ -1276,6 +1277,19 @@ fn lower_builtin_calls_text(output: &str) -> String {
                 }
             }
 
+            if can_start_builtin_call(output, index) && signal::is_constructor(name) {
+                let argument_start = skip_whitespace(output, index + identifier_end);
+
+                if let Some((replacement, end)) =
+                    lower_signal_constructor_call(output, argument_start)
+                {
+                    requires_tuasignal = true;
+                    lowered.push_str(&replacement);
+                    index = end;
+                    continue;
+                }
+            }
+
             lowered.push_str(name);
             index += identifier_end;
             continue;
@@ -1291,10 +1305,19 @@ fn lower_builtin_calls_text(output: &str) -> String {
     }
 
     if requires_brinevector {
-        return format!(
+        lowered = format!(
             "local {} = require(\"{}\")\n{}",
             vector::EMITTED_CONSTRUCTOR_LOCAL,
             vector::RUNTIME_MODULE,
+            lowered
+        );
+    }
+
+    if requires_tuasignal {
+        lowered = format!(
+            "local {} = require(\"{}\")\n{}",
+            signal::EMITTED_CONSTRUCTOR_LOCAL,
+            signal::RUNTIME_MODULE,
             lowered
         );
     }
@@ -1716,6 +1739,20 @@ fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(S
 
     Some((
         format!("{}({x}, {y})", vector::EMITTED_CONSTRUCTOR_LOCAL),
+        close + 1,
+    ))
+}
+
+fn lower_signal_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {
+    if !output[argument_start..].starts_with('(') {
+        return None;
+    }
+
+    let close = find_matching_paren(output, argument_start)?;
+    let arguments = output[argument_start + 1..close].trim();
+
+    Some((
+        format!("{}({arguments})", signal::EMITTED_CONSTRUCTOR_LOCAL),
         close + 1,
     ))
 }

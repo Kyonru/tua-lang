@@ -15,7 +15,7 @@ use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
-use crate::{asset, love_conf, vector};
+use crate::{asset, love_conf, signal, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -997,6 +997,11 @@ fn syntax_snippet_completions(prefix: &str) -> Vec<Completion> {
             "Tua sprite sheet helper",
             crate::sprite::sprite_sheet_snippet(),
         ),
+        (
+            signal::CONSTRUCTOR_NAME,
+            "Tua signal bus helper",
+            signal::signal_snippet(),
+        ),
     ]
     .into_iter()
     .filter(|(label, _, _)| completion_text_matches(label, prefix))
@@ -1065,6 +1070,7 @@ fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
         .chain(asset::builtin_type_names().iter().copied())
         .chain(lua::love_type_names().iter().copied())
         .chain(vector::builtin_type_names().iter().copied())
+        .chain(signal::builtin_type_names().iter().copied())
         .filter(|primitive| completion_text_matches(primitive, prefix))
         .map(|primitive| Completion {
             label: primitive.to_owned(),
@@ -1815,6 +1821,12 @@ fn collect_love_object_fields(
     separator_span: crate::SourceSpan,
     completions: &mut BTreeMap<String, Completion>,
 ) {
+    if let Type::Alias(name) = ty {
+        for item in lua::type_field_items(name, prefix) {
+            insert_love_object_item(completions, parsed, item, separator, separator_span);
+        }
+    }
+
     match resolve_aliases(environment, ty, 0) {
         Type::Alias(name) => {
             for item in lua::type_field_items(&name, prefix) {
@@ -2235,7 +2247,7 @@ fn insert_love_object_item(
     separator: FieldAccessSeparator,
     separator_span: crate::SourceSpan,
 ) {
-    completions.entry(item.label.to_owned()).or_insert_with(|| {
+    completions.insert(item.label.to_owned(), {
         let mut completion = completion_from_lua_item(item);
 
         if item.kind == LuaItemKind::Function {

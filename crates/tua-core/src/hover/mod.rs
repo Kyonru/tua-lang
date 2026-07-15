@@ -95,17 +95,17 @@ impl<'a> HoverResolver<'a> {
                 return Some(hover);
             }
 
+            if let Some(item) =
+                self.love_object_field_item(&field_parts, position, &current_part.text)
+            {
+                return Some(lua_item_hover(item, Some(current_part.span)));
+            }
+
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
                 return Some(hover(
                     format!("(field) {}: {ty}", current_part.text),
                     Some(current_part.span),
                 ));
-            }
-
-            if let Some(item) =
-                self.love_object_field_item(&field_parts, position, &current_part.text)
-            {
-                return Some(lua_item_hover(item, Some(current_part.span)));
             }
 
             if self.environment.local(&field_parts[0]).is_none() {
@@ -614,6 +614,15 @@ fn format_type_list(types: &[Type]) -> String {
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    if let Type::Alias(name) = ty {
+        if let Some(item) = lua::type_field_items(name, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
     match resolve_aliases(environment, ty, 0) {
         Type::Alias(name) => lua::type_field_items(&name, field)
             .into_iter()

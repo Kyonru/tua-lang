@@ -46,6 +46,7 @@ pub mod selection_range;
 mod semantic;
 pub mod semantic_index;
 pub mod semantic_token;
+mod signal;
 pub mod signature_help;
 mod source_text;
 mod sprite;
@@ -220,4 +221,8 @@ pub fn brinevector_runtime_source() -> &'static str {
 
 pub fn anim8_runtime_source() -> &'static str {
     sprite::runtime_source()
+}
+
+pub fn tuasignal_runtime_source() -> &'static str {
+    signal::runtime_source()
 }

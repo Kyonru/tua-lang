@@ -723,6 +723,32 @@ local offset = __tua_vec2(player.x + 4, math.max(0, player.y))
 }
 
 #[test]
+fn snapshot_lowers_builtin_signal_constructor_calls_to_tuasignal() {
+    let emitted = emit_tua_source(
+        "src/signals.tua",
+        r#"
+local events: SignalBus = signal()
+events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+events:emit("player.hit", "ada", 4)
+"#,
+    )
+    .expect("SignalBus constructor calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_signal = require("tuasignal")
+local events = __tua_signal()
+events:on("player.hit", function(player, damage)
+  print(player, damage)
+end)
+events:emit("player.hit", "ada", 4)
+"#
+    );
+}
+
+#[test]
 fn snapshot_does_not_lower_love_asset_loader_names_in_strings_or_comments() {
     let emitted = emit_tua_source(
         "src/assets.tua",

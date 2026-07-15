@@ -80,6 +80,8 @@ Build output mirrors the configured source tree:
 
 - `.tua` files are checked, lowered, erased, and emitted as `.lua`;
 - plain `.lua` files and other assets are copied unchanged;
+- bundled helper runtimes such as `brinevector.lua`, `anim8.lua`, and
+  `tuasignal.lua` are written only when generated Lua requires them;
 - in-place builds are supported when `source` and `out` are the same directory;
 - collisions between generated `.lua` and sibling/copied `.lua` files are
   reported as warnings.

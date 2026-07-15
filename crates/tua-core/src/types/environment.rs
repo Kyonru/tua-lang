@@ -219,6 +219,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            crate::signal::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -272,6 +277,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
     aliases
         .entry(sprite::TYPE_NAME.to_owned())
         .or_insert_with(sprite::sprite_sheet_type);
+    aliases
+        .entry(crate::signal::TYPE_NAME.to_owned())
+        .or_insert_with(crate::signal::signal_bus_type);
     for (name, ty) in builtin_aliases {
         aliases.entry(name).or_insert(ty);
     }
@@ -2721,8 +2729,10 @@ fn infer_function_call_return_types(
             .or_else(|| {
                 vector::is_constructor(name).then(|| Type::Function(vector::constructor_type()))
             })
+            .or_else(|| sprite::is_helper(name).then(|| Type::Function(sprite::constructor_type())))
             .or_else(|| {
-                sprite::is_helper(name).then(|| Type::Function(sprite::constructor_type()))
+                crate::signal::is_constructor(name)
+                    .then(|| Type::Function(crate::signal::constructor_type()))
             });
 
         return function_type

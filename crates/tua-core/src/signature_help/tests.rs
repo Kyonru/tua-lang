@@ -335,6 +335,39 @@ fn returns_builtin_vec2_constructor_signature() {
 }
 
 #[test]
+fn returns_builtin_signal_constructor_and_method_signatures() {
+    let constructor =
+        signature_at("local events = signal(\n", "signal(").expect("signal should have help");
+    let source = r#"
+local events = signal()
+events:emit("player.hit",
+"#;
+    let emit = signature_at(source, "events:emit(\"player.hit\",")
+        .expect("SignalBus emit should have help");
+    let pattern_source = r#"
+local events = signal()
+events:onPattern("player%.",
+"#;
+    let on_pattern = signature_at(pattern_source, "events:onPattern(\"player%.\",")
+        .expect("SignalBus onPattern should have help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function signal(): SignalBus"
+    );
+    assert_eq!(
+        emit.signatures[0].label,
+        "function SignalBus:emit(name: string, ...: any): nil"
+    );
+    assert_eq!(parameter_labels(&emit), vec!["name: string", "...: any"]);
+    assert_eq!(emit.active_parameter, 1);
+    assert_eq!(
+        parameter_labels(&on_pattern),
+        vec!["pattern: string", "handler: function"]
+    );
+}
+
+#[test]
 fn returns_love_object_method_signature_from_inferred_asset_loader_return() {
     let source = r#"
 local function loadPlayerImage()
