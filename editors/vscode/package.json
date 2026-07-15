@@ -22,7 +22,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node --check src/extension.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
+    "check": "node --check src/extension.js && node --check scripts/lsp-completion-profile.js && node --check scripts/lsp-completion-ranking-smoke.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
   },
   "contributes": {
     "configurationDefaults": {

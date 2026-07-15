@@ -27,6 +27,7 @@ nav = [
   { "Tooling" = [
     { "CLI" = "cli.md" },
     { "Language Server" = "lsp.md" },
+    { "Completion Benchmarks" = "completion-benchmarks.md" },
     { "LSP Parity Matrix" = "lsp-parity.md" },
     { "LuaHelper Code Matrix" = "luahelper-code-matrix.md" },
     { "External API Bridge" = "external-api-bridge.md" },

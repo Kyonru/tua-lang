@@ -92,6 +92,8 @@ fn filter_and_rank_completions_with_context(
     prefix: &str,
     ranking_context: Option<&CompletionRankingContext>,
 ) -> Vec<Completion> {
+    let _profile = profile::span("analysis.completion.ranking");
+
     if prefix.is_empty() && ranking_context.is_none() {
         return completions;
     }

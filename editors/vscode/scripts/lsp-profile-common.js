@@ -21,7 +21,7 @@ class LspClient {
   start() {
     this.child = childProcess.spawn(this.command, ["lsp"], {
       cwd: this.root,
-      env: { ...this.env },
+      env: lspScriptEnv(this.env),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -594,6 +594,7 @@ function statsForValues(values) {
     avgMs: avg,
     p50Ms: percentile(sorted, 0.5),
     p95Ms: percentile(sorted, 0.95),
+    p99Ms: percentile(sorted, 0.99),
     minMs: sorted[0],
     maxMs: sorted[sorted.length - 1],
     runs: sorted.length,
@@ -607,7 +608,8 @@ function printRequestReport(root, timings, stats) {
 
     console.log(
       `${label.padEnd(32)} avg ${metric.avgMs.toFixed(2)}ms  ` +
-        `p95 ${metric.p95Ms.toFixed(2)}ms  min ${metric.minMs.toFixed(2)}ms  ` +
+        `p50 ${metric.p50Ms.toFixed(2)}ms  p95 ${metric.p95Ms.toFixed(2)}ms  ` +
+        `p99 ${metric.p99Ms.toFixed(2)}ms  min ${metric.minMs.toFixed(2)}ms  ` +
         `max ${metric.maxMs.toFixed(2)}ms`,
     );
   }
@@ -616,6 +618,10 @@ function printRequestReport(root, timings, stats) {
 }
 
 function formatCacheStats(stats) {
+  const completionContext = stats.completionContext
+    ? `, completionContext h/m ${stats.completionContext.hits}/${stats.completionContext.misses}`
+    : "";
+
   return (
     `cache parse h/m ${stats.parse.hits}/${stats.parse.misses}, ` +
     `hir h/m ${stats.hir.hits}/${stats.hir.misses}, ` +
@@ -623,8 +629,68 @@ function formatCacheStats(stats) {
     `types h/m ${stats.typeEnvironment.hits}/${stats.typeEnvironment.misses}, ` +
     `diagnostics h/m ${stats.diagnostics.hits}/${stats.diagnostics.misses}, ` +
     `symbols h/m ${stats.symbolIndex.hits}/${stats.symbolIndex.misses}, ` +
-    `invalidations ${stats.invalidations}`
+    `invalidations ${stats.invalidations}${completionContext}`
   );
+}
+
+function profileSpans(stderr, prefix) {
+  const spans = [];
+
+  for (const line of (stderr || "").split(/\r?\n/)) {
+    const match = /^\[tua-profile\] (.+) ([0-9.]+)ms$/.exec(line.trim());
+
+    if (!match) {
+      continue;
+    }
+
+    const name = match[1];
+
+    if (prefix && !name.startsWith(prefix)) {
+      continue;
+    }
+
+    spans.push({
+      name,
+      elapsedMs: Number(match[2]),
+    });
+  }
+
+  return spans;
+}
+
+function spanStatsByName(spans) {
+  const byName = new Map();
+
+  for (const span of spans) {
+    const values = byName.get(span.name) || [];
+
+    values.push(span.elapsedMs);
+    byName.set(span.name, values);
+  }
+
+  return [...byName.entries()].map(([name, values]) => ({
+    name,
+    stats: statsForValues(values),
+  }));
+}
+
+function cacheHitRate(cacheStats) {
+  if (!cacheStats) {
+    return 0;
+  }
+
+  const hits = Number(cacheStats.hits || 0);
+  const misses = Number(cacheStats.misses || 0);
+  const total = hits + misses;
+
+  return total === 0 ? 0 : hits / total;
+}
+
+function lspScriptEnv(env) {
+  return {
+    TUA_COMPLETION_STATS: "0",
+    ...env,
+  };
 }
 
 function percentile(sortedValues, percentileValue) {
@@ -691,15 +757,21 @@ function resolveCommand(command) {
 
 module.exports = {
   LspClient,
+  cacheHitRate,
+  completionItems,
   completionResolveParams,
   delay,
   formatCacheStats,
   pathToFileURL,
+  positionAfter,
+  positionAt,
   printRequestReport,
   profileLspProject,
+  profileSpans,
   requestPlan,
   resolveCommand,
   sourceFiles,
+  spanStatsByName,
   statsForValues,
   timingsByLabel,
 };

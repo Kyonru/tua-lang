@@ -89,6 +89,16 @@ profile-lsp: ## Profile LSP request latency against small/medium/large benchmark
 	$(CARGO) build --package tua-cli
 	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-3} node editors/vscode/scripts/lsp-profile.js target/debug/tua benchmarks/lsp/small benchmarks/lsp/medium benchmarks/lsp/large
 
+.PHONY: profile-completion
+profile-completion: ## Profile completion latency, ranking overhead, and completion cache behavior.
+	$(CARGO) build --package tua-cli
+	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-20} node editors/vscode/scripts/lsp-completion-profile.js target/debug/tua benchmarks/lsp/medium
+
+.PHONY: completion-ranking-smoke
+completion-ranking-smoke: ## Check fixture-driven completion ranking order.
+	$(CARGO) build --package tua-cli
+	node editors/vscode/scripts/lsp-completion-ranking-smoke.js target/debug/tua benchmarks/lsp/medium
+
 .PHONY: profile-examples
 profile-examples: ## Profile CLI and LSP speed across every bundled example project.
 	$(CARGO) build --release --package tua-cli

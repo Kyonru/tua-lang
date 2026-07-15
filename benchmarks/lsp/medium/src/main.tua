@@ -2,6 +2,20 @@
 local Player = require("player")
 local Enemy = require("enemy")
 local Legacy = require("legacy")
+local Types = require("types")
+
+type RankedPlayer = {
+  name: string,
+  pos: Types.Vec2,
+  stats: Types.Stats,
+}
+
+local rankedPlayer: RankedPlayer = {
+  name = "Ada",
+  pos = { x = 0, y = 0 },
+  stats = { hp = 100, speed = 8 },
+}
+local rankedHp = rankedPlayer.stats.hp
 
 local player = Player.makePlayer("Ada")
 local enemy = Enemy.spawnEnemy("slime", { x = 12, y = 4 })

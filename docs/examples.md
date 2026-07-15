@@ -61,6 +61,8 @@ They include comments describing the feature surface each file stresses.
 
 ```bash
 make profile-lsp
+make profile-completion
+make completion-ranking-smoke
 ```
 
 ## Examples Speed Suite

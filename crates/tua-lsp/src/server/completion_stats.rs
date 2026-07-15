@@ -10,6 +10,7 @@ use tua_core::{CompletionAdaptiveKey, CompletionAdaptiveMemberStats, CompletionA
 const STATS_DIR: &str = ".tua";
 const STATS_FILE: &str = "completion-stats.json";
 const STATS_VERSION: u32 = 1;
+const STATS_ENV: &str = "TUA_COMPLETION_STATS";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct StoredCompletionStats {
@@ -40,11 +41,27 @@ pub(super) fn completion_stats_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(STATS_DIR).join(STATS_FILE)
 }
 
+pub(super) fn completion_stats_enabled() -> bool {
+    std::env::var(STATS_ENV)
+        .map(|value| {
+            let value = value.trim();
+
+            !(value == "0"
+                || value.eq_ignore_ascii_case("false")
+                || value.eq_ignore_ascii_case("off"))
+        })
+        .unwrap_or(true)
+}
+
 pub(super) fn file_scope_hash(_workspace_root: &Path, path: &Path) -> u64 {
     CompletionAdaptiveStats::file_scope_hash(path)
 }
 
 pub(super) fn load_completion_stats(workspace_root: &Path) -> CompletionAdaptiveStats {
+    if !completion_stats_enabled() {
+        return CompletionAdaptiveStats::default();
+    }
+
     let path = completion_stats_path(workspace_root);
     let Ok(contents) = fs::read_to_string(path) else {
         return CompletionAdaptiveStats::default();
@@ -80,6 +97,10 @@ pub(super) fn save_completion_stats(
     workspace_root: &Path,
     stats: &CompletionAdaptiveStats,
 ) -> std::io::Result<()> {
+    if !completion_stats_enabled() {
+        return Ok(());
+    }
+
     if stats.is_empty() {
         let _ = remove_completion_stats(workspace_root)?;
 
@@ -116,6 +137,10 @@ pub(super) fn save_completion_stats(
 }
 
 pub(super) fn remove_completion_stats(workspace_root: &Path) -> std::io::Result<bool> {
+    if !completion_stats_enabled() {
+        return Ok(false);
+    }
+
     let path = completion_stats_path(workspace_root);
 
     match fs::remove_file(path) {

@@ -545,7 +545,7 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `ide-assists` | Code actions and refactor assists. | `code_action` module with conservative quick fixes, source import actions, and safe file fix-all. | Partial | 66, 89 |
 | `ide-ssr` | Structural search and replace. | No equivalent planned for v1. | Out of scope | None |
 | `test-fixture`, `test-utils` | Fixture DSLs and shared test support. | Many focused tests with ad hoc fixtures and temp projects. | Partial | 52 |
-| `profile` | Performance tracing and benchmark support. | Opt-in `TUA_PROFILE` tracing, LSP latency benchmark fixtures, and cache stats reporting. | Existing | 69 |
+| `profile` | Performance tracing and benchmark support. | Opt-in `TUA_PROFILE` tracing, LSP latency benchmark fixtures, completion-specific profiling, and cache stats reporting. | Existing | 69, 77.5 |
 | `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua plugins must not become arbitrary macro expansion. | Out of scope | None |
 | `load-cargo`, `toolchain` | Rust toolchain and Cargo loading. | No equivalent; Tua project model stays Lua/LOVE-focused. | Out of scope | None |
 

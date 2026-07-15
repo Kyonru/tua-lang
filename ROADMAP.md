@@ -2315,6 +2315,8 @@ Acceptance:
 
 ### 77.5 `feat(completion): add benchmark and telemetry plan`
 
+Status: done.
+
 Scope:
 
 - Add baseline measurements for:
@@ -2334,6 +2336,13 @@ Acceptance:
 - Ranking layer overhead is bounded and reportable in profiler output.
 - The roadmap includes at least one explicit metric where Phase 14 success is considered
   achieved.
+
+Phase 14 success metric:
+
+- `make profile-completion` on `benchmarks/lsp/medium` reports `completion` p95
+  at or below 50ms after warmup and `analysis.completion.ranking` p95 at or
+  below 5ms, with completion-context cache hit rate and optional model-lane
+  fallback frequency included in the report.
 
 ## Phase 15: TypeScript Go LSP And VS Code Parity
 

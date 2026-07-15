@@ -4,6 +4,10 @@ const childProcess = require("child_process");
 
 const command = process.argv[2] || "target/debug/tua";
 const child = childProcess.spawn(command, ["lsp"], {
+  env: {
+    TUA_COMPLETION_STATS: "0",
+    ...process.env,
+  },
   stdio: ["pipe", "pipe", "pipe"],
   windowsHide: true,
 });

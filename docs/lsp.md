@@ -249,9 +249,9 @@ make profile-lsp
 ```
 
 The command runs `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and
-`benchmarks/lsp/large`, reports average, p95, min, and max latency per LSP
-request, and prints analysis cache hit/miss counters from the server. The
-profile includes `completion`, `completionResolve`, `signatureHelp`,
+`benchmarks/lsp/large`, reports average, p50, p95, p99, min, and max latency
+per LSP request, and prints analysis cache hit/miss counters from the server.
+The profile includes `completion`, `completionResolve`, `signatureHelp`,
 `definition`, `definitionAgain`, `references`, `prepareRename`, and `rename`
 so autocomplete, inference, navigation, and rename regressions are visible in
 one run. `definitionAgain` repeats the same go-to-definition request
@@ -264,6 +264,19 @@ TUA_PROFILE_REPEAT=20 make profile-lsp
 TUA_PROFILE=1 make profile-lsp
 TUA_PROFILE=1 TUA_PROFILE_STREAM=1 make profile-lsp
 ```
+
+For completion-specific profiling and ranking regression checks:
+
+```bash
+make profile-completion
+make completion-ranking-smoke
+```
+
+`make profile-completion` runs the fixed `benchmarks/lsp/medium` profile and
+prints completion p50/p95/p99, completion-context cache hit rate,
+`analysis.completion.ranking` overhead, and optional model-lane fallback
+frequency. See [Completion Benchmarks](completion-benchmarks.md) for latency
+targets, baseline comparison, ranking diagnostics, and known failure modes.
 
 To profile the real bundled examples across both CLI commands and editor
 requests:
@@ -321,9 +334,10 @@ restart.
 Current lookup regression targets from the checked-in fixtures are intentionally
 small: `definitionAgain`, `references`, `prepareRename`, and `rename` should
 stay in the low single-digit millisecond range on the large fixture after
-warmup. Completion, completion resolve, signature help, hover, and inlay hints
-should reuse cached semantic facts instead of rebuilding type environments per
-request. If a change pushes those rows noticeably higher, rerun with
-`TUA_PROFILE=1` and inspect the `analysis.query.*`, `analysis.semantic.*`,
-`analysis.completion.*`, `analysis.references.*`, and `lsp.*` spans before
-merging.
+warmup. Completion p95 on the fixed medium profile should stay at or below 50ms,
+and ranking p95 should stay at or below 5ms. Completion, completion resolve,
+signature help, hover, and inlay hints should reuse cached semantic facts
+instead of rebuilding type environments per request. If a change pushes those
+rows noticeably higher, rerun with `TUA_PROFILE=1` and inspect the
+`analysis.query.*`, `analysis.semantic.*`, `analysis.completion.*`,
+`analysis.references.*`, and `lsp.*` spans before merging.

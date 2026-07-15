@@ -10,6 +10,10 @@ const root = path.resolve(process.argv[3] || "examples/features");
 const src = path.join(root, "src");
 const child = childProcess.spawn(command, ["lsp"], {
   cwd: root,
+  env: {
+    TUA_COMPLETION_STATS: "0",
+    ...process.env,
+  },
   stdio: ["pipe", "pipe", "pipe"],
   windowsHide: true,
 });

@@ -118,6 +118,7 @@ pub struct AnalysisHost {
     last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     snapshot_cache: RefCell<Option<CachedAnalysisSnapshot>>,
     revision: u64,
@@ -140,6 +141,7 @@ pub struct AnalysisSnapshot {
     completion_adaptive_stats: CompletionAdaptiveStats,
     semantic_facts: Rc<RefCell<BTreeMap<PathBuf, Rc<AnalysisSemanticFacts>>>>,
     completion_cache: Rc<RefCell<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
+    completion_cache_stats: Rc<RefCell<CompletionCacheStats>>,
     definition_cache: Rc<RefCell<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     reverse_reference_index: Rc<OnceCell<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
@@ -242,8 +244,16 @@ pub struct AnalysisCacheStats {
     pub require_edge_misses: usize,
     pub symbol_index_hits: usize,
     pub symbol_index_misses: usize,
+    pub completion_context_hits: usize,
+    pub completion_context_misses: usize,
     pub invalidations: usize,
     pub dependent_invalidations: usize,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CompletionCacheStats {
+    hits: usize,
+    misses: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -781,6 +791,7 @@ impl AnalysisHost {
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
             semantic_facts: Rc::new(RefCell::new(BTreeMap::new())),
             completion_cache: Rc::clone(&self.completion_cache),
+            completion_cache_stats: Rc::clone(&self.completion_cache_stats),
             definition_cache: Rc::clone(&self.definition_cache),
             reverse_reference_index: Rc::new(OnceCell::new()),
             call_hierarchy_symbols,
@@ -802,7 +813,13 @@ impl AnalysisHost {
     }
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
-        self.cache.borrow().stats.clone()
+        let mut stats = self.cache.borrow().stats.clone();
+        let completion_stats = self.completion_cache_stats.borrow();
+
+        stats.completion_context_hits = completion_stats.hits;
+        stats.completion_context_misses = completion_stats.misses;
+
+        stats
     }
 
     pub fn fast_diagnostics(&self, path: impl AsRef<Path>) -> Vec<Diagnostic> {
@@ -1192,8 +1209,12 @@ impl AnalysisSnapshot {
 
         if let Some(request) = reusable_completion_request(path, &file.source, position) {
             if let Some(completions) = self.completion_cache.borrow().get(&request.key).cloned() {
+                self.record_completion_cache_hit();
+
                 return filter_and_rank_completions(completions, &request.prefix);
             }
+
+            self.record_completion_cache_miss();
 
             let completions = self.completion_uncached(
                 path,
@@ -1211,8 +1232,12 @@ impl AnalysisSnapshot {
         let key = completion_request_key(path, &file.source, position);
 
         if let Some(completions) = self.completion_cache.borrow().get(&key).cloned() {
+            self.record_completion_cache_hit();
+
             return completions;
         }
+
+        self.record_completion_cache_miss();
 
         let completions = self.completion_uncached(path, file, None, position);
 
@@ -1221,6 +1246,14 @@ impl AnalysisSnapshot {
             .insert(key, completions.clone());
 
         completions
+    }
+
+    fn record_completion_cache_hit(&self) {
+        self.completion_cache_stats.borrow_mut().hits += 1;
+    }
+
+    fn record_completion_cache_miss(&self) {
+        self.completion_cache_stats.borrow_mut().misses += 1;
     }
 
     fn completion_uncached(

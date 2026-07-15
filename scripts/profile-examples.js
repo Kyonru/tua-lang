@@ -206,7 +206,8 @@ function printProjectReport(projectReport) {
 
     console.log(
       `${label.padEnd(44)} avg ${stats.avgMs.toFixed(2)}ms  ` +
-        `p95 ${stats.p95Ms.toFixed(2)}ms  min ${stats.minMs.toFixed(2)}ms  ` +
+        `p50 ${stats.p50Ms.toFixed(2)}ms  p95 ${stats.p95Ms.toFixed(2)}ms  ` +
+        `p99 ${stats.p99Ms.toFixed(2)}ms  min ${stats.minMs.toFixed(2)}ms  ` +
         `max ${stats.maxMs.toFixed(2)}ms`,
     );
   }

@@ -66,7 +66,10 @@ project-adaptive learning when the receiver is known:
 - persisted privacy-safe workspace usage statistics for member access and call
   patterns, with reset support;
 - optional model-assisted ranking paths behind explicit configuration;
-- completion latency and ranking-overhead benchmarks.
+- completion latency, ranking-overhead, completion-cache, and model-lane
+  fallback benchmarks. Phase 14 is considered successful when
+  `make profile-completion` reports medium-fixture completion p95 at or below
+  50ms and ranking p95 at or below 5ms after warmup.
 
 Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
 
