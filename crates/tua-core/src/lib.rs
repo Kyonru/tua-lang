@@ -53,6 +53,7 @@ mod sprite;
 mod text_match;
 pub mod type_database;
 pub mod types;
+mod usage_index;
 mod vector;
 pub mod vfs;
 pub mod workspace_symbol;

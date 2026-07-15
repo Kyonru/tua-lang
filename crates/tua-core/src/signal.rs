@@ -210,6 +210,13 @@ pub(crate) fn is_event_schema_method(name: &str) -> bool {
     EVENT_SCHEMA_METHODS.contains(&name)
 }
 
+pub(crate) fn source_may_contain_event_call(source: &str) -> bool {
+    (source.contains("signal") || source.contains("SignalBus"))
+        && EVENT_NAME_METHODS.iter().any(|method| {
+            source.contains(&format!(":{method}")) || source.contains(&format!(".{method}"))
+        })
+}
+
 pub(crate) fn type_is_signal_bus(environment: &TypeEnvironment, ty: &Type) -> bool {
     match ty {
         Type::Alias(name) if name == TYPE_NAME => true,

@@ -352,7 +352,10 @@ under the extension's global `profiles` directory outside the workspace by
 default, while `Tua: Save CPU Profile` and `Tua: Save Heap Summary` ask the
 server for Rust-relevant profile artifacts in that same output directory.
 Servers without those profile artifact capabilities return a warning instead
-of failing the extension host.
+of failing the extension host. Cache stats include `usageIndex` hits and misses
+for the compact per-file member/event summaries used by project completion and
+the signal graph; unchanged files should contribute hits across snapshot
+revisions.
 
 For editor-side trace logging, set `tua.trace.server` to `off`, `messages`, or
 `verbose`, and set `tua.log.verbosity` to `off`, `error`, `info`, `debug`, or

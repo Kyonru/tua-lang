@@ -21,9 +21,18 @@ prints:
 - `completion` and `completionResolve` latency as p50, p95, p99, average, and
   run count;
 - `completionContext` cache hits, misses, and hit rate from `tua/cacheStats`;
+- `usageIndex` per-file summary cache hits and misses from `tua/cacheStats`;
 - `analysis.completion.ranking` overhead from `TUA_PROFILE=1` profile spans;
+- `analysis.index.usage.file` and `analysis.index.usage.project` index build
+  costs when profiling is enabled;
 - optional model-lane fallback frequency. The model lane is currently disabled,
   so the expected baseline is zero requests and zero fallbacks.
+
+Project-aware completion does not collect or reparse project source during an
+editor request. The snapshot reuses content-keyed per-file summaries, builds a
+compact revisioned project usage index, and scopes completion cache entries to
+that revision. A rising `usageIndex.misses` count without corresponding file
+changes indicates unexpected invalidation.
 
 Run the ranking-order regression smoke:
 

@@ -12,9 +12,10 @@ use crate::module_index::{exported_field_for_fields, required_module_exports_for
 use crate::profile;
 use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
 use crate::semantic::{resolve_aliases, SemanticModel};
-use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
+use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
+use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
 use crate::{asset, love_conf, signal, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
@@ -238,7 +239,7 @@ fn completion_uses_source_order(completion: &Completion) -> bool {
 
 #[derive(Clone, Debug)]
 struct CompletionRankingContext<'a> {
-    member_usage: Option<MemberUsageRanking>,
+    member_usage: Option<MemberUsageRanking<'a>>,
     adaptive_stats: Option<&'a CompletionAdaptiveStats>,
     file_scope_hash: u64,
     receiver_parts: Vec<String>,
@@ -246,22 +247,67 @@ struct CompletionRankingContext<'a> {
     sequence_context: CompletionSequenceContextSnapshot,
 }
 
-#[derive(Clone, Debug, Default)]
-struct MemberUsageRanking {
-    member_counts: BTreeMap<String, usize>,
-    receiver_member_counts: BTreeMap<String, usize>,
-    call_counts: BTreeMap<String, usize>,
-    proximity_scores: BTreeMap<String, usize>,
+#[derive(Clone, Copy)]
+enum CompletionProjectData<'a> {
+    Sources(&'a [&'a str]),
+    UsageIndex(&'a ProjectUsageIndex),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CompletionRankingInputs<'a> {
+    project_data: CompletionProjectData<'a>,
+    adaptive_stats: Option<&'a CompletionAdaptiveStats>,
+    file_scope_hash: u64,
+    sequence_ranking: &'a CompletionSequenceRankingConfig,
+}
+
+impl<'a> CompletionRankingInputs<'a> {
+    fn from_sources(
+        project_sources: &'a [&'a str],
+        adaptive_stats: Option<&'a CompletionAdaptiveStats>,
+        file_scope_hash: u64,
+        sequence_ranking: &'a CompletionSequenceRankingConfig,
+    ) -> Self {
+        Self {
+            project_data: CompletionProjectData::Sources(project_sources),
+            adaptive_stats,
+            file_scope_hash,
+            sequence_ranking,
+        }
+    }
+
+    pub(crate) fn from_usage_index(
+        usage_index: &'a ProjectUsageIndex,
+        adaptive_stats: Option<&'a CompletionAdaptiveStats>,
+        file_scope_hash: u64,
+        sequence_ranking: &'a CompletionSequenceRankingConfig,
+    ) -> Self {
+        Self {
+            project_data: CompletionProjectData::UsageIndex(usage_index),
+            adaptive_stats,
+            file_scope_hash,
+            sequence_ranking,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum MemberUsageRanking<'a> {
+    Summary(MemberUsageSummary),
+    Indexed {
+        index: &'a ProjectUsageIndex,
+        current_path: PathBuf,
+        receiver: Option<String>,
+        position: SourcePosition,
+    },
 }
 
 impl<'a> CompletionRankingContext<'a> {
     fn from_context(
+        current_path: &Path,
         source: &str,
         context: &CompletionContext,
-        project_sources: &[&str],
-        adaptive_stats: Option<&'a CompletionAdaptiveStats>,
-        file_scope_hash: u64,
-        sequence_ranking: &CompletionSequenceRankingConfig,
+        ranking: CompletionRankingInputs<'a>,
     ) -> Option<Self> {
         let (receiver_parts, position, prefix, member_usage) = match context {
             CompletionContext::FieldAccess {
@@ -274,8 +320,9 @@ impl<'a> CompletionRankingContext<'a> {
                 *position,
                 prefix.as_str(),
                 Some(MemberUsageRanking::collect(
+                    current_path,
                     source,
-                    project_sources,
+                    ranking.project_data,
                     receiver_parts,
                     *position,
                 )),
@@ -288,10 +335,10 @@ impl<'a> CompletionRankingContext<'a> {
 
         Some(Self {
             member_usage,
-            adaptive_stats,
-            file_scope_hash,
+            adaptive_stats: ranking.adaptive_stats,
+            file_scope_hash: ranking.file_scope_hash,
             receiver_parts: receiver_parts.clone(),
-            sequence_ranking: sequence_ranking.clone(),
+            sequence_ranking: ranking.sequence_ranking.clone(),
             sequence_context: CompletionSequenceContextSnapshot::from_source(
                 source,
                 position,
@@ -347,127 +394,67 @@ impl<'a> CompletionRankingContext<'a> {
     }
 }
 
-impl MemberUsageRanking {
+impl<'a> MemberUsageRanking<'a> {
     fn collect(
+        current_path: &Path,
         source: &str,
-        project_sources: &[&str],
+        project_data: CompletionProjectData<'a>,
         receiver_parts: &[String],
         position: SourcePosition,
     ) -> Self {
-        let mut ranking = Self::default();
-        let receiver = receiver_parts.last().map(String::as_str);
+        let receiver = receiver_parts.last().cloned();
 
-        ranking.collect_from_source(source, receiver, Some(position));
-
-        for project_source in project_sources {
-            ranking.collect_from_source(project_source, receiver, None);
-        }
-
-        ranking
-    }
-
-    fn collect_from_source(
-        &mut self,
-        source: &str,
-        receiver: Option<&str>,
-        position: Option<SourcePosition>,
-    ) {
-        let bytes = source.as_bytes();
-        let mut index = 0;
-        let mut line = 1;
-        let mut quote = None;
-        let mut escaped = false;
-        let mut line_comment = false;
-
-        while index < bytes.len() {
-            let byte = bytes[index];
-
-            if byte == b'\n' {
-                line += 1;
-                line_comment = false;
-                index += 1;
-                continue;
+        match project_data {
+            CompletionProjectData::Sources(project_sources) => {
+                let transient_index =
+                    ProjectUsageIndex::from_sources(current_path, source, project_sources);
+                Self::Summary(transient_index.member_usage(
+                    current_path,
+                    receiver.as_deref(),
+                    position,
+                ))
             }
-
-            if line_comment {
-                index += 1;
-                continue;
-            }
-
-            if let Some(quote_byte) = quote {
-                if escaped {
-                    escaped = false;
-                } else if byte == b'\\' {
-                    escaped = true;
-                } else if byte == quote_byte {
-                    quote = None;
-                }
-                index += 1;
-                continue;
-            }
-
-            if byte == b'-' && bytes.get(index + 1) == Some(&b'-') {
-                line_comment = true;
-                index += 2;
-                continue;
-            }
-
-            if matches!(byte, b'\'' | b'"') {
-                quote = Some(byte);
-                index += 1;
-                continue;
-            }
-
-            if matches!(byte, b'.' | b':') {
-                if let Some((member, end)) = identifier_at(source, index + 1) {
-                    *self.member_counts.entry(member.to_owned()).or_default() += 1;
-
-                    if next_code_byte_after(bytes, end) == Some(b'(') {
-                        *self.call_counts.entry(member.to_owned()).or_default() += 1;
-                    }
-
-                    if receiver.is_some_and(|receiver| {
-                        identifier_before(source, index).as_deref() == Some(receiver)
-                    }) {
-                        *self
-                            .receiver_member_counts
-                            .entry(member.to_owned())
-                            .or_default() += 1;
-                    }
-
-                    if let Some(position) = position {
-                        let score = proximity_score(line, position.line);
-
-                        if score > 0 {
-                            *self.proximity_scores.entry(member.to_owned()).or_default() += score;
-                        }
-                    }
-
-                    index = end;
-                    continue;
-                }
-            }
-
-            index += 1;
+            CompletionProjectData::UsageIndex(index) => Self::Indexed {
+                index,
+                current_path: current_path.to_path_buf(),
+                receiver,
+                position,
+            },
         }
     }
 
     fn score(&self, completion: &Completion) -> usize {
         let label = completion.label.as_str();
-        let receiver_count = self
-            .receiver_member_counts
-            .get(label)
-            .copied()
-            .unwrap_or_default();
-        let call_count = self.call_counts.get(label).copied().unwrap_or_default();
-        let member_count = self.member_counts.get(label).copied().unwrap_or_default();
-        let proximity = self
-            .proximity_scores
-            .get(label)
-            .copied()
-            .unwrap_or_default();
-        let contextual_score =
-            receiver_count * 1_000 + call_count * 200 + member_count * 50 + proximity;
+        let counts = match self {
+            Self::Summary(summary) => MemberUsageCounts {
+                member: summary
+                    .member_counts
+                    .get(label)
+                    .copied()
+                    .unwrap_or_default(),
+                receiver_member: summary
+                    .receiver_member_counts
+                    .get(label)
+                    .copied()
+                    .unwrap_or_default(),
+                call: summary.call_counts.get(label).copied().unwrap_or_default(),
+                proximity: summary
+                    .proximity_scores
+                    .get(label)
+                    .copied()
+                    .unwrap_or_default(),
+            },
+            Self::Indexed {
+                index,
+                current_path,
+                receiver,
+                position,
+            } => index.member_usage_counts(current_path, receiver.as_deref(), *position, label),
+        };
+        let contextual_score = counts.receiver_member * 1_000
+            + counts.call * 200
+            + counts.member * 50
+            + counts.proximity;
 
         if contextual_score == 0 {
             return 0;
@@ -492,59 +479,6 @@ fn completion_quality_score(completion: &Completion) -> usize {
     let callable = usize::from(completion.kind == CompletionKind::Function);
 
     documentation + precise_detail + callable
-}
-
-fn proximity_score(line: usize, cursor_line: usize) -> usize {
-    let distance = line.abs_diff(cursor_line);
-
-    if distance > 50 {
-        0
-    } else {
-        50 - distance + usize::from(line <= cursor_line) * 10
-    }
-}
-
-fn identifier_at(source: &str, start: usize) -> Option<(&str, usize)> {
-    let bytes = source.as_bytes();
-
-    if !bytes
-        .get(start)
-        .is_some_and(|byte| is_identifier_start(*byte))
-    {
-        return None;
-    }
-
-    let mut end = start + 1;
-
-    while end < bytes.len() && is_identifier_continue(bytes[end]) {
-        end += 1;
-    }
-
-    Some((&source[start..end], end))
-}
-
-fn identifier_before(source: &str, end: usize) -> Option<String> {
-    let bytes = source.as_bytes();
-
-    if end == 0 || !is_identifier_continue(*bytes.get(end - 1)?) {
-        return None;
-    }
-
-    let mut start = end - 1;
-
-    while start > 0 && is_identifier_continue(bytes[start - 1]) {
-        start -= 1;
-    }
-
-    Some(source[start..end].to_owned())
-}
-
-fn next_code_byte_after(bytes: &[u8], mut index: usize) -> Option<u8> {
-    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-        index += 1;
-    }
-
-    bytes.get(index).copied()
 }
 
 fn completion_match_rank(completion: &Completion, prefix: &str) -> Option<TextMatchRank> {
@@ -690,6 +624,27 @@ pub(crate) fn complete_source_with_parsed_environment_and_ranking_options(
     file_scope_hash: u64,
     sequence_ranking: &CompletionSequenceRankingConfig,
 ) -> Vec<Completion> {
+    complete_source_with_parsed_environment_and_ranking_inputs(
+        source,
+        parsed,
+        position,
+        environment,
+        CompletionRankingInputs::from_sources(
+            project_sources,
+            adaptive_stats,
+            file_scope_hash,
+            sequence_ranking,
+        ),
+    )
+}
+
+pub(crate) fn complete_source_with_parsed_environment_and_ranking_inputs(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    ranking: CompletionRankingInputs<'_>,
+) -> Vec<Completion> {
     let Some(context) = completion_context(source, position) else {
         return Vec::new();
     };
@@ -699,22 +654,16 @@ pub(crate) fn complete_source_with_parsed_environment_and_ranking_options(
         source,
         context,
         environment,
-        project_sources,
-        adaptive_stats,
-        file_scope_hash,
-        sequence_ranking,
+        ranking,
     )
 }
 
-pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_options(
+pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_inputs(
     source: &str,
     parsed: &ParsedSource,
     position: SourcePosition,
     environment: &TypeEnvironment,
-    project_sources: &[&str],
-    adaptive_stats: Option<&CompletionAdaptiveStats>,
-    file_scope_hash: u64,
-    sequence_ranking: &CompletionSequenceRankingConfig,
+    ranking: CompletionRankingInputs<'_>,
 ) -> Vec<Completion> {
     let Some(CompletionContext::FieldAccess {
         receiver_parts,
@@ -744,14 +693,8 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_optio
         separator,
         separator_span,
     );
-    let ranking_context = CompletionRankingContext::from_context(
-        source,
-        &context,
-        project_sources,
-        adaptive_stats,
-        file_scope_hash,
-        sequence_ranking,
-    );
+    let ranking_context =
+        CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
 
     rank_completions_for_context(completions, Some(prefix.as_str()), ranking_context.as_ref())
 }
@@ -803,10 +746,12 @@ fn complete_parsed_source_with_context_and_ranking(
         source,
         context,
         environment,
-        project_sources,
-        adaptive_stats,
-        file_scope_hash,
-        &CompletionSequenceRankingConfig::default(),
+        CompletionRankingInputs::from_sources(
+            project_sources,
+            adaptive_stats,
+            file_scope_hash,
+            &CompletionSequenceRankingConfig::default(),
+        ),
     )
 }
 
@@ -815,20 +760,11 @@ fn complete_parsed_source_with_context_and_ranking_options(
     source: &str,
     context: CompletionContext,
     environment: &TypeEnvironment,
-    project_sources: &[&str],
-    adaptive_stats: Option<&CompletionAdaptiveStats>,
-    file_scope_hash: u64,
-    sequence_ranking: &CompletionSequenceRankingConfig,
+    ranking: CompletionRankingInputs<'_>,
 ) -> Vec<Completion> {
     let prefix = context.filter_prefix().map(str::to_owned);
-    let ranking_context = CompletionRankingContext::from_context(
-        source,
-        &context,
-        project_sources,
-        adaptive_stats,
-        file_scope_hash,
-        sequence_ranking,
-    );
+    let ranking_context =
+        CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
     let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
         CompletionContext::DocumentationSnippet { position } => {
@@ -880,7 +816,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
             active_parameter,
             prefix.as_str(),
             position,
-            project_sources,
+            ranking.project_data,
         ),
         CompletionContext::RequirePath { prefix } => {
             complete_require_paths(&parsed.path, prefix.as_str())
@@ -1675,7 +1611,7 @@ fn complete_string_argument_values(
     active_parameter: usize,
     prefix: &str,
     position: SourcePosition,
-    project_sources: &[&str],
+    project_data: CompletionProjectData<'_>,
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
     let semantic = SemanticModel::new(parsed, environment);
@@ -1687,7 +1623,7 @@ fn complete_string_argument_values(
         active_parameter,
         prefix,
         position,
-        project_sources,
+        project_data,
     ) {
         return completions;
     }
@@ -1728,7 +1664,7 @@ fn complete_signal_event_names(
     active_parameter: usize,
     prefix: &str,
     position: SourcePosition,
-    project_sources: &[&str],
+    project_data: CompletionProjectData<'_>,
 ) -> Option<Vec<Completion>> {
     if active_parameter != 0 || callee_parts.len() < 2 {
         return None;
@@ -1748,28 +1684,51 @@ fn complete_signal_event_names(
         return None;
     }
 
-    let mut candidates = collect_signal_event_candidates(parsed, environment, Some(position), 0, 0);
+    let mut candidates = match project_data {
+        CompletionProjectData::Sources(project_sources) => {
+            let mut candidates =
+                collect_signal_event_candidates(parsed, environment, Some(position), 0, 0);
 
-    for (index, source) in project_sources.iter().enumerate() {
-        if !source_may_contain_signal_event(source) {
-            continue;
+            for (index, source) in project_sources.iter().enumerate() {
+                if !signal::source_may_contain_event_call(source) {
+                    continue;
+                }
+
+                let Ok(project_parsed) =
+                    parse_tua_source(format!("__project_signal_events_{index}.tua"), *source)
+                else {
+                    continue;
+                };
+                let (project_environment, _) =
+                    build_type_environment_with_diagnostics(&project_parsed);
+
+                candidates.extend(collect_signal_event_candidates(
+                    &project_parsed,
+                    &project_environment,
+                    None,
+                    1,
+                    candidates.len(),
+                ));
+            }
+
+            candidates
         }
-
-        let Ok(project_parsed) =
-            parse_tua_source(format!("__project_signal_events_{index}.tua"), *source)
-        else {
-            continue;
-        };
-        let (project_environment, _) = build_type_environment_with_diagnostics(&project_parsed);
-
-        candidates.extend(collect_signal_event_candidates(
-            &project_parsed,
-            &project_environment,
-            None,
-            1,
-            candidates.len(),
-        ));
-    }
+        CompletionProjectData::UsageIndex(index) => index
+            .signal_events()
+            .iter()
+            .filter(|event| {
+                event.path != parsed.path || !span_contains(event.mention.span, position)
+            })
+            .enumerate()
+            .map(|(source_order, event)| SignalEventCandidate {
+                name: event.mention.name.clone(),
+                receiver_parts: event.mention.receiver_parts.clone(),
+                position: event.mention.position,
+                source_rank: usize::from(event.path != parsed.path),
+                source_order,
+            })
+            .collect(),
+    };
 
     if candidates.is_empty() {
         return Some(Vec::new());
@@ -1853,32 +1812,14 @@ fn signal_event_completions(
     completions
 }
 
-fn source_may_contain_signal_event(source: &str) -> bool {
-    (source.contains("signal") || source.contains("SignalBus"))
-        && (source.contains(":on")
-            || source.contains(".on")
-            || source.contains(":once")
-            || source.contains(".once")
-            || source.contains(":register")
-            || source.contains(".register")
-            || source.contains(":declare")
-            || source.contains(".declare")
-            || source.contains(":emit")
-            || source.contains(".emit")
-            || source.contains(":off")
-            || source.contains(".off")
-            || source.contains(":remove")
-            || source.contains(".remove")
-            || source.contains(":clear")
-            || source.contains(".clear")
-            || source.contains(":has")
-            || source.contains(".has")
-            || source.contains(":listeners")
-            || source.contains(".listeners"))
-}
-
 fn line_distance(left: SourcePosition, right: SourcePosition) -> usize {
     left.line.abs_diff(right.line)
+}
+
+fn span_contains(span: crate::SourceSpan, position: SourcePosition) -> bool {
+    let position = (position.line, position.column);
+
+    (span.start.line, span.start.column) <= position && position <= (span.end.line, span.end.column)
 }
 
 fn parameter_type_from_lua_item(item: LuaItem, index: usize) -> Option<String> {

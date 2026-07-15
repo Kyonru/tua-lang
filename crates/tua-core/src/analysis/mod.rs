@@ -14,10 +14,11 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::completion::{
-    complete_field_access_in_source_with_environment_and_ranking_options,
+    complete_field_access_in_source_with_environment_and_ranking_inputs,
+    complete_source_with_parsed_environment_and_ranking_inputs,
     complete_source_with_parsed_environment_and_ranking_options, filter_and_rank_completions,
     multitoken::complete_multi_token_source, CompletionAdaptiveStats, CompletionMultiTokenConfig,
-    CompletionSequenceRankingConfig,
+    CompletionRankingInputs, CompletionSequenceRankingConfig,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -46,6 +47,7 @@ use crate::text_match::text_matches;
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
+use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
     module_name_for_path, normalize_path, ModulePathSeparator, VfsSnapshot, VfsSourceKind,
     VirtualFileSystem,
@@ -130,6 +132,7 @@ pub struct AnalysisHost {
 
 #[derive(Clone, Debug)]
 pub struct AnalysisSnapshot {
+    revision: u64,
     config: ProjectConfig,
     vfs: VfsSnapshot,
     asset_roots: Vec<PathBuf>,
@@ -141,6 +144,7 @@ pub struct AnalysisSnapshot {
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
+    usage_index: ProjectUsageIndex,
     last_good_files: BTreeMap<PathBuf, LastGoodAnalysisFile>,
     completion_adaptive_stats: CompletionAdaptiveStats,
     completion_sequence_ranking: CompletionSequenceRankingConfig,
@@ -173,6 +177,7 @@ struct AnalysisFile {
     exports: Option<ModuleExports>,
     require_edges: Vec<ModuleLink>,
     assets: Vec<AssetMetadata>,
+    usage_index: Arc<FileUsageIndex>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
 }
@@ -250,6 +255,8 @@ pub struct AnalysisCacheStats {
     pub require_edge_misses: usize,
     pub symbol_index_hits: usize,
     pub symbol_index_misses: usize,
+    pub usage_index_hits: usize,
+    pub usage_index_misses: usize,
     pub completion_context_hits: usize,
     pub completion_context_misses: usize,
     pub invalidations: usize,
@@ -377,6 +384,7 @@ type ModuleExportCandidates = BTreeMap<String, BTreeSet<String>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct CompletionRequestKey {
+    revision: u64,
     path: PathBuf,
     line: usize,
     column: usize,
@@ -782,6 +790,16 @@ impl AnalysisHost {
                 vfs.source_roots(),
             )
         };
+        let usage_index = {
+            let _profile = profile::span("analysis.index.usage.project");
+
+            ProjectUsageIndex::build(
+                self.revision,
+                files
+                    .iter()
+                    .map(|(path, file)| (path.as_path(), &file.usage_index)),
+            )
+        };
         let (call_hierarchy_symbols, call_hierarchy_calls) = {
             let _profile = profile::span("analysis.index.call_hierarchy");
             let symbols = files
@@ -806,6 +824,7 @@ impl AnalysisHost {
         self.refresh_last_good_files(&files);
 
         let snapshot = AnalysisSnapshot {
+            revision: self.revision,
             config: self.config.clone(),
             vfs,
             asset_roots: self.asset_roots.clone(),
@@ -817,6 +836,7 @@ impl AnalysisHost {
             module_graph,
             type_database,
             symbol_index,
+            usage_index,
             last_good_files: self.last_good_files.borrow().clone(),
             completion_adaptive_stats: self.completion_adaptive_stats.clone(),
             completion_sequence_ranking: self.completion_sequence_ranking.clone(),
@@ -1091,6 +1111,10 @@ impl AnalysisHost {
 }
 
 impl AnalysisSnapshot {
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn config(&self) -> &ProjectConfig {
         &self.config
     }
@@ -1259,7 +1283,10 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        if let Some(request) = reusable_completion_request(path, &file.source, position) {
+        let revision = self.usage_index.revision();
+        debug_assert_eq!(revision, self.revision);
+
+        if let Some(request) = reusable_completion_request(revision, path, &file.source, position) {
             if let Some(completions) = self
                 .completion_cache
                 .lock()
@@ -1288,7 +1315,7 @@ impl AnalysisSnapshot {
             return filter_and_rank_completions(completions, &request.prefix);
         }
 
-        let key = completion_request_key(path, &file.source, position);
+        let key = completion_request_key(revision, path, &file.source, position);
 
         if let Some(completions) = self
             .completion_cache
@@ -1336,17 +1363,11 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Vec<Completion> {
         let source = source_override.unwrap_or(&file.source);
-        let project_sources = self.project_completion_sources(path);
         let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(path);
         let completions = match &file.parsed {
             Ok(parsed) => {
-                let completions = self.project_completions(
-                    parsed,
-                    source,
-                    position,
-                    &project_sources,
-                    file_scope_hash,
-                );
+                let completions =
+                    self.project_completions(parsed, source, position, file_scope_hash);
 
                 if !completions.is_empty() {
                     completions
@@ -1360,39 +1381,30 @@ impl AnalysisSnapshot {
                         environment
                     });
 
-                    complete_source_with_parsed_environment_and_ranking_options(
+                    complete_source_with_parsed_environment_and_ranking_inputs(
                         source,
                         parsed,
                         position,
                         &environment,
-                        &project_sources,
-                        Some(&self.completion_adaptive_stats),
-                        file_scope_hash,
-                        &self.completion_sequence_ranking,
+                        self.completion_ranking_inputs(file_scope_hash),
                     )
                 } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
-                    complete_source_with_parsed_environment_and_ranking_options(
+                    complete_source_with_parsed_environment_and_ranking_inputs(
                         source,
                         parsed,
                         position,
                         &facts.environment,
-                        &project_sources,
-                        Some(&self.completion_adaptive_stats),
-                        file_scope_hash,
-                        &self.completion_sequence_ranking,
+                        self.completion_ranking_inputs(file_scope_hash),
                     )
                 } else {
                     let (environment, _) = build_type_environment_with_diagnostics(parsed);
 
-                    complete_source_with_parsed_environment_and_ranking_options(
+                    complete_source_with_parsed_environment_and_ranking_inputs(
                         source,
                         parsed,
                         position,
                         &environment,
-                        &project_sources,
-                        Some(&self.completion_adaptive_stats),
-                        file_scope_hash,
-                        &self.completion_sequence_ranking,
+                        self.completion_ranking_inputs(file_scope_hash),
                     )
                 }
             }
@@ -1403,7 +1415,6 @@ impl AnalysisSnapshot {
                         source,
                         position,
                         &facts.environment,
-                        &project_sources,
                         file_scope_hash,
                     );
 
@@ -1411,15 +1422,12 @@ impl AnalysisSnapshot {
                         completions
                     } else {
                         let completions =
-                            complete_source_with_parsed_environment_and_ranking_options(
+                            complete_source_with_parsed_environment_and_ranking_inputs(
                                 source,
                                 &facts.parsed,
                                 position,
                                 &facts.environment,
-                                &project_sources,
-                                Some(&self.completion_adaptive_stats),
-                                file_scope_hash,
-                                &self.completion_sequence_ranking,
+                                self.completion_ranking_inputs(file_scope_hash),
                             );
 
                         if !completions.is_empty() {
@@ -1436,6 +1444,15 @@ impl AnalysisSnapshot {
         };
 
         completions
+    }
+
+    fn completion_ranking_inputs(&self, file_scope_hash: u64) -> CompletionRankingInputs<'_> {
+        CompletionRankingInputs::from_usage_index(
+            &self.usage_index,
+            Some(&self.completion_adaptive_stats),
+            file_scope_hash,
+            &self.completion_sequence_ranking,
+        )
     }
 
     pub fn multi_token_completion(
@@ -1457,16 +1474,6 @@ impl AnalysisSnapshot {
             primary_candidate_count,
             &self.completion_multi_token,
         )
-    }
-
-    fn project_completion_sources<'a>(&'a self, current_path: &Path) -> Vec<&'a str> {
-        let current_path = normalize_path(current_path);
-
-        self.files
-            .iter()
-            .filter(|(path, _)| **path != current_path)
-            .map(|(_, file)| file.source.as_str())
-            .collect()
     }
 
     pub fn definition(
@@ -3207,24 +3214,10 @@ impl AnalysisSnapshot {
     pub fn signal_graph(&self) -> SignalGraph {
         let mut events = BTreeMap::<String, Vec<_>>::new();
 
-        for (path, file) in &self.files {
-            let Ok(parsed) = &file.parsed else {
-                continue;
-            };
-            let semantic_facts = self.semantic_facts_for_parsed(parsed);
-            let Some(environment) = semantic_facts
-                .as_ref()
-                .map(|facts| &facts.environment)
-                .or(file.environment.as_ref())
-            else {
-                continue;
-            };
+        for event in self.usage_index.signal_events() {
+            let call = graph_call_from_mention(event.path.clone(), event.mention.clone());
 
-            for mention in crate::signal::collect_event_mentions(parsed, environment, None) {
-                let call = graph_call_from_mention(path.clone(), mention);
-
-                events.entry(call.event.clone()).or_default().push(call);
-            }
+            events.entry(call.event.clone()).or_default().push(call);
         }
 
         SignalGraph {
@@ -3739,7 +3732,6 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         source: &str,
         position: SourcePosition,
-        project_sources: &[&str],
         file_scope_hash: u64,
     ) -> Vec<Completion> {
         let asset_completions = self.project_asset_path_completions(source, position);
@@ -3774,17 +3766,13 @@ impl AnalysisSnapshot {
             environment.with_local_types(self.project_local_annotation_types(parsed))
         });
 
-        let field_completions =
-            complete_field_access_in_source_with_environment_and_ranking_options(
-                source,
-                parsed,
-                position,
-                &environment,
-                project_sources,
-                Some(&self.completion_adaptive_stats),
-                file_scope_hash,
-                &self.completion_sequence_ranking,
-            );
+        let field_completions = complete_field_access_in_source_with_environment_and_ranking_inputs(
+            source,
+            parsed,
+            position,
+            &environment,
+            self.completion_ranking_inputs(file_scope_hash),
+        );
 
         if !field_completions.is_empty() {
             field_completions
@@ -3799,7 +3787,6 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
         environment: &TypeEnvironment,
-        project_sources: &[&str],
         file_scope_hash: u64,
     ) -> Vec<Completion> {
         let _profile = profile::span("analysis.completion.render");
@@ -3816,17 +3803,13 @@ impl AnalysisSnapshot {
             return module_completions;
         }
 
-        let field_completions =
-            complete_field_access_in_source_with_environment_and_ranking_options(
-                source,
-                parsed,
-                position,
-                environment,
-                project_sources,
-                Some(&self.completion_adaptive_stats),
-                file_scope_hash,
-                &self.completion_sequence_ranking,
-            );
+        let field_completions = complete_field_access_in_source_with_environment_and_ranking_inputs(
+            source,
+            parsed,
+            position,
+            environment,
+            self.completion_ranking_inputs(file_scope_hash),
+        );
 
         if !field_completions.is_empty() {
             return field_completions;
@@ -5322,13 +5305,14 @@ struct ReusableCompletionRequest {
 }
 
 fn reusable_completion_request(
+    revision: u64,
     path: &Path,
     source: &str,
     position: SourcePosition,
 ) -> Option<ReusableCompletionRequest> {
     let prefix = crate::completion::context::completion_prefix(source, position)?;
     let source = source_without_range(source, prefix.base_position, position)?;
-    let key = completion_request_key(path, &source, prefix.base_position);
+    let key = completion_request_key(revision, path, &source, prefix.base_position);
 
     Some(ReusableCompletionRequest {
         key,
@@ -5339,11 +5323,13 @@ fn reusable_completion_request(
 }
 
 fn completion_request_key(
+    revision: u64,
     path: &Path,
     source: &str,
     position: SourcePosition,
 ) -> CompletionRequestKey {
     CompletionRequestKey {
+        revision,
         path: normalize_path(path),
         line: position.line,
         column: position.column,
@@ -5900,6 +5886,7 @@ impl AnalysisQueryCache {
         self.stats.module_export_hits += 1;
         self.stats.require_edge_hits += 1;
         self.stats.symbol_index_hits += 1;
+        self.stats.usage_index_hits += 1;
     }
 
     fn record_file_rebuild(&mut self, parsed_cache_hit: bool) {
@@ -5916,6 +5903,7 @@ impl AnalysisQueryCache {
         self.stats.module_export_misses += 1;
         self.stats.require_edge_misses += 1;
         self.stats.symbol_index_misses += 1;
+        self.stats.usage_index_misses += 1;
     }
 
     fn record_parse_cache_lookup(&mut self, parsed_cache_hit: bool) {
@@ -6088,6 +6076,19 @@ fn build_analysis_file(
             .map(|parsed| symbol_entries_for_parsed(parsed, hir.as_ref(), context.source_roots))
             .unwrap_or_default()
     };
+    let usage_index = {
+        let _profile = profile::span_for_path("analysis.index.usage.file", path);
+        let fallback_environment = parsed.as_ref().ok().and_then(|parsed| {
+            (environment.is_none() && crate::signal::source_may_contain_event_call(&source))
+                .then(|| build_analysis_type_environment_with_diagnostics(parsed, context.config).0)
+        });
+
+        Arc::new(FileUsageIndex::build(
+            &source,
+            parsed.as_ref().ok(),
+            environment.as_ref().or(fallback_environment.as_ref()),
+        ))
+    };
 
     AnalysisFile {
         source,
@@ -6100,6 +6101,7 @@ fn build_analysis_file(
         exports,
         require_edges,
         assets,
+        usage_index,
         symbols,
     }
 }

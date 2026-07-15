@@ -62,6 +62,8 @@ project-adaptive learning when the receiver is known, and includes default-off
 contextual sequence and multi-token lanes:
 
 - deterministic semantic candidate generation;
+- revisioned, content-cached per-file member/event summaries and source-free
+  project usage aggregation for request-time ranking;
 - same-file proximity, call-site frequency, project member usage, and
   declaration-quality ranking signals;
 - persisted privacy-safe workspace usage statistics for member access and call

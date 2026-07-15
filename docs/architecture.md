@@ -91,10 +91,12 @@ Project-aware feature requests should follow the same path:
 2. The caller takes an immutable `AnalysisSnapshot`.
 3. The snapshot reads normalized files through the VFS and project model.
 4. Cached per-file queries parse source, extract typed source models, lower HIR,
-   build scopes, collect diagnostics, collect exports, and resolve type data.
+   build scopes, collect diagnostics, collect exports, resolve type data, and
+   collect compact member usage, proximity, and SignalBus event summaries.
 5. Project queries build require edges, module exports, symbol indexes,
-   project-aware type information, and lazy reverse-reference indexes from
-   indexed files.
+   project-aware type information, a revisioned project usage index, and lazy
+   reverse-reference indexes from indexed files. The usage index aggregates
+   per-file summaries and does not retain project source text.
 6. IDE queries such as hover, completion, definition, references, rename,
    inlay hints, semantic tokens, document symbols, call hierarchy, and code
    actions read from the snapshot instead of rereading files or rebuilding
@@ -171,10 +173,13 @@ checkpoints can be added without changing protocol behavior.
 
 `AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
 requests against unchanged inputs should reuse the warm snapshot, including
-shared lazy indexes such as semantic facts, completion lists, definition lookup
-results, and reverse references. Any file, open-document, config, builtin, root,
-or asset-root change increments the revision and forces the next snapshot to
-rebuild from the file-granular cache.
+shared lazy indexes such as semantic facts, completion lists, usage summaries,
+definition lookup results, and reverse references. Completion cache keys carry
+the snapshot revision as well as their semantic context so stale snapshots
+cannot seed newer revisions. Any file, open-document, config, builtin, root, or
+asset-root change increments the revision and forces the next snapshot to
+rebuild from the file-granular cache; unchanged files reuse their cached usage
+summaries.
 
 ## Adding A Core Query
 
@@ -549,7 +554,7 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
 | `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
 | `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, project type database, and Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, workspace symbol scans, lazy reverse-reference index, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65, 70.20 |
+| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, revisioned project usage index, workspace symbol scans, lazy reverse-reference index, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65, 70.20 |
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |

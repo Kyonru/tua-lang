@@ -618,6 +618,9 @@ function printRequestReport(root, timings, stats) {
 }
 
 function formatCacheStats(stats) {
+  const usageIndex = stats.usageIndex
+    ? `, usageIndex h/m ${stats.usageIndex.hits}/${stats.usageIndex.misses}`
+    : "";
   const completionContext = stats.completionContext
     ? `, completionContext h/m ${stats.completionContext.hits}/${stats.completionContext.misses}`
     : "";
@@ -629,7 +632,7 @@ function formatCacheStats(stats) {
     `types h/m ${stats.typeEnvironment.hits}/${stats.typeEnvironment.misses}, ` +
     `diagnostics h/m ${stats.diagnostics.hits}/${stats.diagnostics.misses}, ` +
     `symbols h/m ${stats.symbolIndex.hits}/${stats.symbolIndex.misses}, ` +
-    `invalidations ${stats.invalidations}${completionContext}`
+    `invalidations ${stats.invalidations}${usageIndex}${completionContext}`
   );
 }
 

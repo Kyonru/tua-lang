@@ -68,19 +68,22 @@ from the visible suggestion widget.
 
 ### P1: Replace per-request project scans with incremental indexes
 
-Completion currently collects project source text in
-[`analysis/mod.rs`](crates/tua-core/src/analysis/mod.rs), while ranking and
-signal event completion can scan or reparse project files in
-[`completion/mod.rs`](crates/tua-core/src/completion/mod.rs).
+Status: done on 2026-07-15.
 
-Improvements:
+The analysis file cache now stores compact member usage, receiver/member call,
+symbol proximity, and semantically validated SignalBus event summaries. Only a
+changed file rebuilds its summary; snapshots aggregate the summaries into a
+revisioned project usage index without retaining or rescanning project source
+text.
 
-- Store revisioned per-file member usage, event schema, event usage, and symbol
-  proximity summaries.
-- Update summaries only for changed files.
-- Aggregate project ranking data without retaining or rescanning source text.
-- Cache completion candidates and rankings by revision and semantic context.
-- Keep compiler visibility and type facts authoritative over ranking signals.
+Project-aware completion ranking, SignalBus event-name completion, and the
+signal graph consume that shared index. Completion cache keys include the
+snapshot revision and semantic context, so an old snapshot cannot publish a
+result into a newer revision. Ranking remains a secondary operation over
+compiler-generated, visible candidates and cannot introduce an out-of-scope
+member. `tua/cacheStats` and completion profiling expose usage-index cache
+hits and misses, with regression coverage for changed-file invalidation,
+ranking refresh, event refresh, and stale completion-cache isolation.
 
 ### P1: Make watch builds dependency-aware
 

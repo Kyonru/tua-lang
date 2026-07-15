@@ -1358,6 +1358,10 @@ impl LspServer {
                 "hits": stats.symbol_index_hits,
                 "misses": stats.symbol_index_misses
             },
+            "usageIndex": {
+                "hits": stats.usage_index_hits,
+                "misses": stats.usage_index_misses
+            },
             "completionContext": {
                 "hits": stats.completion_context_hits,
                 "misses": stats.completion_context_misses

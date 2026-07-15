@@ -2039,6 +2039,88 @@ player:<|complete|>setFilter(<|signature|>"nearest")
 }
 
 #[test]
+fn project_usage_index_updates_changed_files_and_isolates_completion_revisions() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Sprite = { pause: number, play: number, stop: number }
+local sprite: Sprite = {}
+local selected = sprite.<|member|>
+-- file: src/events.tua
+local events = signal()
+events:emit("<|event|>")
+"#,
+    );
+    let main_path = PathBuf::from("src/main.tua");
+    let events_path = PathBuf::from("src/events.tua");
+    let usage_path = PathBuf::from("src/usage.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&main_path, fixture.source(&main_path));
+    host.set_file(&events_path, fixture.source(&events_path));
+    host.set_file(
+        &usage_path,
+        r#"local sprite = {}
+sprite.unrelated()
+sprite.unrelated()
+sprite.stop()
+sprite.stop()
+sprite.play()
+
+local events = signal()
+events:on("enemy.spawn", function() end)
+"#,
+    );
+
+    let first = host.snapshot();
+    let first_members =
+        completion_labels(&first.completion(&main_path, fixture.position("member")));
+    let first_events =
+        completion_labels(&first.completion(&events_path, fixture.position("event")));
+    let first_graph = first.signal_graph();
+
+    assert_eq!(first_members[0], "stop");
+    assert!(!first_members.contains(&"unrelated".to_owned()));
+    assert_eq!(first_graph.events.len(), 1, "{first_graph:?}");
+    assert_eq!(first_graph.events[0].name, "enemy.spawn");
+    assert_eq!(first_events, vec!["enemy.spawn".to_owned()]);
+    assert_eq!(host.cache_stats().usage_index_misses, 3);
+
+    host.set_file(
+        &usage_path,
+        r#"local sprite = {}
+sprite.play()
+sprite.play()
+sprite.play()
+sprite.stop()
+
+local events = signal()
+events:on("enemy.move", function() end)
+"#,
+    );
+
+    let stale_members =
+        completion_labels(&first.completion(&main_path, fixture.position("member")));
+    assert_eq!(stale_members[0], "stop");
+
+    let second = host.snapshot();
+    let second_members =
+        completion_labels(&second.completion(&main_path, fixture.position("member")));
+    let second_events =
+        completion_labels(&second.completion(&events_path, fixture.position("event")));
+    let second_graph = second.signal_graph();
+
+    assert!(second.revision() > first.revision());
+    assert_eq!(second_members[0], "play");
+    assert_eq!(second_events, vec!["enemy.move".to_owned()]);
+    assert_eq!(second_graph.events.len(), 1);
+    assert_eq!(second_graph.events[0].name, "enemy.move");
+
+    let stats = host.cache_stats();
+    assert_eq!(stats.usage_index_hits, 2);
+    assert_eq!(stats.usage_index_misses, 4);
+}
+
+#[test]
 fn snapshot_definition_cache_covers_the_whole_identifier_token() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
