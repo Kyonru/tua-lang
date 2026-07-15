@@ -100,9 +100,14 @@ pub(crate) fn filter_and_rank_completions(
     ranked
         .into_iter()
         .map(|(_, mut completion)| {
-            completion
-                .filter_text
-                .get_or_insert_with(|| prefix.to_owned());
+            if completion.filter_text.is_none()
+                && !completion
+                    .label
+                    .to_ascii_lowercase()
+                    .starts_with(&prefix.to_ascii_lowercase())
+            {
+                completion.filter_text = Some(prefix.to_owned());
+            }
             completion
         })
         .collect()
@@ -148,6 +153,22 @@ pub fn complete_tua_source(
         context,
         &environment,
     ))
+}
+
+pub fn complete_lossy_identifier_source(
+    source: &str,
+    position: SourcePosition,
+) -> Option<(String, Vec<Completion>)> {
+    let CompletionContext::Identifier { prefix, position } = completion_context(source, position)?
+    else {
+        return None;
+    };
+    let completions = rank_completions_for_prefix(
+        complete_lossy_identifier_items(source, prefix.as_str(), position),
+        Some(prefix.as_str()),
+    );
+
+    Some((prefix, completions))
 }
 
 pub fn complete_parsed_source(

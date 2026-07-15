@@ -17,7 +17,8 @@
       "preLaunchTask": "Build Server and Check Extension",
       "skipFiles": ["<node_internals>/**/*.js"],
       "env": {
-        "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua"
+        "TUA_SERVER_PATH": "${workspaceFolder}/target/debug/tua",
+        "TUA_DEBUG_LSP": "1"
       }
     },
     {

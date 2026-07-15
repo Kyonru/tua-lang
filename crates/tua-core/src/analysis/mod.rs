@@ -767,6 +767,31 @@ impl AnalysisHost {
         fast_diagnostics_for_source(&path, source, analysis_source_kind(kind), &self.config)
     }
 
+    pub fn current_file_hover(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let file = self.current_analysis_file(path.as_ref())?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        if let Some(asset) = asset::asset_at_position(&file.assets, position) {
+            return Some(Hover {
+                contents: asset.hover_markdown(),
+                span: Some(asset.span),
+                documentation: None,
+                context: Vec::new(),
+            });
+        }
+
+        file.environment
+            .as_ref()
+            .and_then(|environment| {
+                hover_parsed_source_with_environment(parsed, position, environment)
+            })
+            .or_else(|| hover_parsed_source(parsed, position).ok().flatten())
+    }
+
     pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {
         self.current_analysis_file(path.as_ref())
             .map(|file| file.require_edges)
@@ -1125,6 +1150,17 @@ impl AnalysisSnapshot {
 
                 if !completions.is_empty() {
                     completions
+                } else if matches!(
+                    crate::completion::context::completion_context(source, position),
+                    Some(crate::completion::context::CompletionContext::Identifier { .. })
+                ) {
+                    let environment = file.environment.clone().unwrap_or_else(|| {
+                        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+                        environment
+                    });
+
+                    complete_source_with_parsed_environment(source, parsed, position, &environment)
                 } else if let Some(facts) = self.semantic_facts_for_parsed(parsed) {
                     complete_source_with_parsed_environment(
                         source,
@@ -3394,13 +3430,50 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        let asset_completions = self.project_asset_path_completions(source, position);
+
+        if !asset_completions.is_empty() {
+            return asset_completions;
+        }
+
+        let module_completions = self.project_module_field_completions(parsed, source, position);
+
+        if !module_completions.is_empty() {
+            return module_completions;
+        }
+
+        let table_literal_completions =
+            self.project_table_literal_completions(parsed, source, position);
+
+        if !table_literal_completions.is_empty() {
+            return table_literal_completions;
+        }
+
+        if !matches!(
+            crate::completion::context::completion_context(source, position),
+            Some(crate::completion::context::CompletionContext::FieldAccess { .. })
+        ) {
+            return Vec::new();
+        }
+
         let environment = self.semantic_environment(parsed).unwrap_or_else(|| {
             let (environment, _) = build_type_environment_with_diagnostics(parsed);
 
             environment.with_local_types(self.project_local_annotation_types(parsed))
         });
 
-        self.project_completions_with_environment(parsed, source, position, &environment)
+        let field_completions = complete_field_access_in_source_with_environment(
+            source,
+            parsed,
+            position,
+            &environment,
+        );
+
+        if !field_completions.is_empty() {
+            field_completions
+        } else {
+            Vec::new()
+        }
     }
 
     fn project_completions_with_environment(

@@ -25,6 +25,16 @@
     "check": "node --check src/extension.js && node scripts/manifest-check.js && node scripts/activation-smoke.js"
   },
   "contributes": {
+    "configurationDefaults": {
+      "[tua]": {
+        "editor.quickSuggestions": {
+          "comments": "off",
+          "strings": "on",
+          "other": "on"
+        },
+        "editor.quickSuggestionsDelay": 0
+      }
+    },
     "configuration": {
       "title": "tua",
       "properties": {

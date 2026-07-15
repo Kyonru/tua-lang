@@ -30,6 +30,27 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+const tuaDefaults = manifest.contributes?.configurationDefaults?.["[tua]"];
+if (!tuaDefaults) {
+  console.error("Missing Tua editor configuration defaults.");
+  process.exit(1);
+}
+
+if (tuaDefaults["editor.quickSuggestionsDelay"] !== 0) {
+  console.error("Tua editor defaults should request immediate quick suggestions.");
+  process.exit(1);
+}
+
+const quickSuggestions = tuaDefaults["editor.quickSuggestions"];
+if (
+  quickSuggestions?.other !== "on" ||
+  quickSuggestions?.strings !== "on" ||
+  quickSuggestions?.comments !== "off"
+) {
+  console.error("Tua editor defaults should enable quick suggestions outside comments.");
+  process.exit(1);
+}
+
 const languages = manifest.contributes?.languages || [];
 const tuaLanguage = languages.find((language) => language.id === "tua");
 if (!tuaLanguage) {

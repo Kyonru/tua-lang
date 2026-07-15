@@ -34,8 +34,15 @@ const COMMANDS = {
 
 const STATUS_SELECTOR = [
   { scheme: "file", language: "tua" },
+  { scheme: "file", pattern: "**/*.tua" },
   { scheme: "untitled", language: "tua" },
 ];
+
+const DEBUG_LSP_ENV = "TUA_DEBUG_LSP";
+const DEBUG_LOG_REPEAT_FLUSH_MS = 250;
+const SUGGEST_TRIGGER_DELAY_MS = 25;
+const SUGGEST_TRIGGER_PATTERN = /^[A-Za-z0-9_.:'"@-]$/;
+let pendingDebugRepeat;
 
 async function activate(context) {
   extensionContext = context;
@@ -43,11 +50,201 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
+  context.subscriptions.push(registerSuggestTrigger());
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);
+  debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP typing trace is active.`);
 
   await startLanguageServer();
+}
+
+function registerSuggestTrigger() {
+  let pendingTrigger;
+
+  const changeSubscription = vscode.workspace.onDidChangeTextDocument((event) => {
+    if (!isTuaDocument(event.document)) {
+      return;
+    }
+
+    if (!isActiveDocument(event.document)) {
+      debugLog(`suggest skip inactive Tua document: ${documentDebugLabel(event.document)}`, {
+        repeatKey: "suggest.skipInactive",
+        repeatLabel: "suggest skip inactive Tua document",
+      });
+      return;
+    }
+
+    const changes = event.contentChanges.map(contentChangeDebugLabel).join(", ");
+
+    if (!event.contentChanges.some((change) => SUGGEST_TRIGGER_PATTERN.test(change.text))) {
+      debugLog(
+        `suggest skip non-trigger change: ${documentDebugLabel(event.document)} changes=[${changes}]`,
+        {
+          repeatKey: "suggest.skipNonTrigger",
+          repeatLabel: "suggest skip non-trigger change",
+        },
+      );
+      return;
+    }
+
+    if (pendingTrigger) {
+      debugLog("suggest debounce: canceled older pending trigger.", {
+        repeatKey: "suggest.debounceCanceled",
+        repeatLabel: "suggest debounce canceled",
+      });
+      clearTimeout(pendingTrigger);
+    }
+
+    const document = event.document;
+
+    debugLog(
+      `suggest scheduled in ${SUGGEST_TRIGGER_DELAY_MS}ms: ${documentDebugLabel(document)} changes=[${changes}] server=${currentServerInfo?.state || "unknown"}`,
+    );
+
+    pendingTrigger = setTimeout(() => {
+      pendingTrigger = undefined;
+
+      if (currentServerInfo?.state !== "running" || !isActiveDocument(document)) {
+        debugLog(
+          `suggest canceled before firing: ${documentDebugLabel(document)} server=${currentServerInfo?.state || "unknown"}`,
+          {
+            repeatKey: "suggest.canceledBeforeFiring",
+            repeatLabel: "suggest canceled before firing",
+          },
+        );
+        return;
+      }
+
+      debugLog(`suggest trigger command: ${documentDebugLabel(document)}`);
+      vscode.commands.executeCommand("editor.action.triggerSuggest");
+    }, SUGGEST_TRIGGER_DELAY_MS);
+  });
+
+  return vscode.Disposable.from(changeSubscription, {
+    dispose() {
+      if (pendingTrigger) {
+        clearTimeout(pendingTrigger);
+        pendingTrigger = undefined;
+      }
+    },
+  });
+}
+
+function isTuaDocument(document) {
+  if (document.languageId === "tua") {
+    return true;
+  }
+
+  const scheme = document.uri?.scheme;
+  if (scheme && scheme !== "file" && scheme !== "untitled") {
+    return false;
+  }
+
+  const filename = document.fileName || document.uri?.fsPath || document.uri?.path || "";
+
+  return filename.endsWith(".tua");
+}
+
+function isActiveDocument(document) {
+  const active = vscode.window.activeTextEditor?.document;
+
+  if (!active) {
+    return false;
+  }
+
+  return active === document || active.uri?.toString() === document.uri?.toString();
+}
+
+function debugLspLoggingEnabled() {
+  return ["1", "true", "yes", "on"].includes(String(process.env[DEBUG_LSP_ENV] || "").toLowerCase());
+}
+
+function debugLog(message, options = {}) {
+  if (!debugLspLoggingEnabled()) {
+    return;
+  }
+
+  const repeatKey = options.repeatKey || message;
+  const repeatLabel = options.repeatLabel || message;
+
+  if (pendingDebugRepeat?.key === repeatKey) {
+    pendingDebugRepeat.count += 1;
+    pendingDebugRepeat.latestMessage = message;
+    scheduleDebugRepeatFlush();
+    return;
+  }
+
+  flushDebugRepeat();
+  appendDebugLine(message);
+  pendingDebugRepeat = {
+    key: repeatKey,
+    label: repeatLabel,
+    firstMessage: message,
+    latestMessage: message,
+    count: 1,
+    timer: undefined,
+  };
+}
+
+function appendDebugLine(message) {
+  outputChannel?.appendLine(`[debug ${new Date().toISOString()}] ${message}`);
+}
+
+function scheduleDebugRepeatFlush() {
+  if (pendingDebugRepeat?.timer) {
+    clearTimeout(pendingDebugRepeat.timer);
+  }
+
+  pendingDebugRepeat.timer = setTimeout(flushDebugRepeat, DEBUG_LOG_REPEAT_FLUSH_MS);
+}
+
+function flushDebugRepeat() {
+  const repeat = pendingDebugRepeat;
+
+  if (!repeat) {
+    return;
+  }
+
+  if (repeat.timer) {
+    clearTimeout(repeat.timer);
+  }
+
+  pendingDebugRepeat = undefined;
+
+  if (repeat.count <= 1) {
+    return;
+  }
+
+  const latest =
+    repeat.latestMessage === repeat.firstMessage ? "" : ` latest=${repeat.latestMessage}`;
+
+  appendDebugLine(`debug repeat: ${repeat.label} count=${repeat.count}${latest}`);
+}
+
+function documentDebugLabel(document) {
+  const uri = document?.uri?.toString?.() || document?.fileName || "<unknown>";
+  const language = document?.languageId || "<unknown>";
+  const version = document?.version ?? "<unknown>";
+
+  return `uri=${uri} language=${language} version=${version}`;
+}
+
+function contentChangeDebugLabel(change) {
+  const text = change?.text || "";
+  const range = change?.range
+    ? `${change.range.start.line}:${change.range.start.character}-${change.range.end.line}:${change.range.end.character}`
+    : "full";
+
+  return `range=${range} text=${textPreview(text)} length=${text.length}`;
+}
+
+function textPreview(text) {
+  if (text.length <= 24) {
+    return JSON.stringify(text);
+  }
+
+  return `${JSON.stringify(text.slice(0, 24))}...`;
 }
 
 function registerLifecycleCommands() {
@@ -164,9 +361,15 @@ async function startLanguageServer() {
     run: serverExecutable(serverCommand, cwd),
     debug: serverExecutable(serverCommand, cwd),
   };
+  const initializationOptions = traceConfiguration();
+
+  debugLog(
+    `language client initialization options: trace.server=${initializationOptions.trace.server} logVerbosity=${initializationOptions.logVerbosity}`,
+  );
+
   const clientOptions = {
     documentSelector: STATUS_SELECTOR,
-    initializationOptions: traceConfiguration(),
+    initializationOptions,
     outputChannel,
     synchronize: {
       configurationSection: "tua",
@@ -464,12 +667,23 @@ function timestampForFilename(date) {
 
 function traceConfiguration() {
   const config = vscode.workspace.getConfiguration("tua");
+  const configuredTrace = config.get("trace.server", "off");
+  const configuredVerbosity = config.get("log.verbosity", "off");
+
+  if (debugLspLoggingEnabled()) {
+    return {
+      trace: {
+        server: configuredTrace === "verbose" ? "verbose" : "messages",
+      },
+      logVerbosity: configuredVerbosity === "trace" ? "trace" : "debug",
+    };
+  }
 
   return {
     trace: {
-      server: config.get("trace.server", "off"),
+      server: configuredTrace,
     },
-    logVerbosity: config.get("log.verbosity", "off"),
+    logVerbosity: configuredVerbosity,
   };
 }
 
@@ -615,6 +829,8 @@ function registerBuiltinDocumentProvider(outputChannel) {
 }
 
 async function deactivate() {
+  flushDebugRepeat();
+
   return stopLanguageServer();
 }
 

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tua_core::{AssistKind, RenameEdit, SourcePosition, SourceSpan};
@@ -24,8 +24,11 @@ use super::protocol::{
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
     capabilities, LogVerbosity, LspServer, PendingDiagnostics, ServerTraceLevel, TraceConfig,
-    SLOW_DIAGNOSTICS_DEBOUNCE,
+    TraceLogCounts, SLOW_DIAGNOSTICS_DEBOUNCE,
 };
+
+const TRACE_LOG_SUMMARY_THRESHOLD: usize = 8;
+const ACTIVE_EDIT_BACKGROUND_REQUEST_COOLDOWN: Duration = Duration::from_millis(1500);
 
 struct DocumentRequest<'a> {
     params: &'a Value,
@@ -52,21 +55,93 @@ impl LspServer {
         let method = message.get("method").and_then(Value::as_str)?.to_owned();
 
         if message.get("id").is_some() {
-            let trace = self.trace_log_message(&message, &method, true);
+            let completion_context = self.completion_debug_context(&message, &method);
+            let definition_context = self.definition_debug_context(&message, &method);
+            let hover_context = self.hover_debug_context(&message, &method);
+            let background_skip_context =
+                self.background_request_skip_debug_context(&message, &method);
+            let debug_started = (completion_context.is_some()
+                || definition_context.is_some()
+                || hover_context.is_some())
+            .then(Instant::now);
+            let mut outbound = self.trace_log_messages(&message, &method, true);
             let response = self.handle_request(message, &method);
+            let completion_trace = completion_context.and_then(|context| {
+                debug_started.map(|started| {
+                    log_message_notification(
+                        4,
+                        format!(
+                            "tua completion response: {context} items={} {} elapsedMs={}",
+                            completion_response_item_count(&response),
+                            completion_response_label_sample(&response),
+                            started.elapsed().as_millis()
+                        ),
+                    )
+                })
+            });
+            let definition_trace = definition_context.and_then(|context| {
+                debug_started.map(|started| {
+                    log_message_notification(
+                        4,
+                        format!(
+                            "tua definition response: {context} {} elapsedMs={}",
+                            definition_response_target(&response),
+                            started.elapsed().as_millis()
+                        ),
+                    )
+                })
+            });
+            let hover_trace = hover_context.and_then(|context| {
+                debug_started.map(|started| {
+                    log_message_notification(
+                        4,
+                        format!(
+                            "tua hover response: {context} {} elapsedMs={}",
+                            hover_response_summary(&response),
+                            started.elapsed().as_millis()
+                        ),
+                    )
+                })
+            });
 
-            return Some(prepend_optional(trace, vec![response]));
+            extend_optional(&mut outbound, completion_trace);
+            extend_optional(&mut outbound, definition_trace);
+            extend_optional(&mut outbound, hover_trace);
+            extend_optional(
+                &mut outbound,
+                background_skip_context.map(|context| {
+                    log_message_notification(
+                        4,
+                        format!(
+                            "tua background request fast response during input backlog: {context}"
+                        ),
+                    )
+                }),
+            );
+            outbound.push(response);
+
+            return Some(outbound);
         }
 
-        let trace = self.trace_log_message(&message, &method, false);
+        let mut outbound = self.trace_log_messages(&message, &method, false);
+        let detail_trace = self.notification_debug_message(&message, &method);
         let notifications = self.handle_notification(&message, &method);
 
-        merge_optional_trace(trace, notifications)
+        extend_optional(&mut outbound, detail_trace);
+        if let Some(notifications) = notifications {
+            outbound.extend(notifications);
+        }
+
+        (!outbound.is_empty()).then_some(outbound)
     }
 
     fn handle_request(&mut self, message: Value, method: &str) -> Value {
         let _profile = tua_core::profile::span(format!("lsp.request {method}"));
         let id = message.get("id").cloned().unwrap_or(Value::Null);
+
+        if let Some(result) = self.background_request_backlog_result(&message, method) {
+            return response(id, result);
+        }
 
         match method {
             "initialize" => {
@@ -223,11 +298,30 @@ impl LspServer {
         )])
     }
 
-    fn trace_log_message(&self, message: &Value, method: &str, request: bool) -> Option<Value> {
+    fn trace_log_messages(&mut self, message: &Value, method: &str, request: bool) -> Vec<Value> {
         if !self.trace_config.enabled() {
-            return None;
+            self.trace_log_counts.clear();
+            return Vec::new();
         }
 
+        if trace_log_should_count(method, request) {
+            self.trace_log_counts.increment(request, method);
+
+            if self.trace_log_counts.total >= TRACE_LOG_SUMMARY_THRESHOLD {
+                return self.drain_trace_log_summary();
+            }
+
+            return Vec::new();
+        }
+
+        let mut messages = self.drain_trace_log_summary();
+
+        messages.push(self.trace_log_message(message, method, request));
+
+        messages
+    }
+
+    fn trace_log_message(&self, message: &Value, method: &str, request: bool) -> Value {
         let direction = if request { "request" } else { "notification" };
         let mut parts = vec![format!("tua lsp {direction}: {method}")];
 
@@ -237,7 +331,172 @@ impl LspServer {
             }
         }
 
-        Some(log_message_notification(4, parts.join(" ")))
+        log_message_notification(4, parts.join(" "))
+    }
+
+    fn drain_trace_log_summary(&mut self) -> Vec<Value> {
+        if self.trace_log_counts.is_empty() {
+            return Vec::new();
+        }
+
+        let summary = trace_log_counts_summary(&self.trace_log_counts);
+
+        self.trace_log_counts.clear();
+
+        vec![log_message_notification(4, summary)]
+    }
+
+    fn notification_debug_message(&self, message: &Value, method: &str) -> Option<Value> {
+        if self.trace_config.log_verbosity < LogVerbosity::Debug {
+            return None;
+        }
+
+        let params = message.get("params")?;
+
+        match method {
+            "textDocument/didOpen" => {
+                let document = params.get("textDocument")?;
+                let uri = document.get("uri")?.as_str()?;
+                let version = document
+                    .get("version")
+                    .and_then(Value::as_i64)
+                    .map_or_else(|| "<none>".to_owned(), |version| version.to_string());
+                let language_id = document
+                    .get("languageId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<unknown>");
+                let text_len = document
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(str::len)
+                    .unwrap_or_default();
+
+                Some(log_message_notification(
+                    4,
+                    format!(
+                        "tua document opened: uri={uri} languageId={language_id} version={version} textBytes={text_len}"
+                    ),
+                ))
+            }
+            "textDocument/didChange" => {
+                let document = params.get("textDocument")?;
+                let uri = document.get("uri")?.as_str()?;
+                let version = document
+                    .get("version")
+                    .and_then(Value::as_i64)
+                    .map_or_else(|| "<none>".to_owned(), |version| version.to_string());
+                let changes = params
+                    .get("contentChanges")
+                    .and_then(Value::as_array)
+                    .map(|changes| {
+                        changes
+                            .iter()
+                            .map(content_change_debug_label)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .unwrap_or_default();
+
+                Some(log_message_notification(
+                    4,
+                    format!(
+                        "tua document changed: uri={uri} version={version} changes=[{changes}]"
+                    ),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn completion_debug_context(&self, message: &Value, method: &str) -> Option<String> {
+        if method != "textDocument/completion"
+            || self.trace_config.log_verbosity < LogVerbosity::Debug
+        {
+            return None;
+        }
+
+        let params = message.get("params")?;
+        let uri = document_uri(params)?;
+        let position = params.get("position").and_then(source_position_from_lsp)?;
+        let position_label = format!("{}:{}", position.line, position.column);
+        let request_id = message
+            .get("id")
+            .map(Value::to_string)
+            .unwrap_or_else(|| "<none>".to_owned());
+        let document_version = self
+            .document_versions
+            .get(uri)
+            .map_or_else(|| "<unknown>".to_owned(), ToString::to_string);
+        let source_context = self
+            .analysis
+            .document_text(uri)
+            .map(|source| completion_source_context(source, position))
+            .unwrap_or_else(|| "prefix=<unknown> before=<unknown> line=<unknown>".to_owned());
+        let trigger_kind = params
+            .get("context")
+            .and_then(|context| context.get("triggerKind"))
+            .and_then(Value::as_u64)
+            .map_or_else(|| "<none>".to_owned(), |kind| kind.to_string());
+        let trigger_character = params
+            .get("context")
+            .and_then(|context| context.get("triggerCharacter"))
+            .and_then(Value::as_str)
+            .map(debug_text_preview)
+            .unwrap_or_else(|| "<none>".to_owned());
+
+        Some(format!(
+            "id={request_id} uri={uri} docVersion={document_version} position={position_label} {source_context} triggerKind={trigger_kind} triggerCharacter={trigger_character}"
+        ))
+    }
+
+    fn definition_debug_context(&self, message: &Value, method: &str) -> Option<String> {
+        if method != "textDocument/definition"
+            || self.trace_config.log_verbosity < LogVerbosity::Debug
+        {
+            return None;
+        }
+
+        let params = message.get("params")?;
+        let uri = document_uri(params)?;
+        let position = params
+            .get("position")
+            .and_then(source_position_from_lsp)
+            .map(|position| format!("{}:{}", position.line, position.column))
+            .unwrap_or_else(|| "<none>".to_owned());
+        let request_id = message
+            .get("id")
+            .map(Value::to_string)
+            .unwrap_or_else(|| "<none>".to_owned());
+
+        Some(format!("id={request_id} uri={uri} position={position}"))
+    }
+
+    fn hover_debug_context(&self, message: &Value, method: &str) -> Option<String> {
+        if method != "textDocument/hover" || self.trace_config.log_verbosity < LogVerbosity::Debug {
+            return None;
+        }
+
+        let params = message.get("params")?;
+        let uri = document_uri(params)?;
+        let position = params.get("position").and_then(source_position_from_lsp)?;
+        let position_label = format!("{}:{}", position.line, position.column);
+        let request_id = message
+            .get("id")
+            .map(Value::to_string)
+            .unwrap_or_else(|| "<none>".to_owned());
+        let document_version = self
+            .document_versions
+            .get(uri)
+            .map_or_else(|| "<unknown>".to_owned(), ToString::to_string);
+        let source_context = self
+            .analysis
+            .document_text(uri)
+            .map(|source| completion_source_context(source, position))
+            .unwrap_or_else(|| "prefix=<unknown> before=<unknown> line=<unknown>".to_owned());
+
+        Some(format!(
+            "id={request_id} uri={uri} docVersion={document_version} position={position_label} {source_context}"
+        ))
     }
 
     fn initialized_notifications(&mut self) -> Option<Vec<Value>> {
@@ -254,9 +513,11 @@ impl LspServer {
         let text = text_document.get("text")?.as_str()?.to_owned();
         let version = text_document.get("version").and_then(Value::as_i64);
 
+        self.recent_document_changes.remove(&uri);
         self.analysis
             .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
         self.clear_semantic_token_results(&uri);
+        self.pending_pull_fast_diagnostics.remove(&uri);
         let generation = self.bump_document_generation(&uri, version);
         self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
 
@@ -280,7 +541,10 @@ impl LspServer {
         self.analysis
             .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
         let generation = self.bump_document_generation(&uri, version);
-        self.queue_slow_diagnostics(uri.clone(), generation, version, Instant::now());
+        let now = Instant::now();
+        self.recent_document_changes.insert(uri.clone(), now);
+        self.queue_slow_diagnostics(uri.clone(), generation, version, now);
+        self.queue_pull_fast_diagnostics(uri.clone(), generation, version, now);
 
         if self.client_pull_diagnostics {
             return None;
@@ -301,7 +565,7 @@ impl LspServer {
                 .and_then(|document| document.get("version"))
                 .and_then(Value::as_i64);
 
-            self.analysis.update_document(
+            self.analysis.save_document(
                 uri.clone(),
                 text.to_owned(),
                 &self.workspace_folders,
@@ -311,6 +575,7 @@ impl LspServer {
         }
 
         self.pending_slow_diagnostics.remove(&uri);
+        self.pending_pull_fast_diagnostics.remove(&uri);
 
         if self.client_pull_diagnostics {
             return None;
@@ -329,9 +594,11 @@ impl LspServer {
 
         self.analysis.close_document(&uri);
         self.pending_slow_diagnostics.remove(&uri);
+        self.pending_pull_fast_diagnostics.remove(&uri);
         self.last_published_diagnostics.remove(&uri);
         self.document_generations.remove(&uri);
         self.document_versions.remove(&uri);
+        self.recent_document_changes.remove(&uri);
         self.clear_semantic_token_results(&uri);
 
         if self.client_pull_diagnostics {
@@ -395,6 +662,7 @@ impl LspServer {
 
         if diagnostics_may_have_changed {
             self.pending_slow_diagnostics.clear();
+            self.pending_pull_fast_diagnostics.clear();
             self.analysis
                 .refresh_open_documents(&self.workspace_folders, &self.settings);
         }
@@ -447,6 +715,7 @@ impl LspServer {
 
         self.analysis
             .reindex_workspace(&self.workspace_folders, &self.settings);
+        self.pending_pull_fast_diagnostics.clear();
 
         self.diagnostic_refresh_notifications()
     }
@@ -458,6 +727,7 @@ impl LspServer {
         self.analysis
             .refresh_open_documents(&self.workspace_folders, &self.settings);
         self.pending_slow_diagnostics.clear();
+        self.pending_pull_fast_diagnostics.clear();
 
         if self.client_pull_diagnostics {
             return self.diagnostic_refresh_notifications();
@@ -524,8 +794,47 @@ impl LspServer {
         );
     }
 
+    fn queue_pull_fast_diagnostics(
+        &mut self,
+        uri: String,
+        generation: u64,
+        version: Option<i64>,
+        now: Instant,
+    ) {
+        if !self.client_pull_diagnostics || !self.client_diagnostic_refresh {
+            return;
+        }
+
+        self.pending_pull_fast_diagnostics.insert(
+            uri,
+            PendingDiagnostics {
+                generation,
+                version,
+                due_at: now + SLOW_DIAGNOSTICS_DEBOUNCE,
+            },
+        );
+    }
+
     pub(super) fn next_slow_diagnostics_due(&self) -> Option<Instant> {
+        self.pending_slow_diagnostics_due()
+            .into_iter()
+            .chain(self.pending_pull_fast_diagnostics_due())
+            .min()
+    }
+
+    fn pending_slow_diagnostics_due(&self) -> Option<Instant> {
         self.pending_slow_diagnostics
+            .values()
+            .map(|pending| pending.due_at)
+            .min()
+    }
+
+    fn pending_pull_fast_diagnostics_due(&self) -> Option<Instant> {
+        if !self.client_pull_diagnostics || !self.client_diagnostic_refresh {
+            return None;
+        }
+
+        self.pending_pull_fast_diagnostics
             .values()
             .map(|pending| pending.due_at)
             .min()
@@ -539,20 +848,33 @@ impl LspServer {
             .filter_map(|(uri, pending)| (pending.due_at <= now).then(|| uri.clone()))
             .collect::<Vec<_>>();
 
-        self.drain_slow_diagnostics_for(due)
+        let mut messages = self.drain_slow_diagnostics_for(due);
+        if let Some(refresh) = self.drain_due_pull_diagnostic_refresh(now) {
+            messages.push(refresh);
+        }
+
+        messages
     }
 
     pub(super) fn drain_next_due_slow_diagnostic(&mut self, now: Instant) -> Option<Value> {
-        let uri = self
+        let due_slow_uri = self
             .pending_slow_diagnostics
             .iter()
             .filter(|(_, pending)| pending.due_at <= now)
             .min_by_key(|(_, pending)| pending.due_at)
-            .map(|(uri, _)| uri.clone())?;
+            .map(|(uri, _)| uri.clone());
 
-        self.drain_slow_diagnostics_for(vec![uri])
-            .into_iter()
-            .next()
+        if let Some(uri) = due_slow_uri {
+            if let Some(publication) = self
+                .drain_slow_diagnostics_for(vec![uri])
+                .into_iter()
+                .next()
+            {
+                return Some(publication);
+            }
+        }
+
+        self.drain_due_pull_diagnostic_refresh(now)
     }
 
     pub(super) fn drain_all_pending_slow_diagnostics(&mut self) -> Vec<Value> {
@@ -589,6 +911,28 @@ impl LspServer {
         }
 
         publications
+    }
+
+    fn drain_due_pull_diagnostic_refresh(&mut self, now: Instant) -> Option<Value> {
+        if !self.client_pull_diagnostics || !self.client_diagnostic_refresh {
+            return None;
+        }
+
+        let due = self
+            .pending_pull_fast_diagnostics
+            .iter()
+            .filter_map(|(uri, pending)| (pending.due_at <= now).then(|| uri.clone()))
+            .collect::<Vec<_>>();
+
+        if due.is_empty() {
+            return None;
+        }
+
+        for uri in due {
+            self.pending_pull_fast_diagnostics.remove(&uri);
+        }
+
+        Some(workspace_diagnostic_refresh_request(self.next_request_id()))
     }
 
     fn bump_document_generation(&mut self, uri: &str, version: Option<i64>) -> u64 {
@@ -643,13 +987,45 @@ impl LspServer {
     }
 
     fn document_diagnostic_response(&self, message: &Value) -> Value {
+        let now = Instant::now();
         let diagnostics = message
             .get("params")
             .and_then(document_uri)
-            .map(|uri| self.diagnostics_for_uri(uri))
+            .map(|uri| self.diagnostics_for_uri_for_pull_request(uri, now))
             .unwrap_or_default();
 
         super::protocol::document_diagnostic_report(diagnostics)
+    }
+
+    fn diagnostics_for_uri_for_pull_request(&self, uri: &str, now: Instant) -> Vec<Value> {
+        if self.should_use_pull_fast_diagnostics(uri, now) {
+            return self.fast_diagnostics_for(uri);
+        }
+
+        self.diagnostics_for_uri(uri)
+    }
+
+    fn should_use_pull_fast_diagnostics(&self, uri: &str, now: Instant) -> bool {
+        if !self.client_pull_diagnostics || !self.analysis.contains_document(uri) {
+            return false;
+        }
+
+        let Some(pending) = self.pending_pull_fast_diagnostics.get(uri) else {
+            return false;
+        };
+
+        if pending.due_at <= now {
+            return false;
+        }
+        if self.document_generations.get(uri).copied() != Some(pending.generation) {
+            return false;
+        }
+        if pending.version.is_some() && self.document_versions.get(uri).copied() != pending.version
+        {
+            return false;
+        }
+
+        true
     }
 
     fn diagnostics_for_uri(&self, uri: &str) -> Vec<Value> {
@@ -660,9 +1036,63 @@ impl LspServer {
         }
     }
 
+    fn background_request_backlog_result(&self, message: &Value, method: &str) -> Option<Value> {
+        let uri = self.active_edit_background_request_uri(message, method)?;
+
+        Some(match method {
+            "textDocument/diagnostic" => {
+                super::protocol::document_diagnostic_report(self.fast_diagnostics_for(uri))
+            }
+            "textDocument/semanticTokens/full"
+            | "textDocument/semanticTokens/full/delta"
+            | "textDocument/semanticTokens/range" => json!({ "data": [] }),
+            _ => json!([]),
+        })
+    }
+
+    fn background_request_skip_debug_context(
+        &self,
+        message: &Value,
+        method: &str,
+    ) -> Option<String> {
+        if self.trace_config.log_verbosity < LogVerbosity::Debug {
+            return None;
+        }
+
+        let uri = self.active_edit_background_request_uri(message, method)?;
+        let changed_at = self.recent_document_changes.get(uri)?;
+        let elapsed = changed_at.elapsed();
+        let remaining = ACTIVE_EDIT_BACKGROUND_REQUEST_COOLDOWN.saturating_sub(elapsed);
+
+        Some(format!(
+            "method={method} uri={uri} sinceChangeMs={} cooldownRemainingMs={}",
+            elapsed.as_millis(),
+            remaining.as_millis()
+        ))
+    }
+
+    fn active_edit_background_request_uri<'a>(
+        &self,
+        message: &'a Value,
+        method: &str,
+    ) -> Option<&'a str> {
+        if !self.input_backlog_active || !edit_background_request_should_yield(method) {
+            return None;
+        }
+
+        let uri = message.get("params").and_then(document_uri)?;
+        let changed_at = self.recent_document_changes.get(uri)?;
+
+        (changed_at.elapsed() < ACTIVE_EDIT_BACKGROUND_REQUEST_COOLDOWN).then_some(uri)
+    }
+
     fn hover_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
+        if let Some(hover) = self.analysis.fast_hover_for_uri(request.uri, position) {
+            return Some(lsp_hover_from_core(hover));
+        }
+
         let snapshot = {
             let _profile = tua_core::profile::span("lsp.hover.snapshot");
 
@@ -685,6 +1115,20 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
+        if completion_request_is_invoked(message) {
+            if let Some((position, completions)) = self
+                .analysis
+                .fast_identifier_completion_for_uri(request.uri, position)
+            {
+                return lsp_completion_array(
+                    request.uri,
+                    position,
+                    completions,
+                    self.client_completion_label_details,
+                );
+            }
+        }
+
         let snapshot = {
             let _profile = tua_core::profile::span("lsp.completion.snapshot");
 
@@ -697,18 +1141,11 @@ impl LspServer {
             snapshot.completion(&request.path, position)
         };
 
-        Value::Array(
-            completions
-                .into_iter()
-                .map(|completion| {
-                    lsp_completion_from_core(
-                        request.uri,
-                        position,
-                        completion,
-                        self.client_completion_label_details,
-                    )
-                })
-                .collect(),
+        lsp_completion_array(
+            request.uri,
+            position,
+            completions,
+            self.client_completion_label_details,
         )
     }
 
@@ -1428,6 +1865,31 @@ fn document_uri(params: &Value) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
+fn completion_request_is_invoked(message: &Value) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("context"))
+        .and_then(|context| context.get("triggerKind"))
+        .and_then(Value::as_u64)
+        == Some(1)
+}
+
+fn lsp_completion_array(
+    uri: &str,
+    position: SourcePosition,
+    completions: Vec<tua_core::Completion>,
+    client_completion_label_details: bool,
+) -> Value {
+    Value::Array(
+        completions
+            .into_iter()
+            .map(|completion| {
+                lsp_completion_from_core(uri, position, completion, client_completion_label_details)
+            })
+            .collect(),
+    )
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct WatchedFileChange {
     uri: String,
@@ -1633,34 +2095,358 @@ fn register_watched_files_request(id: u64) -> Value {
     })
 }
 
-fn prepend_optional(head: Option<Value>, mut tail: Vec<Value>) -> Vec<Value> {
-    if let Some(head) = head {
-        tail.insert(0, head);
+fn extend_optional(values: &mut Vec<Value>, value: Option<Value>) {
+    if let Some(value) = value {
+        values.push(value);
     }
-
-    tail
 }
 
-fn merge_optional_trace(
-    trace: Option<Value>,
-    notifications: Option<Vec<Value>>,
-) -> Option<Vec<Value>> {
-    match (trace, notifications) {
-        (Some(trace), Some(notifications)) => Some(prepend_optional(Some(trace), notifications)),
-        (Some(trace), None) => Some(vec![trace]),
-        (None, notifications) => notifications,
+fn trace_log_should_count(method: &str, request: bool) -> bool {
+    if request {
+        return super::method_is_background_refresh(method);
     }
+
+    matches!(method, "$/cancelRequest")
+}
+
+fn edit_background_request_should_yield(method: &str) -> bool {
+    super::method_is_background_refresh(method)
+}
+
+impl TraceLogCounts {
+    fn clear(&mut self) {
+        self.requests.clear();
+        self.notifications.clear();
+        self.total = 0;
+    }
+
+    fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    fn increment(&mut self, request: bool, method: &str) {
+        let counts = if request {
+            &mut self.requests
+        } else {
+            &mut self.notifications
+        };
+
+        *counts.entry(method.to_owned()).or_insert(0) += 1;
+        self.total += 1;
+    }
+}
+
+fn trace_log_counts_summary(counts: &TraceLogCounts) -> String {
+    let mut parts = vec![format!("total={}", counts.total)];
+
+    if !counts.requests.is_empty() {
+        parts.push(format!(
+            "requests {}",
+            trace_log_count_entries(&counts.requests)
+        ));
+    }
+    if !counts.notifications.is_empty() {
+        parts.push(format!(
+            "notifications {}",
+            trace_log_count_entries(&counts.notifications)
+        ));
+    }
+
+    format!("tua lsp trace summary: {}", parts.join("; "))
+}
+
+fn trace_log_count_entries(counts: &std::collections::BTreeMap<String, usize>) -> String {
+    counts
+        .iter()
+        .map(|(method, count)| format!("{method}={count}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn log_message_notification(message_type: u8, message: impl Into<String>) -> Value {
+    let message = format!("[lsp {}] {}", lsp_log_timestamp(), message.into());
+
     json!({
         "jsonrpc": "2.0",
         "method": "window/logMessage",
         "params": {
             "type": message_type,
-            "message": message.into()
+            "message": message
         }
     })
+}
+
+fn lsp_log_timestamp() -> String {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let seconds = duration.as_secs() as i64;
+    let milliseconds = duration.subsec_millis();
+    let days = seconds.div_euclid(86_400);
+    let seconds_of_day = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_unix_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = seconds_of_day % 3_600 / 60;
+    let second = seconds_of_day % 60;
+
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{milliseconds:03}Z")
+}
+
+fn civil_from_unix_days(days: i64) -> (i64, i64, i64) {
+    let days = days + 719_468;
+    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    let year = year + i64::from(month <= 2);
+
+    (year, month, day)
+}
+
+fn completion_response_item_count(response: &Value) -> usize {
+    completion_response_items(response).map_or(0, Vec::len)
+}
+
+fn hover_response_summary(response: &Value) -> String {
+    let Some(result) = response.get("result") else {
+        return "result=<missing>".to_owned();
+    };
+    if result.is_null() {
+        return "result=null".to_owned();
+    }
+
+    let contents = result
+        .get("contents")
+        .and_then(|contents| {
+            contents
+                .get("value")
+                .and_then(Value::as_str)
+                .or_else(|| contents.as_str())
+        })
+        .map(debug_text_preview)
+        .unwrap_or_else(|| "<unknown>".to_owned());
+
+    format!("result=hover contents={contents}")
+}
+
+fn completion_response_label_sample(response: &Value) -> String {
+    const MAX_LABELS: usize = 32;
+
+    let labels = completion_response_items(response)
+        .into_iter()
+        .flat_map(|items| items.iter())
+        .filter_map(completion_item_debug_label)
+        .collect::<Vec<_>>();
+    let visible = labels
+        .iter()
+        .take(MAX_LABELS)
+        .map(|label| debug_text_preview(label.as_str()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let remaining = labels.len().saturating_sub(MAX_LABELS);
+
+    if remaining == 0 {
+        format!("labels=[{visible}]")
+    } else {
+        format!("labels=[{visible}] labelsMore={remaining}")
+    }
+}
+
+fn completion_response_items(response: &Value) -> Option<&Vec<Value>> {
+    let result = response.get("result")?;
+
+    result
+        .as_array()
+        .or_else(|| result.get("items").and_then(Value::as_array))
+}
+
+fn completion_item_debug_label(item: &Value) -> Option<String> {
+    let label = item.get("label").and_then(Value::as_str)?;
+    let filter_text = item.get("filterText").and_then(Value::as_str);
+
+    Some(match filter_text {
+        Some(filter_text) if filter_text != label => format!("{label}|filter={filter_text}"),
+        _ => label.to_owned(),
+    })
+}
+
+fn completion_source_context(source: &str, position: SourcePosition) -> String {
+    let Some(line) = source_line_at(source, position.line) else {
+        return "prefix=<missing-line> before=<missing-line> line=<missing-line>".to_owned();
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let before = &line[..cursor];
+    let prefix = identifier_prefix_from_before(before);
+    let effective_position = effective_identifier_completion_position(source, position);
+    let effective_context = (effective_position != position)
+        .then(|| effective_completion_source_context(source, effective_position))
+        .flatten()
+        .unwrap_or_default();
+
+    format!(
+        "prefix={} before={} line={}{}",
+        debug_text_preview(prefix),
+        debug_text_preview(before),
+        debug_text_preview(line),
+        effective_context
+    )
+}
+
+fn effective_completion_source_context(source: &str, position: SourcePosition) -> Option<String> {
+    let line = source_line_at(source, position.line)?;
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let before = &line[..cursor];
+    let prefix = identifier_prefix_from_before(before);
+
+    Some(format!(
+        " effectivePosition={}:{} effectivePrefix={} effectiveBefore={}",
+        position.line,
+        position.column,
+        debug_text_preview(prefix),
+        debug_text_preview(before)
+    ))
+}
+
+fn effective_identifier_completion_position(
+    source: &str,
+    position: SourcePosition,
+) -> SourcePosition {
+    let Some(line) = source_line_at(source, position.line) else {
+        return position;
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let bytes = line.as_bytes();
+
+    if cursor >= bytes.len() || !is_identifier_continue_byte(bytes[cursor]) {
+        return position;
+    }
+
+    let mut end = cursor;
+
+    while end < bytes.len() && is_identifier_continue_byte(bytes[end]) {
+        end += 1;
+    }
+
+    SourcePosition {
+        line: position.line,
+        column: column_for_byte(line, end),
+    }
+}
+
+fn source_line_at(source: &str, line: usize) -> Option<&str> {
+    source
+        .split('\n')
+        .nth(line.checked_sub(1)?)
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+}
+
+fn identifier_prefix_from_before(before: &str) -> &str {
+    let start = before
+        .char_indices()
+        .rev()
+        .find_map(|(index, character)| {
+            (!is_identifier_continue_char(character)).then_some(index + character.len_utf8())
+        })
+        .unwrap_or_default();
+
+    &before[start..]
+}
+
+fn is_identifier_continue_char(character: char) -> bool {
+    character == '_' || character.is_ascii_alphanumeric()
+}
+
+fn byte_for_column(line: &str, column: usize) -> usize {
+    let target = column.saturating_sub(1);
+
+    line.char_indices()
+        .nth(target)
+        .map(|(index, _)| index)
+        .unwrap_or(line.len())
+}
+
+fn column_for_byte(line: &str, byte: usize) -> usize {
+    line[..byte.min(line.len())].chars().count() + 1
+}
+
+fn is_identifier_continue_byte(byte: u8) -> bool {
+    byte == b'_' || byte.is_ascii_alphanumeric()
+}
+
+fn definition_response_target(response: &Value) -> String {
+    let Some(result) = response.get("result") else {
+        return "result=<missing>".to_owned();
+    };
+    if result.is_null() {
+        return "result=<null>".to_owned();
+    }
+
+    let uri = result
+        .get("uri")
+        .and_then(Value::as_str)
+        .unwrap_or("<unknown>");
+    let line = result
+        .get("range")
+        .and_then(|range| range.get("start"))
+        .and_then(|start| start.get("line"))
+        .and_then(Value::as_u64)
+        .map(|line| line + 1)
+        .unwrap_or_default();
+    let column = result
+        .get("range")
+        .and_then(|range| range.get("start"))
+        .and_then(|start| start.get("character"))
+        .and_then(Value::as_u64)
+        .map(|column| column + 1)
+        .unwrap_or_default();
+
+    format!("result={uri}:{line}:{column}")
+}
+
+fn content_change_debug_label(change: &Value) -> String {
+    let text = change
+        .get("text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let range = change
+        .get("range")
+        .and_then(|range| {
+            let start = range.get("start")?;
+            let end = range.get("end")?;
+            let start_line = start.get("line")?.as_u64()?;
+            let start_character = start.get("character")?.as_u64()?;
+            let end_line = end.get("line")?.as_u64()?;
+            let end_character = end.get("character")?.as_u64()?;
+
+            Some(format!(
+                "{start_line}:{start_character}-{end_line}:{end_character}"
+            ))
+        })
+        .unwrap_or_else(|| "full".to_owned());
+
+    format!(
+        "range={range} text={} bytes={}",
+        debug_text_preview(text),
+        text.len()
+    )
+}
+
+fn debug_text_preview(text: &str) -> String {
+    const MAX_PREVIEW_CHARS: usize = 24;
+
+    let mut preview = text.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+    let truncated = text.chars().nth(MAX_PREVIEW_CHARS).is_some();
+
+    if truncated {
+        preview.push_str("...");
+    }
+
+    format!("{preview:?}")
 }
 
 fn trace_config_from_initialize(message: &Value) -> TraceConfig {

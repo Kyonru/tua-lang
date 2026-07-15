@@ -43,6 +43,10 @@ const modules = sources.find((source) => source.file === "modules.tua");
 if (!modules) {
   fail("examples/features/src/modules.tua is missing");
 }
+const cheatsheet = sources.find((source) => source.file === "lua_cheatsheet.tua");
+if (!cheatsheet) {
+  fail("examples/features/src/lua_cheatsheet.tua is missing");
+}
 const legacy = {
   path: path.join(src, "legacy.lua"),
   uri: pathToFileURL(path.join(src, "legacy.lua")).href,
@@ -284,6 +288,42 @@ request("initialize", {
         const target = sourceTextFromRange(legacy.text, message.result?.range);
         if (target !== "describe") {
           fail(`definition expected legacy export "describe", got ${JSON.stringify(target)}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
+    request(
+      "textDocument/completion",
+      {
+        textDocument: { uri: cheatsheet.uri },
+        position: positionAfter(cheatsheet.text, "outside_function."),
+      },
+      (message) => {
+        const labels = (message.result || []).map((item) => item.label).sort();
+        if (!labels.includes("length") || !labels.includes("x") || !labels.includes("y")) {
+          fail(`cheatsheet completion missing MetaVector fields: ${labels.join(", ")}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
+    request(
+      "textDocument/definition",
+      {
+        textDocument: { uri: cheatsheet.uri },
+        position: positionAfter(cheatsheet.text, "outside_function."),
+      },
+      (message) => {
+        if (message.result?.uri !== cheatsheet.uri) {
+          fail(`cheatsheet field definition expected ${cheatsheet.uri}, got ${message.result?.uri}`);
+        }
+
+        const target = sourceTextFromRange(cheatsheet.text, message.result?.range);
+        if (target !== "x") {
+          fail(`cheatsheet field definition expected "x", got ${JSON.stringify(target)}`);
         }
       },
     ),

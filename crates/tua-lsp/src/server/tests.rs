@@ -1132,6 +1132,51 @@ fn text_document_diagnostic_returns_same_codes_as_push_diagnostics() {
 }
 
 #[test]
+fn pull_diagnostics_use_fast_current_file_results_during_edit_window() {
+    let temp = TempProject::new("pull-fast-edit-diagnostics");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local ready = true\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&uri, "local ready = true\n"));
+    server.send(did_change(
+        &uri,
+        "local sprite = image \"missing.png\"\n",
+        2,
+    ));
+    server.send(text_document_diagnostic_request(2, &uri));
+
+    assert!(
+        diagnostics_publications(server.output(), &uri).is_empty(),
+        "pull-capable clients should not receive push diagnostics"
+    );
+    assert!(
+        document_diagnostic_items(server.output(), 2).is_empty(),
+        "active typing should use fast diagnostics and skip slow asset validation"
+    );
+
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("pull diagnostics should queue an idle refresh");
+    server.drain_due_diagnostics(due - Duration::from_millis(1));
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 0);
+
+    server.drain_due_diagnostics(due);
+    assert_eq!(diagnostic_refresh_requests(server.output()).len(), 1);
+
+    server.send(text_document_diagnostic_request(3, &uri));
+
+    assert_eq!(
+        diagnostic_codes(&document_diagnostic_items(server.output(), 3)),
+        vec!["TL2004"]
+    );
+}
+
+#[test]
 fn pull_diagnostics_refresh_after_configuration_change() {
     let temp = TempProject::new("pull-configuration-refresh");
     let source = "local unused = 1\n";
@@ -1839,6 +1884,217 @@ fn trace_notification_updates_logging_without_restart() {
 }
 
 #[test]
+fn trace_summarizes_noisy_editor_background_requests() {
+    let mut server = TestServer::new();
+    let uri = "file:///tmp/trace-summary.tua";
+    let source = "local value = 1\nprint(value)\n";
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "messages"
+            },
+            "logVerbosity": "debug"
+        }),
+    ));
+    server.send(did_open(uri, source));
+    server.send(text_document_diagnostic_request(2, uri));
+    server.send(code_action_request(3, uri, 0, 0, 0, 16, Vec::new()));
+    server.send(document_link_request(4, uri));
+    server.send(inlay_hint_request(5, uri, 0, 0, 3, 0));
+    server.send(folding_range_request(6, uri));
+    server.send(document_symbol_request(7, uri));
+    server.send(code_lens_request(8, uri));
+    server.send(json!({
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+            "id": 8
+        }
+    }));
+
+    let log_messages = server
+        .output()
+        .iter()
+        .filter(|message| message["method"] == "window/logMessage")
+        .filter_map(|message| message["params"]["message"].as_str())
+        .collect::<Vec<_>>();
+    let summary = log_messages
+        .iter()
+        .find(|message| message.contains("tua lsp trace summary"))
+        .copied()
+        .unwrap_or_else(|| panic!("trace summary should be logged: {log_messages:#?}"));
+
+    assert!(summary.contains("total=8"));
+    assert!(summary.contains("textDocument/codeAction=1"));
+    assert!(summary.contains("textDocument/inlayHint=1"));
+    assert!(summary.contains("$/cancelRequest=1"));
+    assert!(
+        !log_messages
+            .iter()
+            .any(|message| message.contains("tua lsp request: textDocument/inlayHint")),
+        "noisy request should only appear in the summary: {log_messages:#?}"
+    );
+}
+
+#[test]
+fn input_backlog_prioritizes_typing_and_completion_messages() {
+    let uri = "file:///tmp/backlog-priority.tua";
+    let before = "local outside_function = 1\nprint()\n";
+    let after = "local outside_function = 1\nprint(o)\n";
+    let mut messages = std::collections::VecDeque::from([
+        document_symbol_request(2, uri),
+        code_lens_request(3, uri),
+        hover_request(6, uri, before, "outside_function"),
+        document_highlight_request(7, uri, before, "outside_function", 0),
+        did_change(uri, after, 2),
+        invoked_completion_request(4, uri, after, "print(o"),
+        folding_range_request(5, uri),
+    ]);
+
+    let first = pop_next_pending_message(&mut messages).expect("first message");
+    let second = pop_next_pending_message(&mut messages).expect("second message");
+    let third = pop_next_pending_message(&mut messages).expect("third message");
+
+    assert_eq!(first["method"], "textDocument/didChange");
+    assert_eq!(second["method"], "textDocument/completion");
+    assert_eq!(third["method"], "textDocument/hover");
+    assert_eq!(
+        first["params"]["contentChanges"][0]["text"], after,
+        "the prioritized didChange should carry the latest edited text"
+    );
+    assert_ne!(
+        before, after,
+        "the fixture should model a real edit instead of identical text"
+    );
+}
+
+#[test]
+fn active_typing_backlog_uses_fast_background_responses() {
+    let mut server = TestServer::new();
+    let uri = "file:///tmp/background-fast-response.tua";
+    let before = "local value = 1\nprint(value)\n";
+    let after = "local value = 1\nprint(value)\nlocal next = value\n";
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "messages"
+            },
+            "logVerbosity": "debug"
+        }),
+    ));
+    server.send(did_open(uri, before));
+    server.send(did_change(uri, after, 2));
+
+    server.server.input_backlog_active = true;
+    server.send_without_drain(document_symbol_request(3, uri));
+    server.server.input_backlog_active = false;
+
+    assert_eq!(response_with_id(server.output(), 3)["result"], json!([]));
+    assert!(server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| {
+                    message.contains("tua background request fast response during input backlog")
+                        && message.contains("method=textDocument/documentSymbol")
+                        && message.contains("sinceChangeMs=")
+                })
+    }));
+}
+
+#[test]
+fn debug_trace_logs_typing_and_completion_state() {
+    let mut server = TestServer::new();
+    let uri = "file:///tmp/debug-trace.tua";
+    let source = "local outside_function = { x = 1 }\nprint(ou)\nprint(outside_function.x)\n";
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "messages"
+            },
+            "logVerbosity": "debug"
+        }),
+    ));
+    server.send(did_open(uri, source));
+    server.send(did_change(uri, source, 2));
+    server.send(invoked_completion_request(2, uri, source, "print(o"));
+    server.send(hover_request(4, uri, source, "outside_function"));
+    server.send(definition_request(
+        3,
+        uri,
+        source,
+        "outside_function.x",
+        "outside_function.".len(),
+    ));
+
+    let log_messages = server
+        .output()
+        .iter()
+        .filter(|message| message["method"] == "window/logMessage")
+        .filter_map(|message| message["params"]["message"].as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        log_messages.iter().all(|message| {
+            message.starts_with("[lsp ")
+                && message.get(28..31).is_some_and(|suffix| suffix == "Z] ")
+        }),
+        "LSP log messages should include UTC timestamps: {log_messages:#?}"
+    );
+
+    assert!(
+        log_messages.iter().any(|message| message.contains(
+            "tua document opened: uri=file:///tmp/debug-trace.tua languageId=tua version=1"
+        )),
+        "debug trace should log document open state: {log_messages:#?}"
+    );
+    assert!(
+        log_messages.iter().any(|message| message.contains(
+            "tua document changed: uri=file:///tmp/debug-trace.tua version=2 changes=[range=full"
+        )),
+        "debug trace should log document change state: {log_messages:#?}"
+    );
+    assert!(
+        log_messages.iter().any(|message| {
+            message.contains("tua completion response: id=2 uri=file:///tmp/debug-trace.tua")
+                && message.contains("docVersion=2")
+                && message.contains("prefix=\"o\"")
+                && message.contains("line=\"print(ou)\"")
+                && message.contains("effectivePrefix=\"ou\"")
+                && message.contains("items=")
+                && message.contains("labels=")
+                && message.contains("outside_function")
+                && message.contains("elapsedMs=")
+        }),
+        "debug trace should log completion response state: {log_messages:#?}"
+    );
+    assert!(
+        log_messages.iter().any(|message| {
+            message.contains("tua definition response: id=3 uri=file:///tmp/debug-trace.tua")
+                && message.contains("result=file:///tmp/debug-trace.tua")
+                && message.contains("elapsedMs=")
+        }),
+        "debug trace should log definition response state: {log_messages:#?}"
+    );
+    assert!(
+        log_messages.iter().any(|message| {
+            message.contains("tua hover response: id=4 uri=file:///tmp/debug-trace.tua")
+                && message.contains("docVersion=2")
+                && message.contains("result=hover")
+                && message.contains("outside_function")
+                && message.contains("elapsedMs=")
+        }),
+        "debug trace should log hover response state: {log_messages:#?}"
+    );
+}
+
+#[test]
 fn current_file_requests_do_not_force_project_snapshot() {
     let main_uri = "file:///tmp/current-file-main.tua";
     let other_uri = "file:///tmp/current-file-other.tua";
@@ -2490,6 +2746,73 @@ fn completion_returns_module_label_details() {
 }
 
 #[test]
+fn identifier_completion_uses_open_document_fast_path() {
+    let temp = TempProject::new("identifier-completion-fast-path");
+    let uri = temp.uri_for("src/main.tua");
+    let source = "local outside_function = 1\nprint(ou)\nprint(out)\n";
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(cache_stats_request(2));
+    server.send(invoked_completion_request(3, &uri, source, "print(o"));
+    server.send(invoked_completion_request(4, &uri, source, "print(out"));
+    server.send(cache_stats_request(5));
+
+    let outside_function = completion_with_label(server.output(), 3, "outside_function");
+    assert!(
+        outside_function.get("filterText").is_none(),
+        "stale request positions inside the current identifier should keep label-based client filtering"
+    );
+    let outside_function = completion_with_label(server.output(), 4, "outside_function");
+    assert!(
+        outside_function.get("filterText").is_none(),
+        "longer plain prefix matches should keep label-based client filtering"
+    );
+
+    let before = &response_with_id(server.output(), 2)["result"];
+    let after = &response_with_id(server.output(), 5)["result"];
+
+    assert_eq!(
+        after["parse"]["misses"], before["parse"]["misses"],
+        "plain identifier completion should not force a snapshot parse while typing"
+    );
+}
+
+#[test]
+fn hover_uses_current_file_fast_path_before_project_snapshot() {
+    let temp = TempProject::new("hover-current-file-fast-path");
+    let uri = temp.uri_for("src/main.tua");
+    let source = "local outside_function = 1\nprint(outside_function)\n";
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    for index in 0..12 {
+        let path = format!("src/other_{index}.tua");
+        let contents = format!("type Other{index} = {{ value: number }}\n");
+
+        temp.write(&path, &contents);
+    }
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(cache_stats_request(2));
+    server.send(hover_request(3, &uri, source, "outside_function"));
+    server.send(cache_stats_request(4));
+
+    assert_hover_contains(server.output(), 3, "local outside_function: number");
+
+    let before = &response_with_id(server.output(), 2)["result"];
+    let after = &response_with_id(server.output(), 4)["result"];
+
+    assert_eq!(
+        after["parse"]["misses"].as_u64(),
+        Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 1),
+        "current-file hover should parse only the active document, not every project file"
+    );
+}
+
+#[test]
 fn completion_survives_incomplete_colon_after_valid_open() {
     let uri = "file:///tmp/recovered-completion.tua";
     let valid = r#"type Account = {
@@ -2941,6 +3264,45 @@ return {
         "auto import from player: function(string): { name: string }"
     );
     assert!(completion.get("detail").is_none());
+}
+
+#[test]
+fn completion_skips_auto_imports_for_single_character_prefixes() {
+    let temp = TempProject::new("auto-import-short-prefix");
+    let main = "local made = m\n";
+    let player = r#"local function makePlayer(name: string)
+  return { name = name }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/player.tua", player);
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root_and_completion_label_details(
+        1,
+        temp.uri(),
+    ));
+    server.send(did_open(&main_uri, main));
+    server.send(completion_request(2, &main_uri, main, "m"));
+
+    let labels = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .filter_map(|completion| completion["label"].as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        !labels.contains(&"makePlayer"),
+        "single-character prefixes should not include auto-import candidates: {labels:?}"
+    );
 }
 
 #[test]
@@ -6510,6 +6872,23 @@ fn completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
                 "uri": uri
             },
             "position": lsp_position_after(source, needle)
+        }
+    })
+}
+
+fn invoked_completion_request(id: u64, uri: &str, source: &str, needle: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/completion",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle),
+            "context": {
+                "triggerKind": 1
+            }
         }
     })
 }

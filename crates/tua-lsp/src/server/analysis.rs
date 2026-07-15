@@ -20,6 +20,8 @@ use super::auto_import::{
 use super::configuration::{SourceKind, WorkspaceSettings};
 use super::uri::path_from_uri;
 
+const MIN_AUTO_IMPORT_PREFIX_CHARS: usize = 2;
+
 #[derive(Default)]
 pub(super) struct AnalysisHost {
     core: CoreAnalysisHost,
@@ -91,6 +93,32 @@ impl AnalysisHost {
 
     pub(super) fn cache_stats(&self) -> AnalysisCacheStats {
         self.core.cache_stats()
+    }
+
+    pub(super) fn fast_identifier_completion_for_uri(
+        &self,
+        uri: &str,
+        position: SourcePosition,
+    ) -> Option<(SourcePosition, Vec<Completion>)> {
+        let source = self.document_text(uri)?;
+        let position = identifier_completion_position(source, position);
+        let (_, completions) = tua_core::complete_lossy_identifier_source(source, position)?;
+
+        if position_is_inside_open_table(source, position) {
+            return None;
+        }
+
+        Some((position, completions))
+    }
+
+    pub(super) fn fast_hover_for_uri(
+        &self,
+        uri: &str,
+        position: SourcePosition,
+    ) -> Option<tua_core::Hover> {
+        let document = self.documents.get(uri)?;
+
+        self.core.current_file_hover(&document.path, position)
     }
 
     pub(super) fn fast_diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {
@@ -203,6 +231,38 @@ impl AnalysisHost {
         let path = document.path.clone();
         let effective_roots = self.effective_workspace_folders(roots);
 
+        if settings.is_ignored(&path, &effective_roots) {
+            self.core.remove_file(path);
+            return;
+        }
+
+        let Some(kind) = source_kind_for_path(&path, self.project_model.as_ref()) else {
+            self.core.remove_file(path);
+            return;
+        };
+
+        self.core
+            .open_document_with_kind(path, source, core_source_kind(kind));
+    }
+
+    pub(super) fn save_document(
+        &mut self,
+        uri: impl Into<String>,
+        source: impl Into<String>,
+        roots: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) {
+        let uri = uri.into();
+        let source = source.into();
+
+        let Some(document) = self.documents.get_mut(&uri) else {
+            self.open_document(uri, source, roots, settings);
+            return;
+        };
+
+        document.source = source.clone();
+        let path = document.path.clone();
+        let effective_roots = self.effective_workspace_folders(roots);
         let kind = {
             let _trace = tua_core::profile::diagnostics_span(
                 tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
@@ -510,6 +570,126 @@ impl AnalysisHost {
     }
 }
 
+fn position_is_inside_open_table(source: &str, position: SourcePosition) -> bool {
+    let Some(cursor) = byte_offset_for_position(source, position) else {
+        return false;
+    };
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    let bytes = &source.as_bytes()[..cursor.min(source.len())];
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+
+        if let Some(quote_byte) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == quote_byte {
+                quote = None;
+            }
+            index += 1;
+            continue;
+        }
+
+        if byte == b'-' && bytes.get(index + 1) == Some(&b'-') {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+
+        match byte {
+            b'\'' | b'"' => quote = Some(byte),
+            b'{' => depth += 1,
+            b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+
+        index += 1;
+    }
+
+    depth > 0
+}
+
+fn byte_offset_for_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0usize;
+
+    for (index, line) in source.split_inclusive('\n').enumerate() {
+        let line_number = index + 1;
+        let text = line
+            .strip_suffix('\n')
+            .unwrap_or(line)
+            .strip_suffix('\r')
+            .unwrap_or_else(|| line.strip_suffix('\n').unwrap_or(line));
+
+        if line_number == position.line {
+            return Some(offset + byte_for_column(text, position.column));
+        }
+
+        offset += line.len();
+    }
+
+    if position.line == source.lines().count().max(1) {
+        let line = source.lines().last().unwrap_or_default();
+
+        return Some(offset + byte_for_column(line, position.column));
+    }
+
+    None
+}
+
+fn identifier_completion_position(source: &str, position: SourcePosition) -> SourcePosition {
+    let Some(line) = source_line_at(source, position.line) else {
+        return position;
+    };
+    let cursor = byte_for_column(line, position.column).min(line.len());
+    let bytes = line.as_bytes();
+
+    if cursor >= bytes.len() || !is_identifier_continue_byte(bytes[cursor]) {
+        return position;
+    }
+
+    let mut end = cursor;
+
+    while end < bytes.len() && is_identifier_continue_byte(bytes[end]) {
+        end += 1;
+    }
+
+    SourcePosition {
+        line: position.line,
+        column: column_for_byte(line, end),
+    }
+}
+
+fn source_line_at(source: &str, line: usize) -> Option<&str> {
+    source
+        .split('\n')
+        .nth(line.checked_sub(1)?)
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+}
+
+fn column_for_byte(line: &str, byte: usize) -> usize {
+    line[..byte.min(line.len())].chars().count() + 1
+}
+
+fn is_identifier_continue_byte(byte: u8) -> bool {
+    byte == b'_' || byte.is_ascii_alphanumeric()
+}
+
+fn byte_for_column(line: &str, column: usize) -> usize {
+    let target = column.saturating_sub(1);
+
+    line.char_indices()
+        .nth(target)
+        .map(|(index, _)| index)
+        .unwrap_or(line.len())
+}
+
 impl AnalysisSnapshot {
     pub(super) fn diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {
         let path = path_from_uri(uri);
@@ -605,7 +785,7 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
 
-        if prefix.is_empty() {
+        if prefix.chars().count() < MIN_AUTO_IMPORT_PREFIX_CHARS {
             return Vec::new();
         }
 
@@ -1002,8 +1182,10 @@ mod tests {
         let settings = WorkspaceSettings::default();
         let player_uri = "file:///tmp/analysis-player.tua";
         let enemy_uri = "file:///tmp/analysis-enemy.tua";
+        let player_initial = "local hp: number = 1\n";
+        let player_changed = "local hp: number = 3\n";
 
-        host.open_document(player_uri, "local hp: number = 1\n", &roots, &settings);
+        host.open_document(player_uri, player_initial, &roots, &settings);
         host.open_document(enemy_uri, "local hp: number = 2\n", &roots, &settings);
 
         let before = host.revision();
@@ -1017,12 +1199,16 @@ mod tests {
         host.update_document(player_uri, "local hp: number = 1\n", &roots, &settings);
         assert_eq!(host.revision(), before);
 
-        host.update_document(player_uri, "local hp: number = 3\n", &roots, &settings);
+        host.update_document(player_uri, player_changed, &roots, &settings);
 
         let after = host.revision();
         let snapshot = host.snapshot(&roots, &settings);
 
-        assert!(after > before);
+        assert_eq!(after, before + 1);
+        assert_eq!(
+            snapshot.core.source(path_from_uri(player_uri)),
+            Some(player_changed)
+        );
         assert!(snapshot.core.source(path_from_uri(player_uri)).is_some());
         assert!(snapshot.core.source(path_from_uri(enemy_uri)).is_some());
         assert_eq!(host.cache_stats().parse_misses, 3);

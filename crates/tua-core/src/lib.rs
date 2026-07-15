@@ -79,7 +79,10 @@ pub use code_action::{
     CodeActionRange, CreateFile,
 };
 pub use code_lens::{CodeLens, CodeLensReferenceKind, CodeLensReferenceTarget, CodeLensTarget};
-pub use completion::{complete_parsed_source, complete_tua_source, Completion, CompletionKind};
+pub use completion::{
+    complete_lossy_identifier_source, complete_parsed_source, complete_tua_source, Completion,
+    CompletionKind,
+};
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,
     ConfigParseError, DiagnosticsConfig, EcsConfig, EmitConfig, FormatConfig, InitResult,

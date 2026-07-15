@@ -28,6 +28,7 @@ async function main() {
 
   try {
     await smokeSuccessfulActivation(mockServer, workspace, globalStorage);
+    await smokeDebugLspLogging(mockServer, workspace);
     await smokeStartupFailure(path.join(temp, "missing-tua"), workspace);
     await smokeServerSelection(extensionFixture, workspace);
     await smokeUntrustedWorkspaceGuard(workspace);
@@ -35,6 +36,7 @@ async function main() {
   } finally {
     Module._load = originalLoad;
     delete process.env.TUA_SERVER_PATH;
+    delete process.env.TUA_DEBUG_LSP;
     fs.rmSync(temp, { force: true, recursive: true });
   }
 }
@@ -57,6 +59,43 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assertRegisteredCommands(state);
     assert.strictEqual(state.clients.length, 1, "activation should create one language client");
     assert.strictEqual(state.clients[0].starts, 1, "activation should start the client");
+    assert.deepStrictEqual(
+      state.clients[0].clientOptions.documentSelector,
+      [
+        { scheme: "file", language: "tua" },
+        { scheme: "file", pattern: "**/*.tua" },
+        { scheme: "untitled", language: "tua" },
+      ],
+      "document selector should cover .tua files even when VS Code language mode is wrong",
+    );
+
+    const tuaDocumentWithWrongLanguage = mockDocument(path.join(workspace, "private.tua"), "lua");
+    const commandCountBeforeTyping = state.executedCommands.length;
+
+    state.fireTextDocumentChange(tuaDocumentWithWrongLanguage, "o");
+
+    assert.strictEqual(
+      state.executedCommands.length,
+      commandCountBeforeTyping,
+      "typing should schedule suggestions instead of triggering synchronously",
+    );
+
+    await waitUntil(() => state.executedCommands.length === commandCountBeforeTyping + 1);
+    assert.strictEqual(
+      state.executedCommands.at(-1)?.command,
+      "editor.action.triggerSuggest",
+      "typing an identifier character in a .tua file should open suggestions immediately after sync",
+    );
+
+    state.fireTextDocumentChange(tuaDocumentWithWrongLanguage, " ");
+
+    await delay(35);
+    assert.strictEqual(
+      state.executedCommands.length,
+      commandCountBeforeTyping + 1,
+      "typing a non-trigger character should not reopen suggestions",
+    );
+
     assert.strictEqual(
       state.clients[0].serverOptions.run.command,
       mockServer,
@@ -225,6 +264,107 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
   }
 }
 
+async function smokeDebugLspLogging(mockServer, workspace) {
+  const state = createMockState(workspace);
+  const previousServerPath = process.env.TUA_SERVER_PATH;
+  const previousDebugLsp = process.env.TUA_DEBUG_LSP;
+
+  process.env.TUA_SERVER_PATH = mockServer;
+  process.env.TUA_DEBUG_LSP = "1";
+
+  try {
+    const extension = loadExtension(state);
+    const context = createContext();
+
+    await extension.activate(context);
+
+    assert.deepStrictEqual(
+      state.clients[0].clientOptions.initializationOptions,
+      {
+        trace: {
+          server: "messages",
+        },
+        logVerbosity: "debug",
+      },
+      "debug LSP env flag should enable server trace and debug logs",
+    );
+    assert(
+      state.outputLines.some((line) => line.includes("TUA_DEBUG_LSP=1 enabled")),
+      "debug LSP env flag should announce extension-side debug logging",
+    );
+    assert(
+      state.outputLines.some((line) => line.includes("language client initialization options")),
+      "debug LSP env flag should log the trace settings sent to the server",
+    );
+
+    const outputLineCount = state.outputLines.length;
+    const outputDocument = mockDocument("extension-output-tua-lang.tua", "Log", "output");
+
+    state.fireTextDocumentChange(outputDocument, "log line");
+    await delay(35);
+    assert.strictEqual(
+      state.outputLines.length,
+      outputLineCount,
+      "debug logging should ignore output-channel document changes instead of feeding itself",
+    );
+
+    const document = mockDocument(path.join(workspace, "private.tua"), "lua");
+
+    state.fireTextDocumentChange(document, "o");
+
+    await waitUntil(() =>
+      state.executedCommands.some((entry) => entry.command === "editor.action.triggerSuggest"),
+    );
+    assert(
+      state.outputLines.some((line) => line.includes("suggest scheduled")),
+      "debug LSP env flag should log suggestion scheduling",
+    );
+    assert(
+      state.outputLines.some((line) => line.includes("suggest trigger command")),
+      "debug LSP env flag should log suggestion trigger execution",
+    );
+
+    const repeatStart = state.outputLines.length;
+    document.version = 1;
+    state.fireTextDocumentChange(document, " ");
+    document.version = 2;
+    state.fireTextDocumentChange(document, " ");
+    document.version = 3;
+    state.fireTextDocumentChange(document, " ");
+
+    await waitUntil(() =>
+      state.outputLines
+        .slice(repeatStart)
+        .some((line) => line.includes("debug repeat: suggest skip non-trigger change count=3")),
+    );
+
+    const repeatedLines = state.outputLines.slice(repeatStart);
+    assert.strictEqual(
+      repeatedLines.filter((line) => line.includes("suggest skip non-trigger change")).length,
+      2,
+      "repeated debug logs should emit the first line plus one count summary",
+    );
+    assert(
+      repeatedLines.some((line) => line.includes("version=3")),
+      "repeat summary should keep the latest repeated log details",
+    );
+
+    await extension.deactivate();
+  } finally {
+    if (previousServerPath === undefined) {
+      delete process.env.TUA_SERVER_PATH;
+    } else {
+      process.env.TUA_SERVER_PATH = previousServerPath;
+    }
+
+    if (previousDebugLsp === undefined) {
+      delete process.env.TUA_DEBUG_LSP;
+    } else {
+      process.env.TUA_DEBUG_LSP = previousDebugLsp;
+    }
+  }
+}
+
 async function smokeServerSelection(extensionFixture, workspace) {
   const bundledServer = path.join(extensionFixture, "bin", platformExecutableName());
   const workspaceServer = path.join(workspace, "target", "debug", platformExecutableName());
@@ -378,6 +518,21 @@ async function smokeStartupFailure(missingServer, workspace) {
   }
 }
 
+function mockDocument(filename, languageId = "tua", scheme = "file") {
+  return {
+    fileName: filename,
+    languageId,
+    uri: {
+      fsPath: filename,
+      path: filename,
+      scheme,
+      toString() {
+        return `${scheme}://${filename}`;
+      },
+    },
+  };
+}
+
 function platformExecutableName() {
   return process.platform === "win32" ? "tua.exe" : "tua";
 }
@@ -433,13 +588,16 @@ function createMockState(workspace, options = {}) {
     ["log.verbosity", options.logVerbosity ?? "off"],
   ]);
   const configurationListeners = [];
+  const documentChangeListeners = [];
   const configurationUpdates = [];
   const executedCommands = [];
   const informationMessages = [];
   const openedExternals = [];
+  const outputLines = [];
   const outputShows = [];
   const quickPickCalls = [];
   const warningMessages = [];
+  let activeTextEditor;
   let statusItem;
 
   const vscode = {
@@ -502,9 +660,14 @@ function createMockState(workspace, options = {}) {
       },
     },
     window: {
+      get activeTextEditor() {
+        return activeTextEditor;
+      },
       createOutputChannel() {
         return {
-          appendLine() {},
+          appendLine(line) {
+            outputLines.push(line);
+          },
           dispose() {},
           show(preserveFocus) {
             outputShows.push(preserveFocus);
@@ -567,6 +730,10 @@ function createMockState(workspace, options = {}) {
         configurationListeners.push(listener);
         return { dispose() {} };
       },
+      onDidChangeTextDocument(listener) {
+        documentChangeListeners.push(listener);
+        return { dispose() {} };
+      },
       registerTextDocumentContentProvider() {
         return { dispose() {} };
       },
@@ -625,14 +792,26 @@ function createMockState(workspace, options = {}) {
     configurationListeners,
     configurationUpdates,
     commands,
+    documentChangeListeners,
     executedCommands,
     informationMessages,
     LanguageClient,
     openedExternals,
+    outputLines,
     outputShows,
     quickPickCalls,
     setConfiguration(key, value) {
       configuration.set(key, value);
+    },
+    fireTextDocumentChange(document, text) {
+      activeTextEditor = { document };
+
+      for (const listener of documentChangeListeners) {
+        listener({
+          document,
+          contentChanges: [{ text }],
+        });
+      }
     },
     vscode,
     warningMessages,
@@ -683,4 +862,8 @@ async function waitUntil(predicate) {
   }
 
   assert(predicate(), "condition should become true before timeout");
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

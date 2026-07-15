@@ -17,6 +17,8 @@ Minimal VS Code language support for tua source files.
 - Starts `tua lsp` over stdio and surfaces the language server's diagnostics,
   hover, completion, signature help, document highlights, navigation, rename,
   inlay hint, semantic token, and symbol features.
+- Contributes Tua editor defaults for zero-delay quick suggestions in code and
+  strings.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, probing server profile artifacts,
@@ -45,6 +47,10 @@ Use the workspace `Run Extension (Features Example)` launch profile to open
 `Run Extension (Features Example, Bundled Server)` to compare against a staged
 bundled server. `Run Extension (Debug Server)` opens `examples/love-full` with
 the debug server.
+
+`Run Extension (All Examples)` enables `TUA_DEBUG_LSP=1`, which writes
+extension typing/suggestion trace lines and server completion trace messages to
+the Tua output channel.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
