@@ -10,6 +10,7 @@ pub(super) struct LuaSymbol {
     pub(super) name: String,
     kind: CompletionKind,
     detail: String,
+    line: usize,
 }
 
 impl LuaSymbol {
@@ -49,7 +50,7 @@ pub(super) fn lua_symbols_before_position(
         };
         let code = visible.split("--").next().unwrap_or("").trim_start();
 
-        collect_function_header_parameters(code, &mut symbols);
+        collect_function_header_parameters(code, line_number, &mut symbols);
 
         if let Some(name) = parse_local_function_name(code) {
             symbols.insert(
@@ -58,6 +59,7 @@ pub(super) fn lua_symbols_before_position(
                     name,
                     kind: CompletionKind::Function,
                     detail: "local function".to_owned(),
+                    line: line_number,
                 },
             );
             continue;
@@ -70,6 +72,7 @@ pub(super) fn lua_symbols_before_position(
                     name,
                     kind: CompletionKind::Function,
                     detail: "function".to_owned(),
+                    line: line_number,
                 },
             );
             continue;
@@ -82,12 +85,21 @@ pub(super) fn lua_symbols_before_position(
                     name,
                     kind: CompletionKind::Variable,
                     detail: "local".to_owned(),
+                    line: line_number,
                 },
             );
         }
     }
 
-    symbols.into_values().collect()
+    let mut symbols = symbols.into_values().collect::<Vec<_>>();
+
+    symbols.sort_by(|left, right| {
+        right
+            .line
+            .cmp(&left.line)
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    symbols
 }
 
 fn parse_local_function_name(line: &str) -> Option<String> {
@@ -149,7 +161,11 @@ fn parse_local_names(line: &str) -> Vec<String> {
     names
 }
 
-fn collect_function_header_parameters(line: &str, symbols: &mut BTreeMap<String, LuaSymbol>) {
+fn collect_function_header_parameters(
+    line: &str,
+    line_number: usize,
+    symbols: &mut BTreeMap<String, LuaSymbol>,
+) {
     let Some(open) = line.find('(') else {
         return;
     };
@@ -184,6 +200,7 @@ fn collect_function_header_parameters(line: &str, symbols: &mut BTreeMap<String,
                 name: name.to_owned(),
                 kind: CompletionKind::Variable,
                 detail: "parameter".to_owned(),
+                line: line_number,
             },
         );
     }

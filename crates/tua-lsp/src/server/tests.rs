@@ -2007,6 +2007,60 @@ fn active_typing_backlog_uses_fast_background_responses() {
 }
 
 #[test]
+fn active_typing_backlog_keeps_inlay_hint_responses() {
+    let mut server = TestServer::new();
+    let uri = "file:///tmp/background-inlay-hints.tua";
+    let before = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+"#;
+    let after = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local player = makePlayer()
+"#;
+
+    server.send(initialize_with_trace_options(
+        1,
+        json!({
+            "trace": {
+                "server": "messages"
+            },
+            "logVerbosity": "debug"
+        }),
+    ));
+    server.send(did_open(uri, before));
+    server.send(did_change(uri, after, 2));
+
+    server.server.input_backlog_active = true;
+    server.send_without_drain(inlay_hint_request(3, uri, 0, 0, 10, 0));
+    server.server.input_backlog_active = false;
+
+    let hints = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert!(
+        inlay_hint_labels(hints).contains(&": Player"),
+        "inlay hints should not be replaced by the active-edit empty response: {hints:#?}"
+    );
+    assert!(!server.output().iter().any(|message| {
+        message["method"] == "window/logMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|message| {
+                    message.contains("tua background request fast response during input backlog")
+                        && message.contains("method=textDocument/inlayHint")
+                })
+    }));
+}
+
+#[test]
 fn debug_trace_logs_typing_and_completion_state() {
     let mut server = TestServer::new();
     let uri = "file:///tmp/debug-trace.tua";
@@ -2534,7 +2588,15 @@ return {
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&main_uri, main));
     server.send(completion_request(2, &main_uri, main, "cla"));
-    assert_completion_labels(server.output(), 2, []);
+    let initial_labels = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("completion result should be an array")
+        .iter()
+        .filter_map(|item| item["label"].as_str())
+        .collect::<Vec<_>>();
+
+    assert!(initial_labels.contains(&"class"), "{initial_labels:?}");
+    assert!(!initial_labels.contains(&"clamp"), "{initial_labels:?}");
 
     server.send(did_change_configuration(json!({
         "fileAssociations": {
@@ -3053,6 +3115,38 @@ love.graphics.setBlendMode("scr")
 }
 
 #[test]
+fn completion_sort_text_preserves_server_ranking() {
+    let uri = "file:///tmp/ranked-completion.tua";
+    let source = r#"local classFar = 1
+local classNear = 2
+local value = cl
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        invoked_completion_request(2, uri, source, "local value = cl"),
+    ]);
+    let items = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("completion result should be an array");
+    let labels = items
+        .iter()
+        .map(|item| item["label"].as_str().expect("label should be a string"))
+        .collect::<Vec<_>>();
+    let class = items
+        .iter()
+        .find(|item| item["label"] == "class")
+        .expect("class snippet should complete");
+
+    assert_eq!(labels[0], "classNear");
+    assert_eq!(labels[1], "classFar");
+    assert_eq!(items[0]["sortText"], "0000_classNear");
+    assert_eq!(items[1]["sortText"], "0001_classFar");
+    assert_eq!(class["kind"], 15);
+    assert_eq!(class["insertTextFormat"], 2);
+    assert_eq!(class["insertText"], "class ${1:Name} {\n  ${0}\n}");
+}
+
+#[test]
 fn completion_returns_love_callback_snippet_and_conf_fields() {
     let callback_uri = "file:///tmp/love-callback-completion.tua";
     let callback_source = "function love.up\n";
@@ -3184,11 +3278,11 @@ end
     let alias = response_with_id(server.output(), 2)["result"][0].clone();
     let local = completion_with_label(server.output(), 3, "score");
     let function = completion_with_label(server.output(), 4, "damage");
-    let snippet = response_with_id(server.output(), 5)["result"][0].clone();
+    let snippet = completion_with_label(server.output(), 5, "document function");
 
     assert_eq!(alias["labelDetails"]["description"], "type alias");
     assert_eq!(local["labelDetails"]["description"], "local");
-    assert_eq!(function["labelDetails"]["description"], "function");
+    assert_eq!(function["labelDetails"]["description"], "local function");
     assert_eq!(
         snippet["labelDetails"]["description"],
         "LuaDoc function documentation"
@@ -3212,7 +3306,7 @@ end
     assert_eq!(alias["result"]["data"]["symbolKind"], "typeAlias");
     assert_eq!(local["result"]["detail"], "local");
     assert_eq!(local["result"]["data"]["symbolKind"], "variable");
-    assert_eq!(function["result"]["detail"], "function");
+    assert_eq!(function["result"]["detail"], "local function");
     assert_eq!(function["result"]["data"]["symbolKind"], "function");
     assert_eq!(snippet["result"]["detail"], "LuaDoc function documentation");
     assert_eq!(snippet["result"]["data"]["symbolKind"], "snippet");

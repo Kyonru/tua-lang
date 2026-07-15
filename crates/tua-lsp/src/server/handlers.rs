@@ -1883,8 +1883,21 @@ fn lsp_completion_array(
     Value::Array(
         completions
             .into_iter()
-            .map(|completion| {
-                lsp_completion_from_core(uri, position, completion, client_completion_label_details)
+            .enumerate()
+            .map(|(index, completion)| {
+                let mut item = lsp_completion_from_core(
+                    uri,
+                    position,
+                    completion,
+                    client_completion_label_details,
+                );
+                let label = item
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+
+                item["sortText"] = json!(format!("{index:04}_{label}"));
+                item
             })
             .collect(),
     )
@@ -2110,7 +2123,7 @@ fn trace_log_should_count(method: &str, request: bool) -> bool {
 }
 
 fn edit_background_request_should_yield(method: &str) -> bool {
-    super::method_is_background_refresh(method)
+    method != "textDocument/inlayHint" && super::method_is_background_refresh(method)
 }
 
 impl TraceLogCounts {

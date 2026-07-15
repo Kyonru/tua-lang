@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
@@ -86,20 +86,46 @@ pub(crate) fn filter_and_rank_completions(
 
     let mut ranked = completions
         .into_iter()
+        .enumerate()
         .filter_map(|completion| {
-            completion_match_rank(&completion, prefix).map(|rank| (rank, completion))
+            let (index, completion) = completion;
+
+            completion_match_rank(&completion, prefix)
+                .map(|rank| (rank, completion_priority(&completion), index, completion))
         })
         .collect::<Vec<_>>();
 
-    ranked.sort_by(|(left_rank, left), (right_rank, right)| {
-        left_rank
-            .cmp(right_rank)
-            .then_with(|| left.label.cmp(&right.label))
-    });
+    ranked.sort_by(
+        |(left_rank, left_priority, left_index, left),
+         (right_rank, right_priority, right_index, right)| {
+            let base_order = left_rank
+                .category
+                .cmp(&right_rank.category)
+                .then_with(|| left_rank.index.cmp(&right_rank.index))
+                .then_with(|| left_priority.cmp(right_priority));
+
+            if base_order != std::cmp::Ordering::Equal {
+                return base_order;
+            }
+
+            if completion_uses_source_order(left) && completion_uses_source_order(right) {
+                left_index
+                    .cmp(right_index)
+                    .then_with(|| left_rank.len.cmp(&right_rank.len))
+                    .then_with(|| left.label.cmp(&right.label))
+            } else {
+                left_rank
+                    .len
+                    .cmp(&right_rank.len)
+                    .then_with(|| left_index.cmp(right_index))
+                    .then_with(|| left.label.cmp(&right.label))
+            }
+        },
+    );
 
     ranked
         .into_iter()
-        .map(|(_, mut completion)| {
+        .map(|(_, _, _, mut completion)| {
             if completion.filter_text.is_none()
                 && !completion
                     .label
@@ -111,6 +137,31 @@ pub(crate) fn filter_and_rank_completions(
             completion
         })
         .collect()
+}
+
+fn completion_priority(completion: &Completion) -> u8 {
+    match completion.detail.as_deref() {
+        Some("parameter") => 0,
+        Some("local") | Some("local function") => 1,
+        Some("function") => 2,
+        _ => match completion.kind {
+            CompletionKind::Snippet => 3,
+            CompletionKind::Keyword => 4,
+            CompletionKind::Function => 5,
+            CompletionKind::Variable => 6,
+            CompletionKind::TypeAlias => 7,
+            CompletionKind::Module => 8,
+            CompletionKind::Field => 9,
+            CompletionKind::Value => 10,
+        },
+    }
+}
+
+fn completion_uses_source_order(completion: &Completion) -> bool {
+    matches!(
+        completion.detail.as_deref(),
+        Some("parameter" | "local" | "local function" | "function")
+    )
 }
 
 fn completion_match_rank(completion: &Completion, prefix: &str) -> Option<TextMatchRank> {
@@ -340,6 +391,76 @@ fn rank_completions_for_prefix(
         Some(prefix) => filter_and_rank_completions(completions, prefix),
         None => completions,
     }
+}
+
+fn syntax_snippet_completions(prefix: &str) -> Vec<Completion> {
+    [
+        (
+            "local",
+            "Lua local declaration",
+            "local ${1:name} = ${0:nil}",
+        ),
+        (
+            "local function",
+            "Lua local function declaration",
+            "local function ${1:name}(${2})\n  ${0}\nend",
+        ),
+        (
+            "function",
+            "Lua function declaration",
+            "function ${1:name}(${2})\n  ${0}\nend",
+        ),
+        (
+            "type",
+            "Tua type alias declaration",
+            "type ${1:Name} = {\n  ${0}\n}",
+        ),
+        (
+            "class",
+            "Tua class declaration",
+            "class ${1:Name} {\n  ${0}\n}",
+        ),
+        (
+            "open class",
+            "Tua inheritable class declaration",
+            "open class ${1:Name} {\n  ${0}\n}",
+        ),
+        (
+            "final class",
+            "Tua final class declaration",
+            "final class ${1:Name} {\n  ${0}\n}",
+        ),
+        (
+            "if",
+            "Lua if statement",
+            "if ${1:condition} then\n  ${0}\nend",
+        ),
+        (
+            "for",
+            "Lua numeric for loop",
+            "for ${1:i} = ${2:1}, ${3:n} do\n  ${0}\nend",
+        ),
+        (
+            "while",
+            "Lua while loop",
+            "while ${1:condition} do\n  ${0}\nend",
+        ),
+    ]
+    .into_iter()
+    .filter(|(label, _, _)| completion_text_matches(label, prefix))
+    .map(|(label, detail, insert_text)| Completion {
+        label: label.to_owned(),
+        kind: CompletionKind::Snippet,
+        detail: Some(detail.to_owned()),
+        documentation: None,
+        insert_text: Some(insert_text.to_owned()),
+        filter_text: None,
+        is_snippet: true,
+        module_path: None,
+        source_module: None,
+        additional_text_edits: Vec::new(),
+    })
+    .collect()
 }
 
 fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
@@ -740,14 +861,22 @@ fn complete_identifier_items(
     prefix: &str,
     position: SourcePosition,
 ) -> Vec<Completion> {
-    let mut completions = BTreeMap::new();
+    let mut completions = Vec::new();
+    let mut labels = BTreeSet::new();
 
-    insert_lossy_identifier_items(&mut completions, &parsed.source, prefix, position);
+    insert_lossy_identifier_items(
+        &mut completions,
+        &mut labels,
+        &parsed.source,
+        prefix,
+        position,
+    );
 
     for local in &parsed.local_annotations {
         if completion_text_matches(&local.name, prefix) {
-            completions.insert(
-                local.name.clone(),
+            push_unique_completion(
+                &mut completions,
+                &mut labels,
                 Completion {
                     label: local.name.clone(),
                     kind: CompletionKind::Variable,
@@ -770,8 +899,9 @@ fn complete_identifier_items(
         };
 
         if completion_text_matches(name, prefix) {
-            completions.insert(
-                name.clone(),
+            push_unique_completion(
+                &mut completions,
+                &mut labels,
                 Completion {
                     label: name.clone(),
                     kind: CompletionKind::Function,
@@ -788,7 +918,7 @@ fn complete_identifier_items(
         }
     }
 
-    completions.into_values().collect()
+    completions
 }
 
 fn complete_lossy_identifier_items(
@@ -796,30 +926,46 @@ fn complete_lossy_identifier_items(
     prefix: &str,
     position: SourcePosition,
 ) -> Vec<Completion> {
-    let mut completions = BTreeMap::new();
+    let mut completions = Vec::new();
+    let mut labels = BTreeSet::new();
 
-    insert_lossy_identifier_items(&mut completions, source, prefix, position);
+    insert_lossy_identifier_items(&mut completions, &mut labels, source, prefix, position);
 
-    completions.into_values().collect()
+    completions
 }
 
 fn insert_lossy_identifier_items(
-    completions: &mut BTreeMap<String, Completion>,
+    completions: &mut Vec<Completion>,
+    labels: &mut BTreeSet<String>,
     source: &str,
     prefix: &str,
     position: SourcePosition,
 ) {
+    for symbol in lua_symbols_before_position(source, position) {
+        if completion_text_matches(&symbol.name, prefix) {
+            push_unique_completion(completions, labels, symbol.into_completion());
+        }
+    }
+
+    for completion in syntax_snippet_completions(prefix) {
+        push_unique_completion(completions, labels, completion);
+    }
+
     for item in lua::keyword_items(prefix)
         .into_iter()
         .chain(lua::top_level_items(prefix))
     {
-        insert_lua_item(completions, item);
+        push_unique_completion(completions, labels, completion_from_lua_item(item));
     }
+}
 
-    for symbol in lua_symbols_before_position(source, position) {
-        if completion_text_matches(&symbol.name, prefix) {
-            completions.insert(symbol.name.clone(), symbol.into_completion());
-        }
+fn push_unique_completion(
+    completions: &mut Vec<Completion>,
+    labels: &mut BTreeSet<String>,
+    completion: Completion,
+) {
+    if labels.insert(completion.label.clone()) {
+        completions.push(completion);
     }
 }
 
@@ -1452,12 +1598,6 @@ fn love_conf_parameter_in_source(source: &str, position: SourcePosition) -> Opti
     }
 
     parameter
-}
-
-fn insert_lua_item(completions: &mut BTreeMap<String, Completion>, item: LuaItem) {
-    completions
-        .entry(item.label.to_owned())
-        .or_insert_with(|| completion_from_lua_item(item));
 }
 
 fn insert_love_object_item(

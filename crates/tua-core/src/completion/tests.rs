@@ -278,6 +278,56 @@ fn completes_lua_keywords_and_globals_in_expression_positions() {
 }
 
 #[test]
+fn completes_tua_and_lua_statement_snippets() {
+    for (source, needle, label, insert_text) in [
+        ("cl", "cl", "class", "class ${1:Name} {\n  ${0}\n}"),
+        ("ty", "ty", "type", "type ${1:Name} = {\n  ${0}\n}"),
+        (
+            "fun",
+            "fun",
+            "function",
+            "function ${1:name}(${2})\n  ${0}\nend",
+        ),
+        ("loc", "loc", "local", "local ${1:name} = ${0:nil}"),
+    ] {
+        let completions =
+            complete_tua_source("src/main.tua", source, position_after(source, needle))
+                .expect("statement snippet completion should succeed");
+        let completion = completions
+            .iter()
+            .find(|completion| completion.label == label)
+            .unwrap_or_else(|| panic!("{label} snippet should complete"));
+
+        assert_eq!(completion.kind, CompletionKind::Snippet);
+        assert!(completion.is_snippet);
+        assert_eq!(completion.insert_text.as_deref(), Some(insert_text));
+    }
+}
+
+#[test]
+fn ranks_nearby_locals_before_syntax_snippets() {
+    let source = r#"local classFar = 1
+local classNear = 2
+local value = cl
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "local value = cl"),
+    )
+    .expect("identifier completion should succeed");
+    let labels = labels(&completions);
+    let class_index = labels
+        .iter()
+        .position(|label| label == "class")
+        .expect("class snippet should complete");
+
+    assert_eq!(labels[0], "classNear");
+    assert_eq!(labels[1], "classFar");
+    assert!(class_index > 1, "{labels:?}");
+}
+
+#[test]
 fn completes_love_asset_loader_globals() {
     let source = "local player = \n";
     let position = position_after(source, "= ");

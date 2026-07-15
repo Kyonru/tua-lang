@@ -422,6 +422,8 @@ local outside_function: MetaVector = {
 
 print(outside_function.x)
 
+local as = 12
+
 local function compareVector(left: MetaVector, right: MetaVector): boolean
   return true
 end
