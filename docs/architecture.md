@@ -210,15 +210,25 @@ open-document, config, builtin, root, or asset-root change increments the
 revision and forces the next snapshot to rebuild from the file-granular cache;
 unchanged files reuse their cached usage summaries.
 
-CLI watch mode keeps one `AnalysisHost` for the process lifetime. A changed
-module reports whether its exported or visible type surface changed; removals
-always count as surface changes. Require-target changes are tracked separately
-and rebuild revision-level project indexes without evicting importers when the
-module's export and type surfaces remain stable. The watcher unions reverse
-dependency closures from the snapshots before and after a debounced batch,
-which covers edits, additions, deletions, and rename pairs without a
-CLI-specific require scanner. Export/type invalidation follows transitive
-importers, while emission remains CLI owned.
+CLI watch mode registers `notify`'s platform watcher before the initial build,
+with `PollWatcher` and content comparison as the setup/runtime fallback.
+Platform events only wake a quiet-window debounce. The CLI then computes one
+authoritative snapshot diff, rehashing event-affected files even when size and
+modification time are unchanged. Native mode also performs a low-frequency
+content reconciliation so a silently dropped platform event cannot hide a
+change indefinitely. This normalizes edits, additions, deletions, rename pairs,
+assets, and `tua.toml` changes across watcher backends.
+
+Watch mode keeps one `AnalysisHost` while the project configuration is stable.
+A changed module reports whether its exported or visible type surface changed;
+removals always count as surface changes. Require-target changes are tracked
+separately and rebuild revision-level project indexes without evicting importers
+when the module's export and type surfaces remain stable. The watcher unions
+reverse dependency closures from the snapshots before and after a debounced
+batch, which avoids a CLI-specific require scanner. Export/type invalidation
+follows transitive importers, while emission remains CLI owned. A valid
+`tua.toml` change replaces the build session and watcher roots together; an
+invalid edit is reported while the previous valid session remains active.
 
 ## Adding A Core Query
 

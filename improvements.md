@@ -423,15 +423,20 @@ VS Code settings. `make config-schema-drift-check` is required by CI.
 
 ### P2: Improve file watching after correctness is fixed
 
-Watch mode currently polls the source tree at a fixed interval and compares
-length and modification time.
+Status: done. CLI watch mode registers `notify`'s recommended native backend
+before the initial build and debounces events until a quiet window. Setup or
+runtime backend failures switch to `PollWatcher` with content comparison.
 
-Improvements:
+Events are wake-up hints for one shared snapshot/diff pipeline. Fingerprints
+include content hashes, and event-affected files are rehashed even when size and
+modification time are unchanged. Native mode also performs a low-frequency
+content reconciliation for silently dropped events. Create, remove, rename,
+Tua/Lua source, copied asset, and `tua.toml` changes therefore use the same
+normalized batch.
 
-- Use a filesystem notification library with debouncing.
-- Retain polling as a fallback for unsupported or unreliable filesystems.
-- Content-hash ambiguous same-size/same-timestamp changes.
-- Handle create, remove, rename, config, and asset events uniformly.
+Configuration changes rebuild the project layout, analysis session, and watcher
+roots together. Invalid configuration keeps the previous valid session active.
+Deleted generated Lua, source maps, and copied asset outputs are removed.
 
 ## Release And Documentation
 

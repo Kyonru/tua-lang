@@ -131,11 +131,25 @@ Ambiguous basename-only frames are left unchanged instead of guessed.
 cargo run -p tua-cli -- watch
 ```
 
-Runs an initial build and rebuilds after debounced source changes. Watch mode
-keeps one project analysis session alive, updates changed and removed semantic
-files incrementally, and rechecks the transitive importer closure when an
-exported module surface changes. Valid affected importers are re-emitted;
+Runs an initial build, registers the platform's native filesystem watcher, and
+rebuilds after a quiet debounce window. If native notifications are unavailable
+or fail, watch mode switches to a content-comparing polling backend.
+
+Filesystem events are treated as wake-up hints. One content-aware snapshot
+produces the authoritative changed/deleted batch, so create, remove, rename,
+Tua/Lua source, and copied asset changes share the same path. Files mentioned by
+an event are rehashed even when size and modification time are unchanged.
+Native mode also performs a low-frequency reconciliation scan to recover from
+platform events that are silently dropped.
+
+Watch mode keeps one project analysis session alive, updates changed and removed
+semantic files incrementally, and rechecks the transitive importer closure when
+an exported module surface changes. Valid affected importers are re-emitted;
 invalid importers are reported even when their source file did not change.
+Changing, creating, or removing `tua.toml` reloads the project layout and starts
+a fresh warm analysis session for the new source root, output root, extension,
+and diagnostics settings. Invalid configuration is reported while the previous
+valid configuration remains active.
 
 ## `lsp`
 

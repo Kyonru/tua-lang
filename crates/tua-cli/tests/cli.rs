@@ -5,6 +5,7 @@ use std::process;
 use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -1427,6 +1428,7 @@ fn lint_strict_enables_all_lints() {
 
 #[test]
 fn watch_rebuilds_after_debounced_source_change() {
+    let _guard = watch_test_guard();
     let temp = TempDir::new("watch-rebuild");
 
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
@@ -1445,6 +1447,7 @@ return hp
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1489,7 +1492,188 @@ return hp
 }
 
 #[test]
+fn watch_polling_fallback_reloads_configuration() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-config");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local hp: number = 1\nreturn hp\n",
+    )
+    .expect("failed to write source");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || temp.path().join("build/main.lua").is_file(),
+        Duration::from_secs(3),
+        "watch did not run the initial build",
+    );
+
+    let reconfigured = DEFAULT_CONFIG_TEXT.replace("out = \"build\"", "out = \"dist\"");
+    fs::write(temp.path().join(CONFIG_FILE), reconfigured).expect("failed to update config");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+    assert!(temp.path().join("dist/main.lua").is_file());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.is_empty(), "unexpected watch stderr:\n{stderr}");
+    assert!(stdout.contains("using polling file watcher"));
+    assert!(stdout.contains("changed 1 file(s)"));
+    assert!(stdout.contains("configuration rebuild: rebuilt 1 file(s)"));
+}
+
+#[test]
+fn watch_keeps_source_changes_when_configuration_reload_fails() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-invalid-config-batch");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local hp: number = 1\nreturn hp\n",
+    )
+    .expect("failed to write source");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "100")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "80")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || temp.path().join("build/main.lua").is_file(),
+        Duration::from_secs(3),
+        "watch did not run the initial build",
+    );
+
+    fs::write(temp.path().join(CONFIG_FILE), "[build\n").expect("failed to invalidate config");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local hp: number = 2\nreturn hp\n",
+    )
+    .expect("failed to update source");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(
+        stdout.contains("configuration reload failed; keeping previous configuration"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("rebuild: rebuilt 1 file(s)"), "{stdout}");
+    assert!(stderr.contains("tua.toml"), "{stderr}");
+    assert!(emitted.contains("local hp = 2"), "{emitted}");
+}
+
+#[test]
+fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-assets");
+    let source_assets = temp.path().join("src/assets");
+    let output_assets = temp.path().join("build/assets");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(&source_assets).expect("failed to create assets");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local hp: number = 1\nreturn hp\n",
+    )
+    .expect("failed to write source");
+    fs::write(source_assets.join("original.txt"), "original").expect("failed to write asset");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "3")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || output_assets.join("original.txt").is_file(),
+        Duration::from_secs(3),
+        "watch did not copy the initial asset",
+    );
+
+    fs::write(source_assets.join("created.txt"), "created").expect("failed to create asset");
+    wait_until(
+        || output_assets.join("created.txt").is_file(),
+        Duration::from_secs(3),
+        "watch did not copy the created asset",
+    );
+
+    fs::rename(
+        source_assets.join("original.txt"),
+        source_assets.join("renamed.txt"),
+    )
+    .expect("failed to rename asset");
+    wait_until(
+        || {
+            output_assets.join("renamed.txt").is_file()
+                && !output_assets.join("original.txt").exists()
+        },
+        Duration::from_secs(3),
+        "watch did not apply the asset rename",
+    );
+
+    fs::remove_file(source_assets.join("created.txt")).expect("failed to remove asset");
+    wait_until(
+        || !output_assets.join("created.txt").exists(),
+        Duration::from_secs(3),
+        "watch did not remove the deleted asset output",
+    );
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.is_empty(), "unexpected watch stderr:\n{stderr}");
+    assert_eq!(stdout.matches("changed ").count(), 3, "{stdout}");
+    assert_eq!(stdout.matches("rebuild: rebuilt").count(), 3, "{stdout}");
+    assert!(stdout.contains("changed 2 file(s)"), "{stdout}");
+    assert!(stdout.contains("removed 1 output file(s)"), "{stdout}");
+}
+
+#[test]
 fn watch_rechecks_unchanged_importers_after_exported_type_changes() {
+    let _guard = watch_test_guard();
     let temp = TempDir::new("watch-dependent-types");
 
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
@@ -1521,6 +1705,7 @@ return value
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1589,6 +1774,15 @@ fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration, failure_me
     }
 
     panic!("{failure_message}");
+}
+
+fn watch_test_guard() -> MutexGuard<'static, ()> {
+    static WATCH_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    WATCH_TEST_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn wait_for_child_output(mut child: process::Child, timeout: Duration) -> Output {
