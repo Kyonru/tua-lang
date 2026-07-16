@@ -375,17 +375,18 @@ guarded flow.
 
 ### P2: Prioritize native function types before generics
 
-LuaDoc function types, overloads, and typed varargs already provide useful
-behavior, but native Tua function-type syntax and documentation are less
-coherent.
+Status: done on 2026-07-16.
 
-Improvements:
+Native callback types now use `(parameters) -> returns` across aliases, table
+fields, local callback annotations, module exports, checking, hover,
+completion, inlay hints, document symbols, and signature help. Parameter names,
+typed varargs, and multiple returns survive the shared semantic representation.
 
-- Provide one native function type representation used by aliases, fields,
-  callbacks, hover, and completion.
-- Keep LuaDoc function annotations interoperable with that representation.
-- Delay generics until concrete container or identity-preserving APIs justify
-  the additional language complexity.
+LuaDoc/LuaCATS `fun(...)` types lower to the same representation, and LuaCATS
+emission serializes native callback aliases back to compatible `fun(...)`
+annotations. Generic function syntax and solving remain deliberately deferred
+until a concrete container or identity-preserving API justifies the added
+language complexity.
 
 ### P2: Strengthen source maps
 

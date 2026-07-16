@@ -10,24 +10,32 @@ pub(crate) use environment::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
 pub use model::{
-    FunctionType, IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType, TableField,
-    TableShape, Type, TypeAlias,
+    FunctionParameter, FunctionType, IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType,
+    TableField, TableShape, Type, TypeAlias,
 };
 
-use crate::parser::TuaType;
+use crate::parser::{FunctionTypeParameter as ParsedFunctionTypeParameter, TuaType};
+use full_moon::ast;
 
 pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {
         Type::StringLiteral(_) => Type::string(),
         Type::Union(types) => Type::union(types.iter().map(widen_inferred_type)),
-        Type::Function(function) => Type::function_returns_with_required(
-            function.parameters.iter().map(widen_inferred_type),
+        Type::Function(function) => Type::Function(FunctionType::new_signature(
+            function
+                .parameters
+                .iter()
+                .map(|parameter| FunctionParameter {
+                    name: parameter.name.clone(),
+                    ty: widen_inferred_type(&parameter.ty),
+                }),
             function.required_parameter_count,
+            function.vararg_type.as_deref().map(widen_inferred_type),
             function
                 .return_types_or_any()
                 .iter()
                 .map(widen_inferred_type),
-        ),
+        )),
         Type::Table(table) => {
             let mut widened = TableShape::from_fields(table.fields().map(|(name, field)| {
                 let ty = if name.starts_with("__") {
@@ -91,27 +99,94 @@ pub(crate) fn type_from_tua_type(ty: &TuaType) -> Type {
         TuaType::Function {
             parameters,
             returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
+        } => Type::Function(function_type_from_tua_signature(
+            parameters,
+            returns,
+            |ty| Some(type_from_tua_type(ty)),
+        )),
+    }
+}
 
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_tua_type(&parameter.ty);
+pub(crate) fn function_type_from_tua_signature(
+    parameters: &[ParsedFunctionTypeParameter],
+    returns: &[TuaType],
+    mut resolve: impl FnMut(&TuaType) -> Option<Type>,
+) -> FunctionType {
+    let fixed_parameters = parameters
+        .iter()
+        .filter(|parameter| !parameter.variadic)
+        .collect::<Vec<_>>();
+    let required_parameter_count = fixed_parameters
+        .iter()
+        .take_while(|parameter| !parameter.optional)
+        .count();
+    let vararg_type = parameters
+        .iter()
+        .find(|parameter| parameter.variadic)
+        .and_then(|parameter| resolve(&parameter.ty));
+    let parameters = fixed_parameters
+        .into_iter()
+        .filter_map(|parameter| {
+            let ty = resolve(&parameter.ty)?;
+            let ty = if parameter.optional {
+                Type::union([ty, Type::nil()])
+            } else {
+                ty
+            };
 
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_tua_type),
-            )
+            Some(if let Some(name) = parameter.name.as_deref() {
+                FunctionParameter::named(name, ty)
+            } else {
+                FunctionParameter::anonymous(ty)
+            })
+        })
+        .collect::<Vec<_>>();
+    let returns = returns.iter().filter_map(resolve).collect::<Vec<_>>();
+
+    FunctionType::new_signature(parameters, required_parameter_count, vararg_type, returns)
+}
+
+pub(crate) fn function_type_from_body(body: &ast::FunctionBody) -> Type {
+    let mut parameters = Vec::new();
+    let mut vararg_type = None;
+
+    for (parameter, specifier) in body.parameters().iter().zip(body.type_specifiers()) {
+        let ty = specifier
+            .map(|specifier| {
+                type_from_tua_type(&crate::parser::tua_type_from_type_info(
+                    specifier.type_info(),
+                ))
+            })
+            .unwrap_or(Type::Any);
+
+        match parameter {
+            ast::Parameter::Name(name) => {
+                parameters.push(FunctionParameter::named(name.to_string().trim(), ty))
+            }
+            ast::Parameter::Ellipsis(_) => vararg_type = Some(ty),
+            _ => {}
         }
     }
+
+    let return_types = body
+        .return_type()
+        .map(|specifier| crate::parser::tua_type_from_type_info(specifier.type_info()))
+        .map(|ty| match ty {
+            TuaType::Tuple(types) => types
+                .into_iter()
+                .map(|ty| type_from_tua_type(&ty))
+                .collect(),
+            ty => vec![type_from_tua_type(&ty)],
+        })
+        .unwrap_or_else(|| vec![Type::Any]);
+    let required_parameter_count = parameters.len();
+
+    Type::Function(FunctionType::new_signature(
+        parameters,
+        required_parameter_count,
+        vararg_type,
+        return_types,
+    ))
 }
 
 #[cfg(test)]

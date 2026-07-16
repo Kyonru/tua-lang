@@ -114,7 +114,7 @@ those live in [Lua Interop](lua-interop.md).
 | `---@enum start` / `---@enum end` | `LH-ANN`, `LH-ANN-INFO` | Tua has enum sugar and shallow `---@enum`; LuaHelper block enum semantics are not fully lowered. | Literal-union completions work when lowered from Tua/LuaCATS aliases. | partial | Owner: LuaDoc lowering. Planned in 70.10. |
 | `const` modifier | `LH-ANN` | Const metadata can drive `TL4015` where known. | Published diagnostics. | implemented | Phase 37. |
 | `public` / `protected` / `private` | `LH-ANN` | Visibility can be parsed where present but does not enforce access rules. | May appear as metadata; no access diagnostics. | intentionally shallow | Tua avoids object-visibility semantics for v1 unless a LOVE/library use case proves it. |
-| `fun(...)` type | `LH-ANN` | Function type forms are parsed/lowered. | Hover/signature help where attached. | implemented | Phases 13, 70.10. |
+| `fun(...)` type | `LH-ANN` | Function type forms lower to the same semantic representation as native Tua `(parameters) -> returns` callback types, including names and typed varargs. | Hover, completion details, checking, module exports, and signature help where attached. | implemented | Phases 13, 70.10. Native function types completed 2026-07-16. |
 | `table<...>` type | `LH-ANN` | Key-value table forms are parsed/lowered to table/container types. | Hover/completion where shape is known. | implemented | Phase 70.10. |
 | `identifier` type keyword | `LH-ANN` | Treated as `string` in LuaDoc type positions; Tua does not model a separate name-like type. | Hover/signature/checking display and enforce it as `string`. | intentionally shallow | Phase 70.25. This keeps common LuaHelper stubs useful without adding a new erased primitive. |
 

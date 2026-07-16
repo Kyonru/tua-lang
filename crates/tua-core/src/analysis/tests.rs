@@ -1965,9 +1965,13 @@ return {
         .hover("src/main.tua", fixture.position("hover"))
         .expect("required module export hover should resolve from snapshot index");
 
-    assert!(hover
-        .contents
-        .contains("function Audio.play(string): boolean"));
+    assert!(
+        hover
+            .contents
+            .contains("(field) Audio.play: (source: string) -> boolean"),
+        "unexpected hover contents: {}",
+        hover.contents
+    );
     assert_eq!(
         hover.documentation,
         Some("audio source\nsuccess flag".to_owned())

@@ -219,9 +219,17 @@ return {
 
     assert_hover_contains(&output, 2, "(module) player ->");
     assert_hover_contains(&output, 3, "(module) Player = require(\"player\") ->");
-    assert_hover_contains(&output, 4, "function Player.makePlayer(string): Player");
+    assert_hover_contains(
+        &output,
+        4,
+        "function Player.makePlayer(name: string): Player",
+    );
     assert_hover_contains(&output, 5, "(field) Player.defaultHp: number");
-    assert_hover_contains(&output, 6, "function Legacy.describe(any, any): any");
+    assert_hover_contains(
+        &output,
+        6,
+        "function Legacy.describe(label: any, value: any): any",
+    );
 }
 #[test]
 fn hover_renders_module_export_docs_and_module_path() {
@@ -253,7 +261,7 @@ return {
     ]);
     let contents = hover_contents(&output, 2);
 
-    assert!(contents.contains("```tua\nfunction Audio.play(string): boolean\n```"));
+    assert!(contents.contains("```tua\nfunction Audio.play(source: string): boolean\n```"));
     assert!(contents.contains("Plays a source.\naudio source\nsuccess flag"));
     assert!(contents.contains("- kind: function"));
     assert!(contents.contains("- module:"));

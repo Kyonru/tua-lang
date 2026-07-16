@@ -726,7 +726,7 @@ return {
     );
     assert_eq!(
         completion["labelDetails"]["description"],
-        "auto import from player: function(string): { name: string }"
+        "auto import from player: (name: string) -> { name: string }"
     );
     assert!(completion.get("detail").is_none());
 }
@@ -801,7 +801,7 @@ return {
     assert_eq!(resolved["insertText"], "Player.makePlayer");
     assert_eq!(
         resolved["detail"],
-        "auto import from player: function(string): { name: string }"
+        "auto import from player: (name: string) -> { name: string }"
     );
     assert_eq!(resolved["additionalTextEdits"].as_array().unwrap().len(), 1);
     assert_eq!(
@@ -974,7 +974,7 @@ return {
 
     assert_eq!(
         response["result"]["detail"],
-        "field: function(string): boolean"
+        "field: (source: string) -> boolean"
     );
     assert!(response["result"]["documentation"]["value"]
         .as_str()
@@ -983,7 +983,7 @@ return {
     assert_eq!(response["result"]["data"]["symbolKind"], "function");
     assert_eq!(
         response["result"]["data"]["typeLabel"],
-        "field: function(string): boolean"
+        "field: (source: string) -> boolean"
     );
     assert_eq!(
         response["result"]["data"]["modulePath"],

@@ -145,6 +145,14 @@ separate name-like type. Inside `---@class` fields and annotations attached to
 named colon methods, `Self` resolves to the class or receiver type being
 described.
 
+LuaDoc `fun(...)` types and native Tua callback types share one semantic
+representation. For example, Lua's
+`fun(value: number, ...: string): string` is compatible with Tua's
+`(value: number, ...string) -> string`. Parameter names and typed varargs remain
+available to hover, completion, signature help, checking, and simple module
+exports across `.lua` and `.tua` boundaries. Native callback aliases emitted in
+LuaCATS mode are serialized back to `fun(...)` syntax.
+
 `---@overload` entries add extra call signatures for a known function. Signature
 help can show and select those overloads, and call diagnostics use the matching
 overload when Tua can prove one applies. `---@vararg T` types extra `...`
@@ -213,6 +221,10 @@ local function log(message, ...)
   print(message, ...)
 end
 ```
+
+`---@generic` is parsed as interoperability metadata, but Tua does not have a
+generic solver or native generic function syntax. Generics remain deferred
+until a concrete container or identity-preserving API requires them.
 
 Malformed annotation diagnostics are controlled by `doc_annotations` in
 `tua.toml`.

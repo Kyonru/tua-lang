@@ -61,7 +61,7 @@ local lookupObject = {
 
     assert_eq!(
         type_hints,
-        vec![": { count: number, y: function(any, number): any }"]
+        vec![": { count: number, y: (self: any, amount: number) -> any }"]
     );
 }
 

@@ -594,15 +594,18 @@ fn format_export_hover(parts: &[String], ty: &Type) -> String {
 }
 
 fn format_export_function(name: &str, function: &FunctionType) -> String {
-    let parameters = function
+    let mut parameters = function
         .parameters
         .iter()
         .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ");
+        .collect::<Vec<_>>();
+    if let Some(vararg_type) = function.vararg_type.as_deref() {
+        parameters.push(format!("...: {vararg_type}"));
+    }
 
     format!(
-        "function {name}({parameters}): {}",
+        "function {name}({}): {}",
+        parameters.join(", "),
         format_type_list(function.return_types_or_any())
     )
 }

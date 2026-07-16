@@ -133,10 +133,48 @@ impl TypeAlias {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct FunctionParameter {
+    pub name: Option<String>,
+    pub ty: Type,
+}
+
+impl PartialEq for FunctionParameter {
+    fn eq(&self, other: &Self) -> bool {
+        self.ty == other.ty
+    }
+}
+
+impl Eq for FunctionParameter {}
+
+impl FunctionParameter {
+    pub fn anonymous(ty: Type) -> Self {
+        Self { name: None, ty }
+    }
+
+    pub fn named(name: impl Into<String>, ty: Type) -> Self {
+        Self {
+            name: Some(name.into()),
+            ty,
+        }
+    }
+}
+
+impl fmt::Display for FunctionParameter {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(name) = self.name.as_deref() {
+            write!(formatter, "{name}: ")?;
+        }
+
+        write!(formatter, "{}", self.ty)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FunctionType {
-    pub parameters: Vec<Type>,
+    pub parameters: Vec<FunctionParameter>,
     pub required_parameter_count: usize,
+    pub vararg_type: Option<Box<Type>>,
     pub return_type: Box<Type>,
     pub return_types: Vec<Type>,
 }
@@ -160,6 +198,20 @@ impl FunctionType {
         required_parameter_count: usize,
         return_types: impl IntoIterator<Item = Type>,
     ) -> Self {
+        Self::new_signature(
+            parameters.into_iter().map(FunctionParameter::anonymous),
+            required_parameter_count,
+            None,
+            return_types,
+        )
+    }
+
+    pub fn new_signature(
+        parameters: impl IntoIterator<Item = FunctionParameter>,
+        required_parameter_count: usize,
+        vararg_type: Option<Type>,
+        return_types: impl IntoIterator<Item = Type>,
+    ) -> Self {
         let parameters = parameters.into_iter().collect::<Vec<_>>();
         let mut return_types = return_types.into_iter().collect::<Vec<_>>();
 
@@ -172,6 +224,7 @@ impl FunctionType {
         Self {
             parameters,
             required_parameter_count,
+            vararg_type: vararg_type.map(Box::new),
             return_type: Box::new(return_types[0].clone()),
             return_types,
         }
@@ -495,8 +548,8 @@ impl NewIndexRule {
                 let key_type = function.parameters.get(1)?;
                 let value_type = function.parameters.get(2)?;
 
-                if newindex_key_accepts(key_type, key) {
-                    Some(value_type.clone())
+                if newindex_key_accepts(&key_type.ty, key) {
+                    Some(value_type.ty.clone())
                 } else {
                     None
                 }
@@ -533,18 +586,28 @@ impl fmt::Display for Type {
                 Ok(())
             }
             Type::Function(function) => {
-                write!(formatter, "function(")?;
+                write!(formatter, "(")?;
                 for (index, parameter) in function.parameters.iter().enumerate() {
                     if index > 0 {
                         write!(formatter, ", ")?;
                     }
-                    write!(formatter, "{parameter}")?;
+                    if let Some(name) = parameter.name.as_deref() {
+                        write!(formatter, "{name}: ")?;
+                    }
+                    write!(formatter, "{}", parameter.ty)?;
                 }
-                write!(
-                    formatter,
-                    "): {}",
-                    format_type_list(function.return_types_or_any())
-                )
+                if let Some(vararg_type) = function.vararg_type.as_deref() {
+                    if !function.parameters.is_empty() {
+                        write!(formatter, ", ")?;
+                    }
+                    write!(formatter, "...{vararg_type}")?;
+                }
+                let returns = function.return_types_or_any();
+                if returns.len() > 1 {
+                    write!(formatter, ") -> ({})", format_type_list(returns))
+                } else {
+                    write!(formatter, ") -> {}", format_type_list(returns))
+                }
             }
             Type::Table(table) => {
                 write!(formatter, "{{ ")?;

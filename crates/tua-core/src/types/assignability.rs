@@ -143,13 +143,20 @@ impl TypeContext {
         target: &FunctionType,
         depth: usize,
     ) -> bool {
-        source.parameters.len() == target.parameters.len()
-            && source.required_parameter_count <= target.required_parameter_count
-            && source
-                .parameters
-                .iter()
-                .zip(&target.parameters)
-                .all(|(source, target)| self.is_assignable_inner(target, source, depth + 1))
+        source.required_parameter_count <= target.required_parameter_count
+            && target.parameters.iter().enumerate().all(|(index, target)| {
+                source
+                    .parameters
+                    .get(index)
+                    .map(|parameter| &parameter.ty)
+                    .or(source.vararg_type.as_deref())
+                    .is_some_and(|source| self.is_assignable_inner(&target.ty, source, depth + 1))
+            })
+            && match (source.vararg_type.as_deref(), target.vararg_type.as_deref()) {
+                (_, None) => true,
+                (Some(source), Some(target)) => self.is_assignable_inner(target, source, depth + 1),
+                (None, Some(_)) => false,
+            }
             && source.return_types_or_any().len() == target.return_types_or_any().len()
             && source
                 .return_types_or_any()

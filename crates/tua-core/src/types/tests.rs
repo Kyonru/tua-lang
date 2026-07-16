@@ -777,6 +777,42 @@ end
 }
 
 #[test]
+fn native_and_lua_doc_function_types_share_semantic_representation() {
+    let native = parse_tua_source(
+        "src/native.tua",
+        r#"type Handler = (value: number, ...string) -> boolean
+"#,
+    )
+    .expect("native function alias should parse");
+    let documented = parse_lua_source(
+        "src/documented.lua",
+        r#"---@alias Handler fun(value: number, ...: string): boolean
+"#,
+    )
+    .expect("LuaDoc function alias should parse");
+    let native_environment =
+        build_type_environment(&native).expect("native function alias should lower");
+    let documented_environment =
+        build_type_environment(&documented).expect("LuaDoc function alias should lower");
+
+    assert_eq!(
+        native_environment.alias("Handler"),
+        documented_environment.alias("Handler")
+    );
+
+    let Type::Function(handler) = native_environment
+        .alias("Handler")
+        .expect("native handler should exist")
+    else {
+        panic!("handler should lower to the shared function representation");
+    };
+    assert_eq!(handler.parameters[0].name.as_deref(), Some("value"));
+    assert_eq!(handler.parameters[0].ty, Type::number());
+    assert_eq!(handler.vararg_type.as_deref(), Some(&Type::string()));
+    assert_eq!(handler.return_types_or_any(), &[Type::boolean()]);
+}
+
+#[test]
 fn reports_conflicts_between_tua_and_lua_doc_annotations() {
     let parsed = parse_tua_source(
         "src/conflict.tua",

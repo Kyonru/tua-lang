@@ -815,6 +815,23 @@ fn parse_function_type_text(text: &str) -> Option<TuaType> {
 }
 
 fn parse_function_type_parameter(text: &str) -> FunctionTypeParameter {
+    let text = text.trim();
+
+    if let Some(ty) = text.strip_prefix("...") {
+        let ty = ty.trim_start_matches(':').trim();
+
+        return FunctionTypeParameter {
+            name: Some("...".to_owned()),
+            ty: if ty.is_empty() {
+                TuaType::Named("any".to_owned())
+            } else {
+                parse_type_text(ty)
+            },
+            optional: false,
+            variadic: true,
+        };
+    }
+
     if let Some((name, ty)) = text.split_once(':') {
         let (name, optional) = optional_name(name.trim().to_owned());
 
@@ -822,6 +839,7 @@ fn parse_function_type_parameter(text: &str) -> FunctionTypeParameter {
             name: Some(name),
             ty: parse_type_text(ty),
             optional,
+            variadic: false,
         };
     }
 
@@ -829,6 +847,7 @@ fn parse_function_type_parameter(text: &str) -> FunctionTypeParameter {
         name: None,
         ty: parse_type_text(text),
         optional: false,
+        variadic: false,
     }
 }
 

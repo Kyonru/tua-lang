@@ -914,6 +914,62 @@ end
 }
 
 #[test]
+fn parses_native_function_types_for_aliases_and_fields() {
+    let parsed = parse_tua_source(
+        "src/callbacks.tua",
+        r#"type Player = { name: string }
+type EventHandler = (player: Player, damage: number, ...string) -> (boolean, string)
+type Hooks = {
+  onHit: EventHandler,
+  format: (value: number?) -> string,
+}
+"#,
+    )
+    .expect("native function types should parse");
+
+    let handler = parsed
+        .type_aliases
+        .iter()
+        .find(|alias| alias.name == "EventHandler")
+        .expect("handler alias should exist");
+    let TuaType::Function {
+        parameters,
+        returns,
+    } = &handler.ty
+    else {
+        panic!("handler alias should be a function type");
+    };
+
+    assert_eq!(parameters.len(), 3);
+    assert_eq!(parameters[0].name.as_deref(), Some("player"));
+    assert_eq!(parameters[0].ty, TuaType::Named("Player".to_owned()));
+    assert_eq!(parameters[1].name.as_deref(), Some("damage"));
+    assert_eq!(parameters[1].ty, TuaType::Named("number".to_owned()));
+    assert!(parameters[2].variadic);
+    assert_eq!(parameters[2].ty, TuaType::Named("string".to_owned()));
+    assert_eq!(
+        returns,
+        &vec![
+            TuaType::Named("boolean".to_owned()),
+            TuaType::Named("string".to_owned()),
+        ]
+    );
+
+    let hooks = parsed
+        .type_aliases
+        .iter()
+        .find(|alias| alias.name == "Hooks")
+        .expect("hooks alias should exist");
+    let TuaType::Table(fields) = &hooks.ty else {
+        panic!("hooks should be a table type");
+    };
+    let TuaType::Function { parameters, .. } = &fields[1].ty else {
+        panic!("format field should be a function type");
+    };
+    assert!(parameters[0].optional);
+}
+
+#[test]
 fn parses_additional_luals_annotation_tags() {
     let parsed = parse_lua_source(
         "src/lua_doc.lua",

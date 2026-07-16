@@ -5,7 +5,7 @@ mod normalize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::luau::{TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
+use full_moon::ast::luau::{TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
 use full_moon::ast::{self, LuaVersion};
 use full_moon::node::Node;
 
@@ -1034,7 +1034,7 @@ fn compound_operator_from_ast(operator: &ast::CompoundOp) -> Option<CompoundOper
     }
 }
 
-fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
+pub(crate) fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
     match type_info {
         TypeInfo::Basic(token) => TuaType::Named(token_text(token)),
         TypeInfo::String(token) => {
@@ -1047,6 +1047,21 @@ fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
         TypeInfo::Union(union) => {
             TuaType::Union(union.types().iter().map(tua_type_from_type_info).collect())
         }
+        TypeInfo::Tuple { types, .. } => {
+            TuaType::Tuple(types.iter().map(tua_type_from_type_info).collect())
+        }
+        TypeInfo::Callback {
+            generics: None,
+            arguments,
+            return_type,
+            ..
+        } => TuaType::Function {
+            parameters: arguments
+                .iter()
+                .map(function_type_parameter_from_type_argument)
+                .collect(),
+            returns: function_return_types_from_type_info(return_type),
+        },
         TypeInfo::Table { fields, .. } => TuaType::Table(
             fields
                 .iter()
@@ -1054,6 +1069,31 @@ fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
                 .collect(),
         ),
         other => TuaType::Named(other.to_string()),
+    }
+}
+
+fn function_type_parameter_from_type_argument(argument: &TypeArgument) -> FunctionTypeParameter {
+    let (variadic, type_info) = match argument.type_info() {
+        TypeInfo::Variadic { type_info, .. } => (true, type_info.as_ref()),
+        type_info => (false, type_info),
+    };
+    let (optional, ty) = match type_info {
+        TypeInfo::Optional { base, .. } => (true, tua_type_from_type_info(base)),
+        _ => (false, tua_type_from_type_info(type_info)),
+    };
+
+    FunctionTypeParameter {
+        name: argument.name().map(|(name, _)| token_text(name)),
+        ty,
+        optional,
+        variadic,
+    }
+}
+
+fn function_return_types_from_type_info(type_info: &TypeInfo) -> Vec<TuaType> {
+    match type_info {
+        TypeInfo::Tuple { types, .. } => types.iter().map(tua_type_from_type_info).collect(),
+        _ => vec![tua_type_from_type_info(type_info)],
     }
 }
 

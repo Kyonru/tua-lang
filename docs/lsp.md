@@ -57,6 +57,9 @@ selected path, version, and workspace directory when available.
   snippets, including enum choice placeholders such as `"fill" | "line"`.
 - Completion items advertise label-details support and include concise labels
   such as field types or symbol categories when known.
+- Native callback fields are classified as functions, and completion details
+  preserve callback parameter names, typed varargs, and return types using
+  `(parameters) -> returns` syntax.
 - Completion item resolve includes LOVE wiki links for generated LOVE API
   functions and object methods when a matching page is known. Generated LOVE
   callback items also include parameter names, types, and parameter
@@ -92,7 +95,8 @@ selected path, version, and workspace directory when available.
   combines the current cursor context with the last valid type environment.
 - Signature help triggered by `(` and `,`, retriggered by `)`, including LuaDoc
   overloads, generated LOVE overload variants, optional parameters, return
-  labels, and parameter documentation where catalog or annotations provide it.
+  labels, typed varargs, native callback aliases, and parameter documentation
+  where catalog or annotations provide it.
 - Definition, references, rename, document highlight, document symbols,
   workspace symbols, document links, type definition, implementation, code
   actions, code lens references, call hierarchy, inlay hints, and full, range,

@@ -684,11 +684,14 @@ fn signature_from_type(
 }
 
 fn signature_from_function_type(name: &str, function: &FunctionType) -> SignatureInformation {
-    let parameters = function
+    let mut parameters = function
         .parameters
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
+    if let Some(vararg_type) = function.vararg_type.as_deref() {
+        parameters.push(format!("...: {vararg_type}"));
+    }
 
     signature_from_parts(
         format!(

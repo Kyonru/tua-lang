@@ -366,6 +366,39 @@ end
 Return annotations are checked against explicit `return` statements when the
 compiler can determine the returned expression type.
 
+### Function Types
+
+Function values use one native callback representation in aliases, table
+fields, local annotations, and callback parameters:
+
+```tua
+type Formatter = (value: number, ...string) -> string
+
+type Hooks = {
+  format: Formatter,
+  decode: (text: string) -> (boolean, string),
+}
+
+local formatter: Formatter = function(value: number, ...: string): string
+  return tostring(value)
+end
+```
+
+Parameters may keep names for hover, completion details, and signature help.
+Typed varargs use `...Type` in a function type and `...: Type` in a function
+declaration. Parenthesized return lists represent multiple returns.
+
+LuaDoc/LuaCATS `fun(value: number, ...: string): string` types lower to the
+same semantic function representation. LuaCATS annotation emission converts
+native callback aliases back to `fun(...)` syntax for plain Lua consumers.
+Parameter names are documentation metadata and do not affect assignability.
+Function parameters are checked contravariantly and returns covariantly where
+both sides are statically known.
+
+Tua does not define generic function types in v1. Generics remain deferred
+until concrete container or identity-preserving APIs justify a solver and
+syntax beyond ordinary callback contracts.
+
 ### Local Annotations
 
 Local declarations may include type annotations.
@@ -908,7 +941,6 @@ tua v1 does not include:
 - type-only imports or exports;
 - generics;
 - advanced or dynamic metatable typing;
-- vararg typing;
 - advanced inference;
 - package management;
 - optimization beyond straightforward syntax lowering;

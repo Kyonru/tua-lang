@@ -1072,6 +1072,50 @@ log("hello", 10)
 }
 
 #[test]
+fn checks_native_function_alias_callbacks_and_typed_varargs() {
+    check_tua_source(
+        "src/callbacks.tua",
+        r#"type Handler = (value: number, ...string) -> string
+type Decoder = (text: string) -> (boolean, string)
+
+local handler: Handler = function(value: number, ...: string): string
+  return tostring(value)
+end
+
+local decoder: Decoder = function(text: string): (boolean, string)
+  return true, text
+end
+
+handler(1, "one", "two")
+local ok, decoded = decoder("value")
+"#,
+    )
+    .expect("matching native callback assignments and calls should pass");
+
+    let diagnostics = check_tua_source(
+        "src/callbacks.tua",
+        r#"type Handler = (value: number, ...string) -> string
+
+local handler: Handler = function(value: number, ...: string): string
+  return tostring(value)
+end
+
+handler("wrong")
+handler(1, 2)
+"#,
+    )
+    .expect_err("native callback argument mismatches should be diagnosed");
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn checks_tua_literal_union_and_enum_arguments() {
     let diagnostics = check_tua_source(
         "src/mode.tua",

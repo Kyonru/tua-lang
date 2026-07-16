@@ -398,6 +398,24 @@ type Player = {
 }
 
 #[test]
+fn snapshot_emits_native_function_alias_as_luacats_function_type() {
+    let emitted = emit_tua_source_with_mode(
+        "src/types.tua",
+        r#"
+type Handler = (value: number, ...string) -> string
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("native function aliases should emit LuaCATS function types");
+
+    assert_eq!(
+        emitted,
+        r#"---@alias Handler fun(value: number, ...: string): string
+"#
+    );
+}
+
+#[test]
 fn snapshot_emits_luacats_alias_for_enums() {
     let emitted = emit_tua_source_with_mode(
         "src/enums.tua",

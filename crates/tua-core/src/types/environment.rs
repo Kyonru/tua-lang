@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionCall, Index, LastStmt, Prefix, Suffix, Var,
 };
@@ -22,7 +21,9 @@ use crate::source_text::function_name_table_field;
 use crate::{asset, lua, sprite, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
-use super::{widen_inferred_type, TypeContext};
+use super::{
+    function_type_from_tua_signature, widen_inferred_type, FunctionParameter, TypeContext,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeEnvironment {
@@ -131,7 +132,8 @@ pub struct TypedFunction {
 
 impl TypedFunction {
     pub fn has_fully_annotated_parameters(&self) -> bool {
-        !self.has_varargs && self.parameters.len() == self.parameter_count
+        self.parameters.len() == self.parameter_count
+            && (!self.has_varargs || self.vararg_type.is_some())
     }
 
     pub fn return_type_or_any(&self) -> Type {
@@ -148,11 +150,14 @@ impl TypedFunction {
 
     pub fn as_type(&self) -> Option<Type> {
         self.has_fully_annotated_parameters().then(|| {
-            Type::function_returns_with_required(
-                self.parameters.iter().map(|parameter| parameter.ty.clone()),
+            Type::Function(FunctionType::new_signature(
+                self.parameters.iter().map(|parameter| {
+                    FunctionParameter::named(&parameter.name, parameter.ty.clone())
+                }),
                 self.required_parameter_count,
+                self.vararg_type.clone(),
                 self.return_types_or_any(),
-            )
+            ))
         })
     }
 }
@@ -1292,7 +1297,8 @@ fn overload_from_tua_type(
 }
 
 fn function_type_parameter_is_vararg(parameter: &FunctionTypeParameter) -> bool {
-    parameter.name.as_deref() == Some("...")
+    parameter.variadic
+        || parameter.name.as_deref() == Some("...")
         || matches!(&parameter.ty, TuaType::Named(name) if name == "...")
 }
 
@@ -1682,14 +1688,14 @@ fn function_types_by_name(
 
             Some((
                 name.clone(),
-                Type::function_returns_with_required(
-                    function
-                        .parameters
-                        .iter()
-                        .map(|parameter| parameter.ty.clone()),
+                Type::Function(FunctionType::new_signature(
+                    function.parameters.iter().map(|parameter| {
+                        FunctionParameter::named(&parameter.name, parameter.ty.clone())
+                    }),
                     function.required_parameter_count,
+                    function.vararg_type.clone(),
                     return_types,
-                ),
+                )),
             ))
         })
         .collect()
@@ -3342,57 +3348,7 @@ fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: 
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
-    let return_type = body
-        .return_type()
-        .and_then(|specifier| type_from_type_info(specifier.type_info()))
-        .unwrap_or(Type::Any);
-
-    Type::function(function_parameter_types(body), return_type)
-}
-
-fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {
-    let parameters = body
-        .parameters()
-        .iter()
-        .filter_map(|parameter| match parameter {
-            ast::Parameter::Name(name) => Some((name.start_position()?, name.end_position()?)),
-            ast::Parameter::Ellipsis(_) => None,
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let specifiers = body
-        .type_specifiers()
-        .filter_map(|specifier| {
-            let specifier = specifier?;
-            Some((
-                specifier.start_position()?,
-                type_from_type_info(specifier.type_info())?,
-            ))
-        })
-        .collect::<Vec<_>>();
-
-    parameters
-        .iter()
-        .enumerate()
-        .map(|(index, (_, parameter_end))| {
-            let next_parameter_start = parameters.get(index + 1).map(|(start, _)| *start);
-
-            specifiers
-                .iter()
-                .find_map(|(specifier_start, ty)| {
-                    if specifier_start >= parameter_end
-                        && next_parameter_start
-                            .map(|next_start| specifier_start < &next_start)
-                            .unwrap_or(true)
-                    {
-                        Some(ty.clone())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(Type::Any)
-        })
-        .collect()
+    super::function_type_from_body(body)
 }
 
 fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_receiver: bool) -> Type {
@@ -3401,7 +3357,9 @@ fn function_type_from_body_with_receiver(body: &ast::FunctionBody, include_recei
     };
 
     if include_receiver {
-        function.parameters.insert(0, Type::Any);
+        function
+            .parameters
+            .insert(0, super::FunctionParameter::anonymous(Type::Any));
     }
 
     Type::Function(function)
@@ -3501,23 +3459,6 @@ fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {
     token.to_string().trim().to_owned()
 }
 
-fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
-    match type_info {
-        TypeInfo::Basic(token) => Some(Type::named(token_text(token))),
-        TypeInfo::String(token) => Some(Type::string_literal(unquote_string(&token_text(token)))),
-        TypeInfo::Optional { base, .. } => {
-            Some(Type::union([type_from_type_info(base)?, Type::nil()]))
-        }
-        TypeInfo::Union(union) => union
-            .types()
-            .iter()
-            .map(type_from_type_info)
-            .collect::<Option<Vec<_>>>()
-            .map(Type::union),
-        _ => Some(Type::named(type_info.to_string())),
-    }
-}
-
 fn unquote_string(value: &str) -> String {
     value
         .trim()
@@ -3603,39 +3544,20 @@ fn resolve_tua_type_with_context(
         TuaType::Function {
             parameters,
             returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-            let parameters = parameters
-                .iter()
-                .map(|parameter| {
-                    let ty = resolve_tua_type_with_context(
-                        path,
-                        &parameter.ty,
-                        span,
-                        alias_names,
-                        diagnostics,
-                        context,
-                    );
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                })
-                .collect::<Vec<_>>();
-            let returns = returns
-                .iter()
-                .map(|ty| {
-                    resolve_tua_type_with_context(path, ty, span, alias_names, diagnostics, context)
-                })
-                .collect::<Vec<_>>();
-
-            Type::function_returns_with_required(parameters, required_parameter_count, returns)
-        }
+        } => Type::Function(function_type_from_tua_signature(
+            parameters,
+            returns,
+            |ty| {
+                Some(resolve_tua_type_with_context(
+                    path,
+                    ty,
+                    span,
+                    alias_names,
+                    diagnostics,
+                    context,
+                ))
+            },
+        )),
     }
 }
 

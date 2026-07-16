@@ -274,6 +274,33 @@ load("assets/player.png")
 }
 
 #[test]
+fn hovers_native_function_aliases_and_callback_fields() {
+    let source = r#"type Handler = (value: number, ...string) -> (boolean, string)
+type Hooks = {
+  onValue: (value: number, ...string) -> (boolean, string),
+}
+
+local hooks: Hooks = nil
+local selected = hooks.onValue
+"#;
+    let alias = hover_tua_source("src/main.tua", source, position_at(source, "Handler ="))
+        .expect("hover should succeed")
+        .expect("function alias should hover");
+    let field = hover_tua_source("src/main.tua", source, position_at(source, "onValue\n"))
+        .expect("hover should succeed")
+        .expect("callback field should hover");
+
+    assert_eq!(
+        alias.contents,
+        "type Handler = (value: number, ...string) -> (boolean, string)"
+    );
+    assert_eq!(
+        field.contents,
+        "(field) onValue: (value: number, ...string) -> (boolean, string)"
+    );
+}
+
+#[test]
 fn hovers_inferred_function_return_type_on_definition_and_call() {
     let source = r#"function test(a: boolean)
   return ""
@@ -371,7 +398,7 @@ return {
     assert_eq!(macarrons.contents, "function macarrons(): Player");
     assert_eq!(
         make_function.contents,
-        "function make_function(): function(string): Player"
+        "function make_function(): (name: string) -> Player"
     );
 }
 
@@ -467,11 +494,11 @@ local method = lookupObject.y
 
     assert_eq!(
         object_hover.contents,
-        "local lookupObject: { count: number, y: function(any, number): any }"
+        "local lookupObject: { count: number, y: (self: any, amount: number) -> any }"
     );
     assert_eq!(
         field_hover.contents,
-        "(field) y: function(any, number): any"
+        "(field) y: (self: any, amount: number) -> any"
     );
 }
 
@@ -561,7 +588,10 @@ account:withdraw(10)
     .expect("hover should not fail")
     .expect("self-index metatable method should hover");
 
-    assert_eq!(hover.contents, "(field) withdraw: function(any, any): any");
+    assert_eq!(
+        hover.contents,
+        "(field) withdraw: (any, amount: any) -> any"
+    );
 }
 
 #[test]
@@ -589,7 +619,10 @@ account:withdraw(10)
     .expect("hover should not fail")
     .expect("constructor instance method should hover");
 
-    assert_eq!(hover.contents, "(field) withdraw: function(any, any): any");
+    assert_eq!(
+        hover.contents,
+        "(field) withdraw: (any, amount: any) -> any"
+    );
 }
 
 #[test]
@@ -620,7 +653,7 @@ account:withdraw(10)
 
     assert_eq!(
         hover.contents,
-        "(field) withdraw: function(Account, number): number"
+        "(field) withdraw: (self: Account, amount: number) -> number"
     );
 }
 
@@ -1200,7 +1233,7 @@ return {
         .contains("(module) Player = require(\"player\") ->"));
     assert_eq!(
         function.contents,
-        "function Player.makePlayer(string): Player"
+        "function Player.makePlayer(name: string): Player"
     );
     assert_eq!(field.contents, "(field) Player.defaultHp: number");
 }
@@ -1245,7 +1278,7 @@ return {
         .contains("(module) Player = import(\"./player\") ->"));
     assert_eq!(
         function.contents,
-        "function Player.makePlayer(string): Player"
+        "function Player.makePlayer(name: string): Player"
     );
 }
 
@@ -1272,7 +1305,10 @@ local label = Legacy.describe("hp", 10)
         .expect("hover should not fail")
         .expect("Lua module function should hover");
 
-    assert_eq!(hover.contents, "function Legacy.describe(any, any): any");
+    assert_eq!(
+        hover.contents,
+        "function Legacy.describe(label: any, value: any): any"
+    );
 }
 
 #[test]
@@ -1301,7 +1337,10 @@ return {
         .expect("hover should not fail")
         .expect("annotated Lua module function should hover");
 
-    assert_eq!(hover.contents, "function Audio.play(string): boolean");
+    assert_eq!(
+        hover.contents,
+        "function Audio.play(source: string): boolean"
+    );
     assert_eq!(
         hover.documentation.as_deref(),
         Some("audio source\nsuccess flag")
@@ -1340,7 +1379,10 @@ return {
     .expect("hover should not fail")
     .expect("module export should hover");
 
-    assert_eq!(hover.contents, "function Audio.play(string): boolean");
+    assert_eq!(
+        hover.contents,
+        "function Audio.play(source: string): boolean"
+    );
     assert_eq!(
         hover.documentation.as_deref(),
         Some("Plays a source.\naudio source\nsuccess flag")

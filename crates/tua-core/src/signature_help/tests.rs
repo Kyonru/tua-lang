@@ -124,6 +124,23 @@ load("assets/player.png",
 }
 
 #[test]
+fn returns_native_function_alias_signature_with_parameter_names_and_varargs() {
+    let source = r#"type Handler = (value: number, ...string) -> string
+local handler: Handler = nil
+
+handler(1,
+"#;
+    let help = signature_at(source, "handler(1,")
+        .expect("native function aliases should provide signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function handler(value: number, ...: string): string"
+    );
+    assert_eq!(help.active_parameter, 1);
+}
+
+#[test]
 fn returns_typed_lua_doc_vararg_signature() {
     let source = r#"---@param message string message text
 ---@vararg identifier extra labels
@@ -592,9 +609,9 @@ return {
 
     assert_eq!(
         help.signatures[0].label,
-        "function Player.makePlayer(string): Player"
+        "function Player.makePlayer(name: string): Player"
     );
-    assert_eq!(parameter_labels(&help), vec!["string"]);
+    assert_eq!(parameter_labels(&help), vec!["name: string"]);
 }
 
 #[test]
@@ -629,9 +646,9 @@ return {
 
     assert_eq!(
         help.signatures[0].label,
-        "function Audio.play(string): boolean"
+        "function Audio.play(source: string): boolean"
     );
-    assert_eq!(parameter_labels(&help), vec!["string"]);
+    assert_eq!(parameter_labels(&help), vec!["source: string"]);
     assert_eq!(parameter_documentation(&help), vec![Some("audio source")]);
     assert_eq!(
         help.signatures[0].documentation.as_deref(),
@@ -673,7 +690,7 @@ return {
 
     assert_eq!(
         help.signatures[0].label,
-        "function Player.makePlayer(string): Player"
+        "function Player.makePlayer(name: string): Player"
     );
     assert_eq!(parameter_documentation(&help), vec![Some("player name")]);
 }

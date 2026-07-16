@@ -29,6 +29,28 @@ fn completes_type_aliases_in_annotation_positions() {
 }
 
 #[test]
+fn completes_native_callback_fields_with_function_details() {
+    let source = r#"type Handler = (value: number) -> string
+type Hooks = {
+  onValue: Handler,
+}
+
+local hooks: Hooks = nil
+hooks.on
+"#;
+    let completions =
+        complete_tua_source("src/main.tua", source, position_after(source, "hooks.on"))
+            .expect("callback field completion should succeed");
+
+    assert_eq!(labels(&completions), vec!["onValue".to_owned()]);
+    assert_eq!(completions[0].kind, CompletionKind::Function);
+    assert_eq!(
+        completions[0].detail.as_deref(),
+        Some("field: (value: number) -> string")
+    );
+}
+
+#[test]
 fn completes_lua_doc_annotation_tags_after_marker() {
     let fixture = Fixture::parse(
         r#"---@p<|cursor|>
@@ -1891,7 +1913,7 @@ local value = Audio.play
     assert_eq!(completions[0].kind, CompletionKind::Function);
     assert_eq!(
         completions[0].detail.as_deref(),
-        Some("field: function(string): boolean")
+        Some("field: (source: string) -> boolean")
     );
     assert_eq!(
         completions[0].documentation.as_deref(),
@@ -2013,9 +2035,13 @@ fn completion_includes_index_fields_but_hides_metamethods() {
     let table =
         crate::TableShape::from_fields([("x", crate::TableField::required(Type::number()))])
             .with_metatable_facts(crate::types::MetatableFacts::from_type(&meta));
+    let parsed =
+        crate::parse_tua_source("src/main.tua", "").expect("empty source should parse for context");
+    let environment = TypeEnvironment::from_parsed(&parsed)
+        .expect("empty source should build a type environment");
     let mut fields = std::collections::BTreeMap::new();
 
-    collect_shape_fields(&table, &mut fields);
+    collect_shape_fields(&environment, &table, &mut fields);
 
     assert!(fields.contains_key("x"), "{fields:?}");
     assert!(fields.contains_key("length"), "{fields:?}");

@@ -4,7 +4,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use full_moon::ast::luau::TypeInfo;
 use full_moon::ast::{
     self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix, TableConstructor, Var,
 };
@@ -15,7 +14,10 @@ use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::resolve_aliases;
-use crate::types::{build_type_environment, TableField, Type, TypeEnvironment, TypedFunction};
+use crate::types::{
+    build_type_environment, function_type_from_tua_signature, FunctionParameter, FunctionType,
+    TableField, Type, TypeEnvironment, TypedFunction,
+};
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
 thread_local! {
@@ -926,26 +928,11 @@ fn type_from_lua_doc_type(ty: &crate::TuaType) -> Type {
         crate::TuaType::Function {
             parameters,
             returns,
-        } => {
-            let required_parameter_count = parameters
-                .iter()
-                .take_while(|parameter| !parameter.optional)
-                .count();
-
-            Type::function_returns_with_required(
-                parameters.iter().map(|parameter| {
-                    let ty = type_from_lua_doc_type(&parameter.ty);
-
-                    if parameter.optional {
-                        Type::union([ty, Type::nil()])
-                    } else {
-                        ty
-                    }
-                }),
-                required_parameter_count,
-                returns.iter().map(type_from_lua_doc_type),
-            )
-        }
+        } => Type::Function(function_type_from_tua_signature(
+            parameters,
+            returns,
+            |ty| Some(type_from_lua_doc_type(ty)),
+        )),
     }
 }
 
@@ -1020,17 +1007,20 @@ fn typed_function_type(function: &TypedFunction) -> Type {
         function
             .parameters
             .iter()
-            .map(|parameter| parameter.ty.clone())
+            .map(|parameter| FunctionParameter::named(&parameter.name, parameter.ty.clone()))
             .collect::<Vec<_>>()
     } else {
-        vec![Type::Any; function.parameter_count]
+        (0..function.parameter_count)
+            .map(|index| FunctionParameter::named(format!("arg{}", index + 1), Type::Any))
+            .collect()
     };
 
-    Type::function_returns_with_required(
+    Type::Function(FunctionType::new_signature(
         parameters,
         function.required_parameter_count,
+        function.vararg_type.clone(),
         function.return_types_or_any(),
-    )
+    ))
 }
 
 fn parameter_documentation(function: &TypedFunction) -> Vec<Option<String>> {
@@ -1050,13 +1040,7 @@ fn parameter_names(function: &TypedFunction) -> Vec<String> {
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
-    let parameters = function_parameter_types(body);
-    let return_type = body
-        .return_type()
-        .and_then(|specifier| type_from_type_info(specifier.type_info()))
-        .unwrap_or(Type::Any);
-
-    Type::function(parameters, return_type)
+    crate::types::function_type_from_body(body)
 }
 
 fn parameter_names_from_body(body: &ast::FunctionBody) -> Vec<String> {
@@ -1070,68 +1054,6 @@ fn parameter_names_from_body(body: &ast::FunctionBody) -> Vec<String> {
             Some(token_text(name))
         })
         .collect()
-}
-
-fn function_parameter_types(body: &ast::FunctionBody) -> Vec<Type> {
-    let parameters = body
-        .parameters()
-        .iter()
-        .filter_map(|parameter| match parameter {
-            ast::Parameter::Name(name) => Some((name.start_position()?, name.end_position()?)),
-            ast::Parameter::Ellipsis(_) => None,
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let specifiers = body
-        .type_specifiers()
-        .filter_map(|specifier| {
-            let specifier = specifier?;
-            Some((
-                specifier.start_position()?,
-                type_from_type_info(specifier.type_info())?,
-            ))
-        })
-        .collect::<Vec<_>>();
-
-    parameters
-        .iter()
-        .enumerate()
-        .map(|(index, (_, parameter_end))| {
-            let next_parameter_start = parameters.get(index + 1).map(|(start, _)| *start);
-
-            specifiers
-                .iter()
-                .find_map(|(specifier_start, ty)| {
-                    if specifier_start >= parameter_end
-                        && next_parameter_start
-                            .map(|next_start| specifier_start < &next_start)
-                            .unwrap_or(true)
-                    {
-                        Some(ty.clone())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(Type::Any)
-        })
-        .collect()
-}
-
-fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {
-    match type_info {
-        TypeInfo::Basic(token) => Some(Type::named(token_text(token))),
-        TypeInfo::String(token) => Some(Type::string_literal(unquote_string(&token_text(token)))),
-        TypeInfo::Optional { base, .. } => {
-            Some(Type::union([type_from_type_info(base)?, Type::nil()]))
-        }
-        TypeInfo::Union(union) => union
-            .types()
-            .iter()
-            .map(type_from_type_info)
-            .collect::<Option<Vec<_>>>()
-            .map(Type::union),
-        _ => Some(Type::named(type_info.to_string())),
-    }
 }
 
 fn token_text(token: &full_moon::tokenizer::TokenReference) -> String {

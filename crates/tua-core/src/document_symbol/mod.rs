@@ -290,6 +290,9 @@ fn format_tua_type(ty: &TuaType) -> String {
             let params = parameters
                 .iter()
                 .map(|parameter| {
+                    if parameter.variadic {
+                        return format!("...{}", format_tua_type(&parameter.ty));
+                    }
                     let label = parameter
                         .name
                         .as_ref()
@@ -308,9 +311,9 @@ fn format_tua_type(ty: &TuaType) -> String {
                 .join(", ");
 
             if returns.is_empty() {
-                format!("fun({params})")
+                format!("({params}) -> nil")
             } else {
-                format!("fun({params}): {returns}")
+                format!("({params}) -> {returns}")
             }
         }
     }

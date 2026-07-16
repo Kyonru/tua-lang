@@ -221,6 +221,7 @@ pub struct FunctionTypeParameter {
     pub name: Option<String>,
     pub ty: TuaType,
     pub optional: bool,
+    pub variadic: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

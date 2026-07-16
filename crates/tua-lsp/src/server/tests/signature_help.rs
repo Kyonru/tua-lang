@@ -45,6 +45,36 @@ damage(player,
         "damage amount"
     );
 }
+
+#[test]
+fn signature_help_returns_native_function_alias_names_and_typed_varargs() {
+    let uri = "file:///tmp/native-function-type-signature-help.tua";
+    let source = r#"type Handler = (value: number, ...string) -> string
+local handler: Handler = nil
+
+handler(1,
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        signature_help_request(2, uri, source, "handler(1,"),
+    ]);
+    let response = response_with_id(&output, 2);
+
+    assert_eq!(
+        response["result"]["signatures"][0]["label"],
+        "function handler(value: number, ...: string): string"
+    );
+    assert_eq!(response["result"]["activeParameter"], 1);
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][0]["label"],
+        "value: number"
+    );
+    assert_eq!(
+        response["result"]["signatures"][0]["parameters"][1]["label"],
+        "...: string"
+    );
+}
+
 #[test]
 fn signature_help_returns_signal_event_payload_signature() {
     let uri = "file:///tmp/signal-signature-help.tua";
@@ -251,7 +281,11 @@ return {
     ]);
 
     assert_signature_label(&output, 2, "function math.sin(x: number): number");
-    assert_signature_label(&output, 3, "function Player.makePlayer(string): Player");
+    assert_signature_label(
+        &output,
+        3,
+        "function Player.makePlayer(name: string): Player",
+    );
 
     let lua_response = response_with_id(&output, 2);
     assert_eq!(

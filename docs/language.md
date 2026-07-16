@@ -94,6 +94,7 @@ Useful static facts include:
 - string literal types such as `"static"` and `"stream"`;
 - local annotations and simple initializer inference;
 - function parameter and return annotations;
+- native function types for aliases, fields, callbacks, and typed varargs;
 - scoped `Self` in type aliases and named colon-method annotations;
 - trailing default and optional parameters such as `duration: number = 0.3`
   and `easing?: string`;
@@ -517,6 +518,46 @@ end
 
 Tua checks known argument counts, known argument types, and annotated return
 types.
+
+## Function Types
+
+Native callback types use `(parameters) -> returns`:
+
+```tua
+type Formatter = (value: number, ...string) -> string
+
+type Hooks = {
+  format: Formatter,
+  decode: (text: string) -> (boolean, string),
+}
+
+local formatter: Formatter = function(value: number, ...: string): string
+  return tostring(value)
+end
+
+local hooks: Hooks = {
+  format = formatter,
+  decode = function(text: string): (boolean, string)
+    return true, text
+  end,
+}
+```
+
+The same representation is used by aliases, table fields, callback
+annotations, module exports, checking, hover, completion, inlay hints, and
+signature help. Parameter names are preserved for editor presentation but do
+not change type compatibility. Use `...Type` in a function type and
+`...: Type` in a function declaration. A parenthesized return list represents
+multiple Lua returns.
+
+LuaDoc/LuaCATS function types such as
+`fun(value: number, ...: string): string` lower to this same semantic type.
+When `annotation_mode = "luacats"` is enabled, native callback aliases emit
+compatible `---@alias ... fun(...)` annotations.
+
+Tua intentionally does not add generics alongside this feature. Generic
+functions and containers remain deferred until a concrete identity-preserving
+API needs them and can justify the extra inference and syntax complexity.
 
 ## LOVE Asset And Vector Helpers
 

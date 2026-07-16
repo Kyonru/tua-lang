@@ -595,7 +595,7 @@ missing_requires = true
     assert_hover_contains(
         server.output(),
         3,
-        "function Player.makePlayer(string): Player",
+        "function Player.makePlayer(name: string): Player",
     );
     assert_definition_text(server.output(), 4, &player_uri, player, "makePlayer");
 }
@@ -729,7 +729,7 @@ return {
     assert_hover_contains(
         server.output(),
         3,
-        "function Player.makePlayer(string): Player",
+        "function Player.makePlayer(name: string): Player",
     );
     assert_completion_labels(server.output(), 4, ["makeEnemy", "makePlayer"]);
     assert_eq!(

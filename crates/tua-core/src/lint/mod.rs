@@ -2532,7 +2532,11 @@ fn type_is_dynamic(ty: &Type, context: &TypeContext) -> bool {
             function
                 .parameters
                 .iter()
-                .any(|ty| type_is_dynamic(ty, context))
+                .any(|parameter| type_is_dynamic(&parameter.ty, context))
+                || function
+                    .vararg_type
+                    .as_deref()
+                    .is_some_and(|ty| type_is_dynamic(ty, context))
                 || function
                     .return_types_or_any()
                     .iter()

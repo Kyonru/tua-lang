@@ -10,6 +10,25 @@ type Player = {
   alive: boolean,
 }
 
+type ValueFormatter = (value: number, ...string) -> string
+
+type FormatterHooks = {
+  format: ValueFormatter,
+}
+
+-- Feature: native function types preserve parameter names and typed varargs.
+-- Hover the aliases or `formatterHooks.format`, and request signature help at
+-- the call below to see the same callback contract across editor features.
+local valueFormatter: ValueFormatter = function(value: number, ...: string): string
+  return tostring(value)
+end
+
+local formatterHooks: FormatterHooks = {
+  format = valueFormatter,
+}
+
+local formattedValue = formatterHooks.format(42, "score", "compact")
+
 local function makePlayer(name: string)
   return {
     name = name,
@@ -127,6 +146,9 @@ return {
   inferredTable = inferredTable,
   delayedScore = delayedScore,
   dynamicState = dynamicState,
+  valueFormatter = valueFormatter,
+  formatterHooks = formatterHooks,
+  formattedValue = formattedValue,
   scores = scores,
   firstScore = firstScore,
   scoreRecord = scoreRecord,

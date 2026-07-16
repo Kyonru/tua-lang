@@ -925,6 +925,9 @@ fn luacats_type(ty: &TuaType) -> String {
             let parameters = parameters
                 .iter()
                 .map(|parameter| {
+                    if parameter.variadic {
+                        return format!("...: {}", luacats_type(&parameter.ty));
+                    }
                     let name = parameter
                         .name
                         .as_ref()
@@ -982,9 +985,16 @@ fn luacats_export_type(ty: &Type) -> Option<String> {
                 .parameters
                 .iter()
                 .enumerate()
-                .map(|(index, ty)| format!("arg{}: {}", index + 1, luacats_type_from_type(ty)))
+                .map(|(index, parameter)| {
+                    let name = parameter
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| format!("arg{}", index + 1));
+                    format!("{name}: {}", luacats_type_from_type(&parameter.ty))
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
+            let parameters = append_luacats_vararg(parameters, function.vararg_type.as_deref());
             let returns = function
                 .return_types_or_any()
                 .iter()
@@ -994,6 +1004,19 @@ fn luacats_export_type(ty: &Type) -> Option<String> {
 
             Some(format!("fun({parameters}): {returns}"))
         }
+    }
+}
+
+fn append_luacats_vararg(parameters: String, vararg_type: Option<&Type>) -> String {
+    let Some(vararg_type) = vararg_type else {
+        return parameters;
+    };
+    let vararg = format!("...: {}", luacats_type_from_type(vararg_type));
+
+    if parameters.is_empty() {
+        vararg
+    } else {
+        format!("{parameters}, {vararg}")
     }
 }
 
@@ -1010,9 +1033,16 @@ fn luacats_type_from_type(ty: &Type) -> String {
                 .parameters
                 .iter()
                 .enumerate()
-                .map(|(index, ty)| format!("arg{}: {}", index + 1, luacats_type_from_type(ty)))
+                .map(|(index, parameter)| {
+                    let name = parameter
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| format!("arg{}", index + 1));
+                    format!("{name}: {}", luacats_type_from_type(&parameter.ty))
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
+            let parameters = append_luacats_vararg(parameters, function.vararg_type.as_deref());
             let returns = function
                 .return_types_or_any()
                 .iter()

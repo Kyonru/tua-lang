@@ -26,6 +26,8 @@ make build-features
   locals and field chains.
 - `src/inference.tua` covers local type inlay hints, inferred function return
   hovers, parameter-name hints, field-chain inference from annotated locals,
+  native function type aliases and fields with named parameters and typed
+  varargs,
   stable inferred-local reassignment contracts, explicit optional
   initialization, array/index inference, numeric and generic loop variable
   inference, and the permissive `any` boundary.

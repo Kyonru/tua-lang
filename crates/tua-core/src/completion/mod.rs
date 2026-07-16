@@ -1299,6 +1299,9 @@ fn format_tua_type(ty: &TuaType) -> String {
             let parameters = parameters
                 .iter()
                 .map(|parameter| {
+                    if parameter.variadic {
+                        return format!("...: {}", format_tua_type(&parameter.ty));
+                    }
                     let label = parameter
                         .name
                         .as_ref()
@@ -1548,7 +1551,7 @@ fn complete_fields(
 
     collect_table_fields(environment, &receiver_type, &mut fields);
 
-    for (name, detail) in fields
+    for (name, (detail, kind)) in fields
         .into_iter()
         .filter(|(name, _)| completion_text_matches(name, prefix))
     {
@@ -1556,7 +1559,7 @@ fn complete_fields(
             name.clone(),
             Completion {
                 label: name,
-                kind: CompletionKind::Field,
+                kind,
                 detail: Some(detail),
                 documentation: None,
                 insert_text: None,
@@ -1615,7 +1618,12 @@ fn complete_string_argument_values(
     }
 
     if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {
-        let Some(parameter) = function.parameters.get(active_parameter) else {
+        let Some(parameter) = function
+            .parameters
+            .get(active_parameter)
+            .map(|parameter| &parameter.ty)
+            .or(function.vararg_type.as_deref())
+        else {
             return Vec::new();
         };
 
@@ -2004,10 +2012,10 @@ fn collect_love_object_fields(
 fn collect_table_fields(
     environment: &TypeEnvironment,
     ty: &Type,
-    fields: &mut BTreeMap<String, String>,
+    fields: &mut BTreeMap<String, (String, CompletionKind)>,
 ) {
     match resolve_aliases(environment, ty, 0) {
-        Type::Table(table) => collect_shape_fields(&table, fields),
+        Type::Table(table) => collect_shape_fields(environment, &table, fields),
         Type::Union(types) => {
             for ty in types {
                 collect_table_fields(environment, &ty, fields);
@@ -2024,11 +2032,27 @@ fn collect_table_fields(
     }
 }
 
-fn collect_shape_fields(table: &TableShape, fields: &mut BTreeMap<String, String>) {
+fn collect_shape_fields(
+    environment: &TypeEnvironment,
+    table: &TableShape,
+    fields: &mut BTreeMap<String, (String, CompletionKind)>,
+) {
     for (name, field) in table.semantic_fields() {
         let suffix = if field.optional { " optional" } else { "" };
+        let resolved = resolve_aliases(environment, &field.ty, 0);
+        let display_type = if matches!(resolved, Type::Function(_)) {
+            &resolved
+        } else {
+            &field.ty
+        };
 
-        fields.insert(name, format!("field{suffix}: {}", field.ty));
+        fields.insert(
+            name,
+            (
+                format!("field{suffix}: {display_type}"),
+                completion_kind_for_type(&resolved),
+            ),
+        );
     }
 }
 

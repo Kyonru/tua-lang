@@ -6,8 +6,8 @@ use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
 use crate::vector;
 use crate::vfs::normalize_path;
 use crate::{
-    AnalysisSourceKind, ModuleExportField, ScopeDeclarationKind, ScopeMap, Type, TypeEnvironment,
-    TypedFunction,
+    AnalysisSourceKind, FunctionType, ModuleExportField, ScopeDeclarationKind, ScopeMap, Type,
+    TypeEnvironment, TypedFunction,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -254,19 +254,32 @@ impl ProjectTypeDatabase {
                 let parameters = function
                     .parameters
                     .iter()
-                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
+                    .map(|parameter| crate::FunctionParameter {
+                        name: parameter.name.clone(),
+                        ty: self.resolve_type_inner(
+                            module_graph,
+                            source_path,
+                            &parameter.ty,
+                            resolving,
+                        ),
+                    })
                     .collect::<Vec<_>>();
+                let vararg_type = function
+                    .vararg_type
+                    .as_deref()
+                    .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving));
                 let return_types = function
                     .return_types_or_any()
                     .iter()
                     .map(|ty| self.resolve_type_inner(module_graph, source_path, ty, resolving))
                     .collect::<Vec<_>>();
 
-                Type::function_returns_with_required(
+                Type::Function(FunctionType::new_signature(
                     parameters,
                     function.required_parameter_count,
+                    vararg_type,
                     return_types,
-                )
+                ))
             }
             Type::Table(table) => {
                 let mut resolved_table =
@@ -472,9 +485,12 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 .parameters
                 .iter()
                 .enumerate()
-                .map(|(index, ty)| crate::TypedParameter {
-                    name: format!("arg{}", index + 1),
-                    ty: ty.clone(),
+                .map(|(index, parameter)| crate::TypedParameter {
+                    name: parameter
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| format!("arg{}", index + 1)),
+                    ty: parameter.ty.clone(),
                     documentation: field
                         .parameter_documentation
                         .get(index)
@@ -483,8 +499,8 @@ fn typed_function_from_export(name: &str, field: &ModuleExportField) -> TypedFun
                 .collect(),
             parameter_count: function.parameters.len(),
             required_parameter_count: function.required_parameter_count,
-            has_varargs: false,
-            vararg_type: None,
+            has_varargs: function.vararg_type.is_some(),
+            vararg_type: function.vararg_type.as_deref().cloned(),
             return_type: Some((*function.return_type).clone()),
             return_types: function.return_types_or_any().to_vec(),
             documentation: field.documentation.clone(),
