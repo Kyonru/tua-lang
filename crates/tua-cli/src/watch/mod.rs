@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::build::{build_changed_files, build_project, has_errors, output_path_for, BuildOutcome};
+use crate::build::{has_errors, output_path_for, BuildOutcome, WatchBuildSession};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
@@ -122,7 +122,7 @@ fn run_watch_with_options<W: Write, E: Write>(
         ),
     )?;
 
-    let initial = build_project(cwd, loaded.clone(), false)?;
+    let (mut build_session, initial) = WatchBuildSession::start(cwd, loaded.clone())?;
     write_outcome(stdout, stderr, "initial build", "built", &initial)?;
 
     let mut snapshot = snapshot_source_tree(
@@ -172,7 +172,7 @@ fn run_watch_with_options<W: Write, E: Write>(
         } else {
             remove_deleted_outputs(cwd, &loaded, &changes.deleted)
         };
-        let mut outcome = build_changed_files(cwd, loaded.clone(), changes.changed);
+        let mut outcome = build_session.rebuild(changes.changed, changes.deleted);
         outcome.diagnostics.extend(removed.diagnostics);
 
         if removed.removed > 0 {

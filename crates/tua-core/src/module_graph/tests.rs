@@ -102,6 +102,38 @@ return {
 }
 
 #[test]
+fn reverse_dependency_closure_includes_transitive_importers() {
+    let (model, model_hir, model_exports) = tua_input("src/model.tua", "return { hp = 100 }\n");
+    let (player, player_hir, player_exports) = tua_input(
+        "src/player.tua",
+        "local Model = require(\"model\")\nreturn { hp = Model.hp }\n",
+    );
+    let (main, main_hir, main_exports) = tua_input(
+        "src/main.tua",
+        "local Player = require(\"player\")\nreturn { player = Player }\n",
+    );
+    let graph = graph([
+        (&model, &model_hir, &model_exports, AnalysisSourceKind::Tua),
+        (
+            &player,
+            &player_hir,
+            &player_exports,
+            AnalysisSourceKind::Tua,
+        ),
+        (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+    ]);
+
+    assert_eq!(
+        graph.reverse_dependency_closure(["src/model.tua"]),
+        BTreeSet::from([
+            PathBuf::from("src/main.tua"),
+            PathBuf::from("src/model.tua"),
+            PathBuf::from("src/player.tua"),
+        ])
+    );
+}
+
+#[test]
 fn resolves_static_import_edges_like_require_edges() {
     let (main, main_hir, main_exports) = tua_input(
         "src/systems/main.tua",

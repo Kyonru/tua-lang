@@ -80,6 +80,8 @@ cargo run -p tua-cli -- watch
 ```
 
 The watcher runs an initial build, then debounces source changes and rebuilds.
+It keeps project analysis warm and rechecks unchanged importers when a required
+module's exported API changes.
 
 ## Try Bundled Examples
 

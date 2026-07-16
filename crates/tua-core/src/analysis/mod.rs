@@ -153,6 +153,7 @@ pub struct AnalysisSnapshot {
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    project_diagnostics_cache: Arc<Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
     reverse_reference_index: Arc<OnceLock<ReverseReferenceIndex>>,
     call_hierarchy_symbols: BTreeMap<PathBuf, Vec<CallHierarchySymbol>>,
     call_hierarchy_calls: BTreeMap<PathBuf, Vec<CallHierarchyCallSite>>,
@@ -617,12 +618,23 @@ impl AnalysisHost {
         source: impl Into<String>,
         kind: AnalysisSourceKind,
     ) {
+        let _ = self.update_file_with_kind(path, source, kind);
+    }
+
+    /// Updates a file and reports whether cached importers were invalidated.
+    #[must_use]
+    pub fn update_file_with_kind(
+        &mut self,
+        path: impl Into<PathBuf>,
+        source: impl Into<String>,
+        kind: AnalysisSourceKind,
+    ) -> bool {
         let path = path.into();
         let source = source.into();
         let vfs_kind = vfs_source_kind(kind);
 
         if self.vfs.disk_file_matches(&path, &source, vfs_kind) {
-            return;
+            return false;
         }
 
         let invalidated_dependents =
@@ -635,6 +647,8 @@ impl AnalysisHost {
         }
         self.vfs.set_disk_file(path, source, vfs_kind);
         self.bump_revision();
+
+        invalidated_dependents
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
@@ -845,6 +859,7 @@ impl AnalysisHost {
             completion_cache: Arc::clone(&self.completion_cache),
             completion_cache_stats: Arc::clone(&self.completion_cache_stats),
             definition_cache: Arc::clone(&self.definition_cache),
+            project_diagnostics_cache: Arc::new(Mutex::new(BTreeMap::new())),
             reverse_reference_index: Arc::new(OnceLock::new()),
             call_hierarchy_symbols,
             call_hierarchy_calls,
@@ -1183,6 +1198,8 @@ impl AnalysisSnapshot {
             return Vec::new();
         };
         let mut diagnostics = file.diagnostics.clone();
+
+        diagnostics.extend(self.project_type_diagnostics(path.as_ref(), file));
 
         diagnostics.extend(
             self.module_graph
@@ -4672,6 +4689,63 @@ impl AnalysisSnapshot {
             .collect()
     }
 
+    fn project_type_diagnostics(&self, path: &Path, file: &AnalysisFile) -> Vec<Diagnostic> {
+        if file.require_edges.is_empty() {
+            return Vec::new();
+        }
+
+        let path = normalize_path(path);
+
+        if let Some(diagnostics) = self
+            .project_diagnostics_cache
+            .lock()
+            .expect("project diagnostics cache lock poisoned")
+            .get(&path)
+            .cloned()
+        {
+            return diagnostics;
+        }
+
+        let _profile = profile::span_for_path("analysis.check.project", &path);
+        let diagnostics = file
+            .parsed
+            .as_ref()
+            .ok()
+            .and_then(|parsed| {
+                let facts = self.semantic_facts_for_parsed(parsed)?;
+                let mut diagnostics_config = self.config.diagnostics.clone();
+
+                diagnostics_config.inline_ignores = false;
+
+                let mut diagnostics =
+                    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
+                        parsed,
+                        &facts.environment,
+                        analysis_asset_roots(self.source_roots(), &self.asset_roots),
+                        &diagnostics_config,
+                        &self.config.jit,
+                        self.asset_index.as_ref(),
+                        &self.config.format.options(),
+                    )
+                    .err()
+                    .unwrap_or_default();
+
+                diagnostics.retain(|diagnostic| {
+                    diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
+                });
+
+                Some(diagnostics)
+            })
+            .unwrap_or_default();
+
+        self.project_diagnostics_cache
+            .lock()
+            .expect("project diagnostics cache lock poisoned")
+            .insert(path, diagnostics.clone());
+
+        diagnostics
+    }
+
     fn project_diagnostic_enabled(&self, diagnostic: &Diagnostic) -> bool {
         match diagnostic.code {
             Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) => {
@@ -5767,7 +5841,7 @@ impl AnalysisQueryCache {
         let (parsed, parsed_cache_hit) = self.cached_parsed_file(&path, source, kind);
         self.record_parse_cache_lookup(parsed_cache_hit);
         let Ok(parsed) = parsed else {
-            return false;
+            return true;
         };
 
         let new_surface = DependencySurface::from_parsed(&parsed, config, new_require_targets);
@@ -5789,7 +5863,12 @@ impl AnalysisQueryCache {
     fn invalidate_dependents(&mut self, path: &Path, invalidated: &mut BTreeSet<PathBuf>) {
         if let Some(importers) = self.importers.get(path).cloned() {
             for importer in importers {
+                if invalidated.contains(&importer) {
+                    continue;
+                }
+
                 self.invalidate_one(&importer, invalidated, true);
+                self.invalidate_dependents(&importer, invalidated);
             }
         }
     }

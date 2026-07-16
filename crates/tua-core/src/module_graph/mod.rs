@@ -164,6 +164,52 @@ impl ModuleGraph {
         self.modules.values()
     }
 
+    /// Returns the roots and every module that transitively depends on them.
+    pub fn reverse_dependency_closure<I, P>(&self, roots: I) -> BTreeSet<PathBuf>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<Path>,
+    {
+        let mut importers = BTreeMap::<PathBuf, BTreeSet<PathBuf>>::new();
+
+        for module in self.modules.values() {
+            for edge in &module.require_edges {
+                let dependency = match &edge.resolution {
+                    RequireResolution::Resolved { path } => path,
+                    RequireResolution::Duplicate { selected, .. } => selected,
+                    RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => {
+                        continue;
+                    }
+                };
+
+                importers
+                    .entry(normalize_path(dependency))
+                    .or_default()
+                    .insert(module.path.clone());
+            }
+        }
+
+        let mut closure = roots
+            .into_iter()
+            .map(|path| normalize_path(path.as_ref()))
+            .collect::<BTreeSet<_>>();
+        let mut pending = closure.iter().cloned().collect::<Vec<_>>();
+
+        while let Some(path) = pending.pop() {
+            let Some(dependents) = importers.get(&path) else {
+                continue;
+            };
+
+            for dependent in dependents {
+                if closure.insert(dependent.clone()) {
+                    pending.push(dependent.clone());
+                }
+            }
+        }
+
+        closure
+    }
+
     pub fn export(
         &self,
         module_path: impl AsRef<Path>,

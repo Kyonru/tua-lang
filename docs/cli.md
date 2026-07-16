@@ -122,7 +122,11 @@ Ambiguous basename-only frames are left unchanged instead of guessed.
 cargo run -p tua-cli -- watch
 ```
 
-Runs an initial build and rebuilds after debounced source changes.
+Runs an initial build and rebuilds after debounced source changes. Watch mode
+keeps one project analysis session alive, updates changed and removed semantic
+files incrementally, and rechecks the transitive importer closure when an
+exported module surface changes. Valid affected importers are re-emitted;
+invalid importers are reported even when their source file did not change.
 
 ## `lsp`
 

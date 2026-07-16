@@ -328,12 +328,16 @@ Scope:
 - Watch configured source directory.
 - Run an initial build.
 - Debounce source changes.
-- Re-check and re-emit changed files.
+- Keep project analysis warm across rebuilds.
+- Re-check and re-emit changed files plus transitive importers affected by
+  exported module surface changes.
 
 Acceptance:
 
 - Watch behavior has integration coverage around rebuild triggering where
   practical.
+- Changing an exported signature reports a diagnostic in an unchanged
+  importer.
 - Manual run shows stable rebuild output without duplicate noisy events.
 
 ## Phase 7: LÖVE Example And Runtime Validation

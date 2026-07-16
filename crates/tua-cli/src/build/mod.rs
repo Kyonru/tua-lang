@@ -46,6 +46,10 @@ pub(crate) struct BuildOutcome {
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
+mod watch;
+
+pub(crate) use watch::WatchBuildSession;
+
 enum SourceUnit {
     Tua {
         source_path: PathBuf,
@@ -105,120 +109,6 @@ pub(crate) fn build_project(
         source_files,
         emit_on_error,
     ))
-}
-
-pub(crate) fn build_changed_files(
-    cwd: impl AsRef<Path>,
-    loaded: LoadedConfig,
-    source_files: Vec<PathBuf>,
-) -> BuildOutcome {
-    let cwd = cwd.as_ref();
-    let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
-    let source_dir = workspace.primary_source_root().to_path_buf();
-    let out_dir = workspace.primary_output_root().to_path_buf();
-    let in_place = paths_same_location(&source_dir, &out_dir);
-    let mut outcome = BuildOutcome::default();
-    let mut units = Vec::new();
-    let mut host = AnalysisHost::with_config(workspace.config().clone());
-    let mut required_bundled_runtimes = BTreeSet::new();
-
-    host.set_source_roots(workspace.source_roots().iter().cloned());
-    host.set_output_roots(workspace.output_roots().iter().cloned());
-    host.set_asset_roots(workspace.asset_roots());
-
-    for source_path in source_files {
-        let source_kind = SourceKind::for_path(&source_path, &workspace.config().extension);
-        let output_path = output_path_for(&source_dir, &out_dir, &source_path, source_kind);
-
-        if source_kind == SourceKind::Asset {
-            if in_place {
-                continue;
-            }
-
-            if let Some(tua_source_path) =
-                colliding_tua_source_for_asset(&source_path, &workspace.config().extension)
-            {
-                outcome.diagnostics.push(output_collision_diagnostic(
-                    &source_path,
-                    &tua_source_path,
-                    in_place,
-                ));
-                continue;
-            }
-
-            match copy_output(&source_path, &output_path) {
-                Ok(()) => outcome.emitted += 1,
-                Err(diagnostic) => outcome.diagnostics.push(diagnostic),
-            }
-            continue;
-        }
-
-        let source = match read_source_file(&source_path) {
-            Ok(source) => source,
-            Err(diagnostic) => {
-                outcome.diagnostics.push(diagnostic);
-                continue;
-            }
-        };
-
-        host.set_file_with_kind(&source_path, source.clone(), AnalysisSourceKind::Tua);
-        units.push((source_path, output_path, source));
-    }
-
-    let snapshot = host.snapshot();
-
-    let annotation_mode = workspace.config().emit.annotation_mode;
-
-    for (source_path, output_path, source) in units {
-        let mut source_diagnostics = snapshot.pipeline_diagnostics(&source_path);
-        let has_source_errors = has_errors(&source_diagnostics);
-
-        outcome.diagnostics.append(&mut source_diagnostics);
-
-        if has_source_errors {
-            continue;
-        }
-
-        push_sibling_collision_warning(&mut outcome.diagnostics, &source_path, in_place);
-
-        let output = match emit_tua_source_with_workspace(
-            &source_path,
-            source.as_str(),
-            annotation_mode,
-            &workspace,
-        ) {
-            Ok(output) => output,
-            Err(mut source_diagnostics) => {
-                outcome.diagnostics.append(&mut source_diagnostics);
-                continue;
-            }
-        };
-        collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
-
-        match write_output(&output_path, output.clone()) {
-            Ok(()) => {
-                outcome.emitted += 1;
-
-                if workspace.config().emit_maps {
-                    if let Err(diagnostic) =
-                        write_source_map(cwd, &source_path, &output_path, &source, &output)
-                    {
-                        outcome.diagnostics.push(diagnostic);
-                    }
-                }
-            }
-            Err(diagnostic) => outcome.diagnostics.push(diagnostic),
-        }
-    }
-
-    write_required_bundled_runtimes(
-        &out_dir,
-        &required_bundled_runtimes,
-        &mut outcome.emitted,
-        &mut outcome.diagnostics,
-    );
-
-    outcome
 }
 
 fn build_project_files(
@@ -514,6 +404,18 @@ fn tua_outputs_by_path(
             )
         })
         .collect()
+}
+
+fn analysis_kind_for_path(path: &Path, extension: &str) -> Option<AnalysisSourceKind> {
+    match SourceKind::for_path(path, extension) {
+        SourceKind::Tua => Some(AnalysisSourceKind::Tua),
+        SourceKind::Asset
+            if path.extension().and_then(|extension| extension.to_str()) == Some("lua") =>
+        {
+            Some(AnalysisSourceKind::Lua)
+        }
+        SourceKind::Asset => None,
+    }
 }
 
 fn colliding_tua_source_for_asset(asset_path: &Path, extension: &str) -> Option<PathBuf> {

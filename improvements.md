@@ -87,19 +87,21 @@ ranking refresh, event refresh, and stale completion-cache isolation.
 
 ### P1: Make watch builds dependency-aware
 
-[`watch/mod.rs`](crates/tua-cli/src/watch/mod.rs) passes only changed files to a
-fresh analysis host in [`build/mod.rs`](crates/tua-cli/src/build/mod.rs). An
-exported API change can therefore leave unchanged importers unchecked or
-stale.
+Status: done on 2026-07-15.
 
-Improvements:
+Watch mode now owns one long-lived project `AnalysisHost`. Each debounced batch
+applies semantic additions, edits, and removals to that host; filesystem rename
+pairs are handled as one removal plus one addition. When an exported module
+surface changes, watch mode unions the old and new transitive reverse dependency
+closures, then rechecks and re-emits valid affected Tua files. Changed assets
+continue through the existing copy and collision paths.
 
-- Keep one long-lived project analysis host in watch mode.
-- Apply file additions, edits, removals, and renames incrementally.
-- Compute the reverse dependency closure for changed module surfaces.
-- Recheck and emit affected dependents.
-- Test changing an exported type and observing a new diagnostic in an
-  unchanged importer.
+Project-aware snapshot diagnostics now run the checker with the cached semantic
+environment for files with module edges, so an unchanged importer can report a
+new argument or assignment error after an exported signature changes. Core and
+CLI regressions cover transitive invalidation and this unchanged-importer case.
+Polling precision and native filesystem notifications remain tracked under the
+separate P2 watcher item.
 
 ### P1: Complete or narrow the plugin architecture
 

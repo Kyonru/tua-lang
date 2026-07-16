@@ -1341,6 +1341,95 @@ return hp
     assert!(!emitted.contains(": number"));
 }
 
+#[test]
+fn watch_rechecks_unchanged_importers_after_exported_type_changes() {
+    let temp = TempDir::new("watch-dependent-types");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/types.tua"),
+        r#"
+local function accept(value: number): number
+  return value
+end
+
+return { accept = accept }
+"#,
+    )
+    .expect("failed to write initial type provider");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+local Types = require("types")
+local value: number = Types.accept(10)
+
+return value
+"#,
+    )
+    .expect("failed to write unchanged importer");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || {
+            temp.path().join("build/main.lua").is_file()
+                && temp.path().join("build/types.lua").is_file()
+        },
+        Duration::from_secs(3),
+        "watch did not run the initial dependency-aware build",
+    );
+
+    fs::write(
+        temp.path().join("src/types.tua"),
+        r#"
+local function accept(value: string): string
+  return value
+end
+
+return { accept = accept }
+"#,
+    )
+    .expect("failed to change exported type");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(
+        stdout.contains("initial build: built 2 file(s)"),
+        "unexpected stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("changed 1 file(s)"),
+        "unexpected stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("rebuild: 1 file(s) emitted with errors"),
+        "unexpected stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("src/main.tua"),
+        "unexpected stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("expected string, found number"),
+        "unexpected stderr:\n{stderr}"
+    );
+}
+
 fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration, failure_message: &str) {
     let deadline = Instant::now() + timeout;
 

@@ -1177,6 +1177,47 @@ return M
 }
 
 #[test]
+fn changing_exported_module_invalidates_transitive_importers() {
+    let temp = TempProject::new("transitive-module-dependency");
+    let main = temp.write(
+        "src/main.tua",
+        "local Facade = require(\"facade\")\nreturn { new = Facade.new }\n",
+    );
+    let facade = temp.write(
+        "src/facade.tua",
+        "local Model = require(\"model\")\nreturn { new = Model.new }\n",
+    );
+    let model = temp.write(
+        "src/model.tua",
+        "local M = {}\nfunction M.new()\n  return { hp = 100 }\nend\nreturn M\n",
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&main, fs::read_to_string(&main).expect("main should read"));
+    host.set_file(
+        &facade,
+        fs::read_to_string(&facade).expect("facade should read"),
+    );
+    host.set_file(
+        &model,
+        fs::read_to_string(&model).expect("model should read"),
+    );
+    host.snapshot();
+
+    let surface_changed = host.update_file_with_kind(
+        &model,
+        "local M = {}\nfunction M.new()\n  return { hp = \"full\" }\nend\nreturn M\n",
+        AnalysisSourceKind::Tua,
+    );
+    let stats = host.cache_stats();
+
+    assert!(surface_changed);
+    assert_eq!(stats.invalidations, 3);
+    assert_eq!(stats.dependent_invalidations, 2);
+}
+
+#[test]
 fn changing_required_module_body_without_surface_change_keeps_importers_cached() {
     let temp = TempProject::new("module-body-dependency");
 

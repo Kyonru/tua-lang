@@ -181,6 +181,14 @@ asset-root change increments the revision and forces the next snapshot to
 rebuild from the file-granular cache; unchanged files reuse their cached usage
 summaries.
 
+CLI watch mode keeps one `AnalysisHost` for the process lifetime. A changed
+module reports whether its dependency surface changed; removals always count as
+surface changes. The watcher unions reverse dependency closures from the
+snapshots before and after a debounced batch, which covers edits, additions,
+deletions, and rename pairs without a CLI-specific require scanner. Cached
+analysis invalidation follows transitive importers, while emission remains CLI
+owned.
+
 ## Adding A Core Query
 
 1. Define the core result type near the domain that owns the behavior.
