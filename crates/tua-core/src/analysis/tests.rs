@@ -97,13 +97,13 @@ events:has("player.hit")
 
     let graph = host.snapshot().signal_graph();
 
-    assert_eq!(graph.events.len(), 1);
-    assert_eq!(graph.events[0].name, "player.hit");
-    assert_eq!(graph.events[0].calls.len(), 4);
+    assert_eq!(graph.events.len(), 2);
+    assert!(graph.events.iter().all(|event| event.name == "player.hit"));
     assert_eq!(
-        graph.events[0]
-            .calls
+        graph
+            .events
             .iter()
+            .flat_map(|event| event.calls.iter())
             .map(|call| call.role)
             .collect::<Vec<_>>(),
         vec![
@@ -114,7 +114,12 @@ events:has("player.hit")
         ]
     );
     assert_eq!(
-        graph.events[0].calls[2]
+        graph
+            .events
+            .iter()
+            .flat_map(|event| event.calls.iter())
+            .find(|call| call.role == crate::SignalGraphCallRole::Declaration)
+            .expect("declaration should be present")
             .payload
             .as_ref()
             .expect("declaration should expose a payload")
@@ -123,6 +128,211 @@ events:has("player.hit")
             .collect::<Vec<_>>(),
         vec![("player", "string"), ("damage", "number")]
     );
+}
+
+#[test]
+fn signal_event_queries_share_one_bus_aware_index() {
+    let fixture = Fixture::parse(
+        r#"local events = signal()
+local ui = signal()
+
+events:declare("<|declaration|>player.hit", function(player: string, damage: number) end)
+events:emit("<|usage|>player.hit", "Ada", 12)
+ui:declare("player.hit", function(message: string) end)
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, fixture.source(&path));
+    let snapshot = host.snapshot();
+    let usage = fixture.position("usage");
+    let declaration = fixture.position("declaration");
+
+    let hover = snapshot
+        .hover(&path, usage)
+        .expect("event string should have hover");
+    assert_eq!(
+        hover.contents,
+        "SignalBus event \"player.hit\"(player: string, damage: number)"
+    );
+
+    let definition = snapshot
+        .definition(&path, usage)
+        .expect("event string should resolve to its declaration");
+    assert_eq!(definition.kind, DefinitionKind::SignalEvent);
+    assert_eq!(definition.span.start, declaration);
+
+    let references = snapshot.references(&path, usage, true);
+    assert_eq!(references.len(), 2);
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::SignalEvent));
+
+    let target = snapshot
+        .prepare_rename(&path, usage)
+        .expect("event string should prepare rename");
+    assert_eq!(target.kind, crate::RenameKind::SignalEvent);
+    assert_eq!(target.placeholder, "player.hit");
+
+    let rename = snapshot
+        .rename(&path, usage, "player.damaged")
+        .expect("event name should rename");
+    assert_eq!(rename.edits.len(), 2);
+    assert!(rename
+        .edits
+        .iter()
+        .all(|edit| edit.new_text == "player.damaged"));
+}
+
+#[test]
+fn signal_event_payload_conflicts_are_diagnosed_per_bus() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &path,
+        r#"local events = signal()
+local ui = signal()
+
+events:declare("player.hit", function(player: string, damage: number) end)
+events:on("player.hit", function(player: string, damage: string) end)
+ui:declare("player.hit", function(message: string) end)
+"#,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    let conflicts = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_SIGNAL_SCHEMA))
+        .collect::<Vec<_>>();
+
+    assert_eq!(conflicts.len(), 2);
+    assert!(conflicts
+        .iter()
+        .all(|diagnostic| diagnostic.message.contains("player.hit")));
+}
+
+#[test]
+fn shared_required_signal_bus_links_event_queries_across_files() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/signals.tua
+return signal()
+-- file: src/listeners.tua
+local events: SignalBus = require("signals")
+events:declare("<|declaration|>player.hit", function(player: string, damage: number) end)
+-- file: src/emitters.tua
+local events: SignalBus = require("signals")
+events:emit("<|usage|>player.hit", "Ada", <|signature|>12)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let snapshot = host.snapshot();
+    let emitter = PathBuf::from("src/emitters.tua");
+    let listener = PathBuf::from("src/listeners.tua");
+    let usage = fixture.position("usage");
+
+    let definition = snapshot
+        .definition(&emitter, usage)
+        .expect("required SignalBus event should resolve across files");
+    assert_eq!(definition.path, listener);
+    assert_eq!(definition.span.start, fixture.position("declaration"));
+
+    let references = snapshot.references(&emitter, usage, true);
+    assert_eq!(references.len(), 2);
+
+    let help = snapshot
+        .signature_help(&emitter, fixture.position("signature"))
+        .expect("required SignalBus event should expose project payload signature");
+    assert_eq!(
+        help.signatures[0].label,
+        "function events:emit(\"player.hit\", player: string, damage: number): nil"
+    );
+}
+
+#[test]
+fn shared_required_signal_bus_reports_cross_file_schema_conflicts() {
+    let mut host = AnalysisHost::new();
+
+    host.set_file("src/signals.tua", "return signal()\n");
+    host.set_file(
+        "src/first.tua",
+        r#"local events: SignalBus = require("signals")
+events:declare("player.hit", function(player: string, damage: number) end)
+"#,
+    );
+    host.set_file(
+        "src/second.tua",
+        r#"local events: SignalBus = require("signals")
+events:on("player.hit", function(player: string, damage: string) end)
+"#,
+    );
+
+    let snapshot = host.snapshot();
+
+    for path in ["src/first.tua", "src/second.tua"] {
+        let diagnostics = snapshot.pipeline_diagnostics(path);
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::DOMAIN_SIGNAL_SCHEMA)
+                && diagnostic.message.contains("player.hit")
+        }));
+    }
+
+    let emitter = Fixture::parse(
+        r#"local events: SignalBus = require("signals")
+events:emit("player.hit", "Ada", <|signature|>12)
+"#,
+    );
+    host.set_file("src/emitter.tua", emitter.source("src/main.tua"));
+    let snapshot = host.snapshot();
+    let help = snapshot
+        .signature_help("src/emitter.tua", emitter.position("signature"))
+        .expect("conflicted event should retain generic signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function SignalBus:emit(name: string, ...: any): nil"
+    );
+}
+
+#[test]
+fn shared_required_signal_bus_ranks_event_completion_before_nearby_other_bus() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/signals.tua
+return signal()
+-- file: src/listeners.tua
+local events: SignalBus = require("signals")
+events:declare("player.hit", function(player: string, damage: number) end)
+-- file: src/emitters.tua
+local events: SignalBus = require("signals")
+local ui = signal()
+ui:declare("ui.ready", function() end)
+events:emit("<|completion|>")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let emitter = PathBuf::from("src/emitters.tua");
+    let completions = host
+        .snapshot()
+        .completion(&emitter, fixture.position("completion"));
+    let labels = completions
+        .iter()
+        .map(|completion| completion.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(labels.first(), Some(&"player.hit"));
+    assert!(labels.contains(&"ui.ready"));
 }
 
 #[test]

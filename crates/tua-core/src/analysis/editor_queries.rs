@@ -8,6 +8,10 @@ impl AnalysisSnapshot {
 
         match &file.parsed {
             Ok(parsed) => {
+                if let Some(hover) = self.signal_event_hover(path, position) {
+                    return Some(hover);
+                }
+
                 if let Some(asset) = asset::asset_at_position(&file.assets, position) {
                     return Some(Hover {
                         contents: asset.hover_markdown(),
@@ -29,6 +33,14 @@ impl AnalysisSnapshot {
                 )
             }
         }
+    }
+
+    fn signal_event_hover(&self, path: &Path, position: SourcePosition) -> Option<Hover> {
+        signal_event_hover(
+            self.usage_index.signal_event_index(),
+            &normalize_path(path),
+            position,
+        )
     }
 
     pub(super) fn hover_parsed_snapshot(
@@ -353,15 +365,21 @@ impl AnalysisSnapshot {
             Ok(parsed) => {
                 let facts = self.semantic_facts_for_parsed(parsed);
 
-                signature_help_parsed_source_with_environment(parsed, position, &facts.environment)
+                signature_help_parsed_source_with_environment_and_signal_index(
+                    parsed,
+                    position,
+                    &facts.environment,
+                    Some(self.usage_index.signal_event_index()),
+                )
             }
             Err(_) => self
                 .degraded_semantic_facts(path, file)
                 .and_then(|facts| {
-                    signature_help_parsed_source_with_environment(
+                    signature_help_parsed_source_with_environment_and_signal_index(
                         &facts.parsed,
                         position,
                         &facts.environment,
+                        Some(self.usage_index.signal_event_index()),
                     )
                 })
                 .or_else(|| degraded_signature_help_fallback(path, &file.source, position)),

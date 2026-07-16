@@ -23,6 +23,7 @@ pub struct Reference {
 pub enum ReferenceKind {
     Module,
     Asset,
+    SignalEvent,
     TypeAlias,
     Local,
     Function,
@@ -241,6 +242,7 @@ fn scope_kind_for_definition(kind: DefinitionKind) -> Option<ScopeDeclarationKin
         DefinitionKind::Module
         | DefinitionKind::Builtin
         | DefinitionKind::Asset
+        | DefinitionKind::SignalEvent
         | DefinitionKind::TypeAlias
         | DefinitionKind::TableField => None,
     }
@@ -512,6 +514,7 @@ fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
         DefinitionKind::Module => ReferenceKind::Module,
         DefinitionKind::Builtin => ReferenceKind::Function,
         DefinitionKind::Asset => ReferenceKind::Asset,
+        DefinitionKind::SignalEvent => ReferenceKind::SignalEvent,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,

@@ -71,6 +71,7 @@ impl AnalysisSnapshot {
         let mut diagnostics = file.diagnostics.clone();
 
         diagnostics.extend(self.project_type_diagnostics(path.as_ref(), file));
+        diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
 
         diagnostics.extend(
             self.module_graph
@@ -149,30 +150,48 @@ impl AnalysisSnapshot {
     }
 
     pub fn signal_graph(&self) -> SignalGraph {
-        let mut events = BTreeMap::<String, Vec<_>>::new();
+        let mut events = self
+            .usage_index
+            .signal_event_index()
+            .grouped_events()
+            .into_iter()
+            .filter_map(|group| {
+                let first = group.first()?;
+                let name = first.mention.name.clone();
+                let bus = bus_label(&first.identity);
+                let id = graph_event_id(&first.identity, &name);
+                let bus_path = first.identity.origin.clone();
+                let mut calls = group
+                    .into_iter()
+                    .map(|event| graph_call_from_mention(event.path.clone(), event.mention.clone()))
+                    .collect::<Vec<_>>();
 
-        for event in self.usage_index.signal_events() {
-            let call = graph_call_from_mention(event.path.clone(), event.mention.clone());
+                calls.sort_by(|left, right| {
+                    left.path
+                        .cmp(&right.path)
+                        .then_with(|| left.span.start.line.cmp(&right.span.start.line))
+                        .then_with(|| left.span.start.column.cmp(&right.span.start.column))
+                        .then_with(|| left.method.cmp(&right.method))
+                });
 
-            events.entry(call.event.clone()).or_default().push(call);
-        }
-
-        SignalGraph {
-            events: events
-                .into_iter()
-                .map(|(name, mut calls)| {
-                    calls.sort_by(|left, right| {
-                        left.path
-                            .cmp(&right.path)
-                            .then_with(|| left.span.start.line.cmp(&right.span.start.line))
-                            .then_with(|| left.span.start.column.cmp(&right.span.start.column))
-                            .then_with(|| left.method.cmp(&right.method))
-                    });
-
-                    SignalGraphEvent { name, calls }
+                Some(SignalGraphEvent {
+                    id,
+                    name,
+                    bus,
+                    bus_path,
+                    calls,
                 })
-                .collect(),
-        }
+            })
+            .collect::<Vec<_>>();
+
+        events.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left.bus.cmp(&right.bus))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+
+        SignalGraph { events }
     }
 
     pub fn importable_symbols(&self, prefix: &str) -> Vec<&SymbolIndexEntry> {

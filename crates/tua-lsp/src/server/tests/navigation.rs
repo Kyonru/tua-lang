@@ -60,6 +60,11 @@ events:emit("player.hit", "Ada", 12)
     let event = &response["result"]["events"][0];
 
     assert_eq!(event["name"], "player.hit");
+    assert!(event["id"].as_str().is_some_and(|id| !id.is_empty()));
+    assert!(event["bus"]
+        .as_str()
+        .is_some_and(|bus| bus.contains("events")));
+    assert_eq!(event["busUri"], uri);
     assert_eq!(event["calls"].as_array().map(Vec::len), Some(3));
     assert_eq!(event["calls"][0]["role"], "declaration");
     assert_eq!(event["calls"][0]["payload"][0]["name"], "player");
@@ -68,6 +73,55 @@ events:emit("player.hit", "Ada", 12)
     assert_eq!(event["calls"][2]["uri"], uri);
     assert_eq!(event["calls"][2]["range"]["start"]["line"], 3);
 }
+
+#[test]
+fn signal_event_definition_references_and_rename_share_bus_identity() {
+    let uri = "file:///tmp/signal-navigation.tua";
+    let source = r#"local events = signal()
+local ui = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:emit("player.hit", "Ada", 12)
+ui:declare("player.hit", function(message: string) end)
+"#;
+    let emit = "events:emit(\"player.hit";
+    let event_offset = "events:emit(\"".len();
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, emit, event_offset),
+        references_request(3, uri, source, emit, event_offset, true),
+        prepare_rename_request(4, uri, source, emit, event_offset),
+        rename_request(5, uri, source, emit, event_offset, "player.damaged"),
+    ]);
+    let definition = response_with_id(&output, 2);
+    let references = response_with_id(&output, 3);
+    let prepare = response_with_id(&output, 4);
+
+    assert_eq!(definition["result"]["uri"], uri);
+    assert_eq!(
+        range_text(source, &definition["result"]["range"]),
+        "player.hit"
+    );
+    assert_eq!(references["result"].as_array().map(Vec::len), Some(2));
+    assert!(references["result"]
+        .as_array()
+        .expect("references should be an array")
+        .iter()
+        .all(|reference| range_text(source, &reference["range"]) == "player.hit"));
+    assert_eq!(prepare["result"]["placeholder"], "player.hit");
+    assert_eq!(
+        range_text(source, &prepare["result"]["range"]),
+        "player.hit"
+    );
+    assert_rename_edit_texts(
+        &output,
+        5,
+        uri,
+        source,
+        ["player.hit", "player.hit"],
+        "player.damaged",
+    );
+}
+
 #[test]
 fn definition_returns_known_alias_function_local_and_table_field_locations() {
     let uri = "file:///tmp/definition.tua";

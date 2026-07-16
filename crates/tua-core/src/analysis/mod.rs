@@ -37,8 +37,11 @@ use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
-use crate::signal::{graph_call_from_mention, SignalGraph, SignalGraphEvent};
-use crate::signature_help::signature_help_parsed_source_with_environment;
+use crate::signal::{
+    bus_label, graph_call_from_mention, graph_event_id, SignalEventIndex, SignalGraph,
+    SignalGraphEvent,
+};
+use crate::signature_help::signature_help_parsed_source_with_environment_and_signal_index;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
 };
@@ -555,11 +558,12 @@ fn reference_kind_key(kind: crate::ReferenceKind) -> u8 {
     match kind {
         crate::ReferenceKind::Module => 0,
         crate::ReferenceKind::Asset => 1,
-        crate::ReferenceKind::TypeAlias => 2,
-        crate::ReferenceKind::Local => 3,
-        crate::ReferenceKind::Function => 4,
-        crate::ReferenceKind::Parameter => 5,
-        crate::ReferenceKind::TableField => 6,
+        crate::ReferenceKind::SignalEvent => 2,
+        crate::ReferenceKind::TypeAlias => 3,
+        crate::ReferenceKind::Local => 4,
+        crate::ReferenceKind::Function => 5,
+        crate::ReferenceKind::Parameter => 6,
+        crate::ReferenceKind::TableField => 7,
     }
 }
 
@@ -656,7 +660,7 @@ impl ReferenceIndexKey {
     fn from_definition(definition: &Definition) -> Option<Self> {
         if matches!(
             definition.kind,
-            DefinitionKind::Builtin | DefinitionKind::Asset
+            DefinitionKind::Builtin | DefinitionKind::Asset | DefinitionKind::SignalEvent
         ) {
             return None;
         }
@@ -682,11 +686,12 @@ fn definition_kind_key(kind: DefinitionKind) -> u8 {
         DefinitionKind::Module => 0,
         DefinitionKind::Builtin => 1,
         DefinitionKind::Asset => 2,
-        DefinitionKind::TypeAlias => 3,
-        DefinitionKind::Local => 4,
-        DefinitionKind::Function => 5,
-        DefinitionKind::Parameter => 6,
-        DefinitionKind::TableField => 7,
+        DefinitionKind::SignalEvent => 3,
+        DefinitionKind::TypeAlias => 4,
+        DefinitionKind::Local => 5,
+        DefinitionKind::Function => 6,
+        DefinitionKind::Parameter => 7,
+        DefinitionKind::TableField => 8,
     }
 }
 
@@ -695,6 +700,7 @@ fn reference_kind_for_definition(kind: DefinitionKind) -> ReferenceKind {
         DefinitionKind::Module => ReferenceKind::Module,
         DefinitionKind::Builtin => ReferenceKind::Function,
         DefinitionKind::Asset => ReferenceKind::Asset,
+        DefinitionKind::SignalEvent => ReferenceKind::SignalEvent,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,
@@ -1025,6 +1031,49 @@ fn contains_position(span: SourceSpan, position: SourcePosition) -> bool {
     let position = position_key(position);
 
     start <= position && position < end
+}
+
+fn signal_event_hover(
+    index: &SignalEventIndex,
+    path: &Path,
+    position: SourcePosition,
+) -> Option<Hover> {
+    let event = index.event_at(path, position)?;
+    let related = index.related_events(event);
+    let schema = index.schema_for_event(event);
+    let payload = schema
+        .as_ref()
+        .map(|schema| {
+            schema
+                .payload
+                .iter()
+                .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    let declarations = related
+        .iter()
+        .filter(|event| event.mention.method == "declare")
+        .count();
+    let listeners = related
+        .iter()
+        .filter(|event| matches!(event.mention.method.as_str(), "on" | "once" | "register"))
+        .count();
+    let emits = related
+        .iter()
+        .filter(|event| event.mention.method == "emit")
+        .count();
+
+    Some(Hover {
+        contents: format!("SignalBus event \"{}\"({payload})", event.mention.name),
+        span: Some(event.mention.name_span),
+        documentation: Some(format!(
+            "Bus: `{}`. {declarations} declarations, {listeners} listeners, {emits} emits.",
+            crate::signal::bus_label(&event.identity)
+        )),
+        context: Vec::new(),
+    })
 }
 
 fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {

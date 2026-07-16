@@ -33,6 +33,7 @@ pub enum DefinitionKind {
     Module,
     Builtin,
     Asset,
+    SignalEvent,
     TypeAlias,
     Local,
     Function,

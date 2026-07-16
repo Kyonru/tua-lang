@@ -568,6 +568,7 @@ fn definition_kind_label(kind: DefinitionKind) -> &'static str {
         DefinitionKind::Module => "module",
         DefinitionKind::Builtin => "builtin",
         DefinitionKind::Asset => "asset",
+        DefinitionKind::SignalEvent => "signal event",
         DefinitionKind::TypeAlias => "type alias",
         DefinitionKind::Local => "local",
         DefinitionKind::Function => "function",

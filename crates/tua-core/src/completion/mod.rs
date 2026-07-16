@@ -1640,6 +1640,10 @@ struct SignalEventCandidate {
     receiver_parts: Vec<String>,
     position: SourcePosition,
     source_rank: usize,
+    declaration_rank: usize,
+    project_usage: usize,
+    same_bus: bool,
+    allow_receiver_fallback: bool,
     source_order: usize,
 }
 
@@ -1711,6 +1715,13 @@ fn complete_signal_event_names(
                 receiver_parts: event.mention.receiver_parts.clone(),
                 position: event.mention.position,
                 source_rank: usize::from(event.path != parsed.path),
+                declaration_rank: signal_event_declaration_rank(
+                    &event.mention.method,
+                    event.mention.payload.is_some(),
+                ),
+                project_usage: index.signal_event_index().usage_count(&event.mention.name),
+                same_bus: index.same_signal_bus(&parsed.path, receiver_parts, event, position),
+                allow_receiver_fallback: false,
                 source_order,
             })
             .collect(),
@@ -1721,14 +1732,18 @@ fn complete_signal_event_names(
     }
 
     candidates.sort_by(|left, right| {
-        let left_same_receiver = left.receiver_parts == receiver_parts;
-        let right_same_receiver = right.receiver_parts == receiver_parts;
-        right_same_receiver
-            .cmp(&left_same_receiver)
+        let left_same_bus = left.same_bus
+            || (left.allow_receiver_fallback && left.receiver_parts == receiver_parts);
+        let right_same_bus = right.same_bus
+            || (right.allow_receiver_fallback && right.receiver_parts == receiver_parts);
+        right_same_bus
+            .cmp(&left_same_bus)
             .then_with(|| left.source_rank.cmp(&right.source_rank))
+            .then_with(|| left.declaration_rank.cmp(&right.declaration_rank))
             .then_with(|| {
                 line_distance(left.position, position).cmp(&line_distance(right.position, position))
             })
+            .then_with(|| right.project_usage.cmp(&left.project_usage))
             .then_with(|| left.source_order.cmp(&right.source_order))
             .then_with(|| left.name.cmp(&right.name))
     });
@@ -1749,17 +1764,35 @@ fn collect_signal_event_candidates(
     source_rank: usize,
     source_order_offset: usize,
 ) -> Vec<SignalEventCandidate> {
-    signal::collect_event_mentions(parsed, environment, skip_position)
+    signal::collect_event_mentions(parsed, environment, None, skip_position)
         .into_iter()
         .enumerate()
-        .map(|(index, mention)| SignalEventCandidate {
-            name: mention.name,
-            receiver_parts: mention.receiver_parts,
-            position: mention.position,
-            source_rank,
-            source_order: source_order_offset + index,
+        .map(|(index, mention)| {
+            let declaration_rank =
+                signal_event_declaration_rank(&mention.method, mention.payload.is_some());
+
+            SignalEventCandidate {
+                name: mention.name,
+                receiver_parts: mention.receiver_parts,
+                position: mention.position,
+                source_rank,
+                declaration_rank,
+                project_usage: 0,
+                same_bus: false,
+                allow_receiver_fallback: true,
+                source_order: source_order_offset + index,
+            }
         })
         .collect()
+}
+
+fn signal_event_declaration_rank(method: &str, has_payload: bool) -> usize {
+    match method {
+        "declare" => 0,
+        "on" | "once" | "register" if has_payload => 1,
+        "on" | "once" | "register" => 2,
+        _ => 3,
+    }
 }
 
 fn signal_event_completions(

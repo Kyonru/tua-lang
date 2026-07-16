@@ -260,12 +260,15 @@ provides one. `SignalBus` completions include `on`, `once`, `declare`, `emit`,
 `off`, `clear`, `has`, `listeners`, and Hump-style aliases such as `register`
 and `remove`. In the first string argument of those event-name methods, the
 language server suggests known event names from existing `SignalBus` calls,
-preferring the same receiver and nearby declarations before weaker project-wide
-matches. Typed listener callbacks and `declare(name, function(...) end)` schema
-callbacks define event payload signatures for `emit` signature help and type
-checking; untyped listeners keep `emit` permissive. At runtime, `declare`
-validates the event name and optional handler shape, then returns the handler or
-bus without registering a listener.
+preferring the same bus, same file, typed declarations, nearby calls, and
+project usage before weaker matches. Typed listener callbacks and
+`declare(name, function(...) end)` schema callbacks define event payload
+signatures for `emit` signature help and type checking. Hover, definition,
+references, and rename on event strings use that same bus-aware index.
+Conflicting typed schemas report `TL5005`; untyped listeners and unresolved
+dynamic buses keep `emit` permissive. At runtime, `declare` validates the event
+name and optional handler shape, then returns the handler or bus without
+registering a listener.
 
 ## Boundaries
 

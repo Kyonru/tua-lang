@@ -184,6 +184,10 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
                 .diagnostics
                 .extend(parsed.lua_doc_diagnostics.iter().cloned());
         }
+
+        checker
+            .diagnostics
+            .extend(signal::event_schema_diagnostics(parsed, environment));
     }
 
     checker.diagnostics.extend(lint_parsed_source(

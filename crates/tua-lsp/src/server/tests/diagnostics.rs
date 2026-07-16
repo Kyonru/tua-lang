@@ -56,6 +56,26 @@ fn did_open_publishes_matching_core_diagnostics() {
         .expect("diagnostic message should be a string")
         .contains("type mismatch: expected number, found string"));
 }
+
+#[test]
+fn did_open_publishes_conflicting_signal_event_schemas() {
+    let uri = "file:///tmp/signal-schema-diagnostics.tua";
+    let source = r#"local events = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:on("player.hit", function(player: string, damage: string) end)
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL5005")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().all(|diagnostic| diagnostic["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("player.hit"))));
+}
+
 #[test]
 fn did_open_publishes_love_method_argument_diagnostics() {
     let temp = TempProject::new("love-method-argument-diagnostics");

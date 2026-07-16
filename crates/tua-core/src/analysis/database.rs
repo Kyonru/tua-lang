@@ -464,6 +464,7 @@ fn build_analysis_file(
             &source,
             parsed.as_ref().ok(),
             semantics.as_ref().map(|semantics| &semantics.environment),
+            semantics.as_ref().map(|semantics| &semantics.scope),
         ))
     };
 
@@ -574,6 +575,7 @@ pub(super) fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool 
             | crate::DiagnosticCode::TYPE_IMPOSSIBLE_COMPARISON
             | crate::DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK
             | crate::DiagnosticCode::TYPE_CLASS
+            | crate::DiagnosticCode::DOMAIN_SIGNAL_SCHEMA
             | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
             | crate::DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
             | crate::DiagnosticCode::LINT_FORMAT_INDENTATION

@@ -172,7 +172,10 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
     json!({
         "events": graph.events.into_iter().map(|event| {
             json!({
+                "id": event.id,
                 "name": event.name,
+                "bus": event.bus,
+                "busUri": uri_from_path(&event.bus_path),
                 "calls": event.calls.into_iter().map(|call| {
                     json!({
                         "uri": uri_from_path(&call.path),

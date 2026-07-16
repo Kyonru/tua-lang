@@ -151,6 +151,28 @@ love.graphics.print("hi", 0, 0)
         "[Open LOVE wiki](https://love2d.org/wiki/love.graphics.print)",
     );
 }
+
+#[test]
+fn hover_returns_typed_signal_event_schema() {
+    let uri = "file:///tmp/signal-hover.tua";
+    let source = r#"local events = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:emit("player.hit", "Ada", 12)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "\"player.hit\", \"Ada\""),
+    ]);
+    let contents = hover_contents(&output, 2);
+    let response = response_with_id(&output, 2);
+
+    assert!(contents.contains("SignalBus event"));
+    assert!(contents.contains("player: string, damage: number"));
+    assert_eq!(
+        range_text(source, &response["result"]["range"]),
+        "player.hit"
+    );
+}
 #[test]
 fn hover_returns_required_module_bindings_and_exports() {
     let temp = TempProject::new("required-module-hover");

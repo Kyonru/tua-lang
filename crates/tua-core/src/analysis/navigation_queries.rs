@@ -23,7 +23,8 @@ impl AnalysisSnapshot {
         }
 
         let definition = self
-            .asset_definition_at_position(path, position)
+            .signal_event_definition_at_position(path, position)
+            .or_else(|| self.asset_definition_at_position(path, position))
             .or_else(|| match &file.parsed {
                 Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir(), position),
                 Err(_) => {
@@ -62,6 +63,21 @@ impl AnalysisSnapshot {
         }
 
         definition
+    }
+
+    fn signal_event_definition_at_position(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let event = self.usage_index.signal_event_at(path, position)?;
+        let definition = self.usage_index.signal_event_definition(event)?;
+
+        Some(Definition {
+            path: definition.path.clone(),
+            span: definition.mention.name_span,
+            kind: DefinitionKind::SignalEvent,
+        })
     }
 
     fn asset_definition_at_position(
@@ -707,6 +723,12 @@ impl AnalysisSnapshot {
         let _profile = profile::span("analysis.query.references");
         let path = path.as_ref();
 
+        if let Some(references) =
+            self.signal_event_references_at_position(path, position, include_declaration)
+        {
+            return references;
+        }
+
         if let Some(references) = self.asset_references_at_position(path, position) {
             return references;
         }
@@ -737,6 +759,37 @@ impl AnalysisSnapshot {
         }
 
         self.references_by_scan(&target, include_declaration)
+    }
+
+    fn signal_event_references_at_position(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        include_declaration: bool,
+    ) -> Option<Vec<Reference>> {
+        let event = self.usage_index.signal_event_at(path, position)?;
+        let definition = self.usage_index.signal_event_definition(event);
+        let mut references = self
+            .usage_index
+            .signal_event_index()
+            .related_events(event)
+            .into_iter()
+            .filter(|candidate| {
+                include_declaration
+                    || definition.is_none_or(|definition| {
+                        candidate.path != definition.path
+                            || candidate.mention.name_span != definition.mention.name_span
+                    })
+            })
+            .map(|event| Reference {
+                path: event.path.clone(),
+                span: event.mention.name_span,
+                kind: ReferenceKind::SignalEvent,
+            })
+            .collect::<Vec<_>>();
+
+        sort_and_dedup_references(&mut references);
+        Some(references)
     }
 
     fn asset_references_at_position(
@@ -1210,6 +1263,16 @@ impl AnalysisSnapshot {
     ) -> Option<RenameTarget> {
         let _profile = profile::span("analysis.query.prepare_rename");
         let path = path.as_ref();
+
+        if let Some(event) = self.usage_index.signal_event_at(path, position) {
+            return Some(RenameTarget {
+                path: event.path.clone(),
+                span: event.mention.name_span,
+                placeholder: event.mention.name.clone(),
+                kind: crate::RenameKind::SignalEvent,
+            });
+        }
+
         let target = self.definition(path, position)?;
         let target_parsed = self.file(&target.path)?.parsed.as_ref().ok()?;
         let mut rename_target = rename_target_for_definition(target_parsed, target)?;
@@ -1237,6 +1300,29 @@ impl AnalysisSnapshot {
     ) -> Option<RenameEdit> {
         let _profile = profile::span("analysis.query.rename");
         let path = path.as_ref();
+
+        if let Some(event) = self.usage_index.signal_event_at(path, position) {
+            if !crate::signal::is_valid_event_name(new_name) {
+                return None;
+            }
+
+            let mut edits = self
+                .usage_index
+                .signal_event_index()
+                .related_events(event)
+                .into_iter()
+                .map(|event| TextEdit {
+                    path: event.path.clone(),
+                    span: event.mention.name_span,
+                    new_text: new_name.to_owned(),
+                })
+                .collect::<Vec<_>>();
+
+            edits.sort_by_key(text_edit_key);
+            edits.dedup_by_key(|edit| text_edit_key(edit));
+
+            return (!edits.is_empty()).then_some(RenameEdit { edits });
+        }
 
         if !is_valid_rename_identifier(new_name) {
             return None;
@@ -1588,6 +1674,7 @@ impl AnalysisSnapshot {
         rename_target: &RenameTarget,
     ) -> bool {
         match rename_target.kind {
+            crate::RenameKind::SignalEvent => false,
             crate::RenameKind::Function => {
                 let Some(global_name) = self
                     .file(&target.path)

@@ -388,6 +388,8 @@ impl AnalysisHost {
                 files
                     .iter()
                     .map(|(path, file)| (path.as_path(), &file.usage_index)),
+                &module_graph,
+                &type_database,
             )
         };
         let (call_hierarchy_symbols, call_hierarchy_calls) = {
@@ -509,6 +511,16 @@ impl AnalysisHost {
                 documentation: None,
                 context: Vec::new(),
             });
+        }
+
+        let signal_index =
+            crate::signal::local_event_index(parsed, &semantics.environment, &semantics.scope);
+        if let Some(event) = signal_index.event_at(&parsed.path, position) {
+            if signal_index.schema_for_event(event).is_some() {
+                return signal_event_hover(&signal_index, &parsed.path, position);
+            }
+
+            return None;
         }
 
         hover_parsed_source_with_environment(parsed, position, &semantics.environment)

@@ -3,13 +3,15 @@ use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Suffix}
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use crate::ast_utils::{field_chain_before_first_call, token_text};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
+use crate::scope::ScopeMap;
 use crate::semantic::SemanticModel;
 use crate::types::{FunctionType, TableField, Type, TypeEnvironment};
-use crate::{TypedFunction, TypedParameter};
+use crate::{Diagnostic, DiagnosticCode, TypedFunction, TypedParameter};
 
 pub(crate) const TYPE_NAME: &str = "SignalBus";
 pub(crate) const CONSTRUCTOR_NAME: &str = "signal";
@@ -316,11 +318,265 @@ fn typed_parameter(name: &str, ty: Type) -> TypedParameter {
 pub(crate) struct SignalEventMention {
     pub name: String,
     pub receiver_parts: Vec<String>,
+    pub root_definition: Option<SourceSpan>,
     pub method: String,
     pub position: SourcePosition,
     pub span: SourceSpan,
+    pub name_span: SourceSpan,
     pub source_order: usize,
     pub payload: Option<Vec<TypedParameter>>,
+    pub confirmed_bus: bool,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct SignalBusIdentity {
+    pub origin: PathBuf,
+    pub root_definition: Option<(usize, usize)>,
+    pub receiver_parts: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct IndexedSignalEvent {
+    pub path: PathBuf,
+    pub mention: SignalEventMention,
+    pub identity: SignalBusIdentity,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct SignalEventKey {
+    identity: SignalBusIdentity,
+    name: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SignalEventIndex {
+    events: Vec<IndexedSignalEvent>,
+    groups: BTreeMap<SignalEventKey, Vec<usize>>,
+    name_usage: BTreeMap<String, usize>,
+}
+
+impl SignalEventIndex {
+    pub fn new(events: Vec<IndexedSignalEvent>) -> Self {
+        let mut index = Self {
+            events,
+            ..Self::default()
+        };
+
+        for (event_index, event) in index.events.iter().enumerate() {
+            *index
+                .name_usage
+                .entry(event.mention.name.clone())
+                .or_default() += 1;
+            index
+                .groups
+                .entry(SignalEventKey {
+                    identity: event.identity.clone(),
+                    name: event.mention.name.clone(),
+                })
+                .or_default()
+                .push(event_index);
+        }
+
+        index
+    }
+
+    pub fn events(&self) -> &[IndexedSignalEvent] {
+        &self.events
+    }
+
+    pub fn usage_count(&self, name: &str) -> usize {
+        self.name_usage.get(name).copied().unwrap_or_default()
+    }
+
+    pub fn event_at(&self, path: &Path, position: SourcePosition) -> Option<&IndexedSignalEvent> {
+        self.events.iter().find(|event| {
+            event.path == path && span_contains_position(event.mention.span, position)
+        })
+    }
+
+    pub fn event_for_receiver(
+        &self,
+        path: &Path,
+        receiver_parts: &[String],
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<&IndexedSignalEvent> {
+        self.events
+            .iter()
+            .filter(|event| {
+                event.path == path
+                    && event.mention.name == name
+                    && event.mention.receiver_parts == receiver_parts
+            })
+            .min_by_key(|event| {
+                (
+                    line_distance(event.mention.position, position),
+                    event.mention.source_order,
+                )
+            })
+    }
+
+    pub fn same_bus(
+        &self,
+        path: &Path,
+        receiver_parts: &[String],
+        candidate: &IndexedSignalEvent,
+        position: SourcePosition,
+    ) -> bool {
+        self.events
+            .iter()
+            .filter(|event| event.path == path && event.mention.receiver_parts == receiver_parts)
+            .min_by_key(|event| {
+                (
+                    line_distance(event.mention.position, position),
+                    event.mention.source_order,
+                )
+            })
+            .is_some_and(|event| event.identity == candidate.identity)
+    }
+
+    pub fn related_events(&self, event: &IndexedSignalEvent) -> Vec<&IndexedSignalEvent> {
+        self.group_events(&SignalEventKey {
+            identity: event.identity.clone(),
+            name: event.mention.name.clone(),
+        })
+    }
+
+    pub fn definition(&self, event: &IndexedSignalEvent) -> Option<&IndexedSignalEvent> {
+        self.related_events(event)
+            .into_iter()
+            .min_by_key(|candidate| {
+                (
+                    definition_rank(&candidate.mention),
+                    candidate.path.clone(),
+                    candidate.mention.position.line,
+                    candidate.mention.position.column,
+                    candidate.mention.source_order,
+                )
+            })
+    }
+
+    pub fn schema_for_event(&self, event: &IndexedSignalEvent) -> Option<SignalEventSchema> {
+        self.schema_for_key(&SignalEventKey {
+            identity: event.identity.clone(),
+            name: event.mention.name.clone(),
+        })
+    }
+
+    pub fn schema_for_receiver(
+        &self,
+        path: &Path,
+        receiver_parts: &[String],
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<SignalEventSchema> {
+        let event = self.event_for_receiver(path, receiver_parts, name, position)?;
+
+        self.schema_for_event(event)
+    }
+
+    pub fn diagnostics_for_path(&self, path: &Path) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        for key in self.conflicting_keys() {
+            let events = self.group_events(key);
+            let schemas = distinct_payload_labels(&events);
+            let message = format!(
+                "conflicting payload schemas for SignalBus event `{}` on `{}`: {}",
+                key.name,
+                bus_label(&key.identity),
+                schemas.join(" vs ")
+            );
+
+            diagnostics.extend(
+                events
+                    .into_iter()
+                    .filter(|event| event.path == path && event.mention.payload.is_some())
+                    .map(|event| {
+                        Diagnostic::error(
+                            event.path.clone(),
+                            event.mention.name_span.start.line,
+                            event.mention.name_span.start.column,
+                            message.clone(),
+                        )
+                        .with_code(DiagnosticCode::DOMAIN_SIGNAL_SCHEMA)
+                    }),
+            );
+        }
+
+        diagnostics
+    }
+
+    pub fn grouped_events(&self) -> Vec<Vec<&IndexedSignalEvent>> {
+        self.groups
+            .keys()
+            .map(|key| self.group_events(key))
+            .collect()
+    }
+
+    fn schema_for_key(&self, key: &SignalEventKey) -> Option<SignalEventSchema> {
+        let mut schemas = self
+            .group_events(key)
+            .into_iter()
+            .filter(|event| event.mention.payload.is_some())
+            .collect::<Vec<_>>();
+
+        schemas.sort_by_key(|event| {
+            (
+                definition_rank(&event.mention),
+                event.path.clone(),
+                event.mention.position.line,
+                event.mention.position.column,
+                event.mention.source_order,
+            )
+        });
+
+        let selected = schemas.first()?;
+        let selected_payload = selected.mention.payload.clone()?;
+
+        if schemas.iter().any(|event| {
+            event
+                .mention
+                .payload
+                .as_ref()
+                .is_some_and(|payload| !payload_types_match(payload, &selected_payload))
+        }) {
+            return None;
+        }
+
+        Some(SignalEventSchema {
+            name: key.name.clone(),
+            receiver_parts: selected.mention.receiver_parts.clone(),
+            payload: selected_payload,
+        })
+    }
+
+    fn conflicting_keys(&self) -> impl Iterator<Item = &SignalEventKey> {
+        self.groups.keys().filter(|key| {
+            let payloads = self
+                .group_events(key)
+                .into_iter()
+                .filter_map(|event| event.mention.payload.as_deref())
+                .collect::<Vec<_>>();
+            let Some(first) = payloads.first() else {
+                return false;
+            };
+
+            payloads
+                .iter()
+                .skip(1)
+                .any(|payload| !payload_types_match(first, payload))
+        })
+    }
+
+    fn group_events(&self, key: &SignalEventKey) -> Vec<&IndexedSignalEvent> {
+        self.groups
+            .get(key)
+            .into_iter()
+            .flatten()
+            .filter_map(|index| self.events.get(*index))
+            .collect()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -351,7 +607,10 @@ pub struct SignalGraphCall {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignalGraphEvent {
+    pub id: String,
     pub name: String,
+    pub bus: String,
+    pub bus_path: PathBuf,
     pub calls: Vec<SignalGraphCall>,
 }
 
@@ -404,12 +663,33 @@ pub(crate) struct SignalEventSchema {
 pub(crate) fn collect_event_mentions(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
+    scope: Option<&ScopeMap>,
     skip_position: Option<SourcePosition>,
+) -> Vec<SignalEventMention> {
+    collect_event_mentions_with_mode(parsed, environment, scope, skip_position, false)
+}
+
+pub(crate) fn collect_potential_event_mentions(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    scope: Option<&ScopeMap>,
+) -> Vec<SignalEventMention> {
+    collect_event_mentions_with_mode(parsed, environment, scope, None, true)
+}
+
+fn collect_event_mentions_with_mode(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    scope: Option<&ScopeMap>,
+    skip_position: Option<SourcePosition>,
+    include_unconfirmed: bool,
 ) -> Vec<SignalEventMention> {
     let mut visitor = SignalEventVisitor {
         environment,
         semantic: SemanticModel::new(parsed, environment),
+        scope,
         skip_position,
+        include_unconfirmed,
         mentions: Vec::new(),
     };
 
@@ -424,46 +704,20 @@ pub(crate) fn event_schema_for_receiver(
     name: &str,
     position: SourcePosition,
 ) -> Option<SignalEventSchema> {
-    let mut schemas = collect_event_mentions(parsed, environment, None)
-        .into_iter()
-        .filter(|mention| mention.name == name && mention.payload.is_some())
-        .collect::<Vec<_>>();
+    let scope = crate::scope_map_parsed_source(parsed);
+    let index = local_event_index(parsed, environment, &scope);
 
-    schemas.sort_by(|left, right| {
-        let left_same_receiver = left.receiver_parts == receiver_parts;
-        let right_same_receiver = right.receiver_parts == receiver_parts;
+    index.schema_for_receiver(&parsed.path, receiver_parts, name, position)
+}
 
-        right_same_receiver
-            .cmp(&left_same_receiver)
-            .then_with(|| {
-                line_distance(left.position, position).cmp(&line_distance(right.position, position))
-            })
-            .then_with(|| left.source_order.cmp(&right.source_order))
-            .then_with(|| left.receiver_parts.cmp(&right.receiver_parts))
-    });
+pub(crate) fn event_schema_diagnostics(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<Diagnostic> {
+    let scope = crate::scope_map_parsed_source(parsed);
+    let index = local_event_index(parsed, environment, &scope);
 
-    let selected = schemas.first()?;
-    let selected_receiver = selected.receiver_parts.clone();
-    let selected_payload = selected.payload.clone()?;
-
-    if schemas
-        .iter()
-        .filter(|schema| schema.receiver_parts == selected_receiver)
-        .any(|schema| {
-            schema
-                .payload
-                .as_ref()
-                .is_some_and(|payload| !payload_types_match(payload, &selected_payload))
-        })
-    {
-        return None;
-    }
-
-    Some(SignalEventSchema {
-        name: name.to_owned(),
-        receiver_parts: selected_receiver,
-        payload: selected_payload,
-    })
+    index.diagnostics_for_path(&parsed.path)
 }
 
 fn payload_types_match(left: &[TypedParameter], right: &[TypedParameter]) -> bool {
@@ -502,7 +756,9 @@ pub(crate) fn event_emit_typed_function(name: &str, payload: &[TypedParameter]) 
 struct SignalEventVisitor<'a> {
     environment: &'a TypeEnvironment,
     semantic: SemanticModel<'a>,
+    scope: Option<&'a ScopeMap>,
     skip_position: Option<SourcePosition>,
+    include_unconfirmed: bool,
     mentions: Vec<SignalEventMention>,
 }
 
@@ -521,20 +777,20 @@ impl Visitor for SignalEventVisitor<'_> {
 
         let receiver_parts = &callee_parts[..callee_parts.len() - 1];
         let position = node_start(function_call);
-        let Some(receiver_type) = self.semantic.type_of_field_chain(receiver_parts, position)
-        else {
-            return;
-        };
+        let confirmed_bus = self
+            .semantic
+            .type_of_field_chain(receiver_parts, position)
+            .is_some_and(|receiver_type| type_is_signal_bus(self.environment, &receiver_type));
 
-        if !type_is_signal_bus(self.environment, &receiver_type) {
+        if !confirmed_bus && !self.include_unconfirmed {
             return;
         }
 
-        let Some((name, span)) = first_string_argument(function_call) else {
+        let Some((name, span, name_span)) = first_string_argument(function_call) else {
             return;
         };
 
-        if name.is_empty()
+        if (name.is_empty() && !self.include_unconfirmed)
             || self
                 .skip_position
                 .is_some_and(|position| span_contains_position(span, position))
@@ -551,11 +807,14 @@ impl Visitor for SignalEventVisitor<'_> {
         self.mentions.push(SignalEventMention {
             name,
             receiver_parts: receiver_parts.to_vec(),
+            root_definition: root_definition_span(function_call, self.scope),
             method: method.clone(),
             position: span.start,
             span,
+            name_span,
             source_order: self.mentions.len(),
             payload,
+            confirmed_bus,
         });
     }
 }
@@ -642,36 +901,166 @@ fn argument_expression(function_call: &FunctionCall, index: usize) -> Option<&Ex
     }
 }
 
-fn first_string_argument(function_call: &FunctionCall) -> Option<(String, SourceSpan)> {
+fn first_string_argument(function_call: &FunctionCall) -> Option<(String, SourceSpan, SourceSpan)> {
     let call = function_call.suffixes().find_map(|suffix| match suffix {
         Suffix::Call(call) => Some(call),
         _ => None,
     })?;
 
     match call {
-        Call::AnonymousCall(FunctionArgs::String(value)) => {
-            Some((string_literal_value(value)?, node_span(value)?))
-        }
+        Call::AnonymousCall(FunctionArgs::String(value)) => string_argument(value),
         Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
             let Expression::String(value) = arguments.iter().next()? else {
                 return None;
             };
 
-            Some((string_literal_value(value)?, node_span(value)?))
+            string_argument(value)
         }
         Call::MethodCall(method) => match method.args() {
-            FunctionArgs::String(value) => Some((string_literal_value(value)?, node_span(value)?)),
+            FunctionArgs::String(value) => string_argument(value),
             FunctionArgs::Parentheses { arguments, .. } => {
                 let Expression::String(value) = arguments.iter().next()? else {
                     return None;
                 };
 
-                Some((string_literal_value(value)?, node_span(value)?))
+                string_argument(value)
             }
             _ => None,
         },
         _ => None,
     }
+}
+
+fn string_argument(value: &TokenReference) -> Option<(String, SourceSpan, SourceSpan)> {
+    let name = string_literal_value(value)?;
+    let span = node_span(value)?;
+    let name_span = string_literal_name_span(value, span);
+
+    Some((name, span, name_span))
+}
+
+fn string_literal_name_span(value: &TokenReference, span: SourceSpan) -> SourceSpan {
+    let text = token_text(value);
+
+    if span.start.line == span.end.line
+        && ((text.starts_with('"') && text.ends_with('"'))
+            || (text.starts_with('\'') && text.ends_with('\'')))
+        && span.end.column > span.start.column + 1
+    {
+        return SourceSpan {
+            start: SourcePosition {
+                line: span.start.line,
+                column: span.start.column + 1,
+            },
+            end: SourcePosition {
+                line: span.end.line,
+                column: span.end.column - 1,
+            },
+        };
+    }
+
+    span
+}
+
+fn root_definition_span(
+    function_call: &FunctionCall,
+    scope: Option<&ScopeMap>,
+) -> Option<SourceSpan> {
+    let ast::Prefix::Name(name) = function_call.prefix() else {
+        return None;
+    };
+    let position = node_start(name);
+    let scope = scope?;
+    let symbol = scope.symbol_at_position(position)?;
+
+    scope
+        .declaration(symbol)
+        .map(|declaration| declaration.name_span)
+}
+
+pub(crate) fn local_event_index(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    scope: &ScopeMap,
+) -> SignalEventIndex {
+    SignalEventIndex::new(
+        collect_event_mentions(parsed, environment, Some(scope), None)
+            .into_iter()
+            .map(|mention| IndexedSignalEvent {
+                identity: SignalBusIdentity {
+                    origin: parsed.path.clone(),
+                    root_definition: mention
+                        .root_definition
+                        .map(|span| (span.start.line, span.start.column)),
+                    receiver_parts: mention.receiver_parts.clone(),
+                },
+                path: parsed.path.clone(),
+                mention,
+            })
+            .collect(),
+    )
+}
+
+fn definition_rank(mention: &SignalEventMention) -> usize {
+    match mention.method.as_str() {
+        "declare" => 0,
+        "on" | "once" | "register" if mention.payload.is_some() => 1,
+        "on" | "once" | "register" => 2,
+        _ => 3,
+    }
+}
+
+fn distinct_payload_labels(events: &[&IndexedSignalEvent]) -> Vec<String> {
+    let mut labels = BTreeSet::new();
+
+    for event in events {
+        let Some(payload) = event.mention.payload.as_deref() else {
+            continue;
+        };
+
+        labels.insert(payload_label(payload));
+    }
+
+    labels.into_iter().collect()
+}
+
+fn payload_label(payload: &[TypedParameter]) -> String {
+    format!(
+        "({})",
+        payload
+            .iter()
+            .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+pub(crate) fn bus_label(identity: &SignalBusIdentity) -> String {
+    if identity.receiver_parts.is_empty() {
+        "module SignalBus".to_owned()
+    } else {
+        identity.receiver_parts.join(".")
+    }
+}
+
+pub(crate) fn graph_event_id(identity: &SignalBusIdentity, name: &str) -> String {
+    let definition = identity
+        .root_definition
+        .map(|(line, column)| format!("{line}:{column}"))
+        .unwrap_or_else(|| "module".to_owned());
+
+    format!(
+        "{}#{definition}#{}#{name}",
+        identity.origin.display(),
+        identity.receiver_parts.join(".")
+    )
+}
+
+pub(crate) fn is_valid_event_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|character| !character.is_control() && !matches!(character, '"' | '\'' | '\\'))
 }
 
 fn type_from_type_info(type_info: &TypeInfo) -> Option<Type> {

@@ -104,9 +104,14 @@ selected path, version, and workspace directory when available.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 - The custom `tua/signalGraph` request returns typed SignalBus event calls from
-  the current analysis snapshot with call roles, bus expressions, payload
-  schemas, URIs, and source ranges. The VS Code `Tua: Show Signal Graph` command
-  uses this data for a filterable event-to-file graph and source navigation.
+  the current analysis snapshot with stable bus-aware event identities, call
+  roles, bus expressions, payload schemas, URIs, and source ranges. The VS Code
+  `Tua: Show Signal Graph` command uses this data for a filterable event-to-file
+  graph and source navigation without merging independent same-named events.
+- SignalBus event strings use the same semantic index for completion, payload
+  signature help, hover, definition, references, and rename. Typed listener and
+  `declare` callback conflicts publish `TL5005`; untyped or unresolved buses
+  remain permissive.
 - The general `tua/inspect` request returns structured, revisioned document
   inspector items. Sprite sheet items include declaration ranges, resolved
   image asset URIs and validation status, frame metadata, animations, and the

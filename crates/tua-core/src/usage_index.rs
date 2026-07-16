@@ -2,10 +2,16 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::signal::{collect_event_mentions, SignalEventMention};
+use crate::module_graph::{ModuleGraph, RequireResolution};
+use crate::signal::{
+    collect_potential_event_mentions, IndexedSignalEvent, SignalBusIdentity, SignalEventIndex,
+    SignalEventMention,
+};
 use crate::source_text::{is_identifier_continue, is_identifier_start};
 use crate::vfs::normalize_path;
-use crate::{ParsedSource, SourcePosition, TypeEnvironment};
+use crate::{
+    Diagnostic, ParsedSource, ProjectTypeDatabase, ScopeMap, SourcePosition, Type, TypeEnvironment,
+};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FileUsageIndex {
@@ -14,6 +20,7 @@ pub(crate) struct FileUsageIndex {
     call_counts: BTreeMap<String, usize>,
     member_lines: BTreeMap<String, Vec<usize>>,
     signal_events: Vec<SignalEventMention>,
+    require_bindings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -23,7 +30,8 @@ pub(crate) struct ProjectUsageIndex {
     member_counts: BTreeMap<String, usize>,
     receiver_member_counts: BTreeMap<String, BTreeMap<String, usize>>,
     call_counts: BTreeMap<String, usize>,
-    signal_events: Vec<IndexedSignalEvent>,
+    signal_events: SignalEventIndex,
+    signal_bus_identities: BTreeMap<(PathBuf, Vec<String>), SignalBusIdentity>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -42,23 +50,22 @@ pub(crate) struct MemberUsageCounts {
     pub proximity: usize,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct IndexedSignalEvent {
-    pub path: PathBuf,
-    pub mention: SignalEventMention,
-}
-
 impl FileUsageIndex {
     pub fn build(
         source: &str,
         parsed: Option<&ParsedSource>,
         environment: Option<&TypeEnvironment>,
+        scope: Option<&ScopeMap>,
     ) -> Self {
         let mut index = Self::default();
 
         index.collect_member_usage(source);
         if let (Some(parsed), Some(environment)) = (parsed, environment) {
-            index.signal_events = collect_event_mentions(parsed, environment, None);
+            index.signal_events = collect_potential_event_mentions(parsed, environment, scope);
+            index.require_bindings = crate::require_bindings_for_parsed_source(parsed)
+                .into_iter()
+                .map(|binding| (binding.alias, binding.module))
+                .collect();
         }
 
         index
@@ -146,11 +153,14 @@ impl ProjectUsageIndex {
     pub fn build<'a>(
         revision: u64,
         files: impl IntoIterator<Item = (&'a Path, &'a Arc<FileUsageIndex>)>,
+        module_graph: &ModuleGraph,
+        type_database: &ProjectTypeDatabase,
     ) -> Self {
         let mut index = Self {
             revision,
             ..Self::default()
         };
+        let mut signal_events = Vec::new();
 
         for (path, file) in files {
             merge_counts(&mut index.member_counts, &file.member_counts);
@@ -166,20 +176,34 @@ impl ProjectUsageIndex {
                 );
             }
 
-            index
-                .signal_events
-                .extend(
-                    file.signal_events
-                        .iter()
-                        .cloned()
-                        .map(|mention| IndexedSignalEvent {
-                            path: path.to_path_buf(),
-                            mention,
-                        }),
+            let path = normalize_path(path);
+            for mention in &file.signal_events {
+                if !mention.confirmed_bus
+                    && !project_receiver_is_signal_bus(&path, mention, module_graph, type_database)
+                {
+                    continue;
+                }
+
+                let identity = signal_bus_identity(&path, file, mention, module_graph);
+                index.signal_bus_identities.insert(
+                    (path.clone(), mention.receiver_parts.clone()),
+                    identity.clone(),
                 );
+
+                if mention.name.is_empty() {
+                    continue;
+                }
+
+                signal_events.push(IndexedSignalEvent {
+                    identity,
+                    path: path.clone(),
+                    mention: mention.clone(),
+                });
+            }
             index.files.insert(path.to_path_buf(), Arc::clone(file));
         }
 
+        index.signal_events = SignalEventIndex::new(signal_events);
         index
     }
 
@@ -188,16 +212,21 @@ impl ProjectUsageIndex {
 
         files.insert(
             normalize_path(current_path),
-            Arc::new(FileUsageIndex::build(source, None, None)),
+            Arc::new(FileUsageIndex::build(source, None, None, None)),
         );
         for (index, project_source) in project_sources.iter().enumerate() {
             files.insert(
                 PathBuf::from(format!("__completion_project_source_{index}.tua")),
-                Arc::new(FileUsageIndex::build(project_source, None, None)),
+                Arc::new(FileUsageIndex::build(project_source, None, None, None)),
             );
         }
 
-        Self::build(0, files.iter().map(|(path, file)| (path.as_path(), file)))
+        Self::build(
+            0,
+            files.iter().map(|(path, file)| (path.as_path(), file)),
+            &ModuleGraph::default(),
+            &ProjectTypeDatabase::default(),
+        )
     }
 
     pub fn revision(&self) -> u64 {
@@ -273,8 +302,106 @@ impl ProjectUsageIndex {
     }
 
     pub fn signal_events(&self) -> &[IndexedSignalEvent] {
+        self.signal_events.events()
+    }
+
+    pub fn signal_event_index(&self) -> &SignalEventIndex {
         &self.signal_events
     }
+
+    pub fn signal_event_at(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<&IndexedSignalEvent> {
+        self.signal_events.event_at(&normalize_path(path), position)
+    }
+
+    pub fn signal_event_definition(
+        &self,
+        event: &IndexedSignalEvent,
+    ) -> Option<&IndexedSignalEvent> {
+        self.signal_events.definition(event)
+    }
+
+    pub fn same_signal_bus(
+        &self,
+        path: &Path,
+        receiver_parts: &[String],
+        candidate: &IndexedSignalEvent,
+        position: SourcePosition,
+    ) -> bool {
+        let path = normalize_path(path);
+
+        self.signal_bus_identities
+            .get(&(path.clone(), receiver_parts.to_vec()))
+            .is_some_and(|identity| identity == &candidate.identity)
+            || self
+                .signal_events
+                .same_bus(&path, receiver_parts, candidate, position)
+    }
+
+    pub fn signal_event_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
+        self.signal_events
+            .diagnostics_for_path(&normalize_path(path))
+    }
+}
+
+fn signal_bus_identity(
+    path: &Path,
+    file: &FileUsageIndex,
+    mention: &SignalEventMention,
+    module_graph: &ModuleGraph,
+) -> SignalBusIdentity {
+    let Some(receiver) = mention.receiver_parts.first() else {
+        return local_signal_bus_identity(path, mention);
+    };
+    let Some(module) = file.require_bindings.get(receiver) else {
+        return local_signal_bus_identity(path, mention);
+    };
+    let Some(resolution) = module_graph.resolve_require(path, module) else {
+        return local_signal_bus_identity(path, mention);
+    };
+    let origin = match resolution {
+        RequireResolution::Resolved { path } => path.clone(),
+        RequireResolution::Duplicate { selected, .. } => selected.clone(),
+        RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => {
+            return local_signal_bus_identity(path, mention);
+        }
+    };
+
+    SignalBusIdentity {
+        origin: normalize_path(origin),
+        root_definition: None,
+        receiver_parts: mention.receiver_parts.iter().skip(1).cloned().collect(),
+    }
+}
+
+fn local_signal_bus_identity(path: &Path, mention: &SignalEventMention) -> SignalBusIdentity {
+    SignalBusIdentity {
+        origin: normalize_path(path),
+        root_definition: mention
+            .root_definition
+            .map(|span| (span.start.line, span.start.column)),
+        receiver_parts: mention.receiver_parts.clone(),
+    }
+}
+
+fn project_receiver_is_signal_bus(
+    path: &Path,
+    mention: &SignalEventMention,
+    module_graph: &ModuleGraph,
+    type_database: &ProjectTypeDatabase,
+) -> bool {
+    let Some((receiver, fields)) = mention.receiver_parts.split_first() else {
+        return false;
+    };
+    let Some(ty) = type_database.module_export_type(module_graph, path, receiver, fields) else {
+        return false;
+    };
+
+    matches!(ty, Type::Alias(ref name) if name == crate::signal::TYPE_NAME)
+        || ty == crate::signal::signal_bus_type()
 }
 
 fn merge_counts(target: &mut BTreeMap<String, usize>, source: &BTreeMap<String, usize>) {

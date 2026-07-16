@@ -153,8 +153,10 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   Missing assets, invalid frame ranges, incomplete configuration, and duplicate
   animation names use the same diagnostics shown by the language server.
 - `Tua: Show Signal Graph` requests compiler-validated SignalBus calls from the
-  current project snapshot. The webview connects events to files, distinguishes
+  current project snapshot. The webview connects bus-aware events to files,
+  keeps same-named events on independent buses separate, distinguishes
   declarations, listeners, emits, cleanup, and query calls, and opens exact
-  source locations without parsing Tua source in the extension.
+  source locations without parsing Tua source in the extension. Standard hover,
+  definition, references, and rename requests work directly on event strings.
 - The optional external API bridge is design-only. The extension does not start
   a bridge session today.

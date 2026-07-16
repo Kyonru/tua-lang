@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
 use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
-use crate::signal;
+use crate::signal::{self, SignalEventIndex};
 use crate::source_text::{byte_for_column, is_identifier_continue, is_identifier_start};
 use crate::types::{
     build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
@@ -58,6 +58,7 @@ pub fn signature_help_tua_source(
         &parsed,
         context,
         &environment,
+        None,
     ))
 }
 
@@ -83,20 +84,36 @@ pub(crate) fn signature_help_parsed_source_with_environment(
     position: SourcePosition,
     environment: &TypeEnvironment,
 ) -> Option<SignatureHelp> {
+    signature_help_parsed_source_with_environment_and_signal_index(
+        parsed,
+        position,
+        environment,
+        None,
+    )
+}
+
+pub(crate) fn signature_help_parsed_source_with_environment_and_signal_index(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    signal_index: Option<&SignalEventIndex>,
+) -> Option<SignatureHelp> {
     let context = call_context(&parsed.source, position)?;
 
-    signature_help_parsed_source_with_context(parsed, context, environment)
+    signature_help_parsed_source_with_context(parsed, context, environment, signal_index)
 }
 
 fn signature_help_parsed_source_with_context(
     parsed: &ParsedSource,
     context: CallContext,
     environment: &TypeEnvironment,
+    signal_index: Option<&SignalEventIndex>,
 ) -> Option<SignatureHelp> {
     let resolver = SignatureResolver {
         parsed,
         environment,
         semantic: SemanticModel::new(parsed, environment),
+        signal_index,
     };
     let mut signatures = resolver.signatures_for_context(&context)?;
     if context.is_method_call {
@@ -126,6 +143,7 @@ struct SignatureResolver<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
     semantic: SemanticModel<'a>,
+    signal_index: Option<&'a SignalEventIndex>,
 }
 
 impl<'a> SignatureResolver<'a> {
@@ -245,13 +263,31 @@ impl<'a> SignatureResolver<'a> {
         }
 
         let event_name = context.first_string_argument.as_ref()?;
-        let schema = signal::event_schema_for_receiver(
-            self.parsed,
-            self.environment,
-            receiver_parts,
-            event_name,
-            context.position,
-        )?;
+        let schema = if let Some(index) = self.signal_index {
+            match index.event_for_receiver(
+                &self.parsed.path,
+                receiver_parts,
+                event_name,
+                context.position,
+            ) {
+                Some(event) => index.schema_for_event(event),
+                None => signal::event_schema_for_receiver(
+                    self.parsed,
+                    self.environment,
+                    receiver_parts,
+                    event_name,
+                    context.position,
+                ),
+            }
+        } else {
+            signal::event_schema_for_receiver(
+                self.parsed,
+                self.environment,
+                receiver_parts,
+                event_name,
+                context.position,
+            )
+        }?;
 
         Some(signal::event_emit_typed_function(
             &schema.name,

@@ -99,8 +99,15 @@ function signalGraphViewModel(graph) {
   return {
     events: events
       .filter((event) => typeof event?.name === "string")
-      .map((event) => ({
+      .map((event, index) => ({
+        id:
+          typeof event.id === "string" && event.id
+            ? event.id
+            : `${event.name}:${index}`,
         name: event.name,
+        bus: typeof event.bus === "string" ? event.bus : "",
+        busFile:
+          typeof event.busUri === "string" ? displayPath(event.busUri) : "",
         calls: (Array.isArray(event.calls) ? event.calls : [])
           .filter((call) => typeof call?.uri === "string" && call?.range)
           .map((call) => ({
@@ -197,7 +204,7 @@ function signalGraphHtml(webview, graph) {
     const segmentButtons = Array.from(document.querySelectorAll("[data-mode]"));
     let mode = "all";
     let query = "";
-    let selectedEvent = graphData.events[0]?.name || null;
+    let selectedEvent = graphData.events[0]?.id || null;
     let selectedFile = null;
 
     const roleLabels = {
@@ -247,7 +254,7 @@ function signalGraphHtml(webview, graph) {
             if (!query) {
               return true;
             }
-            return [event.name, call.file, call.receiver, call.method]
+            return [event.name, event.bus, event.busFile, call.file, call.receiver, call.method]
               .some((value) => value.toLowerCase().includes(query));
           }),
         }))
@@ -270,8 +277,8 @@ function signalGraphHtml(webview, graph) {
         return;
       }
 
-      if (!events.some((event) => event.name === selectedEvent)) {
-        selectedEvent = events[0].name;
+      if (!events.some((event) => event.id === selectedEvent)) {
+        selectedEvent = events[0].id;
         selectedFile = null;
       }
       if (selectedFile && !files.includes(selectedFile)) {
@@ -293,7 +300,7 @@ function signalGraphHtml(webview, graph) {
       svg.classList.add("edges");
       root.appendChild(svg);
 
-      const eventY = new Map(events.map((event, index) => [event.name, top + index * rowHeight]));
+      const eventY = new Map(events.map((event, index) => [event.id, top + index * rowHeight]));
       const fileY = new Map(files.map((file, index) => [file, top + index * rowHeight]));
 
       for (const event of events) {
@@ -305,7 +312,7 @@ function signalGraphHtml(webview, graph) {
         }
         for (const [file, calls] of grouped) {
           const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          const y1 = eventY.get(event.name) + 22;
+          const y1 = eventY.get(event.id) + 22;
           const y2 = fileY.get(file) + 22;
           const x1 = nodeWidth + 18;
           const x2 = fileX;
@@ -316,25 +323,27 @@ function signalGraphHtml(webview, graph) {
           line.setAttribute("class", "edge role-" + role);
           line.setAttribute("stroke-width", String(Math.min(5, 1.5 + calls.length * 0.65)));
           line.addEventListener("click", () => {
-            selectedEvent = event.name;
+            selectedEvent = event.id;
             selectedFile = file;
             render();
           });
           const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = event.name + " / " + file + " / " + calls.length + " calls";
+          title.textContent = event.name + " / " + event.bus + " / " + file + " / " + calls.length + " calls";
           line.appendChild(title);
           svg.appendChild(line);
         }
       }
 
       for (const event of events) {
-        const button = graphNode("event", event.name, event.calls.length + " calls");
+        const busDetail = [event.bus, event.busFile].filter(Boolean).join(" / ");
+        const detail = (busDetail ? busDetail + " / " : "") + event.calls.length + " calls";
+        const button = graphNode("event", event.name, detail);
         button.style.left = "18px";
-        button.style.top = eventY.get(event.name) + "px";
+        button.style.top = eventY.get(event.id) + "px";
         button.style.width = nodeWidth + "px";
-        button.classList.toggle("selected", selectedEvent === event.name && !selectedFile);
+        button.classList.toggle("selected", selectedEvent === event.id && !selectedFile);
         button.addEventListener("click", () => {
-          selectedEvent = event.name;
+          selectedEvent = event.id;
           selectedFile = null;
           render();
         });
@@ -349,8 +358,8 @@ function signalGraphHtml(webview, graph) {
         button.style.width = nodeWidth + "px";
         button.classList.toggle("selected", selectedFile === file);
         button.addEventListener("click", () => {
-          if (!events.find((event) => event.name === selectedEvent)?.calls.some((call) => call.file === file)) {
-            selectedEvent = events.find((event) => event.calls.some((call) => call.file === file))?.name || selectedEvent;
+          if (!events.find((event) => event.id === selectedEvent)?.calls.some((call) => call.file === file)) {
+            selectedEvent = events.find((event) => event.calls.some((call) => call.file === file))?.id || selectedEvent;
           }
           selectedFile = selectedFile === file ? null : file;
           renderInspector(events);
@@ -377,7 +386,7 @@ function signalGraphHtml(webview, graph) {
     }
 
     function renderInspector(events) {
-      const event = events.find((candidate) => candidate.name === selectedEvent) || events[0];
+      const event = events.find((candidate) => candidate.id === selectedEvent) || events[0];
       if (!event) {
         inspector.replaceChildren();
         return;
@@ -390,7 +399,7 @@ function signalGraphHtml(webview, graph) {
       const heading = document.createElement("h2");
       heading.textContent = event.name;
       const meta = document.createElement("span");
-      meta.textContent = selectedFile || calls.length + " calls";
+      meta.textContent = selectedFile || [event.bus, event.busFile].filter(Boolean).join(" / ") || calls.length + " calls";
       head.append(heading, meta);
 
       const schemaCall = event.calls.find((call) => call.payload !== null);

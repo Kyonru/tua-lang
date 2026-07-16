@@ -336,18 +336,24 @@ methods, callback identity, and inheritance remain reproducible through
 
 ### P2: Complete SignalBus intelligence
 
-The VS Code extension now provides a compiler-backed event-to-file graph with
-typed payload display and source navigation through `tua/signalGraph`.
+Status: done on 2026-07-16.
 
-Improvements:
+The revisioned project usage index now owns one semantic SignalBus event index
+keyed by compiler-confirmed bus identity and event name. Local buses use their
+lexical declaration identity; required aliases resolve to the required module
+identity so typed shared buses link across files. Same-named events on
+independent buses no longer merge in navigation or `tua/signalGraph`.
 
-- Maintain a semantic event index by bus identity and event name.
-- Infer payload schemas from typed listeners and `declare` callbacks.
-- Diagnose conflicting listener/declaration payloads.
-- Provide event-name completion, signature help, hover, definition,
-  references, and rename from the same index.
-- Rank by same bus, same file, declaration proximity, and project usage.
-- Keep untyped buses permissive and avoid introducing new language syntax.
+Typed `on`, `once`, `register`, and `declare` callbacks contribute payload
+schemas. Conflicting typed schemas publish `TL5005` at every conflicting event
+definition. Untyped callbacks and unresolved/dynamic receivers remain
+permissive.
+
+Event-name completion, signature help, hover, definition, references, rename,
+and the graph consume the shared index. Completion ranking is deterministic and
+prefers the same bus, same file, declaration/schema calls, proximity, project
+usage, and stable source order. Event rename edits only string contents, so
+dotted event names remain ordinary Lua strings with no new syntax.
 
 ## Language And Type System
 
