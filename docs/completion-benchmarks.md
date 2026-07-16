@@ -43,6 +43,28 @@ make completion-ranking-smoke
 That smoke uses `benchmarks/lsp/medium` and checks representative module-field
 and typed-local field completion ordering.
 
+Run the required CI-sized benchmark lane with:
+
+```bash
+make benchmark-smoke
+```
+
+It combines the deterministic ranking fixture with one pass through the bundled
+example profiling harness. It intentionally has no absolute timing threshold,
+because shared CI runner speed is not stable enough for a useful latency gate.
+Command failures and missing profiler output still fail the job.
+
+The separate performance workflow runs the full profiles on `main`, weekly, and
+on demand:
+
+```bash
+make profile-all
+```
+
+It retains `lsp-profile.json`, `completion-profile.json`, and
+`examples-profile.json` as CI artifacts for trend comparison. Pull requests run
+the smaller smoke lane and do not wait for these full profiles.
+
 LSP smoke and profiling scripts set `TUA_COMPLETION_STATS=0` by default so
 verification does not create or mutate fixture-local `.tua/completion-stats.json`
 files. Set `TUA_COMPLETION_STATS=1` when you intentionally want a benchmark run

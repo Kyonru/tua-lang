@@ -342,9 +342,7 @@ fn long_bracket_close(line: &str, start: usize) -> Option<(Vec<u8>, usize)> {
 
     let mut close = Vec::with_capacity(index - start + 1);
     close.push(b']');
-    for _ in 0..index - start - 1 {
-        close.push(b'=');
-    }
+    close.resize(index - start, b'=');
     close.push(b']');
 
     Some((close, index + 1))

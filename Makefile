@@ -32,6 +32,10 @@ help: ## Show available targets.
 fmt: ## Format the Rust workspace.
 	$(CARGO) fmt --all
 
+.PHONY: fmt-check
+fmt-check: ## Check Rust formatting without modifying files.
+	$(CARGO) fmt --all -- --check
+
 .PHONY: test
 test: ## Run the full Rust test suite.
 	$(CARGO) test --workspace
@@ -64,7 +68,10 @@ clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: verify
-verify: fmt test clippy extension-check json-check diff-check ## Run the main local verification suite.
+verify: fmt-check test clippy extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+
+.PHONY: ci-check
+ci-check: fmt-check clippy test build-examples extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -139,6 +146,12 @@ profile-examples-smoke: ## Run one quick examples speed profiling pass.
 	$(CARGO) build --release --package tua-cli
 	TUA_SPEED_WARMUP=0 TUA_SPEED_REPEAT=1 TUA_SPEED_OUT=$${TUA_SPEED_OUT:-target/tua-speed/examples-profile-smoke.json} node scripts/profile-examples.js $(RELEASE_TUA)
 
+.PHONY: benchmark-smoke
+benchmark-smoke: completion-ranking-smoke profile-examples-smoke ## Exercise deterministic ranking fixtures and one timing-harness pass.
+
+.PHONY: profile-all
+profile-all: profile-lsp profile-completion profile-examples ## Run the full LSP, completion, and bundled-example profiles.
+
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.
 	cd $(EXAMPLE) && $(TUA) check
@@ -148,7 +161,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full build-features ## Compile all bundled examples.
+build-examples: build-love-minimal build-love-full build-features build-project-model ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -161,6 +174,10 @@ build-love-full: ## Compile examples/love-full to Lua.
 .PHONY: build-features
 build-features: ## Compile examples/features to Lua.
 	cd examples/features && $(TUA) build
+
+.PHONY: build-project-model
+build-project-model: ## Compile examples/project-model to Lua.
+	cd examples/project-model && $(TUA) build
 
 .PHONY: watch-example
 watch-example: ## Watch one example project. Override with EXAMPLE=examples/love-full.
@@ -209,8 +226,8 @@ extension-test: extension-deps ## Run the VS Code extension-host integration tes
 	$(NPM) --prefix $(VSCODE_DIR) run test:vscode
 
 .PHONY: json-check
-json-check: ## Validate extension and workspace JSON metadata parse.
-	node -e "for (const file of ['$(VSCODE_DIR)/package.json','$(VSCODE_DIR)/package-lock.json','$(VSCODE_DIR)/language-configuration.json','$(VSCODE_DIR)/icons/tua-icon-theme.json','$(VSCODE_DIR)/syntaxes/tua.tmLanguage.json','.vscode/launch.json','.vscode/tasks.json','.vscode/extensions.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'));"
+json-check: ## Validate every tracked JSON file.
+	node scripts/check-json.js
 
 .PHONY: extension-package
 extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.

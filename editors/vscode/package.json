@@ -22,7 +22,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node --check src/extension.js && node --check src/signals/signal-graph.js && node --check scripts/lsp-completion-profile.js && node --check scripts/lsp-completion-ranking-smoke.js && node --check test/run.js && node --check test/fixtures/mock-lsp-server.js && node --check test/suite/index.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "check": "node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
     "test:vscode": "node test/run.js"
   },
   "contributes": {

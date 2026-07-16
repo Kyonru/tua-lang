@@ -348,9 +348,7 @@ fn pop_next_pending_message(messages: &mut VecDeque<Value>) -> Option<Value> {
 }
 
 fn message_interactive_priority(message: &Value) -> Option<u8> {
-    let Some(method) = message.get("method").and_then(Value::as_str) else {
-        return None;
-    };
+    let method = message.get("method").and_then(Value::as_str)?;
 
     match method {
         "initialize"

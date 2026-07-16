@@ -71,10 +71,7 @@ impl ModuleExports {
 }
 
 pub fn require_bindings_for_parsed_source(parsed: &ParsedSource) -> Vec<RequireBinding> {
-    require_bindings(parsed)
-        .into_iter()
-        .map(|(_, binding)| binding)
-        .collect()
+    require_bindings(parsed).into_values().collect()
 }
 
 pub fn required_module_for_receiver(
@@ -819,9 +816,9 @@ fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
     }
 }
 
-fn lua_doc_code_field_annotations<'a>(
-    parsed: &'a ParsedSource,
-) -> BTreeMap<String, Vec<&'a LuaDocAnnotation>> {
+fn lua_doc_code_field_annotations(
+    parsed: &ParsedSource,
+) -> BTreeMap<String, Vec<&LuaDocAnnotation>> {
     let mut by_line = BTreeMap::new();
 
     for annotation in &parsed.lua_doc_annotations {

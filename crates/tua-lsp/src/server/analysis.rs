@@ -950,7 +950,7 @@ impl AnalysisSnapshot {
         let mut completions = Vec::new();
         for symbol in self.core.importable_symbols(&prefix) {
             if symbol.module_path == path
-                || !project_contains_path(Some(&model), &symbol.module_path)
+                || !project_contains_path(Some(model), &symbol.module_path)
                 || self
                     .settings
                     .is_ignored(&symbol.module_path, &self.workspace_folders)

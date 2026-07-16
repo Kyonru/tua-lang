@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
@@ -878,7 +878,8 @@ impl LspServer {
         let due = self
             .pending_slow_diagnostics
             .iter()
-            .filter_map(|(uri, pending)| (pending.due_at <= now).then(|| uri.clone()))
+            .filter(|(_, pending)| pending.due_at <= now)
+            .map(|(uri, _)| uri.clone())
             .collect::<Vec<_>>();
 
         let mut messages = self.drain_slow_diagnostics_for(due);
@@ -968,7 +969,8 @@ impl LspServer {
         let due = self
             .pending_pull_fast_diagnostics
             .iter()
-            .filter_map(|(uri, pending)| (pending.due_at <= now).then(|| uri.clone()))
+            .filter(|(_, pending)| pending.due_at <= now)
+            .map(|(uri, _)| uri.clone())
             .collect::<Vec<_>>();
 
         if due.is_empty() {
@@ -1815,13 +1817,13 @@ impl LspServer {
         lsp_semantic_tokens_from_core(self.semantic_tokens_for_range(&request.path, range))
     }
 
-    fn semantic_token_data(&self, path: &PathBuf, range: Option<SourceRange>) -> Vec<usize> {
+    fn semantic_token_data(&self, path: &Path, range: Option<SourceRange>) -> Vec<usize> {
         lsp_semantic_token_data_from_core(self.semantic_tokens_for_range(path, range))
     }
 
     fn semantic_tokens_for_range(
         &self,
-        path: &PathBuf,
+        path: &Path,
         range: Option<SourceRange>,
     ) -> Vec<tua_core::SemanticToken> {
         let mut tokens = self.analysis.semantic_tokens(path);
@@ -1944,7 +1946,7 @@ impl LspServer {
         })
     }
 
-    fn format_options_for_path(&self, path: &PathBuf) -> tua_core::FormatOptions {
+    fn format_options_for_path(&self, path: &Path) -> tua_core::FormatOptions {
         self.analysis.format_options_for_path(path, &self.settings)
     }
 }

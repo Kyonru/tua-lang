@@ -3,24 +3,116 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  rust:
+  quality:
+    name: Quality gates
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: clippy, rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: make fmt-check
+      - name: Run strict Clippy
+        run: make clippy
+      - name: Validate JSON
+        run: make json-check
+      - name: Build documentation
+        env:
+          TUA_DOCS_VENV_DIR: ${{ runner.temp }}/tua-docs
+        run: make docs-build
+      - name: Check whitespace
+        run: make diff-check
+
+  platform-tests:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - name: Test workspace
         run: cargo test --workspace
-      - name: Test bundled LOVE projects
-        run: cargo test -p tua-cli --test love_example -- --nocapture
+      - name: Build love-minimal
+        working-directory: examples/love-minimal
+        run: cargo run --quiet --package tua-cli -- build
+      - name: Build love-full
+        working-directory: examples/love-full
+        run: cargo run --quiet --package tua-cli -- build
+      - name: Build feature examples
+        working-directory: examples/features
+        run: cargo run --quiet --package tua-cli -- build
+      - name: Build project-model
+        working-directory: examples/project-model
+        run: cargo run --quiet --package tua-cli -- build
+
+  extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci --prefix editors/vscode
+      - name: Check extension
+        run: make extension-check
+      - name: Test extension host
+        run: xvfb-run --auto-servernum npm --prefix editors/vscode run test:vscode
+
+  benchmark-smoke:
+    name: Benchmark smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exercise benchmark fixtures and harness
+        run: make benchmark-smoke
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke-${{ github.run_id }}
+          path: target/tua-speed/examples-profile-smoke.json
+          if-no-files-found: error
+          retention-days: 14
 
   love-api-catalog:
+    name: Generated LOVE catalog
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

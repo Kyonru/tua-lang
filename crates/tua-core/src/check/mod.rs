@@ -190,7 +190,7 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
         parsed,
         diagnostics_config,
         jit_config,
-        &environment,
+        environment,
         format_options,
     ));
 

@@ -530,15 +530,12 @@ local current = sprite.pause
         enabled: true,
         ..CompletionSequenceRankingConfig::default()
     };
-    let ranked = complete_source_with_parsed_environment_and_ranking_options(
+    let ranked = complete_source_with_parsed_environment_and_ranking_inputs(
         &completion_source,
         &parsed,
         position_after(&completion_source, "sprite."),
         &environment,
-        &[],
-        None,
-        file_scope_hash,
-        &config,
+        CompletionRankingInputs::from_sources(&[], None, file_scope_hash, &config),
     );
 
     assert_eq!(
@@ -569,15 +566,12 @@ local current = sprite.pause
         timeout_ms: 0,
         ..CompletionSequenceRankingConfig::default()
     };
-    let completions = complete_source_with_parsed_environment_and_ranking_options(
+    let completions = complete_source_with_parsed_environment_and_ranking_inputs(
         &completion_source,
         &parsed,
         position_after(&completion_source, "sprite."),
         &environment,
-        &[],
-        None,
-        file_scope_hash,
-        &config,
+        CompletionRankingInputs::from_sources(&[], None, file_scope_hash, &config),
     );
 
     assert_eq!(

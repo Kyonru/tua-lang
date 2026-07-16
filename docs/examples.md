@@ -70,9 +70,11 @@ make completion-ranking-smoke
 The real bundled examples can also be profiled as a regression suite:
 
 ```bash
+make benchmark-smoke
 make profile-examples-smoke
 make profile-examples
 make profile-examples-baseline
+make profile-all
 ```
 
 The suite discovers every `examples/*/tua.toml`, times CLI commands and LSP

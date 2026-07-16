@@ -15,8 +15,7 @@ use crate::ast_utils::{
 };
 use crate::completion::{
     complete_field_access_in_source_with_environment_and_ranking_inputs,
-    complete_source_with_parsed_environment_and_ranking_inputs,
-    complete_source_with_parsed_environment_and_ranking_options, filter_and_rank_completions,
+    complete_source_with_parsed_environment_and_ranking_inputs, filter_and_rank_completions,
     multitoken::complete_multi_token_source, CompletionAdaptiveStats, CompletionMultiTokenConfig,
     CompletionRankingInputs, CompletionSequenceRankingConfig,
 };

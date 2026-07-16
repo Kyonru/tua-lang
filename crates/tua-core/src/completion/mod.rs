@@ -262,7 +262,7 @@ pub(crate) struct CompletionRankingInputs<'a> {
 }
 
 impl<'a> CompletionRankingInputs<'a> {
-    fn from_sources(
+    pub(crate) fn from_sources(
         project_sources: &'a [&'a str],
         adaptive_stats: Option<&'a CompletionAdaptiveStats>,
         file_scope_hash: u64,
@@ -602,28 +602,6 @@ pub(crate) fn complete_source_with_parsed_environment_and_ranking(
     adaptive_stats: Option<&CompletionAdaptiveStats>,
     file_scope_hash: u64,
 ) -> Vec<Completion> {
-    complete_source_with_parsed_environment_and_ranking_options(
-        source,
-        parsed,
-        position,
-        environment,
-        project_sources,
-        adaptive_stats,
-        file_scope_hash,
-        &CompletionSequenceRankingConfig::default(),
-    )
-}
-
-pub(crate) fn complete_source_with_parsed_environment_and_ranking_options(
-    source: &str,
-    parsed: &ParsedSource,
-    position: SourcePosition,
-    environment: &TypeEnvironment,
-    project_sources: &[&str],
-    adaptive_stats: Option<&CompletionAdaptiveStats>,
-    file_scope_hash: u64,
-    sequence_ranking: &CompletionSequenceRankingConfig,
-) -> Vec<Completion> {
     complete_source_with_parsed_environment_and_ranking_inputs(
         source,
         parsed,
@@ -633,7 +611,7 @@ pub(crate) fn complete_source_with_parsed_environment_and_ranking_options(
             project_sources,
             adaptive_stats,
             file_scope_hash,
-            sequence_ranking,
+            &CompletionSequenceRankingConfig::default(),
         ),
     )
 }
@@ -683,16 +661,14 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_input
         separator,
         separator_span,
     };
-    let completions = complete_fields(
-        parsed,
-        source,
-        environment,
-        &receiver_parts,
-        prefix.as_str(),
+    let field_context = FieldCompletionContext {
+        receiver_parts: &receiver_parts,
+        prefix: prefix.as_str(),
         position,
         separator,
         separator_span,
-    );
+    };
+    let completions = complete_fields(parsed, source, environment, field_context);
     let ranking_context =
         CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
 
@@ -786,16 +762,14 @@ fn complete_parsed_source_with_context_and_ranking_options(
             if !module_fields.is_empty() {
                 module_fields
             } else {
-                let fields = complete_fields(
-                    parsed,
-                    source,
-                    environment,
-                    &receiver_parts,
-                    prefix.as_str(),
+                let field_context = FieldCompletionContext {
+                    receiver_parts: &receiver_parts,
+                    prefix: prefix.as_str(),
                     position,
                     separator,
                     separator_span,
-                );
+                };
+                let fields = complete_fields(parsed, source, environment, field_context);
 
                 if !fields.is_empty() || environment.local(&receiver_parts[0]).is_some() {
                     fields
@@ -1540,17 +1514,29 @@ fn push_unique_completion(
     }
 }
 
+#[derive(Clone, Copy)]
+struct FieldCompletionContext<'a> {
+    receiver_parts: &'a [String],
+    prefix: &'a str,
+    position: SourcePosition,
+    separator: FieldAccessSeparator,
+    separator_span: crate::SourceSpan,
+}
+
 fn complete_fields(
     parsed: &ParsedSource,
     source: &str,
     environment: &TypeEnvironment,
-    receiver_parts: &[String],
-    prefix: &str,
-    position: SourcePosition,
-    separator: FieldAccessSeparator,
-    separator_span: crate::SourceSpan,
+    context: FieldCompletionContext<'_>,
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.receiver");
+    let FieldCompletionContext {
+        receiver_parts,
+        prefix,
+        position,
+        separator,
+        separator_span,
+    } = context;
     let semantic = SemanticModel::new(parsed, environment);
     let Some(receiver_type) = love_conf_receiver_type(parsed, source, receiver_parts, position)
         .or_else(|| semantic.type_of_field_chain(receiver_parts, position))

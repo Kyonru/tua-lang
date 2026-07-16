@@ -201,20 +201,29 @@ Cache statistics expose a counter for each surface.
 
 ### P1: Add CI and restore strict linting
 
-The repository has no CI workflow. The strict command
-`cargo clippy --workspace --all-targets -- -D warnings` currently reports nine
-errors, including overly broad completion APIs and several mechanical lint
-violations outside the analysis boundary.
+Status: done on 2026-07-16.
 
-Improvements:
+The required CI workflow now separates strict quality checks, Linux/macOS/
+Windows workspace and example builds, VS Code extension checks and extension-
+host tests, generated LOVE catalog drift, and a deterministic benchmark smoke
+lane. Bundled `love-minimal`, `love-full`, `features`, and `project-model`
+builds are required on every supported runner rather than being treated as
+optional samples.
 
-- Run `cargo fmt --all -- --check`, Clippy, workspace tests, extension checks,
-  documentation builds, JSON validation, and generated-data drift checks.
-- Run on Linux, macOS, and Windows where platform behavior differs.
-- Keep formatting commands in verification non-mutating.
-- Treat bundled example failures as release blockers.
-- Add a smaller non-flaky benchmark smoke test and retain full profiles as
-  trend data.
+`cargo clippy --workspace --all-targets -- -D warnings` is clean. The completion
+lint fixes replaced broad argument lists with ranking and field-context inputs;
+the remaining core and LSP fixes use idiomatic references, iterators, paths, and
+configuration construction without lint suppression.
+
+`make verify` now uses the non-mutating `fmt-check` target. `make ci-check`
+provides the local subset that does not need a pinned external LOVE API checkout
+or a graphical VS Code host. Extension checks syntax-check every JavaScript
+module, and JSON validation discovers every tracked `.json` file through Git.
+
+`make benchmark-smoke` checks completion order and runs one timing-harness pass
+without an absolute machine-dependent latency gate. The separate performance
+workflow runs `make profile-all` on `main`, weekly, or on demand and retains the
+LSP, completion, and bundled-example JSON reports as 90-day trend artifacts.
 
 ### P1: Use representative performance benchmarks
 
@@ -237,14 +246,18 @@ Improvements:
 
 ### P1: Add real VS Code integration tests
 
+Status: in progress. The real extension-host suggestion synchronization test is
+implemented and required by CI.
+
 The extension check in [`package.json`](editors/vscode/package.json) validates
-JavaScript syntax, the manifest, and mocked activation. It does not exercise a
-real extension host, editor document synchronization, or webviews.
+every JavaScript module, the manifest, and mocked activation. A separate
+`@vscode/test-electron` suite exercises one-character automatic suggestions,
+continued filtering, synchronized document versions and cursor positions,
+visible suggestion acceptance, and stale-result replacement in a real isolated
+extension host.
 
-Improvements:
+Remaining improvements:
 
-- Use `@vscode/test-electron` for extension-host tests.
-- Cover automatic suggestions after one character and continued filtering.
 - Cover Cmd+click definition, hover, signature help, and inlay hints while
   typing.
 - Cover rapid edits, cancellation, UTF-16 positions, untitled documents,
@@ -416,18 +429,19 @@ Improvements:
 
 ## Verification Baseline
 
-Results from the 2026-07-15 audit:
+Results from 2026-07-16 after restoring the delivery gates:
 
-- `cargo test -p tua-core`: 643 passed.
-- `cargo test -p tua-lsp`: 186 passed.
-- `cargo test --workspace`: failed in the bundled `love-full` example.
-- `cargo clippy --workspace --all-targets -- -D warnings`: failed with 20
-  diagnostics.
+- `cargo test --workspace`: passed, including 666 `tua-core` tests, 193
+  `tua-lsp` tests, CLI integration, Lua syntax, and bundled LOVE regressions.
+- `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `cargo fmt --all -- --check`: passed.
-- `npm --prefix editors/vscode run check`: passed, with mocked coverage only.
-- `make docs-build`: passed.
-- Completion profile on the current medium fixture: p95 1.06 ms, but the
-  fixture is too small and serial to represent reported editor contention.
+- `make build-examples`: passed for all four bundled projects.
+- `npm --prefix editors/vscode run check`: passed for all 20 JavaScript files,
+  manifest validation, and mocked activation.
+- `npm run test:vscode`: passed in a real VS Code extension host.
+- `make benchmark-smoke`, `make docs-build`, and `make json-check`: passed.
+- A one-pass LSP profile wrote all small, medium, and large fixture metrics to
+  `target/tua-speed/lsp-profile.json`.
 
 ## Recommended Execution Order
 
@@ -436,7 +450,7 @@ Results from the 2026-07-15 audit:
 3. Add realistic concurrency benchmarks and real VS Code integration tests.
 4. Replace completion project scans with incremental semantic indexes.
 5. Fix watch-mode dependency invalidation.
-6. Restore Clippy and introduce CI/release gates.
+6. Expand the restored CI baseline into signed, checksummed release artifacts.
 7. Consolidate sprite metadata and other domain intelligence through shared
    semantic queries and keep lowering on the compiler-owned operation IR.
 8. Continue type-system, source-map, configuration, packaging, and

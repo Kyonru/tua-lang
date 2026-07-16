@@ -230,7 +230,7 @@ fn normalize_context(source: &str) -> String {
 
         if byte == b'\n' {
             line_comment = false;
-            push_space(&mut result, &mut needs_space);
+            push_space(&result, &mut needs_space);
             index += 1;
             continue;
         }
@@ -287,7 +287,7 @@ fn normalize_context(source: &str) -> String {
         }
 
         if byte.is_ascii_whitespace() {
-            push_space(&mut result, &mut needs_space);
+            push_space(&result, &mut needs_space);
             index += 1;
             continue;
         }
@@ -295,7 +295,7 @@ fn normalize_context(source: &str) -> String {
         if byte.is_ascii() {
             push_token(&mut result, &mut needs_space, &source[index..index + 1]);
         } else {
-            push_space(&mut result, &mut needs_space);
+            push_space(&result, &mut needs_space);
         }
 
         index += source[index..]
@@ -328,7 +328,7 @@ fn push_token(result: &mut String, needs_space: &mut bool, token: &str) {
     *needs_space = true;
 }
 
-fn push_space(result: &mut String, needs_space: &mut bool) {
+fn push_space(result: &str, needs_space: &mut bool) {
     if !result.is_empty() {
         *needs_space = true;
     }

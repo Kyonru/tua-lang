@@ -530,28 +530,32 @@ impl AnalysisHost {
                     .environment()
                     .expect("parsed file must have a type environment");
 
-                complete_source_with_parsed_environment_and_ranking_options(
+                complete_source_with_parsed_environment_and_ranking_inputs(
                     &file.source,
                     parsed,
                     position,
                     environment,
-                    &[],
-                    None,
-                    CompletionAdaptiveStats::file_scope_hash(path),
-                    &self.completion_sequence_ranking,
-                )
-            }
-            Err(_) => {
-                if let Some(degraded) = &file.degraded_semantics {
-                    complete_source_with_parsed_environment_and_ranking_options(
-                        &file.source,
-                        &degraded.parsed,
-                        position,
-                        &degraded.environment,
+                    CompletionRankingInputs::from_sources(
                         &[],
                         None,
                         CompletionAdaptiveStats::file_scope_hash(path),
                         &self.completion_sequence_ranking,
+                    ),
+                )
+            }
+            Err(_) => {
+                if let Some(degraded) = &file.degraded_semantics {
+                    complete_source_with_parsed_environment_and_ranking_inputs(
+                        &file.source,
+                        &degraded.parsed,
+                        position,
+                        &degraded.environment,
+                        CompletionRankingInputs::from_sources(
+                            &[],
+                            None,
+                            CompletionAdaptiveStats::file_scope_hash(path),
+                            &self.completion_sequence_ranking,
+                        ),
                     )
                 } else {
                     degraded_completion_fallback(path, &file.source, position)

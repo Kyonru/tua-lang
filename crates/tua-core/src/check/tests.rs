@@ -1860,12 +1860,16 @@ end
     check_tua_source("src/runtime_is.tua", source)
         .expect("runtime metatable checks should merge same-name table aliases");
 
-    let mut ecs_config = EcsConfig::default();
-    ecs_config.enabled = true;
+    let ecs_config = EcsConfig {
+        enabled: true,
+        ..EcsConfig::default()
+    };
     let parsed = parse_tua_source("src/runtime_is.tua", source).expect("source should parse");
-    let mut diagnostics_config = DiagnosticsConfig::default();
-    diagnostics_config.inline_ignores = true;
-    diagnostics_config.undefined_variables = true;
+    let diagnostics_config = DiagnosticsConfig {
+        inline_ignores: true,
+        undefined_variables: true,
+        ..DiagnosticsConfig::default()
+    };
 
     check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
         &parsed,

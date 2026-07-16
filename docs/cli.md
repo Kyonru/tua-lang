@@ -146,9 +146,18 @@ behavior as `tua lsp`.
 Common repository targets:
 
 ```bash
+make fmt-check
 make test
 make verify
+make ci-check
 make build-features
 make lsp-smoke
 make lsp-features-smoke
 ```
+
+`make verify` is non-mutating: it checks formatting, tests, strict Clippy,
+extension activation, tracked JSON, and whitespace without rewriting source.
+`make ci-check` adds bundled example builds, the documentation build, and the
+benchmark smoke. Generated LOVE catalog verification still needs
+`LOVE_API_ROOT`, while the real VS Code extension-host test remains
+`make extension-test`.

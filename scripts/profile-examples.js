@@ -55,15 +55,22 @@ const outputPath = path.resolve(
     };
 
     projectReport.metrics.push(...profileCliProject(project));
-    const lsp = await profileLspProject({
-      command,
-      root: project.root,
-      sourceRoot: project.sourceRoot,
-      warmup,
-      repeat,
-      perFile: true,
-      includeDiagnostics: true,
-    });
+    const copied = copyProjectToTemp(project);
+    let lsp;
+
+    try {
+      lsp = await profileLspProject({
+        command,
+        root: copied.root,
+        sourceRoot: copied.sourceRoot,
+        warmup,
+        repeat,
+        perFile: true,
+        includeDiagnostics: true,
+      });
+    } finally {
+      copied.cleanup();
+    }
 
     projectReport.cacheStats = lsp.stats;
     projectReport.metrics.push(...metricsFromTimings(project.name, "lsp", lsp.timings));
@@ -102,9 +109,9 @@ const outputPath = path.resolve(
 function profileCliProject(project) {
   const metrics = [];
   const commands = [
-    { label: "check", args: ["check"], trace: true },
-    { label: "lint", args: ["lint"], trace: true },
-    { label: "fmt --check", args: ["fmt", "--check"], trace: false },
+    { label: "check", args: ["check"], trace: true, tempCopy: true },
+    { label: "lint", args: ["lint"], trace: true, tempCopy: true },
+    { label: "fmt --check", args: ["fmt", "--check"], trace: false, tempCopy: true },
     { label: "build", args: ["build"], trace: false, tempCopy: true },
   ];
 
@@ -270,6 +277,7 @@ function copyProjectToTemp(project) {
 
   return {
     root,
+    sourceRoot: path.join(root, path.relative(project.root, project.sourceRoot)),
     cleanup() {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     },
