@@ -280,14 +280,19 @@ under Xvfb after the fast syntax, manifest, and mocked-activation checks.
 
 ### P1: Split oversized test modules
 
-`crates/tua-lsp/src/server/tests.rs` has more than 8,000 lines.
+Status: done on 2026-07-16.
 
-Improvements:
+The server test suite now lives under
+[`server/tests`](crates/tua-lsp/src/server/tests). Completion, hover,
+navigation, diagnostics, workspace, formatting, semantic tokens, inlay hints,
+and scheduling regressions have dedicated modules. Smaller modules cover code
+actions, document features, signature help, protocol behavior, and degraded
+snapshot recovery.
 
-- Split tests by completion, hover, navigation, diagnostics, workspace,
-  formatting, semantic tokens, inlay hints, and scheduling.
-- Share protocol fixtures and request helpers.
-- Keep regression tests next to the behavior they protect.
+Shared JSON-RPC encoding, the in-process server harness, temporary project
+fixtures, request builders, and response assertions remain single-sourced in
+[`mod.rs`](crates/tua-lsp/src/server/tests/mod.rs). All 192 existing server
+regression tests were preserved during the split.
 
 ## Extension And LOVE Developer Experience
 
