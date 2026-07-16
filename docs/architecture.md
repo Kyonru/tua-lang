@@ -6,14 +6,14 @@ icon: lucide/workflow
 
 This page is the contributor guide for Tua's compiler and language-server
 architecture. It also maps rust-analyzer's crate architecture to Tua's current
-shape and the Phase 12 roadmap. The goal is not to copy rust-analyzer directly.
+shape. The goal is not to copy rust-analyzer directly.
 The goal is to borrow boundaries that make a Lua/LOVE-sized language tool
 faster, easier to reason about, and less likely to grow one-off feature paths.
 
-Language behavior belongs in the root
-[SPEC](https://github.com/Kyonru/tua-lang/blob/main/SPEC.md). Commit-sized
-planning belongs in the root
-[ROADMAP](https://github.com/Kyonru/tua-lang/blob/main/ROADMAP.md). This page
+Language behavior belongs in the canonical
+[Specification](specification.md). Product priorities belong in the
+[Roadmap](roadmap.md), while completed commit-sized planning is preserved in
+the [historical v1 ledger](archive/implementation-ledger-v1.md). This page
 explains where code belongs and how data should flow through the implementation.
 
 Reference point: the current rust-analyzer `crates/` tree includes architecture
@@ -616,9 +616,10 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua has no macro or executable extension expansion surface. | Out of scope | None |
 | `load-cargo`, `toolchain` | Rust toolchain and Cargo loading. | No equivalent; Tua project model stays Lua/LOVE-focused. | Out of scope | None |
 
-## Phase 12 Architecture Path
+## Architecture Evolution
 
-Phase 12 landed in this order, with some rust-analyzer-like pieces intentionally
+The initial architecture work landed in this order, with some
+rust-analyzer-like pieces intentionally
 kept smaller than their Rust equivalents:
 
 1. Add fixture DSL support so architecture changes can be tested clearly.

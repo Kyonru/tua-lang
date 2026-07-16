@@ -9,7 +9,7 @@ statistics, or profile output is sent off-device.
 
 ## Commands
 
-Run the fixed Phase 14 completion profile against the medium LSP fixture:
+Run the fixed completion profile against the medium LSP fixture:
 
 ```bash
 make profile-completion
@@ -165,7 +165,7 @@ by the current implementation.
 
 ## Targets
 
-The fixed Phase 14 success targets are:
+The fixed completion success targets are:
 
 - medium fixture `completion` p95 stays at or below 50ms after warmup;
 - `analysis.completion.ranking` p95 stays at or below 5ms;

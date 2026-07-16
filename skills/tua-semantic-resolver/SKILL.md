@@ -14,7 +14,7 @@ resolver problem instead of patching the visible symptom.
   inlay hints, definition, references, rename, semantic tokens, and LSP.
 - Find the shared source of truth currently used by those surfaces.
 - If behavior differs by surface, route them toward `SemanticModel`,
-  `TypeEnvironment`, module index, or the Phase 12 analysis snapshot.
+  `TypeEnvironment`, module index, or the shared analysis snapshot.
 - Check whether required modules, LOVE constructors, asset helpers, multi-return
   values, or `any` fallback are involved.
 

@@ -9,4 +9,9 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Kyonru/tua-lang"
+homepage = "https://kyonru.github.io/tua-lang"
+keywords = ["lua", "love2d", "luajit", "language-server"]
+categories = ["compilers", "development-tools"]
 version = "0.1.0"

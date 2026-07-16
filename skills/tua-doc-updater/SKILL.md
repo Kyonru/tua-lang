@@ -1,6 +1,6 @@
 ---
 name: tua-doc-updater
-description: Update Tua documentation and examples whenever implementation, CLI behavior, LSP capabilities, diagnostics, LOVE helpers, configuration, roadmap phases, or docs navigation change. Use to proactively find every affected doc surface, keep docs factual, add or update commented examples as the project grows, and verify the Zensical docs site.
+description: Update Tua documentation and examples whenever implementation, CLI behavior, LSP capabilities, diagnostics, LOVE helpers, configuration, product priorities, or docs navigation change. Use to proactively find every affected doc surface, keep docs factual, add or update commented examples as the project grows, and verify the Zensical docs site.
 ---
 
 # Tua Doc Updater
@@ -10,8 +10,11 @@ separate docs request when the implementation changed.
 
 ## Check These Surfaces
 
-- `SPEC.md` for language/toolchain contract.
-- `ROADMAP.md` for commit-sized plans.
+- `docs/specification.md` for the canonical language/toolchain contract.
+- `docs/roadmap.md` for Now, Next, and Later product direction.
+- `docs/capabilities.md` for current language and editor support.
+- `docs/archive/` only for dated historical snapshots; do not update archived
+  ledgers as if they were current plans.
 - `docs/` for user-facing documentation.
 - `zensical.toml` for docs navigation.
 - `examples/` READMEs and sources for runnable, commented examples.
@@ -31,10 +34,12 @@ separate docs request when the implementation changed.
   README summaries.
 - If CLI output, config keys, diagnostics, or LSP capabilities changed, update
   the matching reference page.
-- If the spec contract changed, update `SPEC.md` before or with user-facing
-  docs.
-- If a roadmap phase changed, update `docs/roadmap.md` and parity docs when
-  they reference shifted item numbers.
+- If the spec contract changed, update `docs/specification.md` before or with
+  user-facing docs.
+- If implementation changes current support, update `docs/capabilities.md` and
+  detailed parity docs where relevant.
+- If product priorities change, update the Now, Next, or Later outcome without
+  adding commit-number ledgers back to the public roadmap.
 - If a new docs page is added, add it to `zensical.toml`.
 - If an example source changes, rebuild or explain why generated output is not
   committed.

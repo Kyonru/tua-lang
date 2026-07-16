@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check synchronized versions
+        run: make version-drift-check
+      - name: Test release packaging tools
+        run: make release-tool-test
+      - name: Validate tag and changelog
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node scripts/sync-version.js --print)"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "v${VERSION}" ]]; then
+            echo "release must run from tag v${VERSION}" >&2
+            exit 1
+          fi
+          python3 scripts/package_release.py notes \
+            --changelog CHANGELOG.md \
+            --version "${VERSION}" \
+            --output "${RUNNER_TEMP}/release-notes.md"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Package ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            executable: tua
+            vsce: linux-x64
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            executable: tua.exe
+            vsce: win32-x64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            executable: tua
+            vsce: darwin-x64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            executable: tua
+            vsce: darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install extension packaging dependencies
+        run: npm ci --prefix editors/vscode
+      - name: Build release server
+        run: cargo build --release --locked --package tua-cli --target ${{ matrix.target }}
+      - name: Stage server for VSIX
+        shell: bash
+        run: |
+          mkdir -p editors/vscode/bin
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" \
+            "editors/vscode/bin/${{ matrix.executable }}"
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod 755 "editors/vscode/bin/${{ matrix.executable }}"
+          fi
+      - name: Create standalone server archive
+        shell: bash
+        run: |
+          python3 scripts/package_release.py archive \
+            --repo-root . \
+            --binary "target/${{ matrix.target }}/release/${{ matrix.executable }}" \
+            --version "${{ needs.validate.outputs.version }}" \
+            --target "${{ matrix.target }}" \
+            --output dist
+      - name: Create platform VSIX
+        shell: bash
+        run: |
+          cd editors/vscode
+          npx --no-install vsce package \
+            --target "${{ matrix.vsce }}" \
+            --out "../../dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix"
+      - name: Checksum VSIX
+        shell: bash
+        run: |
+          python3 scripts/package_release.py checksum \
+            "dist/tua-${{ needs.validate.outputs.version }}-${{ matrix.vsce }}.vsix"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Verify release checksums
+        shell: bash
+        run: |
+          cat dist/*.sha256 | sort > dist/SHA256SUMS
+          cd dist
+          sha256sum --check SHA256SUMS
+      - name: Build release notes
+        run: |
+          python3 scripts/package_release.py notes \
+            --changelog CHANGELOG.md \
+            --version "${{ needs.validate.outputs.version }}" \
+            --output release-notes.md
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ needs.validate.outputs.version }}" \
+            dist/* \
+            --verify-tag \
+            --title "Tua ${{ needs.validate.outputs.version }}" \
+            --notes-file release-notes.md

@@ -2,9 +2,17 @@
   "name": "tua",
   "displayName": "tua",
   "description": "Language support for tua, a typed Lua superset for LuaJIT and LOVE projects.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "tua-lang",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kyonru/tua-lang.git"
+  },
+  "homepage": "https://kyonru.github.io/tua-lang",
+  "bugs": {
+    "url": "https://github.com/Kyonru/tua-lang/issues"
+  },
   "icon": "assets/logo.png",
   "main": "./src/extension.js",
   "engines": {
@@ -22,7 +30,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
     "test:vscode": "node test/run.js"
   },
   "contributes": {
@@ -564,6 +572,7 @@
     ]
   },
   "devDependencies": {
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.2"
   }
 }

@@ -4,13 +4,21 @@ tua is a typed Lua superset that compiles to plain Lua 5.1-compatible source
 for LuaJIT and LÖVE projects. Types are erased at compile time, so emitted Lua
 can run without a tua runtime.
 
-The repository now contains the compiler core, CLI, VS Code extension, bundled
+The repository contains the compiler core, CLI, VS Code extension, bundled
 examples, and a broad language-server feature set.
 
-- [SPEC.md](SPEC.md) defines the v1 language and toolchain contract.
-- [ROADMAP.md](ROADMAP.md) breaks the spec into committable implementation
-  slices.
+- [Specification](docs/specification.md) defines the current language and
+  toolchain contract.
+- [Capability Matrix](docs/capabilities.md) records current language and editor
+  support.
+- [Roadmap](docs/roadmap.md) tracks product direction as Now, Next, and Later.
+- [Releases](docs/releases.md) documents artifacts, checksums, compatibility,
+  and migration policy.
+- [CHANGELOG.md](CHANGELOG.md) records release-level changes.
 - [docs/](docs/index.md) contains the Zensical documentation site source.
+
+The original v1 specification and commit-by-commit implementation roadmap are
+preserved under [`docs/archive/`](docs/archive/) for historical reference.
 
 ## Development
 

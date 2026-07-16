@@ -442,48 +442,52 @@ Deleted generated Lua, source maps, and copied asset outputs are removed.
 
 ### P2: Make generated LOVE data reproducible
 
-Status: core reproducibility work is done. Remaining improvement:
+Status: done. Generated catalogs come from one pinned LOVE API revision and are
+guarded by CI drift checks. Compact storage remains an evidence-gated Later
+idea rather than active work:
 
 - Consider compact generated data instead of tens of thousands of Rust source
   lines if compile time or maintenance becomes a problem.
 
 ### P2: Establish a release pipeline
 
-Improvements:
+Status: done on 2026-07-16.
 
-- Use one version source for Rust crates, the CLI, language server, and VS Code
-  extension.
-- Add crate descriptions, repository links, readme metadata, and changelog.
-- Build signed or checksummed server binaries for supported platforms.
-- Package the server with platform VSIX artifacts or use a trusted downloader
-  with checksum verification.
-- Document compatibility and migration notes for each release.
+The Rust workspace version is authoritative for all crates, the CLI/server, and
+generated VS Code package metadata. CI rejects version drift. Crates now expose
+descriptions, repository/homepage links, README metadata, keywords, categories,
+and the shared MIT license. `CHANGELOG.md` owns release changes and migrations.
+
+Tag-driven release automation builds Linux x64, Windows x64, macOS Intel, and
+macOS Apple-silicon server archives plus platform VSIX packages containing the
+matching server. Deterministic archive tooling emits individual SHA-256 files;
+the publish job verifies one combined manifest before creating the release.
+Compatibility, checksum verification, and migration policy live in the docs.
 
 ### P2: Restructure roadmap and specification documentation
 
-The roadmap is an extensive implementation ledger with duplicate phase
-numbers, while parts of the specification describe non-goals that have
-already been implemented through LuaDoc or semantic analysis.
+Status: done on 2026-07-16.
 
-Improvements:
+The documentation site now owns a concise Now, Next, and Later product roadmap,
+a canonical current specification, and an explicit language/editor capability
+matrix. The specification reconciles LuaDoc, semantic analysis, first-class
+domains, and optional vendored helper runtimes with the current implementation.
 
-- Maintain a concise Now, Next, and Later product roadmap.
-- Archive completed implementation phases separately.
-- Keep an explicit language and editor capability matrix.
-- Reconcile specification non-goals with current behavior.
-- Move canonical specification content under the documentation site while
-  preserving versioned historical copies when needed.
+The original v1 specification and 93-item commit ledger are preserved as dated
+historical pages. Root `SPEC.md` and `ROADMAP.md` remain compatibility pointers
+instead of competing canonical sources. Documentation navigation, contributor
+guidance, and repo-local skills point to the new structure.
 
 ## Verification Baseline
 
 Results from 2026-07-16 after restoring the delivery gates:
 
-- `cargo test --workspace`: passed, including 666 `tua-core` tests, 193
+- `cargo test --workspace`: passed, including 693 `tua-core` tests, 201
   `tua-lsp` tests, CLI integration, Lua syntax, and bundled LOVE regressions.
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `cargo fmt --all -- --check`: passed.
 - `make build-examples`: passed for all four bundled projects.
-- `npm --prefix editors/vscode run check`: passed for all 20 JavaScript files,
+- `npm --prefix editors/vscode run check`: passed for all 31 JavaScript files,
   manifest validation, and mocked activation.
 - `npm run test:vscode`: passed in a real VS Code extension host.
 - `make benchmark-smoke`, `make docs-build`, and `make json-check`: passed.

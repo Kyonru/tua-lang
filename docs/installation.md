@@ -4,7 +4,7 @@ icon: lucide/package
 
 # Installation
 
-Tua is currently developed from source as a Rust workspace.
+Tua can be installed from a platform release or built from the Rust workspace.
 
 ## Requirements
 
@@ -32,6 +32,17 @@ For a release build:
 ```bash
 cargo build --release -p tua-cli
 ```
+
+## Install A Release
+
+Each tagged release provides standalone `tua` server archives and VSIX packages
+for Linux x64, Windows x64, macOS Intel, and macOS Apple silicon. Choose the
+artifact matching your operating system and architecture.
+
+Release VSIX packages contain the matching server binary. They do not download
+a server during activation. Verify downloads against the release's
+`SHA256SUMS` before installation; see
+[Releases And Compatibility](releases.md) for commands and the support policy.
 
 ## Run From Source
 

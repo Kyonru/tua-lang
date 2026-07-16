@@ -5,14 +5,15 @@ NPM ?= npm
 NPX ?= npx
 CODE ?= code
 LOVE ?= love
-VSCE ?= $(NPX) --yes @vscode/vsce
+VSCE ?= $(NPX) --no-install vsce
 RSVG_CONVERT ?= rsvg-convert
 LOVE_API_ROOT ?=
 LOVE_API_REVISION := $(shell sed -n '1p' scripts/love-api-revision.txt)
+PROJECT_VERSION := $(shell node scripts/sync-version.js --print)
 
 TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
-VSIX := $(VSCODE_DIR)/tua-0.0.1.vsix
+VSIX := $(VSCODE_DIR)/tua-$(PROJECT_VERSION).vsix
 EXAMPLE ?= examples/love-minimal
 UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
@@ -53,6 +54,19 @@ generate-love-api: ## Regenerate all LOVE catalogs from the pinned love-api chec
 generate-config-schema: ## Regenerate VS Code and docs config metadata from config/schema.json.
 	node scripts/generate-config-schema.js
 
+.PHONY: sync-version
+sync-version: ## Synchronize package versions from the Rust workspace version.
+	node scripts/sync-version.js
+
+.PHONY: version-drift-check
+version-drift-check: ## Verify every package uses the Rust workspace version.
+	node scripts/sync-version.js --check
+
+.PHONY: release-tool-test
+release-tool-test: ## Test deterministic release archives and changelog extraction.
+	node --test scripts/sync-version.test.js
+	PYTHONPATH=scripts python3 -m unittest scripts/package_release_test.py
+
 .PHONY: config-schema-drift-check
 config-schema-drift-check: ## Verify VS Code and docs config metadata matches config/schema.json.
 	node scripts/generate-config-schema.js --check
@@ -76,10 +90,10 @@ clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: verify
-verify: fmt-check test clippy config-schema-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy test build-examples version-drift-check release-tool-test config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -263,7 +277,7 @@ json-check: ## Validate every tracked JSON file.
 
 .PHONY: extension-package
 extension-package: extension-deps extension-server json-check extension-check ## Build a VSIX with the bundled tua server.
-	cd $(VSCODE_DIR) && $(VSCE) package --out tua-0.0.1.vsix
+	cd $(VSCODE_DIR) && $(VSCE) package --out tua-$(PROJECT_VERSION).vsix
 	rm -rf $(VSCODE_DIR)/bin
 
 .PHONY: extension-install

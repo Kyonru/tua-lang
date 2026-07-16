@@ -37,6 +37,10 @@ jobs:
         run: make clippy
       - name: Validate JSON
         run: make json-check
+      - name: Check synchronized package version
+        run: make version-drift-check
+      - name: Test release packaging tools
+        run: make release-tool-test
       - name: Check generated config metadata
         run: make config-schema-drift-check
       - name: Build documentation

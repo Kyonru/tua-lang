@@ -10,7 +10,9 @@ not to reshuffle code for its own sake.
 
 ## First Checks
 
-- Read the relevant roadmap phase, especially Phase 12 in `ROADMAP.md`.
+- Read current priorities in `docs/roadmap.md`, current support in
+  `docs/capabilities.md`, and the architecture guide. Use the archived v1
+  implementation ledger only when historical context is genuinely needed.
 - Inspect the current implementation before proposing new modules.
 - Identify whether the request is a local bug, a missing shared abstraction, or
   a project-model gap.

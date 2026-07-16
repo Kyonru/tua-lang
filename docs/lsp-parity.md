@@ -8,8 +8,10 @@ This matrix tracks Tua's current LSP behavior against LuaHelper-style Lua
 tooling and useful rust-analyzer patterns. It is intentionally conservative:
 the Tua column describes checked-in behavior, not planned behavior.
 
-Roadmap numbers refer to the [roadmap](roadmap.md), which points at the
-canonical root `ROADMAP.md`.
+Numbers in the final column are historical implementation-ledger references,
+not current product priorities. Current direction lives in the
+[Now, Next, Later roadmap](roadmap.md), and current support is summarized in the
+[Capability Matrix](capabilities.md).
 
 For diagnostic-code-level LuaHelper parity, see the
 [LuaHelper code matrix](luahelper-code-matrix.md). That page maps LuaHelper
@@ -86,7 +88,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Flow-sensitive narrowing | Equality, `type(value) == "..."`, and supported `value is Type` checks narrow true branches, but control-flow typing is still shallow. | Expand negative-branch and multi-condition narrowing only where static proof is reliable. | 62 |
 | Rich project edge cases | Project roots, require paths, ignored paths, and targets are modeled. | Add more duplicate-candidate, cycle, generated-source, and multi-root regression coverage as real projects expose gaps. | 55, 59 |
 | Profiling expansion | Opt-in tracing covers parse/check/index/request work, with small/medium/large LSP benchmark fixtures, completion-specific p50/p95/p99 profiling, ranking-overhead spans, completion-context cache stats, and local baseline comparison. | Expand profiling only when new hot paths appear. | 69, 77.5 |
-| Documentation refresh after architecture work | Docs now match the current Phase 12 architecture surface. | Refresh again when later LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
+| Documentation refresh after architecture work | Docs match the current shared-analysis architecture surface. | Refresh again when LOVE domain extensions or LuaLS compatibility work changes user-visible behavior. | 50, 51, 70 |
 | VS Code lifecycle depth | The extension has restart/output/settings commands, server selection, trace/log settings with live `tua/setTrace` updates, cache-stats copy/save, completion-learning reset, profile artifact probes, support commands, a preview-gated sprite animation preview command, and a server status item. | Expand CPU/heap artifact generation only when the Tua server/runtime supports those outputs. | 80 |
 | File rename refactors | `workspace.fileOperations.willRename` updates static `require(...)` and `import(...)` paths for safe same-project module moves. | Dynamic specifiers, ignored/generated files, ambiguous module names, and cross-project moves return no edits. | 88 |
 | Source actions and fix-all | `source.organizeImports`, `source.sortImports`, `source.removeUnusedImports`, and `source.fixAll` are advertised and implemented conservatively. | Broader source actions such as fix-all across workspaces, organize exports, and refactor menus remain future work. | 89 |

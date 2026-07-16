@@ -1,7 +1,8 @@
-- [ ] Large files take too long for suggestions
-- [ ] Signal calls/definitions code/file graph visualization
-- [ ] Changing type should show warn
-- [ ] Concept of Fuctions as type
-- [ ] Basic generic support (i want to discourage this)
-- [ ] When i hover over a asset, i should be able to cmd+click to go to that file, even on sprite
-- [ ] Fix / improve docummentation and readme (consider removing roadmap and todo) and move spec.md to docs
+# Tua Work Tracking
+
+Current product priorities live in [`docs/roadmap.md`](docs/roadmap.md), and
+implemented support lives in
+[`docs/capabilities.md`](docs/capabilities.md).
+
+Do not maintain a second feature checklist here. Completed implementation detail
+belongs in `CHANGELOG.md` or a dated document under `docs/archive/`.

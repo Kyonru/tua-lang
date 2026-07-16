@@ -1,8 +1,14 @@
 [package]
 name = "tua-cli"
+description = "Command-line compiler and language server executable for Tua"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 notify = "8.2.0"

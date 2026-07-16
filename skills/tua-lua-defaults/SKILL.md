@@ -26,8 +26,10 @@ Before adding a Lua-facing feature, check the useful behavior from:
 
 - LuaHelper/LuaLS annotation patterns;
 - rust-analyzer navigation/completion patterns;
-- existing Tua docs: `docs/lua-interop.md`, `docs/lsp-parity.md`;
-- `ROADMAP.md` Phase 11 and Phase 12.
+- existing Tua docs: `docs/lua-interop.md`, `docs/capabilities.md`, and
+  `docs/lsp-parity.md`;
+- current priorities in `docs/roadmap.md` and boundaries in
+  `docs/architecture.md`.
 
 Do not clone every LuaHelper diagnostic or setting. Keep what improves normal
 LOVE/LuaJIT development.

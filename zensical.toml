@@ -20,8 +20,10 @@ nav = [
     { "Configuration" = "configuration.md" },
   ] },
   { "Language" = [
+    { "Specification" = "specification.md" },
     { "Overview" = "language.md" },
     { "Lua Interop" = "lua-interop.md" },
+    { "Capability Matrix" = "capabilities.md" },
   ] },
   { "Tooling" = [
     { "CLI" = "cli.md" },
@@ -33,7 +35,10 @@ nav = [
   ] },
   { "Project" = [
     { "Roadmap" = "roadmap.md" },
+    { "Releases" = "releases.md" },
     { "Architecture" = "architecture.md" },
+    { "Historical v1 Spec" = "archive/specification-v1-initial.md" },
+    { "Historical v1 Ledger" = "archive/implementation-ledger-v1.md" },
   ] },
 ]
 

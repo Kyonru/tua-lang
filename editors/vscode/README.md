@@ -45,6 +45,11 @@ Minimal VS Code language support for tua source files.
 VSIX packages built with `make extension-package` include the current platform's
 `tua` server binary and use it by default.
 
+Tagged releases publish separate `linux-x64`, `win32-x64`, `darwin-x64`, and
+`darwin-arm64` VSIX files. Install the package matching the host platform and
+verify it against the release `SHA256SUMS` manifest. The extension never
+downloads a server during activation.
+
 For extension-host development, `TUA_SERVER_PATH` overrides the setting.
 Use the workspace `Run Extension (Features Example)` launch profile to open
 `examples/features` with `target/debug/tua`. Use

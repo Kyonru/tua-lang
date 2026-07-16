@@ -7,8 +7,9 @@ icon: lucide/home
 **Typed Lua source-to-source tooling for LuaJIT and LOVE projects.**
 
 Tua starts with Lua syntax, adds erased type syntax and a small amount of
-LuaJIT-safe sugar, then emits readable Lua 5.1-compatible source. The generated
-Lua has no Tua runtime dependency.
+LuaJIT-safe sugar, then emits readable Lua 5.1-compatible source. Ordinary
+typed code has no Tua runtime dependency; selected opt-in helpers can emit
+vendored Lua modules into the build output when used.
 
 Tua is built for projects that want editor feedback and static checks without
 leaving the normal Lua and LOVE workflow.
@@ -89,6 +90,9 @@ player.hp = player.hp - 10
 - [Learn](learn.md) - guided language path from Lua to typed Tua and LOVE.
 - [Language](language.md) - overview, type surface, interop, LOVE helpers, and
   emission behavior.
+- [Specification](specification.md) - canonical language and toolchain
+  contract.
+- [Capability Matrix](capabilities.md) - current language and editor support.
 - [Configuration](configuration.md) - `tua.toml` options and diagnostics.
 - [CLI](cli.md) - command reference.
 - [Language Server](lsp.md) - editor features and capability notes.
@@ -98,6 +102,8 @@ player.hp = player.hp - 10
   warning, annotation, and quick-fix parity inventory.
 - [Lua Interop](lua-interop.md) - requiring Lua from Tua and Tua from Lua.
 - [Examples](examples.md) - bundled projects and verification commands.
-- [Roadmap](roadmap.md) - implementation status and planned parity work.
+- [Roadmap](roadmap.md) - Now, Next, and Later product direction.
+- [Releases](releases.md) - artifacts, checksums, compatibility, and migration
+  policy.
 - [Architecture](architecture.md) - contributor guide, architecture map, and
   rust-analyzer gap matrix.

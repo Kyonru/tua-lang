@@ -4,98 +4,68 @@ icon: lucide/map
 
 # Roadmap
 
-The canonical roadmap lives at the repository root:
+Tua tracks product direction as **Now, Next, Later**. This page describes
+outcomes, not commit numbers. Completed implementation detail is preserved in
+the [historical v1 ledger](archive/implementation-ledger-v1.md).
 
-- [ROADMAP.md](https://github.com/Kyonru/tua-lang/blob/main/ROADMAP.md)
+The [Capability Matrix](capabilities.md) is authoritative for what works today.
 
-It is organized into commit-sized slices. Each roadmap item has a proposed
-commit title, scope, and acceptance criteria.
+## Now
 
-## Current Focus
+### Ship And Observe The Coordinated 0.1 Release
 
-The v1 implementation covers the compiler, CLI, examples, VS Code extension,
-LOVE-focused helpers, LuaDoc-aware Lua interop, and a broad language-server
-surface.
+- exercise the checksummed platform server and VSIX pipeline from a real tag;
+- keep CLI, server, extension, changelog, and migration notes synchronized;
+- use representative completion and editor-contention profiles as release
+  gates;
+- fix correctness or responsiveness regressions before expanding language
+  syntax.
 
-The recent roadmap focus landed the Phase 12 architecture spine:
+### Deepen Everyday LOVE Workflows
 
-- rust-analyzer-inspired analysis database, VFS, HIR, and query caching;
-- stronger project modeling for require graphs, source roots, and exports;
-- shared IDE routing for navigation, symbols, call hierarchy, selection ranges,
-  folding ranges, and profiling.
-- cached semantic facts for autocomplete, hover, signature help, and inlay hints
-  so inferred types are reused across fast editor queries.
-- warm snapshot reuse for repeated navigation requests, including a dedicated
-  `definitionAgain` profiling row for cmd+click-style latency checks.
+- harden asset path navigation and diagnostics across realistic project roots;
+- refine sprite-sheet preview and SignalBus graph workflows from user feedback;
+- keep ECS opt-in until its diagnostics and completion remain predictable in
+  larger projects;
+- maintain one generated LOVE source for signatures, enums, callbacks,
+  inheritance, and documentation.
 
-See [Architecture](architecture.md) for the contributor guide and Phase 12
-rust-analyzer gap matrix.
+## Next
 
-Current future work is now more about precision and domain depth:
+### Improve Semantic Precision Without Losing Lua Flexibility
 
-- flow-sensitive type narrowing and richer LuaLS/LuaCATS annotation support;
-- deeper table, array, index, and loop-variable inference;
-- more LuaHelper parity fixtures and stub coverage;
-- LuaHelper check-code parity gaps tracked by the
-  [LuaHelper Code Matrix](luahelper-code-matrix.md);
-- larger refactor support where the shared model can prove edits are safe.
+- broaden control-flow and metatable inference only where identities are
+  compiler-proven;
+- expand LuaDoc/LuaCATS interoperability for common existing Lua libraries;
+- improve safe project-wide refactors and module changes;
+- preserve `any` and ordinary Lua as explicit dynamic escape paths.
 
-After that, Phase 13 explores LOVE domain extensions:
+### Make Releases Easier To Trust
 
-- first-class sprite and ECS analysis through cached core queries, without a
-  generic extension registry;
-- built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)`
-  BrineVector-backed emission;
-- opt-in LuaJIT guidance for stable local/table shapes in hot LOVE code;
-- opt-in tiny-ecs-shaped ECS domain support through the core analysis path;
-- a prototype sprite/animation DSL;
-- richer asset validation and editor metadata, with the first shared metadata
-  slice now powering asset hovers and path completion;
-- optional Feather/tooling integration hooks.
+- add code signing when sustainable signing identities and key management are
+  available;
+- test upgrade and rollback behavior between adjacent extension/server
+  versions;
+- publish compatibility and migration notes for every minor release;
+- add more architectures only when CI can build and test them natively.
 
-Phase 14 tracks completion intelligence as a compiler-first pipeline. It now
-generates parsed identifier candidates from scope visibility, keeps field
-completions backed by type, module, LOVE catalog, and table-shape facts, and
-ranks semantic candidates with local/project usage signals plus local
-project-adaptive learning when the receiver is known, and includes default-off
-contextual sequence and multi-token lanes:
+## Later
 
-- deterministic semantic candidate generation;
-- revisioned, content-cached per-file member/event summaries and source-free
-  project usage aggregation for request-time ranking;
-- same-file proximity, call-site frequency, project member usage, and
-  declaration-quality ranking signals;
-- persisted privacy-safe workspace usage statistics for member access and call
-  patterns, with reset support;
-- optional local contextual sequence ranking behind explicit editor
-  configuration, with timeout/error fallback to pre-sequence ordering;
-- optional local multi-token suggestions for narrow assignment, expression-tail,
-  and method-chain contexts, with parse validation and an explicit future model
-  policy gate;
-- completion latency, ranking-overhead, completion-cache, and model-lane
-  fallback benchmarks. Phase 14 is considered successful when
-  `make profile-completion` reports medium-fixture completion p95 at or below
-  50ms and ranking p95 at or below 5ms after warmup.
+### Revisit Storage And Extensibility With Evidence
 
-Phase 15 tracks TypeScript Go-inspired LSP and VS Code parity gaps:
+- compact generated LOVE data only if measured compile time, binary size, or
+  maintenance cost justifies replacing generated Rust source;
+- revisit an external tooling bridge only after a concrete local consumer
+  exists;
+- reconsider generics when identity-preserving APIs cannot be modeled clearly
+  with concrete types;
+- keep executable third-party plugins out until ownership, ordering, security,
+  and performance contracts can be made stable.
 
-- editor lifecycle UX first: restart/output commands, status, server selection,
-  logging, profiling, and support commands;
-- performance-oriented protocol support includes pull diagnostics,
-  range/on-type formatting, and semantic token delta;
-- deeper navigation and refactor parity after that: type definition,
-  implementation, code lens references, completion label details, signature
-  retriggers, and broader refactor/source-action families beyond the safe import
-  and fix-all actions already implemented;
-- TypeScript Go-style proposed editor features are evaluated conservatively:
-  Tua keeps verbose hover, source definition, multi-document highlight, and auto
-  insert off custom/proposed protocols unless a stable or preview-gated Lua/Tua
-  workflow is proven.
-- The optional external API bridge is design-only today. It should remain
-  disabled by default, local-only, authenticated for pipe/socket use, and
-  separate from LSP startup until a concrete consumer exists.
+## Planning Rules
 
-## Working Rule
-
-Each commit should leave the repository buildable and tested. Behavior changes
-should include focused core or LSP tests in the same commit.
+- Current behavior belongs in the specification and capability matrix.
+- Product priorities belong here.
+- Completed implementation detail belongs in dated archives or the changelog.
+- A roadmap item moves only when implementation, tests, and user documentation
+  agree.
