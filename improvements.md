@@ -220,29 +220,39 @@ provides the local subset that does not need a pinned external LOVE API checkout
 or a graphical VS Code host. Extension checks syntax-check every JavaScript
 module, and JSON validation discovers every tracked `.json` file through Git.
 
-`make benchmark-smoke` checks completion order and runs one timing-harness pass
-without an absolute machine-dependent latency gate. The separate performance
-workflow runs `make profile-all` on `main`, weekly, or on demand and retains the
-LSP, completion, and bundled-example JSON reports as 90-day trend artifacts.
+`make benchmark-smoke` checks completion order, runs one examples timing pass,
+and enforces semantic freshness and a generous completion ceiling on the
+CI-sized representative fixtures. The separate performance workflow runs
+`make profile-all` on `main`, weekly, or on demand and retains the LSP,
+completion, representative, and bundled-example JSON reports as 90-day trend
+artifacts.
 
 ### P1: Use representative performance benchmarks
 
-The current medium fixture is 102 lines and the large fixture is 149 lines.
-The cheatsheet that exposed multi-second editor contention is 764 lines. The
-LSP profiler also sends requests serially, so it cannot reproduce queue
-contention.
+Status: done on 2026-07-16.
 
-Improvements:
+[`generate-lsp-benchmarks.js`](scripts/generate-lsp-benchmarks.js) creates
+deterministic exact 1,000-line and 5,000-line single-file fixtures plus 100-file
+and 1,000-file projects under ignored `target/` storage. A hashed manifest and
+generator tests verify file counts, line counts, and reproducible content
+without checking 1,000 generated files into Git.
 
-- Generate deterministic 1,000-line and 5,000-line single-file fixtures.
-- Add 100-file and 1,000-file project fixtures.
-- Benchmark cold and warm completion, hover, definition, and inlay hints.
-- Simulate bursts of background requests followed by `didChange` and
-  completion.
-- Record p50, p95, p99, request age, cache hit rate, cancellation rate, and
-  stale-result count.
-- Fail regression checks when completion freshness or a generous latency
-  budget is violated.
+[`lsp-representative-profile.js`](editors/vscode/scripts/lsp-representative-profile.js)
+starts a fresh server for every cold feature sample, records repeated warm
+completion, hover, definition, and inlay-hint samples, and simulates editor
+contention with 32 background requests followed by `didChange` and completion.
+The JSON report includes p50/p95/p99, request age, cache hit rates, cancellation
+rate, old-version results after the change, stale-result count, and semantic
+probe failures.
+
+Required CI profiles the 1,000-line and 100-file fixtures with a generous
+2-second completion p95 gate. It also rejects stale results and invalid
+semantic responses while recording cancellation behavior. The scheduled
+performance lane profiles all four scales with a 10-second gate and retains
+reports for 90-day trend analysis. On the implementation baseline, the
+5,000-line contention probe exposed a roughly 5.1-second completion while warm
+completion remained under 10ms, making the remaining preemption cost explicit
+rather than hiding it behind the old 149-line serial profiler.
 
 ### P1: Add real VS Code integration tests
 

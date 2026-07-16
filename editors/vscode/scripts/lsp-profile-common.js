@@ -16,6 +16,9 @@ class LspClient {
     this.diagnostics = [];
     this.diagnosticWaiters = [];
     this.stderr = "";
+    this.requestTimeoutMs = Number(
+      options.requestTimeoutMs || this.env.TUA_LSP_REQUEST_TIMEOUT_MS || 10000,
+    );
   }
 
   start() {
@@ -58,26 +61,49 @@ class LspClient {
   }
 
   request(method, params) {
+    const request = this.startRequest(method, params);
+
+    return request.response.then((message) => {
+      if (message.error) {
+        const error = new Error(`${method} failed: ${JSON.stringify(message.error)}`);
+
+        error.code = message.error.code;
+        error.data = message.error.data;
+        throw error;
+      }
+
+      return message.result;
+    });
+  }
+
+  startRequest(method, params) {
     const id = this.nextId++;
+    const sentAt = process.hrtime.bigint();
+    let timeout;
+    let rejectResponse;
 
-    this.send({ jsonrpc: "2.0", id, method, params });
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+    const response = new Promise((resolve, reject) => {
+      rejectResponse = reject;
+      timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method} timed out`));
-      }, 10000);
+        reject(new Error(`${method} timed out after ${this.requestTimeoutMs}ms`));
+      }, this.requestTimeoutMs);
 
       this.pending.set(id, (message) => {
         clearTimeout(timeout);
-
-        if (message.error) {
-          reject(new Error(`${method} failed: ${JSON.stringify(message.error)}`));
-        } else {
-          resolve(message.result);
-        }
+        resolve(message);
       });
     });
+
+    try {
+      this.send({ jsonrpc: "2.0", id, method, params });
+    } catch (error) {
+      clearTimeout(timeout);
+      this.pending.delete(id);
+      rejectResponse(error);
+    }
+
+    return { id, method, sentAt, response };
   }
 
   notify(method, params) {

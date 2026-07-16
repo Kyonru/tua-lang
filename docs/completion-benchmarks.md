@@ -49,10 +49,11 @@ Run the required CI-sized benchmark lane with:
 make benchmark-smoke
 ```
 
-It combines the deterministic ranking fixture with one pass through the bundled
-example profiling harness. It intentionally has no absolute timing threshold,
-because shared CI runner speed is not stable enough for a useful latency gate.
-Command failures and missing profiler output still fail the job.
+It combines the deterministic ranking fixture, one pass through the bundled
+example profiling harness, and representative contention checks against the
+generated 1,000-line and 100-file fixtures. The contention checks reject stale
+results, validate semantic results, record background cancellation, and use a
+generous 2-second completion p95 ceiling. Both JSON reports are retained by CI.
 
 The separate performance workflow runs the full profiles on `main`, weekly, and
 on demand:
@@ -61,14 +62,66 @@ on demand:
 make profile-all
 ```
 
-It retains `lsp-profile.json`, `completion-profile.json`, and
-`examples-profile.json` as CI artifacts for trend comparison. Pull requests run
-the smaller smoke lane and do not wait for these full profiles.
+It retains `lsp-profile.json`, `completion-profile.json`,
+`representative-profile.json`, and `examples-profile.json` as CI artifacts for
+trend comparison. Pull requests run the smaller smoke lane and do not wait for
+these full profiles.
 
 LSP smoke and profiling scripts set `TUA_COMPLETION_STATS=0` by default so
 verification does not create or mutate fixture-local `.tua/completion-stats.json`
 files. Set `TUA_COMPLETION_STATS=1` when you intentionally want a benchmark run
 to include persisted adaptive completion stats.
+
+## Representative Scale Profile
+
+Generate the deterministic fixtures without running the profiler:
+
+```bash
+make generate-lsp-benchmarks
+```
+
+The generator writes ignored data under
+`target/tua-benchmarks/lsp-representative/` and records content hashes in a
+manifest. It produces:
+
+- one 1,000-line Tua file;
+- one 5,000-line Tua file;
+- a 100-file project;
+- a 1,000-file project.
+
+Run all four profiles with:
+
+```bash
+make profile-representative
+```
+
+Each cold sample starts a fresh server for one request. Warm samples repeat
+completion, hover, definition, and whole-document inlay hints in one session.
+For contention, the profiler starts a burst of background inlay requests,
+sends `didChange`, and immediately requests completion from the new document
+version. Only `main.tua` is opened in project fixtures; the remaining files are
+discovered through the normal project graph.
+
+`representative-profile.json` reports p50/p95/p99 latency, request age, cache
+hit rates, cancellation rate, old-version results received after the change,
+stale-result count, and semantic validation failures. The full lane rejects
+stale results and failed semantic probes, and uses a 10-second completion p95
+ceiling to catch stalls without treating normal runner variance as a
+microbenchmark regression. Cancellation rate remains diagnostic rather than a
+gate because a sufficiently fast server may finish the background burst before
+the change arrives.
+
+Representative profile knobs are:
+
+- `TUA_REPRESENTATIVE_FIXTURES`: comma-separated generated fixture names.
+- `TUA_REPRESENTATIVE_COLD_REPEAT`: fresh-server samples per request.
+- `TUA_REPRESENTATIVE_WARM_REPEAT`: repeated warm samples.
+- `TUA_REPRESENTATIVE_CONTENTION_REPEAT`: background-burst rounds.
+- `TUA_REPRESENTATIVE_BACKGROUND_BURST`: requests started before each change.
+- `TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS`: warm and contended completion
+  ceiling.
+- `TUA_REPRESENTATIVE_PROFILE_OUT`: JSON report path.
+- `TUA_LSP_REQUEST_TIMEOUT_MS`: per-request timeout.
 
 ## Contextual Sequence Ranking
 

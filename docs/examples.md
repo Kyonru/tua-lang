@@ -58,11 +58,15 @@ The test skips gracefully when no compatible Lua executable is present.
 `benchmarks/lsp/small`, `benchmarks/lsp/medium`, and `benchmarks/lsp/large`
 are checked-in Tua projects for profiling editor latency and cache behavior.
 They include comments describing the feature surface each file stresses.
+Larger deterministic fixtures are generated under `target/` so 1,000 generated
+project files do not live in the repository.
 
 ```bash
 make profile-lsp
 make profile-completion
 make completion-ranking-smoke
+make generate-lsp-benchmarks
+make profile-representative
 ```
 
 ## Examples Speed Suite
@@ -77,9 +81,11 @@ make profile-examples-baseline
 make profile-all
 ```
 
-The suite discovers every `examples/*/tua.toml`, times CLI commands and LSP
-editor requests, and writes JSON reports under `target/tua-speed/`. It uses
-local soft thresholds for comparisons because timing varies by machine:
+The examples suite discovers every `examples/*/tua.toml` and times CLI commands
+and LSP editor requests. The representative suite measures generated large-file
+and project-scale fixtures, including request contention. Both write JSON
+reports under `target/tua-speed/`. Example timing comparisons use local soft
+thresholds because timing varies by machine:
 
 ```bash
 TUA_SPEED_BASELINE=target/tua-speed/examples-baseline.json make profile-examples

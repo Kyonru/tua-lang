@@ -286,6 +286,7 @@ For completion-specific profiling and ranking regression checks:
 ```bash
 make profile-completion
 make completion-ranking-smoke
+make profile-representative
 ```
 
 `make profile-completion` runs the fixed `benchmarks/lsp/medium` profile and
@@ -293,6 +294,13 @@ prints completion p50/p95/p99, completion-context cache hit rate,
 `analysis.completion.ranking` overhead, and optional model-lane fallback
 frequency. See [Completion Benchmarks](completion-benchmarks.md) for latency
 targets, baseline comparison, ranking diagnostics, and known failure modes.
+
+`make profile-representative` generates exact 1,000-line, 5,000-line,
+100-file, and 1,000-file fixtures under `target/`, then measures cold and warm
+completion, hover, definition, and inlay hints. Its contention phase sends a
+background request burst before `didChange` and completion, so cancellation,
+request age, freshness, and stale-result regressions are observable rather
+than inferred from serial timings.
 
 Experimental contextual sequence ranking can be enabled with
 `tua.completion.sequenceRanking.enabled`. The initial provider is local-only,

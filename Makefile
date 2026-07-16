@@ -131,6 +131,30 @@ completion-ranking-smoke: ## Check fixture-driven completion ranking order.
 	$(CARGO) build --package tua-cli
 	node editors/vscode/scripts/lsp-completion-ranking-smoke.js target/debug/tua benchmarks/lsp/medium
 
+.PHONY: generate-lsp-benchmarks
+generate-lsp-benchmarks: ## Generate deterministic representative LSP benchmark fixtures under target/.
+	node scripts/generate-lsp-benchmarks.js
+
+.PHONY: representative-benchmark-test
+representative-benchmark-test: ## Verify representative LSP fixture sizes and deterministic content.
+	node --test scripts/generate-lsp-benchmarks.test.js
+
+.PHONY: profile-representative
+profile-representative: representative-benchmark-test ## Profile cold, warm, and contended LSP requests at representative scales.
+	$(CARGO) build --release --package tua-cli
+	node editors/vscode/scripts/lsp-representative-profile.js $(RELEASE_TUA)
+
+.PHONY: representative-benchmark-smoke
+representative-benchmark-smoke: representative-benchmark-test ## Gate completion freshness on CI-sized representative fixtures.
+	$(CARGO) build --release --package tua-cli
+	TUA_REPRESENTATIVE_FIXTURES=single-1000,project-100 \
+	TUA_REPRESENTATIVE_COLD_REPEAT=1 \
+	TUA_REPRESENTATIVE_WARM_REPEAT=2 \
+	TUA_REPRESENTATIVE_CONTENTION_REPEAT=2 \
+	TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS=2000 \
+	TUA_REPRESENTATIVE_PROFILE_OUT=$${TUA_REPRESENTATIVE_PROFILE_OUT:-target/tua-speed/representative-profile-smoke.json} \
+	node editors/vscode/scripts/lsp-representative-profile.js $(RELEASE_TUA)
+
 .PHONY: profile-examples
 profile-examples: ## Profile CLI and LSP speed across every bundled example project.
 	$(CARGO) build --release --package tua-cli
@@ -147,10 +171,10 @@ profile-examples-smoke: ## Run one quick examples speed profiling pass.
 	TUA_SPEED_WARMUP=0 TUA_SPEED_REPEAT=1 TUA_SPEED_OUT=$${TUA_SPEED_OUT:-target/tua-speed/examples-profile-smoke.json} node scripts/profile-examples.js $(RELEASE_TUA)
 
 .PHONY: benchmark-smoke
-benchmark-smoke: completion-ranking-smoke profile-examples-smoke ## Exercise deterministic ranking fixtures and one timing-harness pass.
+benchmark-smoke: completion-ranking-smoke profile-examples-smoke representative-benchmark-smoke ## Exercise deterministic ranking, timing, and completion-freshness gates.
 
 .PHONY: profile-all
-profile-all: profile-lsp profile-completion profile-examples ## Run the full LSP, completion, and bundled-example profiles.
+profile-all: profile-lsp profile-completion profile-examples profile-representative ## Run all LSP, completion, representative, and bundled-example profiles.
 
 .PHONY: check-example
 check-example: ## Check one example project. Override with EXAMPLE=examples/love-full.

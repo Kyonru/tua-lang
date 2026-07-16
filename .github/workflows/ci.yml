@@ -105,7 +105,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-smoke-${{ github.run_id }}
-          path: target/tua-speed/examples-profile-smoke.json
+          path: |
+            target/tua-speed/examples-profile-smoke.json
+            target/tua-speed/representative-profile-smoke.json
           if-no-files-found: error
           retention-days: 14
 
