@@ -495,18 +495,30 @@ local value = cl
 fn completion_returns_love_callback_snippet_and_conf_fields() {
     let callback_uri = "file:///tmp/love-callback-completion.tua";
     let callback_source = "function love.up\n";
+    let generated_callback_uri = "file:///tmp/love-generated-callback-completion.tua";
+    let generated_callback_source = "function love.file\n";
     let conf_uri = "file:///tmp/love-conf-completion.tua";
     let conf_source = r#"function love.conf(t)
   local title = t.window.ti
 end
 "#;
-    let output = run_messages(vec![
+    let mut server = TestServer::new();
+    for message in [
         did_open(callback_uri, callback_source),
+        did_open(generated_callback_uri, generated_callback_source),
         did_open(conf_uri, conf_source),
         completion_request(2, callback_uri, callback_source, "love.up"),
-        completion_request(3, conf_uri, conf_source, "t.window.ti"),
-    ]);
-    let callback = response_with_id(&output, 2)["result"]
+        completion_request(
+            3,
+            generated_callback_uri,
+            generated_callback_source,
+            "love.file",
+        ),
+        completion_request(4, conf_uri, conf_source, "t.window.ti"),
+    ] {
+        server.send(message);
+    }
+    let callback = response_with_id(server.output(), 2)["result"]
         .as_array()
         .expect("callback completions should be an array")
         .iter()
@@ -516,7 +528,25 @@ end
 
     assert_eq!(callback["insertText"], "update(dt)\n  $0\nend");
     assert_eq!(callback["insertTextFormat"], 2);
-    assert_completion_labels(&output, 3, ["title"]);
+    let filedropped = response_with_id(server.output(), 3)["result"]
+        .as_array()
+        .expect("generated callback completions should be an array")
+        .iter()
+        .find(|item| item["label"] == "filedropped")
+        .expect("filedropped callback should complete")
+        .clone();
+
+    assert_eq!(filedropped["insertText"], "filedropped(file)\n  $0\nend");
+    assert_eq!(filedropped["insertTextFormat"], 2);
+    assert_completion_labels(server.output(), 4, ["title"]);
+
+    server.send(completion_resolve_request(5, filedropped));
+    assert!(
+        response_with_id(server.output(), 5)["result"]["documentation"]["value"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("The unopened File object")
+    );
 }
 #[test]
 fn completion_items_can_be_resolved_for_documentation() {

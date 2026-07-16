@@ -22,6 +22,7 @@ pub struct Reference {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReferenceKind {
     Module,
+    Asset,
     TypeAlias,
     Local,
     Function,
@@ -239,6 +240,7 @@ fn scope_kind_for_definition(kind: DefinitionKind) -> Option<ScopeDeclarationKin
         DefinitionKind::Parameter => Some(ScopeDeclarationKind::Parameter),
         DefinitionKind::Module
         | DefinitionKind::Builtin
+        | DefinitionKind::Asset
         | DefinitionKind::TypeAlias
         | DefinitionKind::TableField => None,
     }
@@ -509,6 +511,7 @@ fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
     match kind {
         DefinitionKind::Module => ReferenceKind::Module,
         DefinitionKind::Builtin => ReferenceKind::Function,
+        DefinitionKind::Asset => ReferenceKind::Asset,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,

@@ -137,8 +137,10 @@ or submit external reports automatically.
 Tua prefers standard LSP requests over TypeScript-specific custom protocol:
 
 - Hover uses `textDocument/hover`; no separate verbose-hover command exists.
-- Source navigation uses definition, type-definition, and `tua:/builtins`
-  virtual documents for generated builtin or LOVE stubs.
+- Source navigation uses definition, type-definition, validated asset targets,
+  and `tua:/builtins` virtual documents for generated builtin or LOVE stubs.
+- Asset references find every indexed Tua/Lua loader literal that resolves to
+  the same file.
 - Project-wide occurrences use references instead of automatic multi-document
   highlights.
 - Auto insert is out of scope until Tua has a safe syntax trigger; snippets and

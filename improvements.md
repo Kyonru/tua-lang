@@ -315,15 +315,24 @@ animation names are rendered from `TL5004` inspection diagnostics.
 
 ### P2: Expand LOVE-focused semantic support
 
-Improvements:
+Status: done on 2026-07-16.
 
-- Complete LOVE object inheritance and overload handling first.
-- Add asset path definition and reference navigation.
-- Add callback skeleton completion and callback parameter documentation.
-- Improve `conf.lua` configuration completion and validation.
-- Map emitted Lua runtime errors back to Tua source positions.
-- Keep LOVE catalog documentation, signatures, enum values, and object methods
-  generated from one authoritative version.
+LOVE object inheritance and function overload checking use generated type
+supertypes and signature variants from the pinned `love-api` revision. Validated
+asset literals now resolve definitions directly to asset files, while
+references compare cached asset metadata across project files without
+rescanning source.
+
+Top-level callback identity is generated from the same catalog. Every cataloged
+callback can produce a declaration skeleton, and completion resolve includes
+generated callback parameter names, types, and documentation. `love.conf(t)`
+keeps typed nested field completion and now validates the documented
+`t.window.fullscreentype` literal values.
+
+Generated Lua tracebacks already map through lowering provenance with
+`tua traceback`. LOVE items, overloads, parameter docs, enum values, object
+methods, callback identity, and inheritance remain reproducible through
+`make generate-love-api` and guarded by `make love-api-drift-check`.
 
 ### P2: Complete SignalBus intelligence
 

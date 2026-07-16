@@ -58,13 +58,18 @@ selected path, version, and workspace directory when available.
 - Completion items advertise label-details support and include concise labels
   such as field types or symbol categories when known.
 - Completion item resolve includes LOVE wiki links for generated LOVE API
-  functions and object methods when a matching page is known.
+  functions and object methods when a matching page is known. Generated LOVE
+  callback items also include parameter names, types, and parameter
+  documentation from the pinned catalog.
 - Asset path hovers show kind, relative path, inferred LOVE type, validation
   status, extension, and optional cheap metadata such as PNG dimensions when
   available.
 - Asset path completion and validation use an in-memory asset index refreshed
   from workspace and watched-file events instead of walking asset directories
   during editor requests.
+- Definition on a validated asset string opens the resolved image, audio, font,
+  shader, or video file. References returns every indexed Tua or Lua asset
+  loader literal that resolves to the same file.
 - Static LOVE asset diagnostics cover obvious missing files, unsupported
   formats, and source type mismatches before the game runs.
 - Supported `value is Type` checks narrow true branches for hover, completion,
@@ -73,10 +78,14 @@ selected path, version, and workspace directory when available.
   hover, diagnostics, and optimized final-method calls.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
-- LOVE callback completions can insert declaration snippets for callbacks such
-  as `love.load`, `love.update(dt)`, `love.draw`, and `love.conf(t)`.
+- LOVE callback completions are generated from the pinned LOVE catalog and can
+  insert declaration snippets for all known callbacks, including
+  `love.load`, `love.update(dt)`, `love.filedropped(file)`, touch/gamepad
+  callbacks, `love.draw`, and `love.conf(t)`.
 - `love.conf(t)` parameters expose common config fields such as
-  `t.window.title`, `t.window.width`, and `t.modules.physics`.
+  `t.window.title`, `t.window.width`, and `t.modules.physics`. Known literal
+  options are checked, including `"desktop" | "exclusive"` for
+  `t.window.fullscreentype`.
 - Completion item resolve for documentation/details.
 - Open buffers retain their last valid semantic snapshot. During a temporary
   syntax error, hover and inlay hints keep using those facts, while completion

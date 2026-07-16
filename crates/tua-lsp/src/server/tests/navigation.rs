@@ -136,6 +136,42 @@ lookupObject.count = 1
     assert_definition_text(&output, 2, uri, source, "count");
     assert_reference_texts(&output, 3, source, ["count", "count"]);
 }
+
+#[test]
+fn definition_and_references_resolve_asset_paths() {
+    let project = TempProject::new("asset-navigation");
+    let main = r#"local player = image "assets/player.png"
+"#;
+    let ui = r#"local portrait = love.graphics.newImage("assets/player.png")
+"#;
+
+    project.write("tua.toml", "source = \".\"\n");
+    project.write("main.tua", main);
+    project.write("ui.lua", ui);
+    project.write("assets/player.png", "");
+
+    let main_uri = project.uri_for("main.tua");
+    let ui_uri = project.uri_for("ui.lua");
+    let asset_uri = project.uri_for("assets/player.png");
+    let output = run_messages(vec![
+        initialize_with_root(1, project.uri()),
+        did_open(&main_uri, main),
+        definition_request(2, &main_uri, main, "assets/player.png", 0),
+        references_request(3, &main_uri, main, "assets/player.png", 0, true),
+    ]);
+    let definition = &response_with_id(&output, 2)["result"];
+    let references = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("asset references should be an array");
+
+    assert_eq!(definition["uri"], asset_uri);
+    assert_eq!(definition["range"]["start"]["line"], 0);
+    assert_eq!(definition["range"]["start"]["character"], 0);
+    assert_eq!(references.len(), 2);
+    assert_reference_texts_for_uri(&output, 3, &main_uri, main, ["\"assets/player.png\""]);
+    assert_reference_texts_for_uri(&output, 3, &ui_uri, ui, ["\"assets/player.png\""]);
+}
+
 #[test]
 fn definition_returns_global_function_location() {
     let uri = "file:///tmp/global-definition.tua";

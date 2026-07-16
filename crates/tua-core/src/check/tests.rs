@@ -494,6 +494,34 @@ end
 }
 
 #[test]
+fn validates_love_conf_fullscreen_type_values() {
+    check_tua_source(
+        "src/conf.tua",
+        r#"
+function love.conf(t)
+  t.window.fullscreentype = "desktop"
+end
+"#,
+    )
+    .expect("documented LOVE fullscreen types should be accepted");
+
+    let diagnostics = check_tua_source(
+        "src/conf.tua",
+        r#"
+function love.conf(t)
+  t.window.fullscreentype = "borderless"
+end
+"#,
+    )
+    .expect_err("unknown LOVE fullscreen types should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        r#"expected "desktop" | "exclusive", found "borderless""#,
+    );
+}
+
+#[test]
 fn rejects_table_field_mismatch_in_annotated_local_initializer() {
     let diagnostics = check_tua_source(
         "src/player.tua",

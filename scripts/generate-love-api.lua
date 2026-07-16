@@ -98,6 +98,7 @@ local function add_function(items, path, target, fn)
 end
 
 local items = {}
+local callback_labels = {}
 
 for _, fn in ipairs(api.functions or {}) do
   add_function(items, { "love" }, "love." .. fn.name, fn)
@@ -105,6 +106,7 @@ end
 
 for _, fn in ipairs(api.callbacks or {}) do
   add_function(items, { "love" }, "love." .. fn.name, fn)
+  callback_labels[#callback_labels + 1] = fn.name
 end
 
 for _, module in ipairs(api.modules or {}) do
@@ -122,6 +124,7 @@ for _, module in ipairs(api.modules or {}) do
 end
 
 sort_items(items)
+table.sort(callback_labels)
 
 local revision_file = assert(io.open("scripts/love-api-revision.txt", "r"))
 local revision = assert(revision_file:read("*l"))
@@ -171,6 +174,17 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
         .map(lua_item)
 }
 
+pub(crate) fn callback_item(label: &str) -> Option<LuaItem> {
+    if CALLBACK_LABELS.binary_search(&label).is_err() {
+        return None;
+    }
+
+    ITEMS
+        .iter()
+        .find(|item| item.path == ["love"] && item.label == label)
+        .map(lua_item)
+}
+
 fn path_matches(path: &[&str], receiver_parts: &[String]) -> bool {
     path.len() == receiver_parts.len()
         && path
@@ -211,5 +225,10 @@ for _, item in ipairs(items) do
   file:write("    },\n")
 end
 
+file:write("];\n\n")
+file:write("const CALLBACK_LABELS: &[&str] = &[\n")
+for _, label in ipairs(callback_labels) do
+  file:write("    ", rust_string(label), ",\n")
+end
 file:write("];\n")
 file:close()

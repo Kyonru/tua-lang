@@ -97,6 +97,12 @@ make generate-love-api LOVE_API_ROOT=/path/to/love-api
 make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
 ```
 
+Top-level LOVE callback identity, declaration snippets, function docs,
+parameter docs, overloads, enums, object methods, and object inheritance all
+come from that pinned source. For example, completing
+`function love.filedropped` inserts `filedropped(file) ... end`, and completion
+details describe the generated `DroppedFile` parameter.
+
 ## LuaDoc Annotations
 
 Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.lua` and
@@ -303,6 +309,10 @@ local position = __tua_vec2(100, 200)
 
 Values inferred as LOVE API objects expose generated object methods in
 completion, such as `player:getWidth()`, `jump:play()`, or `file:open("r")`.
+
+Validated asset literals also participate in navigation. Definition opens the
+resolved asset file, and references finds every indexed helper or native LOVE
+constructor string that resolves to the same asset.
 
 `Vec2` is a built-in table-shaped type for position and velocity values. The
 `vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits

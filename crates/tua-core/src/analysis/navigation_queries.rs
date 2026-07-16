@@ -22,19 +22,21 @@ impl AnalysisSnapshot {
             return definition;
         }
 
-        let definition = match &file.parsed {
-            Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir(), position),
-            Err(_) => {
-                let facts = self.degraded_semantic_facts(path, file)?;
+        let definition = self
+            .asset_definition_at_position(path, position)
+            .or_else(|| match &file.parsed {
+                Ok(parsed) => self.definition_parsed_snapshot(parsed, file.hir(), position),
+                Err(_) => {
+                    let facts = self.degraded_semantic_facts(path, file)?;
 
-                self.definition_parsed_snapshot_with_facts(
-                    &facts.parsed,
-                    Some(&facts.hir),
-                    position,
-                    Some(&facts),
-                )
-            }
-        };
+                    self.definition_parsed_snapshot_with_facts(
+                        &facts.parsed,
+                        Some(&facts.hir),
+                        position,
+                        Some(&facts),
+                    )
+                }
+            });
 
         let mut cache = self
             .definition_cache
@@ -60,6 +62,27 @@ impl AnalysisSnapshot {
         }
 
         definition
+    }
+
+    fn asset_definition_at_position(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let file = self.file(path)?;
+        let metadata = asset::asset_at_position(&file.assets, position)?;
+        let path = asset::resolved_asset_path(
+            metadata,
+            self.effective_asset_roots(),
+            self.asset_index.as_ref(),
+        )?;
+        let start = SourcePosition { line: 1, column: 1 };
+
+        Some(Definition {
+            path,
+            span: SourceSpan { start, end: start },
+            kind: DefinitionKind::Asset,
+        })
     }
 
     pub(super) fn definition_parsed_snapshot(
@@ -684,6 +707,10 @@ impl AnalysisSnapshot {
         let _profile = profile::span("analysis.query.references");
         let path = path.as_ref();
 
+        if let Some(references) = self.asset_references_at_position(path, position) {
+            return references;
+        }
+
         if let Some(references) =
             self.scope_references_at_position(path, position, include_declaration)
         {
@@ -710,6 +737,46 @@ impl AnalysisSnapshot {
         }
 
         self.references_by_scan(&target, include_declaration)
+    }
+
+    fn asset_references_at_position(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<Vec<Reference>> {
+        let file = self.file(path)?;
+        let metadata = asset::asset_at_position(&file.assets, position)?;
+        let Some(target) = asset::resolved_asset_path(
+            metadata,
+            self.effective_asset_roots(),
+            self.asset_index.as_ref(),
+        ) else {
+            return Some(Vec::new());
+        };
+        let mut references = Vec::new();
+
+        for (file_path, file) in &self.files {
+            for metadata in &file.assets {
+                let Some(candidate) = asset::resolved_asset_path(
+                    metadata,
+                    self.effective_asset_roots(),
+                    self.asset_index.as_ref(),
+                ) else {
+                    continue;
+                };
+
+                if candidate == target {
+                    references.push(Reference {
+                        path: file_path.clone(),
+                        span: metadata.span,
+                        kind: ReferenceKind::Asset,
+                    });
+                }
+            }
+        }
+
+        sort_and_dedup_references(&mut references);
+        Some(references)
     }
 
     pub(super) fn scope_references_at_position(

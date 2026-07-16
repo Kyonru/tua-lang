@@ -133,6 +133,10 @@ pub(crate) fn signature_variants(item: LuaItem) -> Option<&'static [LuaSignature
     love_api_signatures::signatures_for_target(target)
 }
 
+pub(crate) fn love_callback_item(label: &str) -> Option<LuaItem> {
+    love_api::callback_item(label)
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 

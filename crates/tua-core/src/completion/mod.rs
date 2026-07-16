@@ -2127,6 +2127,9 @@ fn completion_from_lua_field_item(
     let mut completion = completion_from_lua_item(item);
 
     if receiver_parts.len() == 1 && receiver_parts[0] == "love" {
+        if let Some(callback) = lua::love_callback_item(item.label) {
+            append_love_callback_parameter_documentation(&mut completion, callback);
+        }
         if let Some(snippet) = love_callback_snippet(item.label, source, position) {
             completion.insert_text = Some(snippet);
             completion.is_snippet = true;
@@ -2149,6 +2152,11 @@ fn apply_love_callback_snippets(
     completions: &mut BTreeMap<String, Completion>,
 ) {
     for completion in completions.values_mut() {
+        let Some(callback) = lua::love_callback_item(&completion.label) else {
+            continue;
+        };
+
+        append_love_callback_parameter_documentation(completion, callback);
         if let Some(snippet) = love_callback_snippet(&completion.label, source, position) {
             completion.insert_text = Some(snippet);
             completion.is_snippet = true;
@@ -2161,25 +2169,58 @@ fn love_callback_snippet(label: &str, source: &str, position: SourcePosition) ->
         return None;
     }
 
-    let parameters = match label {
-        "conf" => "t",
-        "draw" => "",
-        "focus" => "focus",
-        "keypressed" => "key, scancode, isrepeat",
-        "keyreleased" => "key, scancode",
-        "load" => "args",
-        "mousemoved" => "x, y, dx, dy, istouch",
-        "mousepressed" => "x, y, button, istouch, presses",
-        "mousereleased" => "x, y, button, istouch, presses",
-        "quit" => "",
-        "resize" => "width, height",
-        "textinput" => "text",
-        "update" => "dt",
-        "wheelmoved" => "x, y",
-        _ => return None,
-    };
+    let item = lua::love_callback_item(label)?;
+    let signature = lua::signature_variants(item)?.first()?;
+    let parameters = signature
+        .parameters
+        .iter()
+        .filter_map(|parameter| {
+            let name = parameter
+                .label
+                .split_once(':')
+                .map(|(name, _)| name)
+                .unwrap_or(parameter.label)
+                .trim()
+                .trim_end_matches('?');
+
+            (!name.is_empty() && name != "...").then_some(name)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
 
     Some(format!("{label}({parameters})\n  $0\nend"))
+}
+
+fn append_love_callback_parameter_documentation(completion: &mut Completion, callback: LuaItem) {
+    let Some(signatures) = lua::signature_variants(callback) else {
+        return;
+    };
+    let Some(signature) = signatures.first() else {
+        return;
+    };
+    let parameters = signature
+        .parameters
+        .iter()
+        .filter(|parameter| !parameter.documentation.trim().is_empty())
+        .map(|parameter| {
+            format!(
+                "- `{}`: {}",
+                parameter.label,
+                parameter.documentation.trim()
+            )
+        })
+        .collect::<Vec<_>>();
+
+    if parameters.is_empty() {
+        return;
+    }
+
+    let documentation = completion.documentation.get_or_insert_default();
+    if !documentation.trim().is_empty() {
+        documentation.push_str("\n\n");
+    }
+    documentation.push_str("**Callback parameters**\n\n");
+    documentation.push_str(&parameters.join("\n"));
 }
 
 fn function_call_snippet_from_lua_item(item: LuaItem) -> Option<String> {

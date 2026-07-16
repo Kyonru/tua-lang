@@ -40,6 +40,17 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
         .map(lua_item)
 }
 
+pub(crate) fn callback_item(label: &str) -> Option<LuaItem> {
+    if CALLBACK_LABELS.binary_search(&label).is_err() {
+        return None;
+    }
+
+    ITEMS
+        .iter()
+        .find(|item| item.path == ["love"] && item.label == label)
+        .map(lua_item)
+}
+
 fn path_matches(path: &[&str], receiver_parts: &[String]) -> bool {
     path.len() == receiver_parts.len()
         && path
@@ -3111,4 +3122,43 @@ If width or height is 0, updateMode will use the width and height of the desktop
 
 Changing the display mode may have side effects: for example, canvases will be cleared. Make sure to save the contents of canvases beforehand or re-draw to them afterward if you need to.",
     },
+];
+
+const CALLBACK_LABELS: &[&str] = &[
+    "conf",
+    "directorydropped",
+    "displayrotated",
+    "draw",
+    "errorhandler",
+    "filedropped",
+    "focus",
+    "gamepadaxis",
+    "gamepadpressed",
+    "gamepadreleased",
+    "joystickadded",
+    "joystickaxis",
+    "joystickhat",
+    "joystickpressed",
+    "joystickreleased",
+    "joystickremoved",
+    "keypressed",
+    "keyreleased",
+    "load",
+    "lowmemory",
+    "mousefocus",
+    "mousemoved",
+    "mousepressed",
+    "mousereleased",
+    "quit",
+    "resize",
+    "run",
+    "textedited",
+    "textinput",
+    "threaderror",
+    "touchmoved",
+    "touchpressed",
+    "touchreleased",
+    "update",
+    "visible",
+    "wheelmoved",
 ];

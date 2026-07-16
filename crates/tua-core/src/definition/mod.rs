@@ -32,6 +32,7 @@ pub struct Definition {
 pub enum DefinitionKind {
     Module,
     Builtin,
+    Asset,
     TypeAlias,
     Local,
     Function,

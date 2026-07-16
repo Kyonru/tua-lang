@@ -89,7 +89,13 @@ fn window_type() -> Type {
         ("display", TableField::optional(Type::number())),
         ("displayindex", TableField::optional(Type::number())),
         ("fullscreen", TableField::optional(Type::boolean())),
-        ("fullscreentype", TableField::optional(Type::string())),
+        (
+            "fullscreentype",
+            TableField::optional(Type::union([
+                Type::string_literal("desktop"),
+                Type::string_literal("exclusive"),
+            ])),
+        ),
         ("height", TableField::optional(Type::number())),
         ("highdpi", TableField::optional(Type::boolean())),
         ("icon", TableField::optional(Type::string())),

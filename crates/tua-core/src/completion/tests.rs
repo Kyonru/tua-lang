@@ -1011,6 +1011,28 @@ fn completes_love_callbacks_as_function_declaration_snippets() {
 
     assert!(!expression_update.is_snippet);
     assert_eq!(expression_update.insert_text, None);
+
+    let generated_source = "function love.file\n";
+    let generated_completions = complete_tua_source(
+        "src/main.tua",
+        generated_source,
+        position_after(generated_source, "file"),
+    )
+    .expect("generated LOVE callback completion should succeed");
+    let filedropped = generated_completions
+        .iter()
+        .find(|completion| completion.label == "filedropped")
+        .expect("filedropped callback should complete");
+
+    assert!(filedropped.is_snippet);
+    assert_eq!(
+        filedropped.insert_text.as_deref(),
+        Some("filedropped(file)\n  $0\nend")
+    );
+    let documentation = filedropped.documentation.as_deref().unwrap_or_default();
+    assert!(documentation.contains("**Callback parameters**"));
+    assert!(documentation.contains("`file: DroppedFile`"));
+    assert!(documentation.contains("The unopened File object"));
 }
 
 #[test]

@@ -558,6 +558,53 @@ local rawNext = love.graphics.newImage("assets/p<|raw_complete|>")
 }
 
 #[test]
+fn snapshot_resolves_asset_definitions_and_references_from_cached_metadata() {
+    let temp = TempProject::new("asset-navigation");
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local player = image "assets/<|definition|>player.png"
+-- file: src/ui.lua
+local portrait = love.graphics.newImage("assets/<|reference|>player.png")
+"#,
+    );
+    let asset_path = temp.write("assets/player.png", png_header(16, 16));
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let definition = snapshot
+        .definition("src/main.tua", fixture.position("definition"))
+        .expect("asset definition should resolve");
+    let references = snapshot.references("src/main.tua", fixture.position("definition"), true);
+
+    assert_eq!(definition.path, asset_path);
+    assert_eq!(definition.kind, DefinitionKind::Asset);
+    assert_eq!(
+        definition.span,
+        SourceSpan {
+            start: SourcePosition { line: 1, column: 1 },
+            end: SourcePosition { line: 1, column: 1 },
+        }
+    );
+    assert_eq!(references.len(), 2);
+    assert!(references
+        .iter()
+        .all(|reference| reference.kind == ReferenceKind::Asset));
+    assert_eq!(
+        references
+            .iter()
+            .map(|reference| reference.path.as_path())
+            .collect::<Vec<_>>(),
+        [Path::new("src/main.tua"), Path::new("src/ui.lua")]
+    );
+}
+
+#[test]
 fn snapshot_filters_love_asset_path_completion_by_helper_kind() {
     let temp = TempProject::new("asset-kind-completion");
     let source = r#"local player = image "assets/<|image|>"

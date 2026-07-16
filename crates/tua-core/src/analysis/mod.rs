@@ -554,11 +554,12 @@ fn reference_key(reference: &Reference) -> (PathBuf, usize, usize, usize, usize,
 fn reference_kind_key(kind: crate::ReferenceKind) -> u8 {
     match kind {
         crate::ReferenceKind::Module => 0,
-        crate::ReferenceKind::TypeAlias => 1,
-        crate::ReferenceKind::Local => 2,
-        crate::ReferenceKind::Function => 3,
-        crate::ReferenceKind::Parameter => 4,
-        crate::ReferenceKind::TableField => 5,
+        crate::ReferenceKind::Asset => 1,
+        crate::ReferenceKind::TypeAlias => 2,
+        crate::ReferenceKind::Local => 3,
+        crate::ReferenceKind::Function => 4,
+        crate::ReferenceKind::Parameter => 5,
+        crate::ReferenceKind::TableField => 6,
     }
 }
 
@@ -653,7 +654,10 @@ impl ReverseReferenceIndex {
 
 impl ReferenceIndexKey {
     fn from_definition(definition: &Definition) -> Option<Self> {
-        if definition.kind == DefinitionKind::Builtin {
+        if matches!(
+            definition.kind,
+            DefinitionKind::Builtin | DefinitionKind::Asset
+        ) {
             return None;
         }
 
@@ -677,11 +681,12 @@ fn definition_kind_key(kind: DefinitionKind) -> u8 {
     match kind {
         DefinitionKind::Module => 0,
         DefinitionKind::Builtin => 1,
-        DefinitionKind::TypeAlias => 2,
-        DefinitionKind::Local => 3,
-        DefinitionKind::Function => 4,
-        DefinitionKind::Parameter => 5,
-        DefinitionKind::TableField => 6,
+        DefinitionKind::Asset => 2,
+        DefinitionKind::TypeAlias => 3,
+        DefinitionKind::Local => 4,
+        DefinitionKind::Function => 5,
+        DefinitionKind::Parameter => 6,
+        DefinitionKind::TableField => 7,
     }
 }
 
@@ -689,6 +694,7 @@ fn reference_kind_for_definition(kind: DefinitionKind) -> ReferenceKind {
     match kind {
         DefinitionKind::Module => ReferenceKind::Module,
         DefinitionKind::Builtin => ReferenceKind::Function,
+        DefinitionKind::Asset => ReferenceKind::Asset,
         DefinitionKind::TypeAlias => ReferenceKind::TypeAlias,
         DefinitionKind::Local => ReferenceKind::Local,
         DefinitionKind::Function => ReferenceKind::Function,
