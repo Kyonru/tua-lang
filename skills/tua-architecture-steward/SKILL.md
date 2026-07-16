@@ -24,6 +24,10 @@ not to reshuffle code for its own sake.
 - Keep LSP handlers thin: protocol conversion plus snapshot access.
 - Avoid request-time disk reads once project analysis can answer the query.
 - Prefer one shared semantic path over per-feature fixes.
+- Treat a successful cached parse as owning mandatory HIR, scope, and type
+  environment facts. Temporarily invalid source must use the shared cached
+  degraded path; do not recursively call valid-file queries or standalone
+  environment-building helpers from snapshot features.
 - Preserve public helper APIs such as `*_tua_source` when useful for tests.
 - Keep emission and provenance together in `LuaEmission`; CLI source maps must
   consume compiler provenance rather than reconstructing it from generated Lua.

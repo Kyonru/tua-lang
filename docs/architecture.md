@@ -48,9 +48,11 @@ document symbols, workspace symbols, document links, code actions, call
 hierarchy, inlay hints, semantic tokens, LuaDoc support, LOVE helpers, and
 watched-file updates.
 
-The main architectural gap is not missing editor surface. It is that too much
-semantic knowledge still lives in helper APIs and feature-specific paths instead
-of a single dependency-tracked analysis model.
+The main architectural gap is not missing editor surface. The analysis domain
+now has explicit host, snapshot, database, recovery, editor-query,
+navigation-query, and project-query modules. The remaining work is to keep
+moving shared semantic knowledge out of compatibility helpers and into
+dependency-tracked snapshot facts as those helpers are retired.
 
 ## Crates And Ownership
 
@@ -101,6 +103,14 @@ Project-aware feature requests should follow the same path:
    inlay hints, semantic tokens, document symbols, call hierarchy, and code
    actions read from the snapshot instead of rereading files or rebuilding
    project state during a request.
+
+A successfully parsed cached file always has one semantic bundle containing its
+HIR, scope map, and base type environment, even when type checking reports
+diagnostics. Temporarily invalid text follows the recovery boundary instead: a
+lossy parse, HIR, and base environment are stored once with the cached file,
+then project-enriched degraded facts are cached once per snapshot revision.
+Feature queries must not feed degraded parses back into the valid-file semantic
+cache or rebuild standalone environments as a fallback.
 
 Request handlers should be deterministic. If two handlers need the same
 semantic fact, that fact should move into `tua-core` or the analysis snapshot
@@ -164,9 +174,11 @@ through the same resolver.
 
 Performance-sensitive IDE features should reuse snapshot semantic facts rather
 than rebuilding type environments in each feature. Completion, completion
-resolve, hover, signature help, and inlay hints should prefer cached
-project-aware environments and only fall back to standalone helpers for
-parse-recovery or test-style source inputs.
+resolve, hover, signature help, definition, inlay hints, and semantic tokens
+use cached valid or degraded project-aware environments. Standalone
+`*_tua_source` helpers remain useful for isolated tests and compatibility APIs,
+and recovery owns the few lexical compatibility fallbacks needed when malformed
+text cannot produce degraded semantic facts.
 
 Open and changed documents should publish fast current-file diagnostics first,
 then queue full project-aware diagnostics behind a short debounce. The stdio
@@ -188,20 +200,22 @@ checkpoints can be added without changing protocol behavior.
 `AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
 requests against unchanged inputs should reuse the warm snapshot, including
 shared lazy indexes such as semantic facts, completion lists, usage summaries,
-definition lookup results, and reverse references. Completion cache keys carry
-the snapshot revision as well as their semantic context so stale snapshots
-cannot seed newer revisions. Any file, open-document, config, builtin, root, or
-asset-root change increments the revision and forces the next snapshot to
-rebuild from the file-granular cache; unchanged files reuse their cached usage
-summaries.
+degraded semantic facts, definition lookup results, and reverse references.
+Completion cache keys carry the snapshot revision as well as their semantic
+context so stale snapshots cannot seed newer revisions. Any file,
+open-document, config, builtin, root, or asset-root change increments the
+revision and forces the next snapshot to rebuild from the file-granular cache;
+unchanged files reuse their cached usage summaries.
 
 CLI watch mode keeps one `AnalysisHost` for the process lifetime. A changed
-module reports whether its dependency surface changed; removals always count as
-surface changes. The watcher unions reverse dependency closures from the
-snapshots before and after a debounced batch, which covers edits, additions,
-deletions, and rename pairs without a CLI-specific require scanner. Cached
-analysis invalidation follows transitive importers, while emission remains CLI
-owned.
+module reports whether its exported or visible type surface changed; removals
+always count as surface changes. Require-target changes are tracked separately
+and rebuild revision-level project indexes without evicting importers when the
+module's export and type surfaces remain stable. The watcher unions reverse
+dependency closures from the snapshots before and after a debounced batch,
+which covers edits, additions, deletions, and rename pairs without a
+CLI-specific require scanner. Export/type invalidation follows transitive
+importers, while emission remains CLI owned.
 
 ## Adding A Core Query
 
@@ -323,9 +337,11 @@ assert_eq!(
 
 ### Query Cache Example
 
-The analysis cache is intentionally file-granular for now. It is not yet a full
-incremental query database, but it gives the LSP and future IDE queries a stable
-place to reuse expensive per-file work.
+The analysis cache stores file products as one unit, while dependency
+invalidation distinguishes require-target, export, and visible-type surfaces.
+It is not yet a fully incremental syntax query database, but it gives the LSP
+and future IDE queries stable boundaries for reusing expensive per-file and
+per-revision work.
 
 ```rust
 use tua_core::AnalysisHost;
@@ -347,9 +363,9 @@ let stats_after_first = host.cache_stats();
 let _second = host.snapshot();
 assert_eq!(host.cache_stats(), stats_after_first);
 
-// Editing a file invalidates that file. When require edges resolve to
-// project-backed files, editing an exported module also invalidates known
-// importers through the cached dependency graph. Unrelated files stay reusable.
+// Editing a file invalidates that file. Export or visible-type changes also
+// invalidate known importers through the cached dependency graph. A change to
+// require targets alone refreshes project indexes but keeps importers reusable.
 host.set_file("src/player.tua", "return { hp = 200 }");
 let _third = host.snapshot();
 assert!(host.cache_stats().invalidations > 0);

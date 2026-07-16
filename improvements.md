@@ -170,26 +170,41 @@ core transformations or bypass stable operation ownership and pass ordering.
 
 ### P1: Split semantic analysis into stable query boundaries
 
-[`analysis/mod.rs`](crates/tua-core/src/analysis/mod.rs) contains host state,
-snapshots, caching, recovery, project indexing, completion, hover, navigation,
-and diagnostic orchestration in more than 6,500 lines.
+Status: done. The query-boundary split landed on 2026-07-16.
 
-Improvements:
+The analysis domain now separates host mutation and snapshot construction,
+snapshot accessors, database/cache construction, degraded-source recovery,
+editor queries, navigation queries, and project queries into focused modules
+under [`analysis`](crates/tua-core/src/analysis). `analysis/mod.rs` owns the
+shared state and helper model instead of every query implementation.
 
-- Split host, snapshot, database, recovery, and feature query modules.
-- Make cached semantic facts mandatory for valid parsed files.
-- Define one explicit degraded path for temporarily invalid source.
-- Remove repeated environment construction and recursive fallback behavior.
-- Track query dependencies and invalidation at semantic surface granularity.
+Every successfully parsed cached file now owns one mandatory semantic bundle:
+HIR, scope map, and type environment. Type-checking diagnostics do not remove
+that bundle. Project-aware semantic facts are derived lazily from it and cached
+once per snapshot revision.
+
+Temporarily invalid source uses one explicit degraded path. A cached file stores
+the lossy parse, HIR, and base environment once; snapshot queries enrich and
+cache those facts once for hover, completion, definition, signature help,
+inlay hints, and semantic tokens. Queries no longer recurse from a degraded
+parse into the valid semantic cache. Feature-specific lexical compatibility
+fallbacks are confined to the recovery module and run only when no degraded
+semantic parse can be built.
+
+Dependency surfaces are tracked separately for require targets, module exports,
+and visible type facts. Export or type changes invalidate the transitive
+importer closure. Require-target-only changes rebuild the changed file and
+revision-level project indexes without evicting importer semantic products.
+Cache statistics expose a counter for each surface.
 
 ## Quality And Delivery
 
 ### P1: Add CI and restore strict linting
 
 The repository has no CI workflow. The strict command
-`cargo clippy --workspace --all-targets -- -D warnings` currently reports 20
-errors, including overly broad completion APIs and concentrated complexity in
-analysis and emission.
+`cargo clippy --workspace --all-targets -- -D warnings` currently reports nine
+errors, including overly broad completion APIs and several mechanical lint
+violations outside the analysis boundary.
 
 Improvements:
 

@@ -378,6 +378,46 @@ local hp = enemy.hp
 }
 
 #[test]
+fn valid_files_keep_cached_semantics_when_type_diagnostics_exist() {
+    let fixture = Fixture::parse(
+        r#"type Player = { hp: number }
+local player: Player = { hp = 10 }
+local unresolved: Missing = nil
+local hp = player.<|complete|>h
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, fixture.source(&path).to_owned());
+
+    let snapshot = host.snapshot();
+    let semantic_file = snapshot
+        .semantic_file(&path)
+        .expect("valid source should have semantic facts");
+
+    assert!(!semantic_file.hir.symbols.is_empty());
+    assert!(!semantic_file.scope.declarations().is_empty());
+    assert!(snapshot.type_environment(&path).is_some());
+    assert!(snapshot
+        .diagnostics(&path)
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME)));
+    assert!(
+        completion_labels(&snapshot.completion(&path, fixture.position("complete")))
+            .contains(&"hp".to_owned())
+    );
+    assert_eq!(
+        snapshot
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn snapshot_keeps_project_inputs() {
     let mut host = AnalysisHost::with_config(ProjectConfig {
         source: PathBuf::from("game"),
@@ -851,6 +891,15 @@ end
         hints.iter().any(|hint| hint.label == ": string"),
         "{hints:?}"
     );
+    assert_eq!(
+        snapshot
+            .degraded_facts
+            .lock()
+            .expect("degraded semantic facts lock poisoned")
+            .len(),
+        1,
+        "degraded hover, completion, and inlay hints should share one cached environment"
+    );
 }
 
 #[test]
@@ -1085,6 +1134,9 @@ return M
     let after_update = host.cache_stats();
     assert_eq!(after_update.invalidations, 2);
     assert_eq!(after_update.dependent_invalidations, 1);
+    assert_eq!(after_update.require_surface_invalidations, 0);
+    assert_eq!(after_update.export_surface_invalidations, 1);
+    assert_eq!(after_update.type_surface_invalidations, 1);
 
     host.snapshot();
 
@@ -1133,6 +1185,9 @@ fn changing_exported_module_invalidates_transitive_importers() {
     assert!(surface_changed);
     assert_eq!(stats.invalidations, 3);
     assert_eq!(stats.dependent_invalidations, 2);
+    assert_eq!(stats.require_surface_invalidations, 0);
+    assert_eq!(stats.export_surface_invalidations, 1);
+    assert_eq!(stats.type_surface_invalidations, 1);
 }
 
 #[test]
@@ -1188,12 +1243,46 @@ return M
     let after_update = host.cache_stats();
     assert_eq!(after_update.invalidations, 1);
     assert_eq!(after_update.dependent_invalidations, 0);
+    assert_eq!(after_update.require_surface_invalidations, 0);
+    assert_eq!(after_update.export_surface_invalidations, 0);
+    assert_eq!(after_update.type_surface_invalidations, 0);
 
     host.snapshot();
 
     let after_snapshot = host.cache_stats();
     assert_eq!(after_snapshot.diagnostics_hits, 1);
     assert_eq!(after_snapshot.diagnostics_misses, 3);
+}
+
+#[test]
+fn changing_require_targets_records_a_require_surface_invalidation() {
+    let temp = TempProject::new("module-require-surface");
+    let main = temp.write("src/main.tua", "return require(\"player\")\n");
+    let player = temp.write(
+        "src/player.tua",
+        "local dependency = require(\"stats\")\nreturn { dependency = dependency }\n",
+    );
+    let stats_module = temp.write("src/stats.tua", "return {}\n");
+    let health_module = temp.write("src/health.tua", "return {}\n");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    for path in [&main, &player, &stats_module, &health_module] {
+        host.set_file(path, fs::read_to_string(path).expect("fixture should read"));
+    }
+    host.snapshot();
+
+    let surface_changed = host.update_file_with_kind(
+        &player,
+        "local dependency = require(\"health\")\nreturn { dependency = dependency }\n",
+        AnalysisSourceKind::Tua,
+    );
+    let cache_stats = host.cache_stats();
+
+    assert!(!surface_changed);
+    assert_eq!(cache_stats.require_surface_invalidations, 1);
+    assert_eq!(cache_stats.invalidations, 1);
+    assert_eq!(cache_stats.dependent_invalidations, 0);
 }
 
 #[test]
@@ -1223,8 +1312,8 @@ return M
     let semantic_file = snapshot
         .semantic_file(&path)
         .expect("semantic file should include parsed source");
-    assert!(semantic_file.hir.is_some());
-    assert!(semantic_file.scope.is_some());
+    assert!(!semantic_file.hir.symbols.is_empty());
+    assert!(!semantic_file.scope.declarations().is_empty());
     assert!(snapshot.module_exports(&path).is_some());
     assert!(snapshot
         .symbol_index_for_path(&path)
