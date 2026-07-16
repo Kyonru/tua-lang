@@ -364,6 +364,45 @@ return {
     assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
     assert_definition_text(&output, 4, &legacy_uri, legacy, "clamp");
 }
+
+#[test]
+fn editor_regression_definition_keeps_disk_backed_required_module_after_close() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Player = require("<|module|>player")
+local player = Player.<|export|>makePlayer()
+-- file: src/player.tua
+local function makePlayer()
+  return { hp = 10 }
+end
+
+return {
+  makePlayer = makePlayer,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("closed-required-module-definition")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let player = fixture.source("src/player.tua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let player_uri = path_uri(&temp.join("src/player.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&player_uri, player),
+        did_close(&player_uri),
+        did_open(&main_uri, main),
+        definition_request_at(2, &main_uri, fixture.position("module")),
+        definition_request_at(3, &main_uri, fixture.position("export")),
+    ]);
+
+    assert_definition_text(&output, 2, &player_uri, player, "makePlayer");
+    assert_definition_text(&output, 3, &player_uri, player, "makePlayer");
+}
+
 #[test]
 fn definition_returns_imported_module_and_export_locations() {
     let fixture = Fixture::parse(

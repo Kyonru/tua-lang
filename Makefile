@@ -93,7 +93,7 @@ clippy: ## Run clippy with warnings denied.
 verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples version-drift-check release-tool-test config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -137,6 +137,11 @@ lsp-smoke: ## Initialize and shutdown the LSP server to prove it responds.
 lsp-features-smoke: ## Exercise LSP requests against examples/features with the debug server.
 	$(CARGO) build --package tua-cli
 	node editors/vscode/scripts/lsp-features-smoke.js target/debug/tua examples/features
+
+.PHONY: editor-regression-smoke
+editor-regression-smoke: ## Gate typing freshness and closed/unopened module navigation through the real LSP server.
+	$(CARGO) test -p tua-lsp editor_regression
+	$(MAKE) lsp-features-smoke
 
 .PHONY: profile-lsp
 profile-lsp: ## Profile LSP request latency against small/medium/large benchmark fixtures.

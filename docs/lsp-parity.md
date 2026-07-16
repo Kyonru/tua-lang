@@ -110,6 +110,16 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 
 ## Maintenance Rules
 
+Run `make editor-regression-smoke` for a focused editor reliability gate. It
+combines deterministic scheduler and module-lifecycle tests with requests
+against the real `tua lsp` process and the bundled feature project. The smoke
+keeps required providers unopened, verifies navigation after a provider closes,
+and requires inlay hints from the latest document version after an edit.
+
+Use `make extension-test` for VS Code client synchronization and visible editor
+behavior, and `make benchmark-smoke` for completion freshness and latency
+budgets under representative contention.
+
 - Move a row only when implementation and tests have landed.
 - Keep the Tua column factual and tied to checked-in behavior.
 - Every planned gap should name a roadmap item.

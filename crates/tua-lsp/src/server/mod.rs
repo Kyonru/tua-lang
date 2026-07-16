@@ -369,7 +369,9 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/formatting"
         | "textDocument/rangeFormatting"
         | "textDocument/onTypeFormatting" => Some(2),
-        "textDocument/hover" | "textDocument/documentHighlight" => Some(3),
+        "textDocument/hover" | "textDocument/documentHighlight" | "textDocument/inlayHint" => {
+            Some(3)
+        }
         "tua/inspect" | "tua/signalGraph" => Some(3),
         _ => None,
     }
@@ -392,7 +394,6 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "textDocument/documentLink"
             | "textDocument/documentSymbol"
             | "textDocument/foldingRange"
-            | "textDocument/inlayHint"
             | "textDocument/semanticTokens/full"
             | "textDocument/semanticTokens/full/delta"
             | "textDocument/semanticTokens/range"

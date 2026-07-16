@@ -143,6 +143,18 @@ fn did_open(uri: &str, source: &str) -> Value {
     })
 }
 
+fn did_close(uri: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didClose",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            }
+        }
+    })
+}
+
 fn slow_background_request(id: u64, uri: Option<&str>, delay_ms: u64) -> Value {
     let mut params = json!({ "delayMs": delay_ms });
     if let Some(uri) = uri {

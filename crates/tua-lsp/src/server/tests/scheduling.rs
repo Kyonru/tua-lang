@@ -80,6 +80,56 @@ fn typing_and_completion_preempt_a_running_background_request() {
         .as_array()
         .is_some_and(|items| !items.is_empty()));
 }
+
+#[test]
+fn editor_regression_fresh_inlay_hints_preempt_background_after_typing() {
+    let uri = "file:///tmp/preemptible-inlay-hints.tua";
+    let before = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+"#;
+    let after = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local player = makePlayer()
+"#;
+    let output = run_chunked_messages(vec![
+        (
+            Duration::ZERO,
+            vec![
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }),
+                did_open(uri, before),
+                slow_background_request(2, None, 300),
+            ],
+        ),
+        (
+            Duration::from_millis(50),
+            vec![
+                did_change(uri, after, 2),
+                inlay_hint_request(3, uri, 0, 0, 10, 0),
+            ],
+        ),
+    ]);
+    let inlay_index = response_index_with_id(&output, 3);
+    let slow_index = response_index_with_id(&output, 2);
+    let hints = response_with_id(&output, 3)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert!(
+        inlay_index < slow_index,
+        "fresh inlay hints should not wait for background refreshes: {output:#?}"
+    );
+    assert!(
+        inlay_hint_labels(hints).contains(&": Player"),
+        "inlay hints should describe the latest document version: {hints:#?}"
+    );
+}
 #[test]
 fn did_change_discards_a_stale_background_result() {
     let uri = "file:///tmp/stale-background.tua";

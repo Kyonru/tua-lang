@@ -339,6 +339,7 @@ fn trace_summarizes_noisy_editor_background_requests() {
             "id": 8
         }
     }));
+    server.send(hover_request(9, uri, source, "value"));
 
     let log_messages = server
         .output()
@@ -346,21 +347,24 @@ fn trace_summarizes_noisy_editor_background_requests() {
         .filter(|message| message["method"] == "window/logMessage")
         .filter_map(|message| message["params"]["message"].as_str())
         .collect::<Vec<_>>();
-    let summary = log_messages
+    let summaries = log_messages
         .iter()
-        .find(|message| message.contains("tua lsp trace summary"))
+        .filter(|message| message.contains("tua lsp trace summary"))
         .copied()
-        .unwrap_or_else(|| panic!("trace summary should be logged: {log_messages:#?}"));
+        .collect::<Vec<_>>();
+    let combined = summaries.join("\n");
 
-    assert!(summary.contains("total=8"));
-    assert!(summary.contains("textDocument/codeAction=1"));
-    assert!(summary.contains("textDocument/inlayHint=1"));
-    assert!(summary.contains("$/cancelRequest=1"));
+    assert_eq!(summaries.len(), 2, "{log_messages:#?}");
+    assert!(summaries[0].contains("total=3"));
+    assert!(summaries[1].contains("total=4"));
+    assert!(combined.contains("textDocument/codeAction=1"));
+    assert!(combined.contains("textDocument/codeLens=1"));
+    assert!(combined.contains("$/cancelRequest=1"));
     assert!(
-        !log_messages
+        log_messages
             .iter()
             .any(|message| message.contains("tua lsp request: textDocument/inlayHint")),
-        "noisy request should only appear in the summary: {log_messages:#?}"
+        "interactive inlay requests should remain visible in the trace: {log_messages:#?}"
     );
 }
 #[test]

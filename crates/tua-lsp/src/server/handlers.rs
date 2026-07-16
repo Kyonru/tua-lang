@@ -2239,7 +2239,7 @@ fn trace_log_should_count(method: &str, request: bool) -> bool {
 }
 
 fn edit_background_request_should_yield(method: &str) -> bool {
-    method != "textDocument/inlayHint" && super::method_is_background_refresh(method)
+    super::method_is_background_refresh(method)
 }
 
 impl TraceLogCounts {

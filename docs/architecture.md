@@ -187,11 +187,13 @@ Open and changed documents should publish fast current-file diagnostics first,
 then queue full project-aware diagnostics behind a short debounce. The stdio
 coordinator keeps document synchronization and cancellation on the transport
 thread, while revision-captured analysis state runs on separate interactive and
-background worker lanes. Completion, signature help, hover, and definition do
-not queue behind diagnostics or whole-document refreshes. Identical background
-requests for the same document revision are coalesced, and stale results are
-discarded after document changes. Debounced full diagnostics also run on the
-background lane.
+background worker lanes. Completion, signature help, hover, definition, and
+viewport inlay hints do not queue behind diagnostics or whole-document
+refreshes. Identical refresh requests for the same document revision and range
+are coalesced, and stale results are discarded after document changes.
+Debounced full diagnostics also run on the background lane. Closing a document
+removes only its unsaved VFS overlay, so project navigation immediately falls
+back to the indexed disk source.
 
 Each worker request has a cancellation token and captured document generation.
 Cancellation is currently cooperative at the scheduler boundary: queued work

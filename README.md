@@ -31,7 +31,7 @@ Useful local workflows:
 
 ```sh
 make build-features
-make lsp-features-smoke
+make editor-regression-smoke
 make extension-package
 ```
 

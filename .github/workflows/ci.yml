@@ -78,6 +78,8 @@ jobs:
       - name: Build project-model
         working-directory: examples/project-model
         run: cargo run --quiet --package tua-cli -- build
+      - name: Exercise editor regression smoke
+        run: make editor-regression-smoke
 
   extension:
     name: VS Code extension

@@ -23,6 +23,7 @@ let nextId = 1;
 let completed = false;
 let stderr = "";
 const pending = new Map();
+const pendingMethods = new Map();
 
 const sources = fs
   .readdirSync(src)
@@ -47,6 +48,10 @@ const modules = sources.find((source) => source.file === "modules.tua");
 if (!modules) {
   fail("examples/features/src/modules.tua is missing");
 }
+const functions = sources.find((source) => source.file === "functions.tua");
+if (!functions) {
+  fail("examples/features/src/functions.tua is missing");
+}
 const cheatsheet = sources.find((source) => source.file === "lua_cheatsheet.tua");
 if (!cheatsheet) {
   fail("examples/features/src/lua_cheatsheet.tua is missing");
@@ -63,8 +68,12 @@ const legacy = {
 
 const timeout = setTimeout(() => {
   child.kill();
-  fail("timed out waiting for features LSP smoke responses");
-}, 10000);
+  fail(
+    `timed out waiting for features LSP smoke responses; pending=${[
+      ...pendingMethods.values(),
+    ].join(",")}`,
+  );
+}, 30000);
 
 child.stderr.on("data", (chunk) => {
   stderr += chunk.toString("utf8");
@@ -100,7 +109,7 @@ request("initialize", {
 }, () => {
   send({ jsonrpc: "2.0", method: "initialized", params: {} });
 
-  for (const source of sources) {
+  for (const source of [inference, modules, cheatsheet, sprites]) {
     send({
       jsonrpc: "2.0",
       method: "textDocument/didOpen",
@@ -303,6 +312,26 @@ request("initialize", {
 
   expected.push(
     request(
+      "textDocument/definition",
+      {
+        textDocument: { uri: modules.uri },
+        position: positionAt(modules.text, "makePlayer"),
+      },
+      (message) => {
+        if (message.result?.uri !== functions.uri) {
+          fail(`unopened module definition expected ${functions.uri}, got ${message.result?.uri}`);
+        }
+
+        const target = sourceTextFromRange(functions.text, message.result?.range);
+        if (target !== "makePlayer") {
+          fail(`unopened module definition expected "makePlayer", got ${JSON.stringify(target)}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
+    request(
       "textDocument/completion",
       {
         textDocument: { uri: cheatsheet.uri },
@@ -360,14 +389,84 @@ request("initialize", {
     ),
   );
 
-  Promise.all(expected).then(() => {
-    request("shutdown", null, () => {
-      completed = true;
-      console.log("features LSP smoke passed");
-      send({ jsonrpc: "2.0", method: "exit", params: null });
+  Promise.all(expected)
+    .then(testClosedModuleAndFreshInlayHints)
+    .then(() => {
+      request("shutdown", null, () => {
+        completed = true;
+        console.log("features LSP smoke passed");
+        send({ jsonrpc: "2.0", method: "exit", params: null });
+      });
     });
-  });
 });
+
+async function testClosedModuleAndFreshInlayHints() {
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/didOpen",
+    params: {
+      textDocument: {
+        uri: functions.uri,
+        languageId: "tua",
+        version: 1,
+        text: functions.text,
+      },
+    },
+  });
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/didClose",
+    params: { textDocument: { uri: functions.uri } },
+  });
+
+  await request(
+    "textDocument/definition",
+    {
+      textDocument: { uri: modules.uri },
+      position: positionAt(modules.text, "makePlayer"),
+    },
+    (message) => {
+      if (message.result?.uri !== functions.uri) {
+        fail(`closed module definition expected ${functions.uri}, got ${message.result?.uri}`);
+      }
+    },
+  );
+
+  const changedText = inference.text.replace(
+    "\nreturn {\n",
+    "\nlocal smokeInlay = 42\n\nreturn {\n",
+  );
+  const changedLine = positionAt(changedText, "smokeInlay").line;
+
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: {
+      textDocument: { uri: inference.uri, version: 2 },
+      contentChanges: [{ text: changedText }],
+    },
+  });
+
+  await request(
+    "textDocument/inlayHint",
+    {
+      textDocument: { uri: inference.uri },
+      range: {
+        start: { line: changedLine, character: 0 },
+        end: { line: changedLine + 1, character: 0 },
+      },
+    },
+    (message) => {
+      const hint = (message.result || []).find(
+        (item) => item.label === ": number" && item.position?.line === changedLine,
+      );
+
+      if (!hint) {
+        fail(`fresh edited inlay hint missing on line ${changedLine}: ${JSON.stringify(message.result)}`);
+      }
+    },
+  );
+}
 
 function request(method, params, validate) {
   const id = nextId++;
@@ -380,7 +479,9 @@ function request(method, params, validate) {
   });
 
   return new Promise((resolve) => {
+    pendingMethods.set(id, method);
     pending.set(id, (message) => {
+      pendingMethods.delete(id);
       if (message.error) {
         fail(`${method} failed: ${JSON.stringify(message.error)}`);
       }

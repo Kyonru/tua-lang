@@ -315,7 +315,7 @@ impl AnalysisHost {
 
     pub(super) fn close_document(&mut self, uri: &str) {
         if let Some(document) = self.documents.remove(uri) {
-            self.core.remove_file(&document.path);
+            self.core.close_document(&document.path);
         }
     }
 

@@ -92,8 +92,8 @@ impl RequestScheduler {
             .as_ref()
             .and_then(|uri| server.document_generations.get(uri).copied());
         let background = request_runs_in_background(&method);
-        let coalesce_key =
-            (background && uri.is_some()).then(|| coalesce_key(&method, &message, generation));
+        let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
+            .then(|| coalesce_key(&method, &message, generation));
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
 
         if let Some(job_id) = coalesce_key
