@@ -34,7 +34,6 @@ pub mod module_index;
 pub mod module_link;
 mod narrowing;
 pub mod parser;
-pub mod plugin;
 pub mod profile;
 mod project;
 pub mod project_model;
@@ -157,7 +156,6 @@ pub use parser::{
     RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
     TypedSourceModel,
 };
-pub use plugin::{PluginContext, PluginRegistry, TuaPlugin};
 pub use project::project_description;
 pub use project_model::{
     LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel, ProjectModelOptions,

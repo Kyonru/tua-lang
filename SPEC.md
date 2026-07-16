@@ -831,7 +831,7 @@ Suggested diagnostic code ranges:
 - `TL2000`-`TL2999`: lowering and emission errors;
 - `TL3000`-`TL3999`: project configuration errors;
 - `TL4000`-`TL4999`: lint and style guidance diagnostics;
-- `TL5000`-`TL5999`: built-in domain plugin diagnostics.
+- `TL5000`-`TL5999`: built-in domain diagnostics.
 
 The current type-specific codes include:
 
@@ -848,13 +848,12 @@ The initial codes are:
 These diagnostics are advisory. They must not change type inference, lowering,
 emitted Lua, or runtime behavior.
 
-Built-in domain plugin diagnostics use the plugin range. The initial ECS plugin
-codes are:
+Built-in domain diagnostics use the domain range. The initial ECS codes are:
 
 - `TL5002`: ECS component value does not match a declared component schema;
 - `TL5003`: ECS system/query component usage is invalid or unresolved.
 
-Domain plugin diagnostics are opt-in through their project configuration and
+Optional domain diagnostics are enabled through their project configuration and
 must not execute project runtime code.
 
 Inline diagnostic suppression is opt-in through project configuration. When
@@ -873,7 +872,7 @@ local legacy: number = "soon" -- tua-ignore-line TL1003
 configuration, but should not be enabled by default.
 
 Suppression comments may list exact codes such as `TL1003` or category groups
-such as `TL1000`, `TL4000`, `type`, or `lint`. With no code, a suppression
+such as `TL1000`, `TL4000`, `TL5000`, `type`, `lint`, or `domain`. With no code, a suppression
 matches all non-syntax diagnostics in its target scope. Invalid codes and
 unused suppressions should produce warnings. Suppression comments must never
 change type inference, lowering, emitted Lua, or runtime behavior.

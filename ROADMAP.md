@@ -1948,62 +1948,45 @@ to add domain-aware workflows without turning Tua into a closed game engine.
 Core Lua semantics should remain predictable, and extensions should be opt-in,
 conservative, and tooling-aware.
 
-### 71. `docs(plugins): design domain extension model`
+### 71. `docs(domains): define LOVE domain boundaries`
 
 Status: done.
 
 Scope:
 
-- Write a design document for Tua domain plugins.
-- Define what plugins may extend:
-  - new top-level declarations;
-  - domain blocks;
-  - validation passes;
-  - lowering metadata;
-  - completions, hover, diagnostics, and editor metadata.
-- Define what plugins may not do:
-  - rewrite arbitrary expressions;
-  - change core Lua/Tua semantics;
-  - execute project runtime code during analysis;
-  - emit raw Lua strings as the primary lowering API.
-- Compare possible implementation choices:
-  - Rust-only built-in plugins;
-  - Lua-authored plugins hosted by Rust through a restricted API;
-  - static manifest plugins that provide metadata but no executable code.
+- Keep LOVE-focused behavior in ordinary Lua-compatible APIs.
+- Keep parser, typing, completion, hover, diagnostics, and lowering under core
+  compiler ownership.
+- Require deterministic diagnostics, indexed project inputs, and stable source
+  spans.
+- Do not execute project runtime code during analysis or expose arbitrary source
+  rewriting.
 
 Acceptance:
 
-- The design states v1 plugin boundaries clearly.
-- The document includes at least one sprite/animation example and one asset
-  validation example.
+- Sprite and ECS behavior is documented where users configure and learn it.
 - Security and determinism constraints are explicit.
+- No extension mechanism is promised without a concrete external consumer.
 
-### 72. `feat(plugins): add experimental plugin registry`
+### 72. `refactor(domains): make sprite and ECS analysis first-class`
 
-Status: done with a deliberately narrow validation-only Rust API. The earlier
-declaration, completion, hover, and lowering methods were removed because they
-had no production query or emitter consumer.
+Status: done. The experimental registry was removed after proving that direct
+core ownership is smaller and matches every production consumer.
 
 Scope:
 
-- Add a plugin registry in `tua-core`.
-- Register built-in domain plugins through Rust first.
-- Expose plugin-provided diagnostics over parsed source and indexed asset
-  metadata through the normal cached analysis-file build.
-- Order plugins by stable name, reject duplicate ownership, and constrain
-  diagnostics to the current file and reserved plugin diagnostic range.
-- Keep the registry disabled for third-party executable plugins until the API is
-  proven.
-- Keep completion, hover, typing, and lowering in core until shared plugin query
-  and structured IR boundaries exist.
+- Run sprite diagnostics directly over parsed declarations and indexed assets.
+- Run ECS diagnostics directly when `[ecs].enabled` is active.
+- Keep domain diagnostics in the normal cached analysis-file build.
+- Preserve stable `TL5000`-`TL5999` domain diagnostic codes.
+- Expose separate profiler spans for sprite and ECS diagnostic work.
 
 Acceptance:
 
-- Existing parsing, typing, completion, hover, and emission are unchanged when
-  no plugin contributes diagnostics.
-- A test plugin can register one cached validation diagnostic.
-- Plugin diagnostics use stable Tua diagnostic codes or a reserved plugin code
-  range.
+- Existing parsing, typing, completion, hover, diagnostics, and emission remain
+  unchanged.
+- Sprite and ECS diagnostics are cached with their `AnalysisFile`.
+- No registry, trait object, or public executable extension API remains.
 
 ### 73. `feat(luajit): add JIT-friendly typing and optimization-oriented constraints`
 
@@ -2057,7 +2040,7 @@ Scope:
   - systems over typed component query lists.
 - Keep ECS additions conservative and opt-in (`[ecs]` in config) so projects without
   ECS usage are unaffected.
-- Integrate with the plugin registry path from item 72:
+- Integrate with the first-class domain analysis path from item 72:
   - reusable ECS declarations,
   - ECS diagnostics,
   - completion + hover + signature help for ECS APIs,
@@ -2111,16 +2094,16 @@ Acceptance:
 
 ### 74. `feat(sprite): prototype sprite animation DSL`
 
-Status: done for the first built-in plugin prototype. Tua recognizes one
+Status: done for the first built-in sprite prototype. Tua recognizes one
 parser-native `spriteSheet({...})` helper form, records structured sprite
-metadata, reports plugin diagnostics for missing image assets and invalid
+metadata, reports domain diagnostics for missing image assets and invalid
 ranges/FPS, emits readable anim8-backed Lua, and bundles `anim8.lua` into build
 output when needed. The VS Code extension also includes a preview-gated command
 to visualize active-file sprite animations from local sprite sheet images.
 
 Scope:
 
-- Prototype a LOVE sprite/animation helper, likely as a built-in plugin.
+- Prototype a first-class LOVE sprite/animation helper.
 - Explore syntax for:
   - image path;
   - frame size;
@@ -2158,7 +2141,7 @@ Acceptance:
 Status: done for the first metadata slice. Tua now records asset kind, relative
 path, extension, source span, inferred LOVE type, validation status, and cheap
 PNG dimensions when available. Hover, asset-path completion, diagnostics, and
-plugin contexts read the shared metadata. Richer binary metadata such as audio
+domain analyzers read the shared metadata. Richer binary metadata such as audio
 duration remains future work.
 
 Scope:
@@ -2171,8 +2154,8 @@ Scope:
   - source span;
   - inferred LOVE type;
   - optional dimensions or duration when available without running game code.
-- Surface metadata through hover, completion resolve, diagnostics, and future
-  plugin hooks.
+- Surface metadata through hover, completion resolve, diagnostics, and external
+  tooling queries.
 - Keep binary parsing optional and conservative.
 
 Acceptance:
@@ -2182,7 +2165,7 @@ Acceptance:
   constructor positions.
 - Unsupported, wrong-kind, or missing assets produce diagnostics with
   actionable messages.
-- Metadata is available to built-in plugins through a stable internal API.
+- Metadata is available to built-in domain analyzers through stable typed APIs.
 
 ### 76. `docs(tooling): explore optional Feather integration hooks`
 
@@ -2194,7 +2177,7 @@ Scope:
   - sprite/animation previews;
   - generated metadata export;
   - diagnostics surfaced in external tools;
-  - plugin-provided inspector panels.
+  - compiler-backed inspector panels.
 - Keep Feather integration optional and outside the core runtime/compiler path.
 - Identify which hooks belong in Tua core and which belong in editor/tooling
   adapters.

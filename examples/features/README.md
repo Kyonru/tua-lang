@@ -93,7 +93,7 @@ make build-features
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.
 - `src/sprites.tua` covers the experimental built-in `spriteSheet({...})`
-  helper plugin: sprite sheet image validation, frame size metadata, animation
+  helper: sprite sheet image validation, frame size metadata, animation
   frame ranges, FPS, non-looping animation mode, anim8-backed Lua emission, and
   bundled `anim8.lua` build output.
 - `src/signals.tua` covers the built-in `signal()` helper: inferred

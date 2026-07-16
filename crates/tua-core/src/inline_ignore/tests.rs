@@ -112,6 +112,18 @@ fn category_groups_suppress_matching_codes() {
 }
 
 #[test]
+fn domain_category_suppresses_domain_diagnostics() {
+    let output = apply_inline_ignores(
+        Path::new("src/main.tua"),
+        "-- tua-ignore-next-line domain\nlocal sprites = {}\n",
+        vec![diagnostic(2, DiagnosticCode::DOMAIN_SPRITE)],
+        &config(),
+    );
+
+    assert!(output.is_empty(), "{output:?}");
+}
+
+#[test]
 fn comments_inside_strings_are_ignored() {
     let output = apply_inline_ignores(
         Path::new("src/main.tua"),

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Domain Design"
+  short_description: "Design first-class game domains for Tua."
+  default_prompt: "Use this when designing Tua ECS, sprite, animation, vector, or domain tooling support."

@@ -103,24 +103,32 @@ CLI regressions cover transitive invalidation and this unchanged-importer case.
 Polling precision and native filesystem notifications remain tracked under the
 separate P2 watcher item.
 
-### P1: Complete or narrow the plugin architecture
+### P1: Make ECS and sprite first-class domains
 
-Status: done on 2026-07-15 by narrowing the executable surface.
+Status: done on 2026-07-15.
 
-The Rust registry now supports built-in validation diagnostics only. Diagnostic
-plugins run while an `AnalysisFile` is built, so their results share the normal
-file/revision cache instead of running from LSP handlers. Plugins are keyed and
-ordered by stable names; duplicate names are rejected, built-in `tua.*` owners
-cannot be replaced by configured registries, and returned diagnostics are
-restricted to the current file and the reserved `TL5000`-`TL5999` range.
+The experimental registry and validation trait were removed. They only wrapped
+two built-in diagnostic calls and added dynamic dispatch, snapshot state,
+replacement rules, public API, tests, and documentation without enabling an
+external extension workflow.
 
-The unused declaration, completion, hover, and lowering trait surfaces were
-removed. `spriteSheet({...})` remains ordinary parser-native Tua: core owns its
-typing, completion, hover, and anim8-backed emission, while `tua.sprite` owns
-only static asset/range validation. Third-party executable loading remains
-disabled. New plugin surfaces should wait for shared cached queries and the
-operation ownership rules described by the completed structured lowering work
-below.
+Sprite and ECS validation now run directly while an `AnalysisFile` is built, so
+their results retain the normal file/revision cache. Sprite validation consumes
+parser-owned declarations and indexed asset metadata. ECS validation runs only
+when `[ecs].enabled` is active. Separate `analysis.sprite.diagnostics` and
+`analysis.ecs.diagnostics` profiler spans make their costs reportable.
+
+`spriteSheet({...})` remains ordinary parser-native Tua with core-owned typing,
+completion, hover, diagnostics, and anim8-backed emission. ECS typing,
+completion, hover, signature help, and diagnostics are likewise core-owned.
+Stable domain diagnostic codes remain in `TL5000`-`TL5999`; no executable
+extension API is exposed.
+
+A 10-run release profile over `examples/features` measured combined domain
+validation at 0.4126 ms per check through the direct path versus 0.4316 ms
+through the removed registry. The 4.4% stage-local reduction is only 0.019 ms
+in absolute terms; reduced architecture and snapshot state are the primary
+benefits, not a user-visible latency claim.
 
 ### P1: Introduce structured lowering
 
@@ -157,10 +165,8 @@ classes, and sprites. Additional IR tests cover multiline replacements,
 non-ASCII source, class-following source positions, declaration-level LuaCats
 provenance, operation conflicts, and deterministic same-offset insertions.
 
-Plugin lowering requests remain intentionally disabled. `TuaPlugin` exposes
-validation diagnostics only; a future plugin-lowering phase must define stable
-operation ownership and pass ordering without permitting overlap with core
-transformations.
+Lowering is core-owned. There is no extension lowering API that can overlap
+core transformations or bypass stable operation ownership and pass ordering.
 
 ### P1: Split semantic analysis into stable query boundaries
 
@@ -254,7 +260,7 @@ Improvements:
 
 - Expose structured sprite metadata through a general LSP inspector request.
 - Resolve sprite declarations, animation ranges, and assets from the semantic
-  snapshot or plugin index.
+  snapshot or semantic index.
 - Keep the extension responsible only for preview presentation.
 - Split preview panel state, view model, webview template, and webview runtime.
 - Surface diagnostics for missing assets, invalid frames, and conflicting
@@ -417,7 +423,6 @@ Results from the 2026-07-15 audit:
 5. Fix watch-mode dependency invalidation.
 6. Restore Clippy and introduce CI/release gates.
 7. Consolidate sprite metadata and other domain intelligence through shared
-   semantic queries, then define the IR boundary needed before plugin lowering
-   can return.
+   semantic queries and keep lowering on the compiler-owned operation IR.
 8. Continue type-system, source-map, configuration, packaging, and
    documentation improvements after the editor correctness baseline is stable.

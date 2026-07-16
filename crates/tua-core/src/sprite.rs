@@ -10,7 +10,6 @@ use crate::ast_utils::{
 };
 use crate::emit::lowering::{LoweringDocument, LoweringOperation};
 use crate::emit::LoweringKind;
-use crate::plugin::{PluginContext, TuaPlugin};
 use crate::types::{FunctionType, TableField, Type};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, SourceSpan, TypedParameter};
 
@@ -52,27 +51,15 @@ pub(crate) struct SpriteAnimation {
     pub(crate) fps_span: SourceSpan,
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct SpritePlugin;
-
-impl TuaPlugin for SpritePlugin {
-    fn name(&self) -> &'static str {
-        "tua.sprite"
-    }
-
-    fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
-        let declarations = context
-            .parsed
-            .map(|parsed| parsed.sprite_declarations.as_slice())
-            .unwrap_or(&[]);
-        let mut diagnostics = Vec::new();
-
-        for declaration in declarations {
-            diagnostics.extend(sprite_declaration_diagnostics(context, declaration));
-        }
-
-        diagnostics
-    }
+pub(crate) fn diagnostics(
+    path: &Path,
+    declarations: &[SpriteDeclaration],
+    assets: &[AssetMetadata],
+) -> Vec<Diagnostic> {
+    declarations
+        .iter()
+        .flat_map(|declaration| sprite_declaration_diagnostics(path, assets, declaration))
+        .collect()
 }
 
 pub(crate) fn parse_sprite_declarations(
@@ -500,25 +487,26 @@ fn bool_expression(expression: &Expression) -> Option<bool> {
 }
 
 fn sprite_declaration_diagnostics(
-    context: PluginContext<'_>,
+    path: &Path,
+    assets: &[AssetMetadata],
     declaration: &SpriteDeclaration,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     if let Some(image_span) = declaration.image_span {
-        if let Some(asset) = context.assets.iter().find(|asset| {
+        if let Some(asset) = assets.iter().find(|asset| {
             asset.kind == AssetLoaderKind::Image
                 && asset.span == image_span
                 && Some(asset.relative_path.as_str()) == declaration.image_path.as_deref()
         }) {
             match asset.status {
                 AssetValidationStatus::Missing => diagnostics.push(sprite_diagnostic(
-                    context.path,
+                    path,
                     image_span,
                     format!("missing sprite image asset `{}`", asset.relative_path),
                 )),
                 AssetValidationStatus::UnsupportedExtension => diagnostics.push(sprite_diagnostic(
-                    context.path,
+                    path,
                     image_span,
                     format!(
                         "unsupported sprite image extension for `{}`",
@@ -526,7 +514,7 @@ fn sprite_declaration_diagnostics(
                     ),
                 )),
                 AssetValidationStatus::WrongKind => diagnostics.push(sprite_diagnostic(
-                    context.path,
+                    path,
                     image_span,
                     format!(
                         "sprite image `{}` is not an image asset",
@@ -541,7 +529,7 @@ fn sprite_declaration_diagnostics(
     if let Some(frame) = declaration.frame {
         if frame.width == 0 || frame.height == 0 {
             diagnostics.push(sprite_diagnostic(
-                context.path,
+                path,
                 frame.span,
                 "sprite frame size must be greater than zero",
             ));
@@ -551,7 +539,7 @@ fn sprite_declaration_diagnostics(
     for animation in &declaration.animations {
         if animation.end_frame < animation.start_frame {
             diagnostics.push(sprite_diagnostic(
-                context.path,
+                path,
                 animation.span,
                 format!(
                     "sprite animation `{}` has invalid frame range {}..{}",
@@ -567,7 +555,7 @@ fn sprite_declaration_diagnostics(
             .is_none_or(|fps| fps <= 0.0)
         {
             diagnostics.push(sprite_diagnostic(
-                context.path,
+                path,
                 animation.fps_span,
                 format!(
                     "sprite animation `{}` fps must be greater than zero",
@@ -588,7 +576,7 @@ fn sprite_diagnostic(path: &Path, span: SourceSpan, message: impl Into<String>) 
         DiagnosticSeverity::Error,
         message,
     )
-    .with_code(DiagnosticCode::PLUGIN_SPRITE)
+    .with_code(DiagnosticCode::DOMAIN_SPRITE)
 }
 
 fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {

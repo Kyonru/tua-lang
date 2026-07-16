@@ -1,4 +1,0 @@
-interface:
-  display_name: "Tua Plugin Domain Design"
-  short_description: "Design conservative domain plugins for Tua."
-  default_prompt: "Use this when proposing Tua plugin syntax, lowering, or tooling metadata."

@@ -24,7 +24,7 @@ preview setting explicitly starts it.
 ## Non-Goals
 
 - No remote server mode, cloud sync, telemetry, or internet-facing endpoint.
-- No execution of project Lua, `require(...)`, LOVE callbacks, or plugin runtime
+- No execution of project Lua, `require(...)`, LOVE callbacks, or extension runtime
   code.
 - No write/refactor API in the first bridge. Editor writes should keep using
   standard LSP workspace edits and code actions.

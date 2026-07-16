@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
-use crate::plugin::{PluginContext, TuaPlugin};
 use crate::types::{FunctionType, TableField, TableShape, Type};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
@@ -35,19 +35,6 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
 
 pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
     vec![("ecs".to_owned(), ecs_module_type())]
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct EcsPlugin;
-
-impl TuaPlugin for EcsPlugin {
-    fn name(&self) -> &'static str {
-        "tua.ecs"
-    }
-
-    fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
-        diagnostics_for_source(context)
-    }
 }
 
 fn ecs_module_type() -> Type {
@@ -187,24 +174,24 @@ fn query_type() -> Type {
     ])
 }
 
-fn diagnostics_for_source(context: PluginContext<'_>) -> Vec<Diagnostic> {
-    let schemas = collect_component_schemas(context.source);
+pub(crate) fn diagnostics(path: &Path, source: &str) -> Vec<Diagnostic> {
+    let schemas = collect_component_schemas(source);
     let mut diagnostics = Vec::new();
 
-    for (line_index, line) in context.source.lines().enumerate() {
+    for (line_index, line) in source.lines().enumerate() {
         let line_number = line_index + 1;
 
         if let Some(add_call) = parse_add_call(line) {
             match schemas.get(add_call.component.as_str()) {
                 Some(schema) => diagnostics.extend(component_value_diagnostics(
-                    context,
+                    path,
                     line_number,
                     line,
                     &add_call,
                     schema,
                 )),
                 None => diagnostics.push(ecs_query_diagnostic(
-                    context,
+                    path,
                     line_number,
                     add_call.component_column,
                     format!("unknown ECS component `{}`", add_call.component),
@@ -215,7 +202,7 @@ fn diagnostics_for_source(context: PluginContext<'_>) -> Vec<Diagnostic> {
         if let Some(query) = parse_query_components(line) {
             if query.components.is_empty() {
                 diagnostics.push(ecs_query_diagnostic(
-                    context,
+                    path,
                     line_number,
                     query.column,
                     "ECS system/query requires at least one component".to_owned(),
@@ -225,7 +212,7 @@ fn diagnostics_for_source(context: PluginContext<'_>) -> Vec<Diagnostic> {
             for component in query.components {
                 if !schemas.contains_key(component.name.as_str()) {
                     diagnostics.push(ecs_query_diagnostic(
-                        context,
+                        path,
                         line_number,
                         component.column,
                         format!("unknown ECS component `{}` in system/query", component.name),
@@ -388,7 +375,7 @@ fn parse_value_fields(source: &str) -> BTreeMap<String, ValueField> {
 }
 
 fn component_value_diagnostics(
-    context: PluginContext<'_>,
+    path: &Path,
     line_number: usize,
     line: &str,
     add_call: &AddCall,
@@ -400,7 +387,7 @@ fn component_value_diagnostics(
         match add_call.values.get(name) {
             Some(value) if value.ty == field.ty || field.ty == "any" || value.ty == "any" => {}
             Some(value) => diagnostics.push(ecs_component_value_diagnostic(
-                context,
+                path,
                 line_number,
                 line.find(name)
                     .map(|index| index + 1)
@@ -411,7 +398,7 @@ fn component_value_diagnostics(
                 ),
             )),
             None => diagnostics.push(ecs_component_value_diagnostic(
-                context,
+                path,
                 line_number,
                 add_call.values_column,
                 format!("ECS component value is missing required field `{name}`"),
@@ -422,7 +409,7 @@ fn component_value_diagnostics(
     for (name, value) in &add_call.values {
         if !schema.fields.contains_key(name) {
             diagnostics.push(ecs_component_value_diagnostic(
-                context,
+                path,
                 line_number,
                 line.find(name)
                     .map(|index| index + 1)
@@ -486,35 +473,18 @@ fn infer_literal_type(value: &str) -> String {
 }
 
 fn ecs_component_value_diagnostic(
-    context: PluginContext<'_>,
+    path: &Path,
     line: usize,
     column: usize,
     message: String,
 ) -> Diagnostic {
-    Diagnostic::new(
-        context.path,
-        line,
-        column,
-        DiagnosticSeverity::Error,
-        message,
-    )
-    .with_code(DiagnosticCode::PLUGIN_ECS_COMPONENT_VALUE)
+    Diagnostic::new(path, line, column, DiagnosticSeverity::Error, message)
+        .with_code(DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE)
 }
 
-fn ecs_query_diagnostic(
-    context: PluginContext<'_>,
-    line: usize,
-    column: usize,
-    message: String,
-) -> Diagnostic {
-    Diagnostic::new(
-        context.path,
-        line,
-        column,
-        DiagnosticSeverity::Error,
-        message,
-    )
-    .with_code(DiagnosticCode::PLUGIN_ECS_QUERY)
+fn ecs_query_diagnostic(path: &Path, line: usize, column: usize, message: String) -> Diagnostic {
+    Diagnostic::new(path, line, column, DiagnosticSeverity::Error, message)
+        .with_code(DiagnosticCode::DOMAIN_ECS_QUERY)
 }
 
 #[cfg(test)]
@@ -532,18 +502,13 @@ world:add(entity, Position, { x = 1, name = "wrong" })
 ecs.system(world, { Position, Missing }, function() end)
 "#;
 
-        let diagnostics = diagnostics_for_source(PluginContext {
-            path: Path::new("src/ecs.tua"),
-            source,
-            parsed: None,
-            assets: &[],
-        });
+        let diagnostics = diagnostics(Path::new("src/ecs.tua"), source);
 
         assert_eq!(diagnostics.len(), 3);
         assert_eq!(
             diagnostics[0].code,
-            Some(DiagnosticCode::PLUGIN_ECS_COMPONENT_VALUE)
+            Some(DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE)
         );
-        assert_eq!(diagnostics[2].code, Some(DiagnosticCode::PLUGIN_ECS_QUERY));
+        assert_eq!(diagnostics[2].code, Some(DiagnosticCode::DOMAIN_ECS_QUERY));
     }
 }

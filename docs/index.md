@@ -28,7 +28,7 @@ leaving the normal Lua and LOVE workflow.
   `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, with static
   path validation for helpers and native LOVE constructors that load assets.
 - An experimental built-in `spriteSheet({...})` helper that validates sprite
-  sheet image paths and frame ranges through a built-in validation plugin, then
+  sheet image paths and frame ranges through first-class sprite analysis, then
   emits readable anim8-backed Lua with bundled `anim8.lua` build output.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.
@@ -89,8 +89,6 @@ player.hp = player.hp - 10
 - [Learn](learn.md) - guided language path from Lua to typed Tua and LOVE.
 - [Language](language.md) - overview, type surface, interop, LOVE helpers, and
   emission behavior.
-- [Domain Plugins](plugins.md) - design boundaries for future LOVE-focused
-  domain extensions.
 - [Configuration](configuration.md) - `tua.toml` options and diagnostics.
 - [CLI](cli.md) - command reference.
 - [Language Server](lsp.md) - editor features and capability notes.

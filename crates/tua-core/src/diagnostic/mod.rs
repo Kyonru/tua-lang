@@ -27,7 +27,7 @@ pub enum DiagnosticCategory {
     LoweringEmission,
     ProjectConfig,
     Lint,
-    Plugin,
+    Domain,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,10 +89,9 @@ impl DiagnosticCode {
     pub const LINT_JIT_TABLE_SHAPE_DRIFT: Self = Self(4033);
     pub const LINT_JIT_HOT_LOOP_DYNAMIC_KEY: Self = Self(4034);
     pub const LINT_FORMAT_LINE_WIDTH: Self = Self(4035);
-    pub const PLUGIN_DIAGNOSTIC: Self = Self(5001);
-    pub const PLUGIN_ECS_COMPONENT_VALUE: Self = Self(5002);
-    pub const PLUGIN_ECS_QUERY: Self = Self(5003);
-    pub const PLUGIN_SPRITE: Self = Self(5004);
+    pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
+    pub const DOMAIN_ECS_QUERY: Self = Self(5003);
+    pub const DOMAIN_SPRITE: Self = Self(5004);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -113,7 +112,7 @@ impl DiagnosticCode {
             2000..=2999 => DiagnosticCategory::LoweringEmission,
             3000..=3999 => DiagnosticCategory::ProjectConfig,
             4000..=4999 => DiagnosticCategory::Lint,
-            5000..=5999 => DiagnosticCategory::Plugin,
+            5000..=5999 => DiagnosticCategory::Domain,
             _ => unreachable!("diagnostic codes are validated at construction"),
         }
     }
@@ -176,10 +175,9 @@ impl DiagnosticCode {
                 | Self::LINT_JIT_TABLE_SHAPE_DRIFT
                 | Self::LINT_JIT_HOT_LOOP_DYNAMIC_KEY
                 | Self::LINT_FORMAT_LINE_WIDTH
-                | Self::PLUGIN_DIAGNOSTIC
-                | Self::PLUGIN_ECS_COMPONENT_VALUE
-                | Self::PLUGIN_ECS_QUERY
-                | Self::PLUGIN_SPRITE
+                | Self::DOMAIN_ECS_COMPONENT_VALUE
+                | Self::DOMAIN_ECS_QUERY
+                | Self::DOMAIN_SPRITE
         )
     }
 }

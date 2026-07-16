@@ -128,7 +128,10 @@ through the snapshot. Avoid adding hover-only or completion-only type logic.
 
 Diagnostics belong in the shared diagnostic/check/lint pipeline. Parser,
 project, type, lint, asset, and emission diagnostics should use stable codes and
-flow through the same CLI and LSP formatting paths.
+flow through the same CLI and LSP formatting paths. First-class sprite and ECS
+validation runs while each cached `AnalysisFile` is built: sprite validation
+consumes parser-owned declarations and indexed assets, while ECS validation is
+gated by project configuration.
 
 Emission belongs under `crates/tua-core/src/emit` and build orchestration belongs
 in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
@@ -142,8 +145,8 @@ Operations are deterministic and reject overlaps, invalid ranges, and UTF-8
 splits. Class parser normalization uses the same operation boundary and stores
 generated-line ownership for syntax-token provenance. LuaCats aliases and
 declaration comments are explicit insertion operations; no whole-document text
-rewrite remains. Plugin lowering stays unavailable until a separate design
-defines ownership and ordering without allowing overlap with core passes.
+rewrite remains. Lowering remains compiler-owned so external callbacks cannot
+overlap or reorder core passes.
 
 Project and file identity code belongs in the project model, VFS, module graph,
 and analysis host. Do not resolve `require(...)`, static `import(...)`,
@@ -581,7 +584,7 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `ide-ssr` | Structural search and replace. | No equivalent planned for v1. | Out of scope | None |
 | `test-fixture`, `test-utils` | Fixture DSLs and shared test support. | Many focused tests with ad hoc fixtures and temp projects. | Partial | 52 |
 | `profile` | Performance tracing and benchmark support. | Opt-in `TUA_PROFILE` tracing, LSP latency benchmark fixtures, completion-specific profiling, and cache stats reporting. | Existing | 69, 77.5 |
-| `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua plugins must not become arbitrary macro expansion. | Out of scope | None |
+| `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua has no macro or executable extension expansion surface. | Out of scope | None |
 | `load-cargo`, `toolchain` | Rust toolchain and Cargo loading. | No equivalent; Tua project model stays Lua/LOVE-focused. | Out of scope | None |
 
 ## Phase 12 Architecture Path
@@ -610,7 +613,7 @@ domain extensions.
 - Do not create a Rust clone. Tua targets Lua 5.1/LuaJIT/LOVE projects.
 - Do not add a macro system equivalent to Rust macros.
 - Do not run project code to discover symbols or assets.
-- Do not make plugin support a back door for arbitrary expression rewriting.
+- Do not add an executable extension API as a back door for arbitrary expression rewriting.
 - Do not replace readable Lua output with optimized or minified compiler output.
 - Do not move everything into separate crates until the boundary has earned its
   cost.

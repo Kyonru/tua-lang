@@ -28,8 +28,8 @@ not to reshuffle code for its own sake.
 - Keep emission and provenance together in `LuaEmission`; CLI source maps must
   consume compiler provenance rather than reconstructing it from generated Lua.
 - Route source-backed emission changes through validated `LoweringOperation`s;
-  do not add another whole-document text adapter or expose plugin lowering that
-  can overlap core operations.
+  do not add another whole-document text adapter or extension lowering callback
+  that can overlap core operations.
 - Preserve parser normalization provenance when generated syntax changes line
   positions; emission must consume syntax-backed provenance rather than scan
   generated text for helper or declaration markers.

@@ -32,7 +32,6 @@ use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::{
     module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
 };
-use crate::plugin::{PluginContext, PluginRegistry};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
@@ -117,7 +116,6 @@ pub struct AnalysisHost {
     asset_roots: Vec<PathBuf>,
     asset_index: Option<asset::AssetIndex>,
     builtin_catalogs: BuiltinCatalogs,
-    plugin_registry: PluginRegistry,
     cache: RefCell<AnalysisQueryCache>,
     last_good_files: RefCell<BTreeMap<PathBuf, LastGoodAnalysisFile>>,
     completion_adaptive_stats: CompletionAdaptiveStats,
@@ -140,7 +138,6 @@ pub struct AnalysisSnapshot {
     files: BTreeMap<PathBuf, AnalysisFile>,
     require_path_separator: ModulePathSeparator,
     builtin_catalogs: BuiltinCatalogs,
-    plugin_registry: PluginRegistry,
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
     symbol_index: SymbolIndex,
@@ -235,7 +232,6 @@ struct AnalysisBuildContext<'a> {
     require_path_separator: ModulePathSeparator,
     asset_roots: &'a [PathBuf],
     asset_index: Option<&'a asset::AssetIndex>,
-    plugin_registry: &'a PluginRegistry,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -583,30 +579,6 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
-    pub fn plugin_registry(&self) -> &PluginRegistry {
-        &self.plugin_registry
-    }
-
-    pub fn set_plugin_registry(&mut self, registry: PluginRegistry) {
-        self.plugin_registry = registry;
-        self.invalidate_all_analysis();
-        self.bump_revision();
-    }
-
-    fn effective_plugin_registry(&self) -> PluginRegistry {
-        let mut registry = PluginRegistry::new();
-
-        let _ = registry.register(crate::sprite::SpritePlugin);
-
-        if self.config.ecs.enabled {
-            let _ = registry.register(crate::ecs::EcsPlugin);
-        }
-
-        registry.extend_missing(&self.plugin_registry);
-
-        registry
-    }
-
     pub fn set_file(&mut self, path: impl Into<PathBuf>, source: impl Into<String>) {
         let path = path.into();
         let kind = infer_source_kind(&path, &self.config);
@@ -730,7 +702,6 @@ impl AnalysisHost {
 
         let vfs = self.vfs.snapshot();
         let source_roots = vfs.source_roots().to_vec();
-        let plugin_registry = self.effective_plugin_registry();
         let live_paths = vfs
             .files()
             .map(|file| file.path().to_path_buf())
@@ -754,7 +725,6 @@ impl AnalysisHost {
                             require_path_separator: self.require_path_separator,
                             asset_roots: &self.asset_roots,
                             asset_index: self.asset_index.as_ref(),
-                            plugin_registry: &plugin_registry,
                         },
                     );
 
@@ -848,7 +818,6 @@ impl AnalysisHost {
             files,
             require_path_separator: self.require_path_separator,
             builtin_catalogs: self.builtin_catalogs.clone(),
-            plugin_registry,
             module_graph,
             type_database,
             symbol_index,
@@ -1061,8 +1030,6 @@ impl AnalysisHost {
         let source_roots = self.vfs.options().source_roots.clone();
         let output_roots = self.vfs.options().output_roots.clone();
         let known_paths = self.vfs.paths();
-        let plugin_registry = self.effective_plugin_registry();
-
         Some(self.cache.borrow_mut().cached_file(
             &path,
             &source,
@@ -1075,7 +1042,6 @@ impl AnalysisHost {
                 require_path_separator: self.require_path_separator,
                 asset_roots: &self.asset_roots,
                 asset_index: self.asset_index.as_ref(),
-                plugin_registry: &plugin_registry,
             },
         ))
     }
@@ -1146,10 +1112,6 @@ impl AnalysisSnapshot {
 
     pub fn builtin_catalogs(&self) -> &BuiltinCatalogs {
         &self.builtin_catalogs
-    }
-
-    pub fn plugin_registry(&self) -> &PluginRegistry {
-        &self.plugin_registry
     }
 
     pub fn is_open_document(&self, path: impl AsRef<Path>) -> bool {
@@ -6122,16 +6084,19 @@ fn build_analysis_file(
             })
             .unwrap_or_default()
     };
-    if !context.plugin_registry.is_empty() {
-        let _profile = profile::span_for_path("analysis.plugins.diagnostics", path);
-        let parsed = parsed.as_ref().ok();
+    if let Ok(parsed) = &parsed {
+        let _profile = profile::span_for_path("analysis.sprite.diagnostics", path);
 
-        diagnostics.extend(context.plugin_registry.diagnostics(PluginContext {
+        diagnostics.extend(crate::sprite::diagnostics(
             path,
-            source: &source,
-            parsed,
-            assets: &assets,
-        }));
+            &parsed.sprite_declarations,
+            &assets,
+        ));
+    }
+    if context.config.ecs.enabled {
+        let _profile = profile::span_for_path("analysis.ecs.diagnostics", path);
+
+        diagnostics.extend(crate::ecs::diagnostics(path, &source));
     }
     let diagnostics = deduplicate_diagnostics(diagnostics);
     let exports = {

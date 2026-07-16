@@ -1,6 +1,6 @@
 ---
 name: tua-asset-metadata
-description: Improve Tua LOVE asset validation and metadata. Use when changing image/sound asset loaders, missing or unsupported asset diagnostics, asset path completion, hover metadata, build copying, source/output asset roots, or plugin/editor features that depend on asset information.
+description: Improve Tua LOVE asset validation and metadata. Use when changing image/sound asset loaders, missing or unsupported asset diagnostics, asset path completion, hover metadata, build copying, source/output asset roots, or domain/editor features that depend on asset information.
 ---
 
 # Tua Asset Metadata
@@ -28,8 +28,8 @@ When extending asset behavior, try to produce reusable metadata:
 - validation status;
 - optional dimensions or duration when safe and cheap.
 
-The same metadata should power diagnostics, hover, completion resolve, plugin
-hooks, and future editor inspectors.
+The same metadata should power diagnostics, hover, completion resolve, domain
+analysis, and future editor inspectors.
 
 ## Checks
 

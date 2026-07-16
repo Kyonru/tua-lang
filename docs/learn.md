@@ -305,8 +305,8 @@ Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
 
 ```tua
-local plugin: any = require("runtime_plugin")
-local value = plugin.makeSomething(dynamicInput)
+local adapter: any = require("runtime_adapter")
+local value = adapter.makeSomething(dynamicInput)
 ```
 
 Use `any` deliberately when a value is runtime-shaped, third-party, or

@@ -13,8 +13,8 @@ fn reserves_spec_code_ranges() {
         (3999, DiagnosticCategory::ProjectConfig),
         (4000, DiagnosticCategory::Lint),
         (4999, DiagnosticCategory::Lint),
-        (5000, DiagnosticCategory::Plugin),
-        (5999, DiagnosticCategory::Plugin),
+        (5000, DiagnosticCategory::Domain),
+        (5999, DiagnosticCategory::Domain),
     ];
 
     for (number, category) in cases {

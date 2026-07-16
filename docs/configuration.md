@@ -169,7 +169,7 @@ backend = "tiny-ecs"
 ```
 
 `enabled`
-: Enables the built-in ECS domain plugin, the typed `ecs` helper module, and ECS
+: Enables first-class ECS analysis, the typed `ecs` helper module, and ECS
 diagnostics. The default is `false`.
 
 `backend`
@@ -345,8 +345,8 @@ local legacy: number = "soon" -- tua-ignore-line TL1003
 exists for migration-heavy files, but it must be added to
 `inline_ignore_scopes` before it is accepted.
 
-Codes may be exact (`TL1003`) or category groups (`TL1000`, `TL4000`, `type`,
-`lint`). If no code is supplied, the comment suppresses all non-syntax
+Codes may be exact (`TL1003`) or category groups (`TL1000`, `TL4000`, `TL5000`,
+`type`, `lint`, `domain`). If no code is supplied, the comment suppresses all non-syntax
 diagnostics for that target. Invalid codes and unused suppressions produce
 warnings, and suppression never changes type inference or emitted Lua.
 

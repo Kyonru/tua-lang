@@ -42,14 +42,12 @@ Current future work is now more about precision and domain depth:
 
 After that, Phase 13 explores LOVE domain extensions:
 
-- a conservative built-in validation plugin registry, with broader domain
-  tooling deferred until shared query and lowering boundaries exist; see
-  [Domain Plugins](plugins.md);
+- first-class sprite and ECS analysis through cached core queries, without a
+  generic extension registry;
 - built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)`
   BrineVector-backed emission;
 - opt-in LuaJIT guidance for stable local/table shapes in hot LOVE code;
-- opt-in tiny-ecs-shaped ECS domain support through the built-in plugin
-  registry path;
+- opt-in tiny-ecs-shaped ECS domain support through the core analysis path;
 - a prototype sprite/animation DSL;
 - richer asset validation and editor metadata, with the first shared metadata
   slice now powering asset hovers and path completion;

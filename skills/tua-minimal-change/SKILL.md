@@ -26,7 +26,7 @@ Push back gently when:
 - a one-off patch would duplicate semantic logic;
 - the idea conflicts with LuaJIT/LOVE compatibility;
 - docs or examples would promise behavior not implemented;
-- plugin/runtime ideas would make Tua less predictable.
+- extension/runtime ideas would make Tua less predictable.
 
 Offer a smaller commit-sized alternative.
 
