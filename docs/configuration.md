@@ -6,6 +6,12 @@ icon: lucide/settings
 
 Tua projects use `tua.toml`.
 
+Configuration is decoded through a typed Serde schema and a standards-compliant
+TOML parser. Normal TOML quoting, escapes, multiline arrays, dotted keys, and
+inline tables are supported. Unknown sections and keys are rejected with a
+nearby-name suggestion when one is unambiguous, and editor diagnostics select
+the precise offending key or value range.
+
 ## Default Config
 
 ```toml
@@ -64,6 +70,61 @@ inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0
 globals = []
 ```
+
+## Schema Reference
+
+This compact reference is generated from the same metadata used for config-key
+validation and editor-setting drift checks. The detailed sections below explain
+the behavior and tradeoffs of each option.
+
+<!-- tua-config-schema:start -->
+| TOML path | Type | Default | VS Code override |
+| --- | --- | --- | --- |
+| `source` | string | `"src"` | - |
+| `out` | string | `"build"` | - |
+| `target` | string | `"love11-luajit"` | - |
+| `extension` | string | `"tua"` | - |
+| `emit_maps` | boolean | `true` | - |
+| `emit.annotation_mode` | string | `"off"` | - |
+| `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
+| `format.line_width` | integer | `100` | `tua.format.lineWidth` |
+| `format.quote_style` | string | `"preserve"` | `tua.format.quoteStyle` |
+| `format.final_newline` | boolean | `true` | `tua.format.finalNewline` |
+| `jit.enabled` | boolean | `false` | `tua.jit.enabled` |
+| `jit.variable_type_drift` | boolean | `true` | - |
+| `jit.table_shape_drift` | boolean | `true` | - |
+| `jit.hot_loop_hints` | boolean | `true` | - |
+| `ecs.enabled` | boolean | `false` | `tua.ecs.enabled` |
+| `ecs.backend` | string | `"tiny-ecs"` | - |
+| `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
+| `diagnostics.missing_requires` | boolean | `false` | `tua.diagnostics.missingRequires` |
+| `diagnostics.self_assignments` | boolean | `false` | `tua.diagnostics.selfAssignments` |
+| `diagnostics.doc_annotations` | boolean | `false` | `tua.diagnostics.docAnnotations` |
+| `diagnostics.undefined_variables` | boolean | `false` | `tua.diagnostics.undefinedVariables` |
+| `diagnostics.unused_locals` | boolean | `false` | `tua.diagnostics.unusedLocals` |
+| `diagnostics.unused_parameters` | boolean | `false` | `tua.diagnostics.unusedParameters` |
+| `diagnostics.use_before_definition` | boolean | `false` | `tua.diagnostics.useBeforeDefinition` |
+| `diagnostics.duplicate_parameters` | boolean | `false` | `tua.diagnostics.duplicateParameters` |
+| `diagnostics.wrong_argument_count` | boolean | `false` | `tua.diagnostics.wrongArgumentCount` |
+| `diagnostics.bad_requires` | boolean | `false` | `tua.diagnostics.badRequires` |
+| `diagnostics.impossible_boolean_expressions` | boolean | `false` | `tua.diagnostics.impossibleBooleanExpressions` |
+| `diagnostics.duplicate_if_conditions` | boolean | `false` | `tua.diagnostics.duplicateIfConditions` |
+| `diagnostics.duplicate_binary_operands` | boolean | `false` | `tua.diagnostics.duplicateBinaryOperands` |
+| `diagnostics.float_equality` | boolean | `false` | `tua.diagnostics.floatEquality` |
+| `diagnostics.const_assignments` | boolean | `false` | `tua.diagnostics.constAssignments` |
+| `diagnostics.parameter_type_mismatches` | boolean | `false` | `tua.diagnostics.parameterTypeMismatches` |
+| `diagnostics.return_type_mismatches` | boolean | `false` | `tua.diagnostics.returnTypeMismatches` |
+| `diagnostics.assignment_arity` | boolean | `false` | `tua.diagnostics.assignmentArity` |
+| `diagnostics.local_declaration_arity` | boolean | `false` | `tua.diagnostics.localDeclarationArity` |
+| `diagnostics.unused_assignments` | boolean | `false` | `tua.diagnostics.unusedAssignments` |
+| `diagnostics.binary_operator_type_mismatches` | boolean | `false` | `tua.diagnostics.binaryOperatorTypeMismatches` |
+| `diagnostics.uncalled_local_functions` | boolean | `false` | `tua.diagnostics.uncalledLocalFunctions` |
+| `diagnostics.formatting_lints` | boolean | `true` | `tua.diagnostics.formattingLints` |
+| `diagnostics.inline_ignores` | boolean | `false` | `tua.diagnostics.inlineIgnores` |
+| `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line"]` | `tua.diagnostics.inlineIgnoreScopes` |
+| `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
+| `diagnostics.globals` | string-array | `[]` | `tua.diagnostics.globals` |
+<!-- tua-config-schema:end -->
 
 ## Root Options
 

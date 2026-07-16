@@ -408,17 +408,18 @@ line. Linux CI installs Lua so that runtime boundary is enforced.
 
 ### P2: Replace the handwritten partial TOML parser
 
-[`config/mod.rs`](crates/tua-core/src/config/mod.rs) manually dispatches
-sections and values, and string arrays are split by commas. This does not
-fully implement TOML and makes every setting change cross-cutting.
+Status: done. Configuration now deserializes the existing public config types
+through Serde and the `toml` crate, while `toml_edit` retains source spans for
+unknown-key validation. Defaults remain owned by the typed config structures,
+and standard TOML strings, arrays, dotted keys, and inline tables are covered.
 
-Improvements:
+Unknown sections and keys report deterministic nearby-name suggestions.
+`ConfigParseError` and core diagnostics carry start/end positions, so VS Code
+highlights the offending TOML key or value instead of a generic line position.
 
-- Use `serde` and `toml` with a typed configuration schema.
-- Preserve defaults while reporting unknown keys with suggestions.
-- Attach precise source ranges to configuration diagnostics.
-- Generate VS Code settings and documentation from shared schema metadata
-  where practical.
+[`config/schema.json`](config/schema.json) is the shared option metadata for
+unknown-key lookup, the generated configuration reference, and project-backed
+VS Code settings. `make config-schema-drift-check` is required by CI.
 
 ### P2: Improve file watching after correctness is fixed
 

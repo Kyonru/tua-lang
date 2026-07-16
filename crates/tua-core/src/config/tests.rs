@@ -51,6 +51,11 @@ fn default_config_matches_spec() {
             diagnostics: DiagnosticsConfig::default(),
         }
     );
+
+    assert_eq!(
+        parse_config(DEFAULT_CONFIG_TEXT).expect("default config text should parse"),
+        ProjectConfig::default()
+    );
 }
 
 #[test]
@@ -333,10 +338,14 @@ fn load_present_config_from_directory() {
 
 #[test]
 fn rejects_unknown_config_keys() {
-    let error = parse_config("mode = \"strict\"\n").unwrap_err();
+    let error = parse_config("sorce = \"game\"\n").unwrap_err();
 
     assert_eq!(error.line, 1);
+    assert_eq!(error.column, 1);
+    assert_eq!(error.end_line, 1);
+    assert_eq!(error.end_column, 6);
     assert!(error.message.contains("unknown config key"));
+    assert!(error.message.contains("did you mean `source`"));
 }
 
 #[test]
@@ -344,7 +353,10 @@ fn rejects_invalid_boolean_values() {
     let error = parse_config("emit_maps = yes\n").unwrap_err();
 
     assert_eq!(error.line, 1);
-    assert!(error.message.contains("expected boolean"));
+    assert_eq!(error.column, 13);
+    assert_eq!(error.end_line, 1);
+    assert_eq!(error.end_column, 16);
+    assert!(error.message.contains("must be quoted"));
 }
 
 #[test]
@@ -380,15 +392,21 @@ fn rejects_unknown_diagnostics_keys() {
     let error = parse_config("[diagnostics]\nmissing_requirez = true\n").unwrap_err();
 
     assert_eq!(error.line, 2);
+    assert_eq!(error.column, 1);
+    assert_eq!(error.end_column, 17);
     assert!(error.message.contains("unknown diagnostics config key"));
+    assert!(error.message.contains("did you mean `missing_requires`"));
 }
 
 #[test]
 fn rejects_unknown_config_sections() {
-    let error = parse_config("[lint]\nduplicate_keys = true\n").unwrap_err();
+    let error = parse_config("[formt]\nline_width = 80\n").unwrap_err();
 
     assert_eq!(error.line, 1);
+    assert_eq!(error.column, 2);
+    assert_eq!(error.end_column, 7);
     assert!(error.message.contains("unknown config section"));
+    assert!(error.message.contains("did you mean `[format]`"));
 }
 
 #[test]
@@ -400,8 +418,10 @@ fn config_parse_errors_convert_to_diagnostics() {
 
     assert_eq!(
         diagnostic.format_cli(),
-        "tua.toml:1:1 error TL3001: expected boolean value"
+        "tua.toml:1:13 error TL3001: string values must be quoted, expected literal string"
     );
+    assert_eq!(diagnostic.end_line, 1);
+    assert_eq!(diagnostic.end_column, 16);
 }
 
 #[test]
@@ -415,6 +435,41 @@ source = "game#client" # inline comment
     .expect("config should parse");
 
     assert_eq!(config.source, PathBuf::from("game#client"));
+}
+
+#[test]
+fn parses_standard_toml_strings_arrays_and_dotted_keys() {
+    let config = parse_config(
+        r#"
+source = 'game'
+format.line_width = 120
+diagnostics.inline_ignore_scopes = [
+  "tua-ignore-line",
+  "scope,with,commas",
+]
+diagnostics.globals = ["Game\u0041"]
+"#,
+    )
+    .expect("standards-compliant TOML should parse");
+
+    assert_eq!(config.source, PathBuf::from("game"));
+    assert_eq!(config.format.line_width, 120);
+    assert_eq!(
+        config.diagnostics.inline_ignore_scopes,
+        vec!["tua-ignore-line", "scope,with,commas"]
+    );
+    assert_eq!(config.diagnostics.globals, vec!["GameA"]);
+}
+
+#[test]
+fn validates_unknown_keys_inside_inline_tables() {
+    let error = parse_config("format = { line_wdth = 80 }\n").unwrap_err();
+
+    assert_eq!(error.line, 1);
+    assert_eq!(error.column, 12);
+    assert_eq!(error.end_column, 21);
+    assert!(error.message.contains("unknown format config key"));
+    assert!(error.message.contains("did you mean `line_width`"));
 }
 
 #[test]

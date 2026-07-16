@@ -13,3 +13,7 @@ test-fixture = []
 
 [dependencies]
 full_moon = { version = "2.2.0", features = ["luau"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+toml = "0.9.12"
+toml_edit = "0.23.10"

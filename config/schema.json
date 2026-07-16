@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "settings": [
+    {
+      "path": "source",
+      "type": "string",
+      "default": "src",
+      "description": "Directory containing Tua source files."
+    },
+    {
+      "path": "out",
+      "type": "string",
+      "default": "build",
+      "description": "Directory where emitted Lua files are written."
+    },
+    {
+      "path": "target",
+      "type": "string",
+      "default": "love11-luajit",
+      "description": "Runtime target label."
+    },
+    {
+      "path": "extension",
+      "type": "string",
+      "default": "tua",
+      "description": "Source extension to discover."
+    },
+    {
+      "path": "emit_maps",
+      "type": "boolean",
+      "default": true,
+      "description": "Write Lua source-map sidecars during builds."
+    },
+    {
+      "path": "emit.annotation_mode",
+      "type": "string",
+      "default": "off",
+      "enum": [
+        "off",
+        "luacats"
+      ],
+      "description": "Controls annotation-preserving Lua emission."
+    },
+    {
+      "path": "format.indent_width",
+      "type": "integer",
+      "default": 2,
+      "minimum": 1,
+      "description": "Spaces per indentation level.",
+      "editor": "tua.format.indentWidth",
+      "editorDescription": "Spaces per indentation level for the Tua formatter. Null inherits [format].indent_width from tua.toml."
+    },
+    {
+      "path": "format.line_width",
+      "type": "integer",
+      "default": 100,
+      "minimum": 1,
+      "description": "Preferred maximum formatted line width.",
+      "editor": "tua.format.lineWidth",
+      "editorDescription": "Preferred line width for the Tua formatter. Null inherits [format].line_width from tua.toml."
+    },
+    {
+      "path": "format.quote_style",
+      "type": "string",
+      "default": "preserve",
+      "enum": [
+        "preserve"
+      ],
+      "description": "String quote formatting policy.",
+      "editor": "tua.format.quoteStyle",
+      "editorDescription": "Quote style for the Tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
+    },
+    {
+      "path": "format.final_newline",
+      "type": "boolean",
+      "default": true,
+      "description": "Write a final LF newline when formatting.",
+      "editor": "tua.format.finalNewline",
+      "editorDescription": "Whether the formatter writes a final newline. Null inherits [format].final_newline from tua.toml."
+    },
+    {
+      "path": "jit.enabled",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable opt-in LuaJIT shape guidance diagnostics.",
+      "editor": "tua.jit.enabled",
+      "editorDescription": "Enable opt-in LuaJIT shape guidance diagnostics (TL4032-TL4034). Null inherits [jit].enabled from tua.toml."
+    },
+    {
+      "path": "jit.variable_type_drift",
+      "type": "boolean",
+      "default": true,
+      "description": "Retain variable type drift guidance compatibility."
+    },
+    {
+      "path": "jit.table_shape_drift",
+      "type": "boolean",
+      "default": true,
+      "description": "Report clear table-shape drift."
+    },
+    {
+      "path": "jit.hot_loop_hints",
+      "type": "boolean",
+      "default": true,
+      "description": "Report dynamic table-key writes in loops."
+    },
+    {
+      "path": "ecs.enabled",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable first-class ECS analysis.",
+      "editor": "tua.ecs.enabled",
+      "editorDescription": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ECS APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
+    },
+    {
+      "path": "ecs.backend",
+      "type": "string",
+      "default": "tiny-ecs",
+      "description": "Select the intended ECS runtime adapter."
+    },
+    {
+      "path": "diagnostics.duplicate_keys",
+      "type": "boolean",
+      "default": false,
+      "description": "Report duplicate table keys.",
+      "editor": "tua.diagnostics.duplicateKeys"
+    },
+    {
+      "path": "diagnostics.missing_requires",
+      "type": "boolean",
+      "default": false,
+      "description": "Report require calls that cannot be resolved.",
+      "editor": "tua.diagnostics.missingRequires"
+    },
+    {
+      "path": "diagnostics.self_assignments",
+      "type": "boolean",
+      "default": false,
+      "description": "Report assignments where the target and value are the same symbol.",
+      "editor": "tua.diagnostics.selfAssignments"
+    },
+    {
+      "path": "diagnostics.doc_annotations",
+      "type": "boolean",
+      "default": false,
+      "description": "Report malformed LuaHelper/LuaLS-style documentation annotations.",
+      "editor": "tua.diagnostics.docAnnotations"
+    },
+    {
+      "path": "diagnostics.undefined_variables",
+      "type": "boolean",
+      "default": false,
+      "description": "Report undefined variables when static analysis can prove them.",
+      "editor": "tua.diagnostics.undefinedVariables"
+    },
+    {
+      "path": "diagnostics.unused_locals",
+      "type": "boolean",
+      "default": false,
+      "description": "Report unused local variables.",
+      "editor": "tua.diagnostics.unusedLocals"
+    },
+    {
+      "path": "diagnostics.unused_parameters",
+      "type": "boolean",
+      "default": false,
+      "description": "Report unused function parameters.",
+      "editor": "tua.diagnostics.unusedParameters"
+    },
+    {
+      "path": "diagnostics.use_before_definition",
+      "type": "boolean",
+      "default": false,
+      "description": "Report provable use of locals before their definition.",
+      "editor": "tua.diagnostics.useBeforeDefinition"
+    },
+    {
+      "path": "diagnostics.duplicate_parameters",
+      "type": "boolean",
+      "default": false,
+      "description": "Report duplicate function parameter names.",
+      "editor": "tua.diagnostics.duplicateParameters"
+    },
+    {
+      "path": "diagnostics.wrong_argument_count",
+      "type": "boolean",
+      "default": false,
+      "description": "Report calls with the wrong number of arguments.",
+      "editor": "tua.diagnostics.wrongArgumentCount"
+    },
+    {
+      "path": "diagnostics.bad_requires",
+      "type": "boolean",
+      "default": false,
+      "description": "Report invalid require targets.",
+      "editor": "tua.diagnostics.badRequires"
+    },
+    {
+      "path": "diagnostics.impossible_boolean_expressions",
+      "type": "boolean",
+      "default": false,
+      "description": "Report boolean expressions that can never be true.",
+      "editor": "tua.diagnostics.impossibleBooleanExpressions"
+    },
+    {
+      "path": "diagnostics.duplicate_if_conditions",
+      "type": "boolean",
+      "default": false,
+      "description": "Report repeated if or elseif conditions.",
+      "editor": "tua.diagnostics.duplicateIfConditions"
+    },
+    {
+      "path": "diagnostics.duplicate_binary_operands",
+      "type": "boolean",
+      "default": false,
+      "description": "Report suspicious repeated binary operands.",
+      "editor": "tua.diagnostics.duplicateBinaryOperands"
+    },
+    {
+      "path": "diagnostics.float_equality",
+      "type": "boolean",
+      "default": false,
+      "description": "Report direct equality comparisons on numbers.",
+      "editor": "tua.diagnostics.floatEquality"
+    },
+    {
+      "path": "diagnostics.const_assignments",
+      "type": "boolean",
+      "default": false,
+      "description": "Report assignments to values marked as constant.",
+      "editor": "tua.diagnostics.constAssignments"
+    },
+    {
+      "path": "diagnostics.parameter_type_mismatches",
+      "type": "boolean",
+      "default": false,
+      "description": "Report function argument type mismatches.",
+      "editor": "tua.diagnostics.parameterTypeMismatches"
+    },
+    {
+      "path": "diagnostics.return_type_mismatches",
+      "type": "boolean",
+      "default": false,
+      "description": "Report function return type mismatches.",
+      "editor": "tua.diagnostics.returnTypeMismatches"
+    },
+    {
+      "path": "diagnostics.assignment_arity",
+      "type": "boolean",
+      "default": false,
+      "description": "Report proven assignment value-count mismatches.",
+      "editor": "tua.diagnostics.assignmentArity"
+    },
+    {
+      "path": "diagnostics.local_declaration_arity",
+      "type": "boolean",
+      "default": false,
+      "description": "Report proven local initializer-count mismatches.",
+      "editor": "tua.diagnostics.localDeclarationArity"
+    },
+    {
+      "path": "diagnostics.unused_assignments",
+      "type": "boolean",
+      "default": false,
+      "description": "Report assignments to locals that are never read afterwards.",
+      "editor": "tua.diagnostics.unusedAssignments"
+    },
+    {
+      "path": "diagnostics.binary_operator_type_mismatches",
+      "type": "boolean",
+      "default": false,
+      "description": "Report binary operators with statically incompatible operand types.",
+      "editor": "tua.diagnostics.binaryOperatorTypeMismatches"
+    },
+    {
+      "path": "diagnostics.uncalled_local_functions",
+      "type": "boolean",
+      "default": false,
+      "description": "Report local functions that are referenced but never called.",
+      "editor": "tua.diagnostics.uncalledLocalFunctions"
+    },
+    {
+      "path": "diagnostics.formatting_lints",
+      "type": "boolean",
+      "default": true,
+      "description": "Report opinionated Lua/Tua formatting consistency issues.",
+      "editor": "tua.diagnostics.formattingLints",
+      "editorDescription": "Report opinionated Lua/Tua formatting consistency issues such as trailing whitespace, indentation, line width, keyword spacing, and token spacing. Null inherits [diagnostics].formatting_lints from tua.toml."
+    },
+    {
+      "path": "diagnostics.inline_ignores",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable inline diagnostic suppression comments.",
+      "editor": "tua.diagnostics.inlineIgnores"
+    },
+    {
+      "path": "diagnostics.inline_ignore_scopes",
+      "type": "string-array",
+      "default": [
+        "tua-ignore-line",
+        "tua-ignore-next-line"
+      ],
+      "description": "Allowed inline diagnostic suppression directives.",
+      "editor": "tua.diagnostics.inlineIgnoreScopes"
+    },
+    {
+      "path": "diagnostics.inline_ignore_max_per_file",
+      "type": "integer",
+      "default": 0,
+      "minimum": 0,
+      "description": "Maximum inline diagnostic suppression comments per file; zero is unlimited.",
+      "editor": "tua.diagnostics.inlineIgnoreMaxPerFile"
+    },
+    {
+      "path": "diagnostics.globals",
+      "type": "string-array",
+      "default": [],
+      "description": "Additional global names accepted by diagnostics.",
+      "editor": "tua.diagnostics.globals"
+    }
+  ]
+}

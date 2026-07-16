@@ -4,8 +4,15 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer};
+
 use crate::format::{FormatOptions, QuoteStyle};
 use crate::{Diagnostic, DiagnosticCode};
+
+mod parser;
+
+pub use parser::parse_config;
 
 pub const CONFIG_FILE: &str = "tua.toml";
 
@@ -66,7 +73,8 @@ inline_ignore_max_per_file = 0
 globals = []
 ";
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct ProjectConfig {
     pub source: PathBuf,
     pub out: PathBuf,
@@ -97,7 +105,8 @@ impl Default for ProjectConfig {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct EmitConfig {
     pub annotation_mode: AnnotationMode,
 }
@@ -117,17 +126,6 @@ pub enum AnnotationMode {
 }
 
 impl AnnotationMode {
-    fn parse(line: usize, value: &str) -> Result<Self, ConfigParseError> {
-        match parse_string(line, value)?.as_str() {
-            "off" => Ok(Self::Off),
-            "luacats" => Ok(Self::Luacats),
-            _ => Err(ConfigParseError::new(
-                line,
-                "expected annotation mode \"off\" or \"luacats\"",
-            )),
-        }
-    }
-
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -136,10 +134,27 @@ impl AnnotationMode {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl<'de> Deserialize<'de> for AnnotationMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match String::deserialize(deserializer)?.as_str() {
+            "off" => Ok(Self::Off),
+            "luacats" => Ok(Self::Luacats),
+            _ => Err(D::Error::custom(
+                "expected annotation mode \"off\" or \"luacats\"",
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct FormatConfig {
     pub indent_width: usize,
     pub line_width: usize,
+    #[serde(deserialize_with = "parser::deserialize_quote_style")]
     pub quote_style: QuoteStyle,
     pub final_newline: bool,
 }
@@ -166,17 +181,8 @@ impl FormatConfig {
     }
 }
 
-fn parse_quote_style(line: usize, value: &str) -> Result<QuoteStyle, ConfigParseError> {
-    match parse_string(line, value)?.as_str() {
-        "preserve" => Ok(QuoteStyle::Preserve),
-        _ => Err(ConfigParseError::new(
-            line,
-            "expected quote style \"preserve\"",
-        )),
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct JitConfig {
     pub enabled: bool,
     pub variable_type_drift: bool,
@@ -195,7 +201,8 @@ impl Default for JitConfig {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct EcsConfig {
     pub enabled: bool,
     pub backend: String,
@@ -210,7 +217,8 @@ impl Default for EcsConfig {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct DiagnosticsConfig {
     pub duplicate_keys: bool,
     pub missing_requires: bool,
@@ -328,17 +336,9 @@ pub struct InitResult {
 pub struct ConfigParseError {
     pub line: usize,
     pub column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
     pub message: String,
-}
-
-impl ConfigParseError {
-    fn new(line: usize, message: impl Into<String>) -> Self {
-        Self {
-            line,
-            column: 1,
-            message: message.into(),
-        }
-    }
 }
 
 impl fmt::Display for ConfigParseError {
@@ -390,6 +390,12 @@ impl ConfigError {
                 .with_code(DiagnosticCode::CONFIG_IO),
             Self::Parse { path, source } => {
                 Diagnostic::error(path, source.line, source.column, source.message.clone())
+                    .with_range(
+                        source.line,
+                        source.column,
+                        source.end_line,
+                        source.end_column,
+                    )
                     .with_code(DiagnosticCode::CONFIG_PARSE)
             }
         }
@@ -463,357 +469,6 @@ fn write_default_config_without_overwrite(path: &Path) -> Result<bool, ConfigErr
             path: path.to_path_buf(),
             source,
         }),
-    }
-}
-
-pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
-    let mut config = ProjectConfig::default();
-    let mut section = ConfigSection::Root;
-
-    for (index, raw_line) in input.lines().enumerate() {
-        let line_number = index + 1;
-        let line = strip_comment(raw_line)
-            .map_err(|message| ConfigParseError::new(line_number, message))?;
-        let line = line.trim();
-
-        if line.is_empty() {
-            continue;
-        }
-
-        if let Some(next_section) = parse_section_header(line_number, line)? {
-            section = next_section;
-            continue;
-        }
-
-        let Some((raw_key, raw_value)) = line.split_once('=') else {
-            return Err(ConfigParseError::new(line_number, "expected `key = value`"));
-        };
-
-        let key = raw_key.trim();
-        let value = raw_value.trim();
-
-        match section {
-            ConfigSection::Root => match key {
-                "source" => config.source = PathBuf::from(parse_string(line_number, value)?),
-                "out" => config.out = PathBuf::from(parse_string(line_number, value)?),
-                "target" => config.target = parse_string(line_number, value)?,
-                "extension" => config.extension = parse_string(line_number, value)?,
-                "emit_maps" => config.emit_maps = parse_bool(line_number, value)?,
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown config key `{other}`"),
-                    ));
-                }
-            },
-            ConfigSection::Emit => match key {
-                "annotation_mode" => {
-                    config.emit.annotation_mode = AnnotationMode::parse(line_number, value)?
-                }
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown emit config key `{other}`"),
-                    ));
-                }
-            },
-            ConfigSection::Format => match key {
-                "indent_width" => config.format.indent_width = parse_usize(line_number, value)?,
-                "line_width" => config.format.line_width = parse_usize(line_number, value)?,
-                "quote_style" => config.format.quote_style = parse_quote_style(line_number, value)?,
-                "final_newline" => config.format.final_newline = parse_bool(line_number, value)?,
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown format config key `{other}`"),
-                    ));
-                }
-            },
-            ConfigSection::Jit => match key {
-                "enabled" => config.jit.enabled = parse_bool(line_number, value)?,
-                "variable_type_drift" => {
-                    config.jit.variable_type_drift = parse_bool(line_number, value)?
-                }
-                "table_shape_drift" => {
-                    config.jit.table_shape_drift = parse_bool(line_number, value)?
-                }
-                "hot_loop_hints" => config.jit.hot_loop_hints = parse_bool(line_number, value)?,
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown jit config key `{other}`"),
-                    ));
-                }
-            },
-            ConfigSection::Ecs => match key {
-                "enabled" => config.ecs.enabled = parse_bool(line_number, value)?,
-                "backend" => config.ecs.backend = parse_string(line_number, value)?,
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown ecs config key `{other}`"),
-                    ));
-                }
-            },
-            ConfigSection::Diagnostics => match key {
-                "duplicate_keys" => {
-                    config.diagnostics.duplicate_keys = parse_bool(line_number, value)?
-                }
-                "missing_requires" => {
-                    config.diagnostics.missing_requires = parse_bool(line_number, value)?
-                }
-                "self_assignments" => {
-                    config.diagnostics.self_assignments = parse_bool(line_number, value)?
-                }
-                "doc_annotations" => {
-                    config.diagnostics.doc_annotations = parse_bool(line_number, value)?
-                }
-                "undefined_variables" => {
-                    config.diagnostics.undefined_variables = parse_bool(line_number, value)?
-                }
-                "unused_locals" => {
-                    config.diagnostics.unused_locals = parse_bool(line_number, value)?
-                }
-                "unused_parameters" => {
-                    config.diagnostics.unused_parameters = parse_bool(line_number, value)?
-                }
-                "use_before_definition" => {
-                    config.diagnostics.use_before_definition = parse_bool(line_number, value)?
-                }
-                "duplicate_parameters" => {
-                    config.diagnostics.duplicate_parameters = parse_bool(line_number, value)?
-                }
-                "wrong_argument_count" => {
-                    config.diagnostics.wrong_argument_count = parse_bool(line_number, value)?
-                }
-                "bad_requires" => config.diagnostics.bad_requires = parse_bool(line_number, value)?,
-                "impossible_boolean_expressions" => {
-                    config.diagnostics.impossible_boolean_expressions =
-                        parse_bool(line_number, value)?
-                }
-                "duplicate_if_conditions" => {
-                    config.diagnostics.duplicate_if_conditions = parse_bool(line_number, value)?
-                }
-                "duplicate_binary_operands" => {
-                    config.diagnostics.duplicate_binary_operands = parse_bool(line_number, value)?
-                }
-                "float_equality" => {
-                    config.diagnostics.float_equality = parse_bool(line_number, value)?
-                }
-                "const_assignments" => {
-                    config.diagnostics.const_assignments = parse_bool(line_number, value)?
-                }
-                "parameter_type_mismatches" => {
-                    config.diagnostics.parameter_type_mismatches = parse_bool(line_number, value)?
-                }
-                "return_type_mismatches" => {
-                    config.diagnostics.return_type_mismatches = parse_bool(line_number, value)?
-                }
-                "assignment_arity" => {
-                    config.diagnostics.assignment_arity = parse_bool(line_number, value)?
-                }
-                "local_declaration_arity" => {
-                    config.diagnostics.local_declaration_arity = parse_bool(line_number, value)?
-                }
-                "unused_assignments" => {
-                    config.diagnostics.unused_assignments = parse_bool(line_number, value)?
-                }
-                "binary_operator_type_mismatches" => {
-                    config.diagnostics.binary_operator_type_mismatches =
-                        parse_bool(line_number, value)?
-                }
-                "uncalled_local_functions" => {
-                    config.diagnostics.uncalled_local_functions = parse_bool(line_number, value)?
-                }
-                "formatting_lints" => {
-                    config.diagnostics.formatting_lints = parse_bool(line_number, value)?
-                }
-                "inline_ignores" => {
-                    config.diagnostics.inline_ignores = parse_bool(line_number, value)?
-                }
-                "inline_ignore_scopes" => {
-                    config.diagnostics.inline_ignore_scopes =
-                        parse_string_array(line_number, value)?
-                }
-                "inline_ignore_max_per_file" => {
-                    config.diagnostics.inline_ignore_max_per_file = parse_usize(line_number, value)?
-                }
-                "globals" => config.diagnostics.globals = parse_string_array(line_number, value)?,
-                "" => {
-                    return Err(ConfigParseError::new(line_number, "missing config key"));
-                }
-                other => {
-                    return Err(ConfigParseError::new(
-                        line_number,
-                        format!("unknown diagnostics config key `{other}`"),
-                    ));
-                }
-            },
-        }
-    }
-
-    Ok(config)
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ConfigSection {
-    Root,
-    Emit,
-    Format,
-    Jit,
-    Ecs,
-    Diagnostics,
-}
-
-fn parse_section_header(
-    line_number: usize,
-    line: &str,
-) -> Result<Option<ConfigSection>, ConfigParseError> {
-    if !line.starts_with('[') {
-        return Ok(None);
-    }
-
-    let Some(section) = line
-        .strip_prefix('[')
-        .and_then(|line| line.strip_suffix(']'))
-    else {
-        return Err(ConfigParseError::new(
-            line_number,
-            "expected section header `[name]`",
-        ));
-    };
-
-    match section.trim() {
-        "emit" => Ok(Some(ConfigSection::Emit)),
-        "format" => Ok(Some(ConfigSection::Format)),
-        "jit" => Ok(Some(ConfigSection::Jit)),
-        "ecs" => Ok(Some(ConfigSection::Ecs)),
-        "diagnostics" => Ok(Some(ConfigSection::Diagnostics)),
-        "" => Err(ConfigParseError::new(line_number, "missing section name")),
-        other => Err(ConfigParseError::new(
-            line_number,
-            format!("unknown config section `{other}`"),
-        )),
-    }
-}
-
-fn parse_string(line: usize, value: &str) -> Result<String, ConfigParseError> {
-    let Some(inner) = value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-    else {
-        return Err(ConfigParseError::new(line, "expected string value"));
-    };
-
-    let mut result = String::new();
-    let mut chars = inner.chars();
-
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            result.push(ch);
-            continue;
-        }
-
-        let Some(escaped) = chars.next() else {
-            return Err(ConfigParseError::new(line, "unfinished string escape"));
-        };
-
-        match escaped {
-            '"' => result.push('"'),
-            '\\' => result.push('\\'),
-            'n' => result.push('\n'),
-            'r' => result.push('\r'),
-            't' => result.push('\t'),
-            other => {
-                return Err(ConfigParseError::new(
-                    line,
-                    format!("unsupported string escape `\\{other}`"),
-                ));
-            }
-        }
-    }
-
-    Ok(result)
-}
-
-fn parse_bool(line: usize, value: &str) -> Result<bool, ConfigParseError> {
-    match value {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(ConfigParseError::new(line, "expected boolean value")),
-    }
-}
-
-fn parse_usize(line: usize, value: &str) -> Result<usize, ConfigParseError> {
-    value
-        .parse()
-        .map_err(|_| ConfigParseError::new(line, "expected non-negative integer value"))
-}
-
-fn parse_string_array(line: usize, value: &str) -> Result<Vec<String>, ConfigParseError> {
-    let Some(inner) = value
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-    else {
-        return Err(ConfigParseError::new(line, "expected string array value"));
-    };
-    let inner = inner.trim();
-
-    if inner.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    inner
-        .split(',')
-        .map(|item| parse_string(line, item.trim()))
-        .collect()
-}
-
-fn strip_comment(line: &str) -> Result<String, &'static str> {
-    let mut result = String::new();
-    let mut in_string = false;
-    let mut escaped = false;
-
-    for ch in line.chars() {
-        if escaped {
-            result.push(ch);
-            escaped = false;
-            continue;
-        }
-
-        match ch {
-            '\\' if in_string => {
-                result.push(ch);
-                escaped = true;
-            }
-            '"' => {
-                result.push(ch);
-                in_string = !in_string;
-            }
-            '#' if !in_string => break,
-            other => result.push(other),
-        }
-    }
-
-    if in_string {
-        Err("unterminated string value")
-    } else {
-        Ok(result)
     }
 }
 

@@ -68,6 +68,8 @@ pub(super) fn workspace_diagnostic_refresh_request(id: u64) -> Value {
 pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
     let start_line = diagnostic.line.saturating_sub(1);
     let start_character = diagnostic.column.saturating_sub(1);
+    let end_line = diagnostic.end_line.saturating_sub(1);
+    let end_character = diagnostic.end_column.saturating_sub(1);
 
     json!({
         "range": {
@@ -76,8 +78,8 @@ pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
                 "character": start_character
             },
             "end": {
-                "line": start_line,
-                "character": start_character + 1
+                "line": end_line,
+                "character": end_character
             }
         },
         "severity": lsp_severity(diagnostic.severity),
@@ -93,6 +95,14 @@ pub(super) fn core_diagnostic_from_lsp(
 ) -> Option<Diagnostic> {
     let start = diagnostic.get("range")?.get("start")?;
     let position = source_position_from_lsp(start)?;
+    let end = diagnostic
+        .get("range")
+        .and_then(|range| range.get("end"))
+        .and_then(source_position_from_lsp)
+        .unwrap_or(SourcePosition {
+            line: position.line,
+            column: position.column.saturating_add(1),
+        });
     let code = diagnostic
         .get("code")
         .and_then(Value::as_str)
@@ -103,7 +113,8 @@ pub(super) fn core_diagnostic_from_lsp(
         .map(lsp_diagnostic_severity)
         .unwrap_or(DiagnosticSeverity::Warning);
     let message = diagnostic.get("message")?.as_str()?.to_owned();
-    let mut output = Diagnostic::new(path, position.line, position.column, severity, message);
+    let mut output = Diagnostic::new(path, position.line, position.column, severity, message)
+        .with_range(position.line, position.column, end.line, end.column);
 
     if let Some(code) = code {
         output = output.with_code(code);

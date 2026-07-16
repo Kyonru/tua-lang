@@ -195,6 +195,8 @@ pub struct Diagnostic {
     pub file: PathBuf,
     pub line: usize,
     pub column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
     pub severity: DiagnosticSeverity,
     pub message: String,
     pub code: Option<DiagnosticCode>,
@@ -212,6 +214,8 @@ impl Diagnostic {
             file: file.into(),
             line: line.max(1),
             column: column.max(1),
+            end_line: line.max(1),
+            end_column: column.max(1).saturating_add(1),
             severity,
             message: message.into(),
             code: None,
@@ -229,6 +233,24 @@ impl Diagnostic {
 
     pub fn with_code(mut self, code: DiagnosticCode) -> Self {
         self.code = Some(code);
+        self
+    }
+
+    pub fn with_range(
+        mut self,
+        line: usize,
+        column: usize,
+        end_line: usize,
+        end_column: usize,
+    ) -> Self {
+        self.line = line.max(1);
+        self.column = column.max(1);
+        self.end_line = end_line.max(self.line);
+        self.end_column = if self.end_line == self.line {
+            end_column.max(self.column.saturating_add(1))
+        } else {
+            end_column.max(1)
+        };
         self
     }
 

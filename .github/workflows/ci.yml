@@ -37,6 +37,8 @@ jobs:
         run: make clippy
       - name: Validate JSON
         run: make json-check
+      - name: Check generated config metadata
+        run: make config-schema-drift-check
       - name: Build documentation
         env:
           TUA_DOCS_VENV_DIR: ${{ runner.temp }}/tua-docs

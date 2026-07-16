@@ -19,6 +19,26 @@ fn diagnostic_severities_round_trip_through_lsp() {
         assert_eq!(round_tripped.severity, severity);
     }
 }
+
+#[test]
+fn diagnostic_ranges_round_trip_through_lsp() {
+    let diagnostic =
+        Diagnostic::error("tua.toml", 2, 3, "unknown config key").with_range(2, 3, 2, 18);
+    let lsp = protocol::lsp_diagnostic_from_core(diagnostic);
+
+    assert_eq!(lsp["range"]["start"]["line"], 1);
+    assert_eq!(lsp["range"]["start"]["character"], 2);
+    assert_eq!(lsp["range"]["end"]["line"], 1);
+    assert_eq!(lsp["range"]["end"]["character"], 17);
+
+    let round_tripped = protocol::core_diagnostic_from_lsp(Path::new("tua.toml"), &lsp)
+        .expect("diagnostic should round-trip");
+
+    assert_eq!(round_tripped.line, 2);
+    assert_eq!(round_tripped.column, 3);
+    assert_eq!(round_tripped.end_line, 2);
+    assert_eq!(round_tripped.end_column, 18);
+}
 #[test]
 fn did_open_publishes_matching_core_diagnostics() {
     let uri = "file:///tmp/player.tua";

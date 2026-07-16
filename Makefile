@@ -49,6 +49,14 @@ generate-love-api: ## Regenerate all LOVE catalogs from the pinned love-api chec
 	lua scripts/generate-love-api-extra.lua "$(LOVE_API_ROOT)"
 	rustfmt crates/tua-core/src/love_api.rs crates/tua-core/src/love_api_signatures.rs crates/tua-core/src/love_api_extra.rs
 
+.PHONY: generate-config-schema
+generate-config-schema: ## Regenerate VS Code and docs config metadata from config/schema.json.
+	node scripts/generate-config-schema.js
+
+.PHONY: config-schema-drift-check
+config-schema-drift-check: ## Verify VS Code and docs config metadata matches config/schema.json.
+	node scripts/generate-config-schema.js --check
+
 .PHONY: love-api-drift-check
 love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source checkout.
 	@test -n "$(LOVE_API_ROOT)" || { echo "error: set LOVE_API_ROOT=/path/to/love-api"; exit 1; }
@@ -68,10 +76,10 @@ clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: verify
-verify: fmt-check test clippy extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: fmt-check test clippy config-schema-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy test build-examples config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.

@@ -22,7 +22,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
     "test:vscode": "node test/run.js"
   },
   "contributes": {
@@ -73,7 +73,7 @@
           ],
           "default": null,
           "minimum": 1,
-          "description": "Spaces per indentation level for the tua formatter. Null inherits [format].indent_width from tua.toml."
+          "description": "Spaces per indentation level for the Tua formatter. Null inherits [format].indent_width from tua.toml."
         },
         "tua.format.lineWidth": {
           "type": [
@@ -82,7 +82,7 @@
           ],
           "default": null,
           "minimum": 1,
-          "description": "Preferred line width for the tua formatter. Null inherits [format].line_width from tua.toml."
+          "description": "Preferred line width for the Tua formatter. Null inherits [format].line_width from tua.toml."
         },
         "tua.format.quoteStyle": {
           "type": [
@@ -94,7 +94,7 @@
             "preserve",
             null
           ],
-          "description": "Quote style for the tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
+          "description": "Quote style for the Tua formatter. Preserve keeps the source quote style; null inherits tua.toml."
         },
         "tua.format.finalNewline": {
           "type": [
@@ -166,7 +166,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report use of locals before their definition when provable."
+          "description": "Report provable use of locals before their definition."
         },
         "tua.diagnostics.duplicateParameters": {
           "type": [
@@ -214,7 +214,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report binary expressions that repeat the same operand suspiciously."
+          "description": "Report suspicious repeated binary operands."
         },
         "tua.diagnostics.floatEquality": {
           "type": [
@@ -230,7 +230,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report assignments to values marked as constant by annotations."
+          "description": "Report assignments to values marked as constant."
         },
         "tua.diagnostics.parameterTypeMismatches": {
           "type": [
@@ -254,7 +254,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report multiple assignments where the proven value count does not match the target count."
+          "description": "Report proven assignment value-count mismatches."
         },
         "tua.diagnostics.localDeclarationArity": {
           "type": [
@@ -262,7 +262,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report local declarations where the proven initializer count does not match the local count."
+          "description": "Report proven local initializer-count mismatches."
         },
         "tua.diagnostics.unusedAssignments": {
           "type": [
@@ -278,7 +278,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report binary operators used with statically incompatible operand types."
+          "description": "Report binary operators with statically incompatible operand types."
         },
         "tua.diagnostics.uncalledLocalFunctions": {
           "type": [
@@ -302,7 +302,7 @@
             "null"
           ],
           "default": null,
-          "description": "Enable line-targeted diagnostic suppression comments such as -- tua-ignore-next-line TL4018."
+          "description": "Enable inline diagnostic suppression comments."
         },
         "tua.diagnostics.inlineIgnoreScopes": {
           "type": [
@@ -313,7 +313,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Allowed inline diagnostic suppression directives. Defaults to tua-ignore-line and tua-ignore-next-line."
+          "description": "Allowed inline diagnostic suppression directives."
         },
         "tua.diagnostics.inlineIgnoreMaxPerFile": {
           "type": [
@@ -322,7 +322,7 @@
           ],
           "default": null,
           "minimum": 0,
-          "description": "Maximum inline diagnostic suppression comments per file. 0 means unlimited."
+          "description": "Maximum inline diagnostic suppression comments per file; zero is unlimited."
         },
         "tua.diagnostics.globals": {
           "type": [
@@ -349,7 +349,7 @@
             "null"
           ],
           "default": null,
-          "description": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ecs APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
+          "description": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ECS APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
         },
         "tua.completion.sequenceRanking.enabled": {
           "type": "boolean",

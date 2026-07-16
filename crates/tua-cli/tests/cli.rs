@@ -169,7 +169,9 @@ fn check_prints_config_diagnostics() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
-    assert!(stderr.contains("tua.toml:1:1 error TL3001: expected boolean value"));
+    assert!(stderr.contains(
+        "tua.toml:1:13 error TL3001: string values must be quoted, expected literal string"
+    ));
     assert!(!stderr.contains("panicked"));
 }
 
