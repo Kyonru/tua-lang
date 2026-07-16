@@ -58,15 +58,16 @@ channel. Automatic suggestions use VS Code's native zero-delay quick-suggestion
 flow; the extension does not run a second timer or execute
 `editor.action.triggerSuggest` after edits.
 
-Run the real Extension Development Host typing test with:
+Run the real Extension Development Host integration suite with:
 
 ```bash
 make extension-test
 ```
 
-The test drives the editor suggestion widget against a controlled LSP server
-and checks document-version synchronization, cursor position, duplicate
-requests, result freshness, and visible suggestion acceptance.
+The suite drives an isolated two-root workspace against a controlled LSP
+server. It covers completion freshness and cancellation, hover, definition,
+signature help, inlay hints, UTF-16 and untitled documents, file renames, and
+sprite preview opening, reload, focus, missing assets, and hover command links.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.

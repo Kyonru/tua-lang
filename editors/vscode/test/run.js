@@ -10,12 +10,25 @@ async function main() {
   const extensionTestsPath = path.resolve(__dirname, "suite", "index.js");
   const serverFixturePath = path.resolve(__dirname, "fixtures", "mock-lsp-server.js");
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tua-vscode-test-"));
-  const workspacePath = path.join(tempRoot, "workspace");
-  const documentPath = path.join(workspacePath, "suggestions.tua");
+  const workspaceOne = path.join(tempRoot, "workspace-one");
+  const workspaceTwo = path.join(tempRoot, "workspace-two");
+  const workspacePath = path.join(tempRoot, "tua-integration.code-workspace");
   const logPath = path.join(tempRoot, "lsp-events.jsonl");
 
-  fs.mkdirSync(workspacePath);
-  fs.writeFileSync(documentPath, "local seed = 1\n\n");
+  const fixtures = createWorkspaceFixtures(workspaceOne, workspaceTwo);
+  fs.writeFileSync(
+    workspacePath,
+    `${JSON.stringify(
+      {
+        folders: [{ path: workspaceOne }, { path: workspaceTwo }],
+        settings: {
+          "tua.preview.enabled": true,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
   const serverPath = createServerLauncher(tempRoot, serverFixturePath);
 
   try {
@@ -24,7 +37,7 @@ async function main() {
       extensionTestsPath,
       extensionTestsEnv: {
         TUA_SERVER_PATH: serverPath,
-        TUA_TEST_DOCUMENT: documentPath,
+        TUA_TEST_FIXTURES: JSON.stringify(fixtures),
         TUA_TEST_LSP_LOG: logPath,
       },
       launchArgs: [
@@ -37,8 +50,91 @@ async function main() {
       vscodeExecutablePath: localVSCodeExecutable(),
     });
   } finally {
-    fs.rmSync(tempRoot, { force: true, recursive: true });
+    if (process.env.TUA_TEST_KEEP_TEMP === "1") {
+      console.log(`kept VS Code integration test data at ${tempRoot}`);
+    } else {
+      fs.rmSync(tempRoot, { force: true, recursive: true });
+    }
   }
+}
+
+function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
+  const sourceOne = path.join(workspaceOne, "src");
+  const sourceTwo = path.join(workspaceTwo, "src");
+  const assetDirectory = path.join(sourceOne, "assets");
+
+  fs.mkdirSync(assetDirectory, { recursive: true });
+  fs.mkdirSync(sourceTwo, { recursive: true });
+  fs.writeFileSync(path.join(workspaceOne, "tua.toml"), 'source = "src"\nout = "build"\n');
+  fs.writeFileSync(path.join(workspaceTwo, "tua.toml"), 'source = "src"\nout = "build"\n');
+
+  const fixtures = {
+    intelligence: path.join(sourceOne, "intelligence.tua"),
+    missingSprite: path.join(sourceOne, "missing-sprite.tua"),
+    oldModule: path.join(sourceOne, "old_module.tua"),
+    renameSource: path.join(sourceOne, "rename-source.tua"),
+    rootTwo: path.join(sourceTwo, "secondary.tua"),
+    sprite: path.join(sourceOne, "sprites.tua"),
+    suggestions: path.join(sourceOne, "suggestions.tua"),
+    workspaceOne,
+    workspaceTwo,
+  };
+
+  fs.writeFileSync(fixtures.suggestions, "local seed = 1\n\n");
+  fs.writeFileSync(
+    fixtures.intelligence,
+    [
+      "local target_value = 42",
+      "local function greet(name: string): string",
+      "  return name",
+      "end",
+      "local hover_probe = target_value",
+      "local call_probe = greet(",
+      "local inlay_probe = target_value",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(fixtures.oldModule, "return { value = 1 }\n");
+  fs.writeFileSync(
+    fixtures.renameSource,
+    'local dependency = require("old_module")\nreturn dependency\n',
+  );
+  fs.writeFileSync(fixtures.rootTwo, "local root_two_value = 2\nreturn root_two_value\n");
+  fs.writeFileSync(
+    fixtures.sprite,
+    spriteSource("assets/player.png", {
+      idle: "{ from = 0, to = 3, fps = 8 }",
+    }),
+  );
+  fs.writeFileSync(
+    fixtures.missingSprite,
+    spriteSource("assets/missing.png", {
+      idle: "{ from = 0, to = 3, fps = 8 }",
+    }),
+  );
+  fs.writeFileSync(
+    path.join(assetDirectory, "player.png"),
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
+
+  return fixtures;
+}
+
+function spriteSource(imagePath, animations) {
+  const animationLines = Object.entries(animations).map(
+    ([name, definition]) => `    ${name} = ${definition},`,
+  );
+
+  return [
+    "local Player = spriteSheet({",
+    `  image = "${imagePath}",`,
+    "  frame = { width = 16, height = 16 },",
+    "  animations = {",
+    ...animationLines,
+    "  },",
+    "})",
+    "",
+  ].join("\n");
 }
 
 function createServerLauncher(tempRoot, serverFixturePath) {

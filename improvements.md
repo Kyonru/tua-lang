@@ -256,24 +256,27 @@ rather than hiding it behind the old 149-line serial profiler.
 
 ### P1: Add real VS Code integration tests
 
-Status: in progress. The real extension-host suggestion synchronization test is
-implemented and required by CI.
+Status: done on 2026-07-16.
 
 The extension check in [`package.json`](editors/vscode/package.json) validates
-every JavaScript module, the manifest, and mocked activation. A separate
-`@vscode/test-electron` suite exercises one-character automatic suggestions,
-continued filtering, synchronized document versions and cursor positions,
-visible suggestion acceptance, and stale-result replacement in a real isolated
-extension host.
+every JavaScript module, the manifest, and mocked activation. The required
+`@vscode/test-electron` suite now launches an isolated two-root workspace
+against a deterministic mock LSP and covers:
 
-Remaining improvements:
+- one-character automatic suggestions, rapid edits, cancellation, late stale
+  responses, synchronized document versions and UTF-16 cursor positions;
+- visible suggestion acceptance without stale replacement;
+- hover, Cmd+click-equivalent definition navigation, signature help, and inlay
+  hints immediately after unsaved typing;
+- untitled Tua documents and intelligence in the second workspace root;
+- `workspace/willRenameFiles` edits plus `workspace/didRenameFiles`;
+- sprite hover command links, preview opening, singleton/top-most reveal,
+  reload from updated source, and missing-asset states.
 
-- Cover Cmd+click definition, hover, signature help, and inlay hints while
-  typing.
-- Cover rapid edits, cancellation, UTF-16 positions, untitled documents,
-  multi-root workspaces, file renames, and stale responses.
-- Test sprite preview opening, reload, top-most behavior, asset errors, and
-  hover commands.
+The mock server records timestamped request, response, cancellation, document,
+workspace, and file-operation events. Tests assert current document versions
+and positions instead of depending on fixed sleeps. CI runs the extension host
+under Xvfb after the fast syntax, manifest, and mocked-activation checks.
 
 ### P1: Split oversized test modules
 
@@ -290,9 +293,9 @@ Improvements:
 
 ### P2: Move sprite semantics into the language server
 
-[`sprite-preview.js`](editors/vscode/src/sprite-preview.js) registers a separate
-hover provider and contains ad hoc parsing, asset resolution, webview state,
-and rendering in one large module. This duplicates compiler behavior.
+[`sprite-preview.js`](editors/vscode/src/love/sprite-preview.js) registers a
+separate hover provider and contains ad hoc parsing, asset resolution, webview
+state, and rendering in one large module. This duplicates compiler behavior.
 
 Improvements:
 

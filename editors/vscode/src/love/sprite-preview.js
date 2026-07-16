@@ -5,12 +5,23 @@ const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("../constants");
 
+let previewPanel;
+let previewDocument;
+
 function registerSpritePreviewFeature({ configurationTarget, isTuaDocument }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.previewSprites, () =>
       previewSpriteAnimations({ configurationTarget, isTuaDocument }),
     ),
+    vscode.commands.registerCommand(COMMANDS.reloadSpritePreview, reloadSpritePreview),
     registerSpritePreviewHover({ isTuaDocument }),
+    {
+      dispose() {
+        previewPanel?.dispose?.();
+        previewPanel = undefined;
+        previewDocument = undefined;
+      },
+    },
   );
 }
 
@@ -72,6 +83,10 @@ async function previewSpriteAnimations({ configurationTarget, isTuaDocument }) {
   const document = editor?.document;
 
   if (!document || !isTuaDocument(document)) {
+    if (previewPanel && previewDocument) {
+      return reloadSpritePreview();
+    }
+
     vscode.window.showWarningMessage("Open a Tua file with spriteSheet definitions to preview animations.");
     return;
   }
@@ -81,25 +96,62 @@ async function previewSpriteAnimations({ configurationTarget, isTuaDocument }) {
     return;
   }
 
+  if (previewPanel) {
+    const result = renderSpritePreviewPanel(previewPanel, document);
+
+    if (result) {
+      previewDocument = document;
+      previewPanel.reveal?.(vscode.ViewColumn.Beside, false);
+    }
+
+    return result;
+  }
+
   const panel = vscode.window.createWebviewPanel(
     "tuaSpritePreview",
     "Tua Sprite Preview",
     vscode.ViewColumn.Beside,
     spritePreviewWebviewOptions([]),
   );
+  previewPanel = panel;
+  previewDocument = document;
 
-  if (!renderSpritePreviewPanel(panel, document)) {
-    panel.dispose?.();
-    return;
-  }
-
+  panel.onDidDispose?.(() => {
+    if (previewPanel === panel) {
+      previewPanel = undefined;
+      previewDocument = undefined;
+    }
+  });
   panel.webview.onDidReceiveMessage?.((message) => {
     if (message?.command !== "reload") {
       return;
     }
 
-    renderSpritePreviewPanel(panel, document);
+    reloadSpritePreview();
   });
+
+  const result = renderSpritePreviewPanel(panel, document);
+
+  if (!result) {
+    panel.dispose?.();
+    return;
+  }
+
+  return result;
+}
+
+function reloadSpritePreview() {
+  if (!previewPanel || !previewDocument) {
+    return undefined;
+  }
+
+  const result = renderSpritePreviewPanel(previewPanel, previewDocument);
+
+  if (result) {
+    previewPanel.reveal?.(vscode.ViewColumn.Beside, false);
+  }
+
+  return result;
 }
 
 function renderSpritePreviewPanel(panel, document) {
@@ -107,7 +159,7 @@ function renderSpritePreviewPanel(panel, document) {
 
   if (sprites.length === 0) {
     vscode.window.showWarningMessage("No spriteSheet definitions were found in the active Tua file.");
-    return false;
+    return undefined;
   }
 
   const resolvedSprites = sprites.map((sprite) => resolveSpritePreviewAsset(document, sprite));
@@ -115,7 +167,14 @@ function renderSpritePreviewPanel(panel, document) {
   panel.webview.options = spritePreviewWebviewOptions(resolvedSprites);
   panel.webview.html = spritePreviewHtml(panel.webview, resolvedSprites, document.uri.fsPath);
 
-  return true;
+  return {
+    animationCount: resolvedSprites.reduce(
+      (count, sprite) => count + sprite.animations.length,
+      0,
+    ),
+    missingAssetCount: resolvedSprites.filter((sprite) => !sprite.resolvedImagePath).length,
+    spriteCount: resolvedSprites.length,
+  };
 }
 
 function spritePreviewWebviewOptions(resolvedSprites) {

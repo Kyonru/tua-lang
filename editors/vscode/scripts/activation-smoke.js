@@ -150,7 +150,13 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     state.setActiveDocument(spriteDocument);
 
-    await state.commands.get("tua.previewSprites")();
+    const initialPreview = await state.commands.get("tua.previewSprites")();
+
+    assert.deepStrictEqual(
+      initialPreview,
+      { animationCount: 1, missingAssetCount: 0, spriteCount: 1 },
+      "sprite preview should report the rendered sprite summary",
+    );
 
     assert.strictEqual(
       state.webviewPanels.length,
@@ -163,13 +169,89 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
         state.webviewPanels[0].html.includes("Sprite sheet") &&
         state.webviewPanels[0].html.includes("animation-tabs") &&
         state.webviewPanels[0].html.includes("Fit") &&
-        state.webviewPanels[0].html.includes("Reload"),
+        state.webviewPanels[0].html.includes("Reload") &&
+        state.webviewPanels[0].html.indexOf('class="stage"') <
+          state.webviewPanels[0].html.indexOf('class="inspector"'),
       "sprite preview webview should include parsed sprite metadata and preview controls",
     );
     assert.strictEqual(
       typeof state.webviewPanels[0].messageListener,
       "function",
       "sprite preview webview should handle reload messages",
+    );
+
+    spriteDocument.setText(
+      spriteDocument.getTextContent().replace(
+        "idle = { from = 0, to = 3, fps = 8 },",
+        [
+          "idle = { from = 0, to = 3, fps = 8 },",
+          "    run = { from = 4, to = 9, fps = 12 },",
+        ].join("\n"),
+      ),
+    );
+    const reloadResult = await state.commands.get("tua.previewSprites.reload")();
+    assert.deepStrictEqual(
+      reloadResult,
+      { animationCount: 2, missingAssetCount: 0, spriteCount: 1 },
+      "sprite preview reload should use the latest document contents",
+    );
+    assert(
+      state.webviewPanels[0].html.includes('"name":"run"'),
+      "sprite preview reload should render newly added animations",
+    );
+
+    await state.commands.get("tua.previewSprites")();
+    assert.strictEqual(
+      state.webviewPanels.length,
+      1,
+      "reopening the sprite preview should reuse the existing panel",
+    );
+    assert.deepStrictEqual(
+      state.webviewPanels[0].reveals,
+      [
+        { column: 2, preserveFocus: false },
+        { column: 2, preserveFocus: false },
+      ],
+      "reload and reopen should reveal the preview without preserving focus",
+    );
+
+    spriteDocument.setText(
+      spriteDocument.getTextContent().replace(
+        "run = { from = 4, to = 9, fps = 12 },",
+        [
+          "run = { from = 4, to = 9, fps = 12 },",
+          "    jump = { from = 10, to = 12, fps = 10 },",
+        ].join("\n"),
+      ),
+    );
+    await state.webviewPanels[0].messageListener({ command: "reload" });
+    assert(
+      state.webviewPanels[0].html.includes('"name":"jump"'),
+      "the webview reload message should render current document contents",
+    );
+    assert.deepStrictEqual(
+      state.webviewPanels[0].reveals.at(-1),
+      { column: 2, preserveFocus: false },
+      "the webview reload message should reveal the refreshed preview",
+    );
+
+    const missingSpriteDocument = mockDocument(
+      path.join(workspace, "src", "missing-sprites.tua"),
+      "tua",
+      "file",
+      spriteDocument.getTextContent().replace("assets/player.png", "assets/missing.png"),
+    );
+    state.setActiveDocument(missingSpriteDocument);
+    const missingPreview = await state.commands.get("tua.previewSprites")();
+    assert.deepStrictEqual(
+      missingPreview,
+      { animationCount: 3, missingAssetCount: 1, spriteCount: 1 },
+      "sprite preview should report missing assets without failing to open",
+    );
+    assert(
+      state.webviewPanels[0].html.includes('"imagePath":"assets/missing.png"') &&
+        state.webviewPanels[0].html.includes("Could not find "),
+      "sprite preview should render a clear missing-asset state",
     );
 
     const spriteHover = state.hoverProviders
@@ -830,6 +912,17 @@ function createMockState(workspace, options = {}) {
           column,
           options,
           html: "",
+          reveals: [],
+          reveal(revealColumn, preserveFocus) {
+            panel.reveals.push({ column: revealColumn, preserveFocus });
+          },
+          onDidDispose(listener) {
+            panel.disposeListener = listener;
+            return { dispose() {} };
+          },
+          dispose() {
+            panel.disposeListener?.();
+          },
           webview: {
             cspSource: "mock-csp",
             asWebviewUri(uri) {
@@ -1075,6 +1168,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.previewSprites",
+    "tua.previewSprites.reload",
     "tua.showSignalGraph",
     "tua.source.organizeImports",
     "tua.source.sortImports",

@@ -1,0 +1,89 @@
+"use strict";
+
+const assert = require("assert/strict");
+const fs = require("fs");
+const path = require("path");
+const vscode = require("vscode");
+const {
+  closeActiveEditor,
+  eventSequence,
+  fixtures,
+  hoverText,
+  openFixture,
+  positionAfter,
+  waitForEvent,
+  waitUntil,
+} = require("./support");
+
+async function runWorkspaceTests() {
+  await testSecondWorkspaceFolder();
+  await testFileRenameEdits();
+}
+
+async function testSecondWorkspaceFolder() {
+  assert.equal(vscode.workspace.workspaceFolders.length, 2);
+  const { document } = await openFixture("rootTwo");
+  const position = positionAfter(document, "return root_two_valu");
+  const beforeHover = eventSequence();
+  const hovers = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    position,
+  );
+
+  assert.match(hoverText(hovers), /root_two_value/);
+  await waitForEvent(
+    (event) =>
+      event.type === "hover.request" &&
+      event.uri === document.uri.toString() &&
+      event.docVersion === document.version,
+    "language intelligence in the second workspace folder",
+    beforeHover,
+  );
+  await closeActiveEditor();
+}
+
+async function testFileRenameEdits() {
+  const { document } = await openFixture("renameSource");
+  await vscode.workspace.openTextDocument(fixtures.oldModule);
+  const oldUri = vscode.Uri.file(fixtures.oldModule);
+  const newPath = path.join(path.dirname(fixtures.oldModule), "new_module.tua");
+  const newUri = vscode.Uri.file(newPath);
+  const beforeRename = eventSequence();
+  const edit = new vscode.WorkspaceEdit();
+
+  edit.renameFile(oldUri, newUri);
+  assert.equal(await vscode.workspace.applyEdit(edit), true);
+
+  const request = await waitForEvent(
+    (event) =>
+      event.type === "workspace.willRenameFiles" &&
+      event.files.some(
+        (file) => file.oldUri === oldUri.toString() && file.newUri === newUri.toString(),
+      ),
+    "workspace/willRenameFiles for a Tua module",
+    beforeRename,
+  );
+  assert(request.editedUris.includes(document.uri.toString()));
+
+  await waitUntil(
+    () => document.getText().includes('require("new_module")'),
+    "the file-rename workspace edit to update require paths",
+  );
+  assert.equal(fs.existsSync(fixtures.oldModule), false);
+  assert.equal(fs.existsSync(newPath), true);
+  assert.equal(await document.save(), true);
+
+  await waitForEvent(
+    (event) =>
+      event.type === "workspace.didRenameFiles" &&
+      event.files.some((file) => file.newUri === newUri.toString()),
+    "workspace/didRenameFiles after the rename",
+    beforeRename,
+  );
+  await closeActiveEditor();
+}
+
+module.exports = {
+  runWorkspaceTests,
+};

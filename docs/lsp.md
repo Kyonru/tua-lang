@@ -252,6 +252,17 @@ make lsp-smoke
 make lsp-features-smoke
 ```
 
+The required VS Code extension-host suite runs with:
+
+```bash
+npm --prefix editors/vscode run test:vscode
+```
+
+It opens an isolated two-root workspace and verifies live completion freshness,
+cancellation, hover, definition navigation, signature help, inlay hints,
+UTF-16 and untitled-document positions, file-rename edits, and sprite preview
+opening/reload/focus behavior. CI runs the same suite under Xvfb.
+
 ## Profiling
 
 Profiling is disabled by default. Normal CLI and LSP output stays clean unless
