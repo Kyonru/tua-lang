@@ -58,6 +58,25 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_inferred_local_reassignment_diagnostics() {
+    let uri = "file:///tmp/reassignment.tua";
+    let output = run_messages(vec![did_open(
+        uri,
+        r#"local score = 10
+score = "high"
+"#,
+    )]);
+    let diagnostics = published_diagnostics(&output, uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL1003");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("expected number, found string")));
+}
+
+#[test]
 fn did_open_publishes_conflicting_signal_event_schemas() {
     let uri = "file:///tmp/signal-schema-diagnostics.tua";
     let source = r#"local events = signal()

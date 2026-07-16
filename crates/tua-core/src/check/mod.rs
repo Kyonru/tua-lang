@@ -20,13 +20,13 @@ use crate::lint::lint_parsed_source;
 use crate::love_conf;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
-use crate::parser::{parse_tua_source, ParsedSource, SourcePosition, SourceSpan};
+use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{
-    build_type_environment, build_type_environment_with_builtin_aliases, FunctionType,
-    MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
+    FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, lua, signal, sprite, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -217,6 +217,8 @@ struct Checker<'a> {
     environment: &'a TypeEnvironment,
     context: TypeContext,
     scoped_locals: Vec<BTreeMap<String, Type>>,
+    scoped_local_contracts: Vec<BTreeMap<String, Type>>,
+    stable_inferred_locals: bool,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<&'a asset::AssetIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
@@ -236,6 +238,8 @@ impl<'a> Checker<'a> {
             environment,
             context: environment.to_type_context(),
             scoped_locals: Vec::new(),
+            scoped_local_contracts: Vec::new(),
+            stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
             asset_roots: if asset_index.is_some() {
                 normalize_asset_roots_without_fs(asset_roots)
             } else {
@@ -258,7 +262,18 @@ impl<'a> Checker<'a> {
         current_return: Option<&[Type]>,
         locals: BTreeMap<String, Type>,
     ) {
+        self.check_block_with_bindings(block, current_return, locals, BTreeMap::new());
+    }
+
+    fn check_block_with_bindings(
+        &mut self,
+        block: &ast::Block,
+        current_return: Option<&[Type]>,
+        locals: BTreeMap<String, Type>,
+        contracts: BTreeMap<String, Type>,
+    ) {
         self.scoped_locals.push(locals);
+        self.scoped_local_contracts.push(contracts);
 
         for stmt in block.stmts() {
             self.check_stmt(stmt, current_return);
@@ -269,11 +284,13 @@ impl<'a> Checker<'a> {
         }
 
         self.scoped_locals.pop();
+        self.scoped_local_contracts.pop();
     }
 
     fn check_stmt(&mut self, stmt: &ast::Stmt, current_return: Option<&[Type]>) {
         match stmt {
             ast::Stmt::Assignment(assignment) => self.check_assignment(assignment),
+            ast::Stmt::CompoundAssignment(assignment) => self.check_compound_assignment(assignment),
             ast::Stmt::FunctionCall(function_call) => {
                 self.check_function_call(function_call);
                 self.record_setmetatable_call(function_call);
@@ -305,10 +322,13 @@ impl<'a> Checker<'a> {
                 let name = token_text(function.name());
                 let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_parameter_locals(&name);
+                let contracts = scoped_locals.clone();
 
                 self.scoped_locals.push(scoped_locals);
+                self.scoped_local_contracts.push(contracts);
                 self.check_block(function.body().block(), return_types.as_deref());
                 self.scoped_locals.pop();
+                self.scoped_local_contracts.pop();
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 self.record_function_declaration_type(function);
@@ -316,10 +336,13 @@ impl<'a> Checker<'a> {
                 let name = function.name().to_string();
                 let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_declaration_parameter_locals(function);
+                let contracts = scoped_locals.clone();
 
                 self.scoped_locals.push(scoped_locals);
+                self.scoped_local_contracts.push(contracts);
                 self.check_block(function.body().block(), return_types.as_deref());
                 self.scoped_locals.pop();
+                self.scoped_local_contracts.pop();
             }
             ast::Stmt::NumericFor(for_stmt) => self.check_numeric_for(for_stmt, current_return),
             ast::Stmt::Repeat(repeat) => {
@@ -383,7 +406,7 @@ impl<'a> Checker<'a> {
             .zip(self.generic_for_variable_types(for_stmt))
             .map(|(name, ty)| (token_text(name), ty))
             .collect::<BTreeMap<_, _>>();
-        self.check_block_with_locals(for_stmt.block(), current_return, locals);
+        self.check_block_with_bindings(for_stmt.block(), current_return, locals.clone(), locals);
     }
 
     fn check_numeric_for(&mut self, for_stmt: &ast::NumericFor, current_return: Option<&[Type]>) {
@@ -394,11 +417,8 @@ impl<'a> Checker<'a> {
             self.infer_expression(step);
         }
 
-        self.check_block_with_locals(
-            for_stmt.block(),
-            current_return,
-            BTreeMap::from([(token_text(for_stmt.index_variable()), Type::number())]),
-        );
+        let locals = BTreeMap::from([(token_text(for_stmt.index_variable()), Type::number())]);
+        self.check_block_with_bindings(for_stmt.block(), current_return, locals.clone(), locals);
     }
 
     fn check_equality_comparison(
@@ -427,11 +447,13 @@ impl<'a> Checker<'a> {
     }
 
     fn check_local_assignment(&mut self, local: &ast::LocalAssignment) {
-        for ((name, specifier), expression) in local
+        let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+        for (index, (name, specifier)) in local
             .names()
             .iter()
             .zip(local.type_specifiers())
-            .zip(local.expressions().iter())
+            .enumerate()
         {
             if specifier.is_none() {
                 continue;
@@ -442,7 +464,16 @@ impl<'a> Checker<'a> {
                 continue;
             };
 
-            self.check_expression_assignable(expression, &target);
+            if let Some((expression, return_index)) =
+                assignment_expression_for_local(&expressions, index)
+            {
+                let source = self
+                    .infer_expression_return(expression, return_index)
+                    .unwrap_or(Type::Any);
+                self.check_type_assignable(expression, &source, &target);
+            } else {
+                self.check_type_assignable(local, &Type::nil(), &target);
+            }
         }
 
         self.record_local_assignment_types(local);
@@ -462,21 +493,25 @@ impl<'a> Checker<'a> {
                 .get(index)
                 .and_then(|specifier| *specifier)
                 .and_then(|_| self.environment.local(&name).cloned())
-                .or_else(|| {
-                    assignment_expression_for_local(&expressions, index).and_then(
-                        |(expression, return_index)| {
+                .or_else(
+                    || match assignment_expression_for_local(&expressions, index) {
+                        Some((expression, return_index)) => {
                             self.infer_expression_return(expression, return_index)
-                        },
-                    )
-                });
+                        }
+                        None => Some(Type::nil()),
+                    },
+                );
 
             if let Some(ty) = ty {
                 let ty = if has_annotation {
                     ty
                 } else {
-                    widen_inferred_local_type(ty)
+                    widen_inferred_type(&ty)
                 };
-                self.insert_scoped_local(name, ty);
+                self.insert_scoped_local(name.clone(), ty.clone());
+                if has_annotation || self.stable_inferred_locals {
+                    self.insert_scoped_local_contract(name, ty);
+                }
             }
         }
     }
@@ -487,24 +522,41 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn insert_scoped_local_contract(&mut self, name: String, ty: Type) {
+        if let Some(scope) = self.scoped_local_contracts.last_mut() {
+            scope.insert(name, ty);
+        }
+    }
+
     fn check_assignment(&mut self, assignment: &ast::Assignment) {
         for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
             let source = self.infer_expression(expression);
+            let target = self.infer_var_assignment_target(variable);
 
-            if let (Some(source), Some(target)) =
-                (&source, self.infer_var_assignment_target(variable))
-            {
-                self.check_type_assignable(expression, source, &target);
+            if let (Some(source), Some(target)) = (&source, &target) {
+                self.check_type_assignable(expression, source, target);
             }
 
-            self.record_assignment_type(variable, source, expression);
+            self.record_assignment_type(variable, source, target, expression);
         }
+    }
+
+    fn check_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
+        let source = self.infer_expression(assignment.rhs());
+        let target = self.infer_var_assignment_target(assignment.lhs());
+
+        if let (Some(source), Some(target)) = (&source, &target) {
+            self.check_type_assignable(assignment.rhs(), source, target);
+        }
+
+        self.record_assignment_type(assignment.lhs(), source, target, assignment.rhs());
     }
 
     fn record_assignment_type(
         &mut self,
         variable: &Var,
         ty: Option<Type>,
+        target: Option<Type>,
         expression: &Expression,
     ) {
         if self.record_table_field_assignment_type(variable, ty.clone(), expression) {
@@ -515,8 +567,19 @@ impl<'a> Checker<'a> {
             return;
         };
 
-        match ty {
-            Some(ty) => self.insert_scoped_local(name, widen_inferred_local_type(ty)),
+        let flow_type = match (&ty, &target) {
+            (Some(source), Some(target))
+                if !matches!(source, Type::Any) && self.context.is_assignable(source, target) =>
+            {
+                Some(source.clone())
+            }
+            (_, Some(target)) => Some(target.clone()),
+            (Some(source), None) => Some(source.clone()),
+            (None, None) => None,
+        };
+
+        match flow_type {
+            Some(ty) => self.insert_scoped_local(name, widen_inferred_type(&ty)),
             None => self.clear_scoped_local(&name),
         }
     }
@@ -574,7 +637,7 @@ impl<'a> Checker<'a> {
         self.record_known_table_field_type(
             root,
             field,
-            widen_inferred_local_type(ty),
+            widen_inferred_type(&ty),
             is_self_index,
             false,
         );
@@ -1581,13 +1644,11 @@ impl<'a> Checker<'a> {
     }
 
     fn infer_named_assignment_target(&self, name: &str) -> Option<Type> {
-        self.environment.local(name).cloned().or_else(|| {
-            self.scoped_locals
-                .iter()
-                .rev()
-                .skip(1)
-                .find_map(|locals| locals.get(name).cloned())
-        })
+        self.scoped_local_contracts
+            .iter()
+            .rev()
+            .find_map(|locals| locals.get(name).cloned())
+            .or_else(|| self.environment.local(name).cloned())
     }
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
@@ -3049,72 +3110,8 @@ fn mismatch_found_label(expected: &Type, found: &Type) -> String {
     if type_contains_string_literal(expected) || type_contains_lua_enum_alias(expected) {
         found.to_string()
     } else {
-        type_with_string_literals_erased(found).to_string()
+        widen_inferred_type(found).to_string()
     }
-}
-
-fn type_with_string_literals_erased(ty: &Type) -> Type {
-    match ty {
-        Type::StringLiteral(_) => Type::string(),
-        Type::Union(types) => Type::union(types.iter().map(type_with_string_literals_erased)),
-        Type::Function(function) => Type::function_returns_with_required(
-            function
-                .parameters
-                .iter()
-                .map(type_with_string_literals_erased),
-            function.required_parameter_count,
-            function
-                .return_types_or_any()
-                .iter()
-                .map(type_with_string_literals_erased),
-        ),
-        Type::Table(table) => {
-            let mut erased = crate::TableShape::from_fields(table.fields().map(|(name, field)| {
-                let ty = if is_metamethod_field_name(name) {
-                    field.ty.clone()
-                } else {
-                    type_with_string_literals_erased(&field.ty)
-                };
-
-                (
-                    name.to_owned(),
-                    crate::TableField {
-                        ty,
-                        optional: field.optional,
-                    },
-                )
-            }));
-
-            if let Some(facts) = table.metatable_facts() {
-                erased.set_metatable_facts(facts.clone());
-            }
-
-            if table.has_self_index() {
-                erased.mark_self_index();
-            }
-
-            for method in table.constructor_methods() {
-                erased.mark_constructor_method(method);
-            }
-
-            Type::Table(erased)
-        }
-        Type::Array(item) => Type::array(type_with_string_literals_erased(item)),
-        Type::Tuple(items) => Type::tuple(items.iter().map(type_with_string_literals_erased)),
-        Type::Dictionary { key, value } => Type::dictionary(
-            type_with_string_literals_erased(key),
-            type_with_string_literals_erased(value),
-        ),
-        Type::Primitive(_) | Type::Any | Type::Alias(_) => ty.clone(),
-    }
-}
-
-fn widen_inferred_local_type(ty: Type) -> Type {
-    type_with_string_literals_erased(&ty)
-}
-
-fn is_metamethod_field_name(name: &str) -> bool {
-    name.starts_with("__")
 }
 
 fn type_contains_string_literal(ty: &Type) -> bool {

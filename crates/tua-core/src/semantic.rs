@@ -22,7 +22,10 @@ use crate::types::{
     type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
     TypeEnvironment, TypedFunction,
 };
-use crate::{signal, sprite, vector, ParsedSource, SourcePosition, SourceSpan, TypedParameter};
+use crate::{
+    signal, sprite, vector, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan,
+    TypedParameter,
+};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
@@ -51,14 +54,17 @@ impl<'a> SemanticModel<'a> {
     ) -> Option<Type> {
         let local = self.local_assignment_value(name, position)?;
 
-        local.expression.and_then(|expression| {
-            self.type_of_expression_return_at_depth(
+        let ty = match local.expression {
+            Some(expression) => self.type_of_expression_return_at_depth(
                 expression,
                 local.span.start,
                 local.return_index,
                 0,
-            )
-        })
+            )?,
+            None => Type::nil(),
+        };
+
+        Some(ty)
     }
 
     pub(crate) fn type_of_expression_return(
@@ -395,14 +401,17 @@ impl<'a> SemanticModel<'a> {
             .or_else(|| {
                 let local = self.local_assignment_value(name, position)?;
 
-                local.expression.and_then(|expression| {
-                    self.type_of_expression_return_at_depth(
+                let ty = match local.expression {
+                    Some(expression) => self.type_of_expression_return_at_depth(
                         expression,
                         local.span.start,
                         local.return_index,
                         depth + 1,
-                    )
-                })
+                    )?,
+                    None => Type::nil(),
+                };
+
+                Some(ty)
             })
             .or_else(|| self.loop_variable_type_at_position(name, position, depth + 1))
             .or_else(|| self.parameter_type_at_position(name, position))?;
@@ -1040,7 +1049,12 @@ impl<'a> SemanticModel<'a> {
         name: &str,
         position: SourcePosition,
     ) -> Option<LocalAssignmentValue<'a>> {
-        local_assignment_value_in_block(self.parsed.ast.nodes(), name, position)
+        local_assignment_value_in_block(
+            self.parsed.ast.nodes(),
+            name,
+            position,
+            self.parsed.raw.language == ParsedLanguage::Lua,
+        )
     }
 
     fn parameter_type_at_position(&self, name: &str, position: SourcePosition) -> Option<Type> {
@@ -1537,10 +1551,18 @@ fn local_assignment_value_in_block<'a>(
     block: &'a ast::Block,
     name: &str,
     position: SourcePosition,
+    include_reassignments: bool,
 ) -> Option<LocalAssignmentValue<'a>> {
     let mut candidates = Vec::new();
 
-    collect_local_assignment_values(block, name, position, &mut candidates);
+    collect_local_assignment_values(
+        block,
+        name,
+        position,
+        include_reassignments,
+        false,
+        &mut candidates,
+    );
 
     candidates
         .into_iter()
@@ -1551,15 +1573,21 @@ fn collect_local_assignment_values<'a>(
     block: &'a ast::Block,
     name: &str,
     position: SourcePosition,
+    include_reassignments: bool,
+    nested: bool,
     candidates: &mut Vec<LocalAssignmentValue<'a>>,
 ) {
+    if nested && node_span(block).is_some_and(|span| !contains_position(span, position)) {
+        return;
+    }
+
     for stmt in block.stmts() {
         if !starts_before_or_at(node_start(stmt), position) {
             continue;
         }
 
         match stmt {
-            ast::Stmt::Assignment(assignment) => {
+            ast::Stmt::Assignment(assignment) if include_reassignments => {
                 let expressions = assignment.expressions().iter().collect::<Vec<_>>();
 
                 for (index, variable) in assignment.variables().iter().enumerate() {
@@ -1611,21 +1639,44 @@ fn collect_local_assignment_values<'a>(
                 }
             }
             ast::Stmt::Do(block) => {
-                collect_local_assignment_values(block.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    block.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 collect_local_assignment_values(
                     function.body().block(),
                     name,
                     position,
+                    include_reassignments,
+                    true,
                     candidates,
                 );
             }
             ast::Stmt::GenericFor(for_stmt) => {
-                collect_local_assignment_values(for_stmt.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    for_stmt.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
             }
             ast::Stmt::If(if_stmt) => {
-                collect_local_assignment_values(if_stmt.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    if_stmt.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
@@ -1633,13 +1684,22 @@ fn collect_local_assignment_values<'a>(
                             else_if.block(),
                             name,
                             position,
+                            include_reassignments,
+                            true,
                             candidates,
                         );
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
-                    collect_local_assignment_values(else_block, name, position, candidates);
+                    collect_local_assignment_values(
+                        else_block,
+                        name,
+                        position,
+                        include_reassignments,
+                        true,
+                        candidates,
+                    );
                 }
             }
             ast::Stmt::LocalFunction(function) => {
@@ -1647,17 +1707,40 @@ fn collect_local_assignment_values<'a>(
                     function.body().block(),
                     name,
                     position,
+                    include_reassignments,
+                    true,
                     candidates,
                 );
             }
             ast::Stmt::NumericFor(for_stmt) => {
-                collect_local_assignment_values(for_stmt.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    for_stmt.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
             }
             ast::Stmt::Repeat(repeat) => {
-                collect_local_assignment_values(repeat.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    repeat.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
             }
             ast::Stmt::While(while_stmt) => {
-                collect_local_assignment_values(while_stmt.block(), name, position, candidates);
+                collect_local_assignment_values(
+                    while_stmt.block(),
+                    name,
+                    position,
+                    include_reassignments,
+                    true,
+                    candidates,
+                );
             }
             _ => {}
         }

@@ -308,6 +308,44 @@ Supported primitive names:
 
 `any` is the gradual escape hatch. Assignments to and from `any` are accepted.
 
+## Inferred Local Reassignment
+
+In `.tua` files, an unannotated local with a statically known initializer gets
+one stable, widened type for that lexical binding:
+
+```tua
+local score = 10       -- number
+score = 12             -- accepted
+score = "high"         -- TL1003: expected number, found string
+
+local state = "idle"   -- string, not the literal type "idle"
+state = "running"      -- accepted
+```
+
+Assignments inside `if`, loop, and nested blocks are checked against the same
+binding contract. A branch may narrow a value temporarily, but it does not
+widen the local after control flow joins. A shadowing `local` starts a separate
+contract.
+
+Lua initializes declarations without a value to `nil`, so nil-only
+initialization remains explicit:
+
+```tua
+local pending = nil
+pending = 10 -- TL1003: expected nil, found number
+
+local optional: number | nil = nil
+optional = 10 -- accepted
+
+local dynamic: any = nil
+dynamic = "loaded" -- accepted
+```
+
+Unknown expressions and values typed as `any` remain gradual. Ordinary `.lua`
+files also keep normal permissive Lua reassignment behavior unless LuaDoc
+annotations provide a contract. This changes checking only; emitted Lua still
+performs ordinary runtime assignment.
+
 ## Type Aliases
 
 ```tua

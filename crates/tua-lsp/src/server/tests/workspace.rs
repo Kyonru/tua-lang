@@ -971,8 +971,8 @@ print(callback)
 fn did_change_configuration_can_enable_jit_guidance() {
     let temp = TempProject::new("configuration-jit-guidance");
     let source = r#"
-local value = 1
-value = "shape drift"
+local player = { hp = 10 }
+player.name = "late"
 "#;
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -993,7 +993,7 @@ value = "shape drift"
     let diagnostics = last_published_diagnostics(server.output(), &uri);
 
     assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0]["code"], "TL4032");
+    assert_eq!(diagnostics[0]["code"], "TL4033");
 }
 #[test]
 fn did_change_configuration_can_enable_ecs_domain_support() {

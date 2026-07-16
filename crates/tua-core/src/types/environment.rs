@@ -15,14 +15,14 @@ use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{
     FunctionAnnotation as ParsedFunctionAnnotation, FunctionTypeParameter, LuaDocAnnotation,
-    LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedSource, SourceSpan,
+    LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedLanguage, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::source_text::function_name_table_field;
 use crate::{asset, lua, sprite, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
-use super::TypeContext;
+use super::{widen_inferred_type, TypeContext};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeEnvironment {
@@ -2217,22 +2217,30 @@ fn infer_local_assignment_types(
     let expressions = local.expressions().iter().collect::<Vec<_>>();
 
     for (index, name) in local.names().iter().enumerate() {
-        let Some((expression, return_index)) = assignment_expression_for_local(&expressions, index)
-        else {
-            continue;
-        };
-        let Some(ty) = infer_expression_return_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-            return_index,
-        ) else {
-            continue;
+        let ty = match assignment_expression_for_local(&expressions, index) {
+            Some((expression, return_index)) => {
+                let Some(ty) = infer_expression_return_type(
+                    parsed,
+                    expression,
+                    aliases,
+                    locals,
+                    function_types,
+                    current_function,
+                    return_index,
+                ) else {
+                    continue;
+                };
+                ty
+            }
+            None if parsed.raw.language == ParsedLanguage::Tua => Type::nil(),
+            None => continue,
         };
 
+        let ty = if parsed.raw.language == ParsedLanguage::Tua {
+            widen_inferred_type(&ty)
+        } else {
+            ty
+        };
         locals.insert(token_text(name), ty);
     }
 }
@@ -2273,7 +2281,13 @@ fn infer_assignment_types(
             continue;
         };
 
-        locals.insert(name, ty);
+        if parsed.raw.language == ParsedLanguage::Tua {
+            locals
+                .entry(name)
+                .or_insert_with(|| widen_inferred_type(&ty));
+        } else {
+            locals.insert(name, ty);
+        }
     }
 }
 

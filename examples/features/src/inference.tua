@@ -57,6 +57,21 @@ local inferredTable = {
   enabled = true,
 }
 
+-- Feature: stable inferred local contracts.
+-- Literal declarations widen to their ordinary primitive type, and compatible
+-- reassignments keep that contract across control-flow joins.
+inferredNumber = 64
+inferredString = "still a string"
+
+-- Delayed initialization is explicit because an unannotated `nil` local keeps
+-- the inferred type `nil`.
+local delayedScore: number | nil = nil
+delayedScore = 100
+
+-- `any` remains the intentional escape hatch for values that change shape.
+local dynamicState: any = 1
+dynamicState = "runtime state"
+
 -- Feature: array and index inference.
 -- Hover/inlay should infer `scores` as number[] and `firstScore` as number.
 local scores = { 10, 20, 30 }
@@ -110,6 +125,8 @@ return {
   inferredBoolean = inferredBoolean,
   inferredNil = inferredNil,
   inferredTable = inferredTable,
+  delayedScore = delayedScore,
+  dynamicState = dynamicState,
   scores = scores,
   firstScore = firstScore,
   scoreRecord = scoreRecord,

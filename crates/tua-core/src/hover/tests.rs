@@ -127,6 +127,21 @@ end
 }
 
 #[test]
+fn hover_keeps_the_inferred_local_declaration_contract_after_reassignment() {
+    let source = r#"local value = 1
+value = "invalid"
+local copy = value
+"#;
+
+    assert_hover_in_source(
+        source,
+        "local copy = value",
+        "local copy = ".len(),
+        "local value: number",
+    );
+}
+
+#[test]
 fn parameter_hover_follows_definition_identity() {
     let source = r#"local value: number = 1
 

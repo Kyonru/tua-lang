@@ -864,9 +864,6 @@ fn jit_lints_are_disabled_by_default() {
     check_tua_source(
         "src/main.tua",
         r#"
-local value = 1
-value = "shape drift"
-
 local player = { hp = 10 }
 player.name = "late"
 
@@ -900,8 +897,9 @@ dynamic = "allowed"
 
     assert_eq!(
         count_code(&diagnostics, DiagnosticCode::LINT_JIT_TYPE_DRIFT),
-        1
+        0
     );
+    assert_eq!(count_code(&diagnostics, DiagnosticCode::TYPE_MISMATCH), 2);
     assert_eq!(
         count_code(&diagnostics, DiagnosticCode::LINT_JIT_TABLE_SHAPE_DRIFT),
         2
@@ -909,7 +907,7 @@ dynamic = "allowed"
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic
             .message
-            .contains("LuaJIT shape drift for `value`")
+            .contains("type mismatch: expected number, found string")
     }));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic
@@ -956,9 +954,6 @@ end
 fn jit_sub_rules_can_be_disabled_individually() {
     let diagnostics = check_jit_source(
         r#"
-local value = 1
-value = "shape drift"
-
 local player = { hp = 10 }
 player.name = "late"
 

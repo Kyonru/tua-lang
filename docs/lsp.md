@@ -215,12 +215,14 @@ VS Code can override those values with `tua.format.indentWidth`,
 When enabled, the LSP publishes conservative LuaJIT-friendly guidance from the
 same diagnostic pipeline as `tua check`:
 
-- `TL4032`: a local variable changes clear concrete type.
+- `TL4032`: additional assignable representation drift when detectable.
 - `TL4033`: a known table shape gains a late field or changes a field type.
 - `TL4034`: a loop writes through a dynamic table key.
 
-These diagnostics are disabled by default. `any` and unknown dynamic values
-stay permissive, and the guidance never changes emitted Lua.
+Incompatible inferred-local reassignment in `.tua` is a core `TL1003` error and
+does not depend on JIT guidance. JIT diagnostics are disabled by default.
+`any` and unknown dynamic values stay permissive, and guidance never changes
+emitted Lua.
 
 ## ECS Domain Support
 

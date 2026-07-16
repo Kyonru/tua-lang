@@ -1300,7 +1300,9 @@ impl<'a> JitAnalyzer<'a> {
             return;
         };
 
-        if !jit_types_are_stable(&previous_type, &next_type, &self.type_context) {
+        if self.type_context.is_assignable(&next_type, &previous_type)
+            && !jit_types_are_stable(&previous_type, &next_type, &self.type_context)
+        {
             self.diagnostics.push(jit_type_drift_diagnostic(
                 &self.parsed.path,
                 position,

@@ -433,8 +433,11 @@ The checker must:
 
 - check annotated function parameters and returns;
 - check annotated local declarations;
-- check assignments to known typed variables and table fields;
+- check assignments to annotated and statically inferred local contracts and
+  known table fields;
 - infer primitive literal types for `number`, `string`, `boolean`, and `nil`;
+- widen inferred declaration literals to stable binding types within their
+  lexical scope;
 - infer simple record-like and array-like table literals;
 - infer bracket indexing for known arrays and string-keyed table fields;
 - infer simple numeric, `ipairs`, and `pairs` loop variable types when the
@@ -443,7 +446,8 @@ The checker must:
   variables when a metatable is statically known;
 - narrow true branches for supported `value is Type` runtime checks;
 - allow `any` to flow to and from all types;
-- preserve permissive behavior for unannotated dynamic Lua code.
+- preserve permissive behavior for unknown expressions, explicit `any`, and
+  ordinary `.lua` code without LuaDoc contracts.
 
 The checker should produce diagnostics for obvious mismatches:
 
@@ -457,7 +461,19 @@ Expected diagnostic:
 type mismatch: expected number, found string
 ```
 
-Unannotated code defaults to permissive checking:
+Statically known inferred locals also reject incompatible reassignment:
+
+```tua
+local hp = 100
+hp = "full" -- type mismatch: expected number, found string
+```
+
+The declaration type is widened once and remains stable across nested blocks
+and control-flow joins. `local value = nil` therefore infers `nil`; delayed
+initialization must use an optional annotation such as
+`local value: Player | nil = nil`.
+
+Unknown and explicitly dynamic code remains permissive:
 
 ```tua
 local value = getSomethingDynamic()
@@ -465,7 +481,8 @@ value.anything.deeply.dynamic = true
 ```
 
 This should not fail v1 type checking unless later annotations constrain the
-value.
+value. The rule applies to `.tua` checking only. Unannotated `.lua` locals keep
+ordinary Lua reassignment behavior.
 
 ## Compiler Behavior
 
@@ -841,7 +858,8 @@ The current type-specific codes include:
 LuaJIT-oriented guidance uses the lint/style range and is disabled by default.
 The initial codes are:
 
-- `TL4032`: variable value type drift in opt-in JIT guidance mode;
+- `TL4032`: additional assignable representation drift in opt-in JIT guidance
+  mode; incompatible inferred-local reassignment uses core `TL1003` instead;
 - `TL4033`: known table-shape or field-type drift in opt-in JIT guidance mode;
 - `TL4034`: dynamic table-key writes inside loops in opt-in JIT guidance mode.
 

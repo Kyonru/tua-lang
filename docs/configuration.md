@@ -145,9 +145,10 @@ hot_loop_hints = true
 : Enables the LuaJIT guidance pass. The default is `false`.
 
 `variable_type_drift`
-: Reports clear local value-type drift such as assigning a `string` into a
-local previously inferred as `number`. Values annotated or inferred as `any`
-remain an intentional dynamic escape hatch.
+: Retained for LuaJIT-guidance configuration compatibility. Incompatible
+inferred-local reassignment in `.tua` is now a core `TL1003` error regardless
+of JIT settings, so the JIT pass does not duplicate that diagnostic. `any` and
+unknown dynamic values remain escape hatches.
 
 `table_shape_drift`
 : Reports clear table-shape drift such as adding late fields to a known table

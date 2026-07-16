@@ -26,8 +26,9 @@ make build-features
   locals and field chains.
 - `src/inference.tua` covers local type inlay hints, inferred function return
   hovers, parameter-name hints, field-chain inference from annotated locals,
-  array/index inference, numeric and generic loop variable inference, and the
-  permissive `any` boundary.
+  stable inferred-local reassignment contracts, explicit optional
+  initialization, array/index inference, numeric and generic loop variable
+  inference, and the permissive `any` boundary.
 - `src/modules.tua` covers normal Lua `require(...)` usage, plain Lua module
   interop, and cross-file go to definition for required module exports.
 - `src/imports.tua` covers static `import(...)` module bindings that resolve
@@ -64,10 +65,10 @@ make build-features
   for assignment/local declaration arity, unused assignments, binary operator
   type mismatches, and local functions that are referenced but never directly
   called.
-- `src/luajit.tua` demonstrates opt-in LuaJIT guidance comments for variable
-  type drift, table-shape drift, hot-loop dynamic writes, and the `any` escape
-  hatch. The feature is disabled by default, so the example remains buildable
-  without warnings.
+- `src/luajit.tua` demonstrates stable inferred locals alongside opt-in
+  LuaJIT guidance for table-shape drift, hot-loop dynamic writes, and the
+  `any` escape hatch. The feature is disabled by default, so the example
+  remains buildable without warnings.
 - `src/ecs.tua` demonstrates the opt-in tiny-ecs-shaped ECS domain support:
   component schemas, typed world/entity/system APIs, component value
   diagnostics, query diagnostics, and normal Lua adapter interop.

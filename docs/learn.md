@@ -284,13 +284,14 @@ For hot LOVE code, you can opt into LuaJIT-friendly shape guidance:
 enabled = true
 ```
 
-This adds advisory diagnostics for clear local type drift, late table-shape
-changes, and dynamic table writes inside loops. It is intentionally conservative
-and never changes emitted Lua:
+This adds advisory diagnostics for late table-shape changes and dynamic table
+writes inside loops. It is intentionally conservative and never changes
+emitted Lua. Incompatible inferred-local reassignment is already a core Tua
+type error:
 
 ```tua
 local value = 1
-value = "later" -- TL4032 when JIT guidance is enabled
+value = "later" -- TL1003 in every .tua project
 
 local player = { hp = 10 }
 player.name = "late field" -- TL4033 when JIT guidance is enabled

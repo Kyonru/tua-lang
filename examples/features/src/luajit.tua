@@ -3,9 +3,9 @@
 -- LuaJIT paths harder to optimize. The default feature example keeps the mode
 -- disabled, so this file still checks and builds as ordinary Tua.
 
--- Feature: TL4032 reports clear local variable type drift in JIT mode.
+-- Feature: inferred local types are stable independently of JIT guidance.
 local value = 1
-value = "shape drift when JIT guidance is enabled"
+value = 2
 
 -- Feature: TL4033 reports late table fields and field type drift in JIT mode.
 local player = { hp = 10 }

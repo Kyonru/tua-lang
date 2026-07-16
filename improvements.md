@@ -359,16 +359,19 @@ dotted event names remain ordinary Lua strings with no new syntax.
 
 ### P2: Define inferred variable reassignment semantics
 
-Inferred locals can currently drift toward permissive behavior unless they
-have explicit annotations.
+Status: done on 2026-07-16.
 
-Improvements:
+Unannotated `.tua` locals now receive a stable widened contract from their
+declaration initializer. Compatible simple and compound assignments preserve
+that contract; incompatible assignments publish `TL1003`. Contracts are
+lexical, survive control-flow joins, and remain separate for shadowed locals.
 
-- Decide whether an inferred local has a stable widened type within its scope.
-- Diagnose incompatible reassignment in `.tua` code while preserving explicit
-  `any` as the dynamic escape hatch.
-- Handle control-flow joins and nil initialization predictably.
-- Document the distinction between Tua checking and ordinary Lua behavior.
+`nil` initialization stays `nil`, so delayed initialization uses an explicit
+optional annotation. Explicit `any` and unresolved dynamic expressions remain
+permissive. Ordinary `.lua` files retain dynamic reassignment unless LuaDoc
+annotations constrain the binding. Hover and other semantic queries keep the
+declaration contract while existing guard-based narrowing remains local to the
+guarded flow.
 
 ### P2: Prioritize native function types before generics
 

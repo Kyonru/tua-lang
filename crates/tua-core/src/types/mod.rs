@@ -16,6 +16,58 @@ pub use model::{
 
 use crate::parser::TuaType;
 
+pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
+    match ty {
+        Type::StringLiteral(_) => Type::string(),
+        Type::Union(types) => Type::union(types.iter().map(widen_inferred_type)),
+        Type::Function(function) => Type::function_returns_with_required(
+            function.parameters.iter().map(widen_inferred_type),
+            function.required_parameter_count,
+            function
+                .return_types_or_any()
+                .iter()
+                .map(widen_inferred_type),
+        ),
+        Type::Table(table) => {
+            let mut widened = TableShape::from_fields(table.fields().map(|(name, field)| {
+                let ty = if name.starts_with("__") {
+                    field.ty.clone()
+                } else {
+                    widen_inferred_type(&field.ty)
+                };
+
+                (
+                    name.to_owned(),
+                    TableField {
+                        ty,
+                        optional: field.optional,
+                    },
+                )
+            }));
+
+            if let Some(facts) = table.metatable_facts() {
+                widened.set_metatable_facts(facts.clone());
+            }
+
+            if table.has_self_index() {
+                widened.mark_self_index();
+            }
+
+            for method in table.constructor_methods() {
+                widened.mark_constructor_method(method);
+            }
+
+            Type::Table(widened)
+        }
+        Type::Array(item) => Type::array(widen_inferred_type(item)),
+        Type::Tuple(items) => Type::tuple(items.iter().map(widen_inferred_type)),
+        Type::Dictionary { key, value } => {
+            Type::dictionary(widen_inferred_type(key), widen_inferred_type(value))
+        }
+        Type::Primitive(_) | Type::Any | Type::Alias(_) => ty.clone(),
+    }
+}
+
 pub(crate) fn type_from_tua_type(ty: &TuaType) -> Type {
     match ty {
         TuaType::Named(name) => Type::named(name),

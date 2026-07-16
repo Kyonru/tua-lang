@@ -936,8 +936,8 @@ fn pipeline_diagnostics_run_jit_guidance_from_project_config() {
     host.set_file(
         &path,
         r#"
-local value = 1
-value = "shape drift"
+local player = { hp = 10 }
+player.name = "late"
 "#,
     );
 
@@ -945,7 +945,7 @@ value = "shape drift"
 
     assert!(diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_JIT_TYPE_DRIFT)));
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_JIT_TABLE_SHAPE_DRIFT)));
 }
 
 #[test]
@@ -1364,6 +1364,27 @@ local sprite = image "missing.png"
     assert!(codes.contains(&DiagnosticCode::TYPE_MISMATCH));
     assert!(codes.contains(&DiagnosticCode::LINT_UNDEFINED_VARIABLE));
     assert!(!codes.contains(&DiagnosticCode::ASSET_MISSING));
+}
+
+#[test]
+fn fast_diagnostics_include_inferred_local_reassignment_errors() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &path,
+        r#"
+local score = 10
+score = "high"
+"#,
+    );
+
+    let diagnostics = host.fast_diagnostics(&path);
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("expected number, found string")
+    }));
 }
 
 #[test]

@@ -458,6 +458,164 @@ hp = "low"
 }
 
 #[test]
+fn inferred_local_reassignments_use_a_stable_widened_contract() {
+    check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local score = 10
+score = 11
+
+local state = "idle"
+state = "running"
+
+local dynamic: any = 1
+dynamic = "allowed"
+"#,
+    )
+    .expect("matching inferred reassignments and explicit any should remain valid");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local score = 10
+score = "high"
+"#,
+    )
+    .expect_err("an inferred number local should reject a string reassignment");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
+fn inferred_local_contracts_survive_control_flow_and_shadowing() {
+    check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local function update(active: boolean)
+  local score = 10
+
+  if active then
+    score = 11
+  else
+    score = 12
+  end
+
+  do
+    local score = "shadow"
+    score = "still shadowed"
+  end
+
+  local checked: number = score
+end
+"#,
+    )
+    .expect("branch assignments and shadowed locals should keep their own contracts");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local function update(active: boolean)
+  local score = 10
+
+  if active then
+    score = 11
+  else
+    score = "high"
+  end
+end
+"#,
+    )
+    .expect_err("a branch should not widen an inferred local at the join");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
+fn nil_initialization_requires_an_optional_or_dynamic_annotation() {
+    check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local optional: number | nil = nil
+optional = 10
+
+local dynamic: any = nil
+dynamic = "loaded"
+"#,
+    )
+    .expect("optional and any annotations should support delayed initialization");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local inferred = nil
+inferred = 10
+"#,
+    )
+    .expect_err("an unannotated nil local should keep the inferred nil contract");
+
+    assert_single_mismatch(&diagnostics, "expected nil, found number");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local inferred
+inferred = 10
+"#,
+    )
+    .expect_err("a local without an initializer should infer its runtime nil value");
+
+    assert_single_mismatch(&diagnostics, "expected nil, found number");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local required: number
+"#,
+    )
+    .expect_err("a non-optional local without an initializer is nil at runtime");
+
+    assert_single_mismatch(&diagnostics, "expected number, found nil");
+}
+
+#[test]
+fn inferred_local_compound_assignments_check_the_stable_contract() {
+    check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local score = 10
+score += 2
+"#,
+    )
+    .expect("matching compound assignment should remain valid");
+
+    let diagnostics = check_tua_source(
+        "src/reassignment.tua",
+        r#"
+local score = 10
+score += "two"
+"#,
+    )
+    .expect_err("compound assignment should validate its value against the local contract");
+
+    assert_single_mismatch(&diagnostics, "expected number, found string");
+}
+
+#[test]
+fn ordinary_lua_inferred_locals_remain_permissive_without_annotations() {
+    let parsed = crate::parse_lua_source(
+        "src/legacy.lua",
+        r#"
+local value = 1
+value = "dynamic Lua"
+"#,
+    )
+    .expect("Lua source should parse");
+
+    check_parsed_source(&parsed)
+        .expect("ordinary Lua should not adopt Tua inferred reassignment contracts");
+}
+
+#[test]
 fn rejects_assignment_to_known_table_field_mismatch() {
     let diagnostics = check_tua_source(
         "src/player.tua",
@@ -543,7 +701,7 @@ fn unannotated_dynamic_code_remains_permissive() {
     check_tua_source(
         "src/dynamic.tua",
         r#"
-local hp = 10
+local hp = unknown_value()
 hp = "low"
 
 local player = make_player()
