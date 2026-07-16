@@ -14,6 +14,7 @@ use crate::classes;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
+pub(crate) use model::ParserLineProvenance;
 pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionTypeParameter,
     LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
@@ -48,11 +49,12 @@ pub fn parse_tua_source(
 
 pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
     let original = source.into();
-    let parser_source = normalize_tua_source_for_luau_parser(&original);
+    let (parser_source, parser_provenance) = normalize_tua_source_for_luau_parser(&original);
 
     NormalizedSource {
         original,
         parser_source,
+        parser_provenance,
     }
 }
 
@@ -63,11 +65,13 @@ pub fn parse_raw_lua_source(
     let path = path.as_ref().to_path_buf();
     let source = source.into();
     let parser_source = source.clone();
+    let parser_provenance = source_line_provenance(&source);
 
     parse_raw_source(
         path,
         source,
         parser_source,
+        parser_provenance,
         LuaVersion::lua51(),
         ParsedLanguage::Lua,
     )
@@ -84,6 +88,7 @@ pub fn parse_raw_tua_source(
         path,
         normalized.original,
         normalized.parser_source,
+        normalized.parser_provenance,
         LuaVersion::luau(),
         ParsedLanguage::Tua,
     )
@@ -133,6 +138,7 @@ fn parse_raw_source(
     path: PathBuf,
     source: String,
     parser_source: String,
+    parser_provenance: Vec<ParserLineProvenance>,
     lua_version: LuaVersion,
     language: ParsedLanguage,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
@@ -146,6 +152,7 @@ fn parse_raw_source(
                 path,
                 source,
                 parser_source,
+                parser_provenance,
                 ast,
                 span,
                 language,
@@ -156,6 +163,36 @@ fn parse_raw_source(
             .map(|error| parser_error_to_diagnostic(&path, error))
             .collect()),
     }
+}
+
+fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
+    let lines = if source.is_empty() {
+        Vec::new()
+    } else {
+        source.split_inclusive('\n').collect::<Vec<_>>()
+    };
+
+    lines
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let line_number = index + 1;
+            let text = line.trim_end_matches(['\r', '\n']);
+            ParserLineProvenance {
+                source_span: SourceSpan {
+                    start: SourcePosition {
+                        line: line_number,
+                        column: 1,
+                    },
+                    end: SourcePosition {
+                        line: line_number,
+                        column: text.chars().count() + 1,
+                    },
+                },
+                class_generated: false,
+            }
+        })
+        .collect()
 }
 
 #[derive(Default)]
@@ -187,7 +224,7 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
         ast::Stmt::TypeDeclaration(declaration) => {
             syntax
                 .type_aliases
-                .push(type_alias_from_declaration(declaration));
+                .push(type_alias_from_declaration(declaration, source));
         }
         ast::Stmt::LocalAssignment(local) => {
             for (name, specifier) in local.names().iter().zip(local.type_specifiers()) {
@@ -259,14 +296,83 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
     }
 }
 
-fn type_alias_from_declaration(declaration: &TypeDeclaration) -> TypeAlias {
+fn type_alias_from_declaration(declaration: &TypeDeclaration, source: &str) -> TypeAlias {
+    let ty = tua_type_from_type_info(declaration.type_definition());
+    let mut span = node_span(declaration);
+    if matches!(ty, TuaType::Table(_)) {
+        span = span.map(|span| complete_table_alias_span(source, span));
+    }
+
     TypeAlias {
         name: token_text(declaration.type_name()),
-        ty: tua_type_from_type_info(declaration.type_definition()),
+        ty,
         kind: TypeAliasKind::Alias,
         name_span: node_span(declaration.type_name()),
-        span: node_span(declaration),
+        span,
     }
+}
+
+fn complete_table_alias_span(source: &str, span: SourceSpan) -> SourceSpan {
+    let mut depth = 0usize;
+    let mut saw_open = false;
+
+    for (index, line) in source.lines().enumerate().skip(span.start.line - 1) {
+        let start_column = if index + 1 == span.start.line {
+            span.start.column.saturating_sub(1)
+        } else {
+            0
+        };
+        let mut chars = line.chars().enumerate().skip(start_column).peekable();
+        let mut quote = None;
+        let mut escaped = false;
+
+        while let Some((column, character)) = chars.next() {
+            if let Some(active_quote) = quote {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == active_quote {
+                    quote = None;
+                }
+                continue;
+            }
+
+            if matches!(character, '\'' | '"') {
+                quote = Some(character);
+                continue;
+            }
+            if character == '-'
+                && chars
+                    .peek()
+                    .is_some_and(|(_, next_character)| *next_character == '-')
+            {
+                break;
+            }
+
+            match character {
+                '{' => {
+                    saw_open = true;
+                    depth += 1;
+                }
+                '}' if saw_open => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return SourceSpan {
+                            start: span.start,
+                            end: SourcePosition {
+                                line: index + 1,
+                                column: column + 2,
+                            },
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    span
 }
 
 fn collect_enum_declarations(path: &Path, source: &str, syntax: &mut TuaSyntax) {

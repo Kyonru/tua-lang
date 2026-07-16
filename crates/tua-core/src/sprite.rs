@@ -8,6 +8,8 @@ use crate::asset::{self, AssetIndex, AssetLoaderKind, AssetMetadata, AssetValida
 use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, token_text,
 };
+use crate::emit::lowering::{LoweringDocument, LoweringOperation};
+use crate::emit::LoweringKind;
 use crate::plugin::{PluginContext, TuaPlugin};
 use crate::types::{FunctionType, TableField, Type};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, SourceSpan, TypedParameter};
@@ -83,49 +85,42 @@ pub(crate) fn parse_sprite_declarations(
     (declarations, Vec::new())
 }
 
-pub(crate) fn lower_sprite_sheet_calls_text(output: &str, parsed: &crate::ParsedSource) -> String {
+pub(crate) fn lowering_operations(
+    document: &LoweringDocument,
+    parsed: &crate::ParsedSource,
+) -> Vec<LoweringOperation> {
     if parsed.sprite_declarations.is_empty() {
-        return output.to_owned();
+        return Vec::new();
     }
 
-    let mut lowered = output.to_owned();
+    let output = document.code();
+    let mut operations = Vec::new();
+    let mut output_search_start = 0usize;
+    let mut source_search_start = 0usize;
 
     for declaration in &parsed.sprite_declarations {
-        let Some((start, statement_len)) = find_sprite_statement(&lowered, declaration) else {
+        let Some((relative_start, statement_len)) =
+            find_sprite_statement(&output[output_search_start..], declaration)
+        else {
             continue;
         };
+        let start = output_search_start + relative_start;
         let end = start + statement_len;
+        let (source_span, next_source_search_start) =
+            original_sprite_statement_span(&parsed.source, declaration, source_search_start)
+                .unwrap_or((declaration.span, source_search_start));
 
-        lowered.replace_range(start..end, &lower_sprite_declaration(declaration));
+        operations.push(LoweringOperation::replace(
+            start..end,
+            lower_sprite_declaration(declaration),
+            source_span,
+            LoweringKind::Sprite,
+        ));
+        output_search_start = end;
+        source_search_start = next_source_search_start;
     }
 
-    lowered
-}
-
-pub(crate) fn lowering_provenance_blocks(
-    parsed: &crate::ParsedSource,
-) -> Vec<(String, usize, SourceSpan)> {
-    let mut search_start = 0usize;
-
-    parsed
-        .sprite_declarations
-        .iter()
-        .map(|declaration| {
-            let (source_span, next_search_start) =
-                original_sprite_statement_span(&parsed.source, declaration, search_start)
-                    .unwrap_or((declaration.span, search_start));
-            search_start = next_search_start;
-
-            (
-                format!(
-                    "-- Sprite helper: {} lowers to anim8-backed Lua.",
-                    declaration.name
-                ),
-                lower_sprite_declaration(declaration).lines().count(),
-                source_span,
-            )
-        })
-        .collect()
+    operations
 }
 
 fn original_sprite_statement_span(
@@ -683,7 +678,6 @@ fn node_span(node: &impl Node) -> Option<SourceSpan> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::parse_tua_source;
 
     const SPRITE_SOURCE: &str = r#"local Player = spriteSheet({
@@ -721,9 +715,8 @@ mod tests {
 
     #[test]
     fn lowers_sprite_sheet_helper_call() {
-        let parsed =
-            parse_tua_source("src/sprites.tua", SPRITE_SOURCE).expect("sprite should parse");
-        let lowered = lower_sprite_sheet_calls_text(SPRITE_SOURCE, &parsed);
+        let lowered =
+            crate::emit_tua_source("src/sprites.tua", SPRITE_SOURCE).expect("sprite should lower");
 
         assert!(lowered.contains("-- Sprite helper: Player lowers to anim8-backed Lua."));
         assert!(lowered.contains("local anim8 = require(\"anim8\")"));

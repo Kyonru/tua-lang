@@ -12,11 +12,11 @@ use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
     asset, infer_module_exports, parse_tua_source, signal, vector, AnnotationMode, Diagnostic,
-    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, TuaType,
-    Type,
+    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan,
+    TuaType, Type,
 };
 
-mod lowering;
+pub(crate) mod lowering;
 
 pub use lowering::{LoweringKind, LuaEmission, LuaLineProvenance};
 
@@ -119,36 +119,32 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
 
     if diagnostics.is_empty() {
-        let output = ast.to_string();
-        let mut document = lowering::LoweringDocument::from_erased_lua(output, parsed);
+        let mut document = lowering::LoweringDocument::from_erased_ast(&ast, parsed);
 
-        let output = lower_default_parameter_guards_text(&document.code(), parsed);
-        document.rewrite(LoweringKind::DefaultParameter, output);
-        document.refine_default_parameter_provenance(parsed);
+        let operations = lower_default_parameter_operations(&document, parsed);
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = lower_builtin_calls_text(&document.code());
-        document.rewrite(LoweringKind::BuiltinCall, output);
-        document.refine_builtin_require_provenance();
+        let operations = lower_builtin_call_operations(&document);
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = lower_import_calls_text(&document.code(), parsed, import_resolver)?;
-        document.rewrite(LoweringKind::Import, output);
+        let operations = lower_import_call_operations(&document, parsed, import_resolver)?;
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = lower_runtime_type_checks_text(&document.code(), parsed)?;
-        document.rewrite(LoweringKind::RuntimeTypeCheck, output);
+        let operations = lower_runtime_type_check_operations(&document, parsed)?;
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = lower_final_class_method_calls_text(&document.code(), parsed);
-        document.rewrite(LoweringKind::FinalClassCall, output);
+        let operations = lower_final_class_method_call_operations(&document, parsed);
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = lower_compound_assignments_text(&document.code());
-        document.rewrite(LoweringKind::CompoundAssignment, output);
+        let operations = lower_compound_assignment_operations(&document);
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let output = crate::sprite::lower_sprite_sheet_calls_text(&document.code(), parsed);
-        document.rewrite(LoweringKind::Sprite, output);
-        document.refine_sprite_provenance(parsed);
+        let operations = crate::sprite::lowering_operations(&document, parsed);
+        apply_lowering_operations(&mut document, operations, parsed)?;
 
         if annotation_mode == AnnotationMode::Luacats {
-            let output = apply_luacats_annotations(&document.code(), parsed);
-            document.rewrite(LoweringKind::Annotation, output);
+            let operations = luacats_annotation_operations(&document, parsed);
+            apply_lowering_operations(&mut document, operations, parsed)?;
         }
 
         Ok(document.finish())
@@ -157,15 +153,36 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     }
 }
 
-fn lower_runtime_type_checks_text(
-    output: &str,
+fn apply_lowering_operations(
+    document: &mut lowering::LoweringDocument,
+    operations: Vec<lowering::LoweringOperation>,
     parsed: &ParsedSource,
-) -> Result<String, Vec<Diagnostic>> {
+) -> Result<(), Vec<Diagnostic>> {
+    document.apply_operations(operations).map_err(|error| {
+        let position = parsed
+            .span
+            .map(|span| span.start)
+            .unwrap_or(SourcePosition { line: 1, column: 1 });
+        vec![Diagnostic::error(
+            parsed.path.clone(),
+            position.line,
+            position.column,
+            error.to_string(),
+        )
+        .with_code(DiagnosticCode::LOWERING_OPERATION)]
+    })
+}
+
+fn lower_runtime_type_check_operations(
+    document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
+    let output = document.code();
     let (environment, _) = build_type_environment_with_diagnostics(parsed);
     let semantic = SemanticModel::new(parsed, &environment);
     let runtime_check_sites = runtime_type_check_sites(parsed);
     let mut runtime_check_site_index = 0usize;
-    let mut lowered = String::with_capacity(output.len());
+    let mut operations = Vec::new();
     let mut diagnostics = Vec::new();
     let mut index = 0;
 
@@ -173,15 +190,11 @@ fn lower_runtime_type_checks_text(
         let rest = &output[index..];
 
         if rest.starts_with("--") {
-            let end = consume_comment(output, index);
-
-            lowered.push_str(&output[index..end]);
-            index = end;
+            index = consume_comment(&output, index);
             continue;
         }
 
-        if let Some(end) = consume_string_literal(output, index) {
-            lowered.push_str(&output[index..end]);
+        if let Some(end) = consume_string_literal(&output, index) {
             index = end;
             continue;
         }
@@ -189,25 +202,27 @@ fn lower_runtime_type_checks_text(
         if let Some(identifier_end) = consume_identifier(rest) {
             let name = &output[index..index + identifier_end];
 
-            if name == runtime_type::IS_CHECK_HELPER && can_start_builtin_call(output, index) {
-                let argument_start = skip_whitespace(output, index + identifier_end);
+            if name == runtime_type::IS_CHECK_HELPER && can_start_builtin_call(&output, index) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
 
                 if let Some((replacement, end)) = lower_runtime_type_check_call(
-                    output,
+                    &output,
                     argument_start,
                     parsed,
                     &environment,
                     &semantic,
                     runtime_check_sites.get(runtime_check_site_index).copied(),
+                    document.source_span_at(index).start,
                 ) {
                     runtime_check_site_index += 1;
 
                     match replacement {
-                        Ok(replacement) => lowered.push_str(&replacement),
-                        Err(diagnostic) => {
-                            diagnostics.push(diagnostic);
-                            lowered.push_str(&output[index..end]);
-                        }
+                        Ok(replacement) => operations.push(document.operation(
+                            LoweringKind::RuntimeTypeCheck,
+                            index..end,
+                            replacement,
+                        )),
+                        Err(diagnostic) => diagnostics.push(diagnostic),
                     }
 
                     index = end;
@@ -215,7 +230,6 @@ fn lower_runtime_type_checks_text(
                 }
             }
 
-            lowered.push_str(name);
             index += identifier_end;
             continue;
         }
@@ -225,12 +239,11 @@ fn lower_runtime_type_checks_text(
             .next()
             .expect("loop only runs at valid string boundaries");
 
-        lowered.push(character);
         index += character.len_utf8();
     }
 
     if diagnostics.is_empty() {
-        Ok(lowered)
+        Ok(operations)
     } else {
         Err(diagnostics)
     }
@@ -243,6 +256,7 @@ fn lower_runtime_type_check_call(
     environment: &TypeEnvironment,
     semantic: &SemanticModel<'_>,
     source_position: Option<SourcePosition>,
+    fallback_position: SourcePosition,
 ) -> Option<(Result<String, Diagnostic>, usize)> {
     if !output[argument_start..].starts_with('(') {
         return None;
@@ -252,7 +266,7 @@ fn lower_runtime_type_check_call(
     let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
     let diagnostic_position = source_position
         .map(source_position_tuple)
-        .unwrap_or_else(|| source_position_for_byte(output, argument_start));
+        .unwrap_or_else(|| source_position_tuple(fallback_position));
 
     let replacement = match arguments.as_slice() {
         [value, target] if !value.is_empty() => {
@@ -267,10 +281,7 @@ fn lower_runtime_type_check_call(
                 ));
             };
 
-            let lookup_position = source_position.unwrap_or_else(|| SourcePosition {
-                line: diagnostic_position.0,
-                column: diagnostic_position.1,
-            });
+            let lookup_position = source_position.unwrap_or(fallback_position);
 
             if classes::class_by_name(&parsed.class_declarations, &target).is_some() {
                 Ok(class_runtime_is_check(value, &target))
@@ -349,29 +360,30 @@ fn class_runtime_is_check(value: &str, target: &str) -> String {
     )
 }
 
-fn lower_final_class_method_calls_text(output: &str, parsed: &ParsedSource) -> String {
+fn lower_final_class_method_call_operations(
+    document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+) -> Vec<lowering::LoweringOperation> {
     if parsed.class_declarations.is_empty() {
-        return output.to_owned();
+        return Vec::new();
     }
 
-    let local_classes = inferred_class_locals(output, parsed);
+    let output = document.code();
+    let local_classes = inferred_class_locals(&output, parsed);
     if local_classes.is_empty() {
-        return output.to_owned();
+        return Vec::new();
     }
 
-    let mut lowered = String::with_capacity(output.len());
+    let mut operations = Vec::new();
     let mut index = 0usize;
 
     while index < output.len() {
         if output[index..].starts_with("--") {
-            let end = consume_comment(output, index);
-            lowered.push_str(&output[index..end]);
-            index = end;
+            index = consume_comment(&output, index);
             continue;
         }
 
-        if let Some(end) = consume_string_literal(output, index) {
-            lowered.push_str(&output[index..end]);
+        if let Some(end) = consume_string_literal(&output, index) {
             index = end;
             continue;
         }
@@ -380,16 +392,19 @@ fn lower_final_class_method_calls_text(output: &str, parsed: &ParsedSource) -> S
             let receiver = &output[index..index + identifier_end];
 
             if let Some(class_name) = local_classes.get(receiver) {
-                if let Some((replacement, end)) =
-                    final_class_method_call_replacement(output, index, receiver, class_name, parsed)
-                {
-                    lowered.push_str(&replacement);
+                if let Some((replacement, end)) = final_class_method_call_replacement(
+                    &output, index, receiver, class_name, parsed,
+                ) {
+                    operations.push(document.operation(
+                        LoweringKind::FinalClassCall,
+                        index..end,
+                        replacement,
+                    ));
                     index = end;
                     continue;
                 }
             }
 
-            lowered.push_str(receiver);
             index += identifier_end;
             continue;
         }
@@ -398,11 +413,10 @@ fn lower_final_class_method_calls_text(output: &str, parsed: &ParsedSource) -> S
             .chars()
             .next()
             .expect("loop only runs at valid string boundaries");
-        lowered.push(character);
         index += character.len_utf8();
     }
 
-    lowered
+    operations
 }
 
 fn inferred_class_locals(output: &str, parsed: &ParsedSource) -> BTreeMap<String, String> {
@@ -537,19 +551,39 @@ fn runtime_type_emit_diagnostic(
         .with_code(DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK)
 }
 
-fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> String {
-    let runtime_output = runtime_output.trim_start_matches(char::is_whitespace);
-    let mut aliases = Vec::new();
-    let mut local_annotations = BTreeMap::<String, VecDeque<Vec<String>>>::new();
+#[derive(Clone, Debug)]
+struct LuacatsComments {
+    lines: Vec<String>,
+    source_span: SourceSpan,
+}
+
+fn luacats_annotation_operations(
+    document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+) -> Vec<lowering::LoweringOperation> {
+    let runtime_output = document.code();
+    let runtime_start =
+        runtime_output.len() - runtime_output.trim_start_matches(char::is_whitespace).len();
+    let runtime_is_empty = runtime_output.trim().is_empty();
+    let fallback_span = parsed
+        .span
+        .unwrap_or_else(|| document.source_span_at(runtime_start));
+    let mut operations = Vec::new();
+    let mut local_annotations = BTreeMap::<String, VecDeque<LuacatsComments>>::new();
     let mut local_export_types = BTreeMap::<String, String>::new();
-    let mut function_annotations = BTreeMap::<String, VecDeque<Vec<String>>>::new();
+    let mut function_annotations = BTreeMap::<String, VecDeque<LuacatsComments>>::new();
     let mut function_export_types = BTreeMap::<String, String>::new();
 
-    for alias in &parsed.type_aliases {
-        aliases.push(format!(
-            "---@alias {} {}",
-            alias.name,
-            luacats_type(&alias.ty)
+    for (index, alias) in parsed.type_aliases.iter().enumerate() {
+        let mut text = format!("---@alias {} {}\n", alias.name, luacats_type(&alias.ty));
+        if index + 1 == parsed.type_aliases.len() && !runtime_is_empty {
+            text.push('\n');
+        }
+        operations.push(lowering::LoweringOperation::insert(
+            runtime_start,
+            text,
+            alias.span.unwrap_or(fallback_span),
+            LoweringKind::Annotation,
         ));
     }
 
@@ -558,7 +592,10 @@ fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> Str
         local_annotations
             .entry(local.name.clone())
             .or_default()
-            .push_back(vec![format!("---@type {type_label}")]);
+            .push_back(LuacatsComments {
+                lines: vec![format!("---@type {type_label}")],
+                source_span: local.span.unwrap_or(fallback_span),
+            });
         local_export_types
             .entry(local.name.clone())
             .or_insert(type_label);
@@ -584,7 +621,10 @@ fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> Str
                 function_annotations
                     .entry(name.to_owned())
                     .or_default()
-                    .push_back(comments);
+                    .push_back(LuacatsComments {
+                        lines: comments,
+                        source_span: function.span.unwrap_or(fallback_span),
+                    });
             }
 
             function_export_types
@@ -595,39 +635,10 @@ fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> Str
 
     let export_annotations =
         module_export_annotations(parsed, &local_export_types, &function_export_types);
-    let mut output = String::new();
-
-    if !aliases.is_empty() {
-        for alias in aliases {
-            output.push_str(&alias);
-            output.push('\n');
-        }
-
-        if !runtime_output.trim().is_empty() {
-            output.push('\n');
-        }
-    }
-
-    for line in output_lines(
-        runtime_output,
-        &mut local_annotations,
-        &mut function_annotations,
-        &export_annotations,
-    ) {
-        output.push_str(&line);
-        output.push('\n');
-    }
-
-    output
-}
-
-fn output_lines(
-    output: &str,
-    local_annotations: &mut BTreeMap<String, VecDeque<Vec<String>>>,
-    function_annotations: &mut BTreeMap<String, VecDeque<Vec<String>>>,
-    export_annotations: &[String],
-) -> Vec<String> {
-    let lines = output.lines().collect::<Vec<_>>();
+    let lines = runtime_output
+        .split_inclusive('\n')
+        .map(|line| line.trim_end_matches(['\r', '\n']))
+        .collect::<Vec<_>>();
     let export_line = if export_annotations.is_empty() {
         None
     } else {
@@ -635,49 +646,66 @@ fn output_lines(
             .iter()
             .rposition(|line| line.trim_start().starts_with("return "))
     };
+    let mut offset = 0usize;
 
-    lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| {
-            let mut line_output = String::new();
-            let trimmed = line.trim_start();
-            let indent = &line[..line.len() - trimmed.len()];
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let indent = &line[..line.len() - trimmed.len()];
 
-            if Some(index) == export_line {
-                push_indented_comments(&mut line_output, indent, export_annotations);
+        if Some(index) == export_line {
+            operations.push(lowering::LoweringOperation::insert(
+                offset,
+                indented_comments(indent, &export_annotations),
+                document.source_span_at(offset),
+                LoweringKind::Annotation,
+            ));
+        }
+
+        for name in declared_local_names(trimmed) {
+            if let Some(comments) = pop_comments(&mut local_annotations, &name) {
+                operations.push(lowering::LoweringOperation::insert(
+                    offset,
+                    indented_comments(indent, &comments.lines),
+                    comments.source_span,
+                    LoweringKind::Annotation,
+                ));
             }
+        }
 
-            for name in declared_local_names(trimmed) {
-                if let Some(comments) = pop_comments(local_annotations, &name) {
-                    push_indented_comments(&mut line_output, indent, &comments);
-                }
+        if let Some(name) = declared_function_name(trimmed) {
+            if let Some(comments) = pop_comments(&mut function_annotations, &name) {
+                operations.push(lowering::LoweringOperation::insert(
+                    offset,
+                    indented_comments(indent, &comments.lines),
+                    comments.source_span,
+                    LoweringKind::Annotation,
+                ));
             }
+        }
 
-            if let Some(name) = declared_function_name(trimmed) {
-                if let Some(comments) = pop_comments(function_annotations, &name) {
-                    push_indented_comments(&mut line_output, indent, &comments);
-                }
-            }
+        offset += runtime_output[offset..]
+            .find('\n')
+            .map(|newline| newline + 1)
+            .unwrap_or(line.len());
+    }
 
-            line_output.push_str(line);
-            line_output
-        })
-        .collect()
+    operations
 }
 
-fn push_indented_comments(output: &mut String, indent: &str, comments: &[String]) {
+fn indented_comments(indent: &str, comments: &[String]) -> String {
+    let mut output = String::new();
     for comment in comments {
         output.push_str(indent);
         output.push_str(comment);
         output.push('\n');
     }
+    output
 }
 
 fn pop_comments(
-    annotations: &mut BTreeMap<String, VecDeque<Vec<String>>>,
+    annotations: &mut BTreeMap<String, VecDeque<LuacatsComments>>,
     name: &str,
-) -> Option<Vec<String>> {
+) -> Option<LuacatsComments> {
     let comments = annotations.get_mut(name)?.pop_front();
 
     if annotations.get(name).is_some_and(VecDeque::is_empty) {
@@ -1225,18 +1253,28 @@ fn trailing_whitespace(text: &str) -> &str {
     &text[index..]
 }
 
-fn lower_compound_assignments_text(output: &str) -> String {
-    let mut lowered = output
-        .lines()
-        .map(lower_compound_assignment_line)
-        .collect::<Vec<_>>()
-        .join("\n");
+fn lower_compound_assignment_operations(
+    document: &lowering::LoweringDocument,
+) -> Vec<lowering::LoweringOperation> {
+    let output = document.code();
+    let mut operations = Vec::new();
+    let mut offset = 0usize;
 
-    if output.ends_with('\n') {
-        lowered.push('\n');
+    for line in output.split_inclusive('\n') {
+        let body = line.strip_suffix('\n').unwrap_or(line);
+        let replacement = lower_compound_assignment_line(body);
+
+        if replacement != body {
+            operations.push(document.operation(
+                LoweringKind::CompoundAssignment,
+                offset..offset + body.len(),
+                replacement,
+            ));
+        }
+        offset += line.len();
     }
 
-    lowered
+    operations
 }
 
 fn lower_compound_assignment_line(line: &str) -> String {
@@ -1314,25 +1352,24 @@ fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
     .find_map(|(sugar, binary)| input.strip_prefix(sugar).map(|rhs| (binary, rhs)))
 }
 
-fn lower_builtin_calls_text(output: &str) -> String {
-    let mut lowered = String::with_capacity(output.len());
+fn lower_builtin_call_operations(
+    document: &lowering::LoweringDocument,
+) -> Vec<lowering::LoweringOperation> {
+    let output = document.code();
+    let mut operations = Vec::new();
     let mut index = 0;
-    let mut requires_brinevector = false;
-    let mut requires_tuasignal = false;
+    let mut brinevector_span = None;
+    let mut tuasignal_span = None;
 
     while index < output.len() {
         let rest = &output[index..];
 
         if rest.starts_with("--") {
-            let end = consume_comment(output, index);
-
-            lowered.push_str(&output[index..end]);
-            index = end;
+            index = consume_comment(&output, index);
             continue;
         }
 
-        if let Some(end) = consume_string_literal(output, index) {
-            lowered.push_str(&output[index..end]);
+        if let Some(end) = consume_string_literal(&output, index) {
             index = end;
             continue;
         }
@@ -1340,47 +1377,62 @@ fn lower_builtin_calls_text(output: &str) -> String {
         if let Some(identifier_end) = consume_identifier(rest) {
             let name = &output[index..index + identifier_end];
 
-            if can_start_asset_loader(output, index) {
+            if can_start_asset_loader(&output, index) {
                 if let Some(kind) = asset::loader_kind(name) {
-                    let argument_start = skip_whitespace(output, index + identifier_end);
+                    let argument_start = skip_whitespace(&output, index + identifier_end);
 
                     if let Some((replacement, end)) =
-                        lower_asset_loader_call(output, argument_start, kind)
+                        lower_asset_loader_call(&output, argument_start, kind)
                     {
-                        lowered.push_str(&replacement);
+                        operations.push(document.operation(
+                            LoweringKind::BuiltinCall,
+                            index..end,
+                            replacement,
+                        ));
                         index = end;
                         continue;
                     }
                 }
             }
 
-            if can_start_builtin_call(output, index) && vector::is_constructor(name) {
-                let argument_start = skip_whitespace(output, index + identifier_end);
+            if can_start_builtin_call(&output, index) && vector::is_constructor(name) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
 
                 if let Some((replacement, end)) =
-                    lower_vec2_constructor_call(output, argument_start)
+                    lower_vec2_constructor_call(&output, argument_start)
                 {
-                    requires_brinevector = true;
-                    lowered.push_str(&replacement);
+                    let source_span = document.source_span_at(index);
+                    brinevector_span.get_or_insert(source_span);
+                    operations.push(lowering::LoweringOperation::replace(
+                        index..end,
+                        replacement,
+                        source_span,
+                        LoweringKind::BuiltinCall,
+                    ));
                     index = end;
                     continue;
                 }
             }
 
-            if can_start_builtin_call(output, index) && signal::is_constructor(name) {
-                let argument_start = skip_whitespace(output, index + identifier_end);
+            if can_start_builtin_call(&output, index) && signal::is_constructor(name) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
 
                 if let Some((replacement, end)) =
-                    lower_signal_constructor_call(output, argument_start)
+                    lower_signal_constructor_call(&output, argument_start)
                 {
-                    requires_tuasignal = true;
-                    lowered.push_str(&replacement);
+                    let source_span = document.source_span_at(index);
+                    tuasignal_span.get_or_insert(source_span);
+                    operations.push(lowering::LoweringOperation::replace(
+                        index..end,
+                        replacement,
+                        source_span,
+                        LoweringKind::BuiltinCall,
+                    ));
                     index = end;
                     continue;
                 }
             }
 
-            lowered.push_str(name);
             index += identifier_end;
             continue;
         }
@@ -1390,41 +1442,56 @@ fn lower_builtin_calls_text(output: &str) -> String {
             .next()
             .expect("loop only runs at valid string boundaries");
 
-        lowered.push(character);
         index += character.len_utf8();
     }
 
-    if requires_brinevector || requires_tuasignal {
-        lowered = lowered.trim_start_matches(char::is_whitespace).to_owned();
+    if brinevector_span.is_some() || tuasignal_span.is_some() {
+        let leading_whitespace =
+            output.len() - output.trim_start_matches(char::is_whitespace).len();
+        if leading_whitespace > 0 {
+            operations.push(document.operation(
+                LoweringKind::BuiltinCall,
+                0..leading_whitespace,
+                "",
+            ));
+        }
     }
 
-    if requires_brinevector {
-        lowered = format!(
-            "local {} = require(\"{}\")\n{}",
-            vector::EMITTED_CONSTRUCTOR_LOCAL,
-            vector::RUNTIME_MODULE,
-            lowered
-        );
+    if let Some(source_span) = tuasignal_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                signal::EMITTED_CONSTRUCTOR_LOCAL,
+                signal::RUNTIME_MODULE,
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    if let Some(source_span) = brinevector_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                vector::EMITTED_CONSTRUCTOR_LOCAL,
+                vector::RUNTIME_MODULE,
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
     }
 
-    if requires_tuasignal {
-        lowered = format!(
-            "local {} = require(\"{}\")\n{}",
-            signal::EMITTED_CONSTRUCTOR_LOCAL,
-            signal::RUNTIME_MODULE,
-            lowered
-        );
-    }
-
-    lowered
+    operations
 }
 
-fn lower_import_calls_text(
-    output: &str,
+fn lower_import_call_operations(
+    document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
     import_resolver: ImportResolver<'_>,
-) -> Result<String, Vec<Diagnostic>> {
-    let mut lowered = String::with_capacity(output.len());
+) -> Result<Vec<lowering::LoweringOperation>, Vec<Diagnostic>> {
+    let output = document.code();
+    let mut operations = Vec::new();
     let mut diagnostics = Vec::new();
     let mut index = 0;
 
@@ -1432,15 +1499,11 @@ fn lower_import_calls_text(
         let rest = &output[index..];
 
         if rest.starts_with("--") {
-            let end = consume_comment(output, index);
-
-            lowered.push_str(&output[index..end]);
-            index = end;
+            index = consume_comment(&output, index);
             continue;
         }
 
-        if let Some(end) = consume_string_literal(output, index) {
-            lowered.push_str(&output[index..end]);
+        if let Some(end) = consume_string_literal(&output, index) {
             index = end;
             continue;
         }
@@ -1449,20 +1512,27 @@ fn lower_import_calls_text(
             let name = &output[index..index + identifier_end];
 
             if name == "import"
-                && can_start_builtin_call(output, index)
-                && looks_like_local_import_binding(output, index)
+                && can_start_builtin_call(&output, index)
+                && looks_like_local_import_binding(&output, index)
             {
-                let argument_start = skip_whitespace(output, index + identifier_end);
+                let argument_start = skip_whitespace(&output, index + identifier_end);
+                let diagnostic_position =
+                    source_position_tuple(document.source_span_at(index).start);
 
-                if let Some((replacement, end)) =
-                    lower_import_call(output, argument_start, parsed, import_resolver)
-                {
+                if let Some((replacement, end)) = lower_import_call(
+                    &output,
+                    argument_start,
+                    diagnostic_position,
+                    parsed,
+                    import_resolver,
+                ) {
                     match replacement {
-                        Ok(replacement) => lowered.push_str(&replacement),
-                        Err(diagnostic) => {
-                            diagnostics.push(diagnostic);
-                            lowered.push_str(&output[index..end]);
-                        }
+                        Ok(replacement) => operations.push(document.operation(
+                            LoweringKind::Import,
+                            index..end,
+                            replacement,
+                        )),
+                        Err(diagnostic) => diagnostics.push(diagnostic),
                     }
 
                     index = end;
@@ -1470,7 +1540,6 @@ fn lower_import_calls_text(
                 }
             }
 
-            lowered.push_str(name);
             index += identifier_end;
             continue;
         }
@@ -1480,12 +1549,11 @@ fn lower_import_calls_text(
             .next()
             .expect("loop only runs at valid string boundaries");
 
-        lowered.push(character);
         index += character.len_utf8();
     }
 
     if diagnostics.is_empty() {
-        Ok(lowered)
+        Ok(operations)
     } else {
         Err(diagnostics)
     }
@@ -1494,6 +1562,7 @@ fn lower_import_calls_text(
 fn lower_import_call(
     output: &str,
     argument_start: usize,
+    diagnostic_position: (usize, usize),
     parsed: &ParsedSource,
     import_resolver: ImportResolver<'_>,
 ) -> Option<(Result<String, Diagnostic>, usize)> {
@@ -1503,7 +1572,6 @@ fn lower_import_call(
 
     let close = find_matching_paren(output, argument_start)?;
     let arguments = split_top_level_arguments(&output[argument_start + 1..close])?;
-    let diagnostic_position = source_position_for_byte(output, argument_start);
 
     let replacement = match arguments.as_slice() {
         [argument] => {
@@ -1634,8 +1702,12 @@ fn lua_string_literal(value: &str) -> String {
     output
 }
 
-fn lower_default_parameter_guards_text(output: &str, parsed: &ParsedSource) -> String {
-    let mut lowered = output.to_owned();
+fn lower_default_parameter_operations(
+    document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+) -> Vec<lowering::LoweringOperation> {
+    let output = document.code();
+    let mut operations = Vec::new();
     let mut search_start = 0usize;
 
     for function in parsed
@@ -1647,35 +1719,46 @@ fn lower_default_parameter_guards_text(output: &str, parsed: &ParsedSource) -> S
             continue;
         };
         let needle = format!("function {name}(");
-        let Some(relative_start) = lowered[search_start..].find(&needle) else {
+        let Some(relative_start) = output[search_start..].find(&needle) else {
             continue;
         };
         let header_start = search_start + relative_start;
         let open = header_start + needle.len() - 1;
-        let Some(mut close) = find_matching_paren(&lowered, open) else {
+        let Some(close) = find_matching_paren(&output, open) else {
             continue;
         };
-        let trimmed_close = lowered[..close]
-            .trim_end_matches(|character| character == ' ' || character == '\t')
-            .len();
+        let trimmed_close = output[..close].trim_end_matches([' ', '\t']).len();
 
         if trimmed_close < close {
-            lowered.replace_range(trimmed_close..close, "");
-            close = trimmed_close;
+            operations.push(document.operation(
+                LoweringKind::DefaultParameter,
+                trimmed_close..close,
+                "",
+            ));
         }
 
-        let insert_at = lowered[close + 1..]
+        let insert_at = output[close + 1..]
             .find('\n')
             .map(|offset| close + 1 + offset + 1)
             .unwrap_or(close + 1);
-        let body_indent = format!("{}  ", line_indent_before(&lowered, header_start));
-        let guard = default_parameter_guard_text(&function.default_parameters, &body_indent);
+        let body_indent = format!("{}  ", line_indent_before(&output, header_start));
 
-        lowered.insert_str(insert_at, &guard);
-        search_start = insert_at + guard.len();
+        for default in &function.default_parameters {
+            let source_span = default
+                .span
+                .or(function.span)
+                .unwrap_or_else(|| document.source_span_at(header_start));
+            operations.push(lowering::LoweringOperation::insert(
+                insert_at,
+                default_parameter_guard_text(std::slice::from_ref(default), &body_indent),
+                source_span,
+                LoweringKind::DefaultParameter,
+            ));
+        }
+        search_start = close + 1;
     }
 
-    lowered
+    operations
 }
 
 fn default_parameter_guard_text(defaults: &[ParameterDefault], body_indent: &str) -> String {
@@ -1785,10 +1868,6 @@ fn import_emit_diagnostic(
     code: DiagnosticCode,
 ) -> Diagnostic {
     Diagnostic::error(parsed.path.clone(), position.0, position.1, message).with_code(code)
-}
-
-fn source_position_for_byte(source: &str, byte: usize) -> (usize, usize) {
-    source_position_tuple(source_position_from_byte(source, byte))
 }
 
 fn source_position_from_byte(source: &str, byte: usize) -> SourcePosition {

@@ -119,11 +119,13 @@ removed. `spriteSheet({...})` remains ordinary parser-native Tua: core owns its
 typing, completion, hover, and anim8-backed emission, while `tua.sprite` owns
 only static asset/range validation. Third-party executable loading remains
 disabled. New plugin surfaces should wait for shared cached queries and the
-structured lowering work tracked below.
+operation ownership rules described by the completed structured lowering work
+below.
 
 ### P1: Introduce structured lowering
 
-Status: in progress. The first architecture slice landed on 2026-07-15.
+Status: done. The provenance boundary, typed-operation IR, parser normalization,
+and declaration-level annotation slices landed on 2026-07-15.
 
 `tua-core` now lowers through an ordered `LoweringDocument`. Every emitted line
 has a source span and a `LoweringKind`, and the final `LuaEmission` artifact
@@ -132,22 +134,33 @@ built-ins, imports, runtime checks, classes, final class calls, compound
 assignments, sprites, and LuaCats annotations all flow through that boundary.
 Serialization performs the final boundary normalization once after lowering.
 
+`LoweringOperation` is now the internal lowering IR for byte-range insertions
+and replacements. Operations carry their source span and lowering kind, apply
+in deterministic order, and reject invalid ranges, overlapping replacements,
+and offsets that split UTF-8 text. Default parameters, built-ins, imports,
+runtime checks, final class calls, compound assignments, and sprites emit
+operations directly instead of serializing and reconciling whole documents.
+LuaCats aliases and declaration comments are insertion operations tied to their
+typed declarations or module return statement.
+
+Class expansion is applied by the lowering layer before the Luau parser and
+records generated parser-line ownership at that boundary. Initial emission
+provenance is reconstructed from surviving positioned syntax tokens aligned to
+the canonical erased-AST serialization. This removed generated-class marker
+recognition, skipped-source-line scanning, and the erased-Lua line bootstrap.
+
 CLI builds now write source maps directly from `LuaEmission` provenance. The
 old CLI-side parser, skipped-line reconstruction, and helper-specific mapping
 heuristics were removed. Mixed golden output and end-to-end traceback tests
 cover defaults, bundled helper requires, runtime checks, compound assignments,
-classes, and sprites.
+classes, and sprites. Additional IR tests cover multiline replacements,
+non-ASCII source, class-following source positions, declaration-level LuaCats
+provenance, operation conflicts, and deterministic same-offset insertions.
 
-Remaining work:
-
-- Replace the current text-rewrite adapters with typed lowering edits or nodes;
-  the document currently reconciles each adapter's output into structured
-  provenance lines.
-- Move class parser normalization into the lowering layer instead of recognizing
-  the generated class block after parsing.
-- Define a typed operation IR before future plugin lowering requests are
-  reintroduced.
-- Expand golden mappings to multiline and non-ASCII transformations.
+Plugin lowering requests remain intentionally disabled. `TuaPlugin` exposes
+validation diagnostics only; a future plugin-lowering phase must define stable
+operation ownership and pass ordering without permitting overlap with core
+transformations.
 
 ### P1: Split semantic analysis into stable query boundaries
 

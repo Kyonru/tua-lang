@@ -914,6 +914,58 @@ end
 }
 
 #[test]
+fn multiline_types_and_non_ascii_defaults_keep_operation_provenance() {
+    let emission = emit_tua_source_artifact(
+        "src/non_ascii.tua",
+        r#"type Message = {
+  text: string,
+}
+
+local function greet(name: string = "Olá")
+  local count = 1
+  count += 1
+  return name, count
+end
+"#,
+    )
+    .expect("multiline non-ASCII fixture should emit");
+
+    assert_eq!(
+        emission.code,
+        r#"local function greet(name)
+  if name == nil then
+    name = "Olá"
+  end
+  local count = 1
+  count = count + 1
+  return name, count
+end
+"#
+    );
+    assert_eq!(emission.provenance[0].source_span.start.line, 5);
+    assert!(emission.provenance[1..4]
+        .iter()
+        .all(|line| line.lowering == LoweringKind::DefaultParameter));
+    assert!(emission.provenance[1..4]
+        .iter()
+        .all(|line| line.source_span.start.line == 5));
+    assert_eq!(
+        emission.provenance[5],
+        LuaLineProvenance {
+            generated_line: 6,
+            source_span: SourceSpan {
+                start: SourcePosition { line: 7, column: 1 },
+                end: SourcePosition {
+                    line: 7,
+                    column: 13,
+                },
+            },
+            lowering: LoweringKind::CompoundAssignment,
+        }
+    );
+}
+
+#[test]
 fn class_and_sprite_expansions_keep_declaration_provenance() {
     let emission = emit_tua_source_artifact(
         "src/domain.tua",
@@ -957,4 +1009,93 @@ local Sheet = spriteSheet({
     assert_eq!(sprite_runtime.lowering, LoweringKind::Sprite);
     assert_eq!(sprite_comment.source_span.start.line, 7);
     assert_eq!(sprite_runtime.source_span, sprite_comment.source_span);
+}
+
+#[test]
+fn class_normalization_preserves_following_multiline_and_non_ascii_provenance() {
+    let emission = emit_tua_source_artifact(
+        "src/class_following.tua",
+        r#"final class Player {
+  hp: number = 10
+}
+
+type Message = {
+  text: string,
+}
+
+local greeting: string = "Olá"
+local count = 1
+count += 1
+"#,
+    )
+    .expect("class and following typed source should emit");
+
+    let provenance_for = |needle: &str| {
+        let line = emission
+            .code
+            .lines()
+            .position(|line| line.trim() == needle)
+            .expect("generated line should exist");
+        emission.provenance[line]
+    };
+
+    let class_line = provenance_for("local Player = {}");
+    assert_eq!(class_line.lowering, LoweringKind::Class);
+    assert_eq!(class_line.source_span.start.line, 1);
+    assert_eq!(class_line.source_span.end.line, 3);
+
+    let greeting = provenance_for("local greeting = \"Olá\"");
+    assert_eq!(greeting.lowering, LoweringKind::Source);
+    assert_eq!(greeting.source_span.start.line, 9);
+
+    let compound = provenance_for("count = count + 1");
+    assert_eq!(compound.lowering, LoweringKind::CompoundAssignment);
+    assert_eq!(compound.source_span.start.line, 11);
+}
+
+#[test]
+fn luacats_operations_keep_declaration_provenance() {
+    let emission = emit_tua_source_artifact_with_mode(
+        "src/annotated_module.tua",
+        r#"type Player = {
+  name: string,
+}
+
+local score: number = 0
+
+local function heal(player: Player, amount: number): Player
+  return player
+end
+
+return { score = score, heal = heal }
+"#,
+        AnnotationMode::Luacats,
+    )
+    .expect("LuaCats annotations should emit");
+
+    let provenance_for = |needle: &str| {
+        let line = emission
+            .code
+            .lines()
+            .position(|line| line.trim() == needle)
+            .expect("annotation line should exist");
+        emission.provenance[line]
+    };
+
+    let alias = provenance_for("---@alias Player { name: string }");
+    assert_eq!(alias.lowering, LoweringKind::Annotation);
+    assert_eq!(alias.source_span.start.line, 1);
+    assert_eq!(alias.source_span.end.line, 3);
+
+    let local = provenance_for("---@type number");
+    assert_eq!(local.lowering, LoweringKind::Annotation);
+    assert_eq!(local.source_span.start.line, 5);
+
+    let parameter = provenance_for("---@param player Player");
+    assert_eq!(parameter.lowering, LoweringKind::Annotation);
+    assert_eq!(parameter.source_span.start.line, 7);
+
+    let exports = provenance_for("---@class AnnotatedModuleExports");
+    assert_eq!(exports.lowering, LoweringKind::Annotation);
+    assert_eq!(exports.source_span.start.line, 11);
 }

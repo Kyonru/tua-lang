@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 use std::path::Path;
 
 use crate::parser::{SourcePosition, SourceSpan};
@@ -45,6 +46,13 @@ struct ClassBlock {
     end: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ClassLoweringEdit {
+    pub range: Range<usize>,
+    pub replacement: String,
+    pub source_span: SourceSpan,
+}
+
 #[derive(Clone, Debug)]
 struct ClassHeader {
     name: String,
@@ -82,11 +90,11 @@ pub(crate) fn parse_class_declarations(
     (declarations, diagnostics)
 }
 
-pub(crate) fn lower_classes_for_parser(source: &str) -> String {
+pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
     let blocks = class_blocks(source);
 
     if blocks.is_empty() {
-        return source.to_owned();
+        return Vec::new();
     }
 
     let mut declarations = blocks
@@ -97,17 +105,15 @@ pub(crate) fn lower_classes_for_parser(source: &str) -> String {
     for (index, declaration) in declarations.iter_mut().enumerate() {
         declaration.type_id = index + 1;
     }
-    let mut lowered = String::with_capacity(source.len() + declarations.len() * 256);
-    let mut cursor = 0usize;
-
-    for (block, declaration) in blocks.into_iter().zip(declarations.iter()) {
-        lowered.push_str(&source[cursor..block.start]);
-        lowered.push_str(&lower_class_declaration(declaration, &declarations));
-        cursor = block.end;
-    }
-
-    lowered.push_str(&source[cursor..]);
-    lowered
+    blocks
+        .into_iter()
+        .zip(declarations.iter())
+        .map(|(block, declaration)| ClassLoweringEdit {
+            range: block.start..block.end,
+            replacement: lower_class_declaration(declaration, &declarations),
+            source_span: declaration.span,
+        })
+        .collect()
 }
 
 pub(crate) fn class_by_name<'a>(

@@ -136,8 +136,14 @@ and should not depend on LSP-only concepts. Lowering passes flow through an
 ordered `LoweringDocument`; its final `LuaEmission` contains generated Lua plus
 source-span provenance and a lowering kind for every generated line. CLI builds
 must consume that provenance for source maps instead of reparsing source or
-reverse-engineering generated text. The current pass adapters still produce
-text internally and should migrate incrementally to typed lowering edits.
+reverse-engineering generated text. Core source-backed passes emit validated
+`LoweringOperation` insertions and replacements with explicit provenance.
+Operations are deterministic and reject overlaps, invalid ranges, and UTF-8
+splits. Class parser normalization uses the same operation boundary and stores
+generated-line ownership for syntax-token provenance. LuaCats aliases and
+declaration comments are explicit insertion operations; no whole-document text
+rewrite remains. Plugin lowering stays unavailable until a separate design
+defines ownership and ordering without allowing overlap with core passes.
 
 Project and file identity code belongs in the project model, VFS, module graph,
 and analysis host. Do not resolve `require(...)`, static `import(...)`,

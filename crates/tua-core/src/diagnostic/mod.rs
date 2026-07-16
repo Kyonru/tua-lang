@@ -51,6 +51,7 @@ impl DiagnosticCode {
     pub const ASSET_MISSING: Self = Self(2004);
     pub const ASSET_UNSUPPORTED_EXTENSION: Self = Self(2005);
     pub const ASSET_WRONG_KIND: Self = Self(2006);
+    pub const LOWERING_OPERATION: Self = Self(2007);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -137,6 +138,7 @@ impl DiagnosticCode {
                 | Self::ASSET_MISSING
                 | Self::ASSET_UNSUPPORTED_EXTENSION
                 | Self::ASSET_WRONG_KIND
+                | Self::LOWERING_OPERATION
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY

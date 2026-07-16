@@ -306,6 +306,11 @@ type Player = {
 
     let vec2 = &parsed.type_aliases[0];
     assert_eq!(vec2.name, "Vec2");
+    let vec2_span = vec2
+        .span
+        .expect("table alias should retain its declaration span");
+    assert_eq!(vec2_span.start.line, 2);
+    assert_eq!(vec2_span.end.line, 5);
 
     let TuaType::Table(fields) = &vec2.ty else {
         panic!("Vec2 should be represented as a table shape");
@@ -319,6 +324,11 @@ type Player = {
 
     let player = &parsed.type_aliases[1];
     assert_eq!(player.name, "Player");
+    let player_span = player
+        .span
+        .expect("second table alias should retain its declaration span");
+    assert_eq!(player_span.start.line, 7);
+    assert_eq!(player_span.end.line, 11);
 
     let TuaType::Table(fields) = &player.ty else {
         panic!("Player should be represented as a table shape");

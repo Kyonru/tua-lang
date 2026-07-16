@@ -1,7 +1,22 @@
-use crate::{classes, runtime_type::IS_CHECK_HELPER};
+use crate::emit::lowering;
+use crate::parser::ParserLineProvenance;
+use crate::runtime_type::IS_CHECK_HELPER;
 
-pub(super) fn normalize_tua_source_for_luau_parser(source: &str) -> String {
-    let source = classes::lower_classes_for_parser(source);
+pub(super) fn normalize_tua_source_for_luau_parser(
+    source: &str,
+) -> (String, Vec<ParserLineProvenance>) {
+    let (class_source, provenance) = lowering::lower_classes_for_parser(source);
+    let parser_source = normalize_parser_syntax(&class_source);
+    debug_assert_eq!(
+        class_source.split_inclusive('\n').count(),
+        parser_source.split_inclusive('\n').count(),
+        "parser syntax normalization must preserve class-lowered line count"
+    );
+
+    (parser_source, provenance)
+}
+
+fn normalize_parser_syntax(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
     let mut normalized = String::with_capacity(source.len());
     let mut index = 0;

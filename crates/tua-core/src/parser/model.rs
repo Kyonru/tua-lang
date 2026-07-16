@@ -35,6 +35,12 @@ impl SourceSpan {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ParserLineProvenance {
+    pub source_span: SourceSpan,
+    pub class_generated: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct ParsedSource {
     pub raw: RawParsedSource,
@@ -87,6 +93,7 @@ pub struct RawParsedSource {
     pub path: PathBuf,
     pub source: String,
     pub parser_source: String,
+    pub(crate) parser_provenance: Vec<ParserLineProvenance>,
     pub ast: full_moon::ast::Ast,
     pub span: Option<SourceSpan>,
     pub language: ParsedLanguage,
@@ -96,6 +103,7 @@ pub struct RawParsedSource {
 pub struct NormalizedSource {
     pub original: String,
     pub parser_source: String,
+    pub(crate) parser_provenance: Vec<ParserLineProvenance>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

@@ -27,6 +27,12 @@ not to reshuffle code for its own sake.
 - Preserve public helper APIs such as `*_tua_source` when useful for tests.
 - Keep emission and provenance together in `LuaEmission`; CLI source maps must
   consume compiler provenance rather than reconstructing it from generated Lua.
+- Route source-backed emission changes through validated `LoweringOperation`s;
+  do not add another whole-document text adapter or expose plugin lowering that
+  can overlap core operations.
+- Preserve parser normalization provenance when generated syntax changes line
+  positions; emission must consume syntax-backed provenance rather than scan
+  generated text for helper or declaration markers.
 - Use stable IDs and source spans when a feature needs navigation, rename,
   references, or edits.
 - Keep dynamic Lua gradual: represent unknown or `any` explicitly instead of

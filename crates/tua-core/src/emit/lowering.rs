@@ -1,6 +1,16 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 
+use full_moon::ast::{self, LuaVersion};
+use full_moon::node::Node;
+use full_moon::tokenizer::{Lexer, Position, Token, TokenKind, TokenReference};
+
+use crate::classes;
+use crate::parser::ParserLineProvenance;
 use crate::{ParsedSource, SourcePosition, SourceSpan};
+
+mod operation;
+
+pub(crate) use operation::{LoweringOperation, LoweringOperationError};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoweringKind {
@@ -43,145 +53,141 @@ pub(crate) struct LoweringDocument {
 }
 
 impl LoweringDocument {
-    pub(crate) fn from_erased_lua(lua: String, parsed: &ParsedSource) -> Self {
-        let fallback_span = parsed.span.unwrap_or_else(|| line_span(&parsed.source, 1));
-        let source_lines = initial_source_lines(parsed, &lua);
-        let lines = split_lines(&lua)
+    fn from_source(source: &str) -> Self {
+        let fallback_span = line_span(source, 1);
+        let lines = split_lines(source)
             .into_iter()
-            .zip(source_lines)
-            .map(|(text, source_span)| LoweredLine {
+            .enumerate()
+            .map(|(index, text)| LoweredLine {
                 text: text.to_owned(),
-                source_span,
+                source_span: line_span(source, index + 1),
                 lowering: LoweringKind::Source,
             })
             .collect();
 
-        let mut document = Self {
+        Self {
             lines,
             fallback_span,
+        }
+    }
+
+    pub(crate) fn from_erased_ast(ast: &ast::Ast, parsed: &ParsedSource) -> Self {
+        let fallback_span = parsed.span.unwrap_or_else(|| line_span(&parsed.source, 1));
+        let output = ast.to_string();
+        let mut syntax = surviving_syntax_tokens(ast, parsed).into_iter().peekable();
+        let mut document = Self {
+            lines: Vec::new(),
+            fallback_span,
         };
-        document.refine_class_provenance(parsed);
+
+        let lua_version = match parsed.raw.language {
+            crate::ParsedLanguage::Lua => LuaVersion::lua51(),
+            crate::ParsedLanguage::Tua => LuaVersion::luau(),
+        };
+        let output_tokens = Lexer::new(&output, lua_version).collect().unwrap();
+
+        for token in output_tokens {
+            let text = token.to_string();
+            if text.is_empty() {
+                continue;
+            }
+
+            let matched_origin = syntax.peek().and_then(|candidate| {
+                (candidate.kind == token.token_kind() && candidate.text == text)
+                    .then_some((candidate.source_span, candidate.lowering))
+            });
+            if matched_origin.is_some() {
+                syntax.next();
+            }
+            let origin = (token.token_kind() != TokenKind::Whitespace)
+                .then_some(matched_origin)
+                .flatten();
+            document.push_syntax_text(&text, origin);
+        }
+
+        debug_assert_eq!(document.code(), output);
         document
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_erased_lua(lua: String, parsed: &ParsedSource) -> Self {
+        let fallback_span = parsed.span.unwrap_or_else(|| line_span(&parsed.source, 1));
+        let lines = split_lines(&lua)
+            .into_iter()
+            .enumerate()
+            .map(|(index, text)| LoweredLine {
+                text: text.to_owned(),
+                source_span: line_span(&parsed.source, index + 1),
+                lowering: LoweringKind::Source,
+            })
+            .collect();
+
+        Self {
+            lines,
+            fallback_span,
+        }
     }
 
     pub(crate) fn code(&self) -> String {
         self.lines.iter().map(|line| line.text.as_str()).collect()
     }
 
-    pub(crate) fn rewrite(&mut self, lowering: LoweringKind, next: String) {
-        let current = self.code();
-        if current == next {
-            return;
-        }
-
-        let old = std::mem::take(&mut self.lines);
-        let new = split_lines(&next);
-        self.lines = align_rewrite(&old, &new, lowering, self.fallback_span);
+    pub(crate) fn operation(
+        &self,
+        lowering: LoweringKind,
+        range: Range<usize>,
+        replacement: impl Into<String>,
+    ) -> LoweringOperation {
+        let source_span = self.source_span_at(range.start);
+        LoweringOperation::replace(range, replacement, source_span, lowering)
     }
 
-    pub(crate) fn refine_default_parameter_provenance(&mut self, parsed: &ParsedSource) {
-        let mut search_start = 0usize;
-
-        for function in &parsed.function_annotations {
-            for default in &function.default_parameters {
-                let expected = format!("if {} == nil then", default.name);
-                let Some(relative_index) = self.lines[search_start..]
-                    .iter()
-                    .position(|line| line.text.trim() == expected)
-                else {
-                    continue;
-                };
-                let index = search_start + relative_index;
-                let source_span = default.span.or(function.span).unwrap_or(self.fallback_span);
-
-                for line in self.lines.iter_mut().skip(index).take(3) {
-                    if line.lowering == LoweringKind::DefaultParameter {
-                        line.source_span = source_span;
-                    }
-                }
-
-                search_start = index + 3;
-            }
-        }
-    }
-
-    pub(crate) fn refine_builtin_require_provenance(&mut self) {
-        self.refine_generated_require("local __tua_vec2 = require(\"brinevector\")", "__tua_vec2(");
-        self.refine_generated_require(
-            "local __tua_signal = require(\"tuasignal\")",
-            "__tua_signal(",
-        );
-    }
-
-    pub(crate) fn refine_sprite_provenance(&mut self, parsed: &ParsedSource) {
-        let mut search_start = 0usize;
-
-        for (marker, line_count, source_span) in crate::sprite::lowering_provenance_blocks(parsed) {
-            let Some(relative_start) = self.lines[search_start..]
-                .iter()
-                .position(|line| line.text.trim() == marker)
-            else {
-                continue;
-            };
-            let start = search_start + relative_start;
-
-            for line in self.lines.iter_mut().skip(start).take(line_count) {
-                line.source_span = source_span;
-                line.lowering = LoweringKind::Sprite;
-            }
-
-            search_start = start + line_count;
-        }
-    }
-
-    fn refine_class_provenance(&mut self, parsed: &ParsedSource) {
-        let mut search_start = 0usize;
-
-        for class in &parsed.class_declarations {
-            let start_marker = format!("local {} = {{}}", class.name);
-            let end_marker = format!("{}.new = {}_new", class.name, class.name);
-            let Some(relative_start) = self.lines[search_start..]
-                .iter()
-                .position(|line| line.text.trim() == start_marker)
-            else {
-                continue;
-            };
-            let start = search_start + relative_start;
-            let Some(relative_end) = self.lines[start..]
-                .iter()
-                .position(|line| line.text.trim() == end_marker)
-            else {
-                continue;
-            };
-            let end = start + relative_end;
-
-            for line in &mut self.lines[start..=end] {
-                line.source_span = class.span;
-                line.lowering = LoweringKind::Class;
-            }
-
-            search_start = end + 1;
-        }
-    }
-
-    fn refine_generated_require(&mut self, require: &str, constructor: &str) {
-        let Some(source_span) = self
-            .lines
-            .iter()
-            .find(|line| line.text.contains(constructor))
+    pub(crate) fn source_span_at(&self, offset: usize) -> SourceSpan {
+        line_at_offset(&self.lines, offset)
             .map(|line| line.source_span)
-        else {
-            return;
-        };
-        let Some(line) = self
-            .lines
-            .iter_mut()
-            .find(|line| line.text.trim() == require)
-        else {
-            return;
-        };
+            .unwrap_or(self.fallback_span)
+    }
 
-        line.source_span = source_span;
+    pub(crate) fn apply_operations(
+        &mut self,
+        operations: Vec<LoweringOperation>,
+    ) -> Result<(), LoweringOperationError> {
+        if operations.is_empty() {
+            return Ok(());
+        }
+
+        let code = self.code();
+        self.lines = operation::apply_operations(&self.lines, &code, operations)?;
+        Ok(())
+    }
+
+    fn push_syntax_text(&mut self, text: &str, origin: Option<(SourceSpan, LoweringKind)>) {
+        let inherited = self
+            .lines
+            .last()
+            .map(|line| (line.source_span, line.lowering))
+            .unwrap_or((self.fallback_span, LoweringKind::Source));
+        let (source_span, lowering) = origin.unwrap_or(inherited);
+
+        for piece in split_lines(text) {
+            if let Some(line) = self
+                .lines
+                .last_mut()
+                .filter(|line| !line.text.ends_with('\n'))
+            {
+                line.text.push_str(piece);
+                if origin.is_some() {
+                    line.source_span = source_span;
+                    line.lowering = lowering;
+                }
+            } else {
+                self.lines.push(LoweredLine {
+                    text: piece.to_owned(),
+                    source_span,
+                    lowering,
+                });
+            }
+        }
     }
 
     pub(crate) fn finish(self) -> LuaEmission {
@@ -216,172 +222,137 @@ impl LoweringDocument {
 
         LuaEmission { code, provenance }
     }
+
+    fn parser_provenance(&self) -> Vec<ParserLineProvenance> {
+        self.lines
+            .iter()
+            .map(|line| ParserLineProvenance {
+                source_span: line.source_span,
+                class_generated: line.lowering == LoweringKind::Class,
+            })
+            .collect()
+    }
 }
 
-fn align_rewrite(
-    old: &[LoweredLine],
-    new: &[&str],
-    lowering: LoweringKind,
-    fallback_span: SourceSpan,
-) -> Vec<LoweredLine> {
-    let mut output = Vec::with_capacity(new.len());
-    align_region(old, new, lowering, None, None, fallback_span, &mut output);
+pub(crate) fn lower_classes_for_parser(source: &str) -> (String, Vec<ParserLineProvenance>) {
+    let mut document = LoweringDocument::from_source(source);
+    let operations = classes::class_lowering_edits(source)
+        .into_iter()
+        .map(|edit| {
+            LoweringOperation::replace(
+                edit.range,
+                edit.replacement,
+                edit.source_span,
+                LoweringKind::Class,
+            )
+        })
+        .collect();
 
-    output
+    document
+        .apply_operations(operations)
+        .expect("class parser lowering edits should be valid and non-overlapping");
+
+    let provenance = document.parser_provenance();
+    (document.code(), provenance)
 }
 
-fn align_region(
-    old: &[LoweredLine],
-    new: &[&str],
+#[derive(Clone, Debug)]
+struct SyntaxTokenOrigin {
+    start: usize,
+    end: usize,
+    text: String,
+    kind: TokenKind,
+    source_span: SourceSpan,
     lowering: LoweringKind,
-    before_span: Option<SourceSpan>,
-    after_span: Option<SourceSpan>,
-    fallback_span: SourceSpan,
-    output: &mut Vec<LoweredLine>,
+}
+
+fn surviving_syntax_tokens(ast: &ast::Ast, parsed: &ParsedSource) -> Vec<SyntaxTokenOrigin> {
+    let mut tokens = Vec::new();
+
+    for reference in ast.tokens().chain(std::iter::once(ast.eof())) {
+        collect_reference_origins(reference, parsed, &mut tokens);
+    }
+
+    tokens.sort_by_key(|token| (token.start, token.end));
+    tokens.dedup_by(|left, right| {
+        left.start == right.start
+            && left.end == right.end
+            && left.kind == right.kind
+            && left.text == right.text
+    });
+    tokens
+}
+
+fn collect_reference_origins(
+    reference: &TokenReference,
+    parsed: &ParsedSource,
+    output: &mut Vec<SyntaxTokenOrigin>,
 ) {
-    if new.is_empty() {
-        return;
-    }
-
-    if old.is_empty() {
-        let source_span = after_span.or(before_span).unwrap_or(fallback_span);
-        output.extend(
-            new.iter()
-                .map(|line| generated_line(line, source_span, lowering)),
-        );
-        return;
-    }
-
-    let prefix = common_prefix_len(old, new);
-    output.extend(old[..prefix].iter().cloned());
-
-    let old = &old[prefix..];
-    let new = &new[prefix..];
-    let before_span = output.last().map(|line| line.source_span).or(before_span);
-    if new.is_empty() {
-        return;
-    }
-
-    let suffix = common_suffix_len(old, new);
-    let old_middle = &old[..old.len() - suffix];
-    let new_middle = &new[..new.len() - suffix];
-    let old_suffix = &old[old.len() - suffix..];
-    let after_span = old_suffix
-        .first()
-        .map(|line| line.source_span)
-        .or(after_span);
-
-    if let Some((old_anchor, new_anchor)) = unique_anchor(old_middle, new_middle) {
-        let anchor_span = old_middle[old_anchor].source_span;
-        align_region(
-            &old_middle[..old_anchor],
-            &new_middle[..new_anchor],
-            lowering,
-            before_span,
-            Some(anchor_span),
-            fallback_span,
-            output,
-        );
-        output.push(old_middle[old_anchor].clone());
-        align_region(
-            &old_middle[old_anchor + 1..],
-            &new_middle[new_anchor + 1..],
-            lowering,
-            Some(anchor_span),
-            after_span,
-            fallback_span,
-            output,
-        );
-    } else {
-        align_changed_region(
-            old_middle,
-            new_middle,
-            lowering,
-            before_span,
-            after_span,
-            fallback_span,
-            output,
-        );
-    }
-
-    output.extend(old_suffix.iter().cloned());
-}
-
-fn align_changed_region(
-    old: &[LoweredLine],
-    new: &[&str],
-    lowering: LoweringKind,
-    before_span: Option<SourceSpan>,
-    after_span: Option<SourceSpan>,
-    fallback_span: SourceSpan,
-    output: &mut Vec<LoweredLine>,
-) {
-    for (index, text) in new.iter().enumerate() {
-        if old.get(index).is_some_and(|line| line.text == *text) {
-            output.push(old[index].clone());
+    for token in reference
+        .leading_trivia()
+        .chain(std::iter::once(reference.token()))
+        .chain(reference.trailing_trivia())
+    {
+        let Some((source_span, lowering)) = positioned_token_origin(token, parsed) else {
+            continue;
+        };
+        let text = token.to_string();
+        if text.is_empty() {
             continue;
         }
 
-        let source_span = old
-            .get(index)
-            .or_else(|| old.last())
-            .map(|line| line.source_span)
-            .or(after_span)
-            .or(before_span)
-            .unwrap_or(fallback_span);
-        output.push(generated_line(text, source_span, lowering));
+        output.push(SyntaxTokenOrigin {
+            start: token.start_position().bytes(),
+            end: token.end_position().bytes(),
+            text,
+            kind: token.token_kind(),
+            source_span,
+            lowering,
+        });
     }
 }
 
-fn common_prefix_len(old: &[LoweredLine], new: &[&str]) -> usize {
-    old.iter()
-        .zip(new)
-        .take_while(|(old, new)| old.text == **new)
-        .count()
-}
+fn positioned_token_origin(
+    token: &Token,
+    parsed: &ParsedSource,
+) -> Option<(SourceSpan, LoweringKind)> {
+    let start = token.start_position();
+    let end = token.end_position();
+    let text = token.to_string();
+    let positioned_text = parsed.raw.parser_source.get(start.bytes()..end.bytes())?;
 
-fn common_suffix_len(old: &[LoweredLine], new: &[&str]) -> usize {
-    old.iter()
-        .rev()
-        .zip(new.iter().rev())
-        .take_while(|(old, new)| old.text == ***new)
-        .count()
-}
-
-fn unique_anchor(old: &[LoweredLine], new: &[&str]) -> Option<(usize, usize)> {
-    let mut old_occurrences = BTreeMap::<&str, (usize, usize)>::new();
-    let mut new_occurrences = BTreeMap::<&str, (usize, usize)>::new();
-
-    for (index, line) in old.iter().enumerate() {
-        if !line.text.trim().is_empty() {
-            let occurrence = old_occurrences
-                .entry(line.text.as_str())
-                .or_insert((0, index));
-            occurrence.0 += 1;
-        }
-    }
-    for (index, line) in new.iter().enumerate() {
-        if !line.trim().is_empty() {
-            let occurrence = new_occurrences.entry(line).or_insert((0, index));
-            occurrence.0 += 1;
-        }
+    if positioned_text != text {
+        return None;
     }
 
-    old_occurrences
-        .into_iter()
-        .filter_map(|(line, (old_count, old_index))| {
-            let (new_count, new_index) = new_occurrences.get(line).copied()?;
-            (old_count == 1 && new_count == 1).then_some((old_index, new_index))
-        })
-        .min_by_key(|(old_index, _)| old_index.abs_diff(old.len() / 2))
+    parser_range_origin(parsed, start, end)
 }
 
-fn generated_line(text: &str, source_span: SourceSpan, lowering: LoweringKind) -> LoweredLine {
-    LoweredLine {
-        text: text.to_owned(),
-        source_span,
-        lowering,
+fn parser_range_origin(
+    parsed: &ParsedSource,
+    start: Position,
+    end: Position,
+) -> Option<(SourceSpan, LoweringKind)> {
+    let start_index = start.line().max(1) - 1;
+    let end_index = end.line().max(1) - 1;
+    let start_line = parsed.raw.parser_provenance.get(start_index)?;
+    let end_line = parsed
+        .raw
+        .parser_provenance
+        .get(end_index)
+        .unwrap_or(start_line);
+    let class_generated = start_line.class_generated || end_line.class_generated;
+
+    if class_generated {
+        return Some((start_line.source_span, LoweringKind::Class));
     }
+
+    let source_span = SourceSpan {
+        start: start_line.source_span.start,
+        end: end_line.source_span.end,
+    };
+
+    Some((source_span, LoweringKind::Source))
 }
 
 fn line_at_offset(lines: &[LoweredLine], offset: usize) -> Option<&LoweredLine> {
@@ -406,143 +377,6 @@ fn split_lines(text: &str) -> Vec<&str> {
     }
 }
 
-fn initial_source_lines(parsed: &ParsedSource, lua: &str) -> Vec<SourceSpan> {
-    let source_lines = parsed.source.lines().collect::<Vec<_>>();
-    let skipped = erased_type_syntax_lines(parsed);
-    let mut source_line = 1usize;
-    let mut output = Vec::new();
-    let mut class_index = 0usize;
-    let mut active_class = None::<usize>;
-
-    for generated in split_lines(lua) {
-        let body = generated.trim_end_matches(['\r', '\n']);
-
-        if let Some(index) = active_class {
-            let class = &parsed.class_declarations[index];
-            output.push(class.span);
-
-            if body.trim() == format!("{}.new = {}_new", class.name, class.name) {
-                source_line = class.span.end.line + 1;
-                class_index = index + 1;
-                active_class = None;
-            }
-            continue;
-        }
-
-        if let Some(class) = parsed.class_declarations.get(class_index) {
-            if body.trim() == format!("local {} = {{}}", class.name) {
-                output.push(class.span);
-                active_class = Some(class_index);
-                continue;
-            }
-        }
-
-        if body.trim().is_empty() {
-            while skipped.contains(&source_line) {
-                source_line += 1;
-            }
-
-            if source_lines
-                .get(source_line.saturating_sub(1))
-                .is_some_and(|line| line.trim().is_empty())
-            {
-                output.push(line_span(&parsed.source, source_line));
-                source_line += 1;
-            } else {
-                output.push(line_span(
-                    &parsed.source,
-                    source_line.saturating_sub(1).max(1),
-                ));
-            }
-            continue;
-        }
-
-        source_line = next_source_line(&source_lines, &skipped, source_line, body);
-        output.push(line_span(&parsed.source, source_line));
-        source_line += 1;
-    }
-
-    output
-}
-
-fn erased_type_syntax_lines(parsed: &ParsedSource) -> BTreeSet<usize> {
-    // Parser-normalized class blocks can shift AST positions, and table type ranges omit the
-    // closing brace, so bootstrap erased declarations from the original source until class
-    // normalization moves into lowering.
-    erased_type_syntax_lines_from_source(&parsed.source)
-}
-
-fn erased_type_syntax_lines_from_source(source: &str) -> BTreeSet<usize> {
-    let mut lines = BTreeSet::new();
-    let mut type_brace_depth = 0isize;
-    let mut in_enum = false;
-
-    for (index, line) in source.lines().enumerate() {
-        let line_number = index + 1;
-        let trimmed = line.trim();
-
-        if in_enum {
-            lines.insert(line_number);
-            if trimmed == "end" {
-                in_enum = false;
-            }
-            continue;
-        }
-
-        if type_brace_depth > 0 {
-            lines.insert(line_number);
-            type_brace_depth += brace_delta(trimmed);
-            continue;
-        }
-
-        if trimmed.starts_with("enum ") {
-            lines.insert(line_number);
-            in_enum = true;
-            continue;
-        }
-
-        if trimmed.starts_with("type ") || trimmed.starts_with("export type ") {
-            lines.insert(line_number);
-            type_brace_depth = brace_delta(trimmed).max(0);
-        }
-    }
-
-    lines
-}
-
-fn brace_delta(line: &str) -> isize {
-    line.chars()
-        .map(|character| match character {
-            '{' => 1,
-            '}' => -1,
-            _ => 0,
-        })
-        .sum()
-}
-
-fn next_source_line(
-    source_lines: &[&str],
-    skipped: &BTreeSet<usize>,
-    mut source_line: usize,
-    generated_line: &str,
-) -> usize {
-    while source_line <= source_lines.len() {
-        if skipped.contains(&source_line) {
-            source_line += 1;
-            continue;
-        }
-
-        if !generated_line.trim().is_empty() && source_lines[source_line - 1].trim().is_empty() {
-            source_line += 1;
-            continue;
-        }
-
-        return source_line;
-    }
-
-    source_line.clamp(1, source_lines.len().max(1))
-}
-
 fn line_span(source: &str, line: usize) -> SourceSpan {
     let text = source.lines().nth(line.saturating_sub(1)).unwrap_or("");
     SourceSpan {
@@ -560,7 +394,7 @@ mod tests {
     use crate::parse_tua_source;
 
     #[test]
-    fn rewrite_preserves_unchanged_lines_and_marks_generated_lines() {
+    fn operation_preserves_unchanged_lines_and_marks_generated_lines() {
         let parsed = parse_tua_source(
             "src/main.tua",
             "local value: number = 1\nvalue += 2\nprint(value)\n",
@@ -571,10 +405,16 @@ mod tests {
             &parsed,
         );
 
-        document.rewrite(
+        let code = document.code();
+        let start = code.find("value += 2").expect("assignment should exist");
+        let operation = document.operation(
             LoweringKind::CompoundAssignment,
-            "local value = 1\nvalue = value + 2\nprint(value)\n".to_owned(),
+            start..start + "value += 2".len(),
+            "value = value + 2",
         );
+        document
+            .apply_operations(vec![operation])
+            .expect("operation should apply");
         let emission = document.finish();
 
         assert_eq!(emission.provenance[0].lowering, LoweringKind::Source);
@@ -587,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn rewrite_maps_inserted_lines_to_the_following_source_node() {
+    fn operation_maps_inserted_lines_to_explicit_source_span() {
         let parsed = parse_tua_source(
             "src/main.tua",
             "local function greet(name: string = \"Ada\")\n  return name\nend\n",
@@ -598,12 +438,22 @@ mod tests {
             &parsed,
         );
 
-        document.rewrite(
-            LoweringKind::DefaultParameter,
-            "local function greet(name)\n  if name == nil then\n    name = \"Ada\"\n  end\n  return name\nend\n"
-                .to_owned(),
-        );
-        document.refine_default_parameter_provenance(&parsed);
+        let insert_at = document
+            .code()
+            .find('\n')
+            .map(|offset| offset + 1)
+            .expect("function header should end with a newline");
+        let source_span = parsed.function_annotations[0].default_parameters[0]
+            .span
+            .expect("default should have a source span");
+        document
+            .apply_operations(vec![LoweringOperation::insert(
+                insert_at,
+                "  if name == nil then\n    name = \"Ada\"\n  end\n",
+                source_span,
+                LoweringKind::DefaultParameter,
+            )])
+            .expect("operation should apply");
         let emission = document.finish();
 
         assert!(emission.provenance[1..4]
@@ -615,18 +465,26 @@ mod tests {
     }
 
     #[test]
-    fn rewrite_preserves_following_source_after_large_expansion() {
+    fn operation_preserves_following_source_after_large_expansion() {
         let source = "local before = 1\nlocal after = 2\n";
         let parsed = parse_tua_source("src/main.tua", source).expect("fixture should parse");
         let mut document = LoweringDocument::from_erased_lua(source.to_owned(), &parsed);
-        let mut expanded = "local before = 1\n".to_owned();
+        let mut expanded = String::new();
 
         for index in 0..80 {
             expanded.push_str(&format!("-- generated {index}\n"));
         }
-        expanded.push_str("local after = 2\n");
 
-        document.rewrite(LoweringKind::Annotation, expanded);
+        let insert_at = "local before = 1\n".len();
+        let source_span = document.source_span_at(insert_at);
+        document
+            .apply_operations(vec![LoweringOperation::insert(
+                insert_at,
+                expanded,
+                source_span,
+                LoweringKind::Annotation,
+            )])
+            .expect("large insertion should apply");
         let emission = document.finish();
 
         assert_eq!(emission.provenance.len(), 82);
@@ -635,5 +493,89 @@ mod tests {
             .all(|line| line.lowering == LoweringKind::Annotation));
         assert_eq!(emission.provenance[81].lowering, LoweringKind::Source);
         assert_eq!(emission.provenance[81].source_span.start.line, 2);
+    }
+
+    #[test]
+    fn operations_preserve_multiline_and_non_ascii_provenance() {
+        let source = "local text = \"Olá\"\nvalue += 1\n";
+        let parsed = parse_tua_source("src/main.tua", source).expect("fixture should parse");
+        let mut document = LoweringDocument::from_erased_lua(source.to_owned(), &parsed);
+        let start = source.find("value += 1").expect("assignment should exist");
+        let operation = document.operation(
+            LoweringKind::CompoundAssignment,
+            start..start + "value += 1".len(),
+            "value = value + 1\nprint(\"✓\")",
+        );
+
+        document
+            .apply_operations(vec![operation])
+            .expect("multiline operation should apply");
+        let emission = document.finish();
+
+        assert_eq!(
+            emission.code,
+            "local text = \"Olá\"\nvalue = value + 1\nprint(\"✓\")\n"
+        );
+        assert_eq!(emission.provenance[0].lowering, LoweringKind::Source);
+        assert!(emission.provenance[1..]
+            .iter()
+            .all(|line| line.lowering == LoweringKind::CompoundAssignment));
+        assert!(emission.provenance[1..]
+            .iter()
+            .all(|line| line.source_span.start.line == 2));
+    }
+
+    #[test]
+    fn operations_reject_overlaps_and_utf8_splits() {
+        let source = "local text = \"Olá\"\n";
+        let parsed = parse_tua_source("src/main.tua", source).expect("fixture should parse");
+        let mut document = LoweringDocument::from_erased_lua(source.to_owned(), &parsed);
+        let source_span = document.source_span_at(0);
+        let overlap = document
+            .apply_operations(vec![
+                LoweringOperation::replace(6..12, "first", source_span, LoweringKind::BuiltinCall),
+                LoweringOperation::replace(10..15, "second", source_span, LoweringKind::Import),
+            ])
+            .expect_err("overlapping operations should fail");
+        assert!(matches!(overlap, LoweringOperationError::Overlap { .. }));
+
+        let non_ascii = source
+            .find('á')
+            .expect("fixture should contain non-ASCII text");
+        let utf8_split = document
+            .apply_operations(vec![LoweringOperation::insert(
+                non_ascii + 1,
+                "invalid",
+                source_span,
+                LoweringKind::Annotation,
+            )])
+            .expect_err("UTF-8 split should fail");
+        assert_eq!(
+            utf8_split,
+            LoweringOperationError::InvalidUtf8Boundary {
+                offset: non_ascii + 1
+            }
+        );
+    }
+
+    #[test]
+    fn same_offset_insertions_keep_declared_order() {
+        let source = "local first = 1\nlocal second = 2\n";
+        let parsed = parse_tua_source("src/main.tua", source).expect("fixture should parse");
+        let mut document = LoweringDocument::from_erased_lua(source.to_owned(), &parsed);
+        let first_span = document.source_span_at(0);
+        let second_span = document.source_span_at("local first = 1\n".len());
+
+        document
+            .apply_operations(vec![
+                LoweringOperation::insert(0, "-- first\n", first_span, LoweringKind::BuiltinCall),
+                LoweringOperation::insert(0, "-- second\n", second_span, LoweringKind::Import),
+            ])
+            .expect("insertions should apply");
+        let emission = document.finish();
+
+        assert!(emission.code.starts_with("-- first\n-- second\n"));
+        assert_eq!(emission.provenance[0].source_span.start.line, 1);
+        assert_eq!(emission.provenance[1].source_span.start.line, 2);
     }
 }
