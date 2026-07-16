@@ -1,14 +1,13 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::{
-    AssetMetadata, Completion, Diagnostic, ParsedSource, SourcePosition, SourceSpan, TextEdit,
-};
+use crate::{AssetMetadata, Diagnostic, DiagnosticCategory, DiagnosticCode, ParsedSource};
 
 #[derive(Clone, Debug, Default)]
 pub struct PluginRegistry {
-    plugins: Vec<Arc<dyn TuaPlugin>>,
+    plugins: BTreeMap<&'static str, Arc<dyn TuaPlugin>>,
 }
 
 impl PluginRegistry {
@@ -17,104 +16,69 @@ impl PluginRegistry {
     }
 
     pub fn with_plugin(mut self, plugin: impl TuaPlugin + 'static) -> Self {
-        self.register(plugin);
+        let _ = self.register(plugin);
         self
     }
 
-    pub fn register(&mut self, plugin: impl TuaPlugin + 'static) {
-        self.plugins.push(Arc::new(plugin));
+    /// Registers a statically linked plugin. Duplicate or empty names are rejected.
+    pub fn register(&mut self, plugin: impl TuaPlugin + 'static) -> bool {
+        let name = plugin.name();
+
+        if name.is_empty() || self.plugins.contains_key(name) {
+            return false;
+        }
+
+        self.plugins.insert(name, Arc::new(plugin));
+        true
     }
 
     pub fn is_empty(&self) -> bool {
         self.plugins.is_empty()
     }
 
-    pub fn plugins(&self) -> impl Iterator<Item = &dyn TuaPlugin> {
-        self.plugins.iter().map(Arc::as_ref)
+    pub fn contains(&self, name: &str) -> bool {
+        self.plugins.contains_key(name)
     }
 
-    pub fn declarations(&self) -> Vec<PluginDeclaration> {
-        self.plugins()
-            .flat_map(|plugin| plugin.declarations().into_iter())
-            .collect()
+    pub fn plugin_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.plugins.keys().copied()
+    }
+
+    pub fn plugins(&self) -> impl Iterator<Item = &dyn TuaPlugin> {
+        self.plugins.values().map(Arc::as_ref)
     }
 
     pub fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
         self.plugins()
             .flat_map(|plugin| plugin.diagnostics(context).into_iter())
+            .map(|mut diagnostic| {
+                diagnostic.file = context.path.to_path_buf();
+                if diagnostic
+                    .code
+                    .is_none_or(|code| code.category() != DiagnosticCategory::Plugin)
+                {
+                    diagnostic.code = Some(DiagnosticCode::PLUGIN_DIAGNOSTIC);
+                }
+                diagnostic
+            })
             .collect()
     }
 
-    pub fn completions(&self, context: PluginCompletionContext<'_>) -> Vec<Completion> {
-        self.plugins()
-            .flat_map(|plugin| plugin.completions(context).into_iter())
-            .collect()
-    }
-
-    pub fn hovers(&self, context: PluginHoverContext<'_>) -> Vec<PluginHover> {
-        self.plugins()
-            .flat_map(|plugin| plugin.hovers(context).into_iter())
-            .collect()
-    }
-
-    pub fn lowering_requests(&self, context: PluginContext<'_>) -> Vec<PluginLoweringRequest> {
-        self.plugins()
-            .flat_map(|plugin| plugin.lowering_requests(context).into_iter())
-            .collect()
+    pub(crate) fn extend_missing(&mut self, registry: &Self) {
+        for (name, plugin) in &registry.plugins {
+            self.plugins
+                .entry(name)
+                .or_insert_with(|| Arc::clone(plugin));
+        }
     }
 }
 
 pub trait TuaPlugin: fmt::Debug + Send + Sync {
     fn name(&self) -> &'static str;
 
-    fn declarations(&self) -> Vec<PluginDeclaration> {
-        Vec::new()
-    }
-
     fn diagnostics(&self, _context: PluginContext<'_>) -> Vec<Diagnostic> {
         Vec::new()
     }
-
-    fn completions(&self, _context: PluginCompletionContext<'_>) -> Vec<Completion> {
-        Vec::new()
-    }
-
-    fn hovers(&self, _context: PluginHoverContext<'_>) -> Vec<PluginHover> {
-        Vec::new()
-    }
-
-    fn lowering_requests(&self, _context: PluginContext<'_>) -> Vec<PluginLoweringRequest> {
-        Vec::new()
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PluginDeclaration {
-    pub keyword: String,
-    pub kind: PluginDeclarationKind,
-    pub documentation: Option<String>,
-}
-
-impl PluginDeclaration {
-    pub fn new(keyword: impl Into<String>, kind: PluginDeclarationKind) -> Self {
-        Self {
-            keyword: keyword.into(),
-            kind,
-            documentation: None,
-        }
-    }
-
-    pub fn with_documentation(mut self, documentation: impl Into<String>) -> Self {
-        self.documentation = Some(documentation.into());
-        self
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PluginDeclarationKind {
-    TopLevelDeclaration,
-    DomainBlock,
-    HelperCall,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -123,75 +87,6 @@ pub struct PluginContext<'a> {
     pub source: &'a str,
     pub parsed: Option<&'a ParsedSource>,
     pub assets: &'a [AssetMetadata],
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct PluginCompletionContext<'a> {
-    pub path: &'a Path,
-    pub source: &'a str,
-    pub parsed: Option<&'a ParsedSource>,
-    pub position: SourcePosition,
-    pub assets: &'a [AssetMetadata],
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct PluginHoverContext<'a> {
-    pub path: &'a Path,
-    pub source: &'a str,
-    pub parsed: Option<&'a ParsedSource>,
-    pub position: SourcePosition,
-    pub assets: &'a [AssetMetadata],
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PluginHover {
-    pub contents: String,
-    pub span: Option<SourceSpan>,
-    pub documentation: Option<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PluginLoweringRequest {
-    pub span: SourceSpan,
-    pub operation: PluginLoweringOperation,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PluginLoweringOperation {
-    RequireModule {
-        module: String,
-    },
-    DefineSprite {
-        name: String,
-        image_path: String,
-        frame_width: u32,
-        frame_height: u32,
-        animations: Vec<PluginAnimationDefinition>,
-    },
-    Call {
-        callee: String,
-        arguments: Vec<PluginLoweringValue>,
-    },
-    InsertText {
-        edit: TextEdit,
-    },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PluginLoweringValue {
-    String(String),
-    Number(String),
-    Boolean(bool),
-    Identifier(String),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PluginAnimationDefinition {
-    pub name: String,
-    pub start_frame: u32,
-    pub end_frame: u32,
-    pub fps: String,
-    pub looping: bool,
 }
 
 #[cfg(test)]

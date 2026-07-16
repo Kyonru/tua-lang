@@ -42,8 +42,9 @@ Current future work is now more about precision and domain depth:
 
 After that, Phase 13 explores LOVE domain extensions:
 
-- a conservative plugin architecture for domain declarations and tooling,
-  starting with the [Domain Plugins](plugins.md) design;
+- a conservative built-in validation plugin registry, with broader domain
+  tooling deferred until shared query and lowering boundaries exist; see
+  [Domain Plugins](plugins.md);
 - built-in vector ergonomics, starting with `Vec2` and `vec2(x, y)`
   BrineVector-backed emission;
 - opt-in LuaJIT guidance for stable local/table shapes in hot LOVE code;

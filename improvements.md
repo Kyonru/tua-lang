@@ -105,21 +105,21 @@ separate P2 watcher item.
 
 ### P1: Complete or narrow the plugin architecture
 
-The registry in [`plugin/mod.rs`](crates/tua-core/src/plugin/mod.rs) advertises
-declarations, diagnostics, completions, hover snippets, and structured
-lowering requests. Production analysis visibly consumes plugin diagnostics,
-but sprite completion and emission still use direct hard-coded paths.
+Status: done on 2026-07-15 by narrowing the executable surface.
 
-Improvements:
+The Rust registry now supports built-in validation diagnostics only. Diagnostic
+plugins run while an `AnalysisFile` is built, so their results share the normal
+file/revision cache instead of running from LSP handlers. Plugins are keyed and
+ordered by stable names; duplicate names are rejected, built-in `tua.*` owners
+cannot be replaced by configured registries, and returned diagnostics are
+restricted to the current file and the reserved `TL5000`-`TL5999` range.
 
-- Route plugin declarations, completion, hover, and lowering through shared
-  cached analysis queries.
-- Define ownership, ordering, conflict, and diagnostic-code rules.
-- Keep third-party executable plugins disabled until API stability and trust
-  boundaries are established.
-- Remove unsupported trait surfaces if they are not ready to be integrated.
-- Keep ordinary Lua-compatible APIs, such as `spriteSheet({...})`, preferred
-  over new syntax unless a plugin demonstrates clear semantic value.
+The unused declaration, completion, hover, and lowering trait surfaces were
+removed. `spriteSheet({...})` remains ordinary parser-native Tua: core owns its
+typing, completion, hover, and anim8-backed emission, while `tua.sprite` owns
+only static asset/range validation. Third-party executable loading remains
+disabled. New plugin surfaces should wait for shared cached queries and the
+structured lowering work tracked below.
 
 ### P1: Introduce structured lowering
 
@@ -130,7 +130,7 @@ compose and makes source mapping fragile.
 
 Improvements:
 
-- Lower typed syntax and plugin requests into a small AST or lowering IR.
+- Lower typed syntax and future plugin requests into a small AST or lowering IR.
 - Preserve source provenance through every transformed node.
 - Format once after lowering.
 - Add golden output and traceback/source-map tests for mixed transformations.
@@ -385,7 +385,8 @@ Results from the 2026-07-15 audit:
 4. Replace completion project scans with incremental semantic indexes.
 5. Fix watch-mode dependency invalidation.
 6. Restore Clippy and introduce CI/release gates.
-7. Consolidate plugin lowering, sprite metadata, and other domain intelligence
-   through shared semantic queries.
+7. Consolidate sprite metadata and other domain intelligence through shared
+   semantic queries, then define the IR boundary needed before plugin lowering
+   can return.
 8. Continue type-system, source-map, configuration, packaging, and
    documentation improvements after the editor correctness baseline is stable.

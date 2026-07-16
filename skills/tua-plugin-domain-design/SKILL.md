@@ -9,14 +9,21 @@ Plugins should add domain-aware tooling, not arbitrary macro power.
 
 ## Boundaries
 
-Allow plugins to contribute:
+The implemented `TuaPlugin` surface is deliberately validation-only. Built-in
+Rust plugins may contribute deterministic diagnostics over parser-owned source
+and indexed asset metadata. Plugin names are stable ownership keys, and plugin
+diagnostics must stay in the reserved diagnostic range.
+
+Treat these as future design directions, not current plugin hooks:
 
 - top-level declarations;
 - domain blocks;
-- validation diagnostics;
 - structured lowering requests;
 - completions, hover, signature help, and editor metadata;
 - optional external-tool metadata.
+
+Do not add one of those hooks until it has a shared cached analysis query,
+deterministic ordering/conflict rules, and production consumers outside tests.
 
 Do not allow plugins to:
 
@@ -29,6 +36,8 @@ Do not allow plugins to:
 ## Design Workflow
 
 - Start with a built-in Rust plugin when proving the architecture.
+- Prefer parser-native ordinary APIs and a validation plugin before adding new
+  syntax or extension points.
 - Define AST/IR inputs and structured outputs before adding syntax.
 - Require deterministic diagnostics and stable spans.
 - Keep third-party executable plugins disabled until the security model exists.

@@ -155,11 +155,7 @@ pub use parser::{
     RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
     TypedSourceModel,
 };
-pub use plugin::{
-    PluginAnimationDefinition, PluginCompletionContext, PluginContext, PluginDeclaration,
-    PluginDeclarationKind, PluginHover, PluginHoverContext, PluginLoweringOperation,
-    PluginLoweringRequest, PluginLoweringValue, PluginRegistry, TuaPlugin,
-};
+pub use plugin::{PluginContext, PluginRegistry, TuaPlugin};
 pub use project::project_description;
 pub use project_model::{
     LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel, ProjectModelOptions,

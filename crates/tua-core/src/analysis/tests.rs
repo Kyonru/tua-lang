@@ -1,12 +1,13 @@
 use super::*;
 use crate::{
-    DiagnosticCode, DiagnosticSeverity, Fixture, PluginContext, PluginDeclaration,
-    PluginDeclarationKind, PluginRegistry, TuaPlugin,
+    DiagnosticCode, DiagnosticSeverity, Fixture, PluginContext, PluginRegistry, TuaPlugin,
 };
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TempProject {
@@ -66,13 +67,6 @@ impl TuaPlugin for AnalysisTestPlugin {
         "tua.analysis-test"
     }
 
-    fn declarations(&self) -> Vec<PluginDeclaration> {
-        vec![PluginDeclaration::new(
-            "testdecl",
-            PluginDeclarationKind::TopLevelDeclaration,
-        )]
-    }
-
     fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
         if context.source.contains("plugin_problem") {
             vec![Diagnostic::new(
@@ -86,6 +80,50 @@ impl TuaPlugin for AnalysisTestPlugin {
         } else {
             Vec::new()
         }
+    }
+}
+
+#[derive(Debug)]
+struct CountingAnalysisPlugin {
+    calls: Arc<AtomicUsize>,
+}
+
+impl TuaPlugin for CountingAnalysisPlugin {
+    fn name(&self) -> &'static str {
+        "project.counting"
+    }
+
+    fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+
+        vec![Diagnostic::new(
+            context.path,
+            1,
+            1,
+            DiagnosticSeverity::Warning,
+            "counted plugin diagnostic",
+        )
+        .with_code(DiagnosticCode::PLUGIN_DIAGNOSTIC)]
+    }
+}
+
+#[derive(Debug)]
+struct ConflictingSpritePlugin;
+
+impl TuaPlugin for ConflictingSpritePlugin {
+    fn name(&self) -> &'static str {
+        "tua.sprite"
+    }
+
+    fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
+        vec![Diagnostic::new(
+            context.path,
+            1,
+            1,
+            DiagnosticSeverity::Warning,
+            "configured plugin replaced sprite owner",
+        )
+        .with_code(DiagnosticCode::PLUGIN_DIAGNOSTIC)]
     }
 }
 
@@ -167,11 +205,7 @@ fn plugin_registry_is_inert_until_registered_and_flows_into_diagnostics() {
 
     let snapshot = host.snapshot();
 
-    assert!(snapshot
-        .plugin_registry()
-        .declarations()
-        .iter()
-        .any(|declaration| declaration.keyword == "spriteSheet"));
+    assert!(snapshot.plugin_registry().contains("tua.sprite"));
     assert!(!snapshot
         .diagnostics(&path)
         .iter()
@@ -182,14 +216,48 @@ fn plugin_registry_is_inert_until_registered_and_flows_into_diagnostics() {
     let snapshot = host.snapshot();
     let diagnostics = snapshot.diagnostics(&path);
 
-    assert_eq!(
-        snapshot.plugin_registry().declarations()[0].keyword,
-        "testdecl"
-    );
+    assert!(snapshot.plugin_registry().contains("tua.analysis-test"));
+    assert!(snapshot.plugin_registry().contains("tua.sprite"));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == Some(DiagnosticCode::PLUGIN_DIAGNOSTIC)
             && diagnostic.message == "analysis test plugin diagnostic"
     }));
+}
+
+#[test]
+fn plugin_diagnostics_are_cached_per_analysis_revision() {
+    let path = PathBuf::from("src/main.tua");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut host = AnalysisHost::new();
+
+    host.set_plugin_registry(PluginRegistry::new().with_plugin(CountingAnalysisPlugin {
+        calls: Arc::clone(&calls),
+    }));
+    host.set_file(&path, "local value = 1\n");
+
+    let snapshot = host.snapshot();
+
+    assert_eq!(snapshot.pipeline_diagnostics(&path).len(), 1);
+    assert_eq!(snapshot.pipeline_diagnostics(&path).len(), 1);
+    assert_eq!(host.snapshot().pipeline_diagnostics(&path).len(), 1);
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn built_in_plugin_names_cannot_be_replaced_by_configured_plugins() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_plugin_registry(PluginRegistry::new().with_plugin(ConflictingSpritePlugin));
+    host.set_file(&path, "local value = 1\n");
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot.plugin_registry().contains("tua.sprite"));
+    assert!(!snapshot
+        .pipeline_diagnostics(&path)
+        .iter()
+        .any(|diagnostic| diagnostic.message == "configured plugin replaced sprite owner"));
 }
 
 #[test]
@@ -727,11 +795,7 @@ fn ecs_domain_support_is_disabled_by_default() {
 
     let snapshot = host.snapshot();
 
-    assert!(!snapshot
-        .plugin_registry()
-        .declarations()
-        .iter()
-        .any(|declaration| declaration.keyword == "ecs"));
+    assert!(!snapshot.plugin_registry().contains("tua.ecs"));
     assert!(
         completion_labels(&snapshot.completion(&path, SourcePosition { line: 1, column: 5 }))
             .is_empty()
@@ -759,11 +823,7 @@ fn sprite_plugin_reports_missing_assets_and_invalid_ranges() {
     let snapshot = host.snapshot();
     let diagnostics = snapshot.pipeline_diagnostics(&path);
 
-    assert!(snapshot
-        .plugin_registry()
-        .declarations()
-        .iter()
-        .any(|declaration| declaration.keyword == "spriteSheet"));
+    assert!(snapshot.plugin_registry().contains("tua.sprite"));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == Some(DiagnosticCode::PLUGIN_SPRITE)
             && diagnostic.message.contains("missing sprite image asset")
@@ -839,11 +899,7 @@ local call = world.a
         )
         .expect("world:add should have signature help");
 
-    assert!(snapshot
-        .plugin_registry()
-        .declarations()
-        .iter()
-        .any(|declaration| declaration.keyword == "ecs"));
+    assert!(snapshot.plugin_registry().contains("tua.ecs"));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == Some(DiagnosticCode::PLUGIN_ECS_COMPONENT_VALUE)
             && diagnostic.message.contains("expected number")

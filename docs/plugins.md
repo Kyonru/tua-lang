@@ -14,34 +14,35 @@ Third-party executable plugins are not available today.
 
 ## Current Implementation
 
-Tua currently has an experimental Rust-only plugin registry in `tua-core`.
-`AnalysisHost` owns an optional `PluginRegistry`; the effective default registry
-includes the built-in `tua.sprite` prototype, but ordinary projects behave as
-before unless they use recognized `spriteSheet({...})` helper calls.
+Tua currently has an experimental Rust-only validation registry in `tua-core`.
+`AnalysisHost` owns an optional `PluginRegistry`; the effective registry always
+reserves the built-in `tua.sprite` validator and adds `tua.ecs` when
+`[ecs].enabled = true`.
 
-Registered Rust plugins can currently contribute:
+The executable `TuaPlugin` trait currently contributes diagnostics only. A
+plugin receives the current path, source, parsed source when available, and
+indexed asset metadata. It runs while the cached `AnalysisFile` is built, not
+from an LSP request handler. The same file and analysis revision therefore reuse
+the same plugin diagnostics.
 
-- declaration metadata;
-- diagnostics through the normal analysis snapshot pipeline;
-- completion items;
-- hover snippets;
-- structured lowering requests.
+Ownership and ordering are explicit:
 
-Diagnostics are wired into the default analysis pipeline today. Sprite lowering
-also uses structured helper metadata when emitting Lua. The other
-contribution types are exposed by the registry so future built-in domain plugins
-can route them through completion, hover, and emission without inventing another
-plugin API. Plugin diagnostics use the reserved `TL5000`-`TL5999` range.
+- non-empty plugin names are unique;
+- duplicate registration is rejected;
+- built-in `tua.*` names are registered before configured Rust registries and
+  cannot be replaced;
+- plugins run in lexical name order, preserving each plugin's diagnostic order;
+- diagnostics are constrained to the current file;
+- missing or non-plugin codes become `TL5001`, while stable codes in the
+  reserved `TL5000`-`TL5999` range are preserved;
+- normal diagnostic deduplication resolves identical diagnostic keys (file,
+  position, severity, and code) using that deterministic order.
 
-The first always-on built-in consumer is the experimental `tua.sprite` plugin.
-It contributes the `spriteSheet` helper model, asset/range diagnostics,
-structured lowering metadata for anim8-backed output, and lazy bundled
-`anim8.lua` build output. The opt-in ECS plugin is also available. When
-`[ecs].enabled = true`,
-`AnalysisHost` adds the Rust `tua.ecs` plugin to the effective registry. That
-plugin contributes ECS declaration metadata and diagnostics, while the typed
-`ecs` API surface is provided through the shared type environment so completion,
-hover, and signature help use the same semantic path as other Tua builtins.
+Sprite parsing, typing, completion, hover, and anim8-backed emission are core
+language services over the ordinary `spriteSheet({...})` helper call. The
+`tua.sprite` plugin owns only asset and animation-range validation. Likewise,
+the typed `ecs` API is provided through the shared type environment, while the
+opt-in `tua.ecs` plugin owns ECS-specific validation.
 
 ## Goals
 
@@ -49,15 +50,16 @@ Domain plugins should make game code easier to validate, complete, inspect, and
 lower to readable Lua. A plugin should provide static facts that the compiler,
 language server, and editor can share.
 
-Good plugin features:
+Good validation plugin features today:
 
-- describe domain declarations with stable spans;
 - validate static inputs such as asset paths, frame sizes, and mode names;
-- lower domain syntax through structured compiler metadata;
-- provide completions, hover text, diagnostics, and editor metadata;
-- emit Lua that remains LuaJIT and LOVE compatible;
-- avoid hidden runtime requirements unless the project explicitly imports a
-  normal Lua dependency.
+- consume parser and project metadata already owned by Tua;
+- return deterministic diagnostics with stable spans and plugin-range codes;
+- remain side-effect free and fast enough to run during cached file analysis.
+
+Completion, hover, declarations, editor metadata, and structured lowering are
+possible future surfaces. They should not return to `TuaPlugin` until they have
+shared cached analysis queries, conflict rules, and a Tua-owned lowering IR.
 
 Bad plugin features:
 
@@ -67,24 +69,18 @@ Bad plugin features:
 - hiding large runtime behavior behind Tua syntax;
 - returning raw Lua strings as the main lowering API.
 
-## V1 Extension Surface
+## Current Extension Surface
 
-V1 plugins may extend only declaration-shaped or recognized helper-call parts of
-the language. This keeps the parser, type checker, LSP, and emitter
-deterministic.
+The current executable surface is one validation pass over parser-owned syntax
+and project metadata. Plugins do not add syntax, globals, types, completion,
+hover, editor commands, or emitted code. Recognized helpers such as
+`spriteSheet({...})` must first exist as ordinary core language APIs.
 
-Allowed extension points:
+Potential future extension points include cached editor metadata and structured
+lowering requests, but those are design directions rather than public trait
+methods today.
 
-- **Recognized helper calls**: for example `local Player = spriteSheet({ ... })`.
-- **Domain blocks**: structured blocks owned by a registered declaration kind.
-- **Validation passes**: diagnostics over parsed plugin declarations and project
-  metadata.
-- **Structured lowering metadata**: requests to emit calls, tables, assignments,
-  module requires, or generated constants through Tua-owned lowering APIs.
-- **Editor metadata**: completions, hover, diagnostics, document symbols,
-  semantic-token hints, asset previews, and future inspector data.
-
-V1 plugins may not:
+Validation plugins may not:
 
 - rewrite arbitrary Lua/Tua expressions;
 - add new expression operators;
@@ -94,9 +90,8 @@ V1 plugins may not:
 - emit raw Lua strings as the primary lowering API;
 - depend on network access during normal check/build/LSP requests.
 
-Plugins should be additive. If a plugin is disabled, ordinary Lua/Tua files
-should still parse, check, and build as before, except for files that use that
-plugin's domain syntax.
+Validation plugins are additive. Disabling one removes its domain diagnostics;
+it does not change parsing, typing, completion, hover, or emission.
 
 ## Plugin Kinds
 
@@ -104,18 +99,15 @@ Tua should support implementation choices in this order.
 
 ### Rust Built-In Plugins
 
-Rust built-ins are the safest v1 starting point. They compile with Tua, use
-normal Rust types for AST and lowering IR, and can share existing parser,
-diagnostic, asset, and LSP infrastructure.
+Rust built-ins are the safest v1 starting point. They compile with Tua and share
+existing parser, diagnostic, and asset metadata without executing project code.
 
 Use Rust built-ins for:
 
-- proving the plugin registry;
+- deterministic domain validation;
 - LOVE asset validation;
 - sprite/animation experiments;
-- richer typed vector helpers if they need parser or lowering support beyond
-  the built-in `Vec2`/`vec2(x, y)` BrineVector-backed helper;
-- features that must be fast and deterministic in the LSP.
+- features that must be fast and deterministic during editor analysis.
 
 Tradeoff: users cannot author plugins without changing Tua itself.
 
@@ -201,8 +193,9 @@ are proven by built-in plugins.
 
 ## Structured Lowering
 
-Plugins should lower to a small Tua-owned IR. The emitter then turns that IR
-into readable Lua.
+Structured plugin lowering is not implemented. Before lowering returns to the
+plugin API, Tua should define a small owned IR and make the emitter consume it
+through the same cached analysis snapshot.
 
 Useful IR nodes:
 
@@ -214,13 +207,12 @@ Useful IR nodes:
 - plain identifiers and field chains;
 - generated comments for traceability.
 
-Raw Lua string emission should be reserved for an escape hatch, not the primary
-API. String emission is difficult to format, hard to map back to source spans,
-and easy to make unsafe.
+Raw Lua string emission should not be a plugin API. String emission is difficult
+to format, hard to map back to source spans, and easy to make unsafe.
 
 ## Sprite And Animation Example
 
-The built-in experimental sprite plugin owns one helper-call shape:
+Core Tua owns one experimental ordinary helper-call shape:
 
 ```tua
 local Player = spriteSheet({
@@ -261,7 +253,7 @@ Editor examples:
   preview-gated `Tua: Preview Sprite Animations` command, including the command
   link shown when hovering a parsed sprite sheet binding.
 
-Possible structured lowering:
+Current emitted Lua shape:
 
 ```lua
 local PlayerImage = love.graphics.newImage("assets/player.png")
@@ -277,10 +269,12 @@ local Player = {
 }
 ```
 
-The exact emitted Lua can still change before stabilization, but it must remain
-readable and ordinary. When generated Lua needs `anim8`, `tua build` writes the
-bundled `anim8.lua` runtime into the output directory unless the project already
-provides that module. The plugin does not require a hidden Tua runtime.
+The parser records sprite metadata, the `tua.sprite` validator reports static
+asset/range errors, and the core emitter produces the Lua above. The exact
+output can still change before stabilization, but it must remain readable and
+ordinary. When generated Lua needs `anim8`, `tua build` writes the bundled
+`anim8.lua` runtime into the output directory unless the project already
+provides that module. There is no hidden Tua runtime.
 
 ## Asset Validation Example
 
@@ -352,10 +346,10 @@ For Lua-authored plugins, Tua should additionally require:
 
 ## LSP Integration
 
-Plugin facts should flow through the same analysis snapshot as core facts. LSP
-handlers should not call plugins directly during a request.
+Plugin diagnostics flow through the same cached analysis files and snapshots as
+core diagnostics. LSP handlers do not call plugins directly during a request.
 
-Plugin-provided editor data can include:
+Future plugin-provided editor data could include:
 
 - completions;
 - hover text;
@@ -367,18 +361,20 @@ Plugin-provided editor data can include:
 - future inspector metadata for editor or Feather-style tooling.
 
 Request handlers should stay mostly protocol conversion plus snapshot access.
-If a plugin feature needs project-wide state, the analysis host should index it
-before the request.
+These are not current `TuaPlugin` methods. If a future plugin feature needs
+project-wide state, the analysis host must index it before the request and own
+its ordering and conflict behavior.
 
 ## V1 Recommendation
 
 The recommended implementation path is:
 
-1. A Rust-only plugin registry in `tua-core`. Status: done.
-2. One built-in asset validation plugin.
-3. One small experimental declaration plugin, such as a sprite metadata parser,
-   behind an explicit config flag.
-4. Structured lowering IR for any emitted code.
+1. A Rust-only validation registry in `tua-core`. Status: done.
+2. Built-in sprite and opt-in ECS validators over shared parser/project facts.
+   Status: done.
+3. Shared cached query types for any future completion, hover, or inspector
+   contributions.
+4. A structured lowering IR before exposing plugin emission hooks.
 5. No third-party executable plugins.
 
 Static manifest plugins can follow once the registry exists. Lua-authored

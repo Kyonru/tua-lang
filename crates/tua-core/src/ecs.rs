@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::plugin::{
-    PluginContext, PluginDeclaration, PluginDeclarationKind, PluginHover, TuaPlugin,
-};
+use crate::plugin::{PluginContext, TuaPlugin};
 use crate::types::{FunctionType, TableField, TableShape, Type};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
@@ -47,19 +45,8 @@ impl TuaPlugin for EcsPlugin {
         "tua.ecs"
     }
 
-    fn declarations(&self) -> Vec<PluginDeclaration> {
-        vec![
-            PluginDeclaration::new("ecs", PluginDeclarationKind::TopLevelDeclaration)
-                .with_documentation("Opt-in ECS helper module for tiny-ecs-style LOVE projects."),
-        ]
-    }
-
     fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
         diagnostics_for_source(context)
-    }
-
-    fn hovers(&self, _context: crate::plugin::PluginHoverContext<'_>) -> Vec<PluginHover> {
-        Vec::new()
     }
 }
 

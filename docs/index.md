@@ -27,9 +27,9 @@ leaving the normal Lua and LOVE workflow.
   `music "assets/theme.ogg"`, `font("assets/ui.ttf", 18)`, `shader`,
   `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, with static
   path validation for helpers and native LOVE constructors that load assets.
-- An experimental built-in `spriteSheet({...})` helper plugin that validates
-  sprite sheet image paths and frame ranges, then emits readable anim8-backed
-  Lua with bundled `anim8.lua` build output.
+- An experimental built-in `spriteSheet({...})` helper that validates sprite
+  sheet image paths and frame ranges through a built-in validation plugin, then
+  emits readable anim8-backed Lua with bundled `anim8.lua` build output.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.
 - CLI commands for init, check, fmt, lint, build, traceback remapping, watch,

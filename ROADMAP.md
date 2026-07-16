@@ -1980,25 +1980,28 @@ Acceptance:
 
 ### 72. `feat(plugins): add experimental plugin registry`
 
-Status: done.
+Status: done with a deliberately narrow validation-only Rust API. The earlier
+declaration, completion, hover, and lowering methods were removed because they
+had no production query or emitter consumer.
 
 Scope:
 
 - Add a plugin registry in `tua-core`.
 - Register built-in domain plugins through Rust first.
-- Expose plugin-provided:
-  - declarations;
-  - diagnostics;
-  - completions;
-  - hover snippets;
-  - lowering hooks or structured lowering requests.
+- Expose plugin-provided diagnostics over parsed source and indexed asset
+  metadata through the normal cached analysis-file build.
+- Order plugins by stable name, reject duplicate ownership, and constrain
+  diagnostics to the current file and reserved plugin diagnostic range.
 - Keep the registry disabled for third-party executable plugins until the API is
   proven.
+- Keep completion, hover, typing, and lowering in core until shared plugin query
+  and structured IR boundaries exist.
 
 Acceptance:
 
-- Existing behavior is unchanged when no plugin contributes syntax.
-- A test plugin can register one declaration and one diagnostic.
+- Existing parsing, typing, completion, hover, and emission are unchanged when
+  no plugin contributes diagnostics.
+- A test plugin can register one cached validation diagnostic.
 - Plugin diagnostics use stable Tua diagnostic codes or a reserved plugin code
   range.
 
@@ -2125,7 +2128,8 @@ Scope:
   - frame ranges;
   - FPS;
   - looping mode.
-- Prefer structured lowering metadata over raw Lua string emission.
+- Keep parsed sprite metadata structured and core-owned until the shared
+  lowering IR is ready.
 - Consider bundled anim8-backed output as the first target.
 
 Example direction:

@@ -8,15 +8,9 @@ use crate::asset::{self, AssetIndex, AssetLoaderKind, AssetMetadata, AssetValida
 use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, token_text,
 };
-use crate::plugin::{
-    PluginAnimationDefinition, PluginCompletionContext, PluginContext, PluginDeclaration,
-    PluginDeclarationKind, PluginLoweringOperation, PluginLoweringRequest, TuaPlugin,
-};
+use crate::plugin::{PluginContext, TuaPlugin};
 use crate::types::{FunctionType, TableField, Type};
-use crate::{
-    Completion, CompletionKind, Diagnostic, DiagnosticCode, DiagnosticSeverity, SourcePosition,
-    SourceSpan, TypedParameter,
-};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, SourceSpan, TypedParameter};
 
 pub(crate) const HELPER_NAME: &str = "spriteSheet";
 pub(crate) const TYPE_NAME: &str = "SpriteSheet";
@@ -64,13 +58,6 @@ impl TuaPlugin for SpritePlugin {
         "tua.sprite"
     }
 
-    fn declarations(&self) -> Vec<PluginDeclaration> {
-        vec![
-            PluginDeclaration::new(HELPER_NAME, PluginDeclarationKind::HelperCall)
-                .with_documentation("Experimental LOVE sprite sheet helper."),
-        ]
-    }
-
     fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
         let declarations = context
             .parsed
@@ -83,40 +70,6 @@ impl TuaPlugin for SpritePlugin {
         }
 
         diagnostics
-    }
-
-    fn completions(&self, context: PluginCompletionContext<'_>) -> Vec<Completion> {
-        if !line_prefix_allows_sprite_completion(context.source, context.position) {
-            return Vec::new();
-        }
-
-        vec![Completion {
-            label: HELPER_NAME.to_owned(),
-            kind: CompletionKind::Snippet,
-            detail: Some("Tua sprite sheet helper".to_owned()),
-            documentation: Some(
-                "Creates a LOVE sprite sheet structure and lowers to anim8-backed Lua.".to_owned(),
-            ),
-            insert_text: Some(sprite_sheet_snippet().to_owned()),
-            filter_text: None,
-            is_snippet: true,
-            module_path: None,
-            source_module: Some(self.name().to_owned()),
-            additional_text_edits: Vec::new(),
-        }]
-    }
-
-    fn lowering_requests(&self, context: PluginContext<'_>) -> Vec<PluginLoweringRequest> {
-        context
-            .parsed
-            .map(|parsed| {
-                parsed
-                    .sprite_declarations
-                    .iter()
-                    .filter_map(sprite_lowering_request)
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 }
 
@@ -570,32 +523,6 @@ fn sprite_diagnostic(path: &Path, span: SourceSpan, message: impl Into<String>) 
     .with_code(DiagnosticCode::PLUGIN_SPRITE)
 }
 
-fn sprite_lowering_request(declaration: &SpriteDeclaration) -> Option<PluginLoweringRequest> {
-    let frame = declaration.frame?;
-    let image_path = declaration.image_path.clone()?;
-
-    Some(PluginLoweringRequest {
-        span: declaration.span,
-        operation: PluginLoweringOperation::DefineSprite {
-            name: declaration.name.clone(),
-            image_path,
-            frame_width: frame.width,
-            frame_height: frame.height,
-            animations: declaration
-                .animations
-                .iter()
-                .map(|animation| PluginAnimationDefinition {
-                    name: animation.name.clone(),
-                    start_frame: animation.start_frame,
-                    end_frame: animation.end_frame,
-                    fps: animation.fps.clone(),
-                    looping: animation.looping,
-                })
-                .collect(),
-        },
-    })
-}
-
 fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
     let image_local = format!("{}Image", declaration.name);
     let grid_local = format!("{}Grid", declaration.name);
@@ -665,24 +592,6 @@ fn lower_animation(animation: &SpriteAnimation, grid_local: &str) -> String {
     )
 }
 
-fn line_prefix_allows_sprite_completion(source: &str, position: SourcePosition) -> bool {
-    let mut line = "";
-
-    for (index, candidate) in source.split('\n').enumerate() {
-        if index + 1 == position.line {
-            line = candidate;
-            break;
-        }
-    }
-
-    let prefix = line
-        .chars()
-        .take(position.column.saturating_sub(1))
-        .collect::<String>();
-
-    prefix.trim_start().chars().all(is_identifier_part)
-}
-
 fn string_literal_value(token: &TokenReference) -> Option<String> {
     match token.token().token_type() {
         TokenType::StringLiteral { literal, .. } => Some(literal.to_string()),
@@ -697,10 +606,6 @@ fn lua_string_literal(value: &str) -> String {
 fn node_span(node: &impl Node) -> Option<SourceSpan> {
     node.range()
         .map(|(start, end)| SourceSpan::from_range(start, end))
-}
-
-fn is_identifier_part(character: char) -> bool {
-    character == '_' || character.is_ascii_alphanumeric()
 }
 
 #[cfg(test)]
@@ -753,45 +658,5 @@ mod tests {
             "local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:getHeight())"
         ));
         assert!(!lowered.contains("spriteSheet({"));
-    }
-
-    #[test]
-    fn plugin_exposes_structured_sprite_lowering_request() {
-        let parsed =
-            parse_tua_source("src/sprites.tua", SPRITE_SOURCE).expect("sprite should parse");
-        let plugin = SpritePlugin;
-        let requests = plugin.lowering_requests(PluginContext {
-            path: Path::new("src/sprites.tua"),
-            source: SPRITE_SOURCE,
-            parsed: Some(&parsed),
-            assets: &[],
-        });
-
-        assert_eq!(requests.len(), 1);
-        assert_eq!(
-            requests[0].operation,
-            PluginLoweringOperation::DefineSprite {
-                name: "Player".to_owned(),
-                image_path: "assets/player.png".to_owned(),
-                frame_width: 16,
-                frame_height: 16,
-                animations: vec![
-                    PluginAnimationDefinition {
-                        name: "idle".to_owned(),
-                        start_frame: 0,
-                        end_frame: 3,
-                        fps: "8".to_owned(),
-                        looping: true,
-                    },
-                    PluginAnimationDefinition {
-                        name: "run".to_owned(),
-                        start_frame: 4,
-                        end_frame: 9,
-                        fps: "12".to_owned(),
-                        looping: false,
-                    },
-                ],
-            }
-        );
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    AssetLoaderKind, AssetMetadata, AssetValidationStatus, CompletionKind, DiagnosticCode,
-    DiagnosticSeverity, SourcePosition, SourceSpan,
+    AssetLoaderKind, AssetMetadata, AssetValidationStatus, DiagnosticSeverity, SourcePosition,
+    SourceSpan,
 };
 
 #[derive(Debug)]
@@ -10,13 +10,6 @@ struct TestPlugin;
 impl TuaPlugin for TestPlugin {
     fn name(&self) -> &'static str {
         "tua.test"
-    }
-
-    fn declarations(&self) -> Vec<PluginDeclaration> {
-        vec![
-            PluginDeclaration::new("sprite", PluginDeclarationKind::TopLevelDeclaration)
-                .with_documentation("test declaration"),
-        ]
     }
 
     fn diagnostics(&self, context: PluginContext<'_>) -> Vec<Diagnostic> {
@@ -41,67 +34,46 @@ impl TuaPlugin for TestPlugin {
             Vec::new()
         }
     }
+}
 
-    fn completions(&self, context: PluginCompletionContext<'_>) -> Vec<crate::Completion> {
-        if context.position.line == 1 {
-            vec![crate::Completion {
-                label: "pluginItem".to_owned(),
-                kind: CompletionKind::Snippet,
-                detail: Some("plugin completion".to_owned()),
-                documentation: None,
-                insert_text: Some("pluginItem".to_owned()),
-                filter_text: None,
-                is_snippet: false,
-                module_path: None,
-                source_module: Some(self.name().to_owned()),
-                additional_text_edits: Vec::new(),
-            }]
-        } else {
-            Vec::new()
-        }
+#[derive(Debug)]
+struct OrderedPlugin {
+    name: &'static str,
+    code: Option<DiagnosticCode>,
+}
+
+impl TuaPlugin for OrderedPlugin {
+    fn name(&self) -> &'static str {
+        self.name
     }
 
-    fn hovers(&self, context: PluginHoverContext<'_>) -> Vec<PluginHover> {
-        if context.position.line == 1 {
-            vec![PluginHover {
-                contents: "plugin hover".to_owned(),
-                span: None,
-                documentation: Some("plugin docs".to_owned()),
-            }]
-        } else {
-            Vec::new()
-        }
-    }
+    fn diagnostics(&self, _context: PluginContext<'_>) -> Vec<Diagnostic> {
+        let diagnostic = Diagnostic::new(
+            "src/other.tua",
+            2,
+            3,
+            DiagnosticSeverity::Warning,
+            self.name,
+        );
 
-    fn lowering_requests(&self, context: PluginContext<'_>) -> Vec<PluginLoweringRequest> {
-        if context.source.contains("plugin_lower") {
-            vec![PluginLoweringRequest {
-                span: SourceSpan {
-                    start: SourcePosition { line: 1, column: 1 },
-                    end: SourcePosition {
-                        line: 1,
-                        column: 13,
-                    },
-                },
-                operation: PluginLoweringOperation::RequireModule {
-                    module: "plugin.runtime".to_owned(),
-                },
-            }]
-        } else {
-            Vec::new()
-        }
+        vec![match self.code {
+            Some(code) => diagnostic.with_code(code),
+            None => diagnostic,
+        }]
     }
 }
 
 #[test]
-fn registry_collects_plugin_contributions() {
+fn registry_runs_validation_plugins_with_asset_metadata() {
     let mut registry = PluginRegistry::new();
 
-    registry.register(TestPlugin);
-
+    assert!(registry.register(TestPlugin));
     assert!(!registry.is_empty());
-    assert_eq!(registry.plugins().next().unwrap().name(), "tua.test");
-    assert_eq!(registry.declarations().len(), 1);
+    assert!(registry.contains("tua.test"));
+    assert_eq!(
+        registry.plugin_names().collect::<Vec<_>>(),
+        vec!["tua.test"]
+    );
 
     let path = std::path::Path::new("src/main.tua");
     let diagnostics = registry.diagnostics(PluginContext {
@@ -146,38 +118,50 @@ fn registry_collects_plugin_contributions() {
         asset_diagnostics[0].message,
         "test plugin saw asset metadata"
     );
+}
 
-    let completions = registry.completions(PluginCompletionContext {
+#[test]
+fn registry_rejects_duplicate_names_and_normalizes_diagnostics() {
+    let mut registry = PluginRegistry::new();
+
+    assert!(registry.register(OrderedPlugin {
+        name: "z.plugin",
+        code: None,
+    }));
+    assert!(registry.register(OrderedPlugin {
+        name: "a.plugin",
+        code: Some(DiagnosticCode::TYPE_MISMATCH),
+    }));
+    assert!(!registry.register(OrderedPlugin {
+        name: "a.plugin",
+        code: Some(DiagnosticCode::PLUGIN_SPRITE),
+    }));
+    assert!(!registry.register(OrderedPlugin {
+        name: "",
+        code: Some(DiagnosticCode::PLUGIN_SPRITE),
+    }));
+
+    assert_eq!(
+        registry.plugin_names().collect::<Vec<_>>(),
+        vec!["a.plugin", "z.plugin"]
+    );
+
+    let path = std::path::Path::new("src/main.tua");
+    let diagnostics = registry.diagnostics(PluginContext {
         path,
         source: "",
-        parsed: None,
-        position: SourcePosition { line: 1, column: 1 },
-        assets: &[],
-    });
-
-    assert_eq!(completions[0].label, "pluginItem");
-
-    let hovers = registry.hovers(PluginHoverContext {
-        path,
-        source: "",
-        parsed: None,
-        position: SourcePosition { line: 1, column: 1 },
-        assets: &[],
-    });
-
-    assert_eq!(hovers[0].contents, "plugin hover");
-
-    let lowering_requests = registry.lowering_requests(PluginContext {
-        path,
-        source: "plugin_lower",
         parsed: None,
         assets: &[],
     });
 
     assert_eq!(
-        lowering_requests[0].operation,
-        PluginLoweringOperation::RequireModule {
-            module: "plugin.runtime".to_owned()
-        }
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        vec!["a.plugin", "z.plugin"]
     );
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.file == path && diagnostic.code == Some(DiagnosticCode::PLUGIN_DIAGNOSTIC)
+    }));
 }
