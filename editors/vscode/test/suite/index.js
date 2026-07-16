@@ -9,6 +9,20 @@ const { fixtures, waitForEvent } = require("./support");
 const { runWorkspaceTests } = require("./workspace");
 
 async function run() {
+  const selectedSuite = process.env.TUA_TEST_SUITE || "all";
+  const supportedSuites = new Set([
+    "all",
+    "completion",
+    "editor-intelligence",
+    "workspace",
+    "sprite-preview",
+  ]);
+
+  assert(
+    supportedSuites.has(selectedSuite),
+    `unsupported TUA_TEST_SUITE value: ${selectedSuite}`,
+  );
+
   const extension = vscode.extensions.getExtension("tua-lang.tua");
   assert(extension, "the Tua extension should be available in the extension host");
 
@@ -27,10 +41,18 @@ async function run() {
     "the language client should initialize with both workspace folders",
   );
 
-  await runCompletionTests();
-  await runEditorIntelligenceTests();
-  await runWorkspaceTests();
-  await runSpritePreviewTests();
+  if (selectedSuite === "all" || selectedSuite === "completion") {
+    await runCompletionTests();
+  }
+  if (selectedSuite === "all" || selectedSuite === "editor-intelligence") {
+    await runEditorIntelligenceTests();
+  }
+  if (selectedSuite === "all" || selectedSuite === "workspace") {
+    await runWorkspaceTests();
+  }
+  if (selectedSuite === "all" || selectedSuite === "sprite-preview") {
+    await runSpritePreviewTests();
+  }
 }
 
 module.exports = {

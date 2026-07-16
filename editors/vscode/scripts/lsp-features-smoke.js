@@ -51,6 +51,10 @@ const cheatsheet = sources.find((source) => source.file === "lua_cheatsheet.tua"
 if (!cheatsheet) {
   fail("examples/features/src/lua_cheatsheet.tua is missing");
 }
+const sprites = sources.find((source) => source.file === "sprites.tua");
+if (!sprites) {
+  fail("examples/features/src/sprites.tua is missing");
+}
 const legacy = {
   path: path.join(src, "legacy.lua"),
   uri: pathToFileURL(path.join(src, "legacy.lua")).href,
@@ -328,6 +332,29 @@ request("initialize", {
         const target = sourceTextFromRange(cheatsheet.text, message.result?.range);
         if (target !== "x") {
           fail(`cheatsheet field definition expected "x", got ${JSON.stringify(target)}`);
+        }
+      },
+    ),
+  );
+
+  expected.push(
+    request(
+      "tua/inspect",
+      {
+        textDocument: { uri: sprites.uri },
+        position: positionAt(sprites.text, "Player = spriteSheet"),
+      },
+      (message) => {
+        const sprite = message.result?.items?.[0];
+
+        if (message.result?.documentVersion !== 1 || sprite?.kind !== "spriteSheet") {
+          fail(`sprite inspection returned invalid snapshot metadata: ${JSON.stringify(message.result)}`);
+        }
+        if (sprite.name !== "Player" || sprite.image?.status !== "valid") {
+          fail(`sprite inspection returned invalid declaration metadata: ${JSON.stringify(sprite)}`);
+        }
+        if (sprite.frame?.width !== 128 || sprite.animations?.length !== 2) {
+          fail(`sprite inspection returned invalid animation metadata: ${JSON.stringify(sprite)}`);
         }
       },
     ),

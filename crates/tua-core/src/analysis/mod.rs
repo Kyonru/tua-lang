@@ -27,6 +27,7 @@ use crate::inlay_hint::{
     inlay_hints_parsed_source_with_environment, inlay_hints_parsed_source_with_environment_in_range,
 };
 use crate::inline_ignore::apply_inline_ignores;
+use crate::inspector::InspectorItem;
 use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::{
     module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
@@ -83,6 +84,7 @@ use crate::{
 mod database;
 mod editor_queries;
 mod host;
+mod inspector_queries;
 mod navigation_queries;
 mod project_queries;
 mod recovery;
@@ -501,7 +503,7 @@ fn deduplicate_diagnostics(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     output
 }
 
-fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option<u16>) {
+fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option<u16>, String) {
     if diagnostic.code == Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) {
         return (
             normalize_path(&diagnostic.file),
@@ -509,8 +511,15 @@ fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option
             0,
             diagnostic_severity_key(diagnostic.severity),
             diagnostic.code.map(crate::DiagnosticCode::as_u16),
+            String::new(),
         );
     }
+
+    let message = if diagnostic.code == Some(crate::DiagnosticCode::DOMAIN_SPRITE) {
+        diagnostic.message.clone()
+    } else {
+        String::new()
+    };
 
     (
         normalize_path(&diagnostic.file),
@@ -518,6 +527,7 @@ fn diagnostic_key(diagnostic: &Diagnostic) -> (PathBuf, usize, usize, u8, Option
         diagnostic.column,
         diagnostic_severity_key(diagnostic.severity),
         diagnostic.code.map(crate::DiagnosticCode::as_u16),
+        message,
     )
 }
 

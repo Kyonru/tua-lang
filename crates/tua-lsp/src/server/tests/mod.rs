@@ -14,6 +14,7 @@ mod document_features;
 mod formatting;
 mod hover;
 mod inlay_hints;
+mod inspector;
 mod navigation;
 mod recovery;
 mod scheduling;
@@ -636,6 +637,25 @@ fn signal_graph_request(id: u64) -> Value {
         "id": id,
         "method": "tua/signalGraph",
         "params": null
+    })
+}
+
+fn inspector_request(id: u64, uri: &str, position: Option<Value>) -> Value {
+    let mut params = json!({
+        "textDocument": {
+            "uri": uri
+        }
+    });
+
+    if let Some(position) = position {
+        params["position"] = position;
+    }
+
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/inspect",
+        "params": params
     })
 }
 

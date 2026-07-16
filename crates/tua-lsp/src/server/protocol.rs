@@ -7,7 +7,7 @@ use tua_core::{
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
-    ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
+    InspectorItem, ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
     SemanticTokenKind, SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp,
     SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
     WorkspaceSymbolKind,
@@ -197,6 +197,66 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
             })
         }).collect::<Vec<_>>()
     })
+}
+
+pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value {
+    Value::Array(
+        items
+            .into_iter()
+            .map(|item| match item {
+                InspectorItem::SpriteSheet(sprite) => {
+                    let image = sprite.image.map(|image| {
+                        json!({
+                            "path": image.path,
+                            "uri": image.resolved_path.map(|path| uri_from_path(&path)),
+                            "status": match image.status {
+                                tua_core::AssetValidationStatus::Valid => "valid",
+                                tua_core::AssetValidationStatus::Missing => "missing",
+                                tua_core::AssetValidationStatus::UnsupportedExtension => "unsupportedExtension",
+                                tua_core::AssetValidationStatus::WrongKind => "wrongKind",
+                                tua_core::AssetValidationStatus::Unchecked => "unchecked",
+                            },
+                            "dimensions": image.dimensions.map(|(width, height)| json!({
+                                "width": width,
+                                "height": height
+                            })),
+                            "range": lsp_range(image.span)
+                        })
+                    });
+                    let frame = sprite.frame.map(|frame| {
+                        json!({
+                            "width": frame.width,
+                            "height": frame.height,
+                            "range": lsp_range(frame.span)
+                        })
+                    });
+
+                    json!({
+                        "kind": "spriteSheet",
+                        "name": sprite.name,
+                        "range": lsp_range(sprite.span),
+                        "selectionRange": lsp_range(sprite.name_span),
+                        "image": image,
+                        "frame": frame,
+                        "animations": sprite.animations.into_iter().map(|animation| {
+                            json!({
+                                "name": animation.name,
+                                "from": animation.from,
+                                "to": animation.to,
+                                "fps": animation.fps,
+                                "loop": animation.looping,
+                                "range": lsp_range(animation.span),
+                                "selectionRange": lsp_range(animation.name_span)
+                            })
+                        }).collect::<Vec<_>>(),
+                        "diagnostics": sprite.diagnostics.into_iter()
+                            .map(lsp_diagnostic_from_core)
+                            .collect::<Vec<_>>()
+                    })
+                }
+            })
+            .collect(),
+    )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

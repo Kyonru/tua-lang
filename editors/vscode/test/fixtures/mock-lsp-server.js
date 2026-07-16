@@ -3,6 +3,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { fileURLToPath, pathToFileURL } = require("url");
 
 if (process.argv.includes("--version")) {
   process.stdout.write("tua 0.0.0-vscode-test\n");
@@ -85,6 +86,9 @@ function handleMessage(message) {
       return;
     case "textDocument/inlayHint":
       inlayHints(message);
+      return;
+    case "tua/inspect":
+      inspectDocument(message);
       return;
     case "workspace/willRenameFiles":
       willRenameFiles(message);
@@ -290,6 +294,86 @@ function inlayHints(message) {
       },
     },
   ]);
+}
+
+function inspectDocument(message) {
+  const uri = message.params?.textDocument?.uri;
+  const document = documents.get(uri);
+  const source = document?.text || "";
+  const name = /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*spriteSheet\s*\(/.exec(source)?.[1];
+
+  log({
+    type: "inspect.request",
+    uri,
+    version: document?.version,
+    id: message.id,
+  });
+
+  if (!name) {
+    respond(message.id, {
+      analysisRevision: document?.version || 0,
+      documentVersion: document?.version,
+      items: [],
+    });
+    return;
+  }
+
+  const imagePath = /\bimage\s*=\s*["']([^"']+)["']/.exec(source)?.[1] || "";
+  const frame = /\bframe\s*=\s*\{[^}]*\bwidth\s*=\s*(\d+)[^}]*\bheight\s*=\s*(\d+)/s.exec(
+    source,
+  );
+  const animations = [...source.matchAll(
+    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{[^\n}]*\bfrom\s*=\s*(\d+)[^\n}]*\bto\s*=\s*(\d+)[^\n}]*\bfps\s*=\s*(\d+(?:\.\d+)?)([^\n}]*)\}/gm,
+  )].map((match) => ({
+    name: match[1],
+    from: Number(match[2]),
+    to: Number(match[3]),
+    fps: Number(match[4]),
+    loop: !/\bloop\s*=\s*false\b/.test(match[5]),
+  }));
+  const documentPath = fileURLToPath(uri);
+  const resolvedImagePath = path.resolve(path.dirname(documentPath), imagePath);
+  const imageExists = fs.existsSync(resolvedImagePath);
+
+  respond(message.id, {
+    analysisRevision: document.version,
+    documentVersion: document.version,
+    items: [
+      {
+        kind: "spriteSheet",
+        name,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: Math.max(0, source.split(/\r?\n/).length - 1), character: 0 },
+        },
+        selectionRange: {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 6 + name.length },
+        },
+        image: {
+          path: imagePath,
+          uri: imageExists ? pathToFileURL(resolvedImagePath).toString() : null,
+          status: imageExists ? "valid" : "missing",
+        },
+        frame: frame
+          ? {
+              width: Number(frame[1]),
+              height: Number(frame[2]),
+            }
+          : null,
+        animations,
+        diagnostics: imageExists
+          ? []
+          : [
+              {
+                code: "TL5004",
+                message: `missing sprite image asset \`${imagePath}\``,
+                severity: 1,
+              },
+            ],
+      },
+    ],
+  });
 }
 
 function willRenameFiles(message) {

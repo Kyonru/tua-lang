@@ -298,19 +298,20 @@ regression tests were preserved during the split.
 
 ### P2: Move sprite semantics into the language server
 
-[`sprite-preview.js`](editors/vscode/src/love/sprite-preview.js) registers a
-separate hover provider and contains ad hoc parsing, asset resolution, webview
-state, and rendering in one large module. This duplicates compiler behavior.
+Status: done on 2026-07-16.
 
-Improvements:
+`tua-core` now exposes structured sprite inspection from cached parsed
+declarations and asset metadata. The general `tua/inspect` LSP request returns
+document version and analysis revision metadata, declaration ranges, resolved
+asset URIs/status, frame and animation values, and the same sprite diagnostics
+used by builds and normal editor diagnostics.
 
-- Expose structured sprite metadata through a general LSP inspector request.
-- Resolve sprite declarations, animation ranges, and assets from the semantic
-  snapshot or semantic index.
-- Keep the extension responsible only for preview presentation.
-- Split preview panel state, view model, webview template, and webview runtime.
-- Surface diagnostics for missing assets, invalid frames, and conflicting
-  animation definitions consistently across compiler and preview.
+The VS Code extension no longer parses `spriteSheet` tables, searches for
+`tua.toml`, probes asset candidates, or derives source-backed sprite facts.
+Its preview implementation is split into controller, inspector client, panel
+state, view model, webview template, and webview runtime modules. Missing
+assets, incomplete frame/animation configuration, invalid ranges, and duplicate
+animation names are rendered from `TL5004` inspection diagnostics.
 
 ### P2: Expand LOVE-focused semantic support
 

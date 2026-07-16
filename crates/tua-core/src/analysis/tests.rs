@@ -715,6 +715,7 @@ fn sprite_domain_reports_missing_assets_and_invalid_ranges() {
   frame = { width = 16, height = 16 },
   animations = {
     idle = { from = 5, to = 3, fps = 0 },
+    idle = { from = 0, to = 1, fps = 8 },
   },
 })
 "#;
@@ -745,6 +746,107 @@ fn sprite_domain_reports_missing_assets_and_invalid_ranges() {
         }),
         "{diagnostics:#?}"
     );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_SPRITE)
+            && diagnostic.message.contains("defined more than once")
+            && diagnostic.line == 6
+    }));
+}
+
+#[test]
+fn sprite_inspection_uses_cached_declarations_assets_and_diagnostics() {
+    let temp = TempProject::new("sprite-inspection");
+    let path = temp.path().join("src/sprites.tua");
+    let image_path = temp.write("src/assets/player.png", b"placeholder");
+    let source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+    idle = { from = 4, to = 2, fps = 12 },
+  },
+})
+local selected = Player
+"#;
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&path, source);
+    host.refresh_asset_index_from_disk();
+
+    let snapshot = host.snapshot();
+    let inspections = snapshot.inspect(&path, None);
+    let InspectorItem::SpriteSheet(sprite) = &inspections[0];
+
+    assert_eq!(sprite.name, "Player");
+    assert_eq!(
+        sprite.frame.map(|frame| (frame.width, frame.height)),
+        Some((16, 16))
+    );
+    assert_eq!(sprite.animations.len(), 2);
+    assert_eq!(
+        sprite
+            .image
+            .as_ref()
+            .and_then(|image| image.resolved_path.as_ref()),
+        Some(&image_path)
+    );
+    assert!(sprite.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_SPRITE)
+            && diagnostic.message.contains("defined more than once")
+    }));
+    assert!(sprite.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_SPRITE)
+            && diagnostic.message.contains("invalid frame range")
+    }));
+    assert_eq!(
+        snapshot
+            .inspect(
+                &path,
+                Some(SourcePosition {
+                    line: 9,
+                    column: 20,
+                }),
+            )
+            .len(),
+        1,
+        "sprite usages should resolve back to their inspected declaration"
+    );
+}
+
+#[test]
+fn incomplete_sprite_configuration_is_shared_by_diagnostics_and_inspection() {
+    let path = PathBuf::from("src/sprites.tua");
+    let source = "local Player = spriteSheet({})\n";
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, source);
+
+    let snapshot = host.snapshot();
+    let pipeline_messages = snapshot
+        .pipeline_diagnostics(&path)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_SPRITE))
+        .map(|diagnostic| diagnostic.message)
+        .collect::<Vec<_>>();
+    let inspections = snapshot.inspect(&path, None);
+    let InspectorItem::SpriteSheet(sprite) = &inspections[0];
+    let inspection_messages = sprite
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.message.clone())
+        .collect::<Vec<_>>();
+
+    assert_eq!(inspection_messages, pipeline_messages);
+    assert!(inspection_messages
+        .iter()
+        .any(|message| message.contains("image string path")));
+    assert!(inspection_messages
+        .iter()
+        .any(|message| message.contains("frame width and height")));
+    assert!(inspection_messages
+        .iter()
+        .any(|message| message.contains("at least one animation")));
 }
 
 #[test]

@@ -4,15 +4,18 @@ const assert = require("assert/strict");
 const vscode = require("vscode");
 const {
   closeActiveEditor,
+  eventSequence,
   hoverText,
   openFixture,
   positionAfter,
   previewTabs,
+  waitForEvent,
   waitUntil,
 } = require("./support");
 
 async function runSpritePreviewTests() {
   const { document } = await openFixture("sprite");
+  const beforeHover = eventSequence();
   const spritePosition = positionAfter(document, "local Play");
   const hovers = await vscode.commands.executeCommand(
     "vscode.executeHoverProvider",
@@ -33,6 +36,15 @@ async function runSpritePreviewTests() {
   assert.deepEqual(previewLink.isTrusted, {
     enabledCommands: ["tua.previewSprites"],
   });
+  const hoverInspection = await waitForEvent(
+    (event) =>
+      event.type === "inspect.request" &&
+      event.uri === document.uri.toString() &&
+      event.version === document.version,
+    "sprite hover inspection at the current document version",
+    beforeHover,
+  );
+  const beforePreview = hoverInspection.sequence;
 
   const opened = await vscode.commands.executeCommand("tua.previewSprites");
   assert.deepEqual(opened, {
@@ -40,6 +52,14 @@ async function runSpritePreviewTests() {
     missingAssetCount: 0,
     spriteCount: 1,
   });
+  await waitForEvent(
+    (event) =>
+      event.type === "inspect.request" &&
+      event.uri === document.uri.toString() &&
+      event.version === document.version,
+    "sprite preview inspection at the current document version",
+    beforePreview,
+  );
   await waitUntil(
     () => previewTabs().length === 1 && previewTabs()[0].isActive,
     "one active sprite preview tab",

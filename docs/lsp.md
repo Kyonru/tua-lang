@@ -98,6 +98,10 @@ selected path, version, and workspace directory when available.
   the current analysis snapshot with call roles, bus expressions, payload
   schemas, URIs, and source ranges. The VS Code `Tua: Show Signal Graph` command
   uses this data for a filterable event-to-file graph and source navigation.
+- The general `tua/inspect` request returns structured, revisioned document
+  inspector items. Sprite sheet items include declaration ranges, resolved
+  image asset URIs and validation status, frame metadata, animations, and the
+  same `TL5004` diagnostics used by normal project analysis.
 
 ## Custom VS Code Feature Evaluation
 
@@ -106,7 +110,9 @@ LSP requests. The `tua:/builtins` virtual document provider is used for
 generated builtin and LOVE stubs. Experimental visual tooling, such as the
 sprite animation preview command, is explicit and gated by `tua.preview.enabled`;
 sprite sheet hovers may offer a trusted command link, but the preview itself is
-still a command/webview rather than an LSP hover payload.
+still a command/webview rather than an LSP hover payload. Both the hover link
+and preview request sprite facts through `tua/inspect`; the extension does not
+parse Tua source or resolve asset paths independently.
 
 Signal graph visualization is an explicit project-inspection command backed by
 `tua/signalGraph`. The extension renders semantic results and does not maintain
@@ -261,7 +267,8 @@ npm --prefix editors/vscode run test:vscode
 It opens an isolated two-root workspace and verifies live completion freshness,
 cancellation, hover, definition navigation, signature help, inlay hints,
 UTF-16 and untitled-document positions, file-rename edits, and sprite preview
-opening/reload/focus behavior. CI runs the same suite under Xvfb.
+opening/reload/focus behavior. Sprite tests also assert that inspection uses the
+current synchronized document version. CI runs the same suite under Xvfb.
 
 ## Profiling
 

@@ -23,6 +23,7 @@ pub mod hover;
 pub mod ide_db;
 pub mod inlay_hint;
 mod inline_ignore;
+pub mod inspector;
 mod lint;
 mod love_api;
 mod love_api_extra;
@@ -130,6 +131,10 @@ pub use ide_db::{
     SymbolIndex, SymbolIndexEntry, SymbolIndexExport, SymbolIndexId, SymbolIndexKind,
 };
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
+pub use inspector::{
+    InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
+    SpriteSheetInspection,
+};
 pub use lua::builtin_definition_document;
 pub use module_graph::{
     ModuleExportEntry, ModuleExportOrigin, ModuleGraph, ModuleGraphInput, ModuleGraphModule,

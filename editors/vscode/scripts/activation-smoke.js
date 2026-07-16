@@ -250,11 +250,14 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert(
       state.webviewPanels[0].html.includes('"imagePath":"assets/missing.png"') &&
-        state.webviewPanels[0].html.includes("Could not find "),
+        state.webviewPanels[0].html.includes("Could not find ") &&
+        state.webviewPanels[0].html.includes("TL5004") &&
+        state.webviewPanels[0].html.includes("missing sprite image asset"),
       "sprite preview should render a clear missing-asset state",
     );
 
-    const spriteHover = state.hoverProviders
+    state.setActiveDocument(spriteDocument);
+    const spriteHover = await state.hoverProviders
       .at(-1)
       ?.provider.provideHover(spriteDocument, { line: 0, character: 8 });
 
@@ -267,6 +270,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       spriteHover.contents[0].isTrusted,
       { enabledCommands: ["tua.previewSprites"] },
       "sprite preview hover should trust only the preview command",
+    );
+    assert(
+      state.clients[0].requests.filter((request) => request.method === "tua/inspect").length >= 5,
+      "sprite preview rendering, reload, and hover should request compiler-backed inspection data",
     );
 
     await state.commands.get("tua.showSignalGraph")();
@@ -639,9 +646,14 @@ async function smokeStartupFailure(missingServer, workspace) {
 }
 
 function mockDocument(filename, languageId = "tua", scheme = "file", text = "") {
+  let version = 1;
+
   return {
     fileName: filename,
     languageId,
+    get version() {
+      return version;
+    },
     getText(range) {
       if (!range) {
         return text;
@@ -673,6 +685,7 @@ function mockDocument(filename, languageId = "tua", scheme = "file", text = "") 
     },
     setText(value) {
       text = value;
+      version += 1;
     },
     getTextContent() {
       return text;
@@ -1095,6 +1108,10 @@ function createMockState(workspace, options = {}) {
         });
       }
 
+      if (method === "tua/inspect") {
+        return Promise.resolve(mockSpriteInspection(activeTextEditor?.document));
+      }
+
       return Promise.resolve("");
     }
 
@@ -1141,6 +1158,76 @@ function createMockState(workspace, options = {}) {
     vscode,
     webviewPanels,
     warningMessages,
+  };
+}
+
+function mockSpriteInspection(document) {
+  const source = document?.getText?.() || "";
+  const name = /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*spriteSheet\s*\(/.exec(source)?.[1];
+
+  if (!name) {
+    return {
+      analysisRevision: 1,
+      documentVersion: document?.version,
+      items: [],
+    };
+  }
+
+  const imagePath = /\bimage\s*=\s*["']([^"']+)["']/.exec(source)?.[1] || "";
+  const frame = /\bframe\s*=\s*\{[^}]*\bwidth\s*=\s*(\d+)[^}]*\bheight\s*=\s*(\d+)/s.exec(
+    source,
+  );
+  const animations = [...source.matchAll(
+    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{[^\n}]*\bfrom\s*=\s*(\d+)[^\n}]*\bto\s*=\s*(\d+)[^\n}]*\bfps\s*=\s*(\d+(?:\.\d+)?)([^\n}]*)\}/gm,
+  )]
+    .map((match) => ({
+      name: match[1],
+      from: Number(match[2]),
+      to: Number(match[3]),
+      fps: Number(match[4]),
+      loop: !/\bloop\s*=\s*false\b/.test(match[5]),
+    }));
+  const resolvedImagePath = path.resolve(path.dirname(document.uri.fsPath), imagePath);
+  const imageExists = fs.existsSync(resolvedImagePath);
+
+  return {
+    analysisRevision: 1,
+    documentVersion: document.version,
+    items: [
+      {
+        kind: "spriteSheet",
+        name,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: Math.max(0, source.split(/\r?\n/).length - 1), character: 0 },
+        },
+        selectionRange: {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 6 + name.length },
+        },
+        image: {
+          path: imagePath,
+          uri: imageExists ? `file://${resolvedImagePath}` : null,
+          status: imageExists ? "valid" : "missing",
+        },
+        frame: frame
+          ? {
+              width: Number(frame[1]),
+              height: Number(frame[2]),
+            }
+          : null,
+        animations,
+        diagnostics: imageExists
+          ? []
+          : [
+              {
+                code: "TL5004",
+                message: `missing sprite image asset \`${imagePath}\``,
+                severity: 1,
+              },
+            ],
+      },
+    ],
   };
 }
 

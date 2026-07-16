@@ -366,6 +366,7 @@ pub(crate) struct AssetIndex {
 #[derive(Clone, Debug, PartialEq)]
 struct AssetIndexEntry {
     relative_path: String,
+    absolute_path: PathBuf,
     extension: Option<String>,
     dimensions: Option<(u32, u32)>,
 }
@@ -609,6 +610,21 @@ pub(crate) fn validate_asset_with_index(
         dimensions,
         duration_seconds: None,
     }
+}
+
+pub(crate) fn resolved_asset_path(
+    metadata: &AssetMetadata,
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+) -> Option<PathBuf> {
+    if metadata.status != AssetValidationStatus::Valid {
+        return None;
+    }
+
+    asset_index
+        .and_then(|index| index.entry_for_path(&metadata.relative_path))
+        .map(|entry| entry.absolute_path.clone())
+        .or_else(|| resolve_asset_path(&metadata.relative_path, asset_roots))
 }
 
 struct AssetVisitor<'a> {
@@ -859,6 +875,7 @@ fn collect_asset_index_entries(root: &Path, dir: &Path, index: &mut AssetIndex) 
             relative_path.clone(),
             AssetIndexEntry {
                 relative_path,
+                absolute_path,
                 extension: Some(extension),
                 dimensions,
             },

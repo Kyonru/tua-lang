@@ -144,10 +144,12 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
 - Auto insert is out of scope until Tua has a safe syntax trigger; snippets and
   standard completion are the preferred path for block helpers.
 - Sprite animation previews are exposed as an explicit command gated by
-  `tua.preview.enabled`; they read `spriteSheet({...})` metadata from the active
-  document and draw local image frames in a sticky webview preview without
-  executing project code. Hovering a parsed sprite sheet binding also offers a
-  trusted command link to open the same preview.
+  `tua.preview.enabled`; they request compiler-backed `spriteSheet({...})`
+  metadata through `tua/inspect` and draw resolved local image frames in a
+  sticky webview without executing project code. Hovering a sprite sheet
+  binding also uses the inspector result to offer a trusted command link.
+  Missing assets, invalid frame ranges, incomplete configuration, and duplicate
+  animation names use the same diagnostics shown by the language server.
 - `Tua: Show Signal Graph` requests compiler-validated SignalBus calls from the
   current project snapshot. The webview connects events to files, distinguishes
   declarations, listeners, emits, cleanup, and query calls, and opens exact

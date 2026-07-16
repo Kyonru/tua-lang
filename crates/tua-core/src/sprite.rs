@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 use full_moon::ast::{self, Call, Expression, Field, FunctionArgs, FunctionCall, Suffix};
 use full_moon::node::Node;
@@ -10,6 +11,10 @@ use crate::ast_utils::{
 };
 use crate::emit::lowering::{LoweringDocument, LoweringOperation};
 use crate::emit::LoweringKind;
+use crate::inspector::{
+    InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
+    SpriteSheetInspection,
+};
 use crate::types::{FunctionType, TableField, Type};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, SourceSpan, TypedParameter};
 
@@ -59,6 +64,56 @@ pub(crate) fn diagnostics(
     declarations
         .iter()
         .flat_map(|declaration| sprite_declaration_diagnostics(path, assets, declaration))
+        .collect()
+}
+
+pub(crate) fn inspections(
+    path: &Path,
+    declarations: &[SpriteDeclaration],
+    assets: &[AssetMetadata],
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+) -> Vec<InspectorItem> {
+    declarations
+        .iter()
+        .map(|declaration| {
+            let image =
+                asset_for_declaration(assets, declaration).map(|asset| SpriteAssetInspection {
+                    path: asset.relative_path.clone(),
+                    resolved_path: asset::resolved_asset_path(asset, asset_roots, asset_index),
+                    status: asset.status,
+                    dimensions: asset.dimensions,
+                    span: asset.span,
+                });
+            let frame = declaration.frame.map(|frame| SpriteFrameInspection {
+                width: frame.width,
+                height: frame.height,
+                span: frame.span,
+            });
+            let animations = declaration
+                .animations
+                .iter()
+                .map(|animation| SpriteAnimationInspection {
+                    name: animation.name.clone(),
+                    from: animation.start_frame,
+                    to: animation.end_frame,
+                    fps: animation.fps.parse().unwrap_or(0.0),
+                    looping: animation.looping,
+                    span: animation.span,
+                    name_span: animation.name_span,
+                })
+                .collect();
+
+            InspectorItem::SpriteSheet(SpriteSheetInspection {
+                name: declaration.name.clone(),
+                span: declaration.span,
+                name_span: declaration.name_span,
+                image,
+                frame,
+                animations,
+                diagnostics: sprite_declaration_diagnostics(path, assets, declaration),
+            })
+        })
         .collect()
 }
 
@@ -493,12 +548,14 @@ fn sprite_declaration_diagnostics(
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    if let Some(image_span) = declaration.image_span {
-        if let Some(asset) = assets.iter().find(|asset| {
-            asset.kind == AssetLoaderKind::Image
-                && asset.span == image_span
-                && Some(asset.relative_path.as_str()) == declaration.image_path.as_deref()
-        }) {
+    if declaration.image_path.is_none() {
+        diagnostics.push(sprite_diagnostic(
+            path,
+            declaration.span,
+            "sprite sheet requires an image string path",
+        ));
+    } else if let Some(image_span) = declaration.image_span {
+        if let Some(asset) = asset_for_declaration(assets, declaration) {
             match asset.status {
                 AssetValidationStatus::Missing => diagnostics.push(sprite_diagnostic(
                     path,
@@ -534,9 +591,36 @@ fn sprite_declaration_diagnostics(
                 "sprite frame size must be greater than zero",
             ));
         }
+    } else {
+        diagnostics.push(sprite_diagnostic(
+            path,
+            declaration.span,
+            "sprite sheet requires frame width and height",
+        ));
     }
 
+    if declaration.animations.is_empty() {
+        diagnostics.push(sprite_diagnostic(
+            path,
+            declaration.span,
+            "sprite sheet requires at least one animation",
+        ));
+    }
+
+    let mut animation_names = BTreeSet::new();
+
     for animation in &declaration.animations {
+        if !animation_names.insert(animation.name.as_str()) {
+            diagnostics.push(sprite_diagnostic(
+                path,
+                animation.name_span,
+                format!(
+                    "sprite animation `{}` is defined more than once",
+                    animation.name
+                ),
+            ));
+        }
+
         if animation.end_frame < animation.start_frame {
             diagnostics.push(sprite_diagnostic(
                 path,
@@ -566,6 +650,19 @@ fn sprite_declaration_diagnostics(
     }
 
     diagnostics
+}
+
+fn asset_for_declaration<'a>(
+    assets: &'a [AssetMetadata],
+    declaration: &SpriteDeclaration,
+) -> Option<&'a AssetMetadata> {
+    let image_span = declaration.image_span?;
+
+    assets.iter().find(|asset| {
+        asset.kind == AssetLoaderKind::Image
+            && asset.span == image_span
+            && Some(asset.relative_path.as_str()) == declaration.image_path.as_deref()
+    })
 }
 
 fn sprite_diagnostic(path: &Path, span: SourceSpan, message: impl Into<String>) -> Diagnostic {

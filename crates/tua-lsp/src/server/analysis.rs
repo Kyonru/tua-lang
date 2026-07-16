@@ -9,9 +9,9 @@ use tua_core::{
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
-    FormatOptions, InlayHint, ModuleLink, ModuleSpecifierKind, ProjectModel, ProjectModelOptions,
-    ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
-    SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind,
+    FormatOptions, InlayHint, InspectorItem, ModuleLink, ModuleSpecifierKind, ProjectModel,
+    ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
+    SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind,
     WorkspaceSymbol, CONFIG_FILE,
 };
 
@@ -810,6 +810,10 @@ fn byte_for_column(line: &str, column: usize) -> usize {
 }
 
 impl AnalysisSnapshot {
+    pub(super) fn revision(&self) -> u64 {
+        self.core.revision()
+    }
+
     pub(super) fn diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {
         let path = path_from_uri(uri);
 
@@ -845,6 +849,14 @@ impl AnalysisSnapshot {
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
         self.core.hover(path, position)
+    }
+
+    pub(super) fn inspect(
+        &self,
+        path: &Path,
+        position: Option<SourcePosition>,
+    ) -> Vec<InspectorItem> {
+        self.core.inspect(path, position)
     }
 
     pub(super) fn completion(&self, path: &Path, position: SourcePosition) -> Vec<Completion> {

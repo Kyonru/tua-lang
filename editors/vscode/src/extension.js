@@ -29,7 +29,13 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
-  context.subscriptions.push(registerLoveDevex({ configurationTarget, isTuaDocument }));
+  context.subscriptions.push(
+    registerLoveDevex({
+      configurationTarget,
+      getClient: () => client,
+      isTuaDocument,
+    }),
+  );
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
