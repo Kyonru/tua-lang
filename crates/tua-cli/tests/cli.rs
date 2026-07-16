@@ -524,6 +524,79 @@ player.hp += 1
 }
 
 #[test]
+fn traceback_remaps_mixed_lowering_from_compiler_provenance() {
+    let temp = TempDir::new("traceback-mixed-lowering");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"type Count = number
+
+local function tick(value: Count = 1)
+  local position = vec2(1, 2)
+  local events = signal()
+  value += 2
+  if value is Count then
+    events:emit("tick", position)
+  end
+  return value
+end
+
+tick()
+"#,
+    )
+    .expect("failed to write source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let map = fs::read_to_string(temp.path().join("build/main.lua.map.json"))
+        .expect("failed to read source map");
+    let map: Value = serde_json::from_str(&map).expect("source map should be JSON");
+    let mappings = map["lineMappings"]
+        .as_array()
+        .expect("source map should contain line mappings");
+    let source_line_for = |generated_line: u64| {
+        mappings
+            .iter()
+            .find(|mapping| mapping["generatedLine"] == generated_line)
+            .and_then(|mapping| mapping["sourceLine"].as_u64())
+    };
+
+    assert_eq!(source_line_for(1), Some(5));
+    assert_eq!(source_line_for(4), Some(3));
+    assert_eq!(source_line_for(9), Some(6));
+    assert_eq!(source_line_for(10), Some(7));
+
+    fs::write(
+        temp.path().join("mixed-traceback.txt"),
+        "build/main.lua:1: runtime setup failed\nbuild/main.lua:9: arithmetic failed\n",
+    )
+    .expect("failed to write traceback");
+
+    let output = tua()
+        .args(["traceback", "--maps", "build", "mixed-traceback.txt"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua traceback");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("stdout should be UTF-8"),
+        "src/main.tua:5 (generated build/main.lua:1): runtime setup failed\nsrc/main.tua:6 (generated build/main.lua:9): arithmetic failed\n"
+    );
+}
+
+#[test]
 fn build_lowers_static_imports_to_require_calls() {
     let temp = TempDir::new("build-relative-import");
 

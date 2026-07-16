@@ -10,7 +10,7 @@ use crate::source::{
 };
 use crate::source_map::write_source_map;
 use tua_core::{
-    anim8_runtime_source, brinevector_runtime_source, emit_tua_source_with_workspace,
+    anim8_runtime_source, brinevector_runtime_source, emit_tua_source_with_workspace_artifact,
     format_diagnostics_for_cli, tuasignal_runtime_source, AnalysisHost, AnalysisSourceKind,
     AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
     LoadedConfig, ProjectWorkspace,
@@ -248,7 +248,7 @@ fn build_project_files(
                     continue;
                 }
 
-                let output = match emit_tua_source_with_workspace(
+                let emission = match emit_tua_source_with_workspace_artifact(
                     &source_path,
                     source.as_str(),
                     annotation_mode,
@@ -260,6 +260,7 @@ fn build_project_files(
                         continue;
                     }
                 };
+                let output = emission.code;
                 collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
 
                 match write_output(&output_path, output.clone()) {
@@ -267,9 +268,12 @@ fn build_project_files(
                         emitted += 1;
 
                         if workspace.config().emit_maps {
-                            if let Err(diagnostic) =
-                                write_source_map(cwd, &source_path, &output_path, &source, &output)
-                            {
+                            if let Err(diagnostic) = write_source_map(
+                                cwd,
+                                &source_path,
+                                &output_path,
+                                &emission.provenance,
+                            ) {
                                 diagnostics.push(diagnostic);
                             }
                         }

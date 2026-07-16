@@ -123,17 +123,31 @@ structured lowering work tracked below.
 
 ### P1: Introduce structured lowering
 
-[`emit/mod.rs`](crates/tua-core/src/emit/mod.rs) emits text and then applies a
-sequence of text transformations for defaults, built-ins, imports, runtime
-checks, classes, compound assignments, and sprites. This is difficult to
-compose and makes source mapping fragile.
+Status: in progress. The first architecture slice landed on 2026-07-15.
 
-Improvements:
+`tua-core` now lowers through an ordered `LoweringDocument`. Every emitted line
+has a source span and a `LoweringKind`, and the final `LuaEmission` artifact
+contains both serialized Lua and generated-line provenance. Default parameters,
+built-ins, imports, runtime checks, classes, final class calls, compound
+assignments, sprites, and LuaCats annotations all flow through that boundary.
+Serialization performs the final boundary normalization once after lowering.
 
-- Lower typed syntax and future plugin requests into a small AST or lowering IR.
-- Preserve source provenance through every transformed node.
-- Format once after lowering.
-- Add golden output and traceback/source-map tests for mixed transformations.
+CLI builds now write source maps directly from `LuaEmission` provenance. The
+old CLI-side parser, skipped-line reconstruction, and helper-specific mapping
+heuristics were removed. Mixed golden output and end-to-end traceback tests
+cover defaults, bundled helper requires, runtime checks, compound assignments,
+classes, and sprites.
+
+Remaining work:
+
+- Replace the current text-rewrite adapters with typed lowering edits or nodes;
+  the document currently reconciles each adapter's output into structured
+  provenance lines.
+- Move class parser normalization into the lowering layer instead of recognizing
+  the generated class block after parsing.
+- Define a typed operation IR before future plugin lowering requests are
+  reintroduced.
+- Expand golden mappings to multiline and non-ASCII transformations.
 
 ### P1: Split semantic analysis into stable query boundaries
 
@@ -291,10 +305,14 @@ Improvements:
 
 ### P2: Strengthen source maps
 
+Status: in progress. Source maps now consume compiler-owned lowering
+provenance, and a mixed-transform traceback regression is covered.
+
 Improvements:
 
-- Add golden mappings for defaults, classes, imports, compound assignment,
-  runtime checks, sprites, and combinations of those features.
+- Add remaining focused golden mappings for imports and annotation emission;
+  defaults, classes, compound assignment, runtime checks, sprites, bundled
+  helper requires, and mixed transformations are covered.
 - Test multiline and non-ASCII source positions.
 - Verify emitted runtime tracebacks against original Tua locations.
 

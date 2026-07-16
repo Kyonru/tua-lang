@@ -102,6 +102,79 @@ pub(crate) fn lower_sprite_sheet_calls_text(output: &str, parsed: &crate::Parsed
     lowered
 }
 
+pub(crate) fn lowering_provenance_blocks(
+    parsed: &crate::ParsedSource,
+) -> Vec<(String, usize, SourceSpan)> {
+    let mut search_start = 0usize;
+
+    parsed
+        .sprite_declarations
+        .iter()
+        .map(|declaration| {
+            let (source_span, next_search_start) =
+                original_sprite_statement_span(&parsed.source, declaration, search_start)
+                    .unwrap_or((declaration.span, search_start));
+            search_start = next_search_start;
+
+            (
+                format!(
+                    "-- Sprite helper: {} lowers to anim8-backed Lua.",
+                    declaration.name
+                ),
+                lower_sprite_declaration(declaration).lines().count(),
+                source_span,
+            )
+        })
+        .collect()
+}
+
+fn original_sprite_statement_span(
+    source: &str,
+    declaration: &SpriteDeclaration,
+    search_start: usize,
+) -> Option<(SourceSpan, usize)> {
+    let statement = declaration.statement_text.trim_start();
+    let erased_statement = declaration.erased_statement_text.trim_start();
+    let remaining = source.get(search_start..)?;
+    let (relative_start, length) = remaining
+        .find(statement)
+        .map(|start| (start, statement.len()))
+        .or_else(|| {
+            remaining
+                .find(erased_statement)
+                .map(|start| (start, erased_statement.len()))
+        })?;
+    let start = search_start + relative_start;
+
+    Some((
+        SourceSpan {
+            start: source_position_from_byte(source, start),
+            end: source_position_from_byte(source, start + length),
+        },
+        start + length,
+    ))
+}
+
+fn source_position_from_byte(source: &str, byte: usize) -> crate::SourcePosition {
+    let mut line = 1usize;
+    let mut column = 1usize;
+
+    for (index, character) in source.char_indices() {
+        if index >= byte {
+            break;
+        }
+
+        if character == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    crate::SourcePosition { line, column }
+}
+
 pub(crate) fn asset_metadata_for_declaration(
     declaration: &SpriteDeclaration,
     asset_roots: &[std::path::PathBuf],

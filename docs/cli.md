@@ -87,8 +87,10 @@ Build output mirrors the configured source tree:
   reported as warnings.
 
 When `emit_maps = true`, build also writes `*.lua.map.json` sidecars next to
-generated Lua files. Map files are metadata only and are not counted as emitted
-runtime files.
+generated Lua files. Their line mappings come from compiler lowering provenance,
+including generated default guards, helper runtime imports, classes, runtime
+checks, compound assignments, and sprite expansions. Map files are metadata
+only and are not counted as emitted runtime files.
 
 Use `--emit-on-error` when you want parseable/lowerable files to emit while the
 command still exits non-zero:

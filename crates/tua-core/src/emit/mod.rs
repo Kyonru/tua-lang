@@ -16,11 +16,24 @@ use crate::{
     Type,
 };
 
+mod lowering;
+
+pub use lowering::{LoweringKind, LuaEmission, LuaLineProvenance};
+
+type ImportResolver<'a> = Option<&'a dyn Fn(&str) -> Option<String>>;
+
 pub fn emit_tua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
 ) -> Result<String, Vec<Diagnostic>> {
-    emit_tua_source_with_mode(path, source, AnnotationMode::Off)
+    emit_tua_source_artifact(path, source).map(|emission| emission.code)
+}
+
+pub fn emit_tua_source_artifact(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
+    emit_tua_source_artifact_with_mode(path, source, AnnotationMode::Off)
 }
 
 pub fn emit_tua_source_with_mode(
@@ -28,10 +41,18 @@ pub fn emit_tua_source_with_mode(
     source: impl Into<String>,
     annotation_mode: AnnotationMode,
 ) -> Result<String, Vec<Diagnostic>> {
+    emit_tua_source_artifact_with_mode(path, source, annotation_mode).map(|emission| emission.code)
+}
+
+pub fn emit_tua_source_artifact_with_mode(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    annotation_mode: AnnotationMode,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
     let parsed =
         parse_tua_source(path, source).map_err(reclassify_compound_assignment_diagnostics)?;
 
-    emit_lua_with_mode(&parsed, annotation_mode)
+    emit_lua_artifact_with_mode(&parsed, annotation_mode)
 }
 
 pub fn emit_tua_source_with_workspace(
@@ -40,47 +61,97 @@ pub fn emit_tua_source_with_workspace(
     annotation_mode: AnnotationMode,
     workspace: &ProjectWorkspace,
 ) -> Result<String, Vec<Diagnostic>> {
+    emit_tua_source_with_workspace_artifact(path, source, annotation_mode, workspace)
+        .map(|emission| emission.code)
+}
+
+pub fn emit_tua_source_with_workspace_artifact(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    annotation_mode: AnnotationMode,
+    workspace: &ProjectWorkspace,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
     let parsed =
         parse_tua_source(path, source).map_err(reclassify_compound_assignment_diagnostics)?;
 
     let resolver = |specifier: &str| workspace.module_name_for_import(&parsed.path, specifier);
 
-    emit_lua_with_mode_and_import_resolver(&parsed, annotation_mode, Some(&resolver))
+    emit_lua_artifact_with_mode_and_import_resolver(&parsed, annotation_mode, Some(&resolver))
 }
 
 pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
-    emit_lua_with_mode(parsed, AnnotationMode::Off)
+    emit_lua_artifact(parsed).map(|emission| emission.code)
+}
+
+pub fn emit_lua_artifact(parsed: &ParsedSource) -> Result<LuaEmission, Vec<Diagnostic>> {
+    emit_lua_artifact_with_mode(parsed, AnnotationMode::Off)
 }
 
 pub fn emit_lua_with_mode(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
 ) -> Result<String, Vec<Diagnostic>> {
-    emit_lua_with_mode_and_import_resolver(parsed, annotation_mode, None)
+    emit_lua_artifact_with_mode(parsed, annotation_mode).map(|emission| emission.code)
+}
+
+pub fn emit_lua_artifact_with_mode(
+    parsed: &ParsedSource,
+    annotation_mode: AnnotationMode,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
+    emit_lua_artifact_with_mode_and_import_resolver(parsed, annotation_mode, None)
 }
 
 pub(crate) fn emit_lua_with_mode_and_import_resolver(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
-    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+    import_resolver: ImportResolver<'_>,
 ) -> Result<String, Vec<Diagnostic>> {
+    emit_lua_artifact_with_mode_and_import_resolver(parsed, annotation_mode, import_resolver)
+        .map(|emission| emission.code)
+}
+
+fn emit_lua_artifact_with_mode_and_import_resolver(
+    parsed: &ParsedSource,
+    annotation_mode: AnnotationMode,
+    import_resolver: ImportResolver<'_>,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
 
     if diagnostics.is_empty() {
-        let output = normalize_emitted_lua(ast.to_string());
-        let output = lower_default_parameter_guards_text(&output, parsed);
-        let output = lower_builtin_calls_text(&output);
-        let output = lower_import_calls_text(&output, parsed, import_resolver)?;
-        let output = lower_runtime_type_checks_text(&output, parsed)?;
-        let output = lower_final_class_method_calls_text(&output, parsed);
-        let output = lower_compound_assignments_text(&output);
-        let output = crate::sprite::lower_sprite_sheet_calls_text(&output, parsed);
+        let output = ast.to_string();
+        let mut document = lowering::LoweringDocument::from_erased_lua(output, parsed);
 
-        Ok(match annotation_mode {
-            AnnotationMode::Off => output,
-            AnnotationMode::Luacats => apply_luacats_annotations(&output, parsed),
-        })
+        let output = lower_default_parameter_guards_text(&document.code(), parsed);
+        document.rewrite(LoweringKind::DefaultParameter, output);
+        document.refine_default_parameter_provenance(parsed);
+
+        let output = lower_builtin_calls_text(&document.code());
+        document.rewrite(LoweringKind::BuiltinCall, output);
+        document.refine_builtin_require_provenance();
+
+        let output = lower_import_calls_text(&document.code(), parsed, import_resolver)?;
+        document.rewrite(LoweringKind::Import, output);
+
+        let output = lower_runtime_type_checks_text(&document.code(), parsed)?;
+        document.rewrite(LoweringKind::RuntimeTypeCheck, output);
+
+        let output = lower_final_class_method_calls_text(&document.code(), parsed);
+        document.rewrite(LoweringKind::FinalClassCall, output);
+
+        let output = lower_compound_assignments_text(&document.code());
+        document.rewrite(LoweringKind::CompoundAssignment, output);
+
+        let output = crate::sprite::lower_sprite_sheet_calls_text(&document.code(), parsed);
+        document.rewrite(LoweringKind::Sprite, output);
+        document.refine_sprite_provenance(parsed);
+
+        if annotation_mode == AnnotationMode::Luacats {
+            let output = apply_luacats_annotations(&document.code(), parsed);
+            document.rewrite(LoweringKind::Annotation, output);
+        }
+
+        Ok(document.finish())
     } else {
         Err(diagnostics)
     }
@@ -467,6 +538,7 @@ fn runtime_type_emit_diagnostic(
 }
 
 fn apply_luacats_annotations(runtime_output: &str, parsed: &ParsedSource) -> String {
+    let runtime_output = runtime_output.trim_start_matches(char::is_whitespace);
     let mut aliases = Vec::new();
     let mut local_annotations = BTreeMap::<String, VecDeque<Vec<String>>>::new();
     let mut local_export_types = BTreeMap::<String, String>::new();
@@ -1322,6 +1394,10 @@ fn lower_builtin_calls_text(output: &str) -> String {
         index += character.len_utf8();
     }
 
+    if requires_brinevector || requires_tuasignal {
+        lowered = lowered.trim_start_matches(char::is_whitespace).to_owned();
+    }
+
     if requires_brinevector {
         lowered = format!(
             "local {} = require(\"{}\")\n{}",
@@ -1346,7 +1422,7 @@ fn lower_builtin_calls_text(output: &str) -> String {
 fn lower_import_calls_text(
     output: &str,
     parsed: &ParsedSource,
-    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+    import_resolver: ImportResolver<'_>,
 ) -> Result<String, Vec<Diagnostic>> {
     let mut lowered = String::with_capacity(output.len());
     let mut diagnostics = Vec::new();
@@ -1419,7 +1495,7 @@ fn lower_import_call(
     output: &str,
     argument_start: usize,
     parsed: &ParsedSource,
-    import_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+    import_resolver: ImportResolver<'_>,
 ) -> Option<(Result<String, Diagnostic>, usize)> {
     if !output[argument_start..].starts_with('(') {
         return None;
@@ -1998,16 +2074,6 @@ fn reclassify_compound_assignment_diagnostics(diagnostics: Vec<Diagnostic>) -> V
             diagnostic
         })
         .collect()
-}
-
-fn normalize_emitted_lua(output: String) -> String {
-    let trimmed = output.trim_matches(char::is_whitespace);
-
-    if trimmed.is_empty() {
-        String::new()
-    } else {
-        format!("{trimmed}\n")
-    }
 }
 
 #[cfg(test)]

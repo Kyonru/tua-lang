@@ -246,7 +246,7 @@ impl WatchBuildSession {
                 push_sibling_collision_warning(&mut diagnostics, &source_path, self.in_place);
             }
 
-            let output = match emit_tua_source_with_workspace(
+            let emission = match emit_tua_source_with_workspace_artifact(
                 &source_path,
                 source,
                 annotation_mode,
@@ -258,6 +258,7 @@ impl WatchBuildSession {
                     continue;
                 }
             };
+            let output = emission.code;
             collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
 
             match write_output(&output_path, output.clone()) {
@@ -265,9 +266,12 @@ impl WatchBuildSession {
                     emitted += 1;
 
                     if self.workspace.config().emit_maps {
-                        if let Err(diagnostic) =
-                            write_source_map(&self.cwd, &source_path, &output_path, source, &output)
-                        {
+                        if let Err(diagnostic) = write_source_map(
+                            &self.cwd,
+                            &source_path,
+                            &output_path,
+                            &emission.provenance,
+                        ) {
                             diagnostics.push(diagnostic);
                         }
                     }

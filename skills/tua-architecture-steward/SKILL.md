@@ -25,6 +25,8 @@ not to reshuffle code for its own sake.
 - Avoid request-time disk reads once project analysis can answer the query.
 - Prefer one shared semantic path over per-feature fixes.
 - Preserve public helper APIs such as `*_tua_source` when useful for tests.
+- Keep emission and provenance together in `LuaEmission`; CLI source maps must
+  consume compiler provenance rather than reconstructing it from generated Lua.
 - Use stable IDs and source spans when a feature needs navigation, rename,
   references, or edits.
 - Keep dynamic Lua gradual: represent unknown or `any` explicitly instead of

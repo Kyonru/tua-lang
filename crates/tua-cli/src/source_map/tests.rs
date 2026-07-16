@@ -10,9 +10,9 @@ type Player = {
 local player: Player = { hp = 10 }
 player.hp += 1
 "#;
-    let output = "local player = { hp = 10 }\nplayer.hp = player.hp + 1\n";
-    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
-    let mappings = line_mappings(source, output, Some(&parsed));
+    let emission = tua_core::emit_tua_source_artifact("src/main.tua", source)
+        .expect("source should emit with provenance");
+    let mappings = line_mappings(&emission.provenance);
 
     assert_eq!(
         mappings,
@@ -32,9 +32,9 @@ player.hp += 1
 #[test]
 fn line_map_keeps_default_parameter_guards_on_parameter_source_line() {
     let source = "local function greet(name: string = \"Ada\")\n  return name\nend\n";
-    let output = "local function greet(name)\n  if name == nil then\n    name = \"Ada\"\n  end\n  return name\nend\n";
-    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
-    let mappings = line_mappings(source, output, Some(&parsed));
+    let emission = tua_core::emit_tua_source_artifact("src/main.tua", source)
+        .expect("source should emit with provenance");
+    let mappings = line_mappings(&emission.provenance);
 
     assert_eq!(
         mappings,

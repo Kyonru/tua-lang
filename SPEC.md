@@ -476,11 +476,13 @@ The compiler pipeline is:
 3. Parse each `.tua` file.
 4. Build per-file and project-wide type information for parsed `.tua` files.
 5. Type-check annotated code.
-6. Lower tua-only syntax to Lua syntax.
+6. Lower Tua-only syntax through an ordered emission document that retains
+   source-span provenance for generated lines.
 7. Erase type aliases and type annotations.
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
 9. Copy non-`.tua` files unchanged into the configured output directory.
-10. Emit optional `*.lua.map.json` line-map sidecars when `emit_maps = true`.
+10. Emit optional `*.lua.map.json` line-map sidecars from compiler-owned
+    lowering provenance when `emit_maps = true`.
 
 Emitted Lua should be readable and line-stable where practical. Readability is
 more important than aggressive minification or optimization.

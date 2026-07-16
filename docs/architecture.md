@@ -132,7 +132,12 @@ flow through the same CLI and LSP formatting paths.
 
 Emission belongs under `crates/tua-core/src/emit` and build orchestration belongs
 in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
-and should not depend on LSP-only concepts.
+and should not depend on LSP-only concepts. Lowering passes flow through an
+ordered `LoweringDocument`; its final `LuaEmission` contains generated Lua plus
+source-span provenance and a lowering kind for every generated line. CLI builds
+must consume that provenance for source maps instead of reparsing source or
+reverse-engineering generated text. The current pass adapters still produce
+text internally and should migrate incrementally to typed lowering edits.
 
 Project and file identity code belongs in the project model, VFS, module graph,
 and analysis host. Do not resolve `require(...)`, static `import(...)`,

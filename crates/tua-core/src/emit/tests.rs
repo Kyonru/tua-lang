@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DiagnosticCategory, DiagnosticCode};
+use crate::{DiagnosticCategory, DiagnosticCode, SourceSpan};
 
 #[test]
 fn snapshot_type_aliases_emit_no_runtime_code() {
@@ -821,4 +821,140 @@ fn call_compound_assignment_lhs_emits_lowering_diagnostic() {
         Some(DiagnosticCode::LOWERING_COMPOUND_ASSIGNMENT)
     );
     assert!(diagnostics[0].message.contains("left-hand side"));
+}
+
+#[test]
+fn mixed_lowering_pipeline_emits_stable_lua_with_source_provenance() {
+    let emission = emit_tua_source_artifact(
+        "src/mixed.tua",
+        r#"type Count = number
+
+local function tick(value: Count = 1)
+  local shared = import("shared")
+  local position = vec2(1, 2)
+  local events = signal()
+  local icon = image "assets/icon.png"
+  value += 2
+  if value is Count then
+    events:emit("tick", position, icon)
+  end
+  return shared, value
+end
+"#,
+    )
+    .expect("mixed lowering should emit");
+
+    assert_eq!(
+        emission.code,
+        r#"local __tua_signal = require("tuasignal")
+local __tua_vec2 = require("brinevector")
+local function tick(value)
+  if value == nil then
+    value = 1
+  end
+  local shared = require("shared")
+  local position = __tua_vec2(1, 2)
+  local events = __tua_signal()
+  local icon = love.graphics.newImage("assets/icon.png")
+  value = value + 2
+  if type(value) == "number" then
+    events:emit("tick", position, icon)
+  end
+  return shared, value
+end
+"#
+    );
+
+    let provenance_for = |needle: &str| {
+        let line = emission
+            .code
+            .lines()
+            .position(|line| line.trim() == needle)
+            .expect("generated line should exist");
+        emission.provenance[line]
+    };
+
+    assert_eq!(
+        provenance_for("local __tua_signal = require(\"tuasignal\")"),
+        LuaLineProvenance {
+            generated_line: 1,
+            source_span: SourceSpan {
+                start: SourcePosition { line: 6, column: 1 },
+                end: SourcePosition {
+                    line: 6,
+                    column: 26,
+                },
+            },
+            lowering: LoweringKind::BuiltinCall,
+        }
+    );
+    assert_eq!(
+        provenance_for("if value == nil then").lowering,
+        LoweringKind::DefaultParameter
+    );
+    assert_eq!(
+        provenance_for("if value == nil then")
+            .source_span
+            .start
+            .line,
+        3
+    );
+    assert_eq!(
+        provenance_for("local shared = require(\"shared\")").lowering,
+        LoweringKind::Import
+    );
+    assert_eq!(
+        provenance_for("value = value + 2").lowering,
+        LoweringKind::CompoundAssignment
+    );
+    assert_eq!(
+        provenance_for("if type(value) == \"number\" then").lowering,
+        LoweringKind::RuntimeTypeCheck
+    );
+}
+
+#[test]
+fn class_and_sprite_expansions_keep_declaration_provenance() {
+    let emission = emit_tua_source_artifact(
+        "src/domain.tua",
+        r#"final class Player {
+  hp: number = 10
+}
+
+local afterClass = 1
+
+local Sheet = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+"#,
+    )
+    .expect("domain lowering should emit");
+
+    let provenance_for = |needle: &str| {
+        let line = emission
+            .code
+            .lines()
+            .position(|line| line.trim() == needle)
+            .expect("generated line should exist");
+        emission.provenance[line]
+    };
+
+    let class_line = provenance_for("local Player = {}");
+    assert_eq!(class_line.lowering, LoweringKind::Class);
+    assert_eq!(class_line.source_span.start.line, 1);
+
+    let after_class = provenance_for("local afterClass = 1");
+    assert_eq!(after_class.lowering, LoweringKind::Source);
+    assert_eq!(after_class.source_span.start.line, 5);
+
+    let sprite_comment = provenance_for("-- Sprite helper: Sheet lowers to anim8-backed Lua.");
+    let sprite_runtime = provenance_for("local anim8 = require(\"anim8\")");
+    assert_eq!(sprite_comment.lowering, LoweringKind::Sprite);
+    assert_eq!(sprite_runtime.lowering, LoweringKind::Sprite);
+    assert_eq!(sprite_comment.source_span.start.line, 7);
+    assert_eq!(sprite_runtime.source_span, sprite_comment.source_span);
 }
