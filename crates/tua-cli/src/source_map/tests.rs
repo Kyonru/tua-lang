@@ -1,4 +1,5 @@
 use super::*;
+use tua_core::AnnotationMode;
 
 #[test]
 fn line_map_skips_erased_type_alias_lines() {
@@ -64,5 +65,98 @@ fn line_map_keeps_default_parameter_guards_on_parameter_source_line() {
                 source_line: 3,
             },
         ]
+    );
+}
+
+#[test]
+fn source_map_serializes_static_import_provenance() {
+    let source = "local Shared: any = import(\"shared\")\nreturn Shared\n";
+    let emission = tua_core::emit_tua_source_artifact("src/main.tua", source)
+        .expect("static import should emit with provenance");
+    let map = source_map_json(
+        Path::new("project"),
+        Path::new("project/src/main.tua"),
+        Path::new("project/build/main.lua"),
+        line_mappings(&emission.provenance),
+    );
+
+    assert_eq!(
+        map,
+        json!({
+            "version": 1,
+            "generated": "build/main.lua",
+            "source": "src/main.tua",
+            "lineMappings": [
+                { "generatedLine": 1, "sourceLine": 1 },
+                { "generatedLine": 2, "sourceLine": 2 },
+            ],
+        })
+    );
+}
+
+#[test]
+fn source_map_serializes_luacats_annotation_provenance() {
+    let source = "type Label = string\nlocal title: Label = \"Olá\"\n";
+    let emission = tua_core::emit_tua_source_artifact_with_mode(
+        "src/main.tua",
+        source,
+        AnnotationMode::Luacats,
+    )
+    .expect("LuaCATS annotations should emit with provenance");
+    let map = source_map_json(
+        Path::new("project"),
+        Path::new("project/src/main.tua"),
+        Path::new("project/build/main.lua"),
+        line_mappings(&emission.provenance),
+    );
+
+    assert_eq!(
+        emission.code,
+        "---@alias Label string\n\n---@type Label\nlocal title = \"Olá\"\n"
+    );
+    assert_eq!(
+        map,
+        json!({
+            "version": 1,
+            "generated": "build/main.lua",
+            "source": "src/main.tua",
+            "lineMappings": [
+                { "generatedLine": 1, "sourceLine": 1 },
+                { "generatedLine": 2, "sourceLine": 1 },
+                { "generatedLine": 3, "sourceLine": 2 },
+                { "generatedLine": 4, "sourceLine": 2 },
+            ],
+        })
+    );
+}
+
+#[test]
+fn source_map_keeps_multiline_and_non_ascii_source_lines() {
+    let source = r#"type Message = {
+  text: string,
+}
+
+local greeting: string = "Olá"
+"#;
+    let emission = tua_core::emit_tua_source_artifact("src/main.tua", source)
+        .expect("multiline non-ASCII source should emit with provenance");
+    let map = source_map_json(
+        Path::new("project"),
+        Path::new("project/src/main.tua"),
+        Path::new("project/build/main.lua"),
+        line_mappings(&emission.provenance),
+    );
+
+    assert_eq!(emission.code, "local greeting = \"Olá\"\n");
+    assert_eq!(
+        map,
+        json!({
+            "version": 1,
+            "generated": "build/main.lua",
+            "source": "src/main.tua",
+            "lineMappings": [
+                { "generatedLine": 1, "sourceLine": 5 },
+            ],
+        })
     );
 }

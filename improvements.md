@@ -390,16 +390,19 @@ language complexity.
 
 ### P2: Strengthen source maps
 
-Status: in progress. Source maps now consume compiler-owned lowering
-provenance, and a mixed-transform traceback regression is covered.
+Status: done on 2026-07-16.
 
-Improvements:
+Source maps consume compiler-owned `LuaEmission` provenance without reparsing
+generated Lua. Exact serialized mapping tests now cover static imports and
+LuaCATS annotation insertions in addition to defaults, classes, compound
+assignments, runtime checks, sprites, bundled helper requires, and mixed
+transformations.
 
-- Add remaining focused golden mappings for imports and annotation emission;
-  defaults, classes, compound assignment, runtime checks, sprites, bundled
-  helper requires, and mixed transformations are covered.
-- Test multiline and non-ASCII source positions.
-- Verify emitted runtime tracebacks against original Tua locations.
+Multiline erased type syntax and non-ASCII source text retain correct
+generated-line to source-line ownership. An integration regression builds Tua,
+executes the emitted Lua with a real interpreter, captures the runtime
+traceback, and verifies that `tua traceback` maps it back to the original Tua
+line. Linux CI installs Lua so that runtime boundary is enforced.
 
 ## Configuration And Project Model
 

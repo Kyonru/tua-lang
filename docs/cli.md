@@ -89,8 +89,10 @@ Build output mirrors the configured source tree:
 When `emit_maps = true`, build also writes `*.lua.map.json` sidecars next to
 generated Lua files. Their line mappings come from compiler lowering provenance,
 including generated default guards, helper runtime imports, classes, runtime
-checks, compound assignments, and sprite expansions. Map files are metadata
-only and are not counted as emitted runtime files.
+checks, compound assignments, sprite expansions, static imports, and LuaCATS
+annotation lines. Multiline erased types and non-ASCII source text retain their
+original source-line ownership. Map files are line-based metadata only and are
+not counted as emitted runtime files.
 
 Use `--emit-on-error` when you want parseable/lowerable files to emit while the
 command still exits non-zero:
@@ -109,6 +111,11 @@ cat sentry-traceback.txt | cargo run -p tua-cli -- traceback --maps build
 Remaps generated Lua traceback locations back to Tua source using
 `*.lua.map.json` sidecars from `tua build`. If `--maps` is omitted, the command
 uses the configured output directory.
+
+The regression suite builds Tua, executes the emitted Lua with a real local Lua
+runtime, captures its stderr traceback, and verifies that `tua traceback`
+returns the original Tua line. Linux CI installs Lua for this test; local runs
+skip only that runtime case when no Lua executable is available.
 
 For example, `build/main.lua:12` can become:
 

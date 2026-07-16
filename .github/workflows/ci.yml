@@ -55,6 +55,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Lua for runtime traceback tests
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
       - name: Test workspace
         run: cargo test --workspace
       - name: Build love-minimal

@@ -156,7 +156,10 @@ splits. Class parser normalization uses the same operation boundary and stores
 generated-line ownership for syntax-token provenance. LuaCats aliases and
 declaration comments are explicit insertion operations; no whole-document text
 rewrite remains. Lowering remains compiler-owned so external callbacks cannot
-overlap or reorder core passes.
+overlap or reorder core passes. Source-map goldens cover import replacements,
+LuaCats insertions, multiline erased syntax, and non-ASCII source. CLI
+integration also executes emitted Lua and remaps the captured runtime traceback
+through those serialized maps.
 
 Project and file identity code belongs in the project model, VFS, module graph,
 and analysis host. Do not resolve `require(...)`, static `import(...)`,

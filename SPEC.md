@@ -535,7 +535,10 @@ The compiler pipeline is:
 8. Emit Lua 5.1-compatible `.lua` files under the configured output directory.
 9. Copy non-`.tua` files unchanged into the configured output directory.
 10. Emit optional `*.lua.map.json` line-map sidecars from compiler-owned
-    lowering provenance when `emit_maps = true`.
+    lowering provenance when `emit_maps = true`. Static imports, generated
+    LuaCATS annotations, multiline erased syntax, and non-ASCII source must
+    preserve the same generated-line to source-line ownership as other
+    lowering operations.
 
 Emitted Lua should be readable and line-stable where practical. Readability is
 more important than aggressive minification or optimization.
@@ -799,6 +802,8 @@ Expected behavior:
   provided;
 - rewrites proven `file.lua:line` frames as
   `source.tua:line (generated file.lua:line)`;
+- remaps tracebacks captured from actually executed emitted Lua, not only
+  synthetic traceback strings;
 - leaves dynamic, missing, or ambiguous frames unchanged instead of guessing.
 
 ### `tua watch`

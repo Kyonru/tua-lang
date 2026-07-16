@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -593,6 +594,77 @@ tick()
     assert_eq!(
         String::from_utf8(output.stdout).expect("stdout should be UTF-8"),
         "src/main.tua:5 (generated build/main.lua:1): runtime setup failed\nsrc/main.tua:6 (generated build/main.lua:9): arithmetic failed\n"
+    );
+}
+
+#[test]
+fn traceback_remaps_an_actual_emitted_lua_runtime_error() {
+    let Some(lua) = working_lua_runtime() else {
+        eprintln!("skipping runtime traceback test; no Lua executable was found");
+        return;
+    };
+    let temp = TempDir::new("traceback-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"type Message = {
+  text: string,
+}
+
+local greeting: string = "Olá"
+local player: any = nil
+print(player.name)
+"#,
+    )
+    .expect("failed to write runtime traceback source");
+
+    let build = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        build.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let runtime = Command::new(lua)
+        .arg("build/main.lua")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to execute emitted Lua");
+    assert!(
+        !runtime.status.success(),
+        "emitted Lua should fail at the intentional nil field access"
+    );
+    let traceback = String::from_utf8(runtime.stderr).expect("Lua traceback should be UTF-8");
+    assert!(
+        traceback.contains("build/main.lua:3:"),
+        "unexpected runtime traceback:\n{traceback}"
+    );
+    fs::write(temp.path().join("runtime-traceback.txt"), &traceback)
+        .expect("failed to write captured runtime traceback");
+
+    let remapped = tua()
+        .args(["traceback", "--maps", "build", "runtime-traceback.txt"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to remap captured runtime traceback");
+    assert!(
+        remapped.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&remapped.stdout),
+        String::from_utf8_lossy(&remapped.stderr)
+    );
+    let remapped = String::from_utf8(remapped.stdout).expect("remapped traceback should be UTF-8");
+
+    assert!(
+        remapped.contains("src/main.tua:7 (generated build/main.lua:3)"),
+        "unexpected remapped traceback:\n{remapped}"
     );
 }
 
@@ -1541,4 +1613,25 @@ fn wait_for_child_output(mut child: process::Child, timeout: Duration) -> Output
             Err(error) => panic!("failed to wait for child process: {error}"),
         }
     }
+}
+
+fn working_lua_runtime() -> Option<OsString> {
+    [
+        std::env::var_os("TUA_LUAJIT_BIN"),
+        std::env::var_os("TUA_LUA_BIN"),
+        Some(OsString::from("luajit")),
+        Some(OsString::from("lua5.1")),
+        Some(OsString::from("lua")),
+        Some(OsString::from("lua5.4")),
+        Some(OsString::from("lua5.3")),
+        Some(OsString::from("lua5.2")),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|candidate| {
+        Command::new(candidate)
+            .arg("-v")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    })
 }
