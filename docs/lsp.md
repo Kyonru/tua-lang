@@ -581,6 +581,13 @@ revision of the prepared project snapshot. Warm coverage is reported separately
 from foreground cache hits so idle indexing cannot make interactive hit rates
 look better than they are.
 
+`Tua: Show Language Server Health` opens the `tua/health` view. It reports the
+current analysis revision, open-document counts, workspace-warm coverage,
+coordinator/in-flight/warm queue depth, aggregate and per-cache hit rates,
+request and warm stale-result counts, and recent p50/p95/p99/max request
+latency. Use Reload for a fresh snapshot or Copy JSON when attaching health
+state to a bug report.
+
 Workspace warming runs only while the request scheduler is idle. It prioritizes
 open and changed files, then direct dependency neighbors, then the remaining
 `.tua` and `.lua` files. Completion, hover, definition, signature help, and

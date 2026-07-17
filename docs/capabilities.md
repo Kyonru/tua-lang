@@ -57,6 +57,7 @@ Status meanings:
 | Syntax highlighting | Supported | An immediate TextMate grammar covers Lua, Tua types/classes/enums, LuaDoc, modules, domain helpers, event names, calls, members, labels, literals, and operators. |
 | Semantic tokens and inlay hints | Supported | Full/range/delta tokens classify standard VS Code symbol roles and declaration/readonly/deprecated/modification/default-library modifiers; inferred type/parameter hints are revision-aware, and the extension offers Full, Compact, Types Only, Parameters Only, and Off presentation modes without changing server results. |
 | Watched files and workspace folders | Supported | Source, Lua, assets, config, module creation/deletion, and folder changes refresh project state. |
+| Language-server health view | Supported | A VS Code command shows the current server revision, warm coverage, queue depth, cache hit rates, stale-result counts, and recent request p95 latency from `tua/health`. |
 | Sprite animation preview | Preview | A sticky webview renders compiler-inspected local sprite metadata without executing project code. |
 | Signal call graph | Supported | The extension visualizes compiler-indexed event calls, filters by event/bus/file/listener/emitter, shows schema conflicts, opens exact locations, and creates typed listener or declaration snippets from semantic metadata. |
 | Module dependency explorer | Supported | A compiler-backed graph shows `require`/`import` edges, unresolved modules, cycles, reverse dependencies, exported surfaces, and deterministic root-to-module inclusion paths. |

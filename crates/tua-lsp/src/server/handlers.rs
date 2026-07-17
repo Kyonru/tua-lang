@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tua_core::{AssistKind, RenameEdit, SourcePosition, SourceSpan};
+use tua_core::{AnalysisCacheStats, AssistKind, RenameEdit, SourcePosition, SourceSpan};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -25,8 +25,8 @@ use super::protocol::{
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
-    capabilities, LogVerbosity, LspServer, PendingDiagnostics, ServerTraceLevel, TraceConfig,
-    TraceLogCounts, SLOW_DIAGNOSTICS_DEBOUNCE,
+    capabilities, LogVerbosity, LspServer, PendingDiagnostics, RequestLatencySample,
+    ServerTraceLevel, TraceConfig, TraceLogCounts, SLOW_DIAGNOSTICS_DEBOUNCE,
 };
 
 const TRACE_LOG_SUMMARY_THRESHOLD: usize = 8;
@@ -39,6 +39,7 @@ struct DocumentRequest<'a> {
 }
 
 pub(super) struct RequestTrace {
+    method: String,
     completion_context: Option<String>,
     definition_context: Option<String>,
     hover_context: Option<String>,
@@ -95,14 +96,12 @@ impl LspServer {
         let definition_context = self.definition_debug_context(message, method);
         let hover_context = self.hover_debug_context(message, method);
         let background_skip_context = self.background_request_skip_debug_context(message, method);
-        let started = (completion_context.is_some()
-            || definition_context.is_some()
-            || hover_context.is_some())
-        .then(Instant::now);
+        let started = Some(Instant::now());
 
         (
             self.trace_log_messages(message, method, true),
             RequestTrace {
+                method: method.to_owned(),
                 completion_context,
                 definition_context,
                 hover_context,
@@ -112,8 +111,15 @@ impl LspServer {
         )
     }
 
-    pub(super) fn finish_request_trace(&self, trace: RequestTrace, response: &Value) -> Vec<Value> {
+    pub(super) fn finish_request_trace(
+        &mut self,
+        trace: RequestTrace,
+        response: &Value,
+    ) -> Vec<Value> {
         let mut outbound = Vec::new();
+        if let Some(started) = trace.started {
+            self.record_request_latency(&trace.method, started.elapsed());
+        }
         let completion_trace = trace.completion_context.and_then(|context| {
             trace.started.map(|started| {
                 log_message_notification(
@@ -234,6 +240,7 @@ impl LspServer {
                     .unwrap_or(Value::Null),
             ),
             "tua/cacheStats" => response(id, self.cache_stats_response()),
+            "tua/health" => response(id, self.health_response()),
             "tua/resetCompletionStats" => response(id, self.reset_completion_stats_response()),
             "tua/inspect" => response(id, self.inspector_response(&message)),
             "tua/explainType" => response(id, self.type_explanation_response(&message)),
@@ -1433,6 +1440,78 @@ impl LspServer {
         })
     }
 
+    fn health_response(&self) -> Value {
+        let stats = self.analysis.cache_stats();
+        let cache_hits = cache_hits(&stats);
+        let cache_misses = cache_misses(&stats);
+        let warm_discovered = self.workspace_warm.files_discovered;
+        let warm_warmed = self.workspace_warm.warmed.len();
+        let warm_failed = self.workspace_warm.failed.len();
+        let warm_queued_high = self.workspace_warm.high.len();
+        let warm_queued_low = self.workspace_warm.low.len();
+        let warm_queued = warm_queued_high + warm_queued_low;
+        let warm_coverage = percentage(warm_warmed, warm_discovered);
+        let latency = latency_summary(&self.request_health.recent_latencies);
+        let queue_total = self.scheduler_health.coordinator_queue_depth
+            + self.scheduler_health.in_flight_jobs
+            + warm_queued;
+
+        json!({
+            "revision": self.analysis.revision(),
+            "documents": {
+                "open": self.document_versions.len(),
+                "recentChanges": self.recent_document_changes.len()
+            },
+            "workspaceWarm": {
+                "enabled": self.workspace_warm.enabled,
+                "discovered": warm_discovered,
+                "warmed": warm_warmed,
+                "failed": warm_failed,
+                "queuedHigh": warm_queued_high,
+                "queuedLow": warm_queued_low,
+                "queued": warm_queued,
+                "coveragePercent": warm_coverage,
+                "snapshotReadyRevision": self.workspace_warm.snapshot_ready_revision,
+                "snapshotFailedRevision": self.workspace_warm.snapshot_failed_revision,
+                "staleResults": self.workspace_warm.stale_results
+            },
+            "queue": {
+                "coordinator": self.scheduler_health.coordinator_queue_depth,
+                "inFlight": self.scheduler_health.in_flight_jobs,
+                "workspaceWarmHigh": warm_queued_high,
+                "workspaceWarmLow": warm_queued_low,
+                "total": queue_total
+            },
+            "cache": {
+                "hits": cache_hits,
+                "misses": cache_misses,
+                "hitRate": percentage(cache_hits, cache_hits + cache_misses),
+                "parse": hit_miss(stats.parse_hits, stats.parse_misses),
+                "hir": hit_miss(stats.hir_hits, stats.hir_misses),
+                "scope": hit_miss(stats.scope_hits, stats.scope_misses),
+                "typeEnvironment": hit_miss(
+                    stats.type_environment_hits,
+                    stats.type_environment_misses
+                ),
+                "diagnostics": hit_miss(stats.diagnostics_hits, stats.diagnostics_misses),
+                "moduleExports": hit_miss(stats.module_export_hits, stats.module_export_misses),
+                "requireEdges": hit_miss(stats.require_edge_hits, stats.require_edge_misses),
+                "symbolIndex": hit_miss(stats.symbol_index_hits, stats.symbol_index_misses),
+                "usageIndex": hit_miss(stats.usage_index_hits, stats.usage_index_misses),
+                "completionContext": hit_miss(
+                    stats.completion_context_hits,
+                    stats.completion_context_misses
+                )
+            },
+            "staleResults": {
+                "requests": self.request_health.stale_results,
+                "workspaceWarm": self.workspace_warm.stale_results,
+                "total": self.request_health.stale_results + self.workspace_warm.stale_results
+            },
+            "latency": latency
+        })
+    }
+
     fn reset_completion_stats_response(&mut self) -> Value {
         let removed_files = self
             .analysis
@@ -2347,6 +2426,99 @@ fn is_config_uri(uri: &str) -> bool {
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name == "tua.toml")
+}
+
+fn cache_hits(stats: &AnalysisCacheStats) -> usize {
+    stats.parse_hits
+        + stats.hir_hits
+        + stats.scope_hits
+        + stats.type_environment_hits
+        + stats.diagnostics_hits
+        + stats.module_export_hits
+        + stats.require_edge_hits
+        + stats.symbol_index_hits
+        + stats.usage_index_hits
+        + stats.completion_context_hits
+}
+
+fn cache_misses(stats: &AnalysisCacheStats) -> usize {
+    stats.parse_misses
+        + stats.hir_misses
+        + stats.scope_misses
+        + stats.type_environment_misses
+        + stats.diagnostics_misses
+        + stats.module_export_misses
+        + stats.require_edge_misses
+        + stats.symbol_index_misses
+        + stats.usage_index_misses
+        + stats.completion_context_misses
+}
+
+fn hit_miss(hits: usize, misses: usize) -> Value {
+    json!({
+        "hits": hits,
+        "misses": misses,
+        "hitRate": percentage(hits, hits + misses)
+    })
+}
+
+fn percentage(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        return 0.0;
+    }
+
+    let percent = (numerator as f64 / denominator as f64) * 100.0;
+
+    (percent * 10.0).round() / 10.0
+}
+
+fn latency_summary(samples: &VecDeque<RequestLatencySample>) -> Value {
+    let mut latencies = samples
+        .iter()
+        .map(|sample| sample.elapsed_ms)
+        .collect::<Vec<_>>();
+    latencies.sort_unstable();
+
+    let mut by_method = BTreeMap::<String, Vec<u64>>::new();
+    for sample in samples {
+        by_method
+            .entry(sample.method.clone())
+            .or_default()
+            .push(sample.elapsed_ms);
+    }
+
+    let methods = by_method
+        .into_iter()
+        .map(|(method, mut method_latencies)| {
+            method_latencies.sort_unstable();
+            json!({
+                "method": method,
+                "count": method_latencies.len(),
+                "p95Ms": percentile(&method_latencies, 95),
+                "maxMs": method_latencies.last().copied().unwrap_or(0)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    json!({
+        "recentCount": latencies.len(),
+        "p50Ms": percentile(&latencies, 50),
+        "p95Ms": percentile(&latencies, 95),
+        "p99Ms": percentile(&latencies, 99),
+        "maxMs": latencies.last().copied().unwrap_or(0),
+        "methods": methods
+    })
+}
+
+fn percentile(sorted: &[u64], percentile: usize) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+
+    let rank = percentile.min(100) * sorted.len();
+    let index = rank.div_ceil(100).saturating_sub(1);
+
+    sorted[index.min(sorted.len() - 1)]
 }
 
 fn register_watched_files_request(id: u64) -> Value {

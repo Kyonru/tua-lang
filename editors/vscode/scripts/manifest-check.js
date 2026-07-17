@@ -15,6 +15,7 @@ const expected = [
   "tua.copyDebugInfo",
   "tua.copyCacheStats",
   "tua.saveCacheStats",
+  "tua.showServerHealth",
   "tua.resetCompletionStats",
   "tua.saveCpuProfile",
   "tua.saveHeapSummary",

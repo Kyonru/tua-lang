@@ -31,11 +31,11 @@ Minimal VS Code language support for tua source files.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,
-  probing server profile artifacts, previewing `spriteSheet` animations,
-  visualizing SignalBus events, module dependencies, and object-pool
-  lifecycles across files, explaining why the active module is included,
-  running source actions and refactors, reporting an issue, and opening Tua
-  settings.
+  showing language-server health, probing server profile artifacts, previewing
+  `spriteSheet` animations, visualizing SignalBus events, module dependencies,
+  and object-pool lifecycles across files, explaining why the active module is
+  included, running source actions and refactors, reporting an issue, and
+  opening Tua settings.
 - Adds trusted hover action links for references, implementations, SignalBus
   event graphs, sprite sheet previews, and resolved asset previews.
 - Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type

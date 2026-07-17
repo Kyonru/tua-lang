@@ -474,6 +474,12 @@
         "category": "Tua"
       },
       {
+        "command": "tua.showServerHealth",
+        "title": "Show Language Server Health",
+        "category": "Tua",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "tua.resetCompletionStats",
         "title": "Reset Completion Learning Stats",
         "category": "Tua"
@@ -693,6 +699,10 @@
         },
         {
           "command": "tua.showWorkspaceSymbolsByModule",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.showServerHealth",
           "when": "workspaceFolderCount > 0"
         },
         {

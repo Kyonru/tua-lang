@@ -257,6 +257,43 @@ player.hp = player.hp - 1
     );
     assert!(stats["invalidations"].is_number());
 }
+
+#[test]
+fn health_request_reports_server_revision_queues_cache_and_latency() {
+    let uri = "file:///tmp/health.tua";
+    let source = "local player = { x = 1 }\nplayer.\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(trigger_character_completion_request(
+        2, uri, source, "player.", ".",
+    ));
+    server.send(health_request(3));
+
+    let health = &response_with_id(server.output(), 3)["result"];
+
+    assert!(health["revision"].is_number());
+    assert_eq!(health["documents"]["open"].as_u64(), Some(1));
+    assert!(health["workspaceWarm"]["coveragePercent"].is_number());
+    assert!(health["workspaceWarm"]["queued"].is_number());
+    assert!(health["queue"]["total"].is_number());
+    assert!(health["cache"]["hits"].is_number());
+    assert!(health["cache"]["misses"].is_number());
+    assert!(health["cache"]["hitRate"].is_number());
+    assert!(health["staleResults"]["total"].is_number());
+    assert!(
+        health["latency"]["recentCount"].as_u64().unwrap_or(0) >= 1,
+        "health should include recently completed request timings"
+    );
+    assert!(health["latency"]["p95Ms"].is_number());
+    assert!(
+        health["latency"]["methods"]
+            .as_array()
+            .is_some_and(|methods| !methods.is_empty()),
+        "health should include per-method latency buckets"
+    );
+}
+
 #[test]
 fn trace_initialization_options_emit_lsp_log_messages() {
     let mut server = TestServer::new();

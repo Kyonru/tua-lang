@@ -544,6 +544,28 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "Object Pool Explorer locations should open in the editor",
     );
 
+    await state.commands.get("tua.showServerHealth")();
+
+    assert.strictEqual(
+      state.webviewPanels.length,
+      6,
+      "server health should open one webview panel",
+    );
+    const healthPanel = state.webviewPanels[5];
+    assert(
+      healthPanel.html.includes("Language Server Health") &&
+        healthPanel.html.includes("Warm coverage") &&
+        healthPanel.html.includes("Queue depth") &&
+        healthPanel.html.includes("Cache hit rate") &&
+        healthPanel.html.includes("Recent p95"),
+      "server health should render revision, warm, queue, cache, stale, and latency data",
+    );
+    assertWebviewScriptsParse(healthPanel.html, "server health");
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/health"),
+      "server health should request live LSP health data",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -1460,6 +1482,60 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve({ parse: { hits: 1, misses: 0 } });
       }
 
+      if (method === "tua/health") {
+        return Promise.resolve({
+          revision: 12,
+          documents: { open: 2, recentChanges: 1 },
+          workspaceWarm: {
+            enabled: true,
+            discovered: 10,
+            warmed: 8,
+            failed: 1,
+            queued: 1,
+            queuedHigh: 1,
+            queuedLow: 0,
+            coveragePercent: 80,
+            snapshotReadyRevision: 12,
+            snapshotFailedRevision: null,
+            staleResults: 2,
+          },
+          queue: {
+            coordinator: 0,
+            inFlight: 1,
+            workspaceWarmHigh: 1,
+            workspaceWarmLow: 0,
+            total: 1,
+          },
+          cache: {
+            hits: 40,
+            misses: 10,
+            hitRate: 80,
+            parse: { hits: 10, misses: 1, hitRate: 90.9 },
+            hir: { hits: 8, misses: 2, hitRate: 80 },
+            scope: { hits: 7, misses: 2, hitRate: 77.8 },
+            typeEnvironment: { hits: 6, misses: 2, hitRate: 75 },
+            diagnostics: { hits: 4, misses: 1, hitRate: 80 },
+            moduleExports: { hits: 2, misses: 1, hitRate: 66.7 },
+            requireEdges: { hits: 1, misses: 1, hitRate: 50 },
+            symbolIndex: { hits: 1, misses: 0, hitRate: 100 },
+            usageIndex: { hits: 1, misses: 0, hitRate: 100 },
+            completionContext: { hits: 0, misses: 0, hitRate: 0 },
+          },
+          staleResults: { requests: 1, workspaceWarm: 2, total: 3 },
+          latency: {
+            recentCount: 5,
+            p50Ms: 8,
+            p95Ms: 42,
+            p99Ms: 42,
+            maxMs: 42,
+            methods: [
+              { method: "textDocument/completion", count: 3, p95Ms: 12, maxMs: 12 },
+              { method: "textDocument/inlayHint", count: 2, p95Ms: 42, maxMs: 42 },
+            ],
+          },
+        });
+      }
+
       if (method === "tua/resetCompletionStats") {
         return Promise.resolve({ removedFiles: 1 });
       }
@@ -2162,6 +2238,7 @@ function assertRegisteredCommands(state) {
     "tua.copyDebugInfo",
     "tua.copyCacheStats",
     "tua.saveCacheStats",
+    "tua.showServerHealth",
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",

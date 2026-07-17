@@ -418,6 +418,7 @@ impl RequestScheduler {
                     self.received_document_version_is_stale(uri, waiter.document_version)
                 });
             if stale {
+                server.record_stale_request_result();
                 outbound.push(error_response(
                     waiter.id,
                     CONTENT_MODIFIED,
@@ -437,6 +438,10 @@ impl RequestScheduler {
 
     pub(super) fn has_in_flight(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    pub(super) fn in_flight_count(&self) -> usize {
+        self.jobs.len()
     }
 
     fn received_document_version_is_stale(&self, uri: &str, document_version: Option<i64>) -> bool {
@@ -596,6 +601,7 @@ pub(super) fn request_runs_on_coordinator(method: &str) -> bool {
             | "shutdown"
             | "tua/builtinDocument"
             | "tua/cacheStats"
+            | "tua/health"
             | "tua/resetCompletionStats"
     )
 }

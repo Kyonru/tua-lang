@@ -664,6 +664,15 @@ fn cache_stats_request(id: u64) -> Value {
     })
 }
 
+fn health_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/health",
+        "params": null
+    })
+}
+
 fn reset_completion_stats_request(id: u64) -> Value {
     json!({
         "jsonrpc": "2.0",

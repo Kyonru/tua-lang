@@ -26,6 +26,7 @@ use scheduler::{request_runs_on_coordinator, RequestScheduler, ServerEvent};
 use transport::{read_message, write_message};
 
 const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
+const RECENT_REQUEST_LATENCY_LIMIT: usize = 128;
 
 #[derive(Default)]
 struct ReceivedInputState {
@@ -199,6 +200,7 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             let cancelled_id = (method == "$/cancelRequest")
                 .then(|| message.get("params")?.get("id").cloned())
                 .flatten();
+            server.update_scheduler_health(pending_messages.len(), &scheduler);
             let mut outbound = server.handle_message(message).unwrap_or_default();
 
             if let Some(id) = cancelled_id {
@@ -346,8 +348,28 @@ struct LspServer {
     trace_log_counts: TraceLogCounts,
     input_backlog_active: bool,
     workspace_warm: WorkspaceWarmState,
+    scheduler_health: SchedulerHealthState,
+    request_health: RequestHealthState,
     shutdown_requested: bool,
     should_exit: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct SchedulerHealthState {
+    coordinator_queue_depth: usize,
+    in_flight_jobs: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RequestHealthState {
+    recent_latencies: VecDeque<RequestLatencySample>,
+    stale_results: usize,
+}
+
+#[derive(Clone, Debug)]
+struct RequestLatencySample {
+    method: String,
+    elapsed_ms: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -566,6 +588,34 @@ impl LspServer {
 
         requests
     }
+
+    fn update_scheduler_health(
+        &mut self,
+        coordinator_queue_depth: usize,
+        scheduler: &RequestScheduler,
+    ) {
+        self.scheduler_health = SchedulerHealthState {
+            coordinator_queue_depth,
+            in_flight_jobs: scheduler.in_flight_count(),
+        };
+    }
+
+    fn record_request_latency(&mut self, method: &str, elapsed: Duration) {
+        if self.request_health.recent_latencies.len() >= RECENT_REQUEST_LATENCY_LIMIT {
+            self.request_health.recent_latencies.pop_front();
+        }
+
+        self.request_health
+            .recent_latencies
+            .push_back(RequestLatencySample {
+                method: method.to_owned(),
+                elapsed_ms: elapsed.as_millis().min(u128::from(u64::MAX)) as u64,
+            });
+    }
+
+    fn record_stale_request_result(&mut self) {
+        self.request_health.stale_results = self.request_health.stale_results.saturating_add(1);
+    }
 }
 
 impl WorkspaceWarmState {
@@ -651,7 +701,8 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/didChange"
         | "textDocument/didSave"
         | "textDocument/didClose"
-        | "tua/setTrace" => Some(0),
+        | "tua/setTrace"
+        | "tua/health" => Some(0),
         "textDocument/completion" | "completionItem/resolve" => Some(1),
         "textDocument/signatureHelp"
         | "textDocument/definition"
