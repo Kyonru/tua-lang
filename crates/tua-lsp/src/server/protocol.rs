@@ -7,7 +7,8 @@ use tua_core::{
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
-    InspectorItem, ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
+    InspectorItem, ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind,
+    Reference, RenameEdit, RenameTarget, RequireResolution, SelectionRange, SemanticToken,
     SemanticTokenKind, SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp,
     SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
     TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
@@ -262,6 +263,97 @@ pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value 
             })
         }).collect::<Vec<_>>()
     })
+}
+
+pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph) -> Value {
+    json!({
+        "modules": graph.modules.into_iter().map(|module| {
+            json!({
+                "uri": uri_from_path(&module.path),
+                "sourceKind": match module.source_kind {
+                    tua_core::AnalysisSourceKind::Tua => "tua",
+                    tua_core::AnalysisSourceKind::Lua => "lua",
+                },
+                "root": module.is_root,
+                "inCycle": module.in_cycle,
+                "dependencyCount": module.dependency_count,
+                "unresolvedDependencyCount": module.unresolved_dependency_count,
+                "reverseDependencyCount": module.reverse_dependency_count,
+                "exports": module.exports.into_iter().map(|export| {
+                    json!({
+                        "name": export.name,
+                        "type": export.type_label,
+                        "documentation": export.documentation,
+                        "origin": match export.origin {
+                            ModuleExportOrigin::Tua => "tua",
+                            ModuleExportOrigin::Lua => "lua",
+                            ModuleExportOrigin::LuaDoc => "luaDoc",
+                            ModuleExportOrigin::GeneratedBuiltin => "generatedBuiltin",
+                        },
+                        "range": lsp_range(export.definition_span),
+                        "exportRange": lsp_range(export.export_span)
+                    })
+                }).collect::<Vec<_>>(),
+                "inclusionPath": module.inclusion_path.map(|path| {
+                    json!({
+                        "rootUri": uri_from_path(&path.root),
+                        "steps": path.steps.into_iter().map(|step| {
+                            json!({
+                                "sourceUri": uri_from_path(&step.source),
+                                "targetUri": uri_from_path(&step.target),
+                                "specifier": step.specifier,
+                                "kind": module_specifier_kind_name(step.kind),
+                                "range": lsp_range(step.span)
+                            })
+                        }).collect::<Vec<_>>()
+                    })
+                })
+            })
+        }).collect::<Vec<_>>(),
+        "edges": graph.edges.into_iter().map(|edge| {
+            let resolution = match edge.resolution {
+                RequireResolution::Resolved { path } => json!({
+                    "status": "resolved",
+                    "targetUri": uri_from_path(&path)
+                }),
+                RequireResolution::Missing { search_roots } => json!({
+                    "status": "missing",
+                    "searchRootUris": search_roots.into_iter().map(|path| uri_from_path(&path)).collect::<Vec<_>>()
+                }),
+                RequireResolution::Invalid { reason } => json!({
+                    "status": "invalid",
+                    "reason": reason
+                }),
+                RequireResolution::Duplicate { candidates, selected } => json!({
+                    "status": "duplicate",
+                    "targetUri": uri_from_path(&selected),
+                    "candidateUris": candidates.into_iter().map(|path| uri_from_path(&path)).collect::<Vec<_>>()
+                }),
+            };
+
+            json!({
+                "sourceUri": uri_from_path(&edge.source),
+                "specifier": edge.specifier,
+                "kind": module_specifier_kind_name(edge.kind),
+                "range": lsp_range(edge.span),
+                "resolution": resolution,
+                "inCycle": edge.in_cycle
+            })
+        }).collect::<Vec<_>>(),
+        "cycles": graph.cycles.into_iter().enumerate().map(|(index, paths)| {
+            json!({
+                "id": format!("cycle:{index}"),
+                "moduleUris": paths.into_iter().map(|path| uri_from_path(&path)).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>()
+    })
+}
+
+fn module_specifier_kind_name(kind: ModuleSpecifierKind) -> &'static str {
+    match kind {
+        ModuleSpecifierKind::Require => "require",
+        ModuleSpecifierKind::Import => "import",
+    }
 }
 
 pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value {

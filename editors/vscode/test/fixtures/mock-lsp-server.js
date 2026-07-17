@@ -90,6 +90,9 @@ function handleMessage(message) {
     case "tua/inspect":
       inspectDocument(message);
       return;
+    case "tua/moduleGraph":
+      moduleGraph(message);
+      return;
     case "workspace/willRenameFiles":
       willRenameFiles(message);
       return;
@@ -383,6 +386,107 @@ function inspectDocument(message) {
       },
     ],
   });
+}
+
+function moduleGraph(message) {
+  const rootUri = [...documents.keys()].find((uri) => uri.endsWith("/module-graph-main.tua"));
+  const rootPath = rootUri
+    ? fileURLToPath(rootUri)
+    : path.resolve(process.cwd(), "src", "module-graph-main.tua");
+  const sourceDirectory = path.dirname(rootPath);
+  const mainUri = rootUri || pathToFileURL(rootPath).toString();
+  const playerUri = pathToFileURL(path.join(sourceDirectory, "module_graph_player.tua")).toString();
+  const sharedUri = pathToFileURL(path.join(sourceDirectory, "module_graph_shared.lua")).toString();
+  const importRange = {
+    start: { line: 0, character: 23 },
+    end: { line: 0, character: 42 },
+  };
+
+  log({
+    type: "moduleGraph.request",
+    id: message.id,
+    rootUri: mainUri,
+  });
+  respond(message.id, {
+    analysisRevision: 11,
+    graph: {
+      modules: [
+        moduleGraphModule(mainUri, {
+          root: true,
+          dependencyCount: 2,
+          unresolvedDependencyCount: 1,
+          exports: [{ name: "start", type: "function(): Player", origin: "tua", range: importRange }],
+          inclusionPath: { rootUri: mainUri, steps: [] },
+        }),
+        moduleGraphModule(playerUri, {
+          inCycle: true,
+          dependencyCount: 1,
+          reverseDependencyCount: 2,
+          exports: [{ name: "Player", type: "Player", origin: "tua", range: importRange }],
+          inclusionPath: {
+            rootUri: mainUri,
+            steps: [moduleGraphStep(mainUri, playerUri, "module_graph_player", "require", importRange)],
+          },
+        }),
+        moduleGraphModule(sharedUri, {
+          sourceKind: "lua",
+          inCycle: true,
+          dependencyCount: 1,
+          reverseDependencyCount: 1,
+          exports: [{ name: "version", type: "number", origin: "lua", range: importRange }],
+          inclusionPath: {
+            rootUri: mainUri,
+            steps: [
+              moduleGraphStep(mainUri, playerUri, "module_graph_player", "require", importRange),
+              moduleGraphStep(playerUri, sharedUri, "module_graph_shared", "import", importRange),
+            ],
+          },
+        }),
+      ],
+      edges: [
+        moduleGraphEdge(mainUri, "module_graph_player", "require", importRange, {
+          status: "resolved",
+          targetUri: playerUri,
+        }),
+        moduleGraphEdge(mainUri, "missing_module", "require", importRange, {
+          status: "missing",
+          searchRootUris: [pathToFileURL(sourceDirectory).toString()],
+        }),
+        moduleGraphEdge(playerUri, "module_graph_shared", "import", importRange, {
+          status: "resolved",
+          targetUri: sharedUri,
+        }, true),
+        moduleGraphEdge(sharedUri, "module_graph_player", "require", importRange, {
+          status: "resolved",
+          targetUri: playerUri,
+        }, true),
+      ],
+      cycles: [{ id: "cycle:0", moduleUris: [playerUri, sharedUri] }],
+    },
+  });
+}
+
+function moduleGraphModule(uri, overrides) {
+  return {
+    uri,
+    sourceKind: "tua",
+    root: false,
+    inCycle: false,
+    dependencyCount: 0,
+    unresolvedDependencyCount: 0,
+    reverseDependencyCount: 0,
+    exports: [],
+    inclusionPath: null,
+    ...overrides,
+  };
+}
+
+function moduleGraphStep(sourceUri, targetUri, specifier, kind, range) {
+  return { sourceUri, targetUri, specifier, kind, range };
+}
+
+function moduleGraphEdge(sourceUri, specifier, kind, range, resolution, inCycle = false) {
+  return { sourceUri, specifier, kind, range, inCycle, resolution };
 }
 
 function willRenameFiles(message) {

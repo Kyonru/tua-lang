@@ -70,6 +70,9 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
 
   const fixtures = {
     intelligence: path.join(sourceOne, "intelligence.tua"),
+    moduleGraphRoot: path.join(sourceOne, "module-graph-main.tua"),
+    moduleGraphPlayer: path.join(sourceOne, "module_graph_player.tua"),
+    moduleGraphShared: path.join(sourceOne, "module_graph_shared.lua"),
     missingSprite: path.join(sourceOne, "missing-sprite.tua"),
     oldModule: path.join(sourceOne, "old_module.tua"),
     playerAsset: path.join(assetDirectory, "player.png"),
@@ -96,6 +99,23 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
     ].join("\n"),
   );
   fs.writeFileSync(fixtures.oldModule, "return { value = 1 }\n");
+  fs.writeFileSync(
+    fixtures.moduleGraphRoot,
+    [
+      'local player = require("module_graph_player")',
+      'local missing = require("missing_module")',
+      "return { start = player.spawn, missing = missing }",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    fixtures.moduleGraphPlayer,
+    'local shared = require("module_graph_shared")\nreturn { Player = {}, shared = shared }\n',
+  );
+  fs.writeFileSync(
+    fixtures.moduleGraphShared,
+    'local player = require("module_graph_player")\nreturn { version = 1, player = player }\n',
+  );
   fs.writeFileSync(
     fixtures.renameSource,
     'local dependency = require("old_module")\nreturn dependency\n',

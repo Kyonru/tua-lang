@@ -37,6 +37,14 @@ imports participate in the same module graph as `require(...)` and emit normal
 Lua `require("...")` calls. Use `require(...)` directly for external Lua
 packages and runtime-computed module names.
 
+In VS Code, run `Tua: Show Module Dependency Graph` to inspect that shared
+graph. The explorer shows resolved and unresolved imports, dependency cycles,
+reverse dependencies, and each module's inferred exported surface. Run `Tua:
+Why Is This Module Included?` from a `.tua` editor to focus the active file and
+follow the deterministic shortest chain of static imports from a project root
+candidate. Every dependency and path step opens the original `require` or
+`import` range; the extension does not need the target file to be open.
+
 ## Requiring Tua From Lua
 
 Tua builds `.tua` files into `.lua` files under the configured output directory.

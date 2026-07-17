@@ -9,10 +9,11 @@ use tua_core::{
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
-    FormatOptions, InlayHint, InspectorItem, ModuleLink, ModuleSpecifierKind, ProjectModel,
-    ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
-    SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit,
-    TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
+    FormatOptions, InlayHint, InspectorItem, ModuleDependencyGraph, ModuleLink,
+    ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
+    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignalGraph, SignatureHelp,
+    SourcePosition, SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol,
+    CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -916,6 +917,10 @@ impl AnalysisSnapshot {
 
     pub(super) fn asset_inventory(&self) -> AssetInventory {
         self.core.asset_inventory()
+    }
+
+    pub(super) fn module_dependency_graph(&self) -> ModuleDependencyGraph {
+        self.core.module_dependency_graph()
     }
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {

@@ -5,6 +5,7 @@ const fs = require("fs");
 const Module = require("module");
 const os = require("os");
 const path = require("path");
+const vm = require("vm");
 
 const extensionPath = path.resolve(__dirname, "..", "src", "extension.js");
 const extensionRoot = path.resolve(__dirname, "..");
@@ -393,6 +394,41 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert(
       state.executedCommands.some((entry) => entry.command === "vscode.open"),
       "signal graph call locations should open in the editor",
+    );
+
+    await state.commands.get("tua.whyModuleIncluded")();
+
+    assert.strictEqual(state.webviewPanels.length, 3, "module graph should open one webview panel");
+    const modulePanel = state.webviewPanels[2];
+    assert(
+      modulePanel.html.includes("Module Graph") &&
+        modulePanel.html.includes("Unresolved") &&
+        modulePanel.html.includes("Why included") &&
+        modulePanel.html.includes('"status":"missing"') &&
+        modulePanel.html.includes('"name":"spawn"') &&
+        modulePanel.html.includes('"initialTab":"why"') &&
+        modulePanel.html.includes(`"focusUri":"${spriteDocument.uri.toString()}"`) &&
+        modulePanel.html.includes("openLocation"),
+      "module graph should render relationships, unresolved imports, exports, inclusion paths, and navigation",
+    );
+    assertWebviewScriptsParse(modulePanel.html, "module graph");
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/moduleGraph"),
+      "module graph should request compiler-backed graph data",
+    );
+
+    await modulePanel.messageListener({
+      command: "openLocation",
+      uri: spriteDocument.uri.toString(),
+      range: {
+        start: { line: 0, character: 6 },
+        end: { line: 0, character: 12 },
+      },
+    });
+    assert.strictEqual(
+      state.executedCommands.at(-1).command,
+      "vscode.open",
+      "module graph import and export locations should open in the editor",
     );
 
     await state.commands.get("tua.copyDebugInfo")();
@@ -1351,6 +1387,10 @@ function createMockState(workspace, options = {}) {
         });
       }
 
+      if (method === "tua/moduleGraph") {
+        return Promise.resolve(mockModuleGraph(activeTextEditor?.document, workspace));
+      }
+
       if (method === "tua/assetInventory") {
         const player = path.join(workspace, "assets", "player.png");
         const jump = path.join(workspace, "assets", "jump.wav");
@@ -1468,6 +1508,135 @@ function createMockState(workspace, options = {}) {
     webviewPanels,
     warningMessages,
     workspaceEdits,
+  };
+}
+
+function mockModuleGraph(document, workspace) {
+  const rootUri = document?.uri?.toString?.() || `file://${path.join(workspace, "src", "main.tua")}`;
+  const playerUri = `file://${path.join(workspace, "src", "player.tua")}`;
+  const sharedUri = `file://${path.join(workspace, "src", "shared.tua")}`;
+  const importRange = {
+    start: { line: 0, character: 16 },
+    end: { line: 0, character: 24 },
+  };
+
+  return {
+    analysisRevision: 7,
+    graph: {
+      modules: [
+        {
+          uri: rootUri,
+          sourceKind: "tua",
+          root: true,
+          inCycle: false,
+          dependencyCount: 2,
+          unresolvedDependencyCount: 1,
+          reverseDependencyCount: 0,
+          exports: [
+            {
+              name: "spawn",
+              type: "function(name: string): Player",
+              documentation: "Creates a player.",
+              origin: "tua",
+              range: {
+                start: { line: 0, character: 6 },
+                end: { line: 0, character: 11 },
+              },
+            },
+          ],
+          inclusionPath: { rootUri, steps: [] },
+        },
+        {
+          uri: playerUri,
+          sourceKind: "tua",
+          root: false,
+          inCycle: true,
+          dependencyCount: 1,
+          unresolvedDependencyCount: 0,
+          reverseDependencyCount: 2,
+          exports: [{ name: "Player", type: "Player", origin: "tua", range: importRange }],
+          inclusionPath: {
+            rootUri,
+            steps: [
+              {
+                sourceUri: rootUri,
+                targetUri: playerUri,
+                specifier: "player",
+                kind: "require",
+                range: importRange,
+              },
+            ],
+          },
+        },
+        {
+          uri: sharedUri,
+          sourceKind: "lua",
+          root: false,
+          inCycle: true,
+          dependencyCount: 1,
+          unresolvedDependencyCount: 0,
+          reverseDependencyCount: 1,
+          exports: [{ name: "version", type: "number", origin: "lua", range: importRange }],
+          inclusionPath: {
+            rootUri,
+            steps: [
+              {
+                sourceUri: rootUri,
+                targetUri: playerUri,
+                specifier: "player",
+                kind: "require",
+                range: importRange,
+              },
+              {
+                sourceUri: playerUri,
+                targetUri: sharedUri,
+                specifier: "shared",
+                kind: "import",
+                range: importRange,
+              },
+            ],
+          },
+        },
+      ],
+      edges: [
+        {
+          sourceUri: rootUri,
+          specifier: "player",
+          kind: "require",
+          range: importRange,
+          inCycle: false,
+          resolution: { status: "resolved", targetUri: playerUri },
+        },
+        {
+          sourceUri: rootUri,
+          specifier: "missing",
+          kind: "require",
+          range: importRange,
+          inCycle: false,
+          resolution: {
+            status: "missing",
+            searchRootUris: [`file://${path.join(workspace, "src")}`],
+          },
+        },
+        {
+          sourceUri: playerUri,
+          specifier: "shared",
+          kind: "import",
+          range: importRange,
+          inCycle: true,
+          resolution: { status: "resolved", targetUri: sharedUri },
+        },
+        {
+          sourceUri: sharedUri,
+          specifier: "player",
+          kind: "require",
+          range: importRange,
+          inCycle: true,
+          resolution: { status: "resolved", targetUri: playerUri },
+        },
+      ],
+      cycles: [{ id: "cycle:0", moduleUris: [playerUri, sharedUri] }],
+    },
   };
 }
 
@@ -1624,6 +1793,8 @@ function assertRegisteredCommands(state) {
     "tua.assets.rename",
     "tua.assets.reveal",
     "tua.showSignalGraph",
+    "tua.showModuleGraph",
+    "tua.whyModuleIncluded",
     "tua.source.organizeImports",
     "tua.source.sortImports",
     "tua.source.removeUnusedImports",
@@ -1631,6 +1802,15 @@ function assertRegisteredCommands(state) {
     "tua.reportIssue",
   ]) {
     assert(state.commands.has(command), `${command} should be registered on activation`);
+  }
+}
+
+function assertWebviewScriptsParse(html, label) {
+  const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
+
+  assert(scripts.length > 0, `${label} should include an executable webview script`);
+  for (const [, script] of scripts) {
+    new vm.Script(script, { filename: `${label.replaceAll(" ", "-")}-webview.js` });
   }
 }
 

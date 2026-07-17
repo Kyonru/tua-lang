@@ -143,8 +143,10 @@ pub use inspector::{
 };
 pub use lua::builtin_definition_document;
 pub use module_graph::{
+    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
     ModuleExportEntry, ModuleExportOrigin, ModuleGraph, ModuleGraphInput, ModuleGraphModule,
-    ModuleGraphOptions, RequireGraphEdge, RequireResolution,
+    ModuleGraphOptions, ModuleInclusionPath, ModuleInclusionStep, RequireGraphEdge,
+    RequireResolution,
 };
 pub use module_index::{
     exported_field_for_fields, exported_type_for_fields, infer_module_exports,

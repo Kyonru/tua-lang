@@ -84,6 +84,16 @@ function previewTabs() {
     );
 }
 
+function moduleGraphTabs() {
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter(
+      (tab) =>
+        tab.input instanceof vscode.TabInputWebview &&
+        String(tab.input.viewType || "").endsWith("tuaModuleGraph"),
+    );
+}
+
 function positionAfter(document, needle, occurrence = 1) {
   const text = document.getText();
   let offset = -1;
@@ -110,6 +120,7 @@ module.exports = {
   eventSequence,
   fixtures,
   hoverText,
+  moduleGraphTabs,
   openFixture,
   positionAfter,
   previewTabs,

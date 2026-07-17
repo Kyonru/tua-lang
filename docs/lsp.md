@@ -120,6 +120,15 @@ selected path, version, and workspace directory when available.
   roles, bus expressions, payload schemas, URIs, and source ranges. The VS Code
   `Tua: Show Signal Graph` command uses this data for a filterable event-to-file
   graph and source navigation without merging independent same-named events.
+- The low-priority `tua/moduleGraph` request returns the compiler's revisioned
+  project module graph: Tua/Lua files, static `require` and `import` edges,
+  resolved, missing, invalid, or duplicate resolution states, structured
+  cycles, reverse-dependency counts, inferred exported surfaces, and one
+  deterministic shortest inclusion path from a root candidate to each
+  reachable module. A root candidate is a module with no resolved importer;
+  a pure cycle may therefore have no root path. The VS Code module dependency
+  explorer opens every edge, export, and inclusion step at its compiler-owned
+  source range.
 - SignalBus event strings use the same semantic index for completion, payload
   signature help, hover, definition, references, and rename. Typed listener and
   `declare` callback conflicts publish `TL5005`; untyped or unresolved buses
@@ -186,6 +195,14 @@ parse Tua source or resolve asset paths independently.
 Signal graph visualization is an explicit project-inspection command backed by
 `tua/signalGraph`. The extension renders semantic results and does not maintain
 a parallel SignalBus parser.
+
+Module graph visualization follows the same boundary. `Tua: Show Module
+Dependency Graph` requests `tua/moduleGraph` and presents the returned semantic
+snapshot without scanning source in JavaScript. `Tua: Why Is This Module
+Included?` focuses the active file and opens its root-to-module explanation.
+Module graph work uses the background request lane, so pending inspection
+yields to document changes, completion, hover, definition, and other
+interactive editor work.
 
 The Tua Assets Explorer is backed by `tua/assetInventory`. The extension only
 groups and presents compiler results, publishes the returned unused-asset
@@ -380,10 +397,10 @@ npm --prefix editors/vscode run test:vscode
 
 It opens an isolated two-root workspace and verifies live completion freshness,
 cancellation, hover, definition navigation, signature help, inlay hints,
-UTF-16 and untitled-document positions, module and asset file-rename edits, and
-sprite preview opening/reload/focus behavior. Sprite tests also assert that
-inspection uses the current synchronized document version. CI runs the same
-suite under Xvfb.
+UTF-16 and untitled-document positions, module and asset file-rename edits,
+module dependency graph requests and panel reuse, and sprite preview
+opening/reload/focus behavior. Sprite tests also assert that inspection uses
+the current synchronized document version. CI runs the same suite under Xvfb.
 
 ## Profiling
 

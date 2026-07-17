@@ -28,6 +28,8 @@ const expected = [
   "tua.assets.rename",
   "tua.assets.reveal",
   "tua.showSignalGraph",
+  "tua.showModuleGraph",
+  "tua.whyModuleIncluded",
   "tua.source.organizeImports",
   "tua.source.sortImports",
   "tua.source.removeUnusedImports",

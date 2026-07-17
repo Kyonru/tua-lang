@@ -15,6 +15,10 @@ extra type intelligence, not like a language that forgot Lua exists.
   module exports.
 - `require("...")` should preserve runtime semantics while powering editor
   navigation and completions.
+- Module inspection should consume the shared compiler module graph, include
+  both `.tua` and `.lua` providers whether or not they are open in the editor,
+  and expose structured resolution/cycle/export facts instead of making editor
+  integrations parse source again.
 - LuaDoc/LuaHelper/LuaLS-style annotations should enrich `.lua` and `.tua`
   files where supported.
 - Unknown dynamic Lua should stay permissive instead of producing confident but
@@ -40,6 +44,8 @@ LOVE/LuaJIT development.
 - Fixing `.tua` interop while leaving `.lua` module providers untyped.
 - Adding project-wide behavior that scans arbitrary directories on each
   request.
+- Building module explorers from open editor documents or extension-side path
+  heuristics instead of the revisioned project snapshot.
 - Reporting errors for dynamic Lua that cannot be proven statically.
 
 ## Skill Maintenance

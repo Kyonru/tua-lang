@@ -16,6 +16,7 @@ mod formatting;
 mod hover;
 mod inlay_hints;
 mod inspector;
+mod module_graph;
 mod navigation;
 mod recovery;
 mod scheduling;
@@ -716,6 +717,15 @@ fn asset_inventory_request(id: u64) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "tua/assetInventory",
+        "params": null
+    })
+}
+
+fn module_graph_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/moduleGraph",
         "params": null
     })
 }

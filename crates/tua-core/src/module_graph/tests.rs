@@ -360,6 +360,10 @@ return { name = "b" }
     assert!(graph
         .all_diagnostics()
         .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_REQUIRE_CYCLE)));
+    assert_eq!(
+        graph.cycles(),
+        &[vec![PathBuf::from("src/a.tua"), PathBuf::from("src/b.tua")]]
+    );
 }
 
 #[test]

@@ -26,6 +26,9 @@ language or editor behavior, and migration notes call out those changes.
   reveal, and LSP-aware file rename.
 - Asset path casing warning `TL2008` and conservative unused-asset hint
   `TL2009`; dynamic asset loading remains supported.
+- A compiler-backed VS Code module dependency explorer for static `require` and
+  `import` relationships, unresolved resolutions, cycles, reverse dependencies,
+  exported surfaces, and source-linked "Why Is This Module Included?" paths.
 
 ### Changed
 

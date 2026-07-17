@@ -14,13 +14,13 @@ use super::protocol::{
     lsp_diagnostic_from_core, lsp_document_highlight_from_core, lsp_document_link_from_core,
     lsp_document_symbol_from_core, lsp_folding_range_from_core, lsp_full_document_text_edit,
     lsp_hover_from_core, lsp_inlay_hint_from_core, lsp_inspector_items_from_core,
-    lsp_location_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
-    lsp_resolved_completion_item, lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
-    lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
-    lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
-    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
-    workspace_diagnostic_refresh_request, SourceRange,
+    lsp_location_from_core, lsp_module_dependency_graph_from_core, lsp_prepare_rename_from_core,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
+    lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
+    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signal_graph_from_core,
+    lsp_signature_help_from_core, lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core,
+    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
+    source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
@@ -237,6 +237,7 @@ impl LspServer {
             "tua/inspect" => response(id, self.inspector_response(&message)),
             "tua/explainType" => response(id, self.type_explanation_response(&message)),
             "tua/assetInventory" => response(id, self.asset_inventory_response()),
+            "tua/moduleGraph" => response(id, self.module_dependency_graph_response()),
             "tua/signalGraph" => response(id, self.signal_graph_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
@@ -1441,6 +1442,17 @@ impl LspServer {
         json!({
             "analysisRevision": snapshot.revision(),
             "inventory": lsp_asset_inventory_from_core(snapshot.asset_inventory())
+        })
+    }
+
+    fn module_dependency_graph_response(&self) -> Value {
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+
+        json!({
+            "analysisRevision": snapshot.revision(),
+            "graph": lsp_module_dependency_graph_from_core(snapshot.module_dependency_graph())
         })
     }
 

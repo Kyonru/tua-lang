@@ -1823,6 +1823,94 @@ fn editing_one_file_does_not_reparse_unrelated_files() {
 }
 
 #[test]
+fn module_dependency_graph_reports_relationships_cycles_exports_and_inclusion_paths() {
+    let temp = TempProject::new("module-dependency-graph");
+    let main = temp.write(
+        "src/main.tua",
+        r#"local Player = require("player")
+local Missing = import("missing")
+return { player = Player, missing = Missing }
+"#,
+    );
+    let player = temp.write(
+        "src/player.tua",
+        r#"local Shared = require("shared")
+return { hp = 100, shared = Shared }
+"#,
+    );
+    let shared = temp.write(
+        "src/shared.lua",
+        r#"local Player = require("player")
+return { ready = true, player = Player }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    for path in [&main, &player, &shared] {
+        host.set_file(path, fs::read_to_string(path).expect("module should read"));
+    }
+
+    let graph = host.snapshot().module_dependency_graph();
+    let main_module = graph
+        .modules
+        .iter()
+        .find(|module| module.path == main)
+        .expect("main module should be included");
+    let player_module = graph
+        .modules
+        .iter()
+        .find(|module| module.path == player)
+        .expect("player module should be included");
+    let shared_module = graph
+        .modules
+        .iter()
+        .find(|module| module.path == shared)
+        .expect("shared module should be included");
+
+    assert_eq!(graph.modules.len(), 3);
+    assert_eq!(graph.edges.len(), 4);
+    assert!(main_module.is_root);
+    assert_eq!(main_module.unresolved_dependency_count, 1);
+    assert_eq!(player_module.reverse_dependency_count, 2);
+    assert!(player_module.in_cycle);
+    assert!(shared_module.in_cycle);
+    assert_eq!(shared_module.source_kind, AnalysisSourceKind::Lua);
+    assert_eq!(graph.cycles, vec![vec![player.clone(), shared.clone()]]);
+    assert!(graph.edges.iter().any(|edge| {
+        edge.source == main
+            && edge.specifier == "missing"
+            && matches!(edge.resolution, RequireResolution::Missing { .. })
+    }));
+    assert!(player_module
+        .exports
+        .iter()
+        .any(|export| export.name == "hp" && export.type_label == "number"));
+    assert_eq!(
+        player_module
+            .inclusion_path
+            .as_ref()
+            .expect("player should have an inclusion path")
+            .steps
+            .iter()
+            .map(|step| step.specifier.as_str())
+            .collect::<Vec<_>>(),
+        ["player"]
+    );
+    assert_eq!(
+        shared_module
+            .inclusion_path
+            .as_ref()
+            .expect("shared should have an inclusion path")
+            .steps
+            .iter()
+            .map(|step| step.specifier.as_str())
+            .collect::<Vec<_>>(),
+        ["player", "shared"]
+    );
+}
+
+#[test]
 fn changing_exported_module_invalidates_known_importers() {
     let temp = TempProject::new("module-dependency");
 

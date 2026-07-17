@@ -29,8 +29,9 @@ Minimal VS Code language support for tua source files.
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,
   probing server profile artifacts, previewing `spriteSheet` animations,
-  visualizing SignalBus events across files, running source actions, reporting
-  an issue, and opening Tua settings.
+  visualizing SignalBus events and module dependencies across files, explaining
+  why the active module is included, running source actions, reporting an issue,
+  and opening Tua settings.
 - Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
   and static usage, with reference navigation, file rename, reveal, refresh,
   dimensions, and conservative unused-asset diagnostics.
@@ -81,8 +82,8 @@ make extension-test
 The suite drives an isolated two-root workspace against a controlled LSP
 server. It covers completion freshness and cancellation, hover, definition,
 signature help, inlay hints, UTF-16 and untitled documents, module and asset
-file renames, and sprite preview opening, reload, focus, missing assets, and
-hover command links.
+file renames, module graph opening and reuse, and sprite preview opening,
+reload, focus, missing assets, and hover command links.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
@@ -114,6 +115,8 @@ the setting.
 - `Tua: Preview Sprite Animations`
 - `Tua: Refresh Asset Explorer`
 - `Tua: Show Signal Graph`
+- `Tua: Show Module Dependency Graph`
+- `Tua: Why Is This Module Included?`
 - `Tua: Organize Imports`
 - `Tua: Sort Imports`
 - `Tua: Remove Unused Imports`
@@ -136,6 +139,22 @@ steps. When a result is `any`, the quick-pick title calls that out directly.
 Select a located step to open its declaration or source. Missing modules,
 explicit `any`, unknown initializers, and member access through `any` are shown
 as distinct causes.
+
+## Module Dependency Explorer
+
+`Tua: Show Module Dependency Graph` opens a compiler-backed project view of
+static `require(...)` and `import(...)` relationships. Filter the graph to
+unresolved dependencies, cycles, or root candidates, select a module to inspect
+its direct dependencies and reverse dependencies, and open inferred exports at
+their definitions. Missing and invalid imports show the searched roots or
+compiler reason; duplicate resolutions retain their candidate set.
+
+`Tua: Why Is This Module Included?` opens the same panel focused on the active
+file. The Why included tab shows one deterministic shortest path from a module
+with no resolved importer to the selected file. Pure dependency cycles can have
+no root path, which the inspector reports explicitly. Each step opens the exact
+source import. The request runs as background project inspection and yields to
+typing and interactive language features.
 
 ## Asset Explorer
 
@@ -210,5 +229,9 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   declarations, listeners, emits, cleanup, and query calls, and opens exact
   source locations without parsing Tua source in the extension. Standard hover,
   definition, references, and rename requests work directly on event strings.
+- Module dependency visualization requests `tua/moduleGraph`. The compiler owns
+  module identity, resolution states, cycles, reverse relationships, exports,
+  and inclusion paths; the extension only filters, lays out, and navigates that
+  structured result.
 - The optional external API bridge is design-only. The extension does not start
   a bridge session today.

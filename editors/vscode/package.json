@@ -545,6 +545,18 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "tua.showModuleGraph",
+        "title": "Show Module Dependency Graph",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "tua.whyModuleIncluded",
+        "title": "Why Is This Module Included?",
+        "category": "Tua",
+        "icon": "$(question)"
+      },
+      {
         "command": "tua.source.organizeImports",
         "title": "Organize Imports",
         "category": "Tua"
@@ -602,6 +614,10 @@
           "when": "editorLangId == tua"
         },
         {
+          "command": "tua.whyModuleIncluded",
+          "when": "editorLangId == tua"
+        },
+        {
           "command": "tua.assets.open",
           "when": "false"
         },
@@ -627,6 +643,11 @@
           "command": "tua.explainType",
           "when": "editorLangId == tua",
           "group": "navigation@40"
+        },
+        {
+          "command": "tua.whyModuleIncluded",
+          "when": "editorLangId == tua",
+          "group": "navigation@50"
         }
       ],
       "view/title": [

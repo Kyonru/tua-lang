@@ -22,6 +22,8 @@ const COMMANDS = {
   renameAsset: "tua.assets.rename",
   revealAsset: "tua.assets.reveal",
   showSignalGraph: "tua.showSignalGraph",
+  showModuleGraph: "tua.showModuleGraph",
+  whyModuleIncluded: "tua.whyModuleIncluded",
   organizeImports: "tua.source.organizeImports",
   sortImports: "tua.source.sortImports",
   removeUnusedImports: "tua.source.removeUnusedImports",

@@ -9,12 +9,20 @@ use crate::{
     AnalysisSourceKind, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourceSpan,
 };
 
+mod inspection;
+
+pub use inspection::{
+    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
+    ModuleInclusionPath, ModuleInclusionStep,
+};
+
 #[derive(Clone, Debug, Default)]
 pub struct ModuleGraph {
     modules: BTreeMap<PathBuf, ModuleGraphModule>,
     export_index: BTreeMap<(PathBuf, String), ModuleExportEntry>,
     exports_by_symbol: BTreeMap<(PathBuf, HirSymbolId), Vec<ModuleExportEntry>>,
     diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
+    cycles: Vec<Vec<PathBuf>>,
 }
 
 #[derive(Clone, Debug)]
@@ -153,6 +161,7 @@ impl ModuleGraph {
 
         graph.collect_require_diagnostics();
         graph.collect_cycle_diagnostics();
+        graph.cycles.sort();
         graph
     }
 
@@ -255,6 +264,10 @@ impl ModuleGraph {
             .flat_map(|diagnostics| diagnostics.iter())
     }
 
+    pub fn cycles(&self) -> &[Vec<PathBuf>] {
+        &self.cycles
+    }
+
     fn collect_require_diagnostics(&mut self) {
         for module in self.modules.values() {
             for edge in &module.require_edges {
@@ -305,6 +318,7 @@ impl ModuleGraph {
         if let Some(index) = visiting.iter().position(|candidate| candidate == &path) {
             let cycle = visiting[index..].to_vec();
             if reported.insert(cycle.clone()) {
+                self.cycles.push(cycle.clone());
                 let display = cycle
                     .iter()
                     .chain(std::iter::once(&path))

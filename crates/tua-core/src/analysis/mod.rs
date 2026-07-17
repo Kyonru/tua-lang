@@ -81,12 +81,14 @@ use crate::{
     CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind,
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition,
     DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint,
+    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
     ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
-    ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput,
-    Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
-    SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
-    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
-    TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
+    ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig,
+    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
+    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex, SemanticToken,
+    SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type,
+    TypeEnvironment, TypeExplanation, TypeExplanationStep, TypeExplanationStepKind, TypedFunction,
+    WorkspaceSymbol,
 };
 
 mod asset_queries;
@@ -94,6 +96,7 @@ mod database;
 mod editor_queries;
 mod host;
 mod inspector_queries;
+mod module_queries;
 mod navigation_queries;
 mod project_queries;
 mod recovery;
