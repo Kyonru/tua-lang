@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::types::{FunctionType, TableField, TableShape, Type};
-use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
+use crate::types::{TableField, TableShape, Type, TypeEnvironment};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, TypedFunction, TypedParameter};
+
+pub(crate) const MODULE_NAME: &str = "ecs";
+pub(crate) const RUNTIME_MODULE: &str = "tuaecs";
 
 pub(crate) const WORLD_TYPE: &str = "EcsWorld";
 pub(crate) const ENTITY_ID_TYPE: &str = "EcsEntityId";
@@ -34,35 +37,33 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
 }
 
 pub(crate) fn builtin_locals() -> Vec<(String, Type)> {
-    vec![("ecs".to_owned(), ecs_module_type())]
+    vec![(MODULE_NAME.to_owned(), ecs_module_type())]
+}
+
+pub(crate) fn augment_environment(environment: TypeEnvironment) -> TypeEnvironment {
+    environment
+        .with_alias_types(builtin_aliases())
+        .with_local_types(builtin_locals())
 }
 
 fn ecs_module_type() -> Type {
     Type::table([
         (
             "world",
-            TableField::required(Type::Function(FunctionType::new(
-                [],
-                Type::alias(WORLD_TYPE),
-            ))),
+            TableField::required(typed_module_function("world").unwrap().as_type().unwrap()),
         ),
         (
             "component",
-            TableField::required(Type::Function(FunctionType::new(
-                [Type::string(), Type::empty_table()],
-                Type::alias(COMPONENT_TYPE),
-            ))),
+            TableField::required(
+                typed_module_function("component")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
         (
             "system",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::array(Type::alias(COMPONENT_TYPE)),
-                    Type::function([], Type::nil()),
-                ],
-                Type::alias(SYSTEM_TYPE),
-            ))),
+            TableField::required(typed_module_function("system").unwrap().as_type().unwrap()),
         ),
     ])
 }
@@ -71,72 +72,60 @@ fn world_type() -> Type {
     Type::Table(TableShape::from_fields([
         (
             "create",
-            TableField::required(Type::Function(FunctionType::new(
-                [Type::alias(WORLD_TYPE)],
-                Type::alias(ENTITY_ID_TYPE),
-            ))),
+            TableField::required(
+                typed_method(WORLD_TYPE, "create")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
         (
             "destroy",
-            TableField::required(Type::Function(FunctionType::new(
-                [Type::alias(WORLD_TYPE), Type::alias(ENTITY_ID_TYPE)],
-                Type::nil(),
-            ))),
+            TableField::required(
+                typed_method(WORLD_TYPE, "destroy")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
         (
             "add",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::alias(ENTITY_ID_TYPE),
-                    Type::alias(COMPONENT_TYPE),
-                    Type::empty_table(),
-                ],
-                Type::nil(),
-            ))),
+            TableField::required(typed_method(WORLD_TYPE, "add").unwrap().as_type().unwrap()),
         ),
         (
             "get",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::alias(ENTITY_ID_TYPE),
-                    Type::alias(COMPONENT_TYPE),
-                ],
-                Type::empty_table(),
-            ))),
+            TableField::required(typed_method(WORLD_TYPE, "get").unwrap().as_type().unwrap()),
         ),
         (
             "has",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::alias(ENTITY_ID_TYPE),
-                    Type::alias(COMPONENT_TYPE),
-                ],
-                Type::boolean(),
-            ))),
+            TableField::required(typed_method(WORLD_TYPE, "has").unwrap().as_type().unwrap()),
         ),
         (
             "remove",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::alias(ENTITY_ID_TYPE),
-                    Type::alias(COMPONENT_TYPE),
-                ],
-                Type::nil(),
-            ))),
+            TableField::required(
+                typed_method(WORLD_TYPE, "remove")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
         (
             "query",
-            TableField::required(Type::Function(FunctionType::new(
-                [
-                    Type::alias(WORLD_TYPE),
-                    Type::array(Type::alias(COMPONENT_TYPE)),
-                ],
-                Type::alias(QUERY_TYPE),
-            ))),
+            TableField::required(
+                typed_method(WORLD_TYPE, "query")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
+        ),
+        (
+            "clear",
+            TableField::required(
+                typed_method(WORLD_TYPE, "clear")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
     ]))
 }
@@ -151,9 +140,15 @@ fn component_type() -> Type {
 fn system_type() -> Type {
     Type::table([
         ("enabled", TableField::required(Type::boolean())),
+        ("query", TableField::required(Type::alias(QUERY_TYPE))),
         (
             "update",
-            TableField::required(Type::function([], Type::nil())),
+            TableField::required(
+                typed_method(SYSTEM_TYPE, "update")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
     ])
 }
@@ -162,16 +157,222 @@ fn query_type() -> Type {
     Type::table([
         (
             "each",
-            TableField::required(Type::function(
-                [Type::function([], Type::nil())],
-                Type::nil(),
-            )),
+            TableField::required(typed_method(QUERY_TYPE, "each").unwrap().as_type().unwrap()),
         ),
         (
             "count",
-            TableField::required(Type::function([], Type::number())),
+            TableField::required(
+                typed_method(QUERY_TYPE, "count")
+                    .unwrap()
+                    .as_type()
+                    .unwrap(),
+            ),
         ),
     ])
+}
+
+pub(crate) fn typed_module_function(name: &str) -> Option<TypedFunction> {
+    match name {
+        "world" => Some(typed_function(
+            name,
+            [],
+            Type::alias(WORLD_TYPE),
+            "Create an empty ECS world that owns entities and component storage.",
+        )),
+        "component" => Some(typed_function(
+            name,
+            [
+                parameter("name", Type::string()),
+                parameter("schema", Type::empty_table()),
+            ],
+            Type::alias(COMPONENT_TYPE),
+            "Declare a reusable component and its editor-checked data schema.",
+        )),
+        "system" => Some(typed_function(
+            name,
+            [
+                parameter("world", Type::alias(WORLD_TYPE)),
+                parameter("components", Type::array(Type::alias(COMPONENT_TYPE))),
+                parameter("update", Type::Any),
+            ],
+            Type::alias(SYSTEM_TYPE),
+            "Create a system that runs a callback for every matching entity when updated.",
+        )),
+        _ => None,
+    }
+}
+
+pub(crate) fn typed_method(type_name: &str, method: &str) -> Option<TypedFunction> {
+    let self_parameter = parameter("self", Type::alias(type_name));
+    let entity = || parameter("entity", Type::alias(ENTITY_ID_TYPE));
+    let component = || parameter("component", Type::alias(COMPONENT_TYPE));
+
+    match (type_name, method) {
+        (WORLD_TYPE, "create") => Some(typed_function(
+            method,
+            [self_parameter],
+            Type::alias(ENTITY_ID_TYPE),
+            "Create an entity ID in this world.",
+        )),
+        (WORLD_TYPE, "destroy") => Some(typed_function(
+            method,
+            [self_parameter, entity()],
+            Type::nil(),
+            "Destroy an entity and remove all of its component data.",
+        )),
+        (WORLD_TYPE, "add") => Some(typed_function(
+            method,
+            [
+                self_parameter,
+                entity(),
+                component(),
+                parameter("value", Type::Any),
+            ],
+            Type::Any,
+            "Attach component data to an entity and return that data.",
+        )),
+        (WORLD_TYPE, "get") => Some(typed_function(
+            method,
+            [self_parameter, entity(), component()],
+            Type::Any,
+            "Return an entity's component data, or nil when it is absent.",
+        )),
+        (WORLD_TYPE, "has") => Some(typed_function(
+            method,
+            [self_parameter, entity(), component()],
+            Type::boolean(),
+            "Return whether an entity has a component.",
+        )),
+        (WORLD_TYPE, "remove") => Some(typed_function(
+            method,
+            [self_parameter, entity(), component()],
+            Type::Any,
+            "Remove and return an entity's component data.",
+        )),
+        (WORLD_TYPE, "query") => Some(typed_function(
+            method,
+            [
+                self_parameter,
+                parameter("components", Type::array(Type::alias(COMPONENT_TYPE))),
+            ],
+            Type::alias(QUERY_TYPE),
+            "Create a reusable query matching entities with every listed component.",
+        )),
+        (WORLD_TYPE, "clear") => Some(typed_function(
+            method,
+            [self_parameter],
+            Type::nil(),
+            "Destroy every entity and clear all component storage.",
+        )),
+        (QUERY_TYPE, "each") => Some(typed_function(
+            method,
+            [self_parameter, parameter("visit", Type::Any)],
+            Type::nil(),
+            "Visit matching entities as visit(entity, componentValue...).",
+        )),
+        (QUERY_TYPE, "count") => Some(typed_function(
+            method,
+            [self_parameter],
+            Type::number(),
+            "Count entities currently matched by this query.",
+        )),
+        (SYSTEM_TYPE, "update") => Some(typed_function(
+            method,
+            [self_parameter, parameter("dt", Type::number())],
+            Type::nil(),
+            "Run this system once for all matching entities when enabled.",
+        )),
+        _ => None,
+    }
+}
+
+pub(crate) fn typed_member(
+    environment: &TypeEnvironment,
+    receiver_type: &Type,
+    member: &str,
+) -> Option<TypedFunction> {
+    if is_module_type(environment, receiver_type) {
+        return typed_module_function(member);
+    }
+
+    [WORLD_TYPE, QUERY_TYPE, SYSTEM_TYPE]
+        .into_iter()
+        .find(|type_name| {
+            type_matches(
+                environment,
+                receiver_type,
+                &Type::alias(*type_name),
+                Some(type_name),
+            )
+        })
+        .and_then(|type_name| typed_method(type_name, member))
+}
+
+pub(crate) fn is_module_type(environment: &TypeEnvironment, candidate: &Type) -> bool {
+    type_matches(environment, candidate, &ecs_module_type(), None)
+}
+
+pub(crate) const fn module_documentation() -> &'static str {
+    "Built-in data-oriented ECS helpers. Define components, create a world, then update matching entities through queries or systems."
+}
+
+pub(crate) const fn workflow_snippet() -> &'static str {
+    "local ${1:Position} = ecs.component(\"${1:Position}\", { ${2:x} = \"${3:number}\" })\nlocal ${4:world} = ecs.world()\nlocal ${5:entity} = ${4:world}:create()\n${4:world}:add(${5:entity}, ${1:Position}, { ${2:x} = ${6:0} })\n${0}"
+}
+
+pub(crate) fn runtime_source() -> &'static str {
+    include_str!("../../../vendor/runtime/tuaecs.lua")
+}
+
+fn typed_function(
+    name: &str,
+    parameters: impl IntoIterator<Item = TypedParameter>,
+    return_type: Type,
+    documentation: &str,
+) -> TypedFunction {
+    let parameters = parameters.into_iter().collect::<Vec<_>>();
+
+    TypedFunction {
+        name: Some(name.to_owned()),
+        parameter_count: parameters.len(),
+        required_parameter_count: parameters.len(),
+        parameters,
+        has_varargs: false,
+        vararg_type: None,
+        return_type: Some(return_type.clone()),
+        return_types: vec![return_type],
+        documentation: Some(documentation.to_owned()),
+        overloads: Vec::new(),
+    }
+}
+
+fn parameter(name: &str, ty: Type) -> TypedParameter {
+    TypedParameter {
+        name: name.to_owned(),
+        ty,
+        documentation: None,
+    }
+}
+
+fn type_matches(
+    environment: &TypeEnvironment,
+    candidate: &Type,
+    expected: &Type,
+    alias_name: Option<&str>,
+) -> bool {
+    if candidate == expected {
+        return true;
+    }
+
+    match candidate {
+        Type::Alias(name) => alias_name.is_some_and(|expected_name| name == expected_name),
+        Type::Union(types) => types
+            .iter()
+            .any(|ty| type_matches(environment, ty, expected, alias_name)),
+        _ => alias_name
+            .and_then(|name| environment.alias(name))
+            .is_some_and(|resolved| candidate == resolved),
+    }
 }
 
 pub(crate) fn diagnostics(path: &Path, source: &str) -> Vec<Diagnostic> {

@@ -310,7 +310,7 @@ enabled = true
     .expect("config should parse");
 
     assert!(config.ecs.enabled);
-    assert_eq!(config.ecs.backend, "tiny-ecs");
+    assert_eq!(config.ecs.backend, "tua");
 }
 
 #[test]

@@ -234,20 +234,11 @@ complete and hover `position.x` and `position.y` as `number`, and emitted Lua is
 backed by bundled BrineVector. BrineVector uses LuaJIT/FFI for fast desktop
 LOVE builds and falls back to table vectors where JIT/FFI is not the right fit.
 
-## 8. Add ECS Metadata When You Use ECS
+## 8. Use ECS For Repeated Game Objects
 
-If your LOVE game uses tiny-ecs or a compatible adapter, opt into ECS tooling:
-
-```toml
-[ecs]
-enabled = true
-```
-
-Then bind `ecs` to your runtime module in normal Lua style:
+Tua's built-in ECS needs no require or configuration:
 
 ```tua
-local ecs = require("tiny_ecs_adapter")
-
 local Position = ecs.component("Position", { x = "number", y = "number" })
 local world = ecs.world()
 local player = world:create()
@@ -256,7 +247,11 @@ world:add(player, Position, { x = 120, y = 80 })
 ```
 
 Tua can complete and hover the ECS API, show signatures for world methods, and
-diagnose clear component/query mistakes. Dynamic ECS patterns stay permissive.
+diagnose clear component/query mistakes. Use ECS for large groups such as
+bullets, enemies, particles, or pickups that share update loops. Ordinary
+tables and classes remain clearer for small object graphs, menus, scenes, and
+singletons. See [Entity Component Systems](ecs.md) for systems, queries,
+performance guidance, and runtime overrides.
 
 ## 9. Prefer `:` For LOVE Methods
 

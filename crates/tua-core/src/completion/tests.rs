@@ -20,6 +20,41 @@ local typed: Pl = nil
 "#;
 
 #[test]
+fn completes_builtin_ecs_module_and_documented_members() {
+    let identifier = complete_tua_source(
+        "src/main.tua",
+        "ec",
+        crate::SourcePosition { line: 1, column: 3 },
+    )
+    .expect("ECS identifier completion should succeed");
+    let ecs = identifier
+        .iter()
+        .find(|completion| completion.label == "ecs")
+        .expect("built-in ecs module should complete");
+
+    assert_eq!(ecs.kind, CompletionKind::Module);
+    assert!(ecs
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| { documentation.contains("data-oriented ECS helpers") }));
+
+    let source = "local world = ecs.\n";
+    let members = complete_tua_source("src/main.tua", source, position_after(source, "ecs."))
+        .expect("ECS member completion should succeed");
+    let world = members
+        .iter()
+        .find(|completion| completion.label == "world")
+        .expect("ecs.world should complete");
+
+    assert!(labels(&members).contains(&"component".to_owned()));
+    assert!(labels(&members).contains(&"system".to_owned()));
+    assert_eq!(
+        world.documentation.as_deref(),
+        Some("Create an empty ECS world that owns entities and component storage.")
+    );
+}
+
+#[test]
 fn completes_type_aliases_in_annotation_positions() {
     let completions = complete_at("typed: Pl").expect("alias completion should succeed");
 

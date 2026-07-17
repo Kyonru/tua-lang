@@ -41,6 +41,21 @@ fn hints_unannotated_local_types_from_known_expressions() {
 }
 
 #[test]
+fn hints_builtin_ecs_world_and_entity_types() {
+    let source = r#"local world = ecs.world()
+local entity = world:create()
+"#;
+    let hints = inlay_hints_tua_source("src/ecs.tua", source).expect("ECS source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(type_hints, vec![": EcsWorld", ": EcsEntityId"]);
+}
+
+#[test]
 fn hints_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {

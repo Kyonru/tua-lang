@@ -8,7 +8,7 @@ use full_moon::node::Node;
 use crate::ast_utils::assignment_expression_for_local;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment, Type, TypeEnvironment};
-use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
+use crate::{ecs, parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InlayHint {
@@ -33,7 +33,7 @@ pub fn inlay_hints_tua_source(
 }
 
 pub fn inlay_hints_parsed_source(parsed: &ParsedSource) -> Result<Vec<InlayHint>, Vec<Diagnostic>> {
-    let environment = build_type_environment(parsed)?;
+    let environment = ecs::augment_environment(build_type_environment(parsed)?);
 
     Ok(inlay_hints_parsed_source_with_environment(
         parsed,

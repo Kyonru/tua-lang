@@ -996,7 +996,7 @@ player.name = "late"
     assert_eq!(diagnostics[0]["code"], "TL4033");
 }
 #[test]
-fn did_change_configuration_can_enable_ecs_domain_support() {
+fn did_change_configuration_can_disable_ecs_domain_support() {
     let temp = TempProject::new("configuration-ecs-domain");
     let source = r#"local Position = ecs.component("Position", { x = "number", y = "number" })
 local world = ecs.world()
@@ -1011,18 +1011,20 @@ world:add(entity, Position, { x = 1 })
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    let initial = last_published_diagnostics(server.output(), &uri);
+
+    assert_eq!(initial.len(), 1);
+    assert_eq!(initial[0]["code"], "TL5002");
 
     server.send(did_change_configuration(json!({
         "ecs": {
-            "enabled": true
+            "enabled": false
         }
     })));
 
     let diagnostics = last_published_diagnostics(server.output(), &uri);
 
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0]["code"], "TL5002");
+    assert_eq!(diagnostics.len(), 0);
 }
 #[test]
 fn did_change_configuration_can_enable_inline_ignores() {

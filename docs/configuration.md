@@ -37,8 +37,8 @@ table_shape_drift = true
 hot_loop_hints = true
 
 [ecs]
-enabled = false
-backend = "tiny-ecs"
+enabled = true
+backend = "tua"
 
 [diagnostics]
 duplicate_keys = false
@@ -94,8 +94,8 @@ the behavior and tradeoffs of each option.
 | `jit.variable_type_drift` | boolean | `true` | - |
 | `jit.table_shape_drift` | boolean | `true` | - |
 | `jit.hot_loop_hints` | boolean | `true` | - |
-| `ecs.enabled` | boolean | `false` | `tua.ecs.enabled` |
-| `ecs.backend` | string | `"tiny-ecs"` | - |
+| `ecs.enabled` | boolean | `true` | `tua.ecs.enabled` |
+| `ecs.backend` | string | `"tua"` | - |
 | `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
 | `diagnostics.missing_requires` | boolean | `false` | `tua.diagnostics.missingRequires` |
 | `diagnostics.self_assignments` | boolean | `false` | `tua.diagnostics.selfAssignments` |
@@ -221,23 +221,23 @@ These are hints for reviewing hot code paths, not proof that a loop is slow.
 
 ## ECS Domain Support
 
-ECS support is opt-in and currently shaped around tiny-ecs-compatible Lua
-projects:
+ECS support and the bundled Tua runtime are enabled by default. The section can
+be omitted:
 
 ```toml
 [ecs]
 enabled = true
-backend = "tiny-ecs"
+backend = "tua"
 ```
 
 `enabled`
-: Enables first-class ECS analysis, the typed `ecs` helper module, and ECS
-diagnostics. The default is `false`.
+: Enables the built-in `ecs` module, first-class ECS analysis, ECS diagnostics,
+and automatic bundled runtime emission. The default is `true`; set it to
+`false` to opt out.
 
 `backend`
-: Names the intended runtime adapter. The first supported profile is
-`tiny-ecs`; Tua still emits ordinary Lua and does not vendor or execute an ECS
-runtime.
+: Names the runtime profile. The default `tua` profile emits the bundled
+`tuaecs.lua` runtime only when a source file uses the built-in `ecs` module.
 
 When enabled, Tua recognizes:
 
@@ -256,6 +256,10 @@ The initial diagnostics cover clear, static patterns:
 - empty component query lists.
 
 Dynamic ECS construction remains permissive.
+
+An explicit binding such as `local ecs = require("project_ecs")` overrides the
+built-in runtime for that file. See [Entity Component Systems](ecs.md) for the
+runtime model and guidance on when ECS is appropriate.
 
 ## Diagnostics
 
@@ -453,7 +457,7 @@ Supported editor settings:
 - `tua.fileAssociations`: maps glob patterns to `lua` or `tua` so extra file
   extensions can be indexed.
 - `tua.jit.enabled`: overrides `[jit].enabled` for opt-in LuaJIT guidance.
-- `tua.ecs.enabled`: overrides `[ecs].enabled` for opt-in ECS domain support.
+- `tua.ecs.enabled`: overrides `[ecs].enabled` for built-in ECS support.
 - `tua.completion.sequenceRanking.enabled`: enables the experimental local
   contextual sequence ranker for completion ordering. It defaults to `false`
   and never adds non-compiler candidates.

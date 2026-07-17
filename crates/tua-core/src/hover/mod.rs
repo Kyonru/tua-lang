@@ -15,7 +15,7 @@ use crate::types::{
     TypedFunctionOverload,
 };
 use crate::{
-    definition_parsed_source, parse_tua_source, Definition, DefinitionKind, Diagnostic,
+    definition_parsed_source, ecs, parse_tua_source, Definition, DefinitionKind, Diagnostic,
     ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
 };
 
@@ -41,7 +41,7 @@ pub fn hover_parsed_source(
     parsed: &ParsedSource,
     position: SourcePosition,
 ) -> Result<Option<Hover>, Vec<Diagnostic>> {
-    let environment = build_type_environment(parsed)?;
+    let environment = ecs::augment_environment(build_type_environment(parsed)?);
 
     Ok(hover_parsed_source_with_environment(
         parsed,
@@ -101,6 +101,17 @@ impl<'a> HoverResolver<'a> {
                 return Some(lua_item_hover(item, Some(current_part.span)));
             }
 
+            if let Some(receiver_type) = self
+                .semantic
+                .type_of_field_chain(&field_parts[..field_parts.len() - 1], position)
+            {
+                if let Some(function) =
+                    ecs::typed_member(self.environment, &receiver_type, &current_part.text)
+                {
+                    return Some(self.function_hover(&function, position, current_part.span));
+                }
+            }
+
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
                 return Some(hover(
                     format!("(field) {}: {ty}", current_part.text),
@@ -118,6 +129,18 @@ impl<'a> HoverResolver<'a> {
         if let Some(hover) =
             self.required_module_binding_hover(&current_part.text, current_part.span)
         {
+            return Some(hover);
+        }
+
+        if current_part.text == ecs::MODULE_NAME
+            && self
+                .environment
+                .local(ecs::MODULE_NAME)
+                .is_some_and(|ty| ecs::is_module_type(self.environment, ty))
+        {
+            let mut hover = hover("(built-in module) ecs", Some(current_part.span));
+            hover.documentation = Some(ecs::module_documentation().to_owned());
+
             return Some(hover);
         }
 

@@ -6,7 +6,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
-No unreleased changes are recorded yet.
+### Added
+
+- A zero-setup `ecs` module with a bundled data-oriented `tuaecs.lua` runtime,
+  documented completion, hover, named signatures, world queries, and systems.
+
+### Changed
+
+- ECS analysis is enabled by default and can still be disabled through
+  `[ecs].enabled` or the matching editor setting.
 
 ## [0.1.0] - 2026-07-16
 

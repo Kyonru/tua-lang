@@ -42,8 +42,8 @@ selected path, version, and workspace directory when available.
   `tua.diagnostics.inlineIgnores` or `[diagnostics].inline_ignores`.
 - Optional LuaJIT shape guidance can be enabled through `tua.jit.enabled` or
   `[jit].enabled`.
-- Optional ECS domain support can be enabled through `tua.ecs.enabled` or
-  `[ecs].enabled`.
+- Built-in ECS support is enabled by default and can be disabled through
+  `tua.ecs.enabled` or `[ecs].enabled`.
 - Hover for aliases, locals, parameters, functions, table fields, Lua builtins,
   generated LOVE API items, modules, annotation docs, and inferred unannotated
   locals where possible. Generated LOVE API hovers include direct LOVE wiki
@@ -230,15 +230,16 @@ emitted Lua.
 
 ## ECS Domain Support
 
-When enabled, the language server adds a tiny-ecs-shaped static surface:
+The language server provides the built-in ECS static surface by default:
 
 - completion, hover, and signature help for `ecs.world`, `ecs.component`,
   `ecs.system`, and world methods such as `world:add` and `world:query`;
 - `TL5002` diagnostics for clear component value mismatches;
 - `TL5003` diagnostics for empty or unknown component query lists.
 
-This support is editor/checker metadata. Runtime code still uses ordinary Lua
-modules such as a tiny-ecs adapter required by the project.
+Builds inject `require("tuaecs")` and copy the bundled runtime only when the
+built-in `ecs` module is used. An explicit local `ecs` binding remains an
+ordinary Lua runtime override.
 
 ## Design Notes
 

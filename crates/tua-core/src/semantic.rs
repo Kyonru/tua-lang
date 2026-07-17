@@ -22,7 +22,7 @@ use crate::types::{
     TypeEnvironment, TypedFunction,
 };
 use crate::{
-    signal, sprite, vector, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan,
+    ecs, signal, sprite, vector, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan,
     TypedParameter,
 };
 
@@ -253,6 +253,14 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
+        if root == ecs::MODULE_NAME && fields.len() == 1 {
+            let receiver_type = self.type_of_name(root, position)?;
+
+            if ecs::is_module_type(self.environment, &receiver_type) {
+                return ecs::typed_module_function(&fields[0]);
+            }
+        }
+
         if let Some(function) = self.prototype_typed_function_for_call_parts(parts, position) {
             return Some(function);
         }
@@ -261,6 +269,10 @@ impl<'a> SemanticModel<'a> {
             let method = parts.last()?;
             let receiver_parts = parts.get(..parts.len().saturating_sub(1))?;
             let receiver_type = self.type_of_field_chain(receiver_parts, position)?;
+
+            if let Some(function) = ecs::typed_member(self.environment, &receiver_type, method) {
+                return Some(function);
+            }
 
             if let Some(function) =
                 signal_typed_method_for_receiver(self.environment, &receiver_type, method)

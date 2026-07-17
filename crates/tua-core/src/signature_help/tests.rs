@@ -352,6 +352,32 @@ fn returns_builtin_vec2_constructor_signature() {
 }
 
 #[test]
+fn returns_builtin_ecs_constructor_and_method_signatures() {
+    let component = signature_at(
+        "local Position = ecs.component(\"Position\", \n",
+        "ecs.component(\"Position\", ",
+    )
+    .expect("ecs.component should have signature help");
+    let source = r#"local world = ecs.world()
+local entity = world:create()
+local Position = ecs.component("Position", { x = "number" })
+world:add(entity, Position,
+"#;
+    let add = signature_at(source, "world:add(entity, Position,")
+        .expect("EcsWorld:add should have signature help");
+
+    assert_eq!(
+        component.signatures[0].label,
+        "function ecs.component(name: string, schema: {  }): EcsComponent"
+    );
+    assert_eq!(
+        add.signatures[0].label,
+        "function world:add(entity: EcsEntityId, component: EcsComponent, value: any): any"
+    );
+    assert_eq!(add.active_parameter, 2);
+}
+
+#[test]
 fn returns_builtin_signal_constructor_and_method_signatures() {
     let constructor =
         signature_at("local events = signal(\n", "signal(").expect("signal should have help");

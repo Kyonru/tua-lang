@@ -18,7 +18,7 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
-    lua, sprite, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
+    ecs, lua, sprite, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
 };
 
 pub(crate) fn lint_parsed_source(
@@ -1052,6 +1052,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
     fn is_known_global(&self, name: &str) -> bool {
         self.known_globals.contains(name)
+            || name == ecs::MODULE_NAME
             || sprite::is_helper(name)
             || lua::hover_item(&[name.to_owned()]).is_some()
     }

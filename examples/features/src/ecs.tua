@@ -1,9 +1,6 @@
--- Feature: opt-in ECS domain support.
--- Enable this with [ecs].enabled = true. The first profile is intentionally
--- tiny-ecs-shaped: ordinary Lua tables at runtime, type-aware editor support
--- for worlds, entities, components, and system/query calls.
-
-local ecs = require("tiny_ecs_adapter")
+-- Feature: built-in ECS support with no require or project setup.
+-- Components are reusable data shapes, entities are numeric IDs, and systems
+-- update every entity that has a requested set of components.
 
 -- Feature: typed component schemas use simple string type names.
 -- The ECS analyzer checks one-line schemas and matching world:add values.
@@ -11,7 +8,7 @@ local Position = ecs.component("Position", { x = "number", y = "number" })
 local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
 local Sprite = ecs.component("Sprite", { image = "Image" })
 
--- Feature: ECS API hover/signature help.
+-- Feature: ECS API completion, hover, signature help, and diagnostics.
 -- Hover world to see EcsWorld. Type world:a to complete add.
 local world = ecs.world()
 local player = world:create()
@@ -23,11 +20,13 @@ world:add(player, Sprite, { image = image "assets/player.png" })
 -- Feature: typed query/system component lists.
 -- Unknown components or empty lists produce ECS domain diagnostics.
 local movingSprites = world:query({ Position, Velocity, Sprite })
-local movementSystem = ecs.system(world, { Position, Velocity }, function()
-  local count = movingSprites:count()
-
-  return count
+local movementSystem = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+  position.x += velocity.x * dt
+  position.y += velocity.y * dt
 end)
+
+-- A LOVE update callback can call this with its dt value.
+movementSystem:update(1 / 60)
 
 return {
   Position = Position,

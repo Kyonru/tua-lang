@@ -39,8 +39,8 @@ table_shape_drift = true
 hot_loop_hints = true
 
 [ecs]
-enabled = false
-backend = \"tiny-ecs\"
+enabled = true
+backend = \"tua\"
 
 [diagnostics]
 duplicate_keys = false
@@ -211,8 +211,8 @@ pub struct EcsConfig {
 impl Default for EcsConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            backend: "tiny-ecs".to_owned(),
+            enabled: true,
+            backend: "tua".to_owned(),
         }
     }
 }

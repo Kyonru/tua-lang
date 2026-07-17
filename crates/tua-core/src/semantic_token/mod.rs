@@ -1083,6 +1083,7 @@ fn is_known_global(name: &str) -> bool {
             | "io"
             | "ipairs"
             | "love"
+            | "ecs"
             | "math"
             | "next"
             | "os"

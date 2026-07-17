@@ -1139,6 +1139,78 @@ fn build_does_not_overwrite_project_tuasignal_runtime() {
 }
 
 #[test]
+fn build_writes_tuaecs_runtime_when_builtin_ecs_is_used() {
+    let temp = TempDir::new("build-ecs-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, Position, { x = 10 })
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime =
+        fs::read_to_string(temp.path().join("build/tuaecs.lua")).expect("failed to read tuaecs");
+
+    assert!(stdout.contains("built 2 file(s)"));
+    assert!(emitted.contains(r#"local ecs = require("tuaecs")"#));
+    assert!(runtime.contains("function World:query(components)"));
+    assert!(runtime.contains("function ecs.system(world, components, update)"));
+}
+
+#[test]
+fn build_does_not_inject_tuaecs_when_ecs_support_is_disabled() {
+    let temp = TempDir::new("build-disabled-ecs-runtime");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[ecs]
+enabled = false
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local world = ecs.world()\nreturn world\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+
+    assert!(!emitted.contains("tuaecs"));
+    assert!(!temp.path().join("build/tuaecs.lua").exists());
+}
+
+#[test]
 fn build_excludes_output_directory_when_source_is_project_root() {
     let temp = TempDir::new("build-root-excludes-dist");
 

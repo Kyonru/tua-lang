@@ -794,6 +794,79 @@ events:emit("player.hit", "ada", 4)
 }
 
 #[test]
+fn snapshot_injects_builtin_ecs_runtime_when_ecs_is_used() {
+    let emitted = emit_tua_source(
+        "src/ecs.tua",
+        r#"
+local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, Position, { x = 10 })
+"#,
+    )
+    .expect("built-in ECS calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local ecs = require("tuaecs")
+local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+local entity = world:create()
+world:add(entity, Position, { x = 10 })
+"#
+    );
+}
+
+#[test]
+fn snapshot_preserves_an_explicit_ecs_runtime_binding() {
+    let emitted = emit_tua_source(
+        "src/ecs.tua",
+        r#"
+local ecs = require("project_ecs")
+local world = ecs.world()
+"#,
+    )
+    .expect("explicit ECS runtime should emit unchanged");
+
+    assert_eq!(
+        emitted,
+        r#"local ecs = require("project_ecs")
+local world = ecs.world()
+"#
+    );
+}
+
+#[test]
+fn snapshot_does_not_treat_ecs_table_fields_as_runtime_bindings() {
+    let emitted = emit_tua_source(
+        "src/ecs.tua",
+        r#"
+local config = { ecs = true }
+config.ecs = false
+local world = ecs.world()
+"#,
+    )
+    .expect("ECS field assignments should emit");
+
+    assert!(emitted.starts_with("local ecs = require(\"tuaecs\")\n"));
+}
+
+#[test]
+fn snapshot_injects_ecs_when_an_explicit_binding_appears_after_builtin_usage() {
+    let emitted = emit_tua_source(
+        "src/ecs.tua",
+        r#"
+local builtInWorld = ecs.world()
+local ecs = require("project_ecs")
+local projectWorld = ecs.world()
+"#,
+    )
+    .expect("later ECS binding should not affect earlier built-in usage");
+
+    assert!(emitted.starts_with("local ecs = require(\"tuaecs\")\n"));
+}
+
+#[test]
 fn snapshot_does_not_lower_love_asset_loader_names_in_strings_or_comments() {
     let emitted = emit_tua_source(
         "src/assets.tua",

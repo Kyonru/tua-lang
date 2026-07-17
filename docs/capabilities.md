@@ -37,7 +37,7 @@ Status meanings:
 | Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation and navigation. |
 | Vec2 and SignalBus helpers | Supported | Ordinary APIs emit vendored helper modules only when used. |
 | Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
-| ECS semantics | Opt-in | Typed tiny-ecs-shaped component/query analysis is disabled by default. |
+| ECS semantics | Supported | Zero-setup built-in runtime, typed world/component/query/system APIs, and static component diagnostics are enabled by default. |
 | Generics | Deferred | Concrete function types and container behavior take priority. |
 | Executable third-party plugins | Out of scope | Domain behavior stays first-class until a stable trust and ownership model exists. |
 

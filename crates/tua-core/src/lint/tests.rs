@@ -502,6 +502,22 @@ ConfiguredGlobal()
 }
 
 #[test]
+fn accepts_builtin_ecs_module_for_undefined_variable_lint() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"local Position = ecs.component("Position", { x = "number" })
+local world = ecs.world()
+return { Position = Position, world = world }
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("built-in ecs module should not be reported as undefined");
+}
+
+#[test]
 fn reports_undefined_function_calls_in_local_initializers() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

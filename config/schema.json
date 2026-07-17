@@ -107,16 +107,16 @@
     {
       "path": "ecs.enabled",
       "type": "boolean",
-      "default": false,
-      "description": "Enable first-class ECS analysis.",
+      "default": true,
+      "description": "Enable the built-in ECS runtime and first-class ECS analysis.",
       "editor": "tua.ecs.enabled",
-      "editorDescription": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ECS APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
+      "editorDescription": "Enable Tua's built-in ECS module, typed APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
     },
     {
       "path": "ecs.backend",
       "type": "string",
-      "default": "tiny-ecs",
-      "description": "Select the intended ECS runtime adapter."
+      "default": "tua",
+      "description": "Select the ECS runtime profile; tua uses the bundled zero-setup runtime."
     },
     {
       "path": "diagnostics.duplicate_keys",

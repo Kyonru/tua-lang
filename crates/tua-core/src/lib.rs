@@ -231,3 +231,7 @@ pub fn anim8_runtime_source() -> &'static str {
 pub fn tuasignal_runtime_source() -> &'static str {
     signal::runtime_source()
 }
+
+pub fn tuaecs_runtime_source() -> &'static str {
+    ecs::runtime_source()
+}

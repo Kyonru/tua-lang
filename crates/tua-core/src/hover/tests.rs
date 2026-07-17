@@ -37,6 +37,27 @@ fn hovers_known_local() {
 }
 
 #[test]
+fn hovers_builtin_ecs_module_and_documented_functions() {
+    let source = "local world = ecs.world()\n";
+    let module = hover_tua_source("src/main.tua", source, position_at(source, "ecs"))
+        .expect("ECS module hover should succeed")
+        .expect("ECS module should hover");
+    let world = hover_tua_source("src/main.tua", source, position_at(source, "world()"))
+        .expect("ecs.world hover should succeed")
+        .expect("ecs.world should hover");
+
+    assert_eq!(module.contents, "(built-in module) ecs");
+    assert!(module
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("data-oriented ECS helpers")));
+    assert_eq!(
+        world.documentation.as_deref(),
+        Some("Create an empty ECS world that owns entities and component storage.")
+    );
+}
+
+#[test]
 fn hovers_function_parameters() {
     let source = r#"local function recursive(a: string)
   if a == tostring(1) then

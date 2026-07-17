@@ -958,7 +958,7 @@ player.name = "late"
 }
 
 #[test]
-fn ecs_domain_support_is_disabled_by_default() {
+fn ecs_domain_support_is_enabled_by_default_and_can_be_disabled() {
     let path = PathBuf::from("src/ecs.tua");
     let mut host = AnalysisHost::new();
 
@@ -968,8 +968,30 @@ fn ecs_domain_support_is_disabled_by_default() {
 
     assert!(
         completion_labels(&snapshot.completion(&path, SourcePosition { line: 1, column: 5 }))
-            .is_empty()
+            .contains(&"world".to_owned())
     );
+
+    let mut config = ProjectConfig::default();
+    config.ecs.enabled = false;
+    let mut disabled = AnalysisHost::with_config(config);
+    disabled.set_file(&path, "ecs.\n");
+
+    assert!(completion_labels(
+        &disabled
+            .snapshot()
+            .completion(&path, SourcePosition { line: 1, column: 5 })
+    )
+    .is_empty());
+
+    disabled.set_file(&path, "local value = ec\n");
+    assert!(!completion_labels(&disabled.snapshot().completion(
+        &path,
+        SourcePosition {
+            line: 1,
+            column: 17
+        }
+    ))
+    .contains(&"ecs".to_owned()));
 }
 
 #[test]
@@ -1182,7 +1204,7 @@ local call = world.a
     assert_eq!(hover.contents, "local world: EcsWorld");
     assert_eq!(
         signature.signatures[0].label,
-        "function world:add(EcsEntityId, EcsComponent, {  }): nil"
+        "function world:add(entity: EcsEntityId, component: EcsComponent, value: any): any"
     );
 }
 

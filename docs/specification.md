@@ -31,12 +31,13 @@ The default target is `love11-luajit`. Generated code must avoid Lua 5.2+
 runtime-only syntax and behavior.
 
 Tua's type syntax is erased. Straightforward Tua code requires no Tua runtime.
-Some opt-in built-ins lower to ordinary Lua APIs backed by vendored modules:
+Some source-used built-ins lower to ordinary Lua APIs backed by vendored
+modules:
 
 - `vec2(...)` can emit a `brinevector` require;
 - `signal()` can emit a `tuasignal` require;
 - `spriteSheet({...})` can emit an `anim8` require;
-- ECS support can target a tiny-ecs-compatible adapter when enabled.
+- the built-in `ecs` module can emit a `tuaecs` require.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same
@@ -130,9 +131,9 @@ loader calls can provide diagnostics, completion, hover metadata, definition,
 and references without executing project code.
 
 Domain helpers must prefer ordinary Lua-compatible APIs. `spriteSheet({...})`,
-`signal()`, and opt-in ECS intelligence are first-class compiler domains rather
-than executable third-party plugins. Experimental editor presentation remains
-explicitly preview-gated.
+`signal()`, and the built-in `ecs` module are first-class compiler domains
+rather than executable third-party plugins. Experimental editor presentation
+remains explicitly preview-gated.
 
 ## CLI Contract
 

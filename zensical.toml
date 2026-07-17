@@ -16,6 +16,7 @@ nav = [
     { "Installation" = "installation.md" },
     { "Quickstart" = "quickstart.md" },
     { "Learn" = "learn.md" },
+    { "Entity Component Systems" = "ecs.md" },
     { "Examples" = "examples.md" },
     { "Configuration" = "configuration.md" },
   ] },

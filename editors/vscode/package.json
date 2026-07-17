@@ -357,7 +357,7 @@
             "null"
           ],
           "default": null,
-          "description": "Enable opt-in ECS domain support for tiny-ecs-style helpers, typed ECS APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
+          "description": "Enable Tua's built-in ECS module, typed APIs, and ECS diagnostics. Null inherits [ecs].enabled from tua.toml."
         },
         "tua.completion.sequenceRanking.enabled": {
           "type": "boolean",

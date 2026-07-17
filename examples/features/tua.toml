@@ -4,9 +4,6 @@ target = "love11-luajit"
 extension = "tua"
 emit_maps = true
 
-[ecs]
-enabled = true
-
 [diagnostics]
 inline_ignores = true
 undefined_variables = true

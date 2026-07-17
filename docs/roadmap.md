@@ -25,8 +25,8 @@ The [Capability Matrix](capabilities.md) is authoritative for what works today.
 
 - harden asset path navigation and diagnostics across realistic project roots;
 - refine sprite-sheet preview and SignalBus graph workflows from user feedback;
-- keep ECS opt-in until its diagnostics and completion remain predictable in
-  larger projects;
+- benchmark the built-in ECS runtime on representative LOVE populations and
+  deepen component payload inference without making dynamic patterns rigid;
 - maintain one generated LOVE source for signatures, enums, callbacks,
   inheritance, and documentation.
 

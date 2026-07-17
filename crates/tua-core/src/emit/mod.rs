@@ -11,7 +11,7 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, infer_module_exports, parse_tua_source, signal, vector, AnnotationMode, Diagnostic,
+    asset, ecs, infer_module_exports, parse_tua_source, signal, vector, AnnotationMode, Diagnostic,
     DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan,
     TuaType, Type,
 };
@@ -76,7 +76,12 @@ pub fn emit_tua_source_with_workspace_artifact(
 
     let resolver = |specifier: &str| workspace.module_name_for_import(&parsed.path, specifier);
 
-    emit_lua_artifact_with_mode_and_import_resolver(&parsed, annotation_mode, Some(&resolver))
+    emit_lua_artifact_with_mode_and_import_resolver(
+        &parsed,
+        annotation_mode,
+        Some(&resolver),
+        workspace.config().ecs.enabled,
+    )
 }
 
 pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
@@ -98,7 +103,12 @@ pub fn emit_lua_artifact_with_mode(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
-    emit_lua_artifact_with_mode_and_import_resolver(parsed, annotation_mode, None)
+    emit_lua_artifact_with_mode_and_import_resolver(
+        parsed,
+        annotation_mode,
+        None,
+        crate::config::EcsConfig::default().enabled,
+    )
 }
 
 pub(crate) fn emit_lua_with_mode_and_import_resolver(
@@ -106,14 +116,20 @@ pub(crate) fn emit_lua_with_mode_and_import_resolver(
     annotation_mode: AnnotationMode,
     import_resolver: ImportResolver<'_>,
 ) -> Result<String, Vec<Diagnostic>> {
-    emit_lua_artifact_with_mode_and_import_resolver(parsed, annotation_mode, import_resolver)
-        .map(|emission| emission.code)
+    emit_lua_artifact_with_mode_and_import_resolver(
+        parsed,
+        annotation_mode,
+        import_resolver,
+        crate::config::EcsConfig::default().enabled,
+    )
+    .map(|emission| emission.code)
 }
 
 fn emit_lua_artifact_with_mode_and_import_resolver(
     parsed: &ParsedSource,
     annotation_mode: AnnotationMode,
     import_resolver: ImportResolver<'_>,
+    ecs_enabled: bool,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     let ast = erase_ast(&parsed.path, parsed.ast.clone(), &mut diagnostics);
@@ -124,7 +140,7 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
         let operations = lower_default_parameter_operations(&document, parsed);
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_builtin_call_operations(&document);
+        let operations = lower_builtin_call_operations(&document, parsed, ecs_enabled);
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         let operations = lower_import_call_operations(&document, parsed, import_resolver)?;
@@ -1384,12 +1400,16 @@ fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
 
 fn lower_builtin_call_operations(
     document: &lowering::LoweringDocument,
+    parsed: &ParsedSource,
+    ecs_enabled: bool,
 ) -> Vec<lowering::LoweringOperation> {
     let output = document.code();
     let mut operations = Vec::new();
     let mut index = 0;
     let mut brinevector_span = None;
     let mut tuasignal_span = None;
+    let mut tuaecs_span = None;
+    let explicit_ecs_binding = explicit_ecs_binding_position(parsed);
 
     while index < output.len() {
         let rest = &output[index..];
@@ -1463,6 +1483,22 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if ecs_enabled && name == ecs::MODULE_NAME {
+                let field_start = skip_whitespace(&output, index + identifier_end);
+
+                if output[field_start..].starts_with('.') {
+                    let source_span = document.source_span_at(index);
+                    let binding_is_active = explicit_ecs_binding.is_some_and(|position| {
+                        (position.line, position.column)
+                            <= (source_span.start.line, source_span.start.column)
+                    });
+
+                    if !binding_is_active {
+                        tuaecs_span.get_or_insert(source_span);
+                    }
+                }
+            }
+
             index += identifier_end;
             continue;
         }
@@ -1475,7 +1511,7 @@ fn lower_builtin_call_operations(
         index += character.len_utf8();
     }
 
-    if brinevector_span.is_some() || tuasignal_span.is_some() {
+    if brinevector_span.is_some() || tuasignal_span.is_some() || tuaecs_span.is_some() {
         let leading_whitespace =
             output.len() - output.trim_start_matches(char::is_whitespace).len();
         if leading_whitespace > 0 {
@@ -1511,8 +1547,54 @@ fn lower_builtin_call_operations(
             LoweringKind::BuiltinCall,
         ));
     }
+    if let Some(source_span) = tuaecs_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                ecs::MODULE_NAME,
+                ecs::RUNTIME_MODULE
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
 
     operations
+}
+
+fn explicit_ecs_binding_position(parsed: &ParsedSource) -> Option<SourcePosition> {
+    parsed
+        .ast
+        .nodes()
+        .stmts()
+        .filter_map(|stmt| match stmt {
+            ast::Stmt::LocalAssignment(local) => local
+                .names()
+                .iter()
+                .find(|name| token_text(name) == ecs::MODULE_NAME)
+                .map(|name| SourcePosition::from_full_moon(name.start_position())),
+            ast::Stmt::LocalFunction(function)
+                if token_text(function.name()) == ecs::MODULE_NAME =>
+            {
+                Some(SourcePosition::from_full_moon(
+                    function.name().start_position(),
+                ))
+            }
+            ast::Stmt::Assignment(assignment) => {
+                assignment
+                    .variables()
+                    .iter()
+                    .find_map(|variable| match variable {
+                        Var::Name(name) if token_text(name) == ecs::MODULE_NAME => {
+                            Some(SourcePosition::from_full_moon(name.start_position()))
+                        }
+                        _ => None,
+                    })
+            }
+            _ => None,
+        })
+        .min_by_key(|position| (position.line, position.column))
 }
 
 fn lower_import_call_operations(

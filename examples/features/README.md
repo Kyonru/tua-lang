@@ -71,12 +71,10 @@ make build-features
   LuaJIT guidance for table-shape drift, hot-loop dynamic writes, and the
   `any` escape hatch. The feature is disabled by default, so the example
   remains buildable without warnings.
-- `src/ecs.tua` demonstrates the opt-in tiny-ecs-shaped ECS domain support:
-  component schemas, typed world/entity/system APIs, component value
-  diagnostics, query diagnostics, and normal Lua adapter interop.
-- `src/tiny_ecs_adapter.lua` is a tiny plain-Lua runtime adapter used by
-  `src/ecs.tua`; real projects can bind `ecs` to tiny-ecs or a compatible
-  module without changing Tua's checker model.
+- `src/ecs.tua` demonstrates Tua's zero-setup ECS: component schemas, typed
+  world/entity/query/system APIs, component diagnostics, and a system update
+  over matching position and velocity data. Builds include `tuaecs.lua` only
+  because the source uses the built-in `ecs` module.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`; it demonstrates `---@class`, `---@field`,
   literal-union aliases, `---@overload`, `---@vararg`, and the LuaHelper

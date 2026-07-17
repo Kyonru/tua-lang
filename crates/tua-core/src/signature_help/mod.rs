@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::ecs;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
 use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
@@ -49,6 +50,7 @@ pub fn signature_help_tua_source(
         }
     };
     let (environment, diagnostics) = build_type_environment_with_diagnostics(&parsed);
+    let environment = ecs::augment_environment(environment);
 
     if !diagnostics.is_empty() {
         return Err(diagnostics);
@@ -67,6 +69,7 @@ pub fn signature_help_parsed_source(
     position: SourcePosition,
 ) -> Result<Option<SignatureHelp>, Vec<Diagnostic>> {
     let (environment, diagnostics) = build_type_environment_with_diagnostics(parsed);
+    let environment = ecs::augment_environment(environment);
 
     if !diagnostics.is_empty() {
         return Err(diagnostics);

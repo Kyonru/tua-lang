@@ -16,7 +16,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, love_conf, signal, vector};
+use crate::{asset, ecs, love_conf, signal, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -514,6 +514,7 @@ pub fn complete_tua_source(
         Err(_) => return Ok(complete_lossy_source(&path, &source, context)),
     };
     let (environment, _) = build_type_environment_with_diagnostics(&parsed);
+    let environment = ecs::augment_environment(environment);
 
     Ok(complete_parsed_source_with_context(
         &parsed,
@@ -544,6 +545,7 @@ pub fn complete_parsed_source(
     position: SourcePosition,
 ) -> Result<Vec<Completion>, Vec<Diagnostic>> {
     let (environment, _) = build_type_environment_with_diagnostics(parsed);
+    let environment = ecs::augment_environment(environment);
 
     Ok(complete_parsed_source_with_environment(
         parsed,
@@ -886,7 +888,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
             complete_import_paths(&parsed.path, prefix.as_str())
         }
         CompletionContext::Identifier { prefix, position } => {
-            complete_identifier_items(parsed, prefix.as_str(), position)
+            complete_identifier_items(parsed, environment, prefix.as_str(), position)
         }
     };
 
@@ -900,7 +902,9 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
         CompletionContext::DocumentationSnippet { position } => {
             complete_lossy_documentation_snippet(source, position)
         }
-        CompletionContext::TypeAnnotation { prefix } => complete_builtin_types(prefix.as_str()),
+        CompletionContext::TypeAnnotation { prefix } => {
+            complete_builtin_types(prefix.as_str(), true)
+        }
         CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
@@ -938,7 +942,7 @@ fn rank_completions_for_context(
     }
 }
 
-fn syntax_snippet_completions(prefix: &str) -> Vec<Completion> {
+fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion> {
     [
         (
             "local",
@@ -1000,8 +1004,14 @@ fn syntax_snippet_completions(prefix: &str) -> Vec<Completion> {
             "Tua signal bus helper",
             signal::signal_snippet(),
         ),
+        (
+            "ecs component",
+            "Tua ECS component and world workflow",
+            ecs::workflow_snippet(),
+        ),
     ]
     .into_iter()
+    .filter(|(label, _, _)| include_ecs || *label != "ecs component")
     .filter(|(label, _, _)| completion_text_matches(label, prefix))
     .map(|(label, detail, insert_text)| Completion {
         label: label.to_owned(),
@@ -1055,20 +1065,26 @@ fn complete_type_names(environment: &TypeEnvironment, prefix: &str) -> Vec<Compl
         completions.insert(completion.label.clone(), completion);
     }
 
-    for completion in complete_builtin_types(prefix) {
+    for completion in complete_builtin_types(prefix, false) {
         completions.insert(completion.label.clone(), completion);
     }
 
     completions.into_values().collect()
 }
 
-fn complete_builtin_types(prefix: &str) -> Vec<Completion> {
+fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
     ["any", "boolean", "nil", "number", "string"]
         .into_iter()
         .chain(asset::builtin_type_names().iter().copied())
         .chain(lua::love_type_names().iter().copied())
         .chain(vector::builtin_type_names().iter().copied())
         .chain(signal::builtin_type_names().iter().copied())
+        .chain(
+            ecs::builtin_type_names()
+                .iter()
+                .copied()
+                .filter(|_| include_ecs),
+        )
         .filter(|primitive| completion_text_matches(primitive, prefix))
         .map(|primitive| Completion {
             label: primitive.to_owned(),
@@ -1417,6 +1433,7 @@ fn format_tua_type(ty: &TuaType) -> String {
 
 fn complete_identifier_items(
     parsed: &ParsedSource,
+    environment: &TypeEnvironment,
     prefix: &str,
     position: SourcePosition,
 ) -> Vec<Completion> {
@@ -1426,7 +1443,10 @@ fn complete_identifier_items(
     insert_scope_identifier_items(&mut completions, &mut labels, parsed, prefix, position);
 
     insert_visible_global_function_items(&mut completions, &mut labels, parsed, prefix, position);
-    insert_keyword_and_builtin_identifier_items(&mut completions, &mut labels, prefix);
+    let include_ecs = environment
+        .local(ecs::MODULE_NAME)
+        .is_some_and(|ty| ecs::is_module_type(environment, ty));
+    insert_keyword_and_builtin_identifier_items(&mut completions, &mut labels, prefix, include_ecs);
 
     completions
 }
@@ -1565,8 +1585,28 @@ fn insert_keyword_and_builtin_identifier_items(
     completions: &mut Vec<Completion>,
     labels: &mut BTreeSet<String>,
     prefix: &str,
+    include_ecs: bool,
 ) {
-    for completion in syntax_snippet_completions(prefix) {
+    if include_ecs && completion_text_matches(ecs::MODULE_NAME, prefix) {
+        push_unique_completion(
+            completions,
+            labels,
+            Completion {
+                label: ecs::MODULE_NAME.to_owned(),
+                kind: CompletionKind::Module,
+                detail: Some("built-in ECS module".to_owned()),
+                documentation: Some(ecs::module_documentation().to_owned()),
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            },
+        );
+    }
+
+    for completion in syntax_snippet_completions(prefix, include_ecs) {
         push_unique_completion(completions, labels, completion);
     }
 
@@ -1591,7 +1631,7 @@ fn insert_lossy_identifier_items(
         }
     }
 
-    insert_keyword_and_builtin_identifier_items(completions, labels, prefix);
+    insert_keyword_and_builtin_identifier_items(completions, labels, prefix, true);
 }
 
 fn push_unique_completion(
@@ -1642,13 +1682,16 @@ fn complete_fields(
         .into_iter()
         .filter(|(name, _)| completion_text_matches(name, prefix))
     {
+        let documentation = ecs::typed_member(environment, &receiver_type, &name)
+            .and_then(|function| function.documentation);
+
         completions.insert(
             name.clone(),
             Completion {
                 label: name,
                 kind,
                 detail: Some(detail),
-                documentation: None,
+                documentation,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,

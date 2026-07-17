@@ -141,7 +141,8 @@ project, type, lint, asset, and emission diagnostics should use stable codes and
 flow through the same CLI and LSP formatting paths. First-class sprite and ECS
 validation runs while each cached `AnalysisFile` is built: sprite validation
 consumes parser-owned declarations and indexed assets, while ECS validation is
-gated by project configuration.
+enabled by default and remains gated by project configuration for explicit
+opt-out.
 
 Emission belongs under `crates/tua-core/src/emit` and build orchestration belongs
 in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
