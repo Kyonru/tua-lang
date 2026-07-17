@@ -103,6 +103,13 @@ come from that pinned source. For example, completing
 `function love.filedropped` inserts `filedropped(file) ... end`, and completion
 details describe the generated `DroppedFile` parameter.
 
+The same catalog validates top-level callback declarations. Lua callbacks may
+omit parameters they do not use; Tua reports `TL5006` only for close callback
+name typos, required parameters LOVE does not provide, or explicit parameter
+types that cannot accept the generated callback value. The editor can rename a
+close typo and generate missing `love.load`, `love.update`, and `love.draw`
+declarations through code actions.
+
 ## LuaDoc Annotations
 
 Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.lua` and

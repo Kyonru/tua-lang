@@ -286,6 +286,50 @@ print(A, Z)
 "#
     );
 }
+
+#[test]
+fn code_action_renames_misspelled_love_callback() {
+    let uri = "file:///tmp/code-action-love-callback-typo.tua";
+    let source = "function love.udpate(dt: number)\nend\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    server.send(code_action_request(2, uri, 0, 14, 0, 20, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Rename to `love.update`");
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(action["edit"]["changes"][uri][0]["newText"], "update");
+    assert_eq!(
+        range_text(source, &action["edit"]["changes"][uri][0]["range"]),
+        "udpate"
+    );
+}
+
+#[test]
+fn code_action_creates_missing_love_callbacks() {
+    let uri = "file:///tmp/code-action-love-callbacks.tua";
+    let source = "function love.update(dt: number)\nend\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request_with_only(
+            2,
+            uri,
+            &["source.tua.createMissingLoveCallbacks"],
+            Vec::new(),
+        ),
+    ]);
+    let action = code_action_result(&output, 2, 0);
+
+    assert_eq!(action["title"], "Create missing LOVE callbacks");
+    assert_eq!(action["kind"], "source.tua.createMissingLoveCallbacks");
+    assert_eq!(
+        action["edit"]["changes"][uri][0]["newText"],
+        "\nfunction love.load(arg, unfilteredArg)\nend\n\nfunction love.draw()\nend\n"
+    );
+}
 #[test]
 fn code_action_source_fix_all_uses_current_safe_diagnostics() {
     let temp = TempProject::new("code-action-fix-all");

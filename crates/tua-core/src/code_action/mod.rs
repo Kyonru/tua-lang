@@ -11,6 +11,7 @@ use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
 use crate::inlay_hints_parsed_source;
+use crate::love_callback;
 use crate::module_link::{module_specifier_literals, ModuleSpecifierKind};
 use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
 use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourcePosition, SourceSpan, TextEdit};
@@ -28,6 +29,7 @@ pub enum AssistKind {
     SourceOrganizeImports,
     SourceSortImports,
     SourceRemoveUnusedImports,
+    SourceCreateLoveCallbacks,
     SourceFixAll,
 }
 
@@ -126,6 +128,11 @@ pub fn code_actions_parsed_source_with_kinds(
                     actions.push(action);
                 }
             }
+            AssistKind::SourceCreateLoveCallbacks => {
+                if let Some(action) = create_missing_love_callbacks_action(parsed) {
+                    actions.push(action);
+                }
+            }
             AssistKind::SourceFixAll => {
                 if let Some(action) = fix_all_action(parsed, diagnostics, source_dir, extension) {
                     actions.push(action);
@@ -190,6 +197,11 @@ fn diagnostic_quick_fix_actions(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK) => {
+                if let Some(action) = rename_love_callback_action(parsed, diagnostic) {
+                    actions.push(action);
+                }
+            }
             _ => {}
         }
     }
@@ -240,6 +252,74 @@ fn remove_unused_imports_action(parsed: &ParsedSource) -> Option<Assist> {
             AssistKind::SourceRemoveUnusedImports,
             source,
         )
+    })
+}
+
+fn create_missing_love_callbacks_action(parsed: &ParsedSource) -> Option<Assist> {
+    let declarations = love_callback::missing_core_declarations(parsed);
+
+    if declarations.is_empty() {
+        return None;
+    }
+
+    let mut new_text = String::new();
+    if !parsed.source.is_empty() {
+        if !parsed.source.ends_with('\n') {
+            new_text.push('\n');
+        }
+        new_text.push('\n');
+    }
+    new_text.push_str(&declarations.join("\n\n"));
+    new_text.push('\n');
+
+    let position = document_end_position(&parsed.source);
+
+    Some(Assist {
+        title: "Create missing LOVE callbacks".to_owned(),
+        kind: AssistKind::SourceCreateLoveCallbacks,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: position,
+                    end: position,
+                },
+                new_text,
+            },
+        ),
+    })
+}
+
+fn rename_love_callback_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
+    let span = SourceSpan {
+        start: SourcePosition {
+            line: diagnostic.line,
+            column: diagnostic.column,
+        },
+        end: SourcePosition {
+            line: diagnostic.end_line,
+            column: diagnostic.end_column,
+        },
+    };
+    let current = source_text_for_span(&parsed.source, span)?;
+    let replacement = love_callback::closest_name(current)?;
+
+    if replacement == current {
+        return None;
+    }
+
+    Some(Assist {
+        title: format!("Rename to `love.{replacement}`"),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(
+            parsed.path.clone(),
+            TextEdit {
+                path: parsed.path.clone(),
+                span,
+                new_text: replacement.to_owned(),
+            },
+        ),
     })
 }
 

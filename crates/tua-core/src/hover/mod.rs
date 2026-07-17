@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use crate::love_callback;
 use crate::lua::{self, LuaItem};
 use crate::module_index::{
     required_module_export_for_fields, required_module_for_receiver, resolve_module_specifier,
@@ -93,6 +94,18 @@ impl<'a> HoverResolver<'a> {
                 self.required_module_field_hover(&field_parts, position, current_part.span)
             {
                 return Some(hover);
+            }
+
+            if field_parts.len() == 2 && field_parts[0] == "love" {
+                let callback_name = format!("love.{}", current_part.text);
+
+                if self.environment.local("love").is_none()
+                    || self.environment.function(&callback_name).is_some()
+                {
+                    if let Some(item) = love_callback::item(&current_part.text) {
+                        return Some(lua_item_hover(item, Some(current_part.span)));
+                    }
+                }
             }
 
             if let Some(receiver_type) = self

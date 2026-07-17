@@ -640,12 +640,15 @@ replace the dot with `:`.
 
 The editor can also help with common LOVE declarations and helpers. Completion
 after `function love.` can insert callback snippets such as `love.update(dt)`,
-`love.draw()`, and `love.conf(t)`. Inside `love.conf(t)`, nested config fields
-such as `t.window.title`, `t.window.width`, and `t.modules.physics` complete.
-Code actions can apply the TL4018 colon-call fix and can rewrite obvious
-constructors such as `love.graphics.newImage("path")` to `image "path"`.
-Source actions can also organize/sort static imports, remove unused static
-import bindings, and fix all safe diagnostics in the current file.
+`love.draw()`, and `love.conf(t)`, with generated callback and parameter
+documentation. Callback declarations may omit unused Lua parameters, but close
+name typos, required extra parameters, and explicitly incompatible parameter
+types report `TL5006`. Code actions can rename close callback typos, apply the
+TL4018 colon-call fix, and rewrite obvious constructors such as
+`love.graphics.newImage("path")` to `image "path"`. Source actions can create
+missing core `love.load`, `love.update`, and `love.draw` declarations, organize
+or sort static imports, remove unused static import bindings, and fix all safe
+diagnostics in the current file.
 
 ## Practical Metatable Typing
 

@@ -1003,6 +1003,69 @@ channel:push("ready")
 }
 
 #[test]
+fn diagnoses_misspelled_love_callback_declarations() {
+    let diagnostics = check_tua_source("src/main.tua", "function love.udpate(dt: number)\nend\n")
+        .expect_err("misspelled LOVE callbacks should be reported");
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK))
+        .expect("LOVE callback diagnostic should be present");
+
+    assert_eq!(diagnostic.severity, crate::DiagnosticSeverity::Warning);
+    assert!(diagnostic.message.contains("did you mean `love.update`"));
+    assert_eq!((diagnostic.line, diagnostic.column), (1, 15));
+}
+
+#[test]
+fn accepts_love_callbacks_that_omit_unused_parameters() {
+    check_tua_source(
+        "src/main.tua",
+        r#"function love.keypressed(key: string)
+end
+
+function love.update()
+end
+"#,
+    )
+    .expect("Lua callbacks may omit parameters they do not use");
+}
+
+#[test]
+fn accepts_generated_love_callback_overload_signatures() {
+    check_tua_source(
+        "src/main.tua",
+        r#"function love.keypressed(key: string, isrepeat: boolean)
+end
+"#,
+    )
+    .expect("generated callback overloads should be considered during validation");
+}
+
+#[test]
+fn rejects_incompatible_love_callback_parameter_types() {
+    let diagnostics = check_tua_source("src/main.tua", "function love.update(dt: string)\nend\n")
+        .expect_err("incompatible LOVE callback parameter types should be reported");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK)
+            && diagnostic
+                .message
+                .contains("expected `function love.update(dt: number)`")
+    }));
+}
+
+#[test]
+fn rejects_love_callbacks_that_require_extra_parameters() {
+    let diagnostics = check_tua_source("src/main.tua", "function love.update(dt, extra)\nend\n")
+        .expect_err("LOVE callbacks should not require parameters the runtime never supplies");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_LOVE_CALLBACK)
+            && diagnostic.message.contains("receives at most 1 parameter")
+    }));
+}
+
+#[test]
 fn accepts_love_object_subtypes_for_supertype_parameters() {
     check_tua_source(
         "src/draw.tua",

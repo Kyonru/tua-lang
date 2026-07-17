@@ -15,6 +15,8 @@ language or editor behavior, and migration notes call out those changes.
   on-demand bundled `tuaobjectpool.lua` runtime.
 - A VS Code command that toggles native compact inlay-hint rendering and
   restores the previous Tua-specific hint-length preference when expanded.
+- Generated LOVE callback assistance with `TL5006` typo/signature diagnostics,
+  typo rename fixes, and a source action for missing core lifecycle callbacks.
 
 ### Changed
 

@@ -107,6 +107,73 @@ fn adds_local_annotation_from_inferred_type() {
 }
 
 #[test]
+fn renames_a_misspelled_love_callback() {
+    let source = "function love.udpate(dt: number)\nend\n";
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+    let diagnostics = diagnostics(&parsed, DiagnosticsConfig::default());
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range(1, 15),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Rename to `love.update`")
+        .expect("callback rename action should be present");
+
+    assert_eq!(action.kind, AssistKind::QuickFix);
+    assert_eq!(action.edit.changes[&parsed.path][0].new_text, "update");
+}
+
+#[test]
+fn does_not_offer_a_rename_for_love_callback_signature_diagnostics() {
+    let source = "function love.update(dt: string)\nend\n";
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+    let diagnostics = diagnostics(&parsed, DiagnosticsConfig::default());
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range(1, 15),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert!(actions
+        .iter()
+        .all(|action| !action.title.starts_with("Rename to `love.")));
+}
+
+#[test]
+fn creates_missing_core_love_callbacks_as_a_source_action() {
+    let source = "function love.update(dt: number)\nend\n";
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+    let actions = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceCreateLoveCallbacks],
+    );
+
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].title, "Create missing LOVE callbacks");
+    assert_eq!(actions[0].kind, AssistKind::SourceCreateLoveCallbacks);
+    assert_eq!(
+        actions[0].edit.changes[&parsed.path][0].new_text,
+        r#"
+function love.load(arg, unfilteredArg)
+end
+
+function love.draw()
+end
+"#
+    );
+}
+
+#[test]
 fn removes_unused_local_and_self_assignment() {
     let parsed = parse_tua_source("src/main.tua", "local unused = 1\nhp = hp\n")
         .expect("source should parse");

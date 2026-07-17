@@ -711,6 +711,7 @@ fn lsp_code_action_kind(kind: CodeActionKind) -> &'static str {
         CodeActionKind::SourceOrganizeImports => "source.organizeImports",
         CodeActionKind::SourceSortImports => "source.sortImports",
         CodeActionKind::SourceRemoveUnusedImports => "source.removeUnusedImports",
+        CodeActionKind::SourceCreateLoveCallbacks => "source.tua.createMissingLoveCallbacks",
         CodeActionKind::SourceFixAll => "source.fixAll",
     }
 }

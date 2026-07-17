@@ -33,7 +33,7 @@ Status meanings:
 | Inferred local reassignment contracts | Supported | Tua locals retain stable widened types; explicit `any` remains dynamic. |
 | LuaDoc/LuaCATS interoperability | Partial | Practical aliases, classes, overloads, function types, varargs, docs, and module exports work; the full LuaLS annotation ecosystem is larger. |
 | Static project modules | Supported | `require` and static imports resolve through the project model; imports lower to `require`. |
-| LOVE 11.x catalog | Supported | Generated overloads, enums, callbacks, methods, docs, and inheritance drive semantics. |
+| LOVE 11.x catalog | Supported | Generated overloads, enums, callback snippets/validation, methods, docs, and inheritance drive semantics. |
 | Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation and navigation. |
 | Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types. |
 | Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
@@ -53,7 +53,7 @@ Status meanings:
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
 | References and rename | Supported | Same-file and compiler-identified project symbols are supported; ambiguous dynamic identities are rejected. |
 | Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes. |
-| Formatting and source actions | Supported | Full/range/on-type formatting and conservative import/fix-all actions are available. |
+| Formatting and source actions | Supported | Full/range/on-type formatting plus conservative import, LOVE callback generation, and fix-all actions are available. |
 | Syntax highlighting | Supported | An immediate TextMate grammar covers Lua, Tua types/classes/enums, LuaDoc, modules, domain helpers, event names, calls, members, labels, literals, and operators. |
 | Semantic tokens and inlay hints | Supported | Full/range/delta tokens classify standard VS Code symbol roles and declaration/readonly/deprecated/modification/default-library modifiers; inferred type/parameter hints are revision-aware, and the extension can toggle native compact rendering without changing LSP results. |
 | Watched files and workspace folders | Supported | Source, Lua, assets, config, module creation/deletion, and folder changes refresh project state. |

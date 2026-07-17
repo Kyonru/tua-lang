@@ -576,6 +576,7 @@ pub(super) fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool 
             | crate::DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK
             | crate::DiagnosticCode::TYPE_CLASS
             | crate::DiagnosticCode::DOMAIN_SIGNAL_SCHEMA
+            | crate::DiagnosticCode::DOMAIN_LOVE_CALLBACK
             | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
             | crate::DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
             | crate::DiagnosticCode::LINT_FORMAT_INDENTATION

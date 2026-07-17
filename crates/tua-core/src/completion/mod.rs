@@ -7,6 +7,7 @@ use self::sequence::{
     score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
 };
 use self::symbol::lua_symbols_before_position;
+use crate::love_callback;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
 use crate::profile;
@@ -2363,26 +2364,7 @@ fn love_callback_snippet(label: &str, source: &str, position: SourcePosition) ->
         return None;
     }
 
-    let item = lua::love_callback_item(label)?;
-    let signature = lua::signature_variants(item)?.first()?;
-    let parameters = signature
-        .parameters
-        .iter()
-        .filter_map(|parameter| {
-            let name = parameter
-                .label
-                .split_once(':')
-                .map(|(name, _)| name)
-                .unwrap_or(parameter.label)
-                .trim()
-                .trim_end_matches('?');
-
-            (!name.is_empty() && name != "...").then_some(name)
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    Some(format!("{label}({parameters})\n  $0\nend"))
+    love_callback::declaration_suffix(label, "$0")
 }
 
 fn append_love_callback_parameter_documentation(completion: &mut Completion, callback: LuaItem) {

@@ -140,6 +140,15 @@ pub(crate) fn love_callback_item(label: &str) -> Option<LuaItem> {
     love_api::callback_item(label)
 }
 
+pub(crate) fn love_callback_items() -> Vec<LuaItem> {
+    let receiver = vec!["love".to_owned()];
+
+    love_api::field_items(&receiver, "")
+        .into_iter()
+        .filter(|item| love_api::callback_item(item.label).is_some())
+        .collect()
+}
+
 pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     let (name, receiver) = parts.split_last()?;
 

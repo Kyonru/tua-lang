@@ -84,7 +84,12 @@ selected path, version, and workspace directory when available.
 - LOVE callback completions are generated from the pinned LOVE catalog and can
   insert declaration snippets for all known callbacks, including
   `love.load`, `love.update(dt)`, `love.filedropped(file)`, touch/gamepad
-  callbacks, `love.draw`, and `love.conf(t)`.
+  callbacks, `love.draw`, and `love.conf(t)`. Completion details include
+  callback and parameter documentation from the same catalog.
+- Callback declarations are checked against generated LOVE signatures.
+  Callbacks may omit unused Lua parameters, while misspelled names and required
+  extra or explicitly incompatible parameters report `TL5006`. Close typos
+  offer a rename quick fix.
 - `love.conf(t)` parameters expose common config fields such as
   `t.window.title`, `t.window.width`, and `t.modules.physics`. Known literal
   options are checked, including `"desktop" | "exclusive"` for
@@ -102,7 +107,8 @@ selected path, version, and workspace directory when available.
   actions, code lens references, call hierarchy, inlay hints, and full, range,
   and delta semantic tokens.
 - Source actions for organizing imports, sorting imports, removing unused static
-  import bindings, and fixing all safe diagnostics in the current file.
+  import bindings, creating missing core LOVE callbacks (`load`, `update`, and
+  `draw`), and fixing all safe diagnostics in the current file.
 - Workspace file-rename edits for static `require(...)` and `import(...)`
   module specifiers when the move is unambiguous in the project model.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,

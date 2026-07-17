@@ -71,6 +71,7 @@ pub(super) fn initialize_result(
                     "source.organizeImports",
                     "source.sortImports",
                     "source.removeUnusedImports",
+                    "source.tua.createMissingLoveCallbacks",
                     "source.fixAll"
                 ]
             },

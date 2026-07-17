@@ -116,6 +116,32 @@ events:on("player.hit", function(player: string, damage: string) end)
 }
 
 #[test]
+fn did_open_publishes_love_callback_diagnostics() {
+    let uri = "file:///tmp/love-callback-diagnostics.tua";
+    let source = r#"function love.udpate(dt: number)
+end
+
+function love.draw(unexpected: string)
+end
+"#;
+    let output = run_messages(vec![did_open(uri, source)]);
+    let diagnostics = published_diagnostics(&output, uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL5006")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("did you mean `love.update`")));
+    assert_eq!(diagnostics[1]["severity"], 1);
+    assert!(diagnostics[1]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("receives at most 0 parameters")));
+}
+
+#[test]
 fn did_open_publishes_love_method_argument_diagnostics() {
     let temp = TempProject::new("love-method-argument-diagnostics");
     let source = r#"

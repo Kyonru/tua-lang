@@ -108,6 +108,7 @@ fn initialize_returns_server_capabilities() {
             "source.organizeImports",
             "source.sortImports",
             "source.removeUnusedImports",
+            "source.tua.createMissingLoveCallbacks",
             "source.fixAll"
         ])
     );

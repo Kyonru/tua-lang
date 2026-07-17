@@ -93,6 +93,7 @@ impl DiagnosticCode {
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
     pub const DOMAIN_SIGNAL_SCHEMA: Self = Self(5005);
+    pub const DOMAIN_LOVE_CALLBACK: Self = Self(5006);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -180,6 +181,7 @@ impl DiagnosticCode {
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE
                 | Self::DOMAIN_SIGNAL_SCHEMA
+                | Self::DOMAIN_LOVE_CALLBACK
         )
     }
 }

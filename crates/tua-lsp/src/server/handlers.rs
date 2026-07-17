@@ -2143,6 +2143,7 @@ fn code_action_kinds_from_request(message: &Value) -> Vec<AssistKind> {
                 kinds.insert(AssistKind::SourceOrganizeImports);
                 kinds.insert(AssistKind::SourceSortImports);
                 kinds.insert(AssistKind::SourceRemoveUnusedImports);
+                kinds.insert(AssistKind::SourceCreateLoveCallbacks);
                 kinds.insert(AssistKind::SourceFixAll);
             }
             "source.organizeImports" => {
@@ -2153,6 +2154,9 @@ fn code_action_kinds_from_request(message: &Value) -> Vec<AssistKind> {
             }
             "source.removeUnusedImports" => {
                 kinds.insert(AssistKind::SourceRemoveUnusedImports);
+            }
+            "source.tua.createMissingLoveCallbacks" => {
+                kinds.insert(AssistKind::SourceCreateLoveCallbacks);
             }
             "source.fixAll" | "source.fixAll.tua" => {
                 kinds.insert(AssistKind::SourceFixAll);

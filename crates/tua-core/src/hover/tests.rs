@@ -913,6 +913,26 @@ fn hovers_love_items() {
 }
 
 #[test]
+fn hovers_declared_love_callbacks_from_the_generated_catalog() {
+    let source = r#"function love.keypressed(key: string)
+end
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "keypressed"))
+        .expect("hover should not fail")
+        .expect("declared LOVE callback should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function love.keypressed(key: KeyConstant, scancode: Scancode, isrepeat: boolean)"
+    );
+    assert!(hover
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("Callback function triggered when a key is pressed"));
+}
+
+#[test]
 fn hovers_love_asset_loader_items_and_inferred_locals() {
     let source = r#"
 local player = image "assets/player.png"

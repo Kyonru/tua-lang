@@ -127,6 +127,12 @@ LOVE 11.x APIs are generated from one pinned `love-api` revision. The generated
 catalog owns function signatures, overloads, enums, callback identity, object
 methods, and inheritance used by checking and editor features.
 
+Top-level `love.<callback>` declarations use that catalog for snippets,
+documentation, and validation. Lua callbacks may omit unused parameters, but a
+declaration must not require values LOVE does not supply, and explicit
+parameter annotations must accept the corresponding generated type. Close
+callback-name typos use stable domain diagnostic `TL5006`.
+
 LOVE asset paths are resolved relative to configured asset roots. Supported
 loader calls can provide diagnostics, completion, hover metadata, definition,
 and references without executing project code.

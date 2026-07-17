@@ -639,7 +639,7 @@ assert!(snapshot.diagnostics("src/main.tua").is_empty());
 | `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
 | `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
 | `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |
-| `ide-assists` | Code actions and refactor assists. | `code_action` module with conservative quick fixes, source import actions, and safe file fix-all. | Partial | 66, 89 |
+| `ide-assists` | Code actions and refactor assists. | `code_action` module with conservative quick fixes, source import/LOVE callback actions, and safe file fix-all. | Partial | 66, 89 |
 | `ide-ssr` | Structural search and replace. | No equivalent planned for v1. | Out of scope | None |
 | `test-fixture`, `test-utils` | Fixture DSLs and shared test support. | Many focused tests with ad hoc fixtures and temp projects. | Partial | 52 |
 | `profile` | Performance tracing and benchmark support. | Opt-in `TUA_PROFILE` tracing, LSP latency benchmark fixtures, completion-specific profiling, and cache stats reporting. | Existing | 69, 77.5 |

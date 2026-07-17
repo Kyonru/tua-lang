@@ -27,7 +27,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
     FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, lua, object_pool, signal, sprite, vector};
+use crate::{asset, love_callback, lua, object_pool, signal, sprite, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -330,6 +330,7 @@ impl<'a> Checker<'a> {
                 self.scoped_local_contracts.pop();
             }
             ast::Stmt::FunctionDeclaration(function) => {
+                self.check_love_callback_declaration(function);
                 self.record_function_declaration_type(function);
 
                 let name = function.name().to_string();
@@ -606,6 +607,143 @@ impl<'a> Checker<'a> {
             .unwrap_or_else(|| function_type_from_body_with_receiver(function.body(), is_method));
 
         self.record_known_table_field_type(&root, &field, ty, false, is_constructor);
+    }
+
+    fn check_love_callback_declaration(&mut self, function: &ast::FunctionDeclaration) {
+        let Some((label, token)) = love_callback::declaration_name(function) else {
+            return;
+        };
+        let Some(item) = love_callback::item(&label) else {
+            let Some(suggestion) = love_callback::closest_name(&label) else {
+                return;
+            };
+            let Some(span) = node_span(token).or_else(|| node_span(function.name())) else {
+                return;
+            };
+
+            self.diagnostics.push(
+                Diagnostic::new(
+                    &self.parsed.path,
+                    span.start.line,
+                    span.start.column,
+                    DiagnosticSeverity::Warning,
+                    format!(
+                        "unknown LOVE callback `love.{label}`; did you mean `love.{suggestion}`?"
+                    ),
+                )
+                .with_range(
+                    span.start.line,
+                    span.start.column,
+                    span.end.line,
+                    span.end.column,
+                )
+                .with_code(DiagnosticCode::DOMAIN_LOVE_CALLBACK),
+            );
+            return;
+        };
+
+        let name = format!("love.{label}");
+        let Some(declared) = self.environment.function(&name) else {
+            return;
+        };
+        let Some(expected) = external_function_type_from_lua_item(item) else {
+            return;
+        };
+        let parameter_names = function
+            .body()
+            .parameters()
+            .iter()
+            .filter_map(|parameter| match parameter {
+                ast::Parameter::Name(name) => Some(token_text(name)),
+                ast::Parameter::Ellipsis(_) => None,
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        if expected
+            .variants
+            .iter()
+            .any(|variant| self.love_callback_variant_matches(declared, &parameter_names, variant))
+        {
+            return;
+        }
+
+        let Some(span) = node_span(token).or_else(|| node_span(function.name())) else {
+            return;
+        };
+        let max_parameters = expected
+            .variants
+            .iter()
+            .map(|variant| variant.parameters.len())
+            .max()
+            .unwrap_or_default();
+        let message = if declared.required_parameter_count > max_parameters {
+            let parameter_word = if max_parameters == 1 {
+                "parameter"
+            } else {
+                "parameters"
+            };
+            format!(
+                "LOVE callback `{name}` receives at most {max_parameters} {parameter_word}, but this declaration requires {}",
+                declared.required_parameter_count
+            )
+        } else {
+            format!(
+                "LOVE callback `{name}` has an incompatible parameter type; expected `{}`",
+                item.detail
+            )
+        };
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                &self.parsed.path,
+                span.start.line,
+                span.start.column,
+                message,
+            )
+            .with_range(
+                span.start.line,
+                span.start.column,
+                span.end.line,
+                span.end.column,
+            )
+            .with_code(DiagnosticCode::DOMAIN_LOVE_CALLBACK),
+        );
+    }
+
+    fn love_callback_variant_matches(
+        &self,
+        declared: &TypedFunction,
+        parameter_names: &[String],
+        expected: &ExternalFunctionVariant,
+    ) -> bool {
+        if declared.required_parameter_count > expected.parameters.len() {
+            return false;
+        }
+
+        parameter_names.iter().enumerate().all(|(index, name)| {
+            let Some(declared_parameter) = declared
+                .parameters
+                .iter()
+                .find(|parameter| parameter.name == *name)
+            else {
+                return true;
+            };
+            let Some(expected_parameter) = expected.parameter_type(index) else {
+                return true;
+            };
+
+            self.love_callback_parameter_assignable(expected_parameter, &declared_parameter.ty)
+        })
+    }
+
+    fn love_callback_parameter_assignable(&self, source: &Type, target: &Type) -> bool {
+        if self.context.is_assignable(source, target) {
+            return true;
+        }
+
+        matches!(source, Type::Alias(name) if !lua::enum_value_items(name, "").is_empty())
+            && matches!(target, Type::Primitive(crate::PrimitiveType::String))
     }
 
     fn record_table_field_assignment_type(

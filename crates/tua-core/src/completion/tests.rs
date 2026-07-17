@@ -1147,6 +1147,28 @@ fn completes_love_callbacks_as_function_declaration_snippets() {
     assert!(documentation.contains("**Callback parameters**"));
     assert!(documentation.contains("`file: DroppedFile`"));
     assert!(documentation.contains("The unopened File object"));
+
+    let key_source = "function love.key\n";
+    let key_completions = complete_tua_source(
+        "src/main.tua",
+        key_source,
+        position_after(key_source, "key"),
+    )
+    .expect("key callback completion should succeed");
+    let keypressed = key_completions
+        .iter()
+        .find(|completion| completion.label == "keypressed")
+        .expect("keypressed callback should complete");
+
+    assert_eq!(
+        keypressed.insert_text.as_deref(),
+        Some("keypressed(key, scancode, isrepeat)\n  $0\nend")
+    );
+    assert!(keypressed
+        .documentation
+        .as_deref()
+        .unwrap_or_default()
+        .contains("`scancode: Scancode`"));
 }
 
 #[test]
