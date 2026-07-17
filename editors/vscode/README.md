@@ -112,6 +112,7 @@ the setting.
 - `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
+- `Tua: Open Generated Lua Beside Tua`
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
@@ -143,6 +144,12 @@ steps. When a result is `any`, the quick-pick title calls that out directly.
 Select a located step to open its declaration or source. Missing modules,
 explicit `any`, unknown initializers, and member access through `any` are shown
 as distinct causes.
+
+`Tua: Open Generated Lua Beside Tua` is available from the command palette and
+the Tua editor toolbar. It resolves the active saved `.tua` file through the
+nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
+`.lua` file beside the source editor. If the output does not exist, run
+`tua build` first.
 
 ## Module Dependency Explorer
 

@@ -419,6 +419,11 @@ completion, and navigation. They currently target identifiers and dotted member
 chains; arbitrary runtime expressions remain intentionally unexplained when no
 stable compiler identity exists.
 
+`Tua: Open Generated Lua Beside Tua` resolves the active saved Tua source
+through the nearest `tua.toml` `source` and `out` settings and opens the emitted
+`.lua` file in a side editor. The command is an editor convenience for inspecting
+build output; it does not synthesize Lua or run `tua build` automatically.
+
 For local smoke tests:
 
 ```bash

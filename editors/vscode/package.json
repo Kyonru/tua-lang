@@ -489,6 +489,12 @@
         "category": "Tua"
       },
       {
+        "command": "tua.openGeneratedLua",
+        "title": "Open Generated Lua Beside Tua",
+        "category": "Tua",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "tua.inlayHints.selectMode",
         "title": "Select Inlay Hint Mode",
         "category": "Tua",
@@ -611,6 +617,11 @@
           "group": "navigation@40"
         },
         {
+          "command": "tua.openGeneratedLua",
+          "when": "editorLangId == tua",
+          "group": "navigation@45"
+        },
+        {
           "command": "tua.showSignalGraph",
           "when": "editorLangId == tua",
           "group": "navigation@50"
@@ -623,6 +634,10 @@
         },
         {
           "command": "tua.inlayHints.selectMode",
+          "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.openGeneratedLua",
           "when": "editorLangId == tua"
         },
         {

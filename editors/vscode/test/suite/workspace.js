@@ -17,8 +17,32 @@ const {
 
 async function runWorkspaceTests() {
   await testSecondWorkspaceFolder();
+  await testOpenGeneratedLuaBesideSource();
   await testFileRenameEdits();
   await testAssetRenameEdits();
+}
+
+async function testOpenGeneratedLuaBesideSource() {
+  const sourcePath = path.join(fixtures.workspaceOne, "src", "open-generated.tua");
+  const generatedPath = path.join(fixtures.workspaceOne, "build", "open-generated.lua");
+
+  fs.writeFileSync(sourcePath, "local answer = 42\nreturn answer\n");
+  fs.mkdirSync(path.dirname(generatedPath), { recursive: true });
+  fs.writeFileSync(generatedPath, "local answer = 42\nreturn answer\n");
+
+  const sourceDocument = await vscode.workspace.openTextDocument(sourcePath);
+  await vscode.window.showTextDocument(sourceDocument, {
+    preview: false,
+    viewColumn: vscode.ViewColumn.One,
+  });
+
+  const openedPath = await vscode.commands.executeCommand("tua.openGeneratedLua");
+  assert.equal(openedPath, generatedPath);
+  assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, generatedPath);
+  assert.equal(vscode.window.activeTextEditor?.viewColumn, vscode.ViewColumn.Two);
+
+  await closeActiveEditor();
+  await closeActiveEditor();
 }
 
 async function testAssetRenameEdits() {
