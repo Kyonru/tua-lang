@@ -1084,6 +1084,7 @@ fn is_known_global(name: &str) -> bool {
             | "ipairs"
             | "love"
             | "ecs"
+            | "objectPool"
             | "math"
             | "next"
             | "os"

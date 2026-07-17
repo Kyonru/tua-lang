@@ -255,9 +255,9 @@ events:emit("player.hit", hero, 4)
 events:emit("game.paused", "menu")
 ```
 
-When generated Lua needs `brinevector` or `tuasignal`, `tua build` writes the
-bundled runtime file into the output directory unless the project already
-provides one. `SignalBus` completions include `on`, `once`, `declare`, `emit`,
+When generated Lua needs `brinevector`, `tuasignal`, or `tuaobjectpool`, `tua
+build` writes the bundled runtime file into the output directory unless the
+project already provides one. `SignalBus` completions include `on`, `once`, `declare`, `emit`,
 `off`, `clear`, `has`, `listeners`, and Hump-style aliases such as `register`
 and `remove`. In the first string argument of those event-name methods, the
 language server suggests known event names from existing `SignalBus` calls,
@@ -270,6 +270,13 @@ Conflicting typed schemas report `TL5005`; untyped listeners and unresolved
 dynamic buses keep `emit` permissive. At runtime, `declare` validates the event
 name and optional handler shape, then returns the handler or bus without
 registering a listener.
+
+`objectPool({...})` creates a reusable pool with `acquire`, `release`,
+`prewarm`, ownership, count, and cleanup methods. An annotated `create`
+callback return type flows through `acquire`, while unannotated factories stay
+permissive. The helper targets measured allocation and garbage-collection
+pressure in short-lived gameplay objects; it is not a replacement for normal
+tables or ECS population queries.
 
 ## Boundaries
 

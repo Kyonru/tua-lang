@@ -35,7 +35,7 @@ Status meanings:
 | Static project modules | Supported | `require` and static imports resolve through the project model; imports lower to `require`. |
 | LOVE 11.x catalog | Supported | Generated overloads, enums, callbacks, methods, docs, and inheritance drive semantics. |
 | Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation and navigation. |
-| Vec2 and SignalBus helpers | Supported | Ordinary APIs emit vendored helper modules only when used. |
+| Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types. |
 | Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
 | ECS semantics | Supported | Zero-setup built-in runtime, typed world/component/query/system APIs, and static component diagnostics are enabled by default. |
 | Generics | Deferred | Concrete function types and container behavior take priority. |
@@ -49,7 +49,7 @@ Status meanings:
 | Completion and completion resolve | Supported | Compiler-valid locals, fields, modules, Lua, and LOVE candidates are ranked deterministically. |
 | Project-adaptive completion ranking | Supported | Privacy-safe local frequency and structural statistics stay on-device and can be reset. |
 | Contextual sequence and multi-token completion | Opt-in | Bounded local lanes preserve compiler completion and fail back without user-visible errors. |
-| Hover and signature help | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, and documentation facts. |
+| Hover and signature help | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. |
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
 | References and rename | Supported | Same-file and compiler-identified project symbols are supported; ambiguous dynamic identities are rejected. |
 | Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes. |

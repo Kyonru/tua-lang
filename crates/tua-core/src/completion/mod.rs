@@ -16,7 +16,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, love_conf, signal, vector};
+use crate::{asset, ecs, love_conf, object_pool, signal, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -1005,6 +1005,11 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             signal::signal_snippet(),
         ),
         (
+            object_pool::CONSTRUCTOR_NAME,
+            "Tua object pool helper",
+            object_pool::workflow_snippet(),
+        ),
+        (
             "ecs component",
             "Tua ECS component and world workflow",
             ecs::workflow_snippet(),
@@ -1079,6 +1084,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
         .chain(lua::love_type_names().iter().copied())
         .chain(vector::builtin_type_names().iter().copied())
         .chain(signal::builtin_type_names().iter().copied())
+        .chain(object_pool::builtin_type_names().iter().copied())
         .chain(
             ecs::builtin_type_names()
                 .iter()
@@ -1683,6 +1689,7 @@ fn complete_fields(
         .filter(|(name, _)| completion_text_matches(name, prefix))
     {
         let documentation = ecs::typed_member(environment, &receiver_type, &name)
+            .or_else(|| object_pool::typed_member(environment, &receiver_type, &name))
             .and_then(|function| function.documentation);
 
         completions.insert(

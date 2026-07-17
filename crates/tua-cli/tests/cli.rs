@@ -1175,6 +1175,43 @@ world:add(entity, Position, { x = 10 })
 }
 
 #[test]
+fn build_writes_tuaobjectpool_runtime_when_builtin_pool_is_used() {
+    let temp = TempDir::new("build-object-pool-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local bullets = objectPool({
+  create = function()
+    return { active = false }
+  end,
+  initial = 8,
+})
+return bullets
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime = fs::read_to_string(temp.path().join("build/tuaobjectpool.lua"))
+        .expect("failed to read tuaobjectpool");
+
+    assert!(emitted.contains(r#"local __tua_object_pool = require("tuaobjectpool")"#));
+    assert!(runtime.contains("function pool:acquire()"));
+    assert!(runtime.contains("function pool:release(object)"));
+}
+
+#[test]
 fn build_does_not_inject_tuaecs_when_ecs_support_is_disabled() {
     let temp = TempDir::new("build-disabled-ecs-runtime");
 

@@ -75,6 +75,9 @@ make build-features
   world/entity/query/system APIs, component diagnostics, and a system update
   over matching position and velocity data. Builds include `tuaecs.lua` only
   because the source uses the built-in `ecs` module.
+- `src/object_pool.tua` demonstrates zero-setup object pooling with a typed
+  factory, prewarming, reset-on-release behavior, duplicate-release safety,
+  item-aware editor support, and on-demand `tuaobjectpool.lua` emission.
 - `src/lua_doc_types.lua` is a plain Lua type provider used by
   `src/project_types.tua`; it demonstrates `---@class`, `---@field`,
   literal-union aliases, `---@overload`, `---@vararg`, and the LuaHelper

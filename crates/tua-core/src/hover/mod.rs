@@ -15,8 +15,8 @@ use crate::types::{
     TypedFunctionOverload,
 };
 use crate::{
-    definition_parsed_source, ecs, parse_tua_source, Definition, DefinitionKind, Diagnostic,
-    ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
+    definition_parsed_source, ecs, object_pool, parse_tua_source, Definition, DefinitionKind,
+    Diagnostic, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,21 +95,26 @@ impl<'a> HoverResolver<'a> {
                 return Some(hover);
             }
 
-            if let Some(item) =
-                self.love_object_field_item(&field_parts, position, &current_part.text)
-            {
-                return Some(lua_item_hover(item, Some(current_part.span)));
-            }
-
             if let Some(receiver_type) = self
                 .semantic
                 .type_of_field_chain(&field_parts[..field_parts.len() - 1], position)
             {
-                if let Some(function) =
-                    ecs::typed_member(self.environment, &receiver_type, &current_part.text)
-                {
+                if let Some(function) = ecs::typed_member(
+                    self.environment,
+                    &receiver_type,
+                    &current_part.text,
+                )
+                .or_else(|| {
+                    object_pool::typed_member(self.environment, &receiver_type, &current_part.text)
+                }) {
                     return Some(self.function_hover(&function, position, current_part.span));
                 }
+            }
+
+            if let Some(item) =
+                self.love_object_field_item(&field_parts, position, &current_part.text)
+            {
+                return Some(lua_item_hover(item, Some(current_part.span)));
             }
 
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
@@ -167,6 +172,12 @@ impl<'a> HoverResolver<'a> {
         }
 
         if let Some(ty) = self.environment.local(&current_part.text) {
+            if let Some(hover) =
+                object_pool_local_hover(self.environment, &current_part.text, ty, current_part.span)
+            {
+                return Some(hover);
+            }
+
             let contents = format!("local {}: {ty}", current_part.text);
 
             if let Some(documentation) = self.environment.local_documentation(&current_part.text) {
@@ -282,6 +293,10 @@ impl<'a> HoverResolver<'a> {
         hover_span: SourceSpan,
     ) -> Option<Hover> {
         let ty = self.semantic.type_of_local_assignment(name, position)?;
+        if let Some(hover) = object_pool_local_hover(self.environment, name, &ty, hover_span) {
+            return Some(hover);
+        }
+
         let contents = format!("local {name}: {ty}");
 
         Some(Hover {
@@ -418,9 +433,17 @@ fn lua_item_hover(item: LuaItem, span: Option<SourceSpan>) -> Hover {
 
 fn format_function_signature(function: &TypedFunction) -> String {
     let name = function.name.as_deref().unwrap_or("<anonymous>");
+    let parameter_start = usize::from(
+        name.contains(':')
+            && function
+                .parameters
+                .first()
+                .is_some_and(|parameter| parameter.name == "self"),
+    );
     let mut parameters = function
         .parameters
         .iter()
+        .skip(parameter_start)
         .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
         .collect::<Vec<_>>();
 
@@ -642,6 +665,12 @@ fn format_type_list(types: &[Type]) -> String {
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    if object_pool::pool_item_type(environment, ty).is_some() {
+        return lua::type_field_items(object_pool::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field);
+    }
+
     if let Type::Alias(name) = ty {
         if let Some(item) = lua::type_field_items(name, field)
             .into_iter()
@@ -667,6 +696,24 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         | Type::Tuple(_)
         | Type::Dictionary { .. } => None,
     }
+}
+
+fn object_pool_local_hover(
+    environment: &TypeEnvironment,
+    name: &str,
+    ty: &Type,
+    span: SourceSpan,
+) -> Option<Hover> {
+    let item_type = object_pool::pool_item_type(environment, ty)?;
+    let documentation = (item_type != Type::Any)
+        .then(|| format!("Acquires and releases values of type `{item_type}`."));
+
+    Some(Hover {
+        contents: format!("local {name}: {}", object_pool::TYPE_NAME),
+        span: Some(span),
+        documentation,
+        context: Vec::new(),
+    })
 }
 
 fn starts_before_or_at(span: SourceSpan, position: SourcePosition) -> bool {

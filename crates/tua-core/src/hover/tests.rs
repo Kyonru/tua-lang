@@ -1039,6 +1039,51 @@ events:emit("player.hit", "ada", 4)
 }
 
 #[test]
+fn hovers_typed_builtin_object_pool_constructor_items_and_methods() {
+    let source = r#"
+type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+local bullet = bullets:acquire()
+bullets:release(bullet)
+"#;
+    let constructor = hover_tua_source("src/main.tua", source, position_at(source, "objectPool"))
+        .expect("hover should not fail")
+        .expect("objectPool constructor should hover");
+    let pool = hover_tua_source("src/main.tua", source, position_at(source, "bullets ="))
+        .expect("hover should not fail")
+        .expect("ObjectPool local should hover");
+    let bullet = hover_tua_source("src/main.tua", source, position_at(source, "bullet ="))
+        .expect("hover should not fail")
+        .expect("acquired item should hover");
+    let release = hover_tua_source("src/main.tua", source, position_at(source, "release"))
+        .expect("hover should not fail")
+        .expect("ObjectPool release should hover");
+
+    assert_eq!(
+        constructor.contents,
+        "function objectPool(options: ObjectPoolOptions): ObjectPool"
+    );
+    assert_eq!(pool.contents, "local bullets: ObjectPool");
+    assert_eq!(
+        pool.documentation.as_deref(),
+        Some("Acquires and releases values of type `Bullet`.")
+    );
+    assert_eq!(bullet.contents, "local bullet: Bullet");
+    assert_eq!(
+        release.contents,
+        "function ObjectPool:release(object: Bullet): boolean"
+    );
+    assert!(release
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("duplicate releases")));
+}
+
+#[test]
 fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
     let source = r#"
 local function loadPlayerImage()

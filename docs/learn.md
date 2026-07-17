@@ -253,7 +253,35 @@ tables and classes remain clearer for small object graphs, menus, scenes, and
 singletons. See [Entity Component Systems](ecs.md) for systems, queries,
 performance guidance, and runtime overrides.
 
-## 9. Prefer `:` For LOVE Methods
+## 9. Reuse High-Churn Objects When Profiling Justifies It
+
+Tua also includes a typed object pool with no require or configuration:
+
+```tua
+type Bullet = { x: number, y: number, active: boolean }
+
+local bullets = objectPool({
+  create = function(): Bullet
+    return { x = 0, y = 0, active = false }
+  end,
+  reset = function(bullet: Bullet)
+    bullet.active = false
+  end,
+  initial = 128,
+})
+
+local bullet = bullets:acquire()
+bullets:release(bullet)
+```
+
+The factory's return annotation makes acquired values retain `Bullet` editor
+and checker support. Use pooling for measured high-churn allocations such as
+bullets, particles, and temporary effects. Do not pool ordinary objects by
+default; retained memory and lifecycle complexity can cost more than the
+allocation. See [Object Pooling](object-pooling.md) for lifecycle rules,
+prewarming, cleanup, and ECS integration.
+
+## 10. Prefer `:` For LOVE Methods
 
 LOVE object methods usually need Lua's colon-call syntax so `self` is passed:
 
@@ -270,7 +298,7 @@ playerImage.setFilter("nearest")
 When Tua knows the receiver is a LOVE object, it warns about the dot call and
 editor completions prefer colon-call snippets.
 
-## 10. Enable LuaJIT Guidance When It Helps
+## 11. Enable LuaJIT Guidance When It Helps
 
 For hot LOVE code, you can opt into LuaJIT-friendly shape guidance:
 
@@ -295,7 +323,7 @@ player.name = "late field" -- TL4033 when JIT guidance is enabled
 Use this for code paths where stable shapes matter. Leave it off for migration
 work, prototyping, or runtime-shaped Lua.
 
-## 11. Let Dynamic Lua Stay Dynamic
+## 12. Let Dynamic Lua Stay Dynamic
 
 Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
@@ -309,7 +337,7 @@ Use `any` deliberately when a value is runtime-shaped, third-party, or
 metatable-heavy. Add annotations later if that code becomes important to the
 editor or checker.
 
-## 12. Build And Inspect The Output
+## 13. Build And Inspect The Output
 
 The normal loop is:
 
@@ -328,7 +356,7 @@ cargo run -p tua-cli -- build
 
 That makes the output folder a runnable LOVE distribution folder.
 
-## 13. Try The Examples
+## 14. Try The Examples
 
 The feature tour is the best place to see language and editor behavior in one
 project:

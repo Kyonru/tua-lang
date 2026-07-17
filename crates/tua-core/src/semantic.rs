@@ -22,8 +22,8 @@ use crate::types::{
     TypeEnvironment, TypedFunction,
 };
 use crate::{
-    ecs, signal, sprite, vector, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan,
-    TypedParameter,
+    ecs, object_pool, signal, sprite, vector, ParsedLanguage, ParsedSource, SourcePosition,
+    SourceSpan, TypedParameter,
 };
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -128,6 +128,21 @@ impl<'a> SemanticModel<'a> {
             return Vec::new();
         };
 
+        if parts.len() == 1
+            && object_pool::is_constructor(&parts[0])
+            && self.environment.local(&parts[0]).is_none()
+            && self.environment.function(&parts[0]).is_none()
+        {
+            let pool = first_parenthesized_call_argument(function_call)
+                .and_then(|options| {
+                    self.type_of_expression_return_at_depth(options, position, 0, 1)
+                })
+                .map(|options| object_pool::pool_type_from_options(&options))
+                .unwrap_or_else(|| Type::alias(object_pool::TYPE_NAME));
+
+            return vec![pool];
+        }
+
         self.return_types_for_call_parts(&parts, position)
     }
 
@@ -159,6 +174,12 @@ impl<'a> SemanticModel<'a> {
 
             if signal::is_constructor(root) {
                 return signal::constructor_type().return_types_or_any().to_vec();
+            }
+
+            if object_pool::is_constructor(root) {
+                return object_pool::constructor_type()
+                    .return_types_or_any()
+                    .to_vec();
             }
 
             if let Some(returns) = self
@@ -242,6 +263,10 @@ impl<'a> SemanticModel<'a> {
                 return Some(signal::constructor_typed_function());
             }
 
+            if object_pool::is_constructor(root) {
+                return Some(object_pool::constructor_typed_function());
+            }
+
             if let Some(function) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_function(self.environment, &ty))
@@ -271,6 +296,12 @@ impl<'a> SemanticModel<'a> {
             let receiver_type = self.type_of_field_chain(receiver_parts, position)?;
 
             if let Some(function) = ecs::typed_member(self.environment, &receiver_type, method) {
+                return Some(function);
+            }
+
+            if let Some(function) =
+                object_pool::typed_member(self.environment, &receiver_type, method)
+            {
                 return Some(function);
             }
 
@@ -1927,6 +1958,16 @@ fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, 
     Some((arguments.iter().next()?, arguments.iter().nth(1)?))
 }
 
+fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Expression> {
+    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
+        function_call.suffixes().next()
+    else {
+        return None;
+    };
+
+    arguments.iter().next()
+}
+
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {
     crate::types::function_type_from_body(body)
 }
@@ -1960,6 +2001,12 @@ fn function_body_returns_setmetatable_self(body: &ast::FunctionBody) -> bool {
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {
+    if object_pool::pool_item_type(environment, ty).is_some() {
+        return lua::type_field_items(object_pool::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field);
+    }
+
     if let Type::Alias(name) = ty {
         if let Some(item) = lua::type_field_items(name, field)
             .into_iter()

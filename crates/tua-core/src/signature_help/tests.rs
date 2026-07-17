@@ -378,6 +378,32 @@ world:add(entity, Position,
 }
 
 #[test]
+fn returns_typed_builtin_object_pool_constructor_and_method_signatures() {
+    let constructor = signature_at("local bullets = objectPool(\n", "objectPool(")
+        .expect("objectPool should have signature help");
+    let source = r#"type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+local bullet = bullets:acquire()
+bullets:release(
+"#;
+    let release = signature_at(source, "bullets:release(")
+        .expect("ObjectPool:release should have signature help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function objectPool(options: ObjectPoolOptions): ObjectPool"
+    );
+    assert_eq!(
+        release.signatures[0].label,
+        "function bullets:release(object: Bullet): boolean"
+    );
+}
+
+#[test]
 fn returns_builtin_signal_constructor_and_method_signatures() {
     let constructor =
         signature_at("local events = signal(\n", "signal(").expect("signal should have help");

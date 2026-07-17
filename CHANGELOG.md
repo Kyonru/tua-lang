@@ -10,6 +10,9 @@ language or editor behavior, and migration notes call out those changes.
 
 - A zero-setup `ecs` module with a bundled data-oriented `tuaecs.lua` runtime,
   documented completion, hover, named signatures, world queries, and systems.
+- A zero-setup `objectPool({...})` helper with item-aware typing, lifecycle
+  completion and hover, prewarming, guarded release, cleanup hooks, and an
+  on-demand bundled `tuaobjectpool.lua` runtime.
 
 ### Changed
 

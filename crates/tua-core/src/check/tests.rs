@@ -133,6 +133,85 @@ local currentListeners: any = events:listeners("player.hit")
 }
 
 #[test]
+fn accepts_typed_builtin_object_pool_lifecycle() {
+    check_tua_source(
+        "src/pool.tua",
+        r#"
+type Bullet = { x: number, y: number, active: boolean }
+
+local bullets = objectPool({
+  create = function(): Bullet
+    return { x = 0, y = 0, active = false }
+  end,
+  reset = function(bullet: Bullet)
+    bullet.active = false
+  end,
+  initial = 32,
+})
+
+local bullet: Bullet = bullets:acquire()
+bullet.active = true
+local released: boolean = bullets:release(bullet)
+local warmed: number = bullets:prewarm(64)
+local active: number = bullets:activeCount()
+local available: number = bullets:availableCount()
+local capacity: number = bullets:capacity()
+local owned: boolean = bullets:owns(bullet)
+bullets:clear()
+"#,
+    )
+    .expect("typed object pools should preserve their factory item type");
+}
+
+#[test]
+fn rejects_releasing_the_wrong_type_to_a_typed_object_pool() {
+    let diagnostics = check_tua_source(
+        "src/pool.tua",
+        r#"
+type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+
+bullets:release("not a bullet")
+"#,
+    )
+    .expect_err("typed object pools should reject an incompatible release");
+
+    assert_single_mismatch(&diagnostics, "expected Bullet, found string");
+}
+
+#[test]
+fn rejects_object_pool_options_without_a_factory() {
+    let diagnostics = check_tua_source(
+        "src/pool.tua",
+        r#"local bullets = objectPool({ initial = 16 })
+"#,
+    )
+    .expect_err("objectPool should require a create callback");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.message.contains("expected ObjectPoolOptions") }));
+}
+
+#[test]
+fn preserves_an_explicit_object_pool_function_binding() {
+    check_tua_source(
+        "src/custom_pool.tua",
+        r#"local function objectPool(options: any): string
+  return "custom"
+end
+
+local result: string = objectPool({})
+"#,
+    )
+    .expect("an explicit objectPool function should override the built-in helper");
+}
+
+#[test]
 fn checks_signal_emit_payloads_from_typed_listener_callbacks() {
     check_tua_source(
         "src/signals.tua",

@@ -38,6 +38,7 @@ modules:
 - `signal()` can emit a `tuasignal` require;
 - `spriteSheet({...})` can emit an `anim8` require;
 - the built-in `ecs` module can emit a `tuaecs` require.
+- `objectPool({...})` can emit a `tuaobjectpool` require.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same

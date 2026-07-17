@@ -12,6 +12,8 @@ examples, and a broad language-server feature set.
 - [Capability Matrix](docs/capabilities.md) records current language and editor
   support.
 - [Roadmap](docs/roadmap.md) tracks product direction as Now, Next, and Later.
+- [Object Pooling](docs/object-pooling.md) documents the built-in typed pool
+  and when reuse is worth its lifecycle cost.
 - [Releases](docs/releases.md) documents artifacts, checksums, compatibility,
   and migration policy.
 - [CHANGELOG.md](CHANGELOG.md) records release-level changes.

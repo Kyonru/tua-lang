@@ -11,9 +11,9 @@ use crate::source::{
 use crate::source_map::write_source_map;
 use tua_core::{
     anim8_runtime_source, brinevector_runtime_source, emit_tua_source_with_workspace_artifact,
-    format_diagnostics_for_cli, tuaecs_runtime_source, tuasignal_runtime_source, AnalysisHost,
-    AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode,
-    DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    format_diagnostics_for_cli, tuaecs_runtime_source, tuaobjectpool_runtime_source,
+    tuasignal_runtime_source, AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic,
+    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
 };
 
 struct BundledRuntime {
@@ -42,6 +42,11 @@ const BUNDLED_RUNTIMES: &[BundledRuntime] = &[
         file_name: "tuaecs.lua",
         require_literal: "require(\"tuaecs\")",
         source: tuaecs_runtime_source,
+    },
+    BundledRuntime {
+        file_name: "tuaobjectpool.lua",
+        require_literal: "require(\"tuaobjectpool\")",
+        source: tuaobjectpool_runtime_source,
     },
 ];
 

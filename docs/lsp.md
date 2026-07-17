@@ -241,6 +241,21 @@ Builds inject `require("tuaecs")` and copy the bundled runtime only when the
 built-in `ecs` module is used. An explicit local `ecs` binding remains an
 ordinary Lua runtime override.
 
+## Object Pool Support
+
+The language server treats `objectPool({...})` as a built-in game-development
+primitive:
+
+- completion, hover, signature help, inlay hints, and builtin navigation for
+  pool construction and lifecycle methods;
+- factory-return inference, so an annotated `create(): Bullet` makes
+  `pool:acquire()` return `Bullet`;
+- typed `release`, `prewarm`, count, ownership, and cleanup methods;
+- permissive `any` item behavior when the factory return is not annotated.
+
+Builds inject `require("tuaobjectpool")` and copy the bundled runtime only when
+`objectPool` is used.
+
 ## Design Notes
 
 Tua has broad LSP surface coverage, but it stays conservative. Unknown symbols,

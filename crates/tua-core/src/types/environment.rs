@@ -18,7 +18,7 @@ use crate::parser::{
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::source_text::function_name_table_field;
-use crate::{asset, lua, sprite, vector, Diagnostic, DiagnosticCode};
+use crate::{asset, lua, object_pool, sprite, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
@@ -236,6 +236,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            object_pool::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -292,6 +297,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
     aliases
         .entry(crate::signal::TYPE_NAME.to_owned())
         .or_insert_with(crate::signal::signal_bus_type);
+    for (name, ty) in object_pool::builtin_aliases() {
+        aliases.entry(name).or_insert(ty);
+    }
     for (name, ty) in builtin_aliases {
         aliases.entry(name).or_insert(ty);
     }
@@ -2748,6 +2756,27 @@ fn infer_function_call_return_types(
             return Vec::new();
         };
 
+        if object_pool::is_constructor(name)
+            && !locals.contains_key(name)
+            && !function_types.contains_key(name)
+        {
+            let pool = first_parenthesized_call_argument(function_call)
+                .and_then(|options| {
+                    infer_expression_type(
+                        parsed,
+                        options,
+                        aliases,
+                        locals,
+                        function_types,
+                        current_function,
+                    )
+                })
+                .map(|options| object_pool::pool_type_from_options(&options))
+                .unwrap_or_else(|| Type::alias(object_pool::TYPE_NAME));
+
+            return vec![pool];
+        }
+
         let function_type = function_types
             .get(name)
             .or_else(|| locals.get(name))
@@ -2790,6 +2819,16 @@ fn infer_function_call_return_types(
     infer_field_chain_type(parsed, aliases, locals, &parts)
         .map(|ty| function_return_types(aliases, &ty))
         .unwrap_or_default()
+}
+
+fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Expression> {
+    let Suffix::Call(Call::AnonymousCall(ast::FunctionArgs::Parentheses { arguments, .. })) =
+        function_call.suffixes().next()?
+    else {
+        return None;
+    };
+
+    arguments.iter().next()
 }
 
 fn constructor_call_return_type_from_map(

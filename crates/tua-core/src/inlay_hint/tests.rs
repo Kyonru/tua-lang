@@ -56,6 +56,28 @@ local entity = world:create()
 }
 
 #[test]
+fn hints_builtin_object_pool_and_acquired_item_types() {
+    let source = r#"type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+local bullet = bullets:acquire()
+local active = bullets:activeCount()
+"#;
+    let hints =
+        inlay_hints_tua_source("src/pool.tua", source).expect("object pool source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(type_hints, vec![": ObjectPool", ": Bullet", ": number"]);
+}
+
+#[test]
 fn hints_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {

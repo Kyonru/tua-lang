@@ -8,7 +8,9 @@ use full_moon::node::Node;
 use crate::ast_utils::assignment_expression_for_local;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment, Type, TypeEnvironment};
-use crate::{ecs, parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan};
+use crate::{
+    ecs, object_pool, parse_tua_source, Diagnostic, ParsedSource, SourcePosition, SourceSpan,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InlayHint {
@@ -55,6 +57,7 @@ pub(crate) fn inlay_hints_parsed_source_with_environment_in_range(
 ) -> Vec<InlayHint> {
     let mut collector = InlayHintCollector {
         semantic: SemanticModel::new(parsed, environment),
+        environment,
         range,
         hints: Vec::new(),
     };
@@ -69,6 +72,7 @@ pub(crate) fn inlay_hints_parsed_source_with_environment_in_range(
 
 struct InlayHintCollector<'a> {
     semantic: SemanticModel<'a>,
+    environment: &'a TypeEnvironment,
     range: Option<SourceSpan>,
     hints: Vec<InlayHint>,
 }
@@ -157,9 +161,15 @@ impl<'a> InlayHintCollector<'a> {
             };
 
             if should_hint_type(&ty) {
+                let hint_type = if object_pool::pool_item_type(self.environment, &ty).is_some() {
+                    Type::alias(object_pool::TYPE_NAME)
+                } else {
+                    ty
+                };
+
                 self.push_hint(InlayHint {
                     position: node_end(name),
-                    label: format!(": {ty}"),
+                    label: format!(": {hint_type}"),
                     kind: InlayHintKind::Type,
                 });
             }

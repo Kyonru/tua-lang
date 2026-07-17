@@ -48,6 +48,26 @@ fn classifies_aliases_functions_variables_parameters_and_properties() {
 }
 
 #[test]
+fn classifies_object_pool_as_a_builtin_global() {
+    let source = r#"local pool = objectPool({
+  create = function()
+    return {}
+  end,
+})
+"#;
+    let tokens = semantic_tokens_tua_source("src/pool.tua", source)
+        .expect("object pool source should tokenize");
+
+    assert_token_in_source(
+        &tokens,
+        source,
+        "objectPool",
+        SemanticTokenKind::Global,
+        false,
+    );
+}
+
+#[test]
 fn classifies_primitive_types_and_unresolved_identifiers() {
     let tokens = semantic_tokens();
 

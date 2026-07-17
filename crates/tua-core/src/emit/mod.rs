@@ -11,9 +11,9 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, ecs, infer_module_exports, parse_tua_source, signal, vector, AnnotationMode, Diagnostic,
-    DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan,
-    TuaType, Type,
+    asset, ecs, infer_module_exports, object_pool, parse_tua_source, signal, vector,
+    AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace,
+    SourcePosition, SourceSpan, TuaType, Type,
 };
 
 pub(crate) mod lowering;
@@ -1408,8 +1408,11 @@ fn lower_builtin_call_operations(
     let mut index = 0;
     let mut brinevector_span = None;
     let mut tuasignal_span = None;
+    let mut tuaobjectpool_span = None;
     let mut tuaecs_span = None;
-    let explicit_ecs_binding = explicit_ecs_binding_position(parsed);
+    let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
+    let explicit_object_pool_binding =
+        explicit_binding_position(parsed, object_pool::CONSTRUCTOR_NAME);
 
     while index < output.len() {
         let rest = &output[index..];
@@ -1467,9 +1470,11 @@ fn lower_builtin_call_operations(
             if can_start_builtin_call(&output, index) && signal::is_constructor(name) {
                 let argument_start = skip_whitespace(&output, index + identifier_end);
 
-                if let Some((replacement, end)) =
-                    lower_signal_constructor_call(&output, argument_start)
-                {
+                if let Some((replacement, end)) = lower_runtime_constructor_call(
+                    &output,
+                    argument_start,
+                    signal::EMITTED_CONSTRUCTOR_LOCAL,
+                ) {
                     let source_span = document.source_span_at(index);
                     tuasignal_span.get_or_insert(source_span);
                     operations.push(lowering::LoweringOperation::replace(
@@ -1480,6 +1485,33 @@ fn lower_builtin_call_operations(
                     ));
                     index = end;
                     continue;
+                }
+            }
+
+            if can_start_builtin_call(&output, index) && object_pool::is_constructor(name) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
+                let source_span = document.source_span_at(index);
+                let binding_is_active = explicit_object_pool_binding.is_some_and(|position| {
+                    (position.line, position.column)
+                        <= (source_span.start.line, source_span.start.column)
+                });
+
+                if !binding_is_active {
+                    if let Some((replacement, end)) = lower_runtime_constructor_call(
+                        &output,
+                        argument_start,
+                        object_pool::EMITTED_CONSTRUCTOR_LOCAL,
+                    ) {
+                        tuaobjectpool_span.get_or_insert(source_span);
+                        operations.push(lowering::LoweringOperation::replace(
+                            index..end,
+                            replacement,
+                            source_span,
+                            LoweringKind::BuiltinCall,
+                        ));
+                        index = end;
+                        continue;
+                    }
                 }
             }
 
@@ -1511,7 +1543,11 @@ fn lower_builtin_call_operations(
         index += character.len_utf8();
     }
 
-    if brinevector_span.is_some() || tuasignal_span.is_some() || tuaecs_span.is_some() {
+    if brinevector_span.is_some()
+        || tuasignal_span.is_some()
+        || tuaobjectpool_span.is_some()
+        || tuaecs_span.is_some()
+    {
         let leading_whitespace =
             output.len() - output.trim_start_matches(char::is_whitespace).len();
         if leading_whitespace > 0 {
@@ -1547,6 +1583,18 @@ fn lower_builtin_call_operations(
             LoweringKind::BuiltinCall,
         ));
     }
+    if let Some(source_span) = tuaobjectpool_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                object_pool::EMITTED_CONSTRUCTOR_LOCAL,
+                object_pool::RUNTIME_MODULE,
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
     if let Some(source_span) = tuaecs_span {
         operations.push(lowering::LoweringOperation::insert(
             0,
@@ -1563,7 +1611,7 @@ fn lower_builtin_call_operations(
     operations
 }
 
-fn explicit_ecs_binding_position(parsed: &ParsedSource) -> Option<SourcePosition> {
+fn explicit_binding_position(parsed: &ParsedSource, binding: &str) -> Option<SourcePosition> {
     parsed
         .ast
         .nodes()
@@ -1572,21 +1620,17 @@ fn explicit_ecs_binding_position(parsed: &ParsedSource) -> Option<SourcePosition
             ast::Stmt::LocalAssignment(local) => local
                 .names()
                 .iter()
-                .find(|name| token_text(name) == ecs::MODULE_NAME)
+                .find(|name| token_text(name) == binding)
                 .map(|name| SourcePosition::from_full_moon(name.start_position())),
-            ast::Stmt::LocalFunction(function)
-                if token_text(function.name()) == ecs::MODULE_NAME =>
-            {
-                Some(SourcePosition::from_full_moon(
-                    function.name().start_position(),
-                ))
-            }
+            ast::Stmt::LocalFunction(function) if token_text(function.name()) == binding => Some(
+                SourcePosition::from_full_moon(function.name().start_position()),
+            ),
             ast::Stmt::Assignment(assignment) => {
                 assignment
                     .variables()
                     .iter()
                     .find_map(|variable| match variable {
-                        Var::Name(name) if token_text(name) == ecs::MODULE_NAME => {
+                        Var::Name(name) if token_text(name) == binding => {
                             Some(SourcePosition::from_full_moon(name.start_position()))
                         }
                         _ => None,
@@ -2028,7 +2072,11 @@ fn lower_vec2_constructor_call(output: &str, argument_start: usize) -> Option<(S
     ))
 }
 
-fn lower_signal_constructor_call(output: &str, argument_start: usize) -> Option<(String, usize)> {
+fn lower_runtime_constructor_call(
+    output: &str,
+    argument_start: usize,
+    emitted_constructor: &str,
+) -> Option<(String, usize)> {
     if !output[argument_start..].starts_with('(') {
         return None;
     }
@@ -2036,10 +2084,7 @@ fn lower_signal_constructor_call(output: &str, argument_start: usize) -> Option<
     let close = find_matching_paren(output, argument_start)?;
     let arguments = output[argument_start + 1..close].trim();
 
-    Some((
-        format!("{}({arguments})", signal::EMITTED_CONSTRUCTOR_LOCAL),
-        close + 1,
-    ))
+    Some((format!("{emitted_constructor}({arguments})"), close + 1))
 }
 
 fn lower_asset_loader_call(

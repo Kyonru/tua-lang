@@ -1,4 +1,6 @@
-use crate::{asset, love_api, love_api_extra, love_api_signatures, signal, sprite, vector};
+use crate::{
+    asset, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite, vector,
+};
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
 
@@ -45,6 +47,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .chain(ASSET_LOADERS.iter())
         .chain(VECTOR_ITEMS.iter())
         .chain(SIGNAL_ITEMS.iter())
+        .chain(OBJECT_POOL_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -146,6 +149,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .chain(ASSET_LOADERS.iter())
             .chain(VECTOR_ITEMS.iter())
             .chain(SIGNAL_ITEMS.iter())
+            .chain(OBJECT_POOL_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -236,6 +240,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         "Quad" => Some(QUAD_ITEMS),
         "Shader" => Some(SHADER_ITEMS),
         signal::TYPE_NAME => Some(SIGNAL_BUS_ITEMS),
+        object_pool::TYPE_NAME => Some(OBJECT_POOL_METHOD_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
         "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
         "World" => Some(WORLD_ITEMS),
@@ -249,7 +254,9 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(ASSET_LOADERS.iter())
         .chain(VECTOR_ITEMS.iter())
         .chain(SIGNAL_ITEMS.iter())
+        .chain(OBJECT_POOL_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
+        .chain(OBJECT_POOL_METHOD_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
         .chain(IMAGE_ITEMS.iter())
@@ -771,6 +778,7 @@ const ASSET_LOADERS: &[LuaItem] = &[
 
 const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];
 const SIGNAL_ITEMS: &[LuaItem] = &[signal_item()];
+const OBJECT_POOL_ITEMS: &[LuaItem] = &[object_pool_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -788,6 +796,15 @@ const fn signal_item() -> LuaItem {
         kind: LuaItemKind::Function,
         detail: signal::detail(),
         documentation: signal::documentation(),
+    }
+}
+
+const fn object_pool_item() -> LuaItem {
+    LuaItem {
+        label: object_pool::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: object_pool::detail(),
+        documentation: object_pool::documentation(),
     }
 }
 
@@ -896,6 +913,57 @@ const SIGNAL_BUS_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function SignalBus:clearPattern(pattern: string): nil",
         "Clear every signal whose name matches a Lua pattern.",
+    ),
+];
+
+const OBJECT_POOL_METHOD_ITEMS: &[LuaItem] = &[
+    item(
+        "acquire",
+        LuaItemKind::Function,
+        "function ObjectPool:acquire(): any",
+        "Take an available object or create one when the pool is empty.",
+    ),
+    item(
+        "release",
+        LuaItemKind::Function,
+        "function ObjectPool:release(object: any): boolean",
+        "Reset and return an active object. Returns false for foreign or duplicate releases.",
+    ),
+    item(
+        "prewarm",
+        LuaItemKind::Function,
+        "function ObjectPool:prewarm(count: number): number",
+        "Ensure at least count objects are available and return the number created.",
+    ),
+    item(
+        "clear",
+        LuaItemKind::Function,
+        "function ObjectPool:clear(): nil",
+        "Dispose every owned object and reset the pool to empty.",
+    ),
+    item(
+        "owns",
+        LuaItemKind::Function,
+        "function ObjectPool:owns(object: any): boolean",
+        "Return whether this pool created the object.",
+    ),
+    item(
+        "activeCount",
+        LuaItemKind::Function,
+        "function ObjectPool:activeCount(): number",
+        "Return the number of objects currently checked out.",
+    ),
+    item(
+        "availableCount",
+        LuaItemKind::Function,
+        "function ObjectPool:availableCount(): number",
+        "Return the number of objects ready for immediate reuse.",
+    ),
+    item(
+        "capacity",
+        LuaItemKind::Function,
+        "function ObjectPool:capacity(): number",
+        "Return the total number of objects owned by the pool.",
     ),
 ];
 

@@ -518,6 +518,25 @@ return { Position = Position, world = world }
 }
 
 #[test]
+fn accepts_builtin_object_pool_for_undefined_variable_lint() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"local pool = objectPool({
+  create = function()
+    return {}
+  end,
+})
+return pool
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect("built-in objectPool should not be reported as undefined");
+}
+
+#[test]
 fn reports_undefined_function_calls_in_local_initializers() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

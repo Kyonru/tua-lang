@@ -34,6 +34,7 @@ pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
 mod narrowing;
+mod object_pool;
 pub mod parser;
 pub mod profile;
 mod project;
@@ -234,4 +235,8 @@ pub fn tuasignal_runtime_source() -> &'static str {
 
 pub fn tuaecs_runtime_source() -> &'static str {
     ecs::runtime_source()
+}
+
+pub fn tuaobjectpool_runtime_source() -> &'static str {
+    object_pool::runtime_source()
 }

@@ -33,6 +33,8 @@ leaving the normal Lua and LOVE workflow.
   emits readable anim8-backed Lua with bundled `anim8.lua` build output.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.
+- Zero-setup ECS and typed `objectPool({...})` support for data-oriented game
+  populations and measured high-churn object reuse.
 - CLI commands for init, check, fmt, lint, build, traceback remapping, watch,
   and LSP.
 - A language server with diagnostics, hover, completion, signature help,

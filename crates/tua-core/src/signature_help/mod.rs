@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use crate::ecs;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::required_module_export_for_fields;
 use crate::semantic::{resolve_aliases, resolve_field_chain_type, SemanticModel};
@@ -10,6 +9,7 @@ use crate::types::{
     build_type_environment_with_diagnostics, FunctionType, Type, TypeEnvironment, TypedFunction,
     TypedFunctionOverload, TypedParameter,
 };
+use crate::{ecs, object_pool};
 use crate::{parse_tua_source, Diagnostic, ParsedSource, SourcePosition};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -210,6 +210,13 @@ impl<'a> SignatureResolver<'a> {
                 ));
             }
 
+            if let Some(function) = self.object_pool_typed_function(parts, position) {
+                return Some(signatures_from_typed_function(
+                    &function,
+                    Some(&qualified_name),
+                ));
+            }
+
             if let Some(item) = self
                 .semantic
                 .lua_function_item_for_call_parts(parts, position)
@@ -296,6 +303,20 @@ impl<'a> SignatureResolver<'a> {
             &schema.name,
             &schema.payload,
         ))
+    }
+
+    fn object_pool_typed_function(
+        &self,
+        parts: &[String],
+        position: SourcePosition,
+    ) -> Option<TypedFunction> {
+        let (_, receiver_parts) = parts.split_last()?;
+        let receiver_type = self
+            .semantic
+            .type_of_field_chain(receiver_parts, position)?;
+
+        object_pool::pool_item_type(self.environment, &receiver_type)?;
+        self.semantic.typed_function_for_call_parts(parts, position)
     }
 }
 

@@ -261,6 +261,17 @@ An explicit binding such as `local ecs = require("project_ecs")` overrides the
 built-in runtime for that file. See [Entity Component Systems](ecs.md) for the
 runtime model and guidance on when ECS is appropriate.
 
+## Object Pool Support
+
+`objectPool({...})` is available without configuration. A source file that
+uses it emits a `require("tuaobjectpool")`, and the build copies the bundled
+LuaJIT-compatible runtime only when required. The compiler models lifecycle
+methods and preserves an annotated factory return type through `acquire()`.
+
+There is no pool-wide project setting. Pool size and lifecycle belong at each
+call site through `initial`, `prewarm`, `reset`, and `dispose`. See
+[Object Pooling](object-pooling.md) for the full API and performance guidance.
+
 ## Diagnostics
 
 Formatting lints are enabled by default so `tua check`, `tua lint`, and editor

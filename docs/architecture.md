@@ -176,6 +176,11 @@ resolution paths. A LOVE method return type, signature, or completion should be
 visible to hover, completion, signature help, diagnostics, and inlay hints
 through the same resolver.
 
+Compiler-owned game helpers follow that same rule. ECS and object-pool facts
+must resolve through shared types before catalog fallbacks so checking,
+completion, hover, signature help, inlay hints, navigation, and emission do not
+drift into feature-specific answers.
+
 Performance-sensitive IDE features should reuse snapshot semantic facts rather
 than rebuilding type environments in each feature. Completion, completion
 resolve, hover, signature help, definition, inlay hints, and semantic tokens

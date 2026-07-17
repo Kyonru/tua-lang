@@ -109,6 +109,35 @@ player:setFilter()
 }
 
 #[test]
+fn resolves_object_pool_constructor_and_method_to_virtual_stubs() {
+    let source = r#"type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+local bullet = bullets:acquire()
+bullets:release(bullet)
+"#;
+
+    for (label, expected_uri) in [
+        ("objectPool", "tua:/builtins/objectPool.tua"),
+        ("release", "tua:/builtins/ObjectPool.release.tua"),
+    ] {
+        let definition = definition_tua_source("src/main.tua", source, position_at(source, label))
+            .expect("source should parse")
+            .expect("object pool builtin should resolve");
+        let uri = definition.path.to_string_lossy();
+        let document =
+            crate::builtin_definition_document(&uri).expect("builtin document should exist");
+
+        assert_eq!(definition.kind, DefinitionKind::Builtin);
+        assert_eq!(uri, expected_uri);
+        assert_eq!(source_text_owned(&document, definition.span), label);
+    }
+}
+
+#[test]
 fn resolves_definition_when_an_unrelated_line_is_incomplete() {
     let source = r#"type Player = { hp: number }
 local player: Player = { hp = 10 }

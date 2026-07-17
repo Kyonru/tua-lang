@@ -299,6 +299,63 @@ events:
 }
 
 #[test]
+fn completes_builtin_object_pool_workflow_methods_and_item_fields() {
+    let constructor_source = "local bullets = objectP\n";
+    let constructor_completions = complete_tua_source(
+        "src/main.tua",
+        constructor_source,
+        position_after(constructor_source, "objectP"),
+    )
+    .expect("objectPool constructor completion should succeed");
+    let source = r#"
+type Bullet = { x: number, active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { x = 0, active = false }
+  end,
+})
+bullets:
+"#;
+    let methods = complete_tua_source("src/main.tua", source, position_after(source, "bullets:"))
+        .expect("ObjectPool method completion should succeed");
+    let item_source = source.replace("bullets:\n", "local bullet = bullets:acquire()\nbullet.\n");
+    let item_fields = complete_tua_source(
+        "src/main.tua",
+        &item_source,
+        position_after(&item_source, "bullet."),
+    )
+    .expect("pooled item field completion should succeed");
+
+    assert!(labels(&constructor_completions).contains(&"objectPool".to_owned()));
+    let method_labels = labels(&methods);
+    for expected in [
+        "acquire",
+        "release",
+        "prewarm",
+        "clear",
+        "owns",
+        "activeCount",
+        "availableCount",
+        "capacity",
+    ] {
+        assert!(
+            method_labels.contains(&expected.to_owned()),
+            "missing {expected}"
+        );
+    }
+    let release = methods
+        .iter()
+        .find(|completion| completion.label == "release")
+        .expect("release should complete");
+    assert!(release
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("duplicate releases")));
+    assert!(labels(&item_fields).contains(&"x".to_owned()));
+    assert!(labels(&item_fields).contains(&"active".to_owned()));
+}
+
+#[test]
 fn completes_signal_event_names_from_existing_signal_calls() {
     let source = r#"
 local events = signal()

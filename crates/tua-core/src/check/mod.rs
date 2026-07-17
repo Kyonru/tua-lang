@@ -27,7 +27,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
     FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, lua, signal, sprite, vector};
+use crate::{asset, lua, object_pool, signal, sprite, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -947,6 +947,10 @@ impl<'a> Checker<'a> {
                     self.check_typed_function_call_arguments(function_call, &function);
                 self.check_signal_emit_payload_call(function_call);
 
+                if let Some(ty) = self.object_pool_call_return_type(function_call) {
+                    return vec![ty];
+                }
+
                 if let Some(ty) = self.constructor_call_return_type(function_call) {
                     return vec![ty];
                 }
@@ -965,6 +969,26 @@ impl<'a> Checker<'a> {
         let meta = self.infer_expression(meta)?;
 
         Some(merge_static_metatable(base, meta))
+    }
+
+    fn object_pool_call_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        if parts.len() != 1 || !object_pool::is_constructor(&parts[0]) {
+            return None;
+        }
+        if self.environment.local(&parts[0]).is_some()
+            || self.environment.function(&parts[0]).is_some()
+        {
+            return None;
+        }
+
+        let arguments = call_arguments(function_call)?;
+        let options = match arguments.first()? {
+            CallArgument::Expression(expression) => self.infer_expression(expression)?,
+            CallArgument::Inferred(ty) => ty.clone(),
+        };
+
+        Some(object_pool::pool_type_from_options(&options))
     }
 
     fn record_setmetatable_call(&mut self, function_call: &FunctionCall) {
@@ -1100,6 +1124,12 @@ impl<'a> Checker<'a> {
 
             if signal::is_constructor(root) {
                 return Some(Callable::Function(signal::constructor_type()));
+            }
+
+            if object_pool::is_constructor(root) {
+                return Some(Callable::from_typed_function(
+                    &object_pool::constructor_typed_function(),
+                ));
             }
         }
 

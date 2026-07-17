@@ -794,6 +794,58 @@ events:emit("player.hit", "ada", 4)
 }
 
 #[test]
+fn snapshot_lowers_builtin_object_pool_constructor_to_bundled_runtime() {
+    let emitted = emit_tua_source(
+        "src/pool.tua",
+        r#"
+type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+  initial = 16,
+})
+local bullet = bullets:acquire()
+bullets:release(bullet)
+"#,
+    )
+    .expect("objectPool constructor calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_object_pool = require("tuaobjectpool")
+local bullets = __tua_object_pool({
+  create = function()
+    return { active = false }
+  end,
+  initial = 16,
+})
+local bullet = bullets:acquire()
+bullets:release(bullet)
+"#
+    );
+}
+
+#[test]
+fn snapshot_preserves_an_explicit_object_pool_binding() {
+    let emitted = emit_tua_source(
+        "src/pool.tua",
+        r#"
+local objectPool = require("project_pool")
+local bullets = objectPool({ create = function() return {} end })
+"#,
+    )
+    .expect("explicit objectPool binding should emit unchanged");
+
+    assert_eq!(
+        emitted,
+        r#"local objectPool = require("project_pool")
+local bullets = objectPool({ create = function() return {} end })
+"#
+    );
+}
+
+#[test]
 fn snapshot_injects_builtin_ecs_runtime_when_ecs_is_used() {
     let emitted = emit_tua_source(
         "src/ecs.tua",

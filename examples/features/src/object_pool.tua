@@ -1,0 +1,36 @@
+-- Feature: built-in object pooling with no require or project setup.
+-- A typed factory lets acquire() preserve the pooled item's type.
+type Bullet = {
+  x: number,
+  y: number,
+  active: boolean,
+}
+
+local bullets = objectPool({
+  create = function(): Bullet
+    return { x = 0, y = 0, active = false }
+  end,
+  reset = function(bullet: Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.active = false
+  end,
+  initial = 64,
+})
+
+-- Feature: pooled values retain Bullet completion, hover, and checking.
+local bullet = bullets:acquire()
+bullet.x = 120
+bullet.y = 80
+bullet.active = true
+
+local released = bullets:release(bullet)
+local duplicateRelease = bullets:release(bullet)
+
+return {
+  bullets = bullets,
+  released = released,
+  duplicateRelease = duplicateRelease,
+  capacity = bullets:capacity(),
+  available = bullets:availableCount(),
+}
