@@ -36,6 +36,9 @@ language or editor behavior, and migration notes call out those changes.
   lifecycle operations, item types, conservative unreleased-acquire warnings,
   and source navigation, plus a quick fix for repeated zero-argument
   constructors.
+- Conservative refactor assists for extracting selected expressions to locals
+  or parameterized local functions, and inlining stable local bindings across
+  resolved reads.
 - A quick fix that generates a named Tua table type from stable local table
   literals and annotates the local binding in the same workspace edit.
 - SignalBus graph filters for event, bus, file, listener, and emitter views,

@@ -109,11 +109,12 @@ workspace directory when available.
   actions, code lens references, call hierarchy, inlay hints, and full, range,
   and delta semantic tokens.
 - Source actions for organizing imports, sorting imports, removing unused static
-  import bindings, adding inferred local annotations, generating named table
-  types from stable local table literals, creating missing core LOVE callbacks
-  (`load`, `update`, and `draw`), wrapping repeated zero-argument constructors
-  in an `objectPool` helper, and fixing all safe diagnostics in the current
-  file.
+  import bindings, adding inferred local annotations, extracting selected
+  expressions to locals or parameterized local functions, inlining stable local
+  bindings across resolved reads, generating named table types from stable
+  local table literals, creating missing core LOVE callbacks (`load`, `update`,
+  and `draw`), wrapping repeated zero-argument constructors in an `objectPool`
+  helper, and fixing all safe diagnostics in the current file.
 - Workspace file-rename edits for static `require(...)` and `import(...)`
   module specifiers, plus helper/native LOVE asset literals when the move is
   unambiguous in the project model.

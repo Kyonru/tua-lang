@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use full_moon::ast::{
     self, Assignment, Expression, Field, FunctionArgs, FunctionCall, Index, Prefix, Suffix,
-    TableConstructor,
+    TableConstructor, Var,
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
@@ -13,6 +13,7 @@ use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from
 use crate::inlay_hints_parsed_source;
 use crate::love_callback;
 use crate::module_link::{module_specifier_literals, ModuleSpecifierKind};
+use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind, ScopeMap};
 use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
 use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourcePosition, SourceSpan, TextEdit};
 
@@ -107,6 +108,8 @@ pub fn code_actions_parsed_source_with_kinds(
         actions.extend(object_pool_constructor_actions(parsed, range));
 
         if diagnostics.is_empty() {
+            actions.extend(extract_expression_actions(parsed, range));
+            actions.extend(inline_simple_local_actions(parsed, range));
             actions.extend(table_type_generation_actions(parsed, range));
             actions.extend(add_missing_local_annotation_actions(parsed, range));
         }
@@ -883,6 +886,404 @@ fn line_indent(source: &str, line: usize) -> String {
         .unwrap_or_default()
 }
 
+fn extract_expression_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    if range.start == range.end {
+        return Vec::new();
+    }
+
+    let Some(expression) = selected_expression(parsed, range) else {
+        return Vec::new();
+    };
+    let Some(expression_source) = source_text_for_span(&parsed.source, expression.span) else {
+        return Vec::new();
+    };
+    if expression_source.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let scope = scope_map_parsed_source(parsed);
+
+    [
+        extract_local_action(parsed, expression.span, expression_source),
+        extract_function_action(parsed, &scope, expression.span, expression_source),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SelectedExpression {
+    span: SourceSpan,
+}
+
+fn selected_expression(parsed: &ParsedSource, range: AssistRange) -> Option<SelectedExpression> {
+    let mut visitor = SelectedExpressionVisitor {
+        range,
+        selected: None,
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.selected
+}
+
+struct SelectedExpressionVisitor {
+    range: AssistRange,
+    selected: Option<SelectedExpression>,
+}
+
+impl Visitor for SelectedExpressionVisitor {
+    fn visit_expression(&mut self, expression: &Expression) {
+        if self.selected.is_some() {
+            return;
+        }
+
+        let Some(span) = node_span(expression) else {
+            return;
+        };
+
+        if span_matches_range(span, self.range) && span.start.line == span.end.line {
+            self.selected = Some(SelectedExpression { span });
+        }
+    }
+}
+
+fn extract_local_action(
+    parsed: &ParsedSource,
+    expression_span: SourceSpan,
+    expression_source: &str,
+) -> Option<Assist> {
+    let name = unique_identifier_name(&parsed.source, "extracted")?;
+    let indent = line_indent(&parsed.source, expression_span.start.line);
+    let insert_position = SourcePosition {
+        line: expression_span.start.line,
+        column: 1,
+    };
+    let mut edit = AssistEdit::default();
+
+    edit.changes.insert(
+        parsed.path.clone(),
+        vec![
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: insert_position,
+                    end: insert_position,
+                },
+                new_text: format!("{indent}local {name} = {expression_source}\n"),
+            },
+            TextEdit {
+                path: parsed.path.clone(),
+                span: expression_span,
+                new_text: name.clone(),
+            },
+        ],
+    );
+
+    Some(Assist {
+        title: format!("Extract local `{name}`"),
+        kind: AssistKind::QuickFix,
+        edit,
+    })
+}
+
+fn extract_function_action(
+    parsed: &ParsedSource,
+    scope: &ScopeMap,
+    expression_span: SourceSpan,
+    expression_source: &str,
+) -> Option<Assist> {
+    let name = unique_identifier_name(&parsed.source, "extractedFunction")?;
+    let parameters = extract_function_parameters(scope, expression_span);
+    let parameter_list = parameters.join(", ");
+    let argument_list = parameters.join(", ");
+    let indent = line_indent(&parsed.source, expression_span.start.line);
+    let insert_position = SourcePosition {
+        line: expression_span.start.line,
+        column: 1,
+    };
+    let mut edit = AssistEdit::default();
+
+    edit.changes.insert(
+        parsed.path.clone(),
+        vec![
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: insert_position,
+                    end: insert_position,
+                },
+                new_text: format!(
+                    "{indent}local function {name}({parameter_list})\n{indent}  return {expression_source}\n{indent}end\n\n"
+                ),
+            },
+            TextEdit {
+                path: parsed.path.clone(),
+                span: expression_span,
+                new_text: format!("{name}({argument_list})"),
+            },
+        ],
+    );
+
+    Some(Assist {
+        title: format!("Extract function `{name}`"),
+        kind: AssistKind::QuickFix,
+        edit,
+    })
+}
+
+fn extract_function_parameters(scope: &ScopeMap, expression_span: SourceSpan) -> Vec<String> {
+    let mut references = scope
+        .references()
+        .iter()
+        .filter(|reference| span_contains_span(expression_span, reference.span))
+        .collect::<Vec<_>>();
+
+    references.sort_by_key(|reference| position_key(reference.span.start));
+
+    let mut seen = BTreeSet::new();
+    let mut parameters = Vec::new();
+
+    for reference in references {
+        let Some(symbol_id) = reference.resolution.symbol_id() else {
+            continue;
+        };
+        let Some(declaration) = scope.declaration(symbol_id) else {
+            continue;
+        };
+
+        if !matches!(
+            declaration.kind,
+            ScopeDeclarationKind::Function
+                | ScopeDeclarationKind::Local
+                | ScopeDeclarationKind::ModuleAlias { .. }
+                | ScopeDeclarationKind::Parameter
+        ) {
+            continue;
+        }
+
+        if position_key(declaration.name_span.start) >= position_key(expression_span.start) {
+            continue;
+        }
+
+        if seen.insert(symbol_id) {
+            parameters.push(declaration.name.clone());
+        }
+    }
+
+    parameters
+}
+
+fn inline_simple_local_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    let scope = scope_map_parsed_source(parsed);
+
+    scope
+        .declarations()
+        .iter()
+        .filter(|declaration| declaration.kind == ScopeDeclarationKind::Local)
+        .filter(|declaration| assist_range_intersects_span(range, declaration.name_span))
+        .filter_map(|declaration| inline_simple_local_action(parsed, &scope, declaration))
+        .collect()
+}
+
+fn inline_simple_local_action(
+    parsed: &ParsedSource,
+    scope: &ScopeMap,
+    declaration: &ScopeDeclaration,
+) -> Option<Assist> {
+    let local = local_assignment_for_declaration(parsed, declaration)?;
+    let expression = single_local_expression(local)?;
+    let local_span = node_span(local)?;
+    if local_span.start.line != local_span.end.line {
+        return None;
+    }
+
+    let expression_source = source_text_for_span(&parsed.source, node_span(expression)?)?;
+    let replacement = inline_replacement_for_expression(expression, expression_source);
+    let references = scope.references_to_symbol(declaration.id, false);
+    if references.is_empty() {
+        return None;
+    }
+    if references.len() > 1 && !is_stable_inline_expression(expression) {
+        return None;
+    }
+    if references.iter().any(|reference| {
+        position_key(reference.span.start) <= position_key(declaration.name_span.end)
+            || assignment_target_span_exists(parsed, reference.span)
+    }) {
+        return None;
+    }
+
+    let mut edits = vec![TextEdit {
+        path: parsed.path.clone(),
+        span: line_removal_span(&parsed.source, local_span.start.line),
+        new_text: String::new(),
+    }];
+
+    edits.extend(references.into_iter().map(|reference| TextEdit {
+        path: parsed.path.clone(),
+        span: reference.span,
+        new_text: replacement.clone(),
+    }));
+
+    let mut edit = AssistEdit::default();
+
+    edit.changes.insert(parsed.path.clone(), edits);
+
+    Some(Assist {
+        title: format!("Inline local `{}`", declaration.name),
+        kind: AssistKind::QuickFix,
+        edit,
+    })
+}
+
+fn local_assignment_for_declaration<'a>(
+    parsed: &'a ParsedSource,
+    declaration: &ScopeDeclaration,
+) -> Option<&'a ast::LocalAssignment> {
+    local_assignment_for_name_span(parsed.ast.nodes(), declaration.name_span)
+}
+
+fn local_assignment_for_name_span(
+    block: &ast::Block,
+    name_span: SourceSpan,
+) -> Option<&ast::LocalAssignment> {
+    for stmt in block.stmts() {
+        if let ast::Stmt::LocalAssignment(local) = stmt {
+            if local
+                .names()
+                .iter()
+                .any(|name| node_span(name) == Some(name_span))
+            {
+                return Some(local);
+            }
+        }
+
+        let nested = match stmt {
+            ast::Stmt::Do(block) => local_assignment_for_name_span(block.block(), name_span),
+            ast::Stmt::FunctionDeclaration(function) => {
+                local_assignment_for_name_span(function.body().block(), name_span)
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                local_assignment_for_name_span(for_stmt.block(), name_span)
+            }
+            ast::Stmt::If(if_stmt) => local_assignment_for_name_span(if_stmt.block(), name_span)
+                .or_else(|| {
+                    if_stmt.else_if().and_then(|else_ifs| {
+                        else_ifs.iter().find_map(|else_if| {
+                            local_assignment_for_name_span(else_if.block(), name_span)
+                        })
+                    })
+                })
+                .or_else(|| {
+                    if_stmt
+                        .else_block()
+                        .and_then(|block| local_assignment_for_name_span(block, name_span))
+                }),
+            ast::Stmt::LocalFunction(function) => {
+                local_assignment_for_name_span(function.body().block(), name_span)
+            }
+            ast::Stmt::NumericFor(for_stmt) => {
+                local_assignment_for_name_span(for_stmt.block(), name_span)
+            }
+            ast::Stmt::Repeat(repeat) => local_assignment_for_name_span(repeat.block(), name_span),
+            ast::Stmt::While(while_stmt) => {
+                local_assignment_for_name_span(while_stmt.block(), name_span)
+            }
+            _ => None,
+        };
+
+        if nested.is_some() {
+            return nested;
+        }
+    }
+
+    None
+}
+
+fn single_local_expression(local: &ast::LocalAssignment) -> Option<&Expression> {
+    if local.names().len() != 1 || local.expressions().len() != 1 {
+        return None;
+    }
+
+    local.expressions().iter().next()
+}
+
+fn inline_replacement_for_expression(expression: &Expression, source: &str) -> String {
+    match expression {
+        Expression::FunctionCall(_)
+        | Expression::Number(_)
+        | Expression::Parentheses { .. }
+        | Expression::String(_)
+        | Expression::Symbol(_)
+        | Expression::Var(_) => source.to_owned(),
+        _ => format!("({source})"),
+    }
+}
+
+fn is_stable_inline_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::BinaryOperator { lhs, rhs, .. } => {
+            is_stable_inline_expression(lhs) && is_stable_inline_expression(rhs)
+        }
+        Expression::Number(_)
+        | Expression::String(_)
+        | Expression::Symbol(_)
+        | Expression::Var(_) => true,
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => is_stable_inline_expression(expression),
+        Expression::UnaryOperator { expression, .. } => is_stable_inline_expression(expression),
+        _ => false,
+    }
+}
+
+fn assignment_target_span_exists(parsed: &ParsedSource, span: SourceSpan) -> bool {
+    let mut visitor = AssignmentTargetVisitor {
+        span,
+        exists: false,
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.exists
+}
+
+struct AssignmentTargetVisitor {
+    span: SourceSpan,
+    exists: bool,
+}
+
+impl Visitor for AssignmentTargetVisitor {
+    fn visit_assignment(&mut self, assignment: &Assignment) {
+        if self.exists {
+            return;
+        }
+
+        self.exists = assignment
+            .variables()
+            .iter()
+            .any(|variable| var_name_span(variable) == Some(self.span));
+    }
+
+    fn visit_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
+        if self.exists {
+            return;
+        }
+
+        self.exists = var_name_span(assignment.lhs()) == Some(self.span);
+    }
+}
+
+fn var_name_span(variable: &Var) -> Option<SourceSpan> {
+    match variable {
+        Var::Name(name) => node_span(name),
+        Var::Expression(expression) => match expression.prefix() {
+            Prefix::Name(name) => node_span(name),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn table_type_generation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
     let mut visitor = TableTypeAssistVisitor {
         parsed,
@@ -1413,6 +1814,35 @@ fn assist_range_intersects_span(range: AssistRange, span: SourceSpan) -> bool {
                 column: range.start.column,
             },
         )
+}
+
+fn span_matches_range(span: SourceSpan, range: AssistRange) -> bool {
+    span.start == range.start && span.end == range.end
+}
+
+fn span_contains_span(outer: SourceSpan, inner: SourceSpan) -> bool {
+    position_key(outer.start) <= position_key(inner.start)
+        && position_key(inner.end) <= position_key(outer.end)
+}
+
+fn unique_identifier_name(source: &str, base: &str) -> Option<String> {
+    if !is_identifier(base) {
+        return None;
+    }
+
+    if !identifier_used(source, base) {
+        return Some(base.to_owned());
+    }
+
+    (2..100)
+        .map(|index| format!("{base}{index}"))
+        .find(|candidate| !identifier_used(source, candidate))
+}
+
+fn identifier_used(source: &str, identifier: &str) -> bool {
+    source
+        .split('\n')
+        .any(|line| line_contains_identifier(line.strip_suffix('\r').unwrap_or(line), identifier))
 }
 
 fn diagnostic_position(diagnostic: &Diagnostic) -> SourcePosition {

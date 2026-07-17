@@ -152,6 +152,95 @@ fn generates_type_from_stable_table_literal() {
 }
 
 #[test]
+fn extracts_selected_expression_to_local_or_function() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local score = 10\nlocal bonus = 2\nlocal total = score + bonus\n",
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range_span(3, 15, 3, 28),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let local = actions
+        .iter()
+        .find(|action| action.title == "Extract local `extracted`")
+        .expect("extract local action should be present");
+    let function = actions
+        .iter()
+        .find(|action| action.title == "Extract function `extractedFunction`")
+        .expect("extract function action should be present");
+    let local_edits = &local.edit.changes[&parsed.path];
+    let function_edits = &function.edit.changes[&parsed.path];
+
+    assert_eq!(local.kind, AssistKind::QuickFix);
+    assert_eq!(local_edits.len(), 2);
+    assert_eq!(local_edits[0].new_text, "local extracted = score + bonus\n");
+    assert_eq!(local_edits[1].new_text, "extracted");
+
+    assert_eq!(function.kind, AssistKind::QuickFix);
+    assert_eq!(function_edits.len(), 2);
+    assert_eq!(
+        function_edits[0].new_text,
+        "local function extractedFunction(score, bonus)\n  return score + bonus\nend\n\n"
+    );
+    assert_eq!(
+        function_edits[1].new_text,
+        "extractedFunction(score, bonus)"
+    );
+}
+
+#[test]
+fn inlines_stable_local_with_multiple_resolved_references() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local total = score + bonus\nprint(total)\nprint(total)\n",
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range(1, 8),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Inline local `total`")
+        .expect("inline local action should be present");
+    let edits = &action.edit.changes[&parsed.path];
+
+    assert_eq!(action.kind, AssistKind::QuickFix);
+    assert_eq!(edits.len(), 3);
+    assert_eq!(edits[0].new_text, "");
+    assert_eq!(edits[1].new_text, "(score + bonus)");
+    assert_eq!(edits[2].new_text, "(score + bonus)");
+}
+
+#[test]
+fn skips_multi_use_inline_local_for_unstable_initializers() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local total = compute()\nprint(total, total)\n",
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range(1, 8),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert!(actions
+        .iter()
+        .all(|action| action.title != "Inline local `total`"));
+}
+
+#[test]
 fn skips_type_generation_for_unstable_table_literals() {
     let parsed = parse_tua_source("src/main.tua", "local player = { hp = score }\n")
         .expect("source should parse");
@@ -586,6 +675,24 @@ fn range(line: usize, column: usize) -> CodeActionRange {
     CodeActionRange {
         start: SourcePosition { line, column },
         end: SourcePosition { line, column },
+    }
+}
+
+fn range_span(
+    start_line: usize,
+    start_column: usize,
+    end_line: usize,
+    end_column: usize,
+) -> CodeActionRange {
+    CodeActionRange {
+        start: SourcePosition {
+            line: start_line,
+            column: start_column,
+        },
+        end: SourcePosition {
+            line: end_line,
+            column: end_column,
+        },
     }
 }
 

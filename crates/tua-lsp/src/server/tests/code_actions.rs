@@ -105,6 +105,85 @@ fn code_action_generates_type_from_table_literal() {
 }
 
 #[test]
+fn code_action_extracts_selected_expression() {
+    let uri = "file:///tmp/code-action-extract-expression.tua";
+    let source = "local score = 10\nlocal bonus = 2\nlocal total = score + bonus\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request(2, uri, 2, 14, 2, 27, Vec::new()),
+    ]);
+    let actions = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+    let local = actions
+        .iter()
+        .find(|action| action["title"] == "Extract local `extracted`")
+        .expect("extract local action should be present");
+    let function = actions
+        .iter()
+        .find(|action| action["title"] == "Extract function `extractedFunction`")
+        .expect("extract function action should be present");
+    let local_edits = local["edit"]["changes"][uri]
+        .as_array()
+        .expect("extract local should contain edits");
+    let function_edits = function["edit"]["changes"][uri]
+        .as_array()
+        .expect("extract function should contain edits");
+
+    assert_eq!(local["kind"], "quickfix");
+    assert_eq!(
+        local_edits[0]["newText"],
+        "local extracted = score + bonus\n"
+    );
+    assert_eq!(local_edits[1]["newText"], "extracted");
+    assert_eq!(
+        range_text(source, &local_edits[1]["range"]),
+        "score + bonus"
+    );
+
+    assert_eq!(function["kind"], "quickfix");
+    assert_eq!(
+        function_edits[0]["newText"],
+        "local function extractedFunction(score, bonus)\n  return score + bonus\nend\n\n"
+    );
+    assert_eq!(
+        function_edits[1]["newText"],
+        "extractedFunction(score, bonus)"
+    );
+}
+
+#[test]
+fn code_action_inlines_simple_local() {
+    let uri = "file:///tmp/code-action-inline-local.tua";
+    let source = "local total = score + bonus\nprint(total)\nprint(total)\n";
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request(2, uri, 0, 6, 0, 11, Vec::new()),
+    ]);
+    let action = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| action["title"] == "Inline local `total`")
+        .expect("inline local action should be present");
+    let edits = action["edit"]["changes"][uri]
+        .as_array()
+        .expect("inline local should contain edits");
+
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(edits.len(), 3);
+    assert_eq!(edits[0]["newText"], "");
+    assert_eq!(edits[0]["range"]["start"]["line"], 0);
+    assert_eq!(edits[0]["range"]["start"]["character"], 0);
+    assert_eq!(edits[0]["range"]["end"]["line"], 1);
+    assert_eq!(edits[0]["range"]["end"]["character"], 0);
+    assert_eq!(edits[1]["newText"], "(score + bonus)");
+    assert_eq!(range_text(source, &edits[1]["range"]), "total");
+    assert_eq!(edits[2]["newText"], "(score + bonus)");
+    assert_eq!(range_text(source, &edits[2]["range"]), "total");
+}
+
+#[test]
 fn code_action_rewrites_love_dot_call_and_constructor_helpers() {
     let uri = "file:///tmp/code-action-love-devex.tua";
     let source = r#"local player = image "assets/player.png"
