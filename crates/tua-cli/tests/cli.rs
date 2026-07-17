@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
-use tua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT};
+use tua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT};
 
 fn tua() -> Command {
     Command::new(env!("CARGO_BIN_EXE_tua"))
@@ -120,11 +120,16 @@ fn init_creates_default_project_files() {
     assert!(stdout.contains("initialized tua project"));
     assert!(stdout.contains("created tua.toml"));
     assert!(stdout.contains("created src/"));
+    assert!(stdout.contains("created src/main.tua"));
     assert_eq!(
         fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
         DEFAULT_CONFIG_TEXT
     );
     assert!(temp.path().join("src").is_dir());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
+        DEFAULT_MAIN_TEXT
+    );
 }
 
 #[test]
@@ -151,6 +156,38 @@ fn init_does_not_overwrite_existing_config() {
         existing
     );
     assert!(temp.path().join("src").is_dir());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
+        DEFAULT_MAIN_TEXT
+    );
+}
+
+#[test]
+fn init_does_not_overwrite_existing_main() {
+    let temp = TempDir::new("init-existing-main");
+    let source_dir = temp.path().join("src");
+    let main_path = source_dir.join("main.tua");
+    let existing = "print(\"custom\")\n";
+
+    fs::create_dir_all(&source_dir).expect("failed to create source dir");
+    fs::write(&main_path, existing).expect("failed to write existing main");
+
+    let output = tua()
+        .arg("init")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua init");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+
+    assert!(stdout.contains("src/ already exists"));
+    assert!(stdout.contains("src/main.tua already exists; left unchanged"));
+    assert_eq!(
+        fs::read_to_string(main_path).expect("failed to read main"),
+        existing
+    );
 }
 
 #[test]

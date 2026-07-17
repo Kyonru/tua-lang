@@ -479,11 +479,16 @@ fn init_creates_default_config_and_src_directory() {
 
     assert!(result.config_created);
     assert!(result.source_created);
+    assert!(result.main_created);
     assert_eq!(
         fs::read_to_string(temp.path().join(CONFIG_FILE)).expect("failed to read config"),
         DEFAULT_CONFIG_TEXT
     );
     assert!(temp.path().join("src").is_dir());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
+        DEFAULT_MAIN_TEXT
+    );
 }
 
 #[test]
@@ -502,4 +507,28 @@ fn init_does_not_overwrite_existing_config() {
         existing
     );
     assert!(temp.path().join("src").is_dir());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read main"),
+        DEFAULT_MAIN_TEXT
+    );
+}
+
+#[test]
+fn init_does_not_overwrite_existing_main_file() {
+    let temp = TempDir::new("init-existing-main");
+    let source_dir = temp.path().join("src");
+    let main_path = source_dir.join("main.tua");
+    let existing = "print(\"custom\")\n";
+
+    fs::create_dir_all(&source_dir).expect("failed to create source dir");
+    fs::write(&main_path, existing).expect("failed to write existing main");
+
+    let result = init_project(temp.path()).expect("init should succeed");
+
+    assert!(!result.source_created);
+    assert!(!result.main_created);
+    assert_eq!(
+        fs::read_to_string(main_path).expect("failed to read main"),
+        existing
+    );
 }

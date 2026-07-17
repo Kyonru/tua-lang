@@ -8,6 +8,7 @@ const extensionRoot = path.dirname(packagePath);
 const manifest = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 const commands = new Set((manifest.contributes?.commands || []).map((command) => command.command));
 const expected = [
+  "tua.initProject",
   "tua.restartServer",
   "tua.output.focus",
   "tua.openSettings",

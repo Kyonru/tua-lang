@@ -76,6 +76,11 @@ inline_ignore_max_per_file = 0
 globals = []
 ";
 
+pub const DEFAULT_MAIN_TEXT: &str = "\
+local message: string = \"hello from tua\"
+print(message)
+";
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ProjectConfig {
@@ -331,8 +336,10 @@ pub struct LoadedConfig {
 pub struct InitResult {
     pub config_path: PathBuf,
     pub source_dir: PathBuf,
+    pub main_path: PathBuf,
     pub config_created: bool,
     pub source_created: bool,
+    pub main_created: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -439,7 +446,7 @@ pub fn init_project(dir: impl AsRef<Path>) -> Result<InitResult, ConfigError> {
     })?;
 
     let config_path = dir.join(CONFIG_FILE);
-    let config_created = write_default_config_without_overwrite(&config_path)?;
+    let config_created = write_file_without_overwrite(&config_path, DEFAULT_CONFIG_TEXT)?;
     let source_dir = dir.join(ProjectConfig::default().source);
     let source_created = !source_dir.exists();
 
@@ -447,19 +454,23 @@ pub fn init_project(dir: impl AsRef<Path>) -> Result<InitResult, ConfigError> {
         path: source_dir.clone(),
         source,
     })?;
+    let main_path = source_dir.join("main.tua");
+    let main_created = write_file_without_overwrite(&main_path, DEFAULT_MAIN_TEXT)?;
 
     Ok(InitResult {
         config_path,
         source_dir,
+        main_path,
         config_created,
         source_created,
+        main_created,
     })
 }
 
-fn write_default_config_without_overwrite(path: &Path) -> Result<bool, ConfigError> {
+fn write_file_without_overwrite(path: &Path, contents: &str) -> Result<bool, ConfigError> {
     match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => {
-            file.write_all(DEFAULT_CONFIG_TEXT.as_bytes())
+            file.write_all(contents.as_bytes())
                 .map_err(|source| ConfigError::Io {
                     path: path.to_path_buf(),
                     source,

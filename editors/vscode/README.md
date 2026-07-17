@@ -29,7 +29,7 @@ Minimal VS Code language support for tua source files.
   namespaces, events, labels, and annotation tags. Declaration, readonly,
   deprecated, modification, and default-library modifiers remain theme-aware.
 - Adds Tua command-palette actions for restarting the language server, focusing
-  the output channel, selecting a server binary, copying debug information,
+  the output channel, initializing a Tua project, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,
   showing language-server health, probing server profile artifacts, previewing
   `spriteSheet` animations, visualizing SignalBus events, module dependencies,
@@ -107,6 +107,7 @@ the setting.
 
 ## Commands
 
+- `Tua: Initialize Tua Project`
 - `Tua: Restart Language Server`
 - `Tua: Focus Output`
 - `Tua: Open Settings`
@@ -165,6 +166,12 @@ nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
 `*.lua.map.json` sidecar to jump from a Tua line to the corresponding generated
 Lua line, or from generated Lua back to the original Tua source line. Source
 maps are line-based, so the command opens the nearest mapped line at column 0.
+
+`Tua: Initialize Tua Project` runs `tua init` in the selected workspace
+folder, creates `tua.toml`, `src/`, and `src/main.tua` when they do not
+already exist, and logs the CLI output to the Tua output channel. The command
+activates the extension even in a fresh workspace with no existing `.tua`
+files.
 
 `Tua: Run LOVE Project` creates a cancellable VS Code task that runs
 `tua build` from the nearest project root and then starts LOVE from the

@@ -23,6 +23,7 @@
     "Snippets"
   ],
   "activationEvents": [
+    "onCommand:tua.initProject",
     "onLanguage:tua",
     "workspaceContains:**/*.tua"
   ],
@@ -444,6 +445,12 @@
     },
     "commands": [
       {
+        "command": "tua.initProject",
+        "title": "Initialize Tua Project",
+        "category": "Tua",
+        "icon": "$(new-folder)"
+      },
+      {
         "command": "tua.restartServer",
         "title": "Restart Language Server",
         "category": "Tua"
@@ -704,6 +711,9 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "tua.initProject"
+        },
         {
           "command": "tua.explainType",
           "when": "editorLangId == tua"

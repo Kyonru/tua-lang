@@ -117,6 +117,25 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.strictEqual(state.treeViews.length, 1, "activation should create one Asset Explorer");
     assert.strictEqual(state.treeViews[0].id, "tua.assets");
+    const initResult = await state.commands.get("tua.initProject")();
+    assert.deepStrictEqual(
+      initResult,
+      {
+        command: mockServer,
+        workspaceRoot: workspace,
+      },
+      "init project should run the configured tua executable in the workspace root",
+    );
+    assert(fs.existsSync(path.join(workspace, "tua.toml")), "init project should create tua.toml");
+    assert(fs.existsSync(path.join(workspace, "src", "main.tua")), "init project should create src/main.tua");
+    assert(
+      state.informationMessages.some((message) => message.includes("Initialized Tua project in workspace.")),
+      "init project should confirm successful scaffolding",
+    );
+    assert(
+      state.outputLines.some((line) => line.includes(`${mockServer} init`)),
+      "init project should log the spawned init command to the Tua output channel",
+    );
 
     const assetCategories = state.treeViews[0].treeDataProvider.getChildren();
     const imageCategory = assetCategories.find((node) => node.category === "image");
@@ -1071,7 +1090,26 @@ function platformLoveExecutableName() {
 
 function writeMockServer(filename) {
   if (process.platform === "win32") {
-    fs.writeFileSync(filename, "@echo off\r\necho tua 0.0.0-smoke\r\nexit /b 0\r\n");
+    fs.writeFileSync(
+      filename,
+      [
+        "@echo off",
+        "if \"%~1\"==\"--version\" (",
+        "  echo tua 0.0.0-smoke",
+        "  exit /b 0",
+        ")",
+        "if \"%~1\"==\"init\" (",
+        "  if not exist src mkdir src",
+        "  > tua.toml echo [project]",
+        "  >> tua.toml echo name = \"smoke\"",
+        "  > src\\main.tua echo print(\"hello from smoke\")",
+        "  echo initialized tua project",
+        "  exit /b 0",
+        ")",
+        "exit /b 0",
+        "",
+      ].join("\r\n"),
+    );
     return;
   }
 
@@ -1081,6 +1119,16 @@ function writeMockServer(filename) {
       "#!/usr/bin/env node",
       "if (process.argv[2] === '--version') {",
       "  console.log('tua 0.0.0-smoke');",
+      "  process.exit(0);",
+      "}",
+      "if (process.argv[2] === 'init') {",
+      "  const fs = require('fs');",
+      "  const path = require('path');",
+      "  const cwd = process.cwd();",
+      "  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });",
+      "  fs.writeFileSync(path.join(cwd, 'tua.toml'), '[project]\\nname = \"smoke\"\\n');",
+      "  fs.writeFileSync(path.join(cwd, 'src', 'main.tua'), 'print(\"hello from smoke\")\\n');",
+      "  console.log('initialized tua project');",
       "  process.exit(0);",
       "}",
       "process.exit(0);",
@@ -2388,6 +2436,7 @@ function createMemento() {
 
 function assertRegisteredCommands(state) {
   for (const command of [
+    "tua.initProject",
     "tua.restartServer",
     "tua.output.focus",
     "tua.openSettings",

@@ -19,6 +19,7 @@ This creates:
 ```text
 tua.toml
 src/
+src/main.tua
 ```
 
 The default config mirrors `src/**/*.tua` into `build/**/*.lua`.
@@ -45,7 +46,7 @@ return {
 }
 ```
 
-Create `src/main.tua`:
+Replace `src/main.tua` with:
 
 ```tua
 local Player = require("player")

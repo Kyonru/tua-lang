@@ -18,7 +18,7 @@ cargo run -p tua-cli -- <command>
 cargo run -p tua-cli -- init
 ```
 
-Creates `tua.toml` and `src/` if they do not already exist.
+Creates `tua.toml`, `src/`, and `src/main.tua` if they do not already exist.
 
 ## `check`
 

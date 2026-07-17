@@ -74,6 +74,7 @@ function debugLspLoggingEnabled() {
 
 function registerLifecycleCommands() {
   return vscode.Disposable.from(
+    vscode.commands.registerCommand(COMMANDS.initProject, initializeProject),
     vscode.commands.registerCommand(COMMANDS.restartServer, restartLanguageServer),
     vscode.commands.registerCommand(COMMANDS.focusOutput, () => outputChannel?.show(true)),
     vscode.commands.registerCommand(COMMANDS.openSettings, () =>
@@ -257,6 +258,77 @@ async function restartLanguageServer() {
   await startLanguageServer();
 }
 
+async function initializeProject() {
+  if (!extensionContext) {
+    return undefined;
+  }
+
+  const workspaceFolder = await pickWorkspaceFolderForInit();
+  if (!workspaceFolder) {
+    return undefined;
+  }
+
+  const tuaCommand = configuredServerPath(extensionContext);
+  if (!vscode.workspace.isTrusted && isWorkspaceLocalPath(tuaCommand)) {
+    showWorkspaceTrustWarning(
+      new Error(
+        "Workspace trust is required before initializing a project with a workspace-local Tua executable.",
+      ),
+    );
+    return undefined;
+  }
+
+  const cwd = workspaceFolder.uri.fsPath;
+  outputChannel?.appendLine(`[tua] Initializing project in ${cwd}`);
+  outputChannel?.appendLine(`$ ${tuaCommand} init`);
+
+  try {
+    const result = await runCommandCapture(tuaCommand, ["init"], cwd);
+    appendCommandOutput(result.stdout);
+    appendCommandOutput(result.stderr);
+    vscode.window.showInformationMessage(`Initialized Tua project in ${workspaceFolder.name}.`);
+
+    return {
+      command: tuaCommand,
+      workspaceRoot: cwd,
+    };
+  } catch (error) {
+    outputChannel?.appendLine(`[tua] Failed to initialize project: ${formatError(error)}`);
+    outputChannel?.show(true);
+    vscode.window.showErrorMessage(`Could not initialize Tua project: ${formatError(error)}`);
+    return undefined;
+  }
+}
+
+async function pickWorkspaceFolderForInit() {
+  const folders = (vscode.workspace.workspaceFolders || []).filter(
+    (folder) => folder.uri?.scheme === "file",
+  );
+
+  if (folders.length === 0) {
+    vscode.window.showWarningMessage("Open a folder before initializing a Tua project.");
+    return undefined;
+  }
+
+  if (folders.length === 1) {
+    return folders[0];
+  }
+
+  const selected = await vscode.window.showQuickPick(
+    folders.map((folder) => ({
+      label: folder.name,
+      description: folder.uri.fsPath,
+      folder,
+    })),
+    {
+      placeHolder: "Select the workspace folder to initialize as a Tua project",
+      ignoreFocusOut: true,
+    },
+  );
+
+  return selected?.folder;
+}
+
 async function selectServerVersion() {
   if (!extensionContext) {
     return;
@@ -381,6 +453,87 @@ function workspaceServerPaths() {
 
 function configurationTarget() {
   return hasWorkspaceFolders() ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+}
+
+function runCommandCapture(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+    let child;
+
+    const finishResolve = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve({ stdout, stderr });
+    };
+
+    const finishReject = (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(error);
+    };
+
+    try {
+      child = childProcess.spawn(command, args, {
+        cwd,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    } catch (error) {
+      finishReject(error);
+      return;
+    }
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    child.once("error", (error) => {
+      finishReject(error);
+    });
+
+    child.once("exit", (code) => {
+      if (code === 0) {
+        finishResolve();
+        return;
+      }
+
+      const detail = [stderr.trim(), stdout.trim()].find(Boolean);
+      finishReject(
+        new Error(
+          `\`${formatCommand(command, args)}\` exited with status ${code}${detail ? `: ${detail}` : ""}`,
+        ),
+      );
+    });
+  });
+}
+
+function appendCommandOutput(text) {
+  if (!text) {
+    return;
+  }
+
+  for (const line of text.split(/\r?\n/).map((entry) => entry.trimEnd())) {
+    if (line) {
+      outputChannel?.appendLine(line);
+    }
+  }
+}
+
+function formatCommand(command, args) {
+  return [command, ...args].join(" ");
 }
 
 async function copyDebugInfo() {

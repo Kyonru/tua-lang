@@ -87,6 +87,12 @@ fn format_init_result(result: tua_core::InitResult) -> String {
         lines.push("src/ already exists".to_owned());
     }
 
+    if result.main_created {
+        lines.push("created src/main.tua".to_owned());
+    } else {
+        lines.push("src/main.tua already exists; left unchanged".to_owned());
+    }
+
     lines.join("\n")
 }
 

@@ -1,6 +1,7 @@
 "use strict";
 
 const COMMANDS = {
+  initProject: "tua.initProject",
   restartServer: "tua.restartServer",
   focusOutput: "tua.output.focus",
   openSettings: "tua.openSettings",
