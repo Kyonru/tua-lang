@@ -72,6 +72,20 @@ async function testLiveLanguageFeatures() {
     "definition navigation to reveal the declaration",
   );
 
+  const greetPosition = positionAfter(document, "local function gre");
+  editor.selection = new vscode.Selection(greetPosition, greetPosition);
+  const qualifiedName = await vscode.commands.executeCommand("tua.copyQualifiedName");
+  assert.equal(qualifiedName, "intelligence.greet");
+  assert.equal(await vscode.env.clipboard.readText(), "intelligence.greet");
+
+  const pickedName = await vscode.commands.executeCommand("tua.showWorkspaceSymbolsByModule", {
+    query: "greet",
+    pickFirst: true,
+  });
+  assert.equal(pickedName, "intelligence.greet");
+  assert.equal(vscode.window.activeTextEditor?.document.uri.toString(), document.uri.toString());
+  assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1);
+
   const signaturePosition = positionAfter(document, "call_probe = greet(");
   const signatures = await vscode.commands.executeCommand(
     "vscode.executeSignatureHelpProvider",

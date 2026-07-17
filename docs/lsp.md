@@ -429,6 +429,12 @@ build output; it does not synthesize Lua or run `tua build` automatically.
 Lua lines. Source maps currently carry line provenance only, so the selected
 target column is 0.
 
+`Tua: Copy Fully Qualified Symbol Name` and `Tua: Workspace Symbols by Module`
+reuse the standard document-symbol and workspace-symbol providers. Qualified
+names use the compiler module path from `tua.toml` source roots plus the
+selected symbol path, and the workspace quick pick groups symbols under their
+module container names.
+
 For local smoke tests:
 
 ```bash

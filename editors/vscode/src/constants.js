@@ -13,6 +13,8 @@ const COMMANDS = {
   saveHeapSummary: "tua.saveHeapSummary",
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
+  copyQualifiedName: "tua.copyQualifiedName",
+  showWorkspaceSymbolsByModule: "tua.showWorkspaceSymbolsByModule",
   explainType: "tua.explainType",
   selectInlayHintMode: "tua.inlayHints.selectMode",
   previewSprites: "tua.previewSprites",

@@ -501,6 +501,18 @@
         "icon": "$(arrow-swap)"
       },
       {
+        "command": "tua.copyQualifiedName",
+        "title": "Copy Fully Qualified Symbol Name",
+        "category": "Tua",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "tua.showWorkspaceSymbolsByModule",
+        "title": "Workspace Symbols by Module",
+        "category": "Tua",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "tua.inlayHints.selectMode",
         "title": "Select Inlay Hint Mode",
         "category": "Tua",
@@ -633,6 +645,11 @@
           "group": "navigation@46"
         },
         {
+          "command": "tua.showWorkspaceSymbolsByModule",
+          "when": "editorLangId == tua",
+          "group": "navigation@47"
+        },
+        {
           "command": "tua.showSignalGraph",
           "when": "editorLangId == tua",
           "group": "navigation@50"
@@ -654,6 +671,14 @@
         {
           "command": "tua.jumpBetweenSourceAndGenerated",
           "when": "editorLangId == tua || resourceExtname == .lua"
+        },
+        {
+          "command": "tua.copyQualifiedName",
+          "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.showWorkspaceSymbolsByModule",
+          "when": "workspaceFolderCount > 0"
         },
         {
           "command": "tua.whyModuleIncluded",
@@ -694,6 +719,11 @@
           "command": "tua.whyModuleIncluded",
           "when": "editorLangId == tua",
           "group": "navigation@50"
+        },
+        {
+          "command": "tua.copyQualifiedName",
+          "when": "editorLangId == tua",
+          "group": "navigation@60"
         }
       ],
       "view/title": [

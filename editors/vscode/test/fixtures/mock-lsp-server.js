@@ -12,6 +12,7 @@ if (process.argv.includes("--version")) {
 
 const documents = new Map();
 const cancelledRequests = new Set();
+let workspaceFolders = [];
 let input = Buffer.alloc(0);
 let eventSequence = 0;
 let continuedCompletionCount = 0;
@@ -49,10 +50,11 @@ function readMessages() {
 function handleMessage(message) {
   switch (message.method) {
     case "initialize":
+      workspaceFolders = message.params.workspaceFolders || [];
       log({
         type: "initialize",
         rootUri: message.params.rootUri,
-        workspaceFolders: message.params.workspaceFolders || [],
+        workspaceFolders,
       });
       respond(message.id, initializeResult());
       return;
@@ -81,6 +83,9 @@ function handleMessage(message) {
     case "textDocument/definition":
       definition(message);
       return;
+    case "textDocument/documentSymbol":
+      documentSymbols(message);
+      return;
     case "textDocument/signatureHelp":
       signatureHelp(message);
       return;
@@ -98,6 +103,9 @@ function handleMessage(message) {
       return;
     case "workspace/willRenameFiles":
       willRenameFiles(message);
+      return;
+    case "workspace/symbol":
+      workspaceSymbols(message);
       return;
     case "workspace/didRenameFiles":
       log({ type: "workspace.didRenameFiles", files: message.params.files });
@@ -121,6 +129,7 @@ function initializeResult() {
     capabilities: {
       completionProvider: {},
       definitionProvider: true,
+      documentSymbolProvider: true,
       hoverProvider: true,
       inlayHintProvider: true,
       signatureHelpProvider: {
@@ -131,6 +140,7 @@ function initializeResult() {
         change: 1,
         openClose: true,
       },
+      workspaceSymbolProvider: true,
       workspace: {
         fileOperations: {
           didRename: {
@@ -257,6 +267,61 @@ function definition(message) {
     id: message.id,
   });
   respond(message.id, declaration);
+}
+
+function documentSymbols(message) {
+  const uri = message.params.textDocument.uri;
+  const document = documents.get(uri);
+  const source = document?.text || readUri(uri);
+
+  log({
+    type: "documentSymbol.request",
+    id: message.id,
+    uri,
+    version: document?.version,
+  });
+  respond(message.id, documentSymbolsForSource(source));
+}
+
+function workspaceSymbols(message) {
+  const query = message.params?.query || "";
+  const symbols = [];
+
+  for (const folder of workspaceFolders) {
+    const root = fileURLToPath(folder.uri);
+    const sourceDirectory = path.join(root, "src");
+    for (const filePath of tuaFiles(sourceDirectory)) {
+      const uri = pathToFileURL(filePath).toString();
+      const source = readFile(filePath);
+      const moduleName = moduleNameForPath(sourceDirectory, filePath);
+      const moduleRange = {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 0 },
+      };
+
+      symbols.push({
+        name: moduleName,
+        kind: 2,
+        location: { uri, range: moduleRange },
+      });
+      for (const symbol of documentSymbolsForSource(source)) {
+        symbols.push({
+          name: symbol.name,
+          kind: symbol.kind,
+          containerName: moduleName,
+          location: { uri, range: symbol.selectionRange },
+        });
+      }
+    }
+  }
+
+  log({
+    type: "workspaceSymbol.request",
+    id: message.id,
+    query,
+    count: symbols.length,
+  });
+  respond(message.id, symbols.filter((symbol) => workspaceSymbolMatches(symbol, query)));
 }
 
 function signatureHelp(message) {
@@ -606,6 +671,99 @@ function willRenameFiles(message) {
     editedUris: Object.keys(changes),
   });
   respond(message.id, { changes });
+}
+
+function documentSymbolsForSource(source) {
+  return source
+    .split(/\r?\n/)
+    .flatMap((line, lineNumber) => {
+      const symbols = [];
+      const typeMatch = /^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line);
+      const functionMatch = /^\s*(?:local\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line);
+      const localMatch = /^\s*local\s+([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
+
+      if (typeMatch) {
+        symbols.push(symbolForLine(line, lineNumber, typeMatch[1], 23));
+      }
+      if (functionMatch) {
+        symbols.push(symbolForLine(line, lineNumber, functionMatch[1], 12));
+      }
+      if (localMatch) {
+        symbols.push(symbolForLine(line, lineNumber, localMatch[1], 13));
+      }
+
+      return symbols;
+    });
+}
+
+function symbolForLine(line, lineNumber, name, kind) {
+  const character = line.indexOf(name);
+  const selectionRange = {
+    start: { line: lineNumber, character },
+    end: { line: lineNumber, character: character + name.length },
+  };
+
+  return {
+    name,
+    kind,
+    range: {
+      start: { line: lineNumber, character: 0 },
+      end: { line: lineNumber, character: line.length },
+    },
+    selectionRange,
+    children: [],
+  };
+}
+
+function tuaFiles(directory) {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      return tuaFiles(fullPath);
+    }
+
+    return entry.isFile() && entry.name.endsWith(".tua") ? [fullPath] : [];
+  });
+}
+
+function moduleNameForPath(sourceDirectory, filePath) {
+  const relative = path.relative(sourceDirectory, filePath);
+  const withoutExtension = relative.slice(0, relative.length - path.extname(relative).length);
+
+  return withoutExtension.split(path.sep).join(".");
+}
+
+function workspaceSymbolMatches(symbol, query) {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) {
+    return true;
+  }
+
+  const qualifiedName = symbol.containerName
+    ? `${symbol.containerName}.${symbol.name}`
+    : symbol.name;
+
+  return (
+    symbol.name.toLowerCase().includes(trimmed) ||
+    qualifiedName.toLowerCase().includes(trimmed)
+  );
+}
+
+function readUri(uri) {
+  return readFile(fileURLToPath(uri));
+}
+
+function readFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 function requestContext(message) {

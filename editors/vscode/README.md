@@ -114,6 +114,8 @@ the setting.
 - `Tua: Save Heap Summary`
 - `Tua: Open Generated Lua Beside Tua`
 - `Tua: Jump Between Tua and Generated Lua`
+- `Tua: Copy Fully Qualified Symbol Name`
+- `Tua: Workspace Symbols by Module`
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
@@ -156,6 +158,12 @@ nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
 `*.lua.map.json` sidecar to jump from a Tua line to the corresponding generated
 Lua line, or from generated Lua back to the original Tua source line. Source
 maps are line-based, so the command opens the nearest mapped line at column 0.
+
+`Tua: Copy Fully Qualified Symbol Name` copies the module-qualified name at the
+cursor, such as `systems.combat.damage`, or the current module name when the
+cursor is not on a known symbol. `Tua: Workspace Symbols by Module` presents
+standard workspace symbols grouped by compiler module path and opens the
+selected symbol.
 
 ## Module Dependency Explorer
 

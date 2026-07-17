@@ -20,6 +20,8 @@ const expected = [
   "tua.saveHeapSummary",
   "tua.openGeneratedLua",
   "tua.jumpBetweenSourceAndGenerated",
+  "tua.copyQualifiedName",
+  "tua.showWorkspaceSymbolsByModule",
   "tua.explainType",
   "tua.inlayHints.selectMode",
   "tua.previewSprites",
