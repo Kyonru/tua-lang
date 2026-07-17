@@ -117,6 +117,34 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.strictEqual(state.treeViews.length, 1, "activation should create one Asset Explorer");
     assert.strictEqual(state.treeViews[0].id, "tua.assets");
+
+    fs.mkdirSync(path.join(workspace, "src", "love"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workspace, "tua.toml"),
+      'source = "src"\nout = "build"\nmain = "love/boot.tua"\n',
+    );
+    fs.writeFileSync(
+      path.join(workspace, "src", "love", "boot.tua"),
+      "return true\n",
+    );
+    const projectLayout = require(path.join(extensionRoot, "src", "editor", "project-layout.js"));
+    assert.deepStrictEqual(
+      projectLayout.generatedLuaPathForUri(state.vscode.Uri.file(path.join(workspace, "src", "love", "boot.tua"))),
+      {
+        kind: "ok",
+        layout: {
+          configDirectory: workspace,
+          configPath: path.join(workspace, "tua.toml"),
+          mainSource: "love/boot.tua",
+          outputDirectory: path.join(workspace, "build"),
+          sourceDirectory: path.join(workspace, "src"),
+          workspaceRoot: workspace,
+        },
+        path: path.join(workspace, "build", "main.lua"),
+      },
+      "generated Lua resolution should prefer build/main.lua for the configured LOVE entry source",
+    );
+
     const initResult = await state.commands.get("tua.initProject")();
     assert.deepStrictEqual(
       initResult,

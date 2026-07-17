@@ -3,7 +3,6 @@ use super::*;
 pub(crate) struct WatchBuildSession {
     cwd: PathBuf,
     workspace: ProjectWorkspace,
-    source_dir: PathBuf,
     out_dir: PathBuf,
     in_place: bool,
     host: AnalysisHost,
@@ -36,7 +35,6 @@ impl WatchBuildSession {
         let mut session = Self {
             cwd,
             workspace,
-            source_dir,
             out_dir,
             in_place,
             host,
@@ -44,7 +42,13 @@ impl WatchBuildSession {
         let mut diagnostics = Vec::new();
         let mut tua_paths = BTreeSet::new();
         let mut asset_paths = BTreeSet::new();
-        let tua_outputs = tua_outputs_by_path(&session.source_dir, &session.out_dir, &source_files);
+        let tua_output_owners = tua_output_owners_for_paths(
+            &session.workspace,
+            source_files
+                .iter()
+                .filter(|source_file| source_file.kind == SourceKind::Tua)
+                .map(|source_file| source_file.path.clone()),
+        );
 
         for source_file in source_files {
             match source_file.kind {
@@ -57,14 +61,12 @@ impl WatchBuildSession {
                     );
                 }
                 SourceKind::Asset => {
-                    let output_path = output_path_for(
-                        &session.source_dir,
-                        &session.out_dir,
-                        &source_file.path,
-                        SourceKind::Asset,
-                    );
+                    let output_path = output_path_for_asset(&session.workspace, &source_file.path);
 
-                    if let Some(tua_source_path) = tua_outputs.get(&output_path) {
+                    if let Some(tua_source_path) = tua_output_owners
+                        .get(&output_path)
+                        .and_then(|owners| owners.first())
+                    {
                         diagnostics.push(output_collision_diagnostic(
                             &source_file.path,
                             tua_source_path,
@@ -203,6 +205,22 @@ impl WatchBuildSession {
         warn_on_sibling_collisions: bool,
     ) -> BuildOutcome {
         let mut blocked = BTreeSet::new();
+        let tua_output_collisions = colliding_tua_outputs(&tua_output_owners_for_paths(
+            &self.workspace,
+            self.host.file_paths().into_iter().filter(|path| {
+                SourceKind::for_path(path, &self.workspace.config().extension) == SourceKind::Tua
+                    && snapshot.source(path).is_some()
+            }),
+        ));
+        let relevant_tua_output_collisions =
+            filter_tua_output_collisions_for_sources(&tua_output_collisions, &tua_paths);
+
+        push_tua_output_collision_diagnostics(&mut diagnostics, &relevant_tua_output_collisions);
+        remove_colliding_outputs(
+            &tua_output_collisions,
+            self.workspace.config().emit_maps,
+            &mut diagnostics,
+        );
 
         for path in &tua_paths {
             if snapshot.source(path).is_none() {
@@ -235,13 +253,6 @@ impl WatchBuildSession {
             let Some(source) = snapshot.source(&source_path) else {
                 continue;
             };
-            let output_path = output_path_for(
-                &self.source_dir,
-                &self.out_dir,
-                &source_path,
-                SourceKind::Tua,
-            );
-
             if warn_on_sibling_collisions {
                 push_sibling_collision_warning(&mut diagnostics, &source_path, self.in_place);
             }
@@ -261,22 +272,28 @@ impl WatchBuildSession {
             let output = emission.code;
             collect_required_bundled_runtimes(&output, &mut required_bundled_runtimes);
 
-            match write_output(&output_path, output.clone()) {
-                Ok(()) => {
-                    emitted += 1;
+            for output_path in output_paths_for_tua_source(&self.workspace, &source_path) {
+                if tua_output_collisions.contains_key(&output_path) {
+                    continue;
+                }
 
-                    if self.workspace.config().emit_maps {
-                        if let Err(diagnostic) = write_source_map(
-                            &self.cwd,
-                            &source_path,
-                            &output_path,
-                            &emission.provenance,
-                        ) {
-                            diagnostics.push(diagnostic);
+                match write_output(&output_path, output.clone()) {
+                    Ok(()) => {
+                        emitted += 1;
+
+                        if self.workspace.config().emit_maps {
+                            if let Err(diagnostic) = write_source_map(
+                                &self.cwd,
+                                &source_path,
+                                &output_path,
+                                &emission.provenance,
+                            ) {
+                                diagnostics.push(diagnostic);
+                            }
                         }
                     }
+                    Err(diagnostic) => diagnostics.push(diagnostic),
                 }
-                Err(diagnostic) => diagnostics.push(diagnostic),
             }
         }
 
@@ -284,12 +301,7 @@ impl WatchBuildSession {
             if self.in_place {
                 continue;
             }
-            let output_path = output_path_for(
-                &self.source_dir,
-                &self.out_dir,
-                &source_path,
-                SourceKind::Asset,
-            );
+            let output_path = output_path_for_asset(&self.workspace, &source_path);
 
             if let Some(tua_source_path) =
                 colliding_tua_source_for_asset(&source_path, &self.workspace.config().extension)

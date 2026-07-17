@@ -66,6 +66,8 @@ By default:
 
 - `.tua` files under `source` are parsed, checked, lowered, and emitted under
   `out` with the configured extension changed to `.lua`;
+- the configured `main` source file also emits to `<out>/main.lua` for LOVE
+  entrypoint loading while retaining its normal mirrored output path;
 - non-Tua files are copied as assets when source and output roots differ;
 - `.lua` files participate in project analysis when their LuaDoc or inferred
   exports provide stable facts;

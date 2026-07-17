@@ -29,6 +29,7 @@ Generated config templates live in `config/templates/`:
 ```toml
 source = "src"
 out = "build"
+main = "main.tua"
 target = "love11-luajit"
 extension = "tua"
 emit_maps = true
@@ -94,6 +95,7 @@ the behavior and tradeoffs of each option.
 | --- | --- | --- | --- |
 | `source` | string | `"src"` | - |
 | `out` | string | `"build"` | - |
+| `main` | string | `"main.tua"` | - |
 | `target` | string | `"love11-luajit"` | - |
 | `extension` | string | `"tua"` | - |
 | `emit_maps` | boolean | `true` | - |
@@ -145,6 +147,14 @@ the behavior and tradeoffs of each option.
 
 `out`
 : Directory where emitted Lua files are written.
+
+`main`
+: Source file under `source` that also emits to `<out>/main.lua` for LOVE
+entrypoint loading. The source file still keeps its normal mirrored output
+path, so `main = "love/boot.tua"` emits both `build/love/boot.lua` and
+`build/main.lua`. If another source would also mirror to `<out>/main.lua`,
+`tua build` reports an output collision until one of the sources is renamed or
+`main` is changed.
 
 `target`
 : Runtime target label. The default is `love11-luajit`.

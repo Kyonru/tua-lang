@@ -242,6 +242,42 @@ impl ProjectWorkspace {
         &self.output_roots[0]
     }
 
+    pub fn configured_main(&self) -> &Path {
+        &self.config.main
+    }
+
+    pub fn configured_main_source_path(&self) -> PathBuf {
+        normalize_path(self.primary_source_root().join(&self.config.main))
+    }
+
+    pub fn mirrored_output_path_for_source(
+        &self,
+        source_path: impl AsRef<Path>,
+    ) -> Option<PathBuf> {
+        let source_path = source_path.as_ref();
+        let relative_path = source_path.strip_prefix(self.primary_source_root()).ok()?;
+
+        Some(normalize_path(
+            self.primary_output_root().join(relative_path),
+        ))
+    }
+
+    pub fn lua_output_paths_for_tua_source(
+        &self,
+        source_path: impl AsRef<Path>,
+    ) -> Option<Vec<PathBuf>> {
+        let source_path = normalize_path(source_path);
+        let mirrored = self.mirrored_output_path_for_source(&source_path)?;
+        let mut paths = vec![mirrored.with_extension("lua")];
+        let main_output = normalize_path(self.primary_output_root().join("main.lua"));
+
+        if source_path == self.configured_main_source_path() && !paths.contains(&main_output) {
+            paths.push(main_output);
+        }
+
+        Some(paths)
+    }
+
     pub fn ignored_paths(&self) -> &[String] {
         &self.ignored_paths
     }

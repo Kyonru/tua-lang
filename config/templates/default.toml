@@ -1,5 +1,6 @@
 source = "src"
 out = "build"
+main = "main.tua"
 target = "love11-luajit"
 extension = "tua"
 emit_maps = true

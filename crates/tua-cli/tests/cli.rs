@@ -478,6 +478,145 @@ return {
 }
 
 #[test]
+fn build_emits_configured_main_source_as_root_main_lua() {
+    let temp = TempDir::new("build-configured-main");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+main = "love/boot.tua"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/love")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/love/boot.tua"),
+        "local ready: boolean = true\nreturn ready\n",
+    )
+    .expect("failed to write boot source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/love/boot.lua"))
+            .expect("failed to read mirrored output"),
+        "local ready = true\nreturn ready\n"
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/main.lua"))
+            .expect("failed to read configured main output"),
+        "local ready = true\nreturn ready\n"
+    );
+
+    let map: Value = serde_json::from_str(
+        &fs::read_to_string(temp.path().join("build/main.lua.map.json"))
+            .expect("failed to read configured main source map"),
+    )
+    .expect("configured main source map should be JSON");
+
+    assert_eq!(map["generated"], "build/main.lua");
+    assert_eq!(map["source"], "src/love/boot.tua");
+}
+
+#[test]
+fn build_reports_duplicate_root_main_output_for_configured_main_source() {
+    let temp = TempDir::new("build-configured-main-collision");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+main = "love/boot.tua"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/love")).expect("failed to create love source");
+    fs::write(temp.path().join("src/main.tua"), "return \"default\"\n")
+        .expect("failed to write default main");
+    fs::write(temp.path().join("src/love/boot.tua"), "return \"boot\"\n")
+        .expect("failed to write configured main");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("generated output `"));
+    assert!(stderr.contains("build/main.lua"));
+    assert!(stderr.contains("src/main.tua"));
+    assert!(stderr.contains("src/love/boot.tua"));
+    assert!(!temp.path().join("build/main.lua").exists());
+    assert!(!temp.path().join("build/love/boot.lua").exists());
+}
+
+#[test]
+fn build_emit_on_error_keeps_non_conflicting_output_for_configured_main_source() {
+    let temp = TempDir::new("build-configured-main-collision-emit");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+main = "love/boot.tua"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/love")).expect("failed to create love source");
+    fs::write(temp.path().join("src/main.tua"), "return \"default\"\n")
+        .expect("failed to write default main");
+    fs::write(temp.path().join("src/love/boot.tua"), "return \"boot\"\n")
+        .expect("failed to write configured main");
+
+    let output = tua()
+        .args(["build", "--emit-on-error"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build --emit-on-error");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("build/main.lua"));
+    assert_eq!(
+        fs::read_to_string(temp.path().join("build/love/boot.lua"))
+            .expect("failed to read mirrored output"),
+        "return \"boot\"\n"
+    );
+    assert!(!temp.path().join("build/main.lua").exists());
+    assert!(!temp.path().join("build/main.lua.map.json").exists());
+}
+
+#[test]
 fn build_respects_disabled_source_maps() {
     let temp = TempDir::new("build-no-source-maps");
 

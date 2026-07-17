@@ -76,7 +76,9 @@ cargo run -p tua-cli -- build
 Checks the project and writes emitted Lua to the configured output directory.
 Emission is blocked by errors by default.
 
-Build output mirrors the configured source tree:
+Build output mirrors the configured source tree. The configured `main` source
+file also emits to `<out>/main.lua` for LOVE entrypoint loading while keeping
+its normal mirrored output path.
 
 - `.tua` files are checked, lowered, erased, and emitted as `.lua`;
 - plain `.lua` files and other assets are copied unchanged;

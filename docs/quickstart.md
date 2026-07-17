@@ -23,6 +23,9 @@ src/main.tua
 ```
 
 The default config mirrors `src/**/*.tua` into `build/**/*.lua`.
+By default `src/main.tua` also emits to `build/main.lua`, and `tua.toml`
+can point `main` at a different source file when a LOVE project wants its
+entrypoint somewhere else in the source tree.
 
 ## Add Source
 

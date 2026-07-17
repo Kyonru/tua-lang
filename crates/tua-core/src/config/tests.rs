@@ -39,6 +39,7 @@ fn default_config_matches_spec() {
         ProjectConfig {
             source: PathBuf::from("src"),
             out: PathBuf::from("build"),
+            main: PathBuf::from("main.tua"),
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
@@ -64,6 +65,7 @@ fn parses_present_config() {
         r#"
 source = "game"
 out = "dist"
+main = "love/boot.tua"
 target = "love11-luajit"
 extension = "tl"
 emit_maps = false
@@ -124,6 +126,7 @@ globals = ["Game", "World"]
         ProjectConfig {
             source: PathBuf::from("game"),
             out: PathBuf::from("dist"),
+            main: PathBuf::from("love/boot.tua"),
             target: "love11-luajit".to_owned(),
             extension: "tl".to_owned(),
             emit_maps: false,
@@ -196,6 +199,7 @@ emit_maps = false
 
     assert_eq!(config.source, PathBuf::from("game"));
     assert_eq!(config.out, PathBuf::from("build"));
+    assert_eq!(config.main, PathBuf::from("main.tua"));
     assert_eq!(config.target, "love11-luajit");
     assert_eq!(config.extension, "tua");
     assert!(!config.emit_maps);

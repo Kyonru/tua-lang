@@ -22,6 +22,7 @@ pub const CONFIG_FILE: &str = "tua.toml";
 pub const DEFAULT_CONFIG_TEXT: &str = "\
 source = \"src\"
 out = \"build\"
+main = \"main.tua\"
 target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
@@ -86,6 +87,7 @@ print(message)
 pub struct ProjectConfig {
     pub source: PathBuf,
     pub out: PathBuf,
+    pub main: PathBuf,
     pub target: String,
     pub extension: String,
     pub emit_maps: bool,
@@ -101,6 +103,7 @@ impl Default for ProjectConfig {
         Self {
             source: PathBuf::from("src"),
             out: PathBuf::from("build"),
+            main: PathBuf::from("main.tua"),
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
@@ -447,14 +450,15 @@ pub fn init_project(dir: impl AsRef<Path>) -> Result<InitResult, ConfigError> {
 
     let config_path = dir.join(CONFIG_FILE);
     let config_created = write_file_without_overwrite(&config_path, DEFAULT_CONFIG_TEXT)?;
-    let source_dir = dir.join(ProjectConfig::default().source);
+    let defaults = ProjectConfig::default();
+    let source_dir = dir.join(&defaults.source);
     let source_created = !source_dir.exists();
 
     fs::create_dir_all(&source_dir).map_err(|source| ConfigError::Io {
         path: source_dir.clone(),
         source,
     })?;
-    let main_path = source_dir.join("main.tua");
+    let main_path = source_dir.join(&defaults.main);
     let main_created = write_file_without_overwrite(&main_path, DEFAULT_MAIN_TEXT)?;
 
     Ok(InitResult {

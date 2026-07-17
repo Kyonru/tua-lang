@@ -428,9 +428,11 @@ chains; arbitrary runtime expressions remain intentionally unexplained when no
 stable compiler identity exists.
 
 `Tua: Open Generated Lua Beside Tua` resolves the active saved Tua source
-through the nearest `tua.toml` `source` and `out` settings and opens the emitted
-`.lua` file in a side editor. The command is an editor convenience for inspecting
-build output; it does not synthesize Lua or run `tua build` automatically.
+through the nearest `tua.toml` `source`, `out`, and optional `main` settings
+and opens the emitted `.lua` file in a side editor. When the active file is the
+configured LOVE entry source, the command prefers `<out>/main.lua`. The command
+is an editor convenience for inspecting build output; it does not synthesize
+Lua or run `tua build` automatically.
 
 `Tua: Jump Between Tua and Generated Lua` additionally reads the emitted
 `*.lua.map.json` sidecar and jumps between the nearest mapped Tua and generated

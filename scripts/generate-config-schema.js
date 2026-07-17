@@ -158,7 +158,7 @@ function defaultTemplate(settings) {
 }
 
 function minimalTemplate(settings) {
-  const paths = new Set(["source", "out", "target", "extension", "emit_maps"]);
+  const paths = new Set(["source", "out", "main", "target", "extension", "emit_maps"]);
   const lines = settings
     .filter((setting) => paths.has(setting.path))
     .map((setting) => `${setting.path} = ${tomlValue(setting.default)}`);

@@ -7,6 +7,7 @@ const vscode = require("vscode");
 const CONFIG_FILE_NAME = "tua.toml";
 const DEFAULT_SOURCE_DIRECTORY = "src";
 const DEFAULT_OUTPUT_DIRECTORY = "build";
+const DEFAULT_MAIN_SOURCE = "main.tua";
 
 function generatedLuaPathForUri(uri) {
   const layout = projectLayoutForUri(uri);
@@ -20,6 +21,14 @@ function generatedLuaPathForUri(uri) {
   }
 
   const relativeSource = path.relative(layout.sourceDirectory, sourcePath);
+  if (normalizeRelativePath(relativeSource) === normalizeRelativePath(layout.mainSource)) {
+    return {
+      kind: "ok",
+      path: path.join(layout.outputDirectory, "main.lua"),
+      layout,
+    };
+  }
+
   const relativeLua = replaceExtension(relativeSource, ".lua");
 
   return {
@@ -79,6 +88,7 @@ function projectLayoutForWorkspaceRoot(workspaceRoot, configPath = undefined) {
   return {
     configDirectory,
     configPath: resolvedConfigPath,
+    mainSource: config.main || DEFAULT_MAIN_SOURCE,
     outputDirectory: path.resolve(configDirectory, config.out || DEFAULT_OUTPUT_DIRECTORY),
     sourceDirectory: path.resolve(configDirectory, config.source || DEFAULT_SOURCE_DIRECTORY),
     workspaceRoot: root,
@@ -115,6 +125,7 @@ function readProjectConfig(configPath) {
   const text = fs.readFileSync(configPath, "utf8");
 
   return {
+    main: topLevelStringSetting(text, "main"),
     out: topLevelStringSetting(text, "out"),
     source: topLevelStringSetting(text, "source"),
   };

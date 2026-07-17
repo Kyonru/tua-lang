@@ -5,7 +5,9 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::build::{has_errors, output_path_for, BuildOutcome, WatchBuildSession};
+use crate::build::{
+    has_errors, output_path_for_asset, output_paths_for_tua_source, BuildOutcome, WatchBuildSession,
+};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
@@ -421,18 +423,26 @@ fn remove_deleted_outputs(
     deleted: &[PathBuf],
 ) -> RemovalOutcome {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
-    let source_dir = workspace.primary_source_root().to_path_buf();
-    let out_dir = workspace.primary_output_root().to_path_buf();
     let mut outcome = RemovalOutcome::default();
 
     for source_path in deleted {
         let source_kind = SourceKind::for_path(source_path, &workspace.config().extension);
-        let output_path = output_path_for(&source_dir, &out_dir, source_path, source_kind);
-        let mut output_paths = vec![output_path.clone()];
+        let output_paths = match source_kind {
+            SourceKind::Tua => output_paths_for_tua_source(&workspace, source_path),
+            SourceKind::Asset => vec![output_path_for_asset(&workspace, source_path)],
+        };
+        let output_paths = output_paths
+            .into_iter()
+            .flat_map(|output_path| {
+                let mut paths = vec![output_path.clone()];
 
-        if source_kind == SourceKind::Tua {
-            output_paths.push(source_map_path_for(&output_path));
-        }
+                if source_kind == SourceKind::Tua {
+                    paths.push(source_map_path_for(&output_path));
+                }
+
+                paths
+            })
+            .collect::<Vec<_>>();
 
         for output_path in output_paths {
             match fs::remove_file(&output_path) {

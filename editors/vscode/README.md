@@ -1,300 +1,205 @@
-# tua VS Code Extension
+# Tua for VS Code
 
-Minimal VS Code language support for tua source files.
+Typed Lua editing and LOVE2D tooling for Tua projects.
 
-## Features
+Tua is a typed Lua superset that emits readable Lua 5.1-compatible code for
+LuaJIT and LOVE 11.x. This extension brings compiler-backed editing, LOVE-aware
+completions, asset tooling, project graphs, and build/run commands into VS
+Code without changing the normal Lua and LOVE workflow.
 
-- Registers the `tua` language id.
-- Associates `*.tua` files with the tua language mode.
-- Uses the tua logo SVG for `.tua` file icons and a generated PNG copy for the
-  packaged extension icon.
-- Adds immediate TextMate grammar coverage for Lua and Tua declarations,
-  classes, enums, function and callback types, LuaDoc annotations, module and
-  asset paths, SignalBus event names, LOVE/ECS helpers, calls, members, labels,
-  literals, comments, and operators.
-- Adds language configuration for comments, brackets, auto-closing pairs,
-  region folding, word boundaries, and Lua/Tua indentation.
-- Bundles instant snippets for Lua functions, typed Tua declarations, classes,
-  loops, conditionals, and common LOVE callbacks.
-- Starts `tua lsp` over stdio and surfaces the language server's diagnostics,
-  hover, completion, signature help, document highlights, navigation, rename,
-  inlay hint, semantic token, and symbol features.
-- Attaches the language server to `tua.toml` and provides schema-backed
-  config key/section completion, enum/default value completion, hover
-  documentation, and quick fixes for suggested unknown keys.
-- Contributes Tua editor defaults for zero-delay quick suggestions in code and
-  strings and enables semantic highlighting for Tua documents.
-- Refines lexical scopes with standard VS Code semantic token types for
-  classes, enums, types, functions, methods, parameters, variables, properties,
-  namespaces, events, labels, and annotation tags. Declaration, readonly,
-  deprecated, modification, and default-library modifiers remain theme-aware.
-- Adds Tua command-palette actions for restarting the language server, focusing
-  the output channel, initializing a Tua project, selecting a server binary, copying debug information,
-  copying or saving cache statistics, resetting completion learning stats,
-  showing language-server health, probing server profile artifacts, previewing
-  `spriteSheet` animations, visualizing SignalBus events, module dependencies,
-  and object-pool lifecycles across files, explaining why the active module is
-  included, running source actions and refactors, reporting an issue, and
-  opening Tua settings.
-- Adds trusted hover action links for references, implementations, SignalBus
-  event graphs, sprite sheet previews, and resolved asset previews.
-- Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
-  and static usage, with reference navigation, file rename, reveal, refresh,
-  dimensions, and conservative unused-asset diagnostics.
-- Shows a Tua language status item with the server state, resolved server path,
-  version, and workspace directory when available.
-- Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
-  features such as verbose hover, source definition, multi-document highlight,
-  and auto insert are intentionally not exposed until a concrete Lua/Tua workflow
-  needs preview-gated behavior.
+## Why This Extension
 
-## Configuration
+- Compiler-backed Tua editing: completion, hover, signature help, definitions,
+  references, rename, diagnostics, inlay hints, semantic tokens, and workspace
+  symbols come from the same Tua semantic pipeline as the CLI.
+- LOVE-aware authoring: callback snippets, callback signature checking, LOVE
+  API documentation and overloads, colon-call guidance, and config-aware
+  `love.conf(t)` completion are built in.
+- Better game-project tooling: sprite sheets, SignalBus events, assets, module
+  dependencies, ECS, and object pools all have editor support instead of living
+  as untyped strings and conventions.
+- Generated Lua visibility: inspect emitted Lua beside the current Tua file and
+  jump between Tua and generated Lua with source maps.
+- Project-oriented workflow: initialize a project, run LOVE from VS Code tasks,
+  inspect language-server health, and keep `tua.toml` fully documented in the
+  editor.
 
-- `tua.server.path`: path to the `tua` executable. Defaults to `tua` on `PATH`.
-- `tua.trace.server`: LSP trace level sent to the server. Supported values are
-  `off`, `messages`, and `verbose`.
-- `tua.log.verbosity`: language-server log verbosity. Supported values are
-  `off`, `error`, `info`, `debug`, and `trace`.
-- `tua.preview.enabled`: enables experimental editor previews such as
-  `Tua: Preview Sprite Animations`.
+## Quick Start
 
-VSIX packages built with `make extension-package` include the current platform's
-`tua` server binary and use it by default.
+1. Install the extension.
+2. Run `Tua: Initialize Tua Project`.
+3. Open `src/main.tua`.
+4. Run `Tua: Run LOVE Project`.
 
-Tagged releases publish separate `linux-x64`, `win32-x64`, `darwin-x64`, and
-`darwin-arm64` VSIX files. Install the package matching the host platform and
-verify it against the release `SHA256SUMS` manifest. The extension never
-downloads a server during activation.
+Example:
 
-For extension-host development, `TUA_SERVER_PATH` overrides the setting.
-Use the workspace `Run Extension (Features Example)` launch profile to open
-`examples/features` with `target/debug/tua`. Use
-`Run Extension (Features Example, Bundled Server)` to compare against a staged
-bundled server. `Run Extension (Debug Server)` opens `examples/love-full` with
-the debug server.
+```tua
+type Player = {
+  x: number,
+  y: number,
+  speed: number,
+}
 
-`Run Extension (All Examples)` enables `TUA_DEBUG_LSP=1`, which writes language
-client setup details and server completion trace messages to the Tua output
-channel. Automatic suggestions use VS Code's native zero-delay quick-suggestion
-flow; the extension does not run a second timer or execute
-`editor.action.triggerSuggest` after edits.
+local player: Player = {
+  x = 160,
+  y = 120,
+  speed = 90,
+}
 
-Run the real Extension Development Host integration suite with:
+function love.update(dt: number)
+  if love.keyboard.isDown("right") then
+    player.x += player.speed * dt
+  end
+end
 
-```bash
-make extension-test
+function love.draw()
+  love.graphics.print("Hello from Tua", player.x, player.y)
+end
 ```
 
-The suite drives an isolated two-root workspace against a controlled LSP
-server. It covers completion freshness and cancellation, hover, definition,
-signature help, inlay hints, UTF-16 and untitled documents, module and asset
-file renames, module graph, ECS Explorer, Object Pool Explorer opening and
-reuse, and sprite preview opening, reload, focus, missing assets, and hover
-command links.
+From there you can:
 
-Use `Tua: Select Server` to switch between the bundled/default server and
-workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
-Workspace-local binaries require VS Code workspace trust before they are
-offered or executed.
+- use normal completion and hover on LOVE APIs;
+- open emitted Lua with `Tua: Open Generated Lua Beside Tua`;
+- jump between source and output with `Tua: Jump Between Tua and Generated Lua`;
+- run and restart the LOVE project without leaving VS Code.
 
-Changing `tua.trace.server` or `tua.log.verbosity` sends `tua/setTrace` to the
-running server. A restart is not required when the server supports the request.
-Changing `tua.server.path` still prompts for a restart because the executable
-selection is part of client startup.
+## What You Get
 
-If the executable is missing, activation shows a warning and links directly to
-the setting.
+### Core Tua Editing
 
-## Commands
+- TextMate and semantic highlighting for Tua, Lua interop, LOVE-aware helpers,
+  event names, annotations, types, functions, methods, parameters, properties,
+  labels, and literals.
+- Zero-delay quick suggestions for Tua files using VS Code's normal completion
+  flow.
+- Hover, completion, signature help, definition, references, rename, document
+  symbols, workspace symbols, document highlight, call hierarchy, code lenses,
+  and range/full/delta semantic tokens.
+- Inlay hint modes: Full, Compact, Types Only, Parameters Only, and Off.
+- `Tua: Explain Type / Why Is This Any?` for tracing annotations, inference,
+  widening, narrowing, module resolution, and dynamic fallback points.
+- Source actions for organizing imports, sorting imports, removing unused
+  imports, fixing safe diagnostics, and other compiler-backed refactors.
+- `tua.toml` completion, hover documentation, enum/default value completion,
+  and unknown-key quick fixes.
+
+### LOVE2D Workflow
+
+- LOVE callback snippet completion for `love.load`, `love.update(dt)`,
+  `love.draw`, `love.conf(t)`, touch/gamepad callbacks, file drop callbacks,
+  and more.
+- Callback signature checking and typo diagnostics for misspelled or
+  incompatible LOVE callback declarations.
+- LOVE API completion with overloads, documentation, and parameter details.
+- Asset-path understanding for both Tua helpers and native LOVE constructors
+  that load files.
+- `Tua: Run LOVE Project` and `Tua: Restart LOVE Project` as cancellable VS Code
+  tasks, with emitted Lua traceback lines mapped back to original Tua files
+  when source maps are enabled.
+- Compiler-backed sprite sheet inspection and preview through
+  `spriteSheet({...})` metadata. Preview is currently gated by
+  `tua.preview.enabled`.
+
+### Game-Focused Project Tooling
+
+- Asset Explorer grouped by asset kind and static usage, with reference
+  navigation, rename, reveal, preview, and conservative unused-asset hints.
+- SignalBus event-name completion and a compiler-backed signal graph with
+  typed payload display, conflict inspection, and source navigation.
+- Module dependency explorer for `require(...)` and `import(...)` relationships,
+  unresolved modules, duplicate resolutions, cycles, reverse dependencies, and
+  inclusion paths.
+- ECS explorer showing components, systems, queries, and conservative read/write
+  access insights.
+- Object pool explorer showing declarations plus visible `acquire`, `release`,
+  `clear`, and `prewarm` lifecycle operations.
+
+## Key Commands
+
+### Project and Runtime
 
 - `Tua: Initialize Tua Project`
+- `Tua: Run LOVE Project`
+- `Tua: Restart LOVE Project`
+- `Tua: Open Generated Lua Beside Tua`
+- `Tua: Jump Between Tua and Generated Lua`
+
+### Editing and Insight
+
+- `Tua: Explain Type / Why Is This Any?`
+- `Tua: Select Inlay Hint Mode`
+- `Tua: Copy Fully Qualified Symbol Name`
+- `Tua: Workspace Symbols by Module`
+- `Tua: Organize Imports`
+- `Tua: Sort Imports`
+- `Tua: Remove Unused Imports`
+- `Tua: Fix All Safe Diagnostics`
+
+### Project Explorers
+
+- `Tua: Refresh Asset Explorer`
+- `Tua: Preview Sprite Animations`
+- `Tua: Show Signal Graph`
+- `Tua: Show Module Dependency Graph`
+- `Tua: Show ECS Explorer`
+- `Tua: Show Object Pool Explorer`
+- `Tua: Why Is This Module Included?`
+
+### Server and Support
+
 - `Tua: Restart Language Server`
 - `Tua: Focus Output`
 - `Tua: Open Settings`
 - `Tua: Select Server`
+- `Tua: Show Server Health`
 - `Tua: Copy Debug Info`
 - `Tua: Copy Cache Stats`
 - `Tua: Save Cache Stats`
 - `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
-- `Tua: Open Generated Lua Beside Tua`
-- `Tua: Jump Between Tua and Generated Lua`
-- `Tua: Run LOVE Project`
-- `Tua: Restart LOVE Project`
-- `Tua: Copy Fully Qualified Symbol Name`
-- `Tua: Workspace Symbols by Module`
-- `Tua: Explain Type / Why Is This Any?`
-- `Tua: Select Inlay Hint Mode`
-- `Tua: Preview Sprite Animations`
-- `Tua: Refresh Asset Explorer`
-- `Tua: Show Signal Graph`
-- `Tua: Show Module Dependency Graph`
-- `Tua: Show ECS Explorer`
-- `Tua: Show Object Pool Explorer`
-- `Tua: Why Is This Module Included?`
-- `Tua: Organize Imports`
-- `Tua: Sort Imports`
-- `Tua: Remove Unused Imports`
-- `Tua: Fix All Safe Diagnostics`
 - `Tua: Report Issue`
 
-`Tua: Select Inlay Hint Mode` is available from the command palette and the
-Tua editor toolbar. Its quick pick offers Full, Compact, Types Only, Parameters
-Only, and Off. Compact uses VS Code's native ellipsis rendering and restores
-the exact prior language-specific maximum length when another mode is selected,
-including an absent override. The other modes filter the language server's
-complete type and parameter labels without changing `editor.inlayHints.enabled`
-or unrelated VS Code preferences.
+## Configuration
 
-`Tua: Explain Type / Why Is This Any?` is available from the command palette
-and the editor context menu. It asks the compiler for the type at the cursor
-and lists the contributing annotation, initializer inference, literal widening,
-control-flow narrowing, module resolution, member lookup, and dynamic fallback
-steps. When a result is `any`, the quick-pick title calls that out directly.
-Select a located step to open its declaration or source. Missing modules,
-explicit `any`, unknown initializers, and member access through `any` are shown
-as distinct causes.
+Important VS Code settings:
 
-`Tua: Open Generated Lua Beside Tua` is available from the command palette and
-the Tua editor toolbar. It resolves the active saved `.tua` file through the
-nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
-`.lua` file beside the source editor. If the output does not exist, run
-`tua build` first.
+- `tua.server.path`: path to the `tua` executable used to launch the language
+  server.
+- `tua.love.command`: path to the LOVE executable used by
+  `Tua: Run LOVE Project`.
+- `tua.trace.server`: LSP trace level (`off`, `messages`, `verbose`).
+- `tua.log.verbosity`: server log verbosity (`off`, `error`, `info`, `debug`,
+  `trace`).
+- `tua.preview.enabled`: enables experimental editor previews such as sprite
+  animation preview.
 
-`Tua: Jump Between Tua and Generated Lua` uses the emitted
-`*.lua.map.json` sidecar to jump from a Tua line to the corresponding generated
-Lua line, or from generated Lua back to the original Tua source line. Source
-maps are line-based, so the command opens the nearest mapped line at column 0.
+Project behavior still comes primarily from `tua.toml`, and the extension
+attaches to that file directly for configuration authoring.
 
-`Tua: Initialize Tua Project` runs `tua init` in the selected workspace
-folder, creates `tua.toml`, `src/`, and `src/main.tua` when they do not
-already exist, and logs the CLI output to the Tua output channel. The command
-activates the extension even in a fresh workspace with no existing `.tua`
-files.
+Published VSIX packages bundle the matching platform server binary and do not
+download a server during activation. If you want to use a workspace-local
+binary such as `target/debug/tua`, select it with `Tua: Select Server`. VS Code
+workspace trust is required before workspace-local binaries are offered or
+executed.
 
-`Tua: Run LOVE Project` creates a cancellable VS Code task that runs
-`tua build` from the nearest project root and then starts LOVE from the
-configured output directory. `Tua: Restart LOVE Project` terminates the tracked
-task execution before starting a fresh one. By default the runner uses `love`
-from `PATH`, then falls back to common platform installs such as
-`/Applications/love.app/Contents/MacOS/love` on macOS. Set `tua.love.command`
-when LOVE lives somewhere else. Runtime traceback lines from emitted Lua are
-annotated with clickable Tua source locations when `emit_maps` is enabled. This
-is task execution only; debugging remains outside the Tua extension.
+## Docs
 
-`Tua: Copy Fully Qualified Symbol Name` copies the module-qualified name at the
-cursor, such as `systems.combat.damage`, or the current module name when the
-cursor is not on a known symbol. `Tua: Workspace Symbols by Module` presents
-standard workspace symbols grouped by compiler module path and opens the
-selected symbol.
+- [Project docs](https://kyonru.github.io/tua-lang)
+- [Language server details](https://github.com/Kyonru/tua-lang/blob/main/docs/lsp.md)
+- [Configuration reference](https://github.com/Kyonru/tua-lang/blob/main/docs/configuration.md)
+- [Language overview](https://github.com/Kyonru/tua-lang/blob/main/docs/language.md)
+- [Examples](https://github.com/Kyonru/tua-lang/blob/main/docs/examples.md)
 
-## Module Dependency Explorer
+## Privacy and Support
 
-`Tua: Show Module Dependency Graph` opens a compiler-backed project view of
-static `require(...)` and `import(...)` relationships. Filter the graph to
-unresolved dependencies, cycles, or root candidates, select a module to inspect
-its direct dependencies and reverse dependencies, and open inferred exports at
-their definitions. Missing and invalid imports show the searched roots or
-compiler reason; duplicate resolutions retain their candidate set.
+The extension does not send telemetry or upload project source code.
 
-`Tua: Why Is This Module Included?` opens the same panel focused on the active
-file. The Why included tab shows one deterministic shortest path from a module
-with no resolved importer to the selected file. Pure dependency cycles can have
-no root path, which the inspector reports explicitly. Each step opens the exact
-source import. The request runs as background project inspection and yields to
-typing and interactive language features.
-
-## Asset Explorer
-
-The Explorer's Tua Assets view requests one compiler-owned project inventory
-after the language server starts. It refreshes on source saves, asset file
-events, explicit refreshes, and when the view becomes visible; it does not scan
-or request inventory on each keystroke. Pending inventory work yields to typing
-and other interactive language requests.
-
-Assets are grouped by type, then Used or Unused. Expand a used asset to open its
-exact static references, use Find Asset References for VS Code's references
-view, or rename it from the item context menu. Rename uses a workspace file edit
-so `workspace/willRenameFiles` can update every compiler-identified helper or
-native LOVE path in the same operation. Unused means no static Tua/Lua loader
-literal was indexed; dynamic loading can still use the file.
-
-Hovering a resolved static asset literal offers Preview Asset. The hover action
-uses the same language-server inventory as the Explorer and opens the resolved
-file through VS Code's normal preview flow.
-
-## Profiling
-
-`Tua: Save Cache Stats` writes the current `tua/cacheStats` response as JSON
-under VS Code global extension storage, in a `profiles` directory outside the
-workspace source tree by default. The saved path is printed in the Tua output
-channel and shown in the completion message.
-
-`Tua: Reset Completion Learning Stats` clears local project-adaptive completion
-ranking data for the current workspace. Tua stores only symbol-frequency counts
-and structural hashes under `.tua/completion-stats.json`; it does not send source
-content or ranking data off-device.
-
-`Tua: Save CPU Profile` and `Tua: Save Heap Summary` request a server-provided
-profile artifact directory outside the workspace. Current Tua servers may not
-support those artifact kinds; unsupported or disabled profiling reports a
-warning instead of failing the extension host. The extension intentionally does
-not expose runtime operations that Tua does not have, such as a TypeScript/Go
-garbage-collection command.
-
-## Support
-
-`Tua: Copy Debug Info` copies extension version, VS Code version, platform,
-workspace trust, server state, resolved server path, server version, workspace
-directory, and recent startup failure text when available. It does not read or
-copy source file contents.
+`Tua: Copy Debug Info` gathers extension version, VS Code version, platform,
+workspace trust, resolved server path, server version, server state, workspace
+directory, and recent startup failure text when available. It does not copy
+source file contents.
 
 `Tua: Report Issue` opens the project issue URL with the same diagnostic bundle
-pre-filled for review before submission. The extension does not send telemetry
-or submit external reports automatically.
-
-## Proposed Feature Policy
-
-Tua prefers standard LSP requests over TypeScript-specific custom protocol:
-
-- Hover uses `textDocument/hover`; no separate verbose-hover command exists.
-  The extension can add trusted command links to hover results, but references
-  and implementations still call standard VS Code/LSP providers.
-- Source navigation uses definition, type-definition, validated asset targets,
-  and `tua:/builtins` virtual documents for generated builtin or LOVE stubs.
-- Asset references find every indexed Tua/Lua loader literal that resolves to
-  the same file.
-- Asset inventory, casing checks, unused hints, and rename edits come from the
-  language server; the Explorer does not parse source or resolve paths itself.
-- Project-wide occurrences use references instead of automatic multi-document
-  highlights.
-- Auto insert is out of scope until Tua has a safe syntax trigger; snippets and
-  standard completion are the preferred path for block helpers.
-- Sprite animation previews are exposed as an explicit command gated by
-  `tua.preview.enabled`; they request compiler-backed `spriteSheet({...})`
-  metadata through `tua/inspect` and draw resolved local image frames in a
-  sticky webview without executing project code. Hovering a sprite sheet
-  binding also uses the inspector result to offer a trusted command link.
-  Missing assets, invalid frame ranges, incomplete configuration, and duplicate
-  animation names use the same diagnostics shown by the language server.
-- `Tua: Show Signal Graph` requests compiler-validated SignalBus calls from the
-  current project snapshot. The webview connects bus-aware events to files,
-  keeps same-named events on independent buses separate, distinguishes
-  declarations, listeners, emits, cleanup, and query calls, filters by event,
-  bus, file, listener, and emitter, shows conflicting payload schemas directly,
-  and can create typed listeners or `declare(...)` schemas from compiler
-  metadata. It opens exact source locations without parsing Tua source in the
-  extension. Standard hover, definition, references, and rename requests work
-  directly on event strings.
-- Module dependency visualization requests `tua/moduleGraph`. The compiler owns
-  module identity, resolution states, cycles, reverse relationships, exports,
-  and inclusion paths; the extension only filters, lays out, and navigates that
-  structured result.
-- `Tua: Show ECS Explorer` requests `tua/ecsGraph`. It lists compiler-indexed
-  components, systems, and queries, shows conservative callback read/write
-  access, navigates every resolved component/query relationship, and presents
-  allocation-heavy patterns as insights rather than diagnostics. Imported
-  component identities use normal compiler definition resolution.
-- The optional external API bridge is design-only. The extension does not start
-  a bridge session today.
+pre-filled for review before submission.

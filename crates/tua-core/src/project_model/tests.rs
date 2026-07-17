@@ -55,6 +55,7 @@ fn loads_tua_config_into_project_workspace() {
         r#"
 source = "game"
 out = "dist"
+main = "boot/start.tu"
 target = "love12-luajit"
 extension = "tu"
 "#,
@@ -68,6 +69,11 @@ extension = "tu"
     assert!(workspace.config_found());
     assert_eq!(workspace.primary_source_root(), project.path().join("game"));
     assert_eq!(workspace.primary_output_root(), project.path().join("dist"));
+    assert_eq!(workspace.configured_main(), Path::new("boot/start.tu"));
+    assert_eq!(
+        workspace.configured_main_source_path(),
+        project.path().join("game/boot/start.tu")
+    );
     assert_eq!(workspace.config().extension, "tu");
     assert_eq!(workspace.target().lua_version, LuaVersion::LuaJit);
     assert_eq!(
@@ -76,6 +82,33 @@ extension = "tu"
             major: 12,
             minor: None
         })
+    );
+}
+
+#[test]
+fn duplicates_configured_main_source_to_root_main_lua() {
+    let project = TempProject::new("main-output");
+
+    project.write(
+        "tua.toml",
+        "source = \"src\"\nout = \"build\"\nmain = \"love/start.tua\"\n",
+    );
+
+    let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
+    let workspace = model.primary_workspace().expect("workspace should exist");
+    let start = project.path().join("src/love/start.tua");
+    let helper = project.path().join("src/shared/helper.tua");
+
+    assert_eq!(
+        workspace.lua_output_paths_for_tua_source(&start),
+        Some(vec![
+            project.path().join("build/love/start.lua"),
+            project.path().join("build/main.lua"),
+        ])
+    );
+    assert_eq!(
+        workspace.lua_output_paths_for_tua_source(&helper),
+        Some(vec![project.path().join("build/shared/helper.lua")])
     );
 }
 

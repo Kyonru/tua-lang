@@ -14,6 +14,12 @@
       "description": "Directory where emitted Lua files are written."
     },
     {
+      "path": "main",
+      "type": "string",
+      "default": "main.tua",
+      "description": "Source file under source that also emits to <out>/main.lua for LOVE entrypoints."
+    },
+    {
       "path": "target",
       "type": "string",
       "default": "love11-luajit",
