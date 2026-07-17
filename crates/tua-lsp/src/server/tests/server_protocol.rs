@@ -152,22 +152,30 @@ fn initialize_returns_server_capabilities() {
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"],
         json!([
-            "typeAlias",
+            "type",
             "function",
             "variable",
             "parameter",
             "property",
-            "builtinType",
-            "unresolvedReference",
-            "global",
-            "module",
             "method",
-            "annotationTag"
+            "class",
+            "enum",
+            "enumMember",
+            "namespace",
+            "event",
+            "label",
+            "decorator"
         ])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenModifiers"],
-        json!(["declaration", "readonly", "deprecated"])
+        json!([
+            "declaration",
+            "readonly",
+            "deprecated",
+            "modification",
+            "defaultLibrary"
+        ])
     );
     assert_eq!(
         output[0]["result"]["capabilities"]["semanticTokensProvider"]["full"]["delta"],

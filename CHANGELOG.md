@@ -18,6 +18,10 @@ language or editor behavior, and migration notes call out those changes.
 
 - ECS analysis is enabled by default and can still be disabled through
   `[ecs].enabled` or the matching editor setting.
+- VS Code syntax highlighting now covers the full Lua/Tua and game-helper
+  surface, while semantic highlighting uses standard theme-compatible symbol
+  types and declaration, readonly, deprecated, modification, and library
+  modifiers.
 
 ## [0.1.0] - 2026-07-16
 

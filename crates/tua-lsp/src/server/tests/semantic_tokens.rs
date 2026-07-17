@@ -26,6 +26,7 @@ end
 
 local MAX_HP = 10
 local hero = makePlayer()
+local x = hero.stats.position.x
 damage(hero, 10)
 missing(hero)
 require("systems.player")
@@ -40,23 +41,26 @@ return {
     assert_semantic_token(&tokens, "Player", 0, true);
     assert_semantic_token(&tokens, "makePlayer", 1, true);
     assert_semantic_token(&tokens, "hero", 2, true);
+    assert_semantic_token(&tokens, "stats", 4, false);
+    assert_semantic_token(&tokens, "position", 4, false);
+    assert_semantic_token(&tokens, "x", 4, false);
     assert_semantic_token(&tokens, "player", 3, true);
     assert_semantic_token(&tokens, "hp", 4, true);
-    assert_semantic_token(&tokens, "number", 5, false);
-    assert_semantic_token(&tokens, "missing", 6, false);
-    assert_semantic_token(&tokens, "require", 7, false);
-    assert_semantic_token(&tokens, "systems.player", 8, false);
-    assert_semantic_token(&tokens, "heal", 9, true);
-    assert_semantic_token(&tokens, "heal", 9, false);
-    assert_semantic_token(&tokens, "@class", 10, false);
-    assert_semantic_token(&tokens, "@field", 10, false);
-    assert_semantic_token(&tokens, "@deprecated", 10, false);
+    assert_semantic_token(&tokens, "number", 0, false);
+    assert_semantic_token(&tokens, "missing", 2, false);
+    assert_semantic_token(&tokens, "require", 1, false);
+    assert_semantic_token(&tokens, "systems.player", 9, false);
+    assert_semantic_token(&tokens, "heal", 5, true);
+    assert_semantic_token(&tokens, "heal", 5, false);
+    assert_semantic_token(&tokens, "@class", 12, false);
+    assert_semantic_token(&tokens, "@field", 12, false);
+    assert_semantic_token(&tokens, "@deprecated", 12, false);
     assert!(tokens
         .iter()
         .any(|token| token.text == "damage" && token.token_type == 1 && !token.declaration));
-    assert!(!tokens
+    assert!(tokens
         .iter()
-        .any(|token| token.text == "require" && token.token_type == 6));
+        .any(|token| token.text == "require" && token.default_library));
     assert!(tokens
         .iter()
         .any(|token| token.text == "makePlayer" && token.token_type == 4 && token.declaration));
@@ -68,7 +72,10 @@ return {
         .any(|token| token.text == "Player" && token.token_type == 0 && token.deprecated));
     assert!(tokens
         .iter()
-        .any(|token| token.text == "@deprecated" && token.token_type == 10 && token.deprecated));
+        .any(|token| token.text == "@deprecated" && token.token_type == 12 && token.deprecated));
+    assert!(tokens
+        .iter()
+        .any(|token| token.text == "hp" && token.token_type == 4 && token.modification));
 }
 #[test]
 fn semantic_tokens_range_filters_to_requested_span() {
@@ -177,7 +184,7 @@ function player.damage(amount: number)
 
     assert_semantic_token(&tokens, "Player", 0, true);
     assert_semantic_token(&tokens, "hp", 4, false);
-    assert_semantic_token(&tokens, "number", 5, false);
+    assert_semantic_token(&tokens, "number", 0, false);
     assert_semantic_token(&tokens, "player", 2, true);
     assert_semantic_token(&tokens, "damage", 1, true);
 }

@@ -966,17 +966,21 @@ fn semantic_token_delta_edits(previous_data: &[usize], current_data: &[usize]) -
 
 fn semantic_token_type_index(kind: SemanticTokenKind) -> usize {
     match kind {
-        SemanticTokenKind::TypeAlias => 0,
+        SemanticTokenKind::TypeAlias | SemanticTokenKind::BuiltinType => 0,
         SemanticTokenKind::Function => 1,
-        SemanticTokenKind::Variable => 2,
+        SemanticTokenKind::Variable
+        | SemanticTokenKind::UnresolvedReference
+        | SemanticTokenKind::Global => 2,
         SemanticTokenKind::Parameter => 3,
         SemanticTokenKind::Property => 4,
-        SemanticTokenKind::BuiltinType => 5,
-        SemanticTokenKind::UnresolvedReference => 6,
-        SemanticTokenKind::Global => 7,
-        SemanticTokenKind::Module => 8,
-        SemanticTokenKind::Method => 9,
-        SemanticTokenKind::AnnotationTag => 10,
+        SemanticTokenKind::Method => 5,
+        SemanticTokenKind::Class => 6,
+        SemanticTokenKind::Enum => 7,
+        SemanticTokenKind::EnumMember => 8,
+        SemanticTokenKind::Module | SemanticTokenKind::Namespace => 9,
+        SemanticTokenKind::Event => 10,
+        SemanticTokenKind::Label => 11,
+        SemanticTokenKind::AnnotationTag => 12,
     }
 }
 
@@ -991,6 +995,8 @@ fn semantic_token_modifier_bit(modifier: SemanticTokenModifier) -> usize {
         SemanticTokenModifier::Declaration => 1 << 0,
         SemanticTokenModifier::Readonly => 1 << 1,
         SemanticTokenModifier::Deprecated => 1 << 2,
+        SemanticTokenModifier::Modification => 1 << 3,
+        SemanticTokenModifier::DefaultLibrary => 1 << 4,
     }
 }
 

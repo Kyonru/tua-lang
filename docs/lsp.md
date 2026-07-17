@@ -121,6 +121,44 @@ selected path, version, and workspace directory when available.
   image asset URIs and validation status, frame metadata, animations, and the
   same `TL5004` diagnostics used by normal project analysis.
 
+## Syntax And Semantic Highlighting
+
+The VS Code extension uses two complementary highlighting layers:
+
+- The TextMate grammar runs immediately while typing and does not wait for the
+  language server. It covers Lua syntax plus Tua types, classes, enums,
+  function annotations, LuaDoc, modules, assets, SignalBus event names, LOVE,
+  ECS, sprites, object pools, calls, members, labels, literals, and operators.
+- Semantic tokens refine that baseline from compiler facts. Tua emits standard
+  VS Code token types for classes, enums, types, functions, methods,
+  parameters, variables, properties, namespaces, events, labels, and
+  annotations, with declaration, readonly, deprecated, modification, and
+  default-library modifiers.
+
+Full-document, range, and delta requests use the same classification. During
+temporarily invalid syntax, the semantic provider tokenizes the current source
+lossily so declarations, members, types, built-ins, events, modules, and labels
+do not all revert to plain text. VS Code themes can use their normal semantic
+rules; the extension also supplies Tua-specific TextMate fallback scopes.
+
+Use `Developer: Inspect Editor Tokens and Scopes` in VS Code to inspect both
+the TextMate scope and semantic token at the cursor.
+
+Member access is classified segment by segment. In `object.position.x`,
+`object` keeps its variable or namespace classification while `position` and
+`x` are properties. A terminal called member, such as `object.position:update()`,
+is a method. The active VS Code theme chooses the actual colors. Themes that
+render variables and properties identically can be overridden without changing
+other Tua tokens:
+
+```json
+"editor.semanticTokenColorCustomizations": {
+  "rules": {
+    "property:tua": "#4EC9B0"
+  }
+}
+```
+
 ## Custom VS Code Feature Evaluation
 
 The VS Code extension intentionally stays on stable VS Code APIs plus standard

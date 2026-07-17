@@ -9,6 +9,7 @@ use crate::{Diagnostic, DiagnosticCode};
 pub(crate) struct ClassDeclaration {
     pub name: String,
     pub parent: Option<String>,
+    pub parent_span: Option<SourceSpan>,
     pub is_open: bool,
     pub is_final: bool,
     pub fields: Vec<ClassField>,
@@ -25,6 +26,7 @@ pub(crate) struct ClassField {
     pub ty: String,
     pub default: Option<String>,
     pub span: SourceSpan,
+    pub name_span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,6 +39,7 @@ pub(crate) struct ClassMethod {
     pub is_override: bool,
     pub span: SourceSpan,
     pub name_span: SourceSpan,
+    pub parameters_span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,6 +60,7 @@ pub(crate) struct ClassLoweringEdit {
 struct ClassHeader {
     name: String,
     parent: Option<String>,
+    parent_span: Option<SourceSpan>,
     is_open: bool,
     is_final: bool,
     name_span: SourceSpan,
@@ -204,13 +208,19 @@ fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
     let (name, name_start, name_end) = take_identifier(source, cursor)?;
     cursor = skip_whitespace(source, name_end);
 
-    let parent = if starts_keyword(source, cursor, "extends") {
+    let (parent, parent_span) = if starts_keyword(source, cursor, "extends") {
         cursor = skip_whitespace(source, cursor + "extends".len());
-        let (parent, _, parent_end) = take_identifier(source, cursor)?;
+        let (parent, parent_start, parent_end) = take_identifier(source, cursor)?;
         cursor = skip_whitespace(source, parent_end);
-        Some(parent)
+        (
+            Some(parent),
+            Some(SourceSpan {
+                start: source_position_from_byte(source, parent_start),
+                end: source_position_from_byte(source, parent_end),
+            }),
+        )
     } else {
-        None
+        (None, None)
     };
 
     if !source[cursor..].starts_with('{') {
@@ -220,6 +230,7 @@ fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
     Some(ClassHeader {
         name,
         parent,
+        parent_span,
         is_open,
         is_final: is_final || !is_open,
         name_span: SourceSpan {
@@ -272,6 +283,7 @@ fn parse_class_body(
     ClassDeclaration {
         name: header.name,
         parent: header.parent,
+        parent_span: header.parent_span,
         is_open: header.is_open,
         is_final: header.is_final,
         fields,
@@ -320,6 +332,10 @@ fn parse_class_method(
     }
 
     let params_close = find_matching_paren(body, cursor)?;
+    let parameters_span = SourceSpan {
+        start: source_position_from_byte(source, body_offset + cursor + 1),
+        end: source_position_from_byte(source, body_offset + params_close),
+    };
     let parameters = body[cursor + 1..params_close].trim().to_owned();
     cursor = skip_whitespace(body, params_close + 1);
 
@@ -356,6 +372,7 @@ fn parse_class_method(
                 start: source_position_from_byte(source, body_offset + name_start),
                 end: source_position_from_byte(source, body_offset + name_end),
             },
+            parameters_span,
         },
         method_close + 1,
     ))
@@ -367,7 +384,7 @@ fn parse_class_field(
     body_offset: usize,
     index: usize,
 ) -> Option<(ClassField, usize)> {
-    let (name, _, name_end) = take_identifier(body, index)?;
+    let (name, name_start, name_end) = take_identifier(body, index)?;
     let mut cursor = skip_whitespace(body, name_end);
 
     if !body[cursor..].starts_with(':') {
@@ -397,6 +414,10 @@ fn parse_class_field(
             span: SourceSpan {
                 start: source_position_from_byte(source, body_offset + index),
                 end: source_position_from_byte(source, body_offset + line_end),
+            },
+            name_span: SourceSpan {
+                start: source_position_from_byte(source, body_offset + name_start),
+                end: source_position_from_byte(source, body_offset + name_end),
             },
         },
         line_end,

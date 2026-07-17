@@ -1539,6 +1539,8 @@ struct DecodedSemanticToken<'a> {
     declaration: bool,
     readonly: bool,
     deprecated: bool,
+    modification: bool,
+    default_library: bool,
 }
 
 fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<DecodedSemanticToken<'a>> {
@@ -1575,6 +1577,8 @@ fn decoded_semantic_tokens<'a>(source: &'a str, response: &Value) -> Vec<Decoded
             declaration: modifiers & 1 == 1,
             readonly: modifiers & 2 == 2,
             deprecated: modifiers & 4 == 4,
+            modification: modifiers & 8 == 8,
+            default_library: modifiers & 16 == 16,
         });
     }
 

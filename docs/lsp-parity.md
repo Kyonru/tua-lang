@@ -78,7 +78,7 @@ families to Tua `TLxxxx` diagnostics and LSP surfaces.
 | Inlay hints | Useful local and parameter hints exist. | No full expression-chain or flow-sensitive hint model. | 61, 62, 65 |
 | Code actions | Mechanical fixes exist for a focused set of diagnostics and LOVE helper assists. Source actions organize/sort imports, remove unused static import bindings, and fix all safe diagnostics in a file. | Still intentionally conservative: dynamic imports, unsafe creates, overlapping edits, and broader refactor menus are skipped. | 66, 70.9, 89 |
 | Code lens | Lazily resolved reference lenses are provided for exported functions and unambiguous type aliases. | No run/check/build or LOVE asset lenses until project intent and command behavior are explicit. | 86 |
-| Semantic token transport | Full, range, and full/delta semantic token requests are advertised and implemented with cached result IDs. | Delta edits are intentionally array-based and conservative rather than a deeper incremental semantic-token engine. | 87 |
+| Syntax and semantic highlighting | Immediate TextMate scopes cover Lua/Tua syntax and game-domain helpers; full, range, and full/delta semantic token requests refine standard VS Code classes, enums, types, functions, methods, parameters, variables, properties, namespaces, events, labels, decorators, and modifiers. | Delta edits are intentionally array-based and conservative rather than a deeper incremental semantic-token engine; temporarily invalid source uses a lossy current-text classifier. | 87 |
 
 ## Missing And Planned
 

@@ -1,38 +1,1010 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "tua",
+  "name": "Tua",
   "scopeName": "source.tua",
   "patterns": [
+    {
+      "include": "#shebang"
+    },
+    {
+      "include": "#documentation-comments"
+    },
     {
       "include": "#comments"
     },
     {
-      "include": "#strings"
+      "include": "#enum-declarations"
     },
     {
-      "include": "#type-aliases"
+      "include": "#class-declarations"
+    },
+    {
+      "include": "#type-alias-declarations"
     },
     {
       "include": "#function-declarations"
     },
     {
-      "include": "#annotations"
+      "include": "#anonymous-functions"
+    },
+    {
+      "include": "#local-declarations"
+    },
+    {
+      "include": "#for-declarations"
+    },
+    {
+      "include": "#signal-event-calls"
+    },
+    {
+      "include": "#module-calls"
+    },
+    {
+      "include": "#asset-calls"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#labels"
+    },
+    {
+      "include": "#type-annotations"
     },
     {
       "include": "#keywords"
+    },
+    {
+      "include": "#builtin-globals"
+    },
+    {
+      "include": "#function-calls"
+    },
+    {
+      "include": "#member-access"
     },
     {
       "include": "#numbers"
     },
     {
       "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
     }
   ],
   "repository": {
-    "annotations": {
+    "anonymous-functions": {
       "patterns": [
         {
-          "name": "meta.annotation.type.tua",
+          "name": "meta.function.expression.tua",
+          "begin": "\\b(function)\\s*(\\()",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.function.tua"
+            },
+            "2": {
+              "name": "punctuation.definition.parameters.begin.tua"
+            }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.parameters.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#parameters"
+            }
+          ]
+        }
+      ]
+    },
+    "asset-calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.asset.tua",
+          "match": "\\b(image|sound|font|shader)\\b(\\s*)(\\(?)\\s*(\")((?:\\\\.|[^\"\\\\])*)(\")",
+          "captures": {
+            "1": {
+              "name": "support.function.asset.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "string.quoted.double.filename.asset.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        },
+        {
+          "name": "meta.function-call.asset.tua",
+          "match": "\\b(image|sound|font|shader)\\b(\\s*)(\\(?)\\s*(')((?:\\\\.|[^'\\\\])*)(')",
+          "captures": {
+            "1": {
+              "name": "support.function.asset.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "string.quoted.single.filename.asset.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        }
+      ]
+    },
+    "builtin-globals": {
+      "patterns": [
+        {
+          "name": "support.function.tua",
+          "match": "\\b(?:assert|collectgarbage|dofile|error|getfenv|getmetatable|ipairs|load|loadfile|loadstring|module|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|import|select|setfenv|setmetatable|tonumber|tostring|type|unpack|xpcall|vec2|signal|objectPool|spriteSheet)\\b"
+        },
+        {
+          "name": "support.variable.namespace.tua",
+          "match": "\\b(?:bit|bit32|coroutine|debug|ecs|ffi|io|jit|love|math|os|package|string|table|utf8)\\b"
+        },
+        {
+          "name": "support.constant.tua",
+          "match": "\\b(?:_ENV|_G|_VERSION)\\b"
+        }
+      ]
+    },
+    "class-declarations": {
+      "patterns": [
+        {
+          "name": "meta.class.tua",
+          "begin": "^\\s*(?:(open|final)\\s+)?(class)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(extends)\\s+([A-Za-z_][A-Za-z0-9_]*))?\\s*(\\{)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.modifier.class.tua"
+            },
+            "2": {
+              "name": "storage.type.class.tua"
+            },
+            "3": {
+              "name": "entity.name.type.class.tua"
+            },
+            "4": {
+              "name": "storage.modifier.extends.tua"
+            },
+            "5": {
+              "name": "entity.other.inherited-class.tua"
+            },
+            "6": {
+              "name": "punctuation.section.class.begin.tua"
+            }
+          },
+          "end": "^(\\})",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.class.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#documentation-comments"
+            },
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#class-methods"
+            },
+            {
+              "include": "#class-fields"
+            },
+            {
+              "include": "#anonymous-functions"
+            },
+            {
+              "include": "#local-declarations"
+            },
+            {
+              "include": "#signal-event-calls"
+            },
+            {
+              "include": "#module-calls"
+            },
+            {
+              "include": "#asset-calls"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#type-annotations"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#builtin-globals"
+            },
+            {
+              "include": "#function-calls"
+            },
+            {
+              "include": "#member-access"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#operators"
+            },
+            {
+              "include": "#punctuation"
+            }
+          ]
+        }
+      ]
+    },
+    "class-fields": {
+      "patterns": [
+        {
+          "name": "meta.class.field.tua",
+          "begin": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(\\?)?\\s*(:)",
+          "beginCaptures": {
+            "1": {
+              "name": "variable.other.property.declaration.tua"
+            },
+            "2": {
+              "name": "punctuation.definition.optional.tua"
+            },
+            "3": {
+              "name": "punctuation.definition.type-annotation.tua"
+            }
+          },
+          "end": "(?==|$)",
+          "patterns": [
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#type-punctuation"
+            }
+          ]
+        }
+      ]
+    },
+    "class-methods": {
+      "patterns": [
+        {
+          "name": "meta.method.declaration.tua",
+          "begin": "^\\s*((?:(?:override|final)\\s+)*)([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.modifier.method.tua"
+            },
+            "2": {
+              "name": "entity.name.function.member.tua"
+            },
+            "3": {
+              "name": "punctuation.definition.parameters.begin.tua"
+            }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.parameters.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#parameters"
+            }
+          ]
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.tua",
+          "begin": "--\\[(=*)\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.begin.tua"
+            }
+          },
+          "end": "\\]\\1\\]",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.end.tua"
+            }
+          }
+        },
+        {
+          "name": "comment.line.double-dash.tua",
+          "begin": "--",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.tua"
+            }
+          },
+          "end": "$"
+        }
+      ]
+    },
+    "documentation-comments": {
+      "patterns": [
+        {
+          "name": "comment.line.documentation.tua",
+          "begin": "---(?=@)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.documentation.tua"
+            }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "name": "storage.type.annotation.tua",
+              "match": "@[A-Za-z_][A-Za-z0-9_-]*"
+            },
+            {
+              "name": "entity.name.type.annotation.tua",
+              "match": "(?<=@class\\s|@alias\\s|@enum\\s)[A-Za-z_][A-Za-z0-9_]*"
+            },
+            {
+              "name": "variable.parameter.annotation.tua",
+              "match": "(?<=@param\\s)[A-Za-z_][A-Za-z0-9_]*(?:\\?)?"
+            },
+            {
+              "name": "variable.other.property.annotation.tua",
+              "match": "(?<=@field\\s)(?:(?:public|private|protected|package)\\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\\?)?"
+            },
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#type-punctuation"
+            },
+            {
+              "include": "#strings"
+            }
+          ]
+        },
+        {
+          "name": "comment.line.documentation.tua",
+          "begin": "---",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.documentation.tua"
+            }
+          },
+          "end": "$"
+        }
+      ]
+    },
+    "enum-declarations": {
+      "patterns": [
+        {
+          "name": "meta.enum.tua",
+          "begin": "^\\s*(enum)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*$",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.enum.tua"
+            },
+            "2": {
+              "name": "entity.name.type.enum.tua"
+            }
+          },
+          "end": "^\\s*(end)\\b",
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#documentation-comments"
+            },
+            {
+              "include": "#comments"
+            },
+            {
+              "name": "string.quoted.double.enum-member.tua",
+              "match": "(\")((?:\\\\.|[^\"\\\\])*)(\")",
+              "captures": {
+                "1": {
+                  "name": "punctuation.definition.string.begin.tua"
+                },
+                "2": {
+                  "name": "variable.other.enummember.tua"
+                },
+                "3": {
+                  "name": "punctuation.definition.string.end.tua"
+                }
+              }
+            },
+            {
+              "name": "string.quoted.single.enum-member.tua",
+              "match": "(')((?:\\\\.|[^'\\\\])*)(')",
+              "captures": {
+                "1": {
+                  "name": "punctuation.definition.string.begin.tua"
+                },
+                "2": {
+                  "name": "variable.other.enummember.tua"
+                },
+                "3": {
+                  "name": "punctuation.definition.string.end.tua"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "for-declarations": {
+      "patterns": [
+        {
+          "name": "meta.for.tua",
+          "begin": "\\b(for)\\b",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.loop.tua"
+            }
+          },
+          "end": "(?=\\bin\\b|=)",
+          "patterns": [
+            {
+              "name": "variable.other.loop.tua",
+              "match": "[A-Za-z_][A-Za-z0-9_]*"
+            },
+            {
+              "name": "punctuation.separator.variable.tua",
+              "match": ","
+            }
+          ]
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.method.tua",
+          "match": "([.:])\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(?:\\(|[\"'{]))",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.tua"
+            },
+            "2": {
+              "name": "entity.name.function.member.tua"
+            }
+          }
+        },
+        {
+          "name": "entity.name.function.call.tua",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:\\(|[\"'{]))"
+        }
+      ]
+    },
+    "function-declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.declaration.tua",
+          "begin": "\\b(?:(local)\\s+)?(function)\\s+((?:[A-Za-z_][A-Za-z0-9_]*[.:])*)([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.modifier.local.tua"
+            },
+            "2": {
+              "name": "keyword.control.function.tua"
+            },
+            "3": {
+              "name": "entity.name.namespace.tua"
+            },
+            "4": {
+              "name": "entity.name.function.tua"
+            },
+            "5": {
+              "name": "punctuation.definition.parameters.begin.tua"
+            }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.parameters.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#parameters"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.conditional.tua",
+          "match": "\\b(?:else|elseif|if|then)\\b"
+        },
+        {
+          "name": "keyword.control.loop.tua",
+          "match": "\\b(?:do|for|in|repeat|until|while)\\b"
+        },
+        {
+          "name": "keyword.control.flow.tua",
+          "match": "\\b(?:break|goto|return)\\b"
+        },
+        {
+          "name": "keyword.control.tua",
+          "match": "\\b(?:end|function)\\b"
+        },
+        {
+          "name": "storage.type.tua",
+          "match": "\\b(?:class|enum|type)\\b"
+        },
+        {
+          "name": "storage.modifier.tua",
+          "match": "\\b(?:extends|final|local|open|override)\\b"
+        },
+        {
+          "name": "keyword.operator.word.tua",
+          "match": "\\b(?:and|is|not|or)\\b"
+        },
+        {
+          "name": "support.function.super.tua",
+          "match": "\\bsuper(?=\\s*\\()"
+        },
+        {
+          "name": "variable.language.self.tua",
+          "match": "\\bself\\b"
+        },
+        {
+          "name": "constant.language.tua",
+          "match": "\\b(?:false|nil|true)\\b"
+        }
+      ]
+    },
+    "labels": {
+      "patterns": [
+        {
+          "name": "meta.label.tua",
+          "match": "(::)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(::)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.label.begin.tua"
+            },
+            "2": {
+              "name": "entity.name.label.tua"
+            },
+            "3": {
+              "name": "punctuation.definition.label.end.tua"
+            }
+          }
+        },
+        {
+          "name": "meta.goto.tua",
+          "match": "\\b(goto)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.goto.tua"
+            },
+            "2": {
+              "name": "entity.name.label.tua"
+            }
+          }
+        }
+      ]
+    },
+    "local-declarations": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.local.tua",
+          "begin": "\\b(local)\\b(?!\\s+function)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.modifier.local.tua"
+            }
+          },
+          "end": "(?==|$)",
+          "patterns": [
+            {
+              "name": "variable.other.readwrite.declaration.tua",
+              "match": "[A-Za-z_][A-Za-z0-9_]*"
+            },
+            {
+              "include": "#type-annotations"
+            },
+            {
+              "name": "punctuation.separator.variable.tua",
+              "match": ","
+            }
+          ]
+        }
+      ]
+    },
+    "member-access": {
+      "patterns": [
+        {
+          "name": "meta.property-access.tua",
+          "match": "(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.tua"
+            },
+            "2": {
+              "name": "variable.other.property.tua"
+            }
+          }
+        }
+      ]
+    },
+    "module-calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.module.tua",
+          "match": "\\b(require|import)\\b(\\s*)(\\(?)\\s*(\")((?:\\\\.|[^\"\\\\])*)(\")",
+          "captures": {
+            "1": {
+              "name": "support.function.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "entity.name.namespace.module.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        },
+        {
+          "name": "meta.function-call.module.tua",
+          "match": "\\b(require|import)\\b(\\s*)(\\(?)\\s*(')((?:\\\\.|[^'\\\\])*)(')",
+          "captures": {
+            "1": {
+              "name": "support.function.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "entity.name.namespace.module.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.tua",
+          "match": "(?<![A-Za-z0-9_])0[xX][0-9A-Fa-f]+(?:\\.[0-9A-Fa-f]*)?(?:[pP][+-]?[0-9]+)?"
+        },
+        {
+          "name": "constant.numeric.float.tua",
+          "match": "(?<![A-Za-z0-9_])(?:[0-9]+\\.[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
+        },
+        {
+          "name": "constant.numeric.integer.tua",
+          "match": "(?<![A-Za-z0-9_])[0-9]+(?:[eE][+-]?[0-9]+)?"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.compound.tua",
+          "match": "\\+=|-=|\\*=|/=|%="
+        },
+        {
+          "name": "keyword.operator.arrow.tua",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.union.tua",
+          "match": "\\|"
+        },
+        {
+          "name": "keyword.operator.assignment.tua",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.comparison.tua",
+          "match": "==|~=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.arithmetic.tua",
+          "match": "[+\\-*/%^]"
+        },
+        {
+          "name": "keyword.operator.concatenation.tua",
+          "match": "\\.\\."
+        },
+        {
+          "name": "keyword.operator.length.tua",
+          "match": "#"
+        }
+      ]
+    },
+    "parameters": {
+      "patterns": [
+        {
+          "name": "meta.parameter.variadic.tua",
+          "begin": "(\\.\\.\\.)(?:\\s*(:))?",
+          "beginCaptures": {
+            "1": {
+              "name": "variable.parameter.vararg.tua"
+            },
+            "2": {
+              "name": "punctuation.definition.type-annotation.tua"
+            }
+          },
+          "end": "(?=,|\\))",
+          "patterns": [
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#type-punctuation"
+            }
+          ]
+        },
+        {
+          "name": "meta.parameter.typed.tua",
+          "begin": "([A-Za-z_][A-Za-z0-9_]*)(\\?)?\\s*(:)",
+          "beginCaptures": {
+            "1": {
+              "name": "variable.parameter.tua"
+            },
+            "2": {
+              "name": "punctuation.definition.optional.tua"
+            },
+            "3": {
+              "name": "punctuation.definition.type-annotation.tua"
+            }
+          },
+          "end": "(?=,|\\))",
+          "patterns": [
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#type-punctuation"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
+        },
+        {
+          "name": "variable.parameter.tua",
+          "match": "[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "punctuation.separator.parameter.tua",
+          "match": ","
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.tua",
+          "match": ","
+        },
+        {
+          "name": "punctuation.separator.semicolon.tua",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.accessor.tua",
+          "match": "[.:]"
+        },
+        {
+          "name": "punctuation.section.group.begin.tua",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.group.end.tua",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.tua",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.tua",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.section.block.begin.tua",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.block.end.tua",
+          "match": "\\}"
+        }
+      ]
+    },
+    "shebang": {
+      "patterns": [
+        {
+          "name": "comment.line.shebang.tua",
+          "match": "\\A#!.*$"
+        }
+      ]
+    },
+    "signal-event-calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.signal.tua",
+          "match": "(:)\\s*(on|once|register|declare|emit|off|remove|clear|has|listeners)\\s*(\\()\\s*(\")((?:\\\\.|[^\"\\\\])*)(\")",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.tua"
+            },
+            "2": {
+              "name": "entity.name.function.member.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "entity.name.event.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        },
+        {
+          "name": "meta.function-call.signal.tua",
+          "match": "(:)\\s*(on|once|register|declare|emit|off|remove|clear|has|listeners)\\s*(\\()\\s*(')((?:\\\\.|[^'\\\\])*)(')",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.tua"
+            },
+            "2": {
+              "name": "entity.name.function.member.tua"
+            },
+            "3": {
+              "name": "punctuation.section.arguments.begin.tua"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.tua"
+            },
+            "5": {
+              "name": "entity.name.event.tua"
+            },
+            "6": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.tua",
+          "begin": "(\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.tua"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.tua",
+              "match": "\\\\(?:[abfnrtvz\\\\\"']|[0-9]{1,3}|x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]+\\}|z\\s*)"
+            },
+            {
+              "name": "invalid.illegal.escape.tua",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.tua",
+          "begin": "(')",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.tua"
+            }
+          },
+          "end": "(')",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.tua",
+              "match": "\\\\(?:[abfnrtvz\\\\\"']|[0-9]{1,3}|x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]+\\}|z\\s*)"
+            },
+            {
+              "name": "invalid.illegal.escape.tua",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.multiline.tua",
+          "begin": "\\[(=*)\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.tua"
+            }
+          },
+          "end": "\\]\\1\\]",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.tua"
+            }
+          }
+        }
+      ]
+    },
+    "type-alias-declarations": {
+      "patterns": [
+        {
+          "name": "meta.type.alias.tua",
+          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)",
+          "captures": {
+            "1": {
+              "name": "storage.type.type.tua"
+            },
+            "2": {
+              "name": "entity.name.type.alias.tua"
+            },
+            "3": {
+              "name": "keyword.operator.assignment.tua"
+            }
+          }
+        }
+      ]
+    },
+    "type-annotations": {
+      "patterns": [
+        {
+          "name": "meta.type.annotation.tua",
           "begin": "(\\?)?\\s*(:)",
           "beginCaptures": {
             "1": {
@@ -48,145 +1020,48 @@
               "include": "#types"
             },
             {
-              "name": "keyword.operator.union.tua",
-              "match": "\\|"
+              "include": "#type-punctuation"
             },
             {
-              "name": "punctuation.definition.table.type.tua",
-              "match": "[{}]"
-            },
-            {
-              "name": "punctuation.separator.type.tua",
-              "match": "[,;]"
+              "include": "#strings"
             }
           ]
         }
       ]
     },
-    "comments": {
+    "type-punctuation": {
       "patterns": [
         {
-          "name": "comment.block.tua",
-          "begin": "--\\[\\[",
-          "end": "\\]\\]"
+          "name": "keyword.operator.union.tua",
+          "match": "\\|"
         },
         {
-          "name": "comment.line.double-dash.tua",
-          "match": "--.*$"
-        }
-      ]
-    },
-    "function-declarations": {
-      "patterns": [
-        {
-          "name": "meta.function.declaration.tua",
-          "match": "\\b(local\\s+)?(function)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)",
-          "captures": {
-            "1": {
-              "name": "storage.modifier.local.tua"
-            },
-            "2": {
-              "name": "keyword.control.function.tua"
-            },
-            "3": {
-              "name": "entity.name.function.tua"
-            }
-          }
-        }
-      ]
-    },
-    "keywords": {
-      "patterns": [
-        {
-          "name": "keyword.control.tua",
-          "match": "\\b(?:break|class|do|else|elseif|end|extends|for|function|goto|if|in|override|repeat|return|super|then|until|while)\\b"
+          "name": "keyword.operator.arrow.tua",
+          "match": "->"
         },
         {
-          "name": "storage.modifier.local.tua",
-          "match": "\\b(?:final|local|open)\\b"
+          "name": "punctuation.definition.optional.tua",
+          "match": "\\?"
         },
         {
-          "name": "keyword.operator.word.tua",
-          "match": "\\b(?:and|is|not|or)\\b"
+          "name": "punctuation.definition.type-table.tua",
+          "match": "[{}]"
         },
         {
-          "name": "constant.language.tua",
-          "match": "\\b(?:false|nil|true)\\b"
-        }
-      ]
-    },
-    "numbers": {
-      "patterns": [
-        {
-          "name": "constant.numeric.hex.tua",
-          "match": "\\b0[xX][0-9A-Fa-f]+(?:\\.[0-9A-Fa-f]+)?(?:[pP][+-]?[0-9]+)?\\b"
+          "name": "punctuation.definition.type-group.tua",
+          "match": "[()]"
         },
         {
-          "name": "constant.numeric.float.tua",
-          "match": "\\b(?:[0-9]+\\.[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?\\b"
+          "name": "punctuation.definition.type-index.tua",
+          "match": "[\\[\\]]"
         },
         {
-          "name": "constant.numeric.integer.tua",
-          "match": "\\b[0-9]+(?:[eE][+-]?[0-9]+)?\\b"
-        }
-      ]
-    },
-    "operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.assignment.compound.tua",
-          "match": "\\+=|-=|\\*=|/=|%="
+          "name": "punctuation.separator.type.tua",
+          "match": "[,;:]"
         },
         {
-          "name": "keyword.operator.tua",
-          "match": "\\.\\.|==|~=|<=|>=|[+\\-*/%^#=<>]"
-        }
-      ]
-    },
-    "strings": {
-      "patterns": [
-        {
-          "name": "string.quoted.double.tua",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.tua",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "name": "string.quoted.single.tua",
-          "begin": "'",
-          "end": "'",
-          "patterns": [
-            {
-              "name": "constant.character.escape.tua",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "name": "string.quoted.other.long-bracket.tua",
-          "begin": "\\[\\[",
-          "end": "\\]\\]"
-        }
-      ]
-    },
-    "type-aliases": {
-      "patterns": [
-        {
-          "name": "meta.type.alias.tua",
-          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-          "captures": {
-            "1": {
-              "name": "keyword.declaration.type.tua"
-            },
-            "2": {
-              "name": "entity.name.type.alias.tua"
-            }
-          }
+          "name": "variable.parameter.vararg.tua",
+          "match": "\\.\\.\\."
         }
       ]
     },
@@ -197,8 +1072,12 @@
           "match": "\\b(?:any|boolean|nil|number|string)\\b"
         },
         {
+          "name": "support.type.builtin.tua",
+          "match": "\\b(?:Self|Vec2|SignalBus|ObjectPool|ObjectPoolOptions|SpriteSheet|SpriteAnimation|EcsWorld|EcsComponent|EcsQuery|EcsSystem|Drawable|Image|Canvas|Font|Shader|Source|Video|Quad|Mesh|ParticleSystem|SpriteBatch|Text)\\b"
+        },
+        {
           "name": "entity.name.type.tua",
-          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
         }
       ]
     }

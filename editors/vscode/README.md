@@ -8,8 +8,10 @@ Minimal VS Code language support for tua source files.
 - Associates `*.tua` files with the tua language mode.
 - Uses the tua logo SVG for `.tua` file icons and a generated PNG copy for the
   packaged extension icon.
-- Adds TextMate grammar coverage for Lua keywords, comments, strings, numbers,
-  operators, type aliases, and type annotations.
+- Adds immediate TextMate grammar coverage for Lua and Tua declarations,
+  classes, enums, function and callback types, LuaDoc annotations, module and
+  asset paths, SignalBus event names, LOVE/ECS helpers, calls, members, labels,
+  literals, comments, and operators.
 - Adds language configuration for comments, brackets, auto-closing pairs,
   region folding, word boundaries, and Lua/Tua indentation.
 - Bundles instant snippets for Lua functions, typed Tua declarations, classes,
@@ -18,7 +20,11 @@ Minimal VS Code language support for tua source files.
   hover, completion, signature help, document highlights, navigation, rename,
   inlay hint, semantic token, and symbol features.
 - Contributes Tua editor defaults for zero-delay quick suggestions in code and
-  strings.
+  strings and enables semantic highlighting for Tua documents.
+- Refines lexical scopes with standard VS Code semantic token types for
+  classes, enums, types, functions, methods, parameters, variables, properties,
+  namespaces, events, labels, and annotation tags. Declaration, readonly,
+  deprecated, modification, and default-library modifiers remain theme-aware.
 - Adds Tua command-palette actions for restarting the language server, focusing
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,

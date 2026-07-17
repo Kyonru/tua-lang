@@ -1,0 +1,53 @@
+#!/usr/bin/env tua
+---@class LegacyPlayer
+---@field hp number
+type Callback = (player: Player, amount: number) -> boolean
+
+enum PlayerState
+  "idle"
+  "running"
+end
+
+open class BaseEntity {
+  update(dt: number) {
+  }
+}
+
+open class Entity extends BaseEntity {
+  x: number = 0
+
+  init(name: string) {
+    self.name = name
+  }
+
+  override final update(dt: number) {
+    self.x += dt
+  }
+}
+
+local events = signal()
+events:on("player.hit", function(player: Player, damage: number)
+  player.hp -= damage
+end)
+
+local Player = import("game.player")
+local sprite = image "assets/player.png"
+type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+local world = ecs.world()
+local coordinate = world.entities.player.position.x
+
+function love.load()
+end
+
+::retry::
+if value is Entity then
+  goto retry
+end
+
+local text = [=[long text]=]
+--[=[block comment]=]

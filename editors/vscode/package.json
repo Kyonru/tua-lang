@@ -30,7 +30,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
     "test:vscode": "node test/run.js"
   },
   "contributes": {
@@ -41,7 +41,8 @@
           "strings": "on",
           "other": "on"
         },
-        "editor.quickSuggestionsDelay": 0
+        "editor.quickSuggestionsDelay": 0,
+        "editor.semanticHighlighting.enabled": true
       }
     },
     "configuration": {
@@ -557,6 +558,47 @@
         "path": "./syntaxes/tua.tmLanguage.json"
       }
     ],
+    "semanticTokenScopes": [
+      {
+        "language": "tua",
+        "scopes": {
+          "type": [
+            "entity.name.type.tua"
+          ],
+          "type.defaultLibrary": [
+            "support.type.builtin.tua",
+            "support.type.primitive.tua"
+          ],
+          "class": [
+            "entity.name.type.class.tua"
+          ],
+          "enum": [
+            "entity.name.type.enum.tua"
+          ],
+          "enumMember": [
+            "variable.other.enummember.tua"
+          ],
+          "function.defaultLibrary": [
+            "support.function.tua"
+          ],
+          "namespace.defaultLibrary": [
+            "support.variable.namespace.tua"
+          ],
+          "method": [
+            "entity.name.function.member.tua"
+          ],
+          "property": [
+            "variable.other.property.tua"
+          ],
+          "event": [
+            "entity.name.event.tua"
+          ],
+          "decorator": [
+            "storage.type.annotation.tua"
+          ]
+        }
+      }
+    ],
     "snippets": [
       {
         "language": "tua",
@@ -573,6 +615,8 @@
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.2"
+    "@vscode/vsce": "^3.9.2",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   }
 }

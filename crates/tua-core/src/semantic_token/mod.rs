@@ -2,16 +2,16 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use full_moon::ast::{
-    self, Call, Expression, Field, FunctionBody, Index, LastStmt, LuaVersion, Parameter, Suffix,
-    Var,
+    self, Call, Expression, Field, FunctionBody, Index, LastStmt, LuaVersion, Parameter, Prefix,
+    Suffix, Var,
 };
 use full_moon::node::Node;
 use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
 
 use crate::hir::{lower_parsed_source, HirSymbolKind};
-use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
+use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TypeAliasKind};
 use crate::source_text::{byte_for_column, line_at};
-use crate::{parse_tua_source, Diagnostic};
+use crate::{ecs, lua, object_pool, parse_tua_source, signal, sprite, vector, Diagnostic};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticToken {
@@ -33,6 +33,12 @@ pub enum SemanticTokenKind {
     Module,
     Method,
     AnnotationTag,
+    Class,
+    Enum,
+    EnumMember,
+    Namespace,
+    Event,
+    Label,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -40,6 +46,8 @@ pub enum SemanticTokenModifier {
     Declaration,
     Readonly,
     Deprecated,
+    Modification,
+    DefaultLibrary,
 }
 
 pub fn semantic_tokens_tua_source(
@@ -58,17 +66,21 @@ pub fn semantic_tokens_tua_source(
 pub fn semantic_tokens_parsed_source(
     parsed: &ParsedSource,
 ) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
-    let declarations = DeclarationIndex::new(parsed);
-    let mut tokens = parsed
-        .ast
-        .tokens()
-        .filter(|token| is_identifier(token))
-        .filter_map(|token| semantic_token_for_identifier(parsed, &declarations, token))
+    let source_tokens = lossy_tokens(&parsed.source);
+    let declarations = DeclarationIndex::new(parsed, &source_tokens);
+    let mut tokens = source_tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| {
+            semantic_token_for_identifier(parsed, &declarations, &source_tokens, index, token)
+        })
         .collect::<Vec<_>>();
 
     tokens.extend(lua_doc_semantic_tokens(parsed));
     tokens.extend(annotation_tag_semantic_tokens(&parsed.source));
-    tokens.extend(require_module_semantic_tokens(&parsed.source));
+    tokens.extend(module_semantic_tokens(&source_tokens));
+    tokens.extend(signal_event_semantic_tokens(&source_tokens));
+    tokens.extend(enum_member_semantic_tokens(parsed, &source_tokens));
 
     tokens.sort_by_key(|token| position_key(token.span.start));
     tokens.dedup_by_key(|token| {
@@ -87,32 +99,109 @@ pub fn semantic_tokens_parsed_source(
 fn semantic_token_for_identifier(
     parsed: &ParsedSource,
     declarations: &DeclarationIndex,
-    token: &TokenReference,
+    tokens: &[Token],
+    index: usize,
+    token: &Token,
 ) -> Option<SemanticToken> {
-    let span = node_span(token)?;
-    let text = token_text(token);
+    let text = token_identifier_text(token)?;
+    let span = token_span(token);
 
-    if let Some(classification) = declarations.by_span.get(&span_key(span)) {
-        return Some(classification.to_token(span));
+    if is_language_keyword(&text) {
+        return None;
     }
 
-    if is_primitive_type(&text) && is_type_reference(&parsed.source, span.start) {
-        return Some(SemanticToken {
-            span,
-            kind: SemanticTokenKind::BuiltinType,
-            modifiers: Vec::new(),
-        });
+    if let Some(classification) = declarations.by_span.get(&span_key(span)) {
+        let mut token = classification.to_token(span);
+
+        if matches!(
+            token.kind,
+            SemanticTokenKind::Method | SemanticTokenKind::Property
+        ) && member_uses_builtin_namespace(tokens, index)
+            && !token
+                .modifiers
+                .contains(&SemanticTokenModifier::DefaultLibrary)
+        {
+            token.modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+        if is_modification_reference(tokens, index)
+            && !token
+                .modifiers
+                .contains(&SemanticTokenModifier::Modification)
+        {
+            token.modifiers.push(SemanticTokenModifier::Modification);
+        }
+
+        return Some(token);
     }
 
     if is_type_reference(&parsed.source, span.start) {
+        let kind = declarations
+            .type_kind(&text)
+            .unwrap_or_else(|| type_reference_kind(&text));
+        let mut modifiers = semantic_modifiers_for_name(&text, false);
+
+        if kind == SemanticTokenKind::BuiltinType {
+            modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+
         return Some(SemanticToken {
             span,
-            kind: SemanticTokenKind::TypeAlias,
-            modifiers: semantic_modifiers_for_name(&text, false),
+            kind,
+            modifiers,
+        });
+    }
+
+    if let Some(kind) = member_kind(tokens, index) {
+        let mut modifiers = semantic_modifiers_for_name(&text, false);
+
+        if member_uses_builtin_namespace(tokens, index) {
+            modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+        if is_modification_reference(tokens, index) {
+            modifiers.push(SemanticTokenModifier::Modification);
+        }
+
+        return Some(SemanticToken {
+            span,
+            kind,
+            modifiers,
         });
     }
 
     if let Some(kind) = declarations.nearest_value_kind(&text, span.start) {
+        let mut modifiers = semantic_modifiers_for_name(&text, false);
+
+        if is_modification_reference(tokens, index) {
+            modifiers.push(SemanticTokenModifier::Modification);
+        }
+
+        return Some(SemanticToken {
+            span,
+            kind,
+            modifiers,
+        });
+    }
+
+    if let Some(kind) = builtin_global_kind(&text) {
+        let mut modifiers = semantic_modifiers_for_name(&text, false);
+        modifiers.push(SemanticTokenModifier::DefaultLibrary);
+
+        return Some(SemanticToken {
+            span,
+            kind,
+            modifiers,
+        });
+    }
+
+    if text == "self" {
+        return Some(SemanticToken {
+            span,
+            kind: SemanticTokenKind::Parameter,
+            modifiers: Vec::new(),
+        });
+    }
+
+    if let Some(kind) = declarations.type_kind(&text) {
         return Some(SemanticToken {
             span,
             kind,
@@ -120,12 +209,12 @@ fn semantic_token_for_identifier(
         });
     }
 
-    if is_known_global(&text) {
-        return Some(SemanticToken {
+    if is_label(tokens, index) {
+        return Some(semantic_token(
             span,
-            kind: SemanticTokenKind::Global,
-            modifiers: semantic_modifiers_for_name(&text, false),
-        });
+            SemanticTokenKind::Label,
+            is_label_declaration(tokens, index),
+        ));
     }
 
     Some(SemanticToken {
@@ -144,7 +233,9 @@ fn lossy_semantic_tokens(source: &str) -> Vec<SemanticToken> {
         .collect::<Vec<_>>();
 
     semantic_tokens.extend(annotation_tag_semantic_tokens(source));
-    semantic_tokens.extend(require_module_semantic_tokens(source));
+    semantic_tokens.extend(module_semantic_tokens(&tokens));
+    semantic_tokens.extend(signal_event_semantic_tokens(&tokens));
+    semantic_tokens.extend(lossy_enum_member_semantic_tokens(&tokens));
 
     semantic_tokens.sort_by_key(|token| position_key(token.span.start));
     semantic_tokens.dedup_by_key(|token| {
@@ -183,8 +274,20 @@ fn lossy_semantic_token_for_identifier(
         return None;
     }
 
+    if is_language_keyword(&text) {
+        return None;
+    }
+
     if is_lossy_type_alias_declaration(tokens, index) {
         return Some(semantic_token(span, SemanticTokenKind::TypeAlias, true));
+    }
+
+    if is_lossy_enum_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Enum, true));
+    }
+
+    if is_lossy_class_declaration(tokens, index) {
+        return Some(semantic_token(span, SemanticTokenKind::Class, true));
     }
 
     if is_lossy_function_declaration(tokens, index) {
@@ -203,14 +306,42 @@ fn lossy_semantic_token_for_identifier(
         return Some(semantic_token(span, SemanticTokenKind::Parameter, true));
     }
 
-    if is_lossy_type_reference(tokens, index) {
-        let kind = if is_primitive_type(&text) {
-            SemanticTokenKind::BuiltinType
-        } else {
-            SemanticTokenKind::TypeAlias
-        };
+    if let Some(kind) = member_kind(tokens, index) {
+        let mut token = semantic_token_with_default_library(
+            span,
+            kind,
+            member_uses_builtin_namespace(tokens, index),
+        );
+        if is_modification_reference(tokens, index) {
+            token.modifiers.push(SemanticTokenModifier::Modification);
+        }
+        return Some(token);
+    }
 
-        return Some(semantic_token(span, kind, false));
+    if is_lossy_type_reference(tokens, index) {
+        let kind = type_reference_kind(&text);
+
+        return Some(semantic_token_with_default_library(
+            span,
+            kind,
+            kind == SemanticTokenKind::BuiltinType,
+        ));
+    }
+
+    if let Some(kind) = builtin_global_kind(&text) {
+        return Some(semantic_token_with_default_library(span, kind, true));
+    }
+
+    if text == "self" {
+        return Some(semantic_token(span, SemanticTokenKind::Parameter, false));
+    }
+
+    if is_label(tokens, index) {
+        return Some(semantic_token(
+            span,
+            SemanticTokenKind::Label,
+            is_label_declaration(tokens, index),
+        ));
     }
 
     None
@@ -224,9 +355,31 @@ fn semantic_token(span: SourceSpan, kind: SemanticTokenKind, declaration: bool) 
     }
 }
 
+fn semantic_token_with_default_library(
+    span: SourceSpan,
+    kind: SemanticTokenKind,
+    default_library: bool,
+) -> SemanticToken {
+    let mut token = semantic_token(span, kind, false);
+
+    if default_library {
+        token.modifiers.push(SemanticTokenModifier::DefaultLibrary);
+    }
+
+    token
+}
+
 fn is_lossy_type_alias_declaration(tokens: &[Token], index: usize) -> bool {
     previous_identifier(tokens, index).as_deref() == Some("type")
         && next_symbol(tokens, index) == Some(Symbol::Equal)
+}
+
+fn is_lossy_enum_declaration(tokens: &[Token], index: usize) -> bool {
+    previous_identifier_immediate(tokens, index).as_deref() == Some("enum")
+}
+
+fn is_lossy_class_declaration(tokens: &[Token], index: usize) -> bool {
+    previous_identifier_immediate(tokens, index).as_deref() == Some("class")
 }
 
 fn is_lossy_property(tokens: &[Token], index: usize) -> bool {
@@ -376,6 +529,12 @@ fn previous_identifier(tokens: &[Token], index: usize) -> Option<String> {
     tokens[..index].iter().rev().find_map(token_identifier_text)
 }
 
+fn previous_identifier_immediate(tokens: &[Token], index: usize) -> Option<String> {
+    tokens
+        .get(index.checked_sub(1)?)
+        .and_then(token_identifier_text)
+}
+
 fn next_symbol(tokens: &[Token], index: usize) -> Option<Symbol> {
     tokens.get(index + 1..)?.iter().find_map(token_symbol)
 }
@@ -410,20 +569,28 @@ fn token_index(tokens: &[Token], needle: &Token) -> Option<usize> {
 struct DeclarationIndex {
     by_span: BTreeMap<SpanKey, Classification>,
     values: BTreeMap<String, Vec<ValueDeclaration>>,
+    types: BTreeMap<String, SemanticTokenKind>,
 }
 
 impl DeclarationIndex {
-    fn new(parsed: &ParsedSource) -> Self {
+    fn new(parsed: &ParsedSource, tokens: &[Token]) -> Self {
         let mut index = Self::default();
         let hir = lower_parsed_source(parsed);
 
         for symbol in hir.symbols() {
             match symbol.kind {
-                HirSymbolKind::TypeAlias => index.insert_declaration(
-                    symbol.name_span,
-                    &symbol.name,
-                    SemanticTokenKind::TypeAlias,
-                ),
+                HirSymbolKind::TypeAlias => {
+                    let kind = parsed
+                        .type_aliases
+                        .iter()
+                        .find(|alias| alias.name_span == Some(symbol.name_span))
+                        .map(|alias| match alias.kind {
+                            TypeAliasKind::Alias => SemanticTokenKind::TypeAlias,
+                            TypeAliasKind::Enum => SemanticTokenKind::Enum,
+                        })
+                        .unwrap_or(SemanticTokenKind::TypeAlias);
+                    index.insert_declaration(symbol.name_span, &symbol.name, kind);
+                }
                 HirSymbolKind::TableField => {
                     index.insert_property_declaration(symbol.name_span, &symbol.name)
                 }
@@ -446,6 +613,7 @@ impl DeclarationIndex {
         }
 
         collect_block_declarations(parsed.ast.nodes(), &mut index);
+        collect_class_declarations(parsed, tokens, &mut index);
         mark_deprecated_declarations(parsed, &mut index);
 
         index
@@ -459,8 +627,17 @@ impl DeclarationIndex {
                 declaration: true,
                 readonly: looks_like_const_name(name),
                 deprecated: false,
+                modification: false,
+                default_library: false,
             },
         );
+
+        if matches!(
+            kind,
+            SemanticTokenKind::TypeAlias | SemanticTokenKind::Class | SemanticTokenKind::Enum
+        ) {
+            self.types.insert(name.to_owned(), kind);
+        }
 
         if matches!(
             kind,
@@ -483,6 +660,8 @@ impl DeclarationIndex {
                 declaration: false,
                 readonly: false,
                 deprecated: false,
+                modification: false,
+                default_library: false,
             });
     }
 
@@ -498,6 +677,22 @@ impl DeclarationIndex {
                 declaration,
                 readonly: looks_like_const_name(name),
                 deprecated: false,
+                modification: false,
+                default_library: false,
+            },
+        );
+    }
+
+    fn insert_reference(&mut self, span: SourceSpan, kind: SemanticTokenKind, modification: bool) {
+        self.by_span.insert(
+            span_key(span),
+            Classification {
+                kind,
+                declaration: false,
+                readonly: false,
+                deprecated: false,
+                modification,
+                default_library: false,
             },
         );
     }
@@ -522,6 +717,10 @@ impl DeclarationIndex {
             .max_by_key(|declaration| position_key(declaration.span.start))
             .map(|declaration| declaration.kind)
     }
+
+    fn type_kind(&self, name: &str) -> Option<SemanticTokenKind> {
+        self.types.get(name).copied()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -530,6 +729,8 @@ struct Classification {
     declaration: bool,
     readonly: bool,
     deprecated: bool,
+    modification: bool,
+    default_library: bool,
 }
 
 impl Classification {
@@ -548,6 +749,14 @@ impl Classification {
             modifiers.push(SemanticTokenModifier::Deprecated);
         }
 
+        if self.modification {
+            modifiers.push(SemanticTokenModifier::Modification);
+        }
+
+        if self.default_library {
+            modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+
         SemanticToken {
             span,
             kind: self.kind,
@@ -559,6 +768,67 @@ impl Classification {
 struct ValueDeclaration {
     span: SourceSpan,
     kind: SemanticTokenKind,
+}
+
+fn collect_class_declarations(
+    parsed: &ParsedSource,
+    tokens: &[Token],
+    index: &mut DeclarationIndex,
+) {
+    for class in &parsed.class_declarations {
+        index.insert_declaration(class.name_span, &class.name, SemanticTokenKind::Class);
+
+        if let Some(parent_span) = class.parent_span {
+            index.insert_reference(parent_span, SemanticTokenKind::Class, false);
+        }
+
+        for field in &class.fields {
+            index.insert_declaration(field.name_span, &field.name, SemanticTokenKind::Property);
+        }
+
+        for method in class.init.iter().chain(class.methods.iter()) {
+            index.insert_method(method.name_span, &method.name, true);
+            collect_class_parameter_declarations(tokens, method.parameters_span, index);
+        }
+    }
+}
+
+fn collect_class_parameter_declarations(
+    tokens: &[Token],
+    parameters_span: SourceSpan,
+    index: &mut DeclarationIndex,
+) {
+    let mut expect_parameter = true;
+    let mut nested_depth = 0usize;
+
+    for token in tokens
+        .iter()
+        .filter(|token| span_contains(parameters_span, token_span(token)))
+    {
+        match token_symbol(token) {
+            Some(Symbol::LeftParen | Symbol::LeftBrace | Symbol::LeftBracket) => {
+                nested_depth += 1;
+            }
+            Some(Symbol::RightParen | Symbol::RightBrace | Symbol::RightBracket) => {
+                nested_depth = nested_depth.saturating_sub(1);
+            }
+            Some(Symbol::Comma) if nested_depth == 0 => expect_parameter = true,
+            _ => {
+                let Some(name) = token_identifier_text(token) else {
+                    continue;
+                };
+
+                if expect_parameter && nested_depth == 0 {
+                    index.insert_declaration(
+                        token_span(token),
+                        &name,
+                        SemanticTokenKind::Parameter,
+                    );
+                    expect_parameter = false;
+                }
+            }
+        }
+    }
 }
 
 fn collect_block_declarations(block: &ast::Block, index: &mut DeclarationIndex) {
@@ -577,7 +847,7 @@ fn collect_stmt_declarations(stmt: &ast::Stmt, index: &mut DeclarationIndex) {
     match stmt {
         ast::Stmt::Assignment(assignment) => {
             for variable in assignment.variables() {
-                collect_var_properties(variable, index);
+                collect_assignment_target(variable, index);
             }
 
             for expression in assignment.expressions() {
@@ -585,7 +855,7 @@ fn collect_stmt_declarations(stmt: &ast::Stmt, index: &mut DeclarationIndex) {
             }
         }
         ast::Stmt::CompoundAssignment(assignment) => {
-            collect_var_properties(assignment.lhs(), index);
+            collect_assignment_target(assignment.lhs(), index);
             collect_expression_properties(assignment.rhs(), index);
         }
         ast::Stmt::Do(block) => collect_block_declarations(block.block(), index),
@@ -736,24 +1006,42 @@ fn collect_function_name_declaration(name: &ast::FunctionName, index: &mut Decla
 
     if let Some(function_name) = name.names().iter().last() {
         if let Some(span) = node_span(function_name) {
-            index.insert_declaration(
-                span,
-                &token_text(function_name),
-                SemanticTokenKind::Function,
-            );
+            let function_name = token_text(function_name);
+
+            if name.names().iter().count() > 1 {
+                index.insert_method(span, &function_name, true);
+            } else {
+                index.insert_declaration(span, &function_name, SemanticTokenKind::Function);
+            }
         }
     }
 }
 
 fn collect_function_call_methods(function_call: &ast::FunctionCall, index: &mut DeclarationIndex) {
-    for suffix in function_call.suffixes() {
+    let suffixes = function_call.suffixes().collect::<Vec<_>>();
+
+    for (offset, suffix) in suffixes.iter().enumerate() {
         match suffix {
             Suffix::Call(Call::MethodCall(method)) => {
                 if let Some(span) = node_span(method.name()) {
                     index.insert_method(span, &token_text(method.name()), false);
                 }
             }
-            Suffix::Call(Call::AnonymousCall(_)) => break,
+            Suffix::Index(Index::Dot { name, .. }) => {
+                let Some(span) = node_span(name) else {
+                    continue;
+                };
+                let called = matches!(
+                    suffixes.get(offset + 1),
+                    Some(Suffix::Call(Call::AnonymousCall(_)))
+                );
+
+                if called {
+                    index.insert_method(span, &token_text(name), false);
+                } else {
+                    index.insert_property(span);
+                }
+            }
             _ => {}
         }
     }
@@ -770,6 +1058,43 @@ fn collect_var_properties(var: &Var, index: &mut DeclarationIndex) {
                 index.insert_property(span);
             }
         }
+    }
+}
+
+fn collect_assignment_target(var: &Var, index: &mut DeclarationIndex) {
+    match var {
+        Var::Name(name) => {
+            if let Some(span) = node_span(name) {
+                index.insert_reference(span, SemanticTokenKind::Variable, true);
+            }
+        }
+        Var::Expression(expression) => {
+            if expression.suffixes().next().is_none() {
+                if let Prefix::Name(name) = expression.prefix() {
+                    if let Some(span) = node_span(name) {
+                        index.insert_reference(span, SemanticTokenKind::Variable, true);
+                    }
+                }
+                return;
+            }
+
+            let properties = expression
+                .suffixes()
+                .filter_map(|suffix| match suffix {
+                    Suffix::Index(Index::Dot { name, .. }) => node_span(name),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            for (offset, span) in properties.iter().copied().enumerate() {
+                index.insert_reference(
+                    span,
+                    SemanticTokenKind::Property,
+                    offset + 1 == properties.len(),
+                );
+            }
+        }
+        _ => {}
     }
 }
 
@@ -960,13 +1285,13 @@ fn type_tokens_in_span(source: &str, span: SourceSpan) -> Vec<SemanticToken> {
         let after = text[token_end..].trim_start();
         let kind = if after.starts_with(':') || after.starts_with("?:") {
             SemanticTokenKind::Property
-        } else if is_primitive_type(name) {
+        } else if is_builtin_type(name) {
             SemanticTokenKind::BuiltinType
         } else {
             SemanticTokenKind::TypeAlias
         };
 
-        tokens.push(semantic_token(
+        let mut token = semantic_token(
             SourceSpan {
                 start: SourcePosition {
                     line: span.start.line,
@@ -979,7 +1304,13 @@ fn type_tokens_in_span(source: &str, span: SourceSpan) -> Vec<SemanticToken> {
             },
             kind,
             kind == SemanticTokenKind::Property,
-        ));
+        );
+
+        if kind == SemanticTokenKind::BuiltinType {
+            token.modifiers.push(SemanticTokenModifier::DefaultLibrary);
+        }
+
+        tokens.push(token);
 
         cursor = token_end;
     }
@@ -987,67 +1318,144 @@ fn type_tokens_in_span(source: &str, span: SourceSpan) -> Vec<SemanticToken> {
     tokens
 }
 
-fn require_module_semantic_tokens(source: &str) -> Vec<SemanticToken> {
-    let mut tokens = Vec::new();
+fn module_semantic_tokens(tokens: &[Token]) -> Vec<SemanticToken> {
+    tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| {
+            let name = token_identifier_text(token)?;
 
-    for (offset, line) in source.lines().enumerate() {
-        let line_number = offset + 1;
-        let mut search_start = 0usize;
-
-        while let Some(relative) = line[search_start..].find("require") {
-            let require_start = search_start + relative;
-            let after_require = require_start + "require".len();
-
-            if !identifier_boundary_before(line, require_start)
-                || !identifier_boundary_after(line, after_require)
+            if !matches!(name.as_str(), "require" | "import")
+                || matches!(
+                    index
+                        .checked_sub(1)
+                        .and_then(|previous| tokens.get(previous))
+                        .and_then(token_symbol),
+                    Some(Symbol::Colon | Symbol::Dot)
+                )
             {
-                search_start = after_require;
-                continue;
+                return None;
             }
 
-            let mut cursor = skip_ascii_spaces(line, after_require);
+            let span = string_literal_content_span(first_string_argument(tokens, index)?)?;
+            Some(semantic_token(span, SemanticTokenKind::Module, false))
+        })
+        .collect()
+}
 
-            if line[cursor..].starts_with('(') {
-                cursor = skip_ascii_spaces(line, cursor + 1);
+fn signal_event_semantic_tokens(tokens: &[Token]) -> Vec<SemanticToken> {
+    tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| {
+            let name = token_identifier_text(token)?;
+
+            if !signal::is_event_name_method(&name)
+                || !matches!(
+                    tokens.get(index.checked_sub(1)?).and_then(token_symbol),
+                    Some(Symbol::Colon | Symbol::Dot)
+                )
+            {
+                return None;
             }
 
-            let Some(quote) = line[cursor..].chars().next() else {
-                break;
-            };
+            let span = string_literal_content_span(first_string_argument(tokens, index)?)?;
+            let mut token = semantic_token(
+                span,
+                SemanticTokenKind::Event,
+                signal::is_event_schema_method(&name),
+            );
+            token.modifiers.push(SemanticTokenModifier::Readonly);
+            Some(token)
+        })
+        .collect()
+}
 
-            if quote != '"' && quote != '\'' {
-                search_start = after_require;
-                continue;
-            }
+fn first_string_argument(tokens: &[Token], function_index: usize) -> Option<&Token> {
+    let mut cursor = function_index + 1;
 
-            let content_start = cursor + quote.len_utf8();
-            let Some(content_len) = line[content_start..].find(quote) else {
-                break;
-            };
-            let content_end = content_start + content_len;
+    if token_symbol(tokens.get(cursor)?) == Some(Symbol::LeftParen) {
+        cursor += 1;
+    }
 
-            if content_end > content_start {
-                tokens.push(semantic_token(
-                    SourceSpan {
-                        start: SourcePosition {
-                            line: line_number,
-                            column: content_start + 1,
-                        },
-                        end: SourcePosition {
-                            line: line_number,
-                            column: content_end + 1,
-                        },
-                    },
-                    SemanticTokenKind::Module,
-                    false,
-                ));
-            }
+    let token = tokens.get(cursor)?;
+    matches!(token.token_type(), TokenType::StringLiteral { .. }).then_some(token)
+}
 
-            search_start = content_end + quote.len_utf8();
+fn string_literal_content_span(token: &Token) -> Option<SourceSpan> {
+    let text = token.to_string();
+    let quote = text.chars().next()?;
+
+    if !matches!(quote, '\'' | '"') || !text.ends_with(quote) || text.len() < 2 {
+        return None;
+    }
+
+    let span = token_span(token);
+    (span.start.line == span.end.line).then_some(SourceSpan {
+        start: SourcePosition {
+            line: span.start.line,
+            column: span.start.column + 1,
+        },
+        end: SourcePosition {
+            line: span.end.line,
+            column: span.end.column - 1,
+        },
+    })
+}
+
+fn enum_member_semantic_tokens(parsed: &ParsedSource, tokens: &[Token]) -> Vec<SemanticToken> {
+    let enum_spans = parsed
+        .type_aliases
+        .iter()
+        .filter(|alias| alias.kind == TypeAliasKind::Enum)
+        .filter_map(|alias| alias.span)
+        .collect::<Vec<_>>();
+
+    tokens
+        .iter()
+        .filter(|token| matches!(token.token_type(), TokenType::StringLiteral { .. }))
+        .filter(|token| {
+            let span = token_span(token);
+            enum_spans
+                .iter()
+                .any(|enum_span| span_contains(*enum_span, span))
+        })
+        .filter_map(string_literal_content_span)
+        .map(|span| {
+            let mut token = semantic_token(span, SemanticTokenKind::EnumMember, true);
+            token.modifiers.push(SemanticTokenModifier::Readonly);
+            token
+        })
+        .collect()
+}
+
+fn lossy_enum_member_semantic_tokens(tokens: &[Token]) -> Vec<SemanticToken> {
+    let mut in_enum = false;
+    let mut semantic_tokens = Vec::new();
+
+    for (index, token) in tokens.iter().enumerate() {
+        if token_identifier_text(token).as_deref() == Some("enum") {
+            in_enum = true;
+            continue;
+        }
+
+        if in_enum && token_symbol(token) == Some(Symbol::End) {
+            in_enum = false;
+            continue;
+        }
+
+        if !in_enum || !matches!(token.token_type(), TokenType::StringLiteral { .. }) {
+            continue;
+        }
+
+        if let Some(span) = string_literal_content_span(&tokens[index]) {
+            let mut token = semantic_token(span, SemanticTokenKind::EnumMember, true);
+            token.modifiers.push(SemanticTokenModifier::Readonly);
+            semantic_tokens.push(token);
         }
     }
 
-    tokens
+    semantic_tokens
 }
 
 fn is_type_reference(source: &str, position: SourcePosition) -> bool {
@@ -1062,6 +1470,10 @@ fn is_type_reference(source: &str, position: SourcePosition) -> bool {
     let marker = prefix.as_bytes()[marker_index];
     let before_marker = &prefix[..marker_index];
 
+    if marker == b':' && before_marker.ends_with(':') {
+        return false;
+    }
+
     match marker {
         b':' => line[marker_index + 1..cursor]
             .chars()
@@ -1072,40 +1484,150 @@ fn is_type_reference(source: &str, position: SourcePosition) -> bool {
     }
 }
 
-fn is_known_global(name: &str) -> bool {
+fn builtin_global_kind(name: &str) -> Option<SemanticTokenKind> {
+    if matches!(name, "ecs" | "love") {
+        return Some(SemanticTokenKind::Namespace);
+    }
+
+    if name == "import" {
+        return Some(SemanticTokenKind::Function);
+    }
+
+    lua::top_level_items(name)
+        .into_iter()
+        .find(|item| item.label == name)
+        .map(|item| match item.kind {
+            lua::LuaItemKind::Function => SemanticTokenKind::Function,
+            lua::LuaItemKind::Module => SemanticTokenKind::Namespace,
+            lua::LuaItemKind::Value => SemanticTokenKind::Global,
+            lua::LuaItemKind::Keyword => SemanticTokenKind::UnresolvedReference,
+        })
+}
+
+fn type_reference_kind(name: &str) -> SemanticTokenKind {
+    if is_builtin_type(name) {
+        SemanticTokenKind::BuiltinType
+    } else {
+        SemanticTokenKind::TypeAlias
+    }
+}
+
+fn is_builtin_type(name: &str) -> bool {
+    is_primitive_type(name)
+        || name == "Self"
+        || lua::love_type_names().contains(&name)
+        || vector::builtin_type_names().contains(&name)
+        || signal::builtin_type_names().contains(&name)
+        || object_pool::builtin_type_names().contains(&name)
+        || sprite::builtin_type_names().contains(&name)
+        || ecs::builtin_type_names().contains(&name)
+}
+
+fn is_language_keyword(name: &str) -> bool {
     matches!(
         name,
-        "assert"
-            | "coroutine"
-            | "debug"
-            | "error"
-            | "getmetatable"
-            | "io"
-            | "ipairs"
-            | "love"
-            | "ecs"
-            | "objectPool"
-            | "math"
-            | "next"
-            | "os"
-            | "package"
-            | "pairs"
-            | "pcall"
-            | "print"
-            | "rawequal"
-            | "rawget"
-            | "rawset"
-            | "require"
-            | "select"
-            | "setmetatable"
-            | "string"
-            | "table"
-            | "tonumber"
-            | "tostring"
+        "and"
+            | "break"
+            | "class"
+            | "do"
+            | "else"
+            | "elseif"
+            | "end"
+            | "enum"
+            | "extends"
+            | "false"
+            | "final"
+            | "for"
+            | "function"
+            | "goto"
+            | "if"
+            | "in"
+            | "is"
+            | "local"
+            | "nil"
+            | "not"
+            | "open"
+            | "or"
+            | "override"
+            | "repeat"
+            | "return"
+            | "super"
+            | "then"
+            | "true"
             | "type"
-            | "unpack"
-            | "xpcall"
+            | "until"
+            | "while"
     )
+}
+
+fn member_kind(tokens: &[Token], index: usize) -> Option<SemanticTokenKind> {
+    let accessor = tokens.get(index.checked_sub(1)?).and_then(token_symbol)?;
+
+    if !matches!(accessor, Symbol::Dot | Symbol::Colon) {
+        return None;
+    }
+
+    let called = tokens.get(index + 1).is_some_and(|token| {
+        token_symbol(token) == Some(Symbol::LeftParen)
+            || matches!(token.token_type(), TokenType::StringLiteral { .. })
+            || token_symbol(token) == Some(Symbol::LeftBrace)
+    });
+
+    if accessor == Symbol::Colon && !called {
+        return None;
+    }
+
+    Some(if called {
+        SemanticTokenKind::Method
+    } else {
+        SemanticTokenKind::Property
+    })
+}
+
+fn member_uses_builtin_namespace(tokens: &[Token], index: usize) -> bool {
+    let mut cursor = index;
+    let mut root = None;
+
+    while cursor >= 2 {
+        let Some(accessor) = tokens.get(cursor - 1).and_then(token_symbol) else {
+            break;
+        };
+        if !matches!(accessor, Symbol::Dot | Symbol::Colon) {
+            break;
+        }
+
+        let Some(name) = tokens.get(cursor - 2).and_then(token_identifier_text) else {
+            break;
+        };
+        root = Some(name);
+        cursor -= 2;
+    }
+
+    root.is_some_and(|name| builtin_global_kind(&name) == Some(SemanticTokenKind::Namespace))
+}
+
+fn is_modification_reference(tokens: &[Token], index: usize) -> bool {
+    matches!(
+        tokens.get(index + 1).and_then(token_symbol),
+        Some(
+            Symbol::Equal
+                | Symbol::PlusEqual
+                | Symbol::MinusEqual
+                | Symbol::StarEqual
+                | Symbol::SlashEqual
+                | Symbol::PercentEqual
+        )
+    )
+}
+
+fn is_label(tokens: &[Token], index: usize) -> bool {
+    is_label_declaration(tokens, index)
+        || previous_identifier_immediate(tokens, index).as_deref() == Some("goto")
+}
+
+fn is_label_declaration(tokens: &[Token], index: usize) -> bool {
+    tokens.get(index.wrapping_sub(1)).and_then(token_symbol) == Some(Symbol::TwoColons)
+        && tokens.get(index + 1).and_then(token_symbol) == Some(Symbol::TwoColons)
 }
 
 fn is_primitive_type(text: &str) -> bool {
@@ -1150,32 +1672,6 @@ fn is_identifier_continue(ch: char) -> bool {
     ch == '_' || ch.is_ascii_alphanumeric()
 }
 
-fn identifier_boundary_before(line: &str, index: usize) -> bool {
-    line[..index]
-        .chars()
-        .next_back()
-        .is_none_or(|ch| !is_identifier_continue(ch))
-}
-
-fn identifier_boundary_after(line: &str, index: usize) -> bool {
-    line[index..]
-        .chars()
-        .next()
-        .is_none_or(|ch| !is_identifier_continue(ch))
-}
-
-fn skip_ascii_spaces(line: &str, mut cursor: usize) -> usize {
-    while cursor < line.len() && line.as_bytes()[cursor].is_ascii_whitespace() {
-        cursor += 1;
-    }
-
-    cursor
-}
-
-fn is_identifier(token: &TokenReference) -> bool {
-    matches!(token.token().token_type(), TokenType::Identifier { .. })
-}
-
 fn node_span(node: &impl Node) -> Option<SourceSpan> {
     node.range()
         .map(|(start, end)| SourceSpan::from_range(start, end))
@@ -1192,6 +1688,11 @@ fn span_key(span: SourceSpan) -> SpanKey {
         span.end.line,
         span.end.column,
     )
+}
+
+fn span_contains(container: SourceSpan, candidate: SourceSpan) -> bool {
+    position_key(container.start) <= position_key(candidate.start)
+        && position_key(candidate.end) <= position_key(container.end)
 }
 
 type SpanKey = (usize, usize, usize, usize);
