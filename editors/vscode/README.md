@@ -226,9 +226,12 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
 - `Tua: Show Signal Graph` requests compiler-validated SignalBus calls from the
   current project snapshot. The webview connects bus-aware events to files,
   keeps same-named events on independent buses separate, distinguishes
-  declarations, listeners, emits, cleanup, and query calls, and opens exact
-  source locations without parsing Tua source in the extension. Standard hover,
-  definition, references, and rename requests work directly on event strings.
+  declarations, listeners, emits, cleanup, and query calls, filters by event,
+  bus, file, listener, and emitter, shows conflicting payload schemas directly,
+  and can create typed listeners or `declare(...)` schemas from compiler
+  metadata. It opens exact source locations without parsing Tua source in the
+  extension. Standard hover, definition, references, and rename requests work
+  directly on event strings.
 - Module dependency visualization requests `tua/moduleGraph`. The compiler owns
   module identity, resolution states, cycles, reverse relationships, exports,
   and inclusion paths; the extension only filters, lays out, and navigates that

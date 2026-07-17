@@ -374,7 +374,11 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert(
       signalPanel.html.includes("Signal Graph") &&
         signalPanel.html.includes("player.hit") &&
-        signalPanel.html.includes("Definitions") &&
+        signalPanel.html.includes("Listeners") &&
+        signalPanel.html.includes("Emitters") &&
+        signalPanel.html.includes("Create typed listener") &&
+        signalPanel.html.includes("Create declaration from emit") &&
+        signalPanel.html.includes("schema conflict") &&
         signalPanel.html.includes("openLocation"),
       "signal graph should render event, file, role, and navigation data",
     );
@@ -394,6 +398,35 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert(
       state.executedCommands.some((entry) => entry.command === "vscode.open"),
       "signal graph call locations should open in the editor",
+    );
+
+    await signalPanel.messageListener({
+      command: "createTypedListener",
+      eventId: "events:player.hit",
+      callId: "events-player-hit-declare",
+    });
+    await signalPanel.messageListener({
+      command: "createDeclarationFromEmit",
+      eventId: "events:enemy.spawned",
+      callId: "events-enemy-spawned-emit",
+    });
+
+    const signalInsertions = state.workspaceEdits.flatMap((edit) => edit.insertions || []);
+    assert(
+      signalInsertions.some((insertion) =>
+        insertion.newText.includes(
+          'events:on("player.hit", function(player: Player, damage: number)',
+        ),
+      ),
+      "signal graph should create typed listener snippets from resolved payloads",
+    );
+    assert(
+      signalInsertions.some((insertion) =>
+        insertion.newText.includes(
+          'events:declare("enemy.spawned", function(enemy: Enemy, x: number) end)',
+        ),
+      ),
+      "signal graph should create declaration snippets from inferred emit payloads",
     );
 
     await state.commands.get("tua.whyModuleIncluded")();
@@ -1096,10 +1129,15 @@ function createMockState(workspace, options = {}) {
     WorkspaceEdit: class WorkspaceEdit {
       constructor() {
         this.renames = [];
+        this.insertions = [];
       }
 
       renameFile(oldUri, newUri, renameOptions) {
         this.renames.push({ oldUri, newUri, options: renameOptions });
+      }
+
+      insert(uri, position, newText) {
+        this.insertions.push({ uri, position, newText });
       }
     },
     ViewColumn: {
@@ -1384,13 +1422,25 @@ function createMockState(workspace, options = {}) {
       }
 
       if (method === "tua/signalGraph") {
+        const eventsUri = `file://${path.join(workspace, "src", "events.tua")}`;
+        const combatUri = `file://${path.join(workspace, "src", "combat.tua")}`;
+
         return Promise.resolve({
           events: [
             {
+              id: "events:player.hit",
               name: "player.hit",
+              bus: "events",
+              busUri: eventsUri,
+              resolvedPayload: [
+                { name: "player", type: "Player" },
+                { name: "damage", type: "number" },
+              ],
+              schemaConflict: false,
               calls: [
                 {
-                  uri: `file://${path.join(workspace, "src", "events.tua")}`,
+                  id: "events-player-hit-declare",
+                  uri: eventsUri,
                   receiver: "events",
                   method: "declare",
                   role: "declaration",
@@ -1398,13 +1448,21 @@ function createMockState(workspace, options = {}) {
                     start: { line: 1, character: 13 },
                     end: { line: 1, character: 25 },
                   },
+                  callRange: {
+                    start: { line: 1, character: 0 },
+                    end: { line: 1, character: 74 },
+                  },
+                  insertionPosition: { line: 1, character: 0 },
+                  indentation: "",
                   payload: [
                     { name: "player", type: "Player" },
                     { name: "damage", type: "number" },
                   ],
+                  inferredPayload: null,
                 },
                 {
-                  uri: `file://${path.join(workspace, "src", "combat.tua")}`,
+                  id: "events-player-hit-emit",
+                  uri: combatUri,
                   receiver: "events",
                   method: "emit",
                   role: "emit",
@@ -1412,7 +1470,100 @@ function createMockState(workspace, options = {}) {
                     start: { line: 8, character: 12 },
                     end: { line: 8, character: 24 },
                   },
+                  callRange: {
+                    start: { line: 8, character: 0 },
+                    end: { line: 8, character: 36 },
+                  },
+                  insertionPosition: { line: 8, character: 0 },
+                  indentation: "",
                   payload: null,
+                  inferredPayload: [
+                    { name: "player", type: "Player" },
+                    { name: "damage", type: "number" },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "events:enemy.spawned",
+              name: "enemy.spawned",
+              bus: "events",
+              busUri: eventsUri,
+              resolvedPayload: [
+                { name: "enemy", type: "Enemy" },
+                { name: "x", type: "number" },
+              ],
+              schemaConflict: false,
+              calls: [
+                {
+                  id: "events-enemy-spawned-emit",
+                  uri: combatUri,
+                  receiver: "events",
+                  method: "emit",
+                  role: "emit",
+                  range: {
+                    start: { line: 12, character: 12 },
+                    end: { line: 12, character: 27 },
+                  },
+                  callRange: {
+                    start: { line: 12, character: 0 },
+                    end: { line: 12, character: 44 },
+                  },
+                  insertionPosition: { line: 12, character: 0 },
+                  indentation: "",
+                  payload: null,
+                  inferredPayload: [
+                    { name: "enemy", type: "Enemy" },
+                    { name: "x", type: "number" },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "events:score.changed",
+              name: "score.changed",
+              bus: "events",
+              busUri: eventsUri,
+              resolvedPayload: null,
+              schemaConflict: true,
+              calls: [
+                {
+                  id: "events-score-declare",
+                  uri: eventsUri,
+                  receiver: "events",
+                  method: "declare",
+                  role: "declaration",
+                  range: {
+                    start: { line: 14, character: 16 },
+                    end: { line: 14, character: 29 },
+                  },
+                  callRange: {
+                    start: { line: 14, character: 0 },
+                    end: { line: 14, character: 68 },
+                  },
+                  insertionPosition: { line: 14, character: 0 },
+                  indentation: "",
+                  payload: [{ name: "score", type: "number" }],
+                  inferredPayload: null,
+                },
+                {
+                  id: "events-score-listener",
+                  uri: combatUri,
+                  receiver: "events",
+                  method: "on",
+                  role: "listener",
+                  range: {
+                    start: { line: 16, character: 10 },
+                    end: { line: 16, character: 23 },
+                  },
+                  callRange: {
+                    start: { line: 16, character: 0 },
+                    end: { line: 16, character: 62 },
+                  },
+                  insertionPosition: { line: 16, character: 0 },
+                  indentation: "",
+                  payload: [{ name: "score", type: "string" }],
+                  inferredPayload: null,
                 },
               ],
             },

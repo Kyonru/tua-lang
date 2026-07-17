@@ -361,6 +361,12 @@ prefers the same bus, same file, declaration/schema calls, proximity, project
 usage, and stable source order. Event rename edits only string contents, so
 dotted event names remain ordinary Lua strings with no new syntax.
 
+The VS Code Signal Graph now filters by event name, bus, file, listener, and
+emitter, shows conflicting payload schemas directly, and inserts typed
+listeners or no-op `declare(...)` schemas from compiler-provided graph
+metadata. The extension still presents the graph only; source ownership stays in
+the shared semantic index.
+
 ## Language And Type System
 
 ### P2: Define inferred variable reassignment semantics

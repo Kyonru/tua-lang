@@ -117,9 +117,12 @@ selected path, version, and workspace directory when available.
   LOVE asset extensions, and `tua.toml`.
 - The custom `tua/signalGraph` request returns typed SignalBus event calls from
   the current analysis snapshot with stable bus-aware event identities, call
-  roles, bus expressions, payload schemas, URIs, and source ranges. The VS Code
-  `Tua: Show Signal Graph` command uses this data for a filterable event-to-file
-  graph and source navigation without merging independent same-named events.
+  roles, bus expressions, resolved payload schemas, conflict flags, inferred
+  emit payloads, insertion targets, URIs, and source ranges. The VS Code
+  `Tua: Show Signal Graph` command uses this data for event, bus, file,
+  listener, and emitter filtering, conflict inspection, source navigation, and
+  typed listener/declaration creation without merging independent same-named
+  events.
 - The low-priority `tua/moduleGraph` request returns the compiler's revisioned
   project module graph: Tua/Lua files, static `require` and `import` edges,
   resolved, missing, invalid, or duplicate resolution states, structured
@@ -200,8 +203,10 @@ and preview request sprite facts through `tua/inspect`; the extension does not
 parse Tua source or resolve asset paths independently.
 
 Signal graph visualization is an explicit project-inspection command backed by
-`tua/signalGraph`. The extension renders semantic results and does not maintain
-a parallel SignalBus parser.
+`tua/signalGraph`. The extension renders semantic results, filters by event,
+bus, file, listener, and emitter, shows conflicting payload variants directly,
+and can insert a typed listener or `declare(...)` schema from server-provided
+call metadata. It does not maintain a parallel SignalBus parser.
 
 Module graph visualization follows the same boundary. `Tua: Show Module
 Dependency Graph` requests `tua/moduleGraph` and presents the returned semantic

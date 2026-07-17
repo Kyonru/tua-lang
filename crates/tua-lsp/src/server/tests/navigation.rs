@@ -65,6 +65,11 @@ events:emit("player.hit", "Ada", 12)
         .as_str()
         .is_some_and(|bus| bus.contains("events")));
     assert_eq!(event["busUri"], uri);
+    assert_eq!(event["schemaConflict"], false);
+    assert_eq!(event["resolvedPayload"][0]["name"], "player");
+    assert_eq!(event["resolvedPayload"][0]["type"], "string");
+    assert_eq!(event["resolvedPayload"][1]["name"], "damage");
+    assert_eq!(event["resolvedPayload"][1]["type"], "number");
     assert_eq!(event["calls"].as_array().map(Vec::len), Some(3));
     assert_eq!(event["calls"][0]["role"], "declaration");
     assert_eq!(event["calls"][0]["payload"][0]["name"], "player");
@@ -72,6 +77,33 @@ events:emit("player.hit", "Ada", 12)
     assert_eq!(event["calls"][2]["role"], "emit");
     assert_eq!(event["calls"][2]["uri"], uri);
     assert_eq!(event["calls"][2]["range"]["start"]["line"], 3);
+    assert_eq!(event["calls"][2]["callRange"]["start"]["line"], 3);
+    assert_eq!(event["calls"][2]["insertionPosition"]["line"], 3);
+    assert_eq!(event["calls"][2]["insertionPosition"]["character"], 0);
+    assert_eq!(event["calls"][2]["inferredPayload"][0]["name"], "value1");
+    assert_eq!(event["calls"][2]["inferredPayload"][0]["type"], "string");
+    assert_eq!(event["calls"][2]["inferredPayload"][1]["name"], "value2");
+    assert_eq!(event["calls"][2]["inferredPayload"][1]["type"], "number");
+}
+
+#[test]
+fn signal_graph_reports_conflicting_payload_schemas() {
+    let uri = "file:///tmp/signal-graph-conflict.tua";
+    let source = r#"local events = signal()
+events:declare("player.hit", function(player: string) end)
+events:on("player.hit", function(player: number) end)
+"#;
+    let output = run_messages(vec![did_open(uri, source), signal_graph_request(2)]);
+    let response = response_with_id(&output, 2);
+    let event = &response["result"]["events"][0];
+
+    assert_eq!(event["name"], "player.hit");
+    assert_eq!(event["schemaConflict"], true);
+    assert!(event["resolvedPayload"].is_null());
+    assert_eq!(event["calls"][0]["payload"][0]["type"], "string");
+    assert_eq!(event["calls"][1]["payload"][0]["type"], "number");
+    assert_eq!(event["calls"][0]["insertionPosition"]["line"], 1);
+    assert_eq!(event["calls"][0]["insertionPosition"]["character"], 0);
 }
 
 #[test]

@@ -58,7 +58,7 @@ Status meanings:
 | Semantic tokens and inlay hints | Supported | Full/range/delta tokens classify standard VS Code symbol roles and declaration/readonly/deprecated/modification/default-library modifiers; inferred type/parameter hints are revision-aware, and the extension offers Full, Compact, Types Only, Parameters Only, and Off presentation modes without changing server results. |
 | Watched files and workspace folders | Supported | Source, Lua, assets, config, module creation/deletion, and folder changes refresh project state. |
 | Sprite animation preview | Preview | A sticky webview renders compiler-inspected local sprite metadata without executing project code. |
-| Signal call graph | Supported | The extension visualizes compiler-indexed event calls and navigates to exact locations. |
+| Signal call graph | Supported | The extension visualizes compiler-indexed event calls, filters by event/bus/file/listener/emitter, shows schema conflicts, opens exact locations, and creates typed listener or declaration snippets from semantic metadata. |
 | Module dependency explorer | Supported | A compiler-backed graph shows `require`/`import` edges, unresolved modules, cycles, reverse dependencies, exported surfaces, and deterministic root-to-module inclusion paths. |
 | ECS Explorer | Supported | A compiler-backed project view lists static components, systems, and queries; infers conservative read/write access; navigates component relationships; and presents allocation patterns as non-diagnostic insights. |
 | Asset Explorer | Supported | The Explorer groups compiler-indexed assets by type and static usage, publishes conservative unused-asset hints, opens references, and performs LSP-aware file renames. |

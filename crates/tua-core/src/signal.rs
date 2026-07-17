@@ -6,11 +6,13 @@ use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::ast_utils::{field_chain_before_first_call, token_text};
+use crate::ast_utils::{
+    field_chain_before_first_call, plain_field_chain_from_expression, token_text,
+};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
 use crate::scope::ScopeMap;
 use crate::semantic::SemanticModel;
-use crate::types::{FunctionType, TableField, Type, TypeEnvironment};
+use crate::types::{widen_inferred_type, FunctionType, TableField, Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode, TypedFunction, TypedParameter};
 
 pub(crate) const TYPE_NAME: &str = "SignalBus";
@@ -323,8 +325,10 @@ pub(crate) struct SignalEventMention {
     pub position: SourcePosition,
     pub span: SourceSpan,
     pub name_span: SourceSpan,
+    pub call_span: SourceSpan,
     pub source_order: usize,
     pub payload: Option<Vec<TypedParameter>>,
+    pub inferred_emit_payload: Option<Vec<TypedParameter>>,
     pub confirmed_bus: bool,
 }
 
@@ -602,7 +606,11 @@ pub struct SignalGraphCall {
     pub method: String,
     pub role: SignalGraphCallRole,
     pub span: SourceSpan,
+    pub call_span: SourceSpan,
+    pub insertion_position: SourcePosition,
+    pub indentation: String,
     pub payload: Option<Vec<SignalGraphParameter>>,
+    pub inferred_emit_payload: Option<Vec<SignalGraphParameter>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -611,6 +619,8 @@ pub struct SignalGraphEvent {
     pub name: String,
     pub bus: String,
     pub bus_path: PathBuf,
+    pub resolved_payload: Option<Vec<SignalGraphParameter>>,
+    pub schema_conflict: bool,
     pub calls: Vec<SignalGraphCall>,
 }
 
@@ -622,7 +632,25 @@ pub struct SignalGraph {
 pub(crate) fn graph_call_from_mention(
     path: PathBuf,
     mention: SignalEventMention,
+    source: Option<&str>,
 ) -> SignalGraphCall {
+    let insertion_position = SourcePosition {
+        line: mention.call_span.start.line,
+        column: 1,
+    };
+    let indentation = source
+        .and_then(|source| {
+            source
+                .lines()
+                .nth(insertion_position.line.saturating_sub(1))
+        })
+        .map(|line| {
+            line.chars()
+                .take_while(|character| character.is_whitespace())
+                .collect()
+        })
+        .unwrap_or_default();
+
     SignalGraphCall {
         path,
         event: mention.name,
@@ -630,16 +658,78 @@ pub(crate) fn graph_call_from_mention(
         method: mention.method.clone(),
         role: graph_call_role(&mention.method),
         span: mention.span,
-        payload: mention.payload.map(|parameters| {
-            parameters
-                .into_iter()
-                .map(|parameter| SignalGraphParameter {
-                    name: parameter.name,
-                    type_label: parameter.ty.to_string(),
-                })
-                .collect()
-        }),
+        call_span: mention.call_span,
+        insertion_position,
+        indentation,
+        payload: mention.payload.map(graph_parameters),
+        inferred_emit_payload: mention.inferred_emit_payload.map(graph_parameters),
     }
+}
+
+pub(crate) fn graph_schema_summary(
+    events: &[&IndexedSignalEvent],
+) -> (Option<Vec<SignalGraphParameter>>, bool) {
+    let mut explicit = events
+        .iter()
+        .filter(|event| event.mention.payload.is_some())
+        .copied()
+        .collect::<Vec<_>>();
+    explicit.sort_by_key(|event| {
+        (
+            definition_rank(&event.mention),
+            event.path.clone(),
+            event.mention.position.line,
+            event.mention.position.column,
+            event.mention.source_order,
+        )
+    });
+
+    if let Some(selected) = explicit.first() {
+        let selected_payload = selected
+            .mention
+            .payload
+            .as_deref()
+            .expect("explicit schema should have a payload");
+        let conflict = explicit.iter().skip(1).any(|event| {
+            event
+                .mention
+                .payload
+                .as_deref()
+                .is_some_and(|payload| !payload_types_match(payload, selected_payload))
+        });
+
+        return (
+            (!conflict).then(|| graph_parameters(selected_payload.to_vec())),
+            conflict,
+        );
+    }
+
+    let inferred = events
+        .iter()
+        .filter_map(|event| event.mention.inferred_emit_payload.as_deref())
+        .collect::<Vec<_>>();
+    let Some(selected) = inferred.first() else {
+        return (None, false);
+    };
+    let compatible = inferred
+        .iter()
+        .skip(1)
+        .all(|payload| payload_types_match(selected, payload));
+
+    (
+        compatible.then(|| graph_parameters(selected.to_vec())),
+        false,
+    )
+}
+
+fn graph_parameters(parameters: Vec<TypedParameter>) -> Vec<SignalGraphParameter> {
+    parameters
+        .into_iter()
+        .map(|parameter| SignalGraphParameter {
+            name: parameter.name,
+            type_label: parameter.ty.to_string(),
+        })
+        .collect()
 }
 
 fn graph_call_role(method: &str) -> SignalGraphCallRole {
@@ -803,6 +893,10 @@ impl Visitor for SignalEventVisitor<'_> {
         } else {
             None
         };
+        let inferred_emit_payload = (method == "emit")
+            .then(|| emit_payload_parameters(function_call, &self.semantic, position))
+            .flatten();
+        let call_span = node_span(function_call).unwrap_or(span);
 
         self.mentions.push(SignalEventMention {
             name,
@@ -812,10 +906,74 @@ impl Visitor for SignalEventVisitor<'_> {
             position: span.start,
             span,
             name_span,
+            call_span,
             source_order: self.mentions.len(),
             payload,
+            inferred_emit_payload,
             confirmed_bus,
         });
+    }
+}
+
+fn emit_payload_parameters(
+    function_call: &FunctionCall,
+    semantic: &SemanticModel<'_>,
+    position: SourcePosition,
+) -> Option<Vec<TypedParameter>> {
+    let arguments = call_argument_expressions(function_call)?;
+    let mut names = BTreeSet::new();
+
+    arguments
+        .into_iter()
+        .skip(1)
+        .enumerate()
+        .map(|(index, expression)| {
+            let preferred = plain_field_chain_from_expression(expression)
+                .and_then(|parts| parts.last().cloned())
+                .unwrap_or_else(|| format!("value{}", index + 1));
+            let name = unique_parameter_name(preferred, index, &mut names);
+            let ty = semantic
+                .type_of_expression_return(expression, position, 0)
+                .map(|ty| widen_inferred_type(&ty))
+                .unwrap_or(Type::Any);
+
+            Some(TypedParameter {
+                name,
+                ty,
+                documentation: None,
+            })
+        })
+        .collect()
+}
+
+fn unique_parameter_name(preferred: String, index: usize, names: &mut BTreeSet<String>) -> String {
+    if names.insert(preferred.clone()) {
+        return preferred;
+    }
+
+    let fallback = format!("{preferred}{}", index + 1);
+    names.insert(fallback.clone());
+    fallback
+}
+
+fn call_argument_expressions(function_call: &FunctionCall) -> Option<Vec<&Expression>> {
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+
+    match call {
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            Some(arguments.iter().collect())
+        }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter().collect()),
+            FunctionArgs::String(_) | FunctionArgs::TableConstructor(_) => Some(Vec::new()),
+            _ => None,
+        },
+        Call::AnonymousCall(FunctionArgs::String(_))
+        | Call::AnonymousCall(FunctionArgs::TableConstructor(_)) => Some(Vec::new()),
+        _ => None,
     }
 }
 

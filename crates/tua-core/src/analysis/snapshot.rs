@@ -161,9 +161,16 @@ impl AnalysisSnapshot {
                 let bus = bus_label(&first.identity);
                 let id = graph_event_id(&first.identity, &name);
                 let bus_path = first.identity.origin.clone();
+                let (resolved_payload, schema_conflict) = graph_schema_summary(&group);
                 let mut calls = group
                     .into_iter()
-                    .map(|event| graph_call_from_mention(event.path.clone(), event.mention.clone()))
+                    .map(|event| {
+                        graph_call_from_mention(
+                            event.path.clone(),
+                            event.mention.clone(),
+                            self.source(&event.path),
+                        )
+                    })
                     .collect::<Vec<_>>();
 
                 calls.sort_by(|left, right| {
@@ -179,6 +186,8 @@ impl AnalysisSnapshot {
                     name,
                     bus,
                     bus_path,
+                    resolved_payload,
+                    schema_conflict,
                     calls,
                 })
             })

@@ -270,6 +270,9 @@ Conflicting typed schemas report `TL5005`; untyped listeners and unresolved
 dynamic buses keep `emit` permissive. At runtime, `declare` validates the event
 name and optional handler shape, then returns the handler or bus without
 registering a listener.
+`Tua: Show Signal Graph` visualizes those indexed events across files, filters
+by bus/file/listener/emitter, shows conflicting schemas, and can create a typed
+listener or no-op declaration from known payloads.
 
 `objectPool({...})` creates a reusable pool with `acquire`, `release`,
 `prewarm`, ownership, count, and cleanup methods. An annotated `create`

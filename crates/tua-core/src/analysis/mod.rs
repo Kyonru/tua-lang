@@ -42,8 +42,8 @@ use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
 use crate::semantic::SemanticModel;
 use crate::signal::{
-    bus_label, graph_call_from_mention, graph_event_id, SignalEventIndex, SignalGraph,
-    SignalGraphEvent,
+    bus_label, graph_call_from_mention, graph_event_id, graph_schema_summary, SignalEventIndex,
+    SignalGraph, SignalGraphEvent,
 };
 use crate::signature_help::signature_help_parsed_source_with_environment_and_signal_index;
 use crate::source_text::{

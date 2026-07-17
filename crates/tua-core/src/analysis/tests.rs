@@ -330,6 +330,73 @@ events:has("player.hit")
             .collect::<Vec<_>>(),
         vec![("player", "string"), ("damage", "number")]
     );
+    let emit_event = graph
+        .events
+        .iter()
+        .find(|event| {
+            event
+                .calls
+                .iter()
+                .any(|call| call.role == crate::SignalGraphCallRole::Emit)
+        })
+        .expect("emitter bus should be present");
+    assert_eq!(
+        emit_event.resolved_payload,
+        Some(vec![
+            crate::SignalGraphParameter {
+                name: "value1".to_owned(),
+                type_label: "string".to_owned(),
+            },
+            crate::SignalGraphParameter {
+                name: "value2".to_owned(),
+                type_label: "number".to_owned(),
+            },
+        ])
+    );
+    assert_eq!(
+        emit_event
+            .calls
+            .iter()
+            .find(|call| call.role == crate::SignalGraphCallRole::Emit)
+            .and_then(|call| call.inferred_emit_payload.as_ref())
+            .map(|parameters| parameters
+                .iter()
+                .map(|parameter| parameter.type_label.as_str())
+                .collect::<Vec<_>>()),
+        Some(vec!["string", "number"])
+    );
+    assert!(!emit_event.schema_conflict);
+}
+
+#[test]
+fn signal_graph_exposes_conflicting_schema_variants_without_resolving_one() {
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        "src/events.tua",
+        r#"local events = signal()
+events:declare("player.hit", function(player: string, damage: number) end)
+events:on("player.hit", function(player: number, damage: number) end)
+events:emit("player.hit", "Ada", 12)
+"#,
+    );
+
+    let graph = host.snapshot().signal_graph();
+    let event = graph.events.first().expect("event should be indexed");
+
+    assert!(event.schema_conflict);
+    assert_eq!(event.resolved_payload, None);
+    assert_eq!(
+        event
+            .calls
+            .iter()
+            .filter_map(|call| call.payload.as_ref())
+            .map(|payload| payload[0].type_label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["string", "number"]
+    );
+    assert_eq!(event.calls[0].insertion_position.line, 2);
+    assert_eq!(event.calls[0].indentation, "");
 }
 
 #[test]

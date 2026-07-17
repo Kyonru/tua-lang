@@ -32,6 +32,9 @@ language or editor behavior, and migration notes call out those changes.
 - A compiler-backed VS Code ECS Explorer for project components, systems,
   queries, conservative callback read/write access, exact source navigation,
   and non-diagnostic allocation insights.
+- SignalBus graph filters for event, bus, file, listener, and emitter views,
+  plus direct schema-conflict display and actions to create typed listeners or
+  declarations from compiler metadata.
 - Shared VS Code webview, URI/range, error, and document-response utilities now
   own CSP nonces, safe JSON embedding, HTML escaping, location opening, and
   stale-response checks across editor domains.

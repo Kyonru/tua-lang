@@ -10,9 +10,9 @@ use tua_core::{
     FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind, InspectorItem,
     ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind, Reference,
     RenameEdit, RenameTarget, RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind,
-    SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp, SignatureInformation,
-    SourcePosition, SourceSpan, TextEdit, TypeExplanation, TypeExplanationStepKind,
-    WorkspaceSymbol, WorkspaceSymbolKind,
+    SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignalGraphParameter, SignatureHelp,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
+    TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -206,6 +206,8 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
                 "name": event.name,
                 "bus": event.bus,
                 "busUri": uri_from_path(&event.bus_path),
+                "resolvedPayload": lsp_signal_graph_parameters(event.resolved_payload),
+                "schemaConflict": event.schema_conflict,
                 "calls": event.calls.into_iter().map(|call| {
                     json!({
                         "uri": uri_from_path(&call.path),
@@ -219,17 +221,33 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
                             SignalGraphCallRole::Query => "query",
                         },
                         "range": lsp_range(call.span),
-                        "payload": call.payload.map(|parameters| parameters.into_iter().map(|parameter| {
-                            json!({
-                                "name": parameter.name,
-                                "type": parameter.type_label
-                            })
-                        }).collect::<Vec<_>>())
+                        "callRange": lsp_range(call.call_span),
+                        "insertionPosition": lsp_position(call.insertion_position),
+                        "indentation": call.indentation,
+                        "payload": lsp_signal_graph_parameters(call.payload),
+                        "inferredPayload": lsp_signal_graph_parameters(call.inferred_emit_payload),
                     })
                 }).collect::<Vec<_>>()
             })
         }).collect::<Vec<_>>()
     })
+}
+
+fn lsp_signal_graph_parameters(parameters: Option<Vec<SignalGraphParameter>>) -> Value {
+    parameters
+        .map(|parameters| {
+            parameters
+                .into_iter()
+                .map(|parameter| {
+                    json!({
+                        "name": parameter.name,
+                        "type": parameter.type_label
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .map(Value::Array)
+        .unwrap_or(Value::Null)
 }
 
 pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value {
