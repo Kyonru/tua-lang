@@ -19,6 +19,7 @@ const expected = [
   "tua.saveCpuProfile",
   "tua.saveHeapSummary",
   "tua.openGeneratedLua",
+  "tua.jumpBetweenSourceAndGenerated",
   "tua.explainType",
   "tua.inlayHints.selectMode",
   "tua.previewSprites",

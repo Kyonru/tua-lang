@@ -25,21 +25,58 @@ async function runWorkspaceTests() {
 async function testOpenGeneratedLuaBesideSource() {
   const sourcePath = path.join(fixtures.workspaceOne, "src", "open-generated.tua");
   const generatedPath = path.join(fixtures.workspaceOne, "build", "open-generated.lua");
+  const sourceMapPath = path.join(fixtures.workspaceOne, "build", "open-generated.lua.map.json");
 
   fs.writeFileSync(sourcePath, "local answer = 42\nreturn answer\n");
   fs.mkdirSync(path.dirname(generatedPath), { recursive: true });
   fs.writeFileSync(generatedPath, "local answer = 42\nreturn answer\n");
+  fs.writeFileSync(
+    sourceMapPath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        generated: "build/open-generated.lua",
+        source: "src/open-generated.tua",
+        lineMappings: [
+          { generatedLine: 1, sourceLine: 1 },
+          { generatedLine: 2, sourceLine: 2 },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
 
   const sourceDocument = await vscode.workspace.openTextDocument(sourcePath);
-  await vscode.window.showTextDocument(sourceDocument, {
+  const sourceEditor = await vscode.window.showTextDocument(sourceDocument, {
     preview: false,
     viewColumn: vscode.ViewColumn.One,
   });
+  sourceEditor.selection = new vscode.Selection(1, 0, 1, 0);
 
   const openedPath = await vscode.commands.executeCommand("tua.openGeneratedLua");
   assert.equal(openedPath, generatedPath);
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, generatedPath);
   assert.equal(vscode.window.activeTextEditor?.viewColumn, vscode.ViewColumn.Two);
+
+  const reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
+    preview: false,
+    viewColumn: vscode.ViewColumn.One,
+  });
+  reopenedSourceEditor.selection = new vscode.Selection(1, 0, 1, 0);
+  const openedGeneratedPath = await vscode.commands.executeCommand(
+    "tua.jumpBetweenSourceAndGenerated",
+  );
+  assert.equal(openedGeneratedPath, generatedPath);
+  assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, generatedPath);
+  assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1);
+
+  const openedSourcePath = await vscode.commands.executeCommand(
+    "tua.jumpBetweenSourceAndGenerated",
+  );
+  assert.equal(openedSourcePath, sourcePath);
+  assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, sourcePath);
+  assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1);
 
   await closeActiveEditor();
   await closeActiveEditor();

@@ -12,6 +12,7 @@ const COMMANDS = {
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
   openGeneratedLua: "tua.openGeneratedLua",
+  jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
   explainType: "tua.explainType",
   selectInlayHintMode: "tua.inlayHints.selectMode",
   previewSprites: "tua.previewSprites",

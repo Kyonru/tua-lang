@@ -424,6 +424,11 @@ through the nearest `tua.toml` `source` and `out` settings and opens the emitted
 `.lua` file in a side editor. The command is an editor convenience for inspecting
 build output; it does not synthesize Lua or run `tua build` automatically.
 
+`Tua: Jump Between Tua and Generated Lua` additionally reads the emitted
+`*.lua.map.json` sidecar and jumps between the nearest mapped Tua and generated
+Lua lines. Source maps currently carry line provenance only, so the selected
+target column is 0.
+
 For local smoke tests:
 
 ```bash

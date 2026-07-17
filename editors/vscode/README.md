@@ -113,6 +113,7 @@ the setting.
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
 - `Tua: Open Generated Lua Beside Tua`
+- `Tua: Jump Between Tua and Generated Lua`
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
@@ -150,6 +151,11 @@ the Tua editor toolbar. It resolves the active saved `.tua` file through the
 nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
 `.lua` file beside the source editor. If the output does not exist, run
 `tua build` first.
+
+`Tua: Jump Between Tua and Generated Lua` uses the emitted
+`*.lua.map.json` sidecar to jump from a Tua line to the corresponding generated
+Lua line, or from generated Lua back to the original Tua source line. Source
+maps are line-based, so the command opens the nearest mapped line at column 0.
 
 ## Module Dependency Explorer
 

@@ -495,6 +495,12 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "tua.jumpBetweenSourceAndGenerated",
+        "title": "Jump Between Tua and Generated Lua",
+        "category": "Tua",
+        "icon": "$(arrow-swap)"
+      },
+      {
         "command": "tua.inlayHints.selectMode",
         "title": "Select Inlay Hint Mode",
         "category": "Tua",
@@ -622,6 +628,11 @@
           "group": "navigation@45"
         },
         {
+          "command": "tua.jumpBetweenSourceAndGenerated",
+          "when": "editorLangId == tua || resourceExtname == .lua",
+          "group": "navigation@46"
+        },
+        {
           "command": "tua.showSignalGraph",
           "when": "editorLangId == tua",
           "group": "navigation@50"
@@ -639,6 +650,10 @@
         {
           "command": "tua.openGeneratedLua",
           "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.jumpBetweenSourceAndGenerated",
+          "when": "editorLangId == tua || resourceExtname == .lua"
         },
         {
           "command": "tua.whyModuleIncluded",
