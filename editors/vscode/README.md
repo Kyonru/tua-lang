@@ -105,6 +105,7 @@ the setting.
 - `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
+- `Tua: Toggle Compact Inlay Hints`
 - `Tua: Preview Sprite Animations`
 - `Tua: Show Signal Graph`
 - `Tua: Organize Imports`
@@ -112,6 +113,12 @@ the setting.
 - `Tua: Remove Unused Imports`
 - `Tua: Fix All Safe Diagnostics`
 - `Tua: Report Issue`
+
+`Tua: Toggle Compact Inlay Hints` switches Tua editors between the full hint
+labels and VS Code's native compact ellipsis rendering. The command remembers
+and restores the previous language-specific maximum length. It changes only
+presentation; the language server continues returning complete type and
+parameter labels.
 
 ## Profiling
 

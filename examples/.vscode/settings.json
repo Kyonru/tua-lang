@@ -1,3 +1,5 @@
 {
-  "tua.preview.enabled": true
+  "tua.preview.enabled": true,
+  "[tua]": {
+  }
 }

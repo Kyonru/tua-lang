@@ -16,7 +16,7 @@
   "icon": "assets/logo.png",
   "main": "./src/extension.js",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.94.0"
   },
   "categories": [
     "Programming Languages",
@@ -489,6 +489,12 @@
         "category": "Tua"
       },
       {
+        "command": "tua.inlayHints.toggleCompact",
+        "title": "Toggle Compact Inlay Hints",
+        "category": "Tua",
+        "icon": "$(ellipsis)"
+      },
+      {
         "command": "tua.previewSprites",
         "title": "Preview Sprite Animations",
         "category": "Tua"
@@ -528,9 +534,20 @@
     "menus": {
       "editor/title": [
         {
+          "command": "tua.inlayHints.toggleCompact",
+          "when": "editorLangId == tua",
+          "group": "navigation@40"
+        },
+        {
           "command": "tua.showSignalGraph",
           "when": "editorLangId == tua",
           "group": "navigation@50"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "tua.inlayHints.toggleCompact",
+          "when": "editorLangId == tua"
         }
       ]
     },

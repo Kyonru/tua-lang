@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("./constants");
+const { registerEditorDevex } = require("./editor");
 const { registerLoveDevex } = require("./love");
 const { registerSignalDevex } = require("./signals");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
@@ -29,6 +30,13 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
+  context.subscriptions.push(
+    registerEditorDevex({
+      context,
+      configurationTarget,
+      isTuaDocument,
+    }),
+  );
   context.subscriptions.push(
     registerLoveDevex({
       configurationTarget,

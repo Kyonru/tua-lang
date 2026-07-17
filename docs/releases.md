@@ -60,6 +60,9 @@ Before 1.0, Tua uses semantic versions with these expectations:
 - generated Lua continues to target Lua 5.1-style Lua, LuaJIT, and LOVE 11.x
   unless a release note explicitly announces a target change.
 
+The VS Code extension requires VS Code 1.94 or newer. That baseline provides
+the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
+
 ## Release Process
 
 1. Update `[Unreleased]` and add a dated version section in `CHANGELOG.md` with

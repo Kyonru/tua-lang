@@ -1254,6 +1254,7 @@ function assertRegisteredCommands(state) {
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.inlayHints.toggleCompact",
     "tua.previewSprites",
     "tua.previewSprites.reload",
     "tua.showSignalGraph",

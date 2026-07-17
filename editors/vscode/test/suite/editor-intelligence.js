@@ -88,6 +88,8 @@ async function testLiveLanguageFeatures() {
   );
   assert(hints.some((hint) => hint.label === ": number"));
 
+  await testCompactInlayHintToggle(document);
+
   for (const type of [
     "hover.request",
     "definition.request",
@@ -105,6 +107,79 @@ async function testLiveLanguageFeatures() {
   }
 
   await discardActiveEditor();
+}
+
+async function testCompactInlayHintToggle(document) {
+  const configuration = () =>
+    vscode.workspace.getConfiguration("editor", { uri: document.uri, languageId: "tua" });
+  const previous = configuration().inspect("inlayHints.maximumLength")?.workspaceLanguageValue;
+
+  try {
+    await configuration().update(
+      "inlayHints.maximumLength",
+      27,
+      vscode.ConfigurationTarget.Workspace,
+      true,
+    );
+    assert.equal(
+      configuration().get("inlayHints.maximumLength"),
+      27,
+      "the test host should apply Tua language-specific inlay settings",
+    );
+
+    assert.equal(
+      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
+      true,
+    );
+    assert.equal(configuration().get("inlayHints.maximumLength"), 1);
+
+    const hints = await vscode.commands.executeCommand(
+      "vscode.executeInlayHintProvider",
+      document.uri,
+      new vscode.Range(0, 0, document.lineCount, 0),
+    );
+    assert(
+      hints.some((hint) => hint.label === ": number"),
+      "compact presentation must not replace the LSP's full inlay hint labels",
+    );
+
+    assert.equal(
+      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
+      false,
+    );
+    assert.equal(
+      configuration().get("inlayHints.maximumLength"),
+      27,
+      "expanding should restore the previous Tua language override",
+    );
+
+    await configuration().update(
+      "inlayHints.maximumLength",
+      undefined,
+      vscode.ConfigurationTarget.Workspace,
+      true,
+    );
+    assert.equal(
+      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
+      true,
+    );
+    assert.equal(
+      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
+      false,
+    );
+    assert.equal(
+      configuration().inspect("inlayHints.maximumLength")?.workspaceLanguageValue,
+      undefined,
+      "expanding should remove the temporary override when none existed before",
+    );
+  } finally {
+    await configuration().update(
+      "inlayHints.maximumLength",
+      previous,
+      vscode.ConfigurationTarget.Workspace,
+      true,
+    );
+  }
 }
 
 async function testUtf16AndUntitledDocuments() {

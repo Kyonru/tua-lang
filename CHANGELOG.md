@@ -13,6 +13,8 @@ language or editor behavior, and migration notes call out those changes.
 - A zero-setup `objectPool({...})` helper with item-aware typing, lifecycle
   completion and hover, prewarming, guarded release, cleanup hooks, and an
   on-demand bundled `tuaobjectpool.lua` runtime.
+- A VS Code command that toggles native compact inlay-hint rendering and
+  restores the previous Tua-specific hint-length preference when expanded.
 
 ### Changed
 
@@ -22,6 +24,8 @@ language or editor behavior, and migration notes call out those changes.
   surface, while semantic highlighting uses standard theme-compatible symbol
   types and declaration, readonly, deprecated, modification, and library
   modifiers.
+- The VS Code extension now requires VS Code 1.94 or newer for native compact
+  inlay-hint presentation.
 
 ## [0.1.0] - 2026-07-16
 

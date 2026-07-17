@@ -325,6 +325,12 @@ stale timer callbacks. `make extension-test` types through a real editor host
 and verifies request version, cursor position, freshness, and suggestion-widget
 acceptance.
 
+`Tua: Toggle Compact Inlay Hints` uses VS Code's native inlay-hint maximum
+length to switch Tua editors to compact ellipsis rendering. Running it again
+restores the exact prior Tua language override, including an absent override.
+This is a presentation toggle: complete hint labels remain available from the
+language server and no document analysis is repeated by the command.
+
 For local smoke tests:
 
 ```bash

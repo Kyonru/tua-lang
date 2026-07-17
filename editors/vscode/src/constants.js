@@ -11,6 +11,7 @@ const COMMANDS = {
   resetCompletionStats: "tua.resetCompletionStats",
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
+  toggleCompactInlayHints: "tua.inlayHints.toggleCompact",
   previewSprites: "tua.previewSprites",
   reloadSpritePreview: "tua.previewSprites.reload",
   showSignalGraph: "tua.showSignalGraph",
