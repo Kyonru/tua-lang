@@ -94,6 +94,16 @@ function moduleGraphTabs() {
     );
 }
 
+function ecsExplorerTabs() {
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter(
+      (tab) =>
+        tab.input instanceof vscode.TabInputWebview &&
+        String(tab.input.viewType || "").endsWith("tuaEcsExplorer"),
+    );
+}
+
 function positionAfter(document, needle, occurrence = 1) {
   const text = document.getText();
   let offset = -1;
@@ -117,6 +127,7 @@ module.exports = {
   closeActiveEditor,
   delay,
   discardActiveEditor,
+  ecsExplorerTabs,
   eventSequence,
   fixtures,
   hoverText,

@@ -94,7 +94,8 @@ Project-aware feature requests should follow the same path:
 3. The snapshot reads normalized files through the VFS and project model.
 4. Cached per-file queries parse source, extract typed source models, lower HIR,
    build scopes, collect diagnostics, collect exports, resolve type data, and
-   collect compact member usage, proximity, and SignalBus event summaries.
+   collect compact member usage, proximity, SignalBus event summaries, and
+   static ECS component/system/query summaries.
 5. Project queries build require edges, module exports, symbol indexes,
    project-aware type information, a revisioned project usage index, and lazy
    reverse-reference indexes from indexed files. The usage index aggregates
@@ -180,6 +181,12 @@ Compiler-owned game helpers follow that same rule. ECS and object-pool facts
 must resolve through shared types before catalog fallbacks so checking,
 completion, hover, signature help, inlay hints, navigation, and emission do not
 drift into feature-specific answers.
+
+Project ECS inspection aggregates cached per-file ECS summaries. Imported
+component identity is resolved through the normal definition query and module
+graph; the VS Code extension receives only structured facts through
+`tua/ecsGraph`. Performance observations remain inspector data rather than
+diagnostics because they describe patterns to measure, not invalid programs.
 
 Performance-sensitive IDE features should reuse snapshot semantic facts rather
 than rebuilding type environments in each feature. Completion, completion

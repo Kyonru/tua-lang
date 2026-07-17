@@ -23,6 +23,7 @@ const COMMANDS = {
   revealAsset: "tua.assets.reveal",
   showSignalGraph: "tua.showSignalGraph",
   showModuleGraph: "tua.showModuleGraph",
+  showEcsExplorer: "tua.showEcsExplorer",
   whyModuleIncluded: "tua.whyModuleIncluded",
   organizeImports: "tua.source.organizeImports",
   sortImports: "tua.source.sortImports",

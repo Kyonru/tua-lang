@@ -4,6 +4,14 @@ use std::path::Path;
 use crate::types::{TableField, TableShape, Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, TypedFunction, TypedParameter};
 
+mod inspection;
+
+pub(crate) use inspection::{ecs_file_index, ecs_graph, EcsFileIndex};
+pub use inspection::{
+    EcsAccessKind, EcsComponent, EcsComponentField, EcsComponentUse, EcsGraph, EcsInsight,
+    EcsInsightKind, EcsQuery, EcsQueryKind, EcsSystem,
+};
+
 pub(crate) const MODULE_NAME: &str = "ecs";
 pub(crate) const RUNTIME_MODULE: &str = "tuaecs";
 

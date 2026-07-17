@@ -2,6 +2,8 @@
 
 const vscode = require("vscode");
 const { COMMANDS } = require("../../constants");
+const { formatError } = require("../../shared/errors");
+const { lspRangeToVscode } = require("../../shared/locations");
 const { AssetTreeDataProvider } = require("./tree");
 
 const ASSET_GLOB = "**/*.{bmp,exr,hdr,jpeg,jpg,pic,png,tga,flac,mp3,ogg,wav,otf,ttf,frag,fs,glsl,vert,vs,ogm,ogv}";
@@ -179,7 +181,7 @@ async function openReference(node) {
 
   await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(reference.uri), {
     preview: true,
-    selection: protocolRange(reference.range),
+    selection: lspRangeToVscode(reference.range),
   });
 }
 
@@ -191,7 +193,7 @@ async function findReferences(node) {
 
   const locations = (asset.references || []).map(
     (reference) =>
-      new vscode.Location(vscode.Uri.parse(reference.uri), protocolRange(reference.range)),
+      new vscode.Location(vscode.Uri.parse(reference.uri), lspRangeToVscode(reference.range)),
   );
 
   if (locations.length === 0) {
@@ -219,7 +221,7 @@ function updateDiagnostics(collection, entries) {
     const uri = vscode.Uri.parse(entry.uri);
     const key = uri.toString();
     const diagnostic = new vscode.Diagnostic(
-      protocolRange(entry.diagnostic.range),
+      lspRangeToVscode(entry.diagnostic.range),
       entry.diagnostic.message,
       diagnosticSeverity(entry.diagnostic.severity),
     );
@@ -250,19 +252,8 @@ function diagnosticSeverity(severity) {
   }
 }
 
-function protocolRange(range) {
-  return new vscode.Range(
-    new vscode.Position(range.start.line, range.start.character),
-    new vscode.Position(range.end.line, range.end.character),
-  );
-}
-
 function assetUri(node) {
   return node?.asset?.uri ? vscode.Uri.parse(node.asset.uri) : undefined;
-}
-
-function formatError(error) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 module.exports = {

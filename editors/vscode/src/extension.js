@@ -7,11 +7,13 @@ const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("./constants");
 const { registerEditorDevex } = require("./editor");
+const { registerEcsDevex } = require("./ecs");
 const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerSignalDevex } = require("./signals");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isTuaDocument } = require("./shared/documents");
+const { formatError } = require("./shared/errors");
 
 let client;
 let editorDevex;
@@ -48,6 +50,7 @@ async function activate(context) {
   context.subscriptions.push(loveDevex);
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(registerModuleDevex({ getClient: () => client }));
+  context.subscriptions.push(registerEcsDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);
@@ -871,18 +874,6 @@ function showWorkspaceTrustWarning(error) {
         vscode.commands.executeCommand(COMMANDS.openSettings);
       }
     });
-}
-
-function formatError(error) {
-  if (!error) {
-    return "";
-  }
-
-  if (typeof error.message === "string" && error.message) {
-    return error.message;
-  }
-
-  return String(error);
 }
 
 module.exports = {

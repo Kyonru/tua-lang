@@ -15,6 +15,11 @@ function isTuaDocument(document) {
   return filename.endsWith(".tua");
 }
 
+function isStaleDocumentResponse(response, document) {
+  return Number.isInteger(document.version) && response?.documentVersion !== document.version;
+}
+
 module.exports = {
+  isStaleDocumentResponse,
   isTuaDocument,
 };

@@ -6,12 +6,13 @@ use tua_core::{
     AssetInventory, CodeAction, CodeActionEdit, CodeActionKind, CodeLens, CodeLensReferenceKind,
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
-    DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
-    InspectorItem, ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind,
-    Reference, RenameEdit, RenameTarget, RequireResolution, SelectionRange, SemanticToken,
-    SemanticTokenKind, SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp,
-    SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
-    TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
+    DocumentSymbolKind, EcsAccessKind, EcsComponentUse, EcsGraph, EcsInsightKind, EcsQueryKind,
+    FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind, InspectorItem,
+    ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind, Reference,
+    RenameEdit, RenameTarget, RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind,
+    SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp, SignatureInformation,
+    SourcePosition, SourceSpan, TextEdit, TypeExplanation, TypeExplanationStepKind,
+    WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -346,6 +347,84 @@ pub(super) fn lsp_module_dependency_graph_from_core(graph: ModuleDependencyGraph
                 "moduleUris": paths.into_iter().map(|path| uri_from_path(&path)).collect::<Vec<_>>()
             })
         }).collect::<Vec<_>>()
+    })
+}
+
+pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
+    json!({
+        "components": graph.components.into_iter().map(|component| {
+            json!({
+                "id": component.id,
+                "uri": uri_from_path(&component.path),
+                "localName": component.local_name,
+                "runtimeName": component.runtime_name,
+                "range": lsp_range(component.span),
+                "nameRange": lsp_range(component.name_span),
+                "fields": component.fields.into_iter().map(|field| {
+                    json!({
+                        "name": field.name,
+                        "type": field.type_label,
+                        "range": lsp_range(field.span)
+                    })
+                }).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>(),
+        "systems": graph.systems.into_iter().map(|system| {
+            json!({
+                "id": system.id,
+                "uri": uri_from_path(&system.path),
+                "name": system.name,
+                "range": lsp_range(system.span),
+                "nameRange": system.name_span.map(lsp_range),
+                "callbackRange": system.callback_span.map(lsp_range),
+                "components": system.components.into_iter().map(lsp_ecs_component_use).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>(),
+        "queries": graph.queries.into_iter().map(|query| {
+            json!({
+                "id": query.id,
+                "uri": uri_from_path(&query.path),
+                "name": query.name,
+                "kind": match query.kind {
+                    EcsQueryKind::Standalone => "standalone",
+                    EcsQueryKind::System => "system",
+                },
+                "ownerSystemId": query.owner_system_id,
+                "range": lsp_range(query.span),
+                "nameRange": query.name_span.map(lsp_range),
+                "components": query.components.into_iter().map(lsp_ecs_component_use).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>(),
+        "insights": graph.insights.into_iter().map(|insight| {
+            json!({
+                "id": insight.id,
+                "kind": match insight.kind {
+                    EcsInsightKind::WideQueryAllocation => "wideQueryAllocation",
+                    EcsInsightKind::CallbackAllocation => "callbackAllocation",
+                    EcsInsightKind::ResourceConstruction => "resourceConstruction",
+                },
+                "title": insight.title,
+                "message": insight.message,
+                "uri": uri_from_path(&insight.path),
+                "range": lsp_range(insight.span),
+                "subjectId": insight.subject_id
+            })
+        }).collect::<Vec<_>>()
+    })
+}
+
+fn lsp_ecs_component_use(component: EcsComponentUse) -> Value {
+    json!({
+        "reference": component.reference,
+        "componentId": component.component_id,
+        "access": match component.access {
+            EcsAccessKind::Filter => "filter",
+            EcsAccessKind::Read => "read",
+            EcsAccessKind::Write => "write",
+            EcsAccessKind::ReadWrite => "readWrite",
+            EcsAccessKind::Unknown => "unknown",
+        },
+        "range": lsp_range(component.span)
     })
 }
 

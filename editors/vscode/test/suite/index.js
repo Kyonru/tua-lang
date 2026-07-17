@@ -4,6 +4,7 @@ const assert = require("assert/strict");
 const vscode = require("vscode");
 const { runCompletionTests } = require("./completion");
 const { runEditorIntelligenceTests } = require("./editor-intelligence");
+const { runEcsExplorerTests } = require("./ecs-explorer");
 const { runModuleGraphTests } = require("./module-graph");
 const { runSpritePreviewTests } = require("./sprite-preview");
 const { fixtures, waitForEvent } = require("./support");
@@ -15,6 +16,7 @@ async function run() {
     "all",
     "completion",
     "editor-intelligence",
+    "ecs-explorer",
     "module-graph",
     "workspace",
     "sprite-preview",
@@ -48,6 +50,9 @@ async function run() {
   }
   if (selectedSuite === "all" || selectedSuite === "editor-intelligence") {
     await runEditorIntelligenceTests();
+  }
+  if (selectedSuite === "all" || selectedSuite === "ecs-explorer") {
+    await runEcsExplorerTests();
   }
   if (selectedSuite === "all" || selectedSuite === "module-graph") {
     await runModuleGraphTests();

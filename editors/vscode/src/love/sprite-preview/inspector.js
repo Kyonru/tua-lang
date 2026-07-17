@@ -1,5 +1,7 @@
 "use strict";
 
+const { isStaleDocumentResponse } = require("../../shared/documents");
+
 async function inspectSpriteSheets({ client, document, position }) {
   if (!client) {
     throw new Error("The Tua language server is not running.");
@@ -20,11 +22,11 @@ async function inspectSpriteSheets({ client, document, position }) {
 
   let response = await client.sendRequest("tua/inspect", params);
 
-  if (isStale(response, document)) {
+  if (isStaleDocumentResponse(response, document)) {
     response = await client.sendRequest("tua/inspect", params);
   }
 
-  if (isStale(response, document)) {
+  if (isStaleDocumentResponse(response, document)) {
     throw new Error("Sprite inspection is stale. Reload after document synchronization.");
   }
 
@@ -35,13 +37,6 @@ async function inspectSpriteSheets({ client, document, position }) {
       (item) => item?.kind === "spriteSheet" && typeof item.name === "string",
     ),
   };
-}
-
-function isStale(response, document) {
-  return (
-    Number.isInteger(document.version) &&
-    response?.documentVersion !== document.version
-  );
 }
 
 function numberOrUndefined(value) {

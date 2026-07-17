@@ -1,8 +1,9 @@
 "use strict";
 
-const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { displayUriPath, openLocationMessage } = require("../shared/locations");
+const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
 
 let graphPanel;
 
@@ -60,24 +61,7 @@ async function handleGraphMessage(message, { getClient }) {
     return;
   }
 
-  if (message?.command !== "openLocation" || typeof message.uri !== "string") {
-    return;
-  }
-
-  const range = message.range;
-  const start = new vscode.Position(
-    Number(range?.start?.line) || 0,
-    Number(range?.start?.character) || 0,
-  );
-  const end = new vscode.Position(
-    Number(range?.end?.line) || start.line,
-    Number(range?.end?.character) || start.character,
-  );
-
-  await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(message.uri), {
-    preview: true,
-    selection: new vscode.Range(start, end),
-  });
+  await openLocationMessage(message);
 }
 
 async function renderSignalGraph(panel, client) {
@@ -107,12 +91,12 @@ function signalGraphViewModel(graph) {
         name: event.name,
         bus: typeof event.bus === "string" ? event.bus : "",
         busFile:
-          typeof event.busUri === "string" ? displayPath(event.busUri) : "",
+          typeof event.busUri === "string" ? displayUriPath(event.busUri) : "",
         calls: (Array.isArray(event.calls) ? event.calls : [])
           .filter((call) => typeof call?.uri === "string" && call?.range)
           .map((call) => ({
             uri: call.uri,
-            file: displayPath(call.uri),
+            file: displayUriPath(call.uri),
             receiver: typeof call.receiver === "string" ? call.receiver : "",
             method: typeof call.method === "string" ? call.method : "",
             role: knownRole(call.role),
@@ -127,20 +111,6 @@ function signalGraphViewModel(graph) {
           })),
       })),
   };
-}
-
-function displayPath(uriValue) {
-  const uri = vscode.Uri.parse(uriValue);
-
-  if (typeof vscode.workspace.asRelativePath === "function") {
-    const relative = vscode.workspace.asRelativePath(uri, false);
-
-    if (relative) {
-      return relative;
-    }
-  }
-
-  return uri.fsPath ? path.basename(uri.fsPath) : uriValue;
 }
 
 function knownRole(role) {
@@ -449,16 +419,7 @@ function signalGraphHtml(webview, graph) {
 }
 
 function documentHtml(webview, title, body, script) {
-  const nonce = webviewNonce();
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <title>${escapeHtml(title)}</title>
-  <style>
+  return webviewDocument(webview, { title, body, script, styles: `
     :root { color-scheme: light dark; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
     * { box-sizing: border-box; }
     body { margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); }
@@ -528,43 +489,7 @@ function documentHtml(webview, title, body, script) {
       .call-row { grid-template-columns: 70px minmax(0, 1fr); }
       .call-row code { grid-column: 1 / -1; }
     }
-  </style>
-</head>
-<body>
-  ${body}
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    ${script}
-  </script>
-</body>
-</html>`;
-}
-
-function jsonForHtml(value) {
-  return JSON.stringify(value)
-    .replaceAll("&", "\\u0026")
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e");
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function webviewNonce() {
-  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let nonce = "";
-
-  for (let index = 0; index < 24; index += 1) {
-    nonce += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-
-  return nonce;
+  ` });
 }
 
 module.exports = {

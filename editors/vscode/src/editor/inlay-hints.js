@@ -2,6 +2,7 @@
 
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { formatError } = require("../shared/errors");
 
 const MAXIMUM_LENGTH_SETTING = "inlayHints.maximumLength";
 const COMPACT_MAXIMUM_LENGTH = 1;
@@ -224,10 +225,6 @@ function languageValueForTarget(inspection, target) {
   }
 
   return inspection.workspaceLanguageValue;
-}
-
-function formatError(error) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 module.exports = {

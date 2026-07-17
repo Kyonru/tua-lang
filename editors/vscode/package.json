@@ -551,6 +551,12 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "tua.showEcsExplorer",
+        "title": "Show ECS Explorer",
+        "category": "Tua",
+        "icon": "$(symbol-structure)"
+      },
+      {
         "command": "tua.whyModuleIncluded",
         "title": "Why Is This Module Included?",
         "category": "Tua",

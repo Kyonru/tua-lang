@@ -2,6 +2,7 @@
 
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { activeFileUri, openLocationMessage } = require("../shared/locations");
 const { moduleGraphViewModel } = require("./view-model");
 const {
   moduleGraphErrorHtml,
@@ -73,27 +74,7 @@ async function handleGraphMessage(message, { getClient }) {
     return;
   }
 
-  if (message?.command !== "openLocation" || typeof message.uri !== "string") {
-    return;
-  }
-
-  const range = message.range || {
-    start: { line: 0, character: 0 },
-    end: { line: 0, character: 0 },
-  };
-  const start = new vscode.Position(
-    Number(range.start?.line) || 0,
-    Number(range.start?.character) || 0,
-  );
-  const end = new vscode.Position(
-    Number(range.end?.line) || start.line,
-    Number(range.end?.character) || start.character,
-  );
-
-  await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(message.uri), {
-    preview: true,
-    selection: new vscode.Range(start, end),
-  });
+  await openLocationMessage(message);
 }
 
 async function renderModuleGraph(panel, client, focus) {
@@ -107,11 +88,6 @@ async function renderModuleGraph(panel, client, focus) {
   } catch (error) {
     panel.webview.html = moduleGraphErrorHtml(panel.webview, error);
   }
-}
-
-function activeFileUri() {
-  const uri = vscode.window.activeTextEditor?.document?.uri;
-  return uri?.scheme === "file" ? uri.toString() : undefined;
 }
 
 module.exports = {

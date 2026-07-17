@@ -93,6 +93,9 @@ function handleMessage(message) {
     case "tua/moduleGraph":
       moduleGraph(message);
       return;
+    case "tua/ecsGraph":
+      ecsGraph(message);
+      return;
     case "workspace/willRenameFiles":
       willRenameFiles(message);
       return;
@@ -464,6 +467,92 @@ function moduleGraph(message) {
       cycles: [{ id: "cycle:0", moduleUris: [playerUri, sharedUri] }],
     },
   });
+}
+
+function ecsGraph(message) {
+  const uri = [...documents.keys()].find((candidate) => candidate.endsWith("/ecs.tua"))
+    || pathToFileURL(path.resolve(process.cwd(), "src", "ecs.tua")).toString();
+  const componentRange = {
+    start: { line: 0, character: 6 },
+    end: { line: 0, character: 14 },
+  };
+  const systemRange = {
+    start: { line: 2, character: 6 },
+    end: { line: 4, character: 4 },
+  };
+  const positionId = "component:position";
+  const velocityId = "component:velocity";
+  const systemId = "system:movement";
+
+  log({ type: "ecsGraph.request", id: message.id, rootUri: uri });
+  respond(message.id, {
+    analysisRevision: 12,
+    graph: {
+      components: [
+        ecsComponent(positionId, uri, "Position", componentRange),
+        ecsComponent(velocityId, uri, "Velocity", {
+          start: { line: 1, character: 6 },
+          end: { line: 1, character: 14 },
+        }),
+      ],
+      systems: [
+        {
+          id: systemId,
+          uri,
+          name: "movement",
+          range: systemRange,
+          nameRange: { start: systemRange.start, end: { line: 2, character: 14 } },
+          callbackRange: systemRange,
+          components: [
+            ecsComponentUse("Position", positionId, "readWrite", componentRange),
+            ecsComponentUse("Velocity", velocityId, "read", componentRange),
+          ],
+        },
+      ],
+      queries: [
+        {
+          id: `${systemId}:query`,
+          uri,
+          name: "movement",
+          kind: "system",
+          ownerSystemId: systemId,
+          range: systemRange,
+          nameRange: { start: systemRange.start, end: { line: 2, character: 14 } },
+          components: [
+            ecsComponentUse("Position", positionId, "readWrite", componentRange),
+            ecsComponentUse("Velocity", velocityId, "read", componentRange),
+          ],
+        },
+      ],
+      insights: [
+        {
+          id: `${systemId}:allocation`,
+          kind: "callbackAllocation",
+          title: "Per-entity callback allocations",
+          message: "Consider reusing callback data when profiling shows allocation pressure.",
+          uri,
+          range: systemRange,
+          subjectId: systemId,
+        },
+      ],
+    },
+  });
+}
+
+function ecsComponent(id, uri, name, range) {
+  return {
+    id,
+    uri,
+    localName: name,
+    runtimeName: name,
+    range,
+    nameRange: range,
+    fields: [{ name: "x", type: "number", range }],
+  };
+}
+
+function ecsComponentUse(reference, componentId, access, range) {
+  return { reference, componentId, access, range };
 }
 
 function moduleGraphModule(uri, overrides) {

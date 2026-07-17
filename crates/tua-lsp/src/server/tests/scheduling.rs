@@ -71,6 +71,25 @@ fn module_graph_yields_to_typing_and_completion() {
 }
 
 #[test]
+fn ecs_graph_yields_to_typing_and_completion() {
+    let uri = "file:///tmp/ecs-graph-priority.tua";
+    let after = "local Position = ecs.component(\"Position\", {})\nP";
+    let mut messages = std::collections::VecDeque::from([
+        ecs_graph_request(2),
+        did_change(uri, after, 2),
+        invoked_completion_request(3, uri, after, "P"),
+    ]);
+
+    let first = pop_next_pending_message(&mut messages).expect("first message");
+    let second = pop_next_pending_message(&mut messages).expect("second message");
+    let third = pop_next_pending_message(&mut messages).expect("third message");
+
+    assert_eq!(first["method"], "textDocument/didChange");
+    assert_eq!(second["method"], "textDocument/completion");
+    assert_eq!(third["method"], "tua/ecsGraph");
+}
+
+#[test]
 fn shutdown_does_not_overtake_an_earlier_interactive_request() {
     let uri = "file:///tmp/shutdown-order.tua";
     let source = "local hp: number = 10\n";

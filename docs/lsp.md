@@ -129,6 +129,13 @@ selected path, version, and workspace directory when available.
   a pure cycle may therefore have no root path. The VS Code module dependency
   explorer opens every edge, export, and inclusion step at its compiler-owned
   source range.
+- The low-priority `tua/ecsGraph` request returns cached project ECS facts:
+  static component declarations and schemas, systems, standalone and
+  system-owned queries, resolved component identities, conservative callback
+  access (`filter`, `read`, `write`, `readWrite`, or `unknown`), and
+  non-diagnostic performance insights. Module-qualified component references
+  resolve through normal compiler definitions. The VS Code ECS Explorer opens
+  every declaration and query use at its compiler-owned range.
 - SignalBus event strings use the same semantic index for completion, payload
   signature help, hover, definition, references, and rename. Typed listener and
   `declare` callback conflicts publish `TL5005`; untyped or unresolved buses
@@ -203,6 +210,12 @@ Included?` focuses the active file and opens its root-to-module explanation.
 Module graph work uses the background request lane, so pending inspection
 yields to document changes, completion, hover, definition, and other
 interactive editor work.
+
+ECS visualization follows the same compiler/presentation boundary. `Tua: Show
+ECS Explorer` requests `tua/ecsGraph`; the extension filters and presents the
+structured snapshot but does not parse ECS calls. The request uses the
+background lane and yields to interactive editor work. Allocation findings are
+returned as inspector insights only and are never published as diagnostics.
 
 The Tua Assets Explorer is backed by `tua/assetInventory`. The extension only
 groups and presents compiler results, publishes the returned unused-asset

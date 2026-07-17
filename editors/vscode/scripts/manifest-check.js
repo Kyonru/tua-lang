@@ -29,6 +29,7 @@ const expected = [
   "tua.assets.reveal",
   "tua.showSignalGraph",
   "tua.showModuleGraph",
+  "tua.showEcsExplorer",
   "tua.whyModuleIncluded",
   "tua.source.organizeImports",
   "tua.source.sortImports",

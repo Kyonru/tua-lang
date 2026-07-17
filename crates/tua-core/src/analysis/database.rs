@@ -467,6 +467,27 @@ fn build_analysis_file(
             semantics.as_ref().map(|semantics| &semantics.scope),
         ))
     };
+    let ecs_index = {
+        let _profile = profile::span_for_path("analysis.index.ecs.file", path);
+
+        Arc::new(if context.config.ecs.enabled {
+            parsed
+                .as_ref()
+                .ok()
+                .map(|parsed| {
+                    crate::ecs::ecs_file_index(
+                        parsed,
+                        &semantics
+                            .as_ref()
+                            .expect("parsed file must have semantic facts")
+                            .environment,
+                    )
+                })
+                .unwrap_or_default()
+        } else {
+            crate::ecs::EcsFileIndex::default()
+        })
+    };
 
     AnalysisFile {
         source,
@@ -479,6 +500,7 @@ fn build_analysis_file(
         require_edges,
         assets,
         usage_index,
+        ecs_index,
         symbols,
     }
 }

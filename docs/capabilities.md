@@ -60,6 +60,7 @@ Status meanings:
 | Sprite animation preview | Preview | A sticky webview renders compiler-inspected local sprite metadata without executing project code. |
 | Signal call graph | Supported | The extension visualizes compiler-indexed event calls and navigates to exact locations. |
 | Module dependency explorer | Supported | A compiler-backed graph shows `require`/`import` edges, unresolved modules, cycles, reverse dependencies, exported surfaces, and deterministic root-to-module inclusion paths. |
+| ECS Explorer | Supported | A compiler-backed project view lists static components, systems, and queries; infers conservative read/write access; navigates component relationships; and presents allocation patterns as non-diagnostic insights. |
 | Asset Explorer | Supported | The Explorer groups compiler-indexed assets by type and static usage, publishes conservative unused-asset hints, opens references, and performs LSP-aware file renames. |
 | Debugger and runtime profiler | Out of scope | Tua provides static tooling and source-map traceback remapping, not a Lua debugger. |
 | Package management | Out of scope | Tua understands module paths but does not install Lua packages. |

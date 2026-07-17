@@ -923,6 +923,10 @@ impl AnalysisSnapshot {
         self.core.module_dependency_graph()
     }
 
+    pub(super) fn ecs_graph(&self) -> tua_core::EcsGraph {
+        self.core.ecs_graph()
+    }
+
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
         self.core.hover(path, position)
     }

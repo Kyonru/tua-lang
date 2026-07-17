@@ -53,6 +53,34 @@ short API documentation, checks static component values, and reports unknown
 components in queries. Typing `ecs component` also offers a complete starter
 snippet.
 
+## ECS Explorer
+
+Run **Tua: Show ECS Explorer** from VS Code to inspect the current project's
+static ECS structure. The compiler-backed view lists components, systems, and
+standalone or system-owned queries without reparsing source in the extension.
+Selecting a component shows its schema, every resolved system access, and every
+relevant query; each relationship opens the exact component reference.
+
+System access is inferred conservatively from callback parameters:
+
+- `filter` means the component participates in matching but its callback value
+  is not used;
+- `read` and `write` are proven references and assignments;
+- `read + write` includes compound assignments such as `position.x += dx`;
+- `unknown mutation` means a method was called on the component value and Tua
+  cannot prove whether that method mutates it.
+
+Module-qualified references such as `Components.Position` resolve through the
+same project definition index as go-to-definition. Dynamic component lists stay
+unresolved rather than being guessed.
+
+The Insights tab reports conservative performance observations, not compiler
+errors. It currently highlights queries wider than three components because the
+bundled runtime allocates a temporary values table per match, table or closure
+allocations inside per-entity system callbacks, and LOVE resource construction
+inside those callbacks. These observations are prompts to profile; they do not
+change diagnostics or builds.
+
 ## When ECS Helps
 
 Use ECS when most of these are true:

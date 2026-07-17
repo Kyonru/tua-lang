@@ -29,6 +29,12 @@ language or editor behavior, and migration notes call out those changes.
 - A compiler-backed VS Code module dependency explorer for static `require` and
   `import` relationships, unresolved resolutions, cycles, reverse dependencies,
   exported surfaces, and source-linked "Why Is This Module Included?" paths.
+- A compiler-backed VS Code ECS Explorer for project components, systems,
+  queries, conservative callback read/write access, exact source navigation,
+  and non-diagnostic allocation insights.
+- Shared VS Code webview, URI/range, error, and document-response utilities now
+  own CSP nonces, safe JSON embedding, HTML escaping, location opening, and
+  stale-response checks across editor domains.
 
 ### Changed
 

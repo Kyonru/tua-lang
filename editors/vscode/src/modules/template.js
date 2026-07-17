@@ -1,5 +1,7 @@
 "use strict";
 
+const { escapeHtml, jsonForHtml, webviewDocument } = require("../shared/webview");
+
 function moduleGraphLoadingHtml(webview) {
   return documentHtml(
     webview,
@@ -554,16 +556,7 @@ function moduleGraphHtml(webview, viewModel) {
 }
 
 function documentHtml(webview, title, body, script) {
-  const nonce = randomNonce();
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
-  <title>${escapeHtml(title)}</title>
-  <style nonce="${nonce}">
+  return webviewDocument(webview, { title, body, script, styles: `
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
@@ -753,43 +746,7 @@ function documentHtml(webview, title, body, script) {
       .graph-band { min-height: 420px; border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
       .inspector { min-height: 420px; }
     }
-  </style>
-</head>
-<body>
-  ${body}
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    ${script}
-  </script>
-</body>
-</html>`;
-}
-
-function jsonForHtml(value) {
-  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (character) => {
-    const code = character.charCodeAt(0).toString(16).padStart(4, "0");
-    return `\\u${code}`;
-  });
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function randomNonce() {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let value = "";
-
-  for (let index = 0; index < 32; index += 1) {
-    value += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-
-  return value;
+  ` });
 }
 
 module.exports = {

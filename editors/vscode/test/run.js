@@ -69,6 +69,7 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
   fs.writeFileSync(path.join(workspaceTwo, "tua.toml"), 'source = "src"\nout = "build"\n');
 
   const fixtures = {
+    ecs: path.join(sourceOne, "ecs.tua"),
     intelligence: path.join(sourceOne, "intelligence.tua"),
     moduleGraphRoot: path.join(sourceOne, "module-graph-main.tua"),
     moduleGraphPlayer: path.join(sourceOne, "module_graph_player.tua"),
@@ -85,6 +86,17 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
   };
 
   fs.writeFileSync(fixtures.suggestions, "local seed = 1\n\n");
+  fs.writeFileSync(
+    fixtures.ecs,
+    [
+      'local Position = ecs.component("Position", { x = "number", y = "number" })',
+      'local Velocity = ecs.component("Velocity", { x = "number", y = "number" })',
+      'local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)',
+      '  position.x += velocity.x * dt',
+      'end)',
+      '',
+    ].join("\n"),
+  );
   fs.writeFileSync(
     fixtures.intelligence,
     [

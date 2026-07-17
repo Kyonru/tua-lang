@@ -1,5 +1,6 @@
 "use strict";
 
+const { escapeHtml, webviewNonce } = require("../../shared/webview");
 const { spritePreviewRuntime } = require("./runtime");
 
 function spritePreviewHtml(webview, viewModel) {
@@ -542,18 +543,6 @@ function spritePreviewStateHtml(webview, source, title, message) {
   </main>
 </body>
 </html>`;
-}
-
-function webviewNonce() {
-  return Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 module.exports = {

@@ -431,6 +431,39 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "module graph import and export locations should open in the editor",
     );
 
+    await state.commands.get("tua.showEcsExplorer")();
+
+    assert.strictEqual(state.webviewPanels.length, 4, "ECS Explorer should open one webview panel");
+    const ecsPanel = state.webviewPanels[3];
+    assert(
+      ecsPanel.html.includes("ECS Explorer") &&
+        ecsPanel.html.includes('"runtimeName":"Position"') &&
+        ecsPanel.html.includes('"access":"readWrite"') &&
+        ecsPanel.html.includes("Relevant queries") &&
+        ecsPanel.html.includes("Insight, not a diagnostic") &&
+        ecsPanel.html.includes("openLocation"),
+      "ECS Explorer should render components, system access, queries, insights, and navigation",
+    );
+    assertWebviewScriptsParse(ecsPanel.html, "ECS Explorer");
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/ecsGraph"),
+      "ECS Explorer should request compiler-backed graph data",
+    );
+
+    await ecsPanel.messageListener({
+      command: "openLocation",
+      uri: `file://${path.join(workspace, "src", "ecs.tua")}`,
+      range: {
+        start: { line: 0, character: 6 },
+        end: { line: 0, character: 14 },
+      },
+    });
+    assert.strictEqual(
+      state.executedCommands.at(-1).command,
+      "vscode.open",
+      "ECS component and query locations should open in the editor",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -1391,6 +1424,10 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve(mockModuleGraph(activeTextEditor?.document, workspace));
       }
 
+      if (method === "tua/ecsGraph") {
+        return Promise.resolve(mockEcsGraph(workspace));
+      }
+
       if (method === "tua/assetInventory") {
         const player = path.join(workspace, "assets", "player.png");
         const jump = path.join(workspace, "assets", "jump.wav");
@@ -1640,6 +1677,81 @@ function mockModuleGraph(document, workspace) {
   };
 }
 
+function mockEcsGraph(workspace) {
+  const uri = `file://${path.join(workspace, "src", "ecs.tua")}`;
+  const range = {
+    start: { line: 0, character: 6 },
+    end: { line: 0, character: 14 },
+  };
+  const componentId = "component:position";
+  const systemId = "system:movement";
+
+  return {
+    analysisRevision: 12,
+    graph: {
+      components: [
+        {
+          id: componentId,
+          uri,
+          localName: "Position",
+          runtimeName: "Position",
+          range,
+          nameRange: range,
+          fields: [{ name: "x", type: "number", range }],
+        },
+      ],
+      systems: [
+        {
+          id: systemId,
+          uri,
+          name: "movement",
+          range,
+          nameRange: range,
+          callbackRange: range,
+          components: [
+            {
+              reference: "Position",
+              componentId,
+              access: "readWrite",
+              range,
+            },
+          ],
+        },
+      ],
+      queries: [
+        {
+          id: `${systemId}:query`,
+          uri,
+          name: "movement",
+          kind: "system",
+          ownerSystemId: systemId,
+          range,
+          nameRange: range,
+          components: [
+            {
+              reference: "Position",
+              componentId,
+              access: "readWrite",
+              range,
+            },
+          ],
+        },
+      ],
+      insights: [
+        {
+          id: `${systemId}:allocation`,
+          kind: "callbackAllocation",
+          title: "Per-entity callback allocations",
+          message: "This is a performance insight, not an error.",
+          uri,
+          range,
+          subjectId: systemId,
+        },
+      ],
+    },
+  };
+}
+
 function mockSpriteInspection(document) {
   const source = document?.getText?.() || "";
   const name = /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*spriteSheet\s*\(/.exec(source)?.[1];
@@ -1794,6 +1906,7 @@ function assertRegisteredCommands(state) {
     "tua.assets.reveal",
     "tua.showSignalGraph",
     "tua.showModuleGraph",
+    "tua.showEcsExplorer",
     "tua.whyModuleIncluded",
     "tua.source.organizeImports",
     "tua.source.sortImports",

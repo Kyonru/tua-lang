@@ -2,6 +2,8 @@
 
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { isStaleDocumentResponse } = require("../shared/documents");
+const { formatError } = require("../shared/errors");
 
 const STEP_ICONS = {
   annotation: "symbol-type-parameter",
@@ -42,10 +44,10 @@ async function explainTypeAtCursor({ getClient, isTuaDocument }) {
 
   try {
     let response = await client.sendRequest("tua/explainType", params);
-    if (isStale(response, document)) {
+    if (isStaleDocumentResponse(response, document)) {
       response = await client.sendRequest("tua/explainType", params);
     }
-    if (isStale(response, document)) {
+    if (isStaleDocumentResponse(response, document)) {
       throw new Error("The explanation is stale. Try again after document synchronization.");
     }
 
@@ -144,14 +146,6 @@ function validRange(range) {
     Number.isInteger(range?.end?.line) &&
     Number.isInteger(range?.end?.character)
   );
-}
-
-function isStale(response, document) {
-  return Number.isInteger(document.version) && response?.documentVersion !== document.version;
-}
-
-function formatError(error) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 module.exports = {

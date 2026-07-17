@@ -12,6 +12,7 @@ mod code_actions;
 mod completion;
 mod diagnostics;
 mod document_features;
+mod ecs_graph;
 mod formatting;
 mod hover;
 mod inlay_hints;
@@ -726,6 +727,15 @@ fn module_graph_request(id: u64) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "tua/moduleGraph",
+        "params": null
+    })
+}
+
+fn ecs_graph_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/ecsGraph",
         "params": null
     })
 }

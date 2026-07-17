@@ -2,6 +2,7 @@
 
 const path = require("path");
 const vscode = require("vscode");
+const { displayUriPath } = require("../shared/locations");
 
 function moduleGraphViewModel(response, focus = {}) {
   const graph = response?.graph || {};
@@ -61,7 +62,7 @@ function moduleViewModel(module) {
 
   return {
     uri: module.uri,
-    file: displayPath(module.uri),
+    file: displayUriPath(module.uri),
     sourceKind: module.sourceKind === "lua" ? "lua" : "tua",
     root: Boolean(module.root),
     inCycle: Boolean(module.inCycle),
@@ -81,7 +82,7 @@ function moduleViewModel(module) {
       typeof inclusionPath?.rootUri === "string"
         ? {
             rootUri: inclusionPath.rootUri,
-            rootFile: displayPath(inclusionPath.rootUri),
+            rootFile: displayUriPath(inclusionPath.rootUri),
             steps: (Array.isArray(inclusionPath.steps) ? inclusionPath.steps : [])
               .filter(
                 (step) =>
@@ -91,9 +92,9 @@ function moduleViewModel(module) {
               )
               .map((step) => ({
                 sourceUri: step.sourceUri,
-                sourceFile: displayPath(step.sourceUri),
+                sourceFile: displayUriPath(step.sourceUri),
                 targetUri: step.targetUri,
-                targetFile: displayPath(step.targetUri),
+                targetFile: displayUriPath(step.targetUri),
                 specifier: typeof step.specifier === "string" ? step.specifier : "",
                 kind: step.kind === "import" ? "import" : "require",
                 range: step.range,
@@ -112,7 +113,7 @@ function edgeViewModel(edge, index) {
   return {
     id: `edge:${index}`,
     sourceUri: edge.sourceUri,
-    sourceFile: displayPath(edge.sourceUri),
+    sourceFile: displayUriPath(edge.sourceUri),
     specifier: typeof edge.specifier === "string" ? edge.specifier : "",
     kind: edge.kind === "import" ? "import" : "require",
     range: edge.range,
@@ -121,31 +122,18 @@ function edgeViewModel(edge, index) {
       status,
       targetUri: typeof resolution.targetUri === "string" ? resolution.targetUri : undefined,
       targetFile:
-        typeof resolution.targetUri === "string" ? displayPath(resolution.targetUri) : undefined,
+        typeof resolution.targetUri === "string" ? displayUriPath(resolution.targetUri) : undefined,
       reason: typeof resolution.reason === "string" ? resolution.reason : "",
       candidates: (Array.isArray(resolution.candidateUris)
         ? resolution.candidateUris
         : []
-      ).map((uri) => ({ uri, file: displayPath(uri) })),
+      ).map((uri) => ({ uri, file: displayUriPath(uri) })),
       searchRoots: (Array.isArray(resolution.searchRootUris)
         ? resolution.searchRootUris
         : []
-      ).map((uri) => displayPath(uri)),
+      ).map((uri) => displayUriPath(uri)),
     },
   };
-}
-
-function displayPath(uriValue) {
-  const uri = vscode.Uri.parse(uriValue);
-
-  if (typeof vscode.workspace.asRelativePath === "function") {
-    const relative = vscode.workspace.asRelativePath(uri, false);
-    if (relative) {
-      return relative;
-    }
-  }
-
-  return uri.fsPath ? path.basename(uri.fsPath) : uriValue;
 }
 
 function knownExportOrigin(origin) {

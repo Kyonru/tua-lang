@@ -82,8 +82,8 @@ make extension-test
 The suite drives an isolated two-root workspace against a controlled LSP
 server. It covers completion freshness and cancellation, hover, definition,
 signature help, inlay hints, UTF-16 and untitled documents, module and asset
-file renames, module graph opening and reuse, and sprite preview opening,
-reload, focus, missing assets, and hover command links.
+file renames, module graph and ECS Explorer opening and reuse, and sprite
+preview opening, reload, focus, missing assets, and hover command links.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
@@ -233,5 +233,10 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   module identity, resolution states, cycles, reverse relationships, exports,
   and inclusion paths; the extension only filters, lays out, and navigates that
   structured result.
+- `Tua: Show ECS Explorer` requests `tua/ecsGraph`. It lists compiler-indexed
+  components, systems, and queries, shows conservative callback read/write
+  access, navigates every resolved component/query relationship, and presents
+  allocation-heavy patterns as insights rather than diagnostics. Imported
+  component identities use normal compiler definition resolution.
 - The optional external API bridge is design-only. The extension does not start
   a bridge session today.

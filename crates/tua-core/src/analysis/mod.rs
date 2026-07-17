@@ -93,6 +93,7 @@ use crate::{
 
 mod asset_queries;
 mod database;
+mod ecs_queries;
 mod editor_queries;
 mod host;
 mod inspector_queries;
@@ -201,6 +202,7 @@ struct AnalysisFile {
     require_edges: Vec<ModuleLink>,
     assets: Vec<AssetMetadata>,
     usage_index: Arc<FileUsageIndex>,
+    ecs_index: Arc<crate::ecs::EcsFileIndex>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
 }

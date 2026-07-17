@@ -2,6 +2,7 @@
 
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("../constants");
+const { lspRangeToVscode } = require("../shared/locations");
 const { inspectSpriteSheets } = require("./sprite-preview/inspector");
 const { createSpritePreviewState } = require("./sprite-preview/state");
 const {
@@ -238,17 +239,6 @@ function activePreviewDocument(state, isTuaDocument) {
   }
 
   return state.document();
-}
-
-function lspRangeToVscode(range) {
-  if (!range?.start || !range?.end) {
-    return undefined;
-  }
-
-  return new vscode.Range(
-    new vscode.Position(range.start.line, range.start.character),
-    new vscode.Position(range.end.line, range.end.character),
-  );
 }
 
 module.exports = {

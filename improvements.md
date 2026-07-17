@@ -124,6 +124,12 @@ completion, hover, signature help, and diagnostics are likewise core-owned.
 Stable domain diagnostic codes remain in `TL5000`-`TL5999`; no executable
 extension API is exposed.
 
+Cached per-file ECS summaries now also feed a project ECS Explorer. The shared
+snapshot resolves imported component identities through normal definitions,
+reports conservative system access, and returns allocation observations as
+inspector insights rather than diagnostics. The VS Code extension only renders
+and navigates the structured `tua/ecsGraph` result.
+
 A 10-run release profile over `examples/features` measured combined domain
 validation at 0.4126 ms per check through the direct path versus 0.4316 ms
 through the removed registry. The 4.4% stage-local reduction is only 0.019 ms
