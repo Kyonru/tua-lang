@@ -1003,6 +1003,117 @@ local portrait = love.graphics.newImage("assets/<|reference|>player.png")
 }
 
 #[test]
+fn asset_inventory_groups_usage_and_reports_unused_assets() {
+    let temp = TempProject::new("asset-inventory");
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local player = image "assets/player.png"
+-- file: src/ui.tua
+local portrait = love.graphics.newImage('assets/player.png')
+"#,
+    );
+    let player_path = temp.write("assets/player.png", png_header(16, 16));
+    let unused_path = temp.write("assets/unused.wav", b"placeholder");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    host.refresh_asset_index_from_disk();
+
+    let inventory = host.snapshot().asset_inventory();
+    let player = inventory
+        .assets
+        .iter()
+        .find(|asset| asset.path == player_path)
+        .expect("used image should be inventoried");
+    let unused = inventory
+        .assets
+        .iter()
+        .find(|asset| asset.path == unused_path)
+        .expect("unused sound should be inventoried");
+
+    assert_eq!(player.category, crate::AssetCategory::Image);
+    assert_eq!(player.references.len(), 2);
+    assert_eq!(unused.category, crate::AssetCategory::Audio);
+    assert!(unused.references.is_empty());
+    assert_eq!(inventory.diagnostics.len(), 1);
+    assert_eq!(inventory.diagnostics[0].file, unused_path);
+    assert_eq!(
+        inventory.diagnostics[0].code,
+        Some(DiagnosticCode::ASSET_UNUSED)
+    );
+    assert_eq!(
+        inventory.diagnostics[0].severity,
+        crate::DiagnosticSeverity::Hint
+    );
+}
+
+#[test]
+fn asset_file_rename_edits_update_static_references_and_preserve_quotes() {
+    let temp = TempProject::new("asset-rename");
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local player = image "assets/player.png"
+-- file: src/ui.tua
+local portrait = love.graphics.newImage('assets/player.png')
+"#,
+    );
+    let old_path = temp.write("assets/player.png", png_header(16, 16));
+    let new_path = temp.path().join("assets/hero.png");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+    host.refresh_asset_index_from_disk();
+
+    let edits = host
+        .snapshot()
+        .asset_file_rename_edits(&old_path, &new_path);
+
+    assert_eq!(edits.len(), 2);
+    assert_eq!(
+        edits
+            .iter()
+            .map(|edit| (edit.path.as_path(), edit.new_text.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (Path::new("src/main.tua"), "\"assets/hero.png\""),
+            (Path::new("src/ui.tua"), "'assets/hero.png'")
+        ]
+    );
+}
+
+#[test]
+fn pipeline_diagnostics_report_inconsistent_asset_path_casing() {
+    let temp = TempProject::new("asset-case-diagnostic");
+    let source = r#"local player = image "Assets/Player.PNG"
+"#;
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    temp.write("assets/player.png", png_header(16, 16));
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_asset_roots([temp.path().to_path_buf()]);
+    host.set_file(&path, source);
+    host.refresh_asset_index_from_disk();
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::ASSET_PATH_CASE))
+        .expect("path casing mismatch should be diagnosed");
+
+    assert_eq!(diagnostic.severity, crate::DiagnosticSeverity::Warning);
+    assert!(diagnostic.message.contains("assets/player.png"));
+}
+
+#[test]
 fn snapshot_filters_love_asset_path_completion_by_helper_kind() {
     let temp = TempProject::new("asset-kind-completion");
     let source = r#"local player = image "assets/<|image|>"

@@ -31,6 +31,26 @@ fn input_backlog_prioritizes_typing_and_completion_messages() {
         "the fixture should model a real edit instead of identical text"
     );
 }
+
+#[test]
+fn asset_inventory_yields_to_typing_and_completion() {
+    let uri = "file:///tmp/asset-inventory-priority.tua";
+    let after = "local player = image \"assets/player.png\"\np";
+    let mut messages = std::collections::VecDeque::from([
+        asset_inventory_request(2),
+        did_change(uri, after, 2),
+        invoked_completion_request(3, uri, after, "p"),
+    ]);
+
+    let first = pop_next_pending_message(&mut messages).expect("first message");
+    let second = pop_next_pending_message(&mut messages).expect("second message");
+    let third = pop_next_pending_message(&mut messages).expect("third message");
+
+    assert_eq!(first["method"], "textDocument/didChange");
+    assert_eq!(second["method"], "textDocument/completion");
+    assert_eq!(third["method"], "tua/assetInventory");
+}
+
 #[test]
 fn shutdown_does_not_overtake_an_earlier_interactive_request() {
     let uri = "file:///tmp/shutdown-order.tua";

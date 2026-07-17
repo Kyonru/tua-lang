@@ -505,6 +505,40 @@
         "category": "Tua"
       },
       {
+        "command": "tua.assets.refresh",
+        "title": "Refresh Asset Explorer",
+        "category": "Tua",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tua.assets.open",
+        "title": "Open Asset",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.assets.openReference",
+        "title": "Open Asset Reference",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.assets.findReferences",
+        "title": "Find Asset References",
+        "category": "Tua",
+        "icon": "$(references)"
+      },
+      {
+        "command": "tua.assets.rename",
+        "title": "Rename Asset...",
+        "category": "Tua",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "tua.assets.reveal",
+        "title": "Reveal Asset in File Explorer",
+        "category": "Tua",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "tua.showSignalGraph",
         "title": "Show Signal Graph",
         "category": "Tua",
@@ -536,6 +570,15 @@
         "category": "Tua"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "tua.assets",
+          "name": "Tua Assets",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
@@ -557,6 +600,26 @@
         {
           "command": "tua.inlayHints.selectMode",
           "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.assets.open",
+          "when": "false"
+        },
+        {
+          "command": "tua.assets.openReference",
+          "when": "false"
+        },
+        {
+          "command": "tua.assets.findReferences",
+          "when": "false"
+        },
+        {
+          "command": "tua.assets.rename",
+          "when": "false"
+        },
+        {
+          "command": "tua.assets.reveal",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -564,6 +627,30 @@
           "command": "tua.explainType",
           "when": "editorLangId == tua",
           "group": "navigation@40"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tua.assets.refresh",
+          "when": "view == tua.assets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tua.assets.findReferences",
+          "when": "view == tua.assets && viewItem == tuaAsset.used",
+          "group": "navigation@10"
+        },
+        {
+          "command": "tua.assets.rename",
+          "when": "view == tua.assets && (viewItem == tuaAsset.used || viewItem == tuaAsset.unused)",
+          "group": "navigation@20"
+        },
+        {
+          "command": "tua.assets.reveal",
+          "when": "view == tua.assets && (viewItem == tuaAsset.used || viewItem == tuaAsset.unused)",
+          "group": "navigation@30"
         }
       ]
     },

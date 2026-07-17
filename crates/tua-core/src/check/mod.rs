@@ -1187,6 +1187,17 @@ impl<'a> Checker<'a> {
                     &asset_call.path,
                 ));
             }
+            asset::AssetValidationStatus::PathCaseMismatch => {
+                self.push_asset_diagnostic(asset_path_case_diagnostic(
+                    &self.parsed.path,
+                    asset_call.path_span,
+                    &asset_call.path,
+                    metadata
+                        .canonical_path
+                        .as_deref()
+                        .unwrap_or(&asset_call.path),
+                ));
+            }
             asset::AssetValidationStatus::Valid | asset::AssetValidationStatus::Unchecked => {}
         }
     }
@@ -3170,6 +3181,24 @@ fn unsupported_asset_extension_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::ASSET_UNSUPPORTED_EXTENSION)
+}
+
+fn asset_path_case_diagnostic(
+    path: &Path,
+    span: SourceSpan,
+    asset_path: &str,
+    canonical_path: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        span.start.line,
+        span.start.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "asset path casing `{asset_path}` does not match the filesystem path `{canonical_path}`"
+        ),
+    )
+    .with_code(DiagnosticCode::ASSET_PATH_CASE)
 }
 
 fn dot_method_call_diagnostic(

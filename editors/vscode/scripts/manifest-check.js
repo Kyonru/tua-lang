@@ -21,6 +21,12 @@ const expected = [
   "tua.explainType",
   "tua.inlayHints.selectMode",
   "tua.previewSprites",
+  "tua.assets.refresh",
+  "tua.assets.open",
+  "tua.assets.openReference",
+  "tua.assets.findReferences",
+  "tua.assets.rename",
+  "tua.assets.reveal",
   "tua.showSignalGraph",
   "tua.source.organizeImports",
   "tua.source.sortImports",
@@ -33,6 +39,48 @@ const missing = expected.filter((command) => !commands.has(command));
 if (missing.length > 0) {
   console.error(`Missing contributed commands: ${missing.join(", ")}`);
   process.exit(1);
+}
+
+const assetView = (manifest.contributes?.views?.explorer || []).find(
+  (view) => view.id === "tua.assets",
+);
+if (!assetView) {
+  console.error("Missing Tua Asset Explorer contribution.");
+  process.exit(1);
+}
+
+const assetViewCommands = new Set(
+  [
+    ...(manifest.contributes?.menus?.["view/title"] || []),
+    ...(manifest.contributes?.menus?.["view/item/context"] || []),
+  ]
+    .filter((item) => item.when?.includes("tua.assets"))
+    .map((item) => item.command),
+);
+for (const command of [
+  "tua.assets.refresh",
+  "tua.assets.findReferences",
+  "tua.assets.rename",
+  "tua.assets.reveal",
+]) {
+  if (!assetViewCommands.has(command)) {
+    console.error(`Missing Asset Explorer menu command: ${command}`);
+    process.exit(1);
+  }
+}
+
+const commandPalette = manifest.contributes?.menus?.commandPalette || [];
+for (const command of [
+  "tua.assets.open",
+  "tua.assets.openReference",
+  "tua.assets.findReferences",
+  "tua.assets.rename",
+  "tua.assets.reveal",
+]) {
+  if (!commandPalette.some((item) => item.command === command && item.when === "false")) {
+    console.error(`Asset node command should be hidden from the command palette: ${command}`);
+    process.exit(1);
+  }
 }
 
 const tuaDefaults = manifest.contributes?.configurationDefaults?.["[tua]"];

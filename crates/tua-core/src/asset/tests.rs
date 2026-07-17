@@ -206,6 +206,29 @@ fn finds_asset_metadata_at_source_position() {
 }
 
 #[test]
+fn indexed_validation_reports_canonical_path_casing() {
+    let temp = TempProject::new("path-case");
+    let source = r#"local player = image "Assets/Player.PNG"
+"#;
+    let path = temp.write("src/main.tua", source);
+
+    temp.write("assets/player.png", b"placeholder");
+
+    let parsed = parse_tua_source(&path, source).expect("source should parse");
+    let index = AssetIndex::from_roots(std::slice::from_ref(&temp.path));
+    let assets =
+        collect_asset_metadata_with_index(&parsed, std::slice::from_ref(&temp.path), Some(&index));
+    let asset = assets.first().expect("asset metadata should be collected");
+
+    assert_eq!(asset.status, AssetValidationStatus::PathCaseMismatch);
+    assert_eq!(asset.canonical_path.as_deref(), Some("assets/player.png"));
+    assert_eq!(
+        resolved_asset_path(asset, std::slice::from_ref(&temp.path), Some(&index)),
+        Some(temp.path.join("assets/player.png"))
+    );
+}
+
+#[test]
 fn collects_sprite_image_asset_metadata() {
     let temp = TempProject::new("sprite-metadata");
     let source = r#"local Player = spriteSheet({

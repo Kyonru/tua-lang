@@ -234,6 +234,33 @@ local player = image "assets/missing.png"
         .expect("diagnostic message should be a string")
         .contains("image asset not found: assets/missing.png"));
 }
+
+#[test]
+fn did_open_publishes_asset_path_casing_diagnostics() {
+    let temp = TempProject::new("asset-case-diagnostics");
+    let source = r#"local player = image "assets/player.png"
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
+    temp.write("src/assets.tua", source);
+    temp.write("src/assets/Player.png", "");
+
+    let uri = temp.uri_for("src/assets.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let diagnostics = last_published_diagnostics(&output, &uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert_eq!(diagnostics[0]["code"], "TL2008");
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("assets/Player.png"));
+}
+
 #[test]
 fn did_open_publishes_impossible_comparison_warnings() {
     let uri = "file:///tmp/comparison.tua";

@@ -753,6 +753,37 @@ fn will_rename_files_updates_same_folder_require() {
     assert_eq!(range_text(main, &edits[0]["range"]), "player");
     assert_eq!(edits[0]["newText"], "actor");
 }
+
+#[test]
+fn will_rename_files_updates_static_asset_references() {
+    let temp = TempProject::new("file-rename-asset");
+    let main = r#"local player = image "assets/player.png"
+"#;
+
+    temp.write("tua.toml", "source = \".\"\n");
+    temp.write("main.tua", main);
+    temp.write("assets/player.png", "");
+
+    let main_uri = temp.uri_for("main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        will_rename_files_request(
+            2,
+            [(
+                temp.uri_for("assets/player.png"),
+                temp.uri_for("assets/hero.png"),
+            )],
+        ),
+    ]);
+    let edits = workspace_edit_changes_for_uri(&output, 2, &main_uri);
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(
+        range_text(main, &edits[0]["range"]),
+        "\"assets/player.png\""
+    );
+    assert_eq!(edits[0]["newText"], "\"assets/hero.png\"");
+}
 #[test]
 fn will_rename_files_updates_nested_child_import_to_project_import() {
     let temp = TempProject::new("file-rename-import");

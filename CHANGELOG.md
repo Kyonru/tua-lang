@@ -21,6 +21,11 @@ language or editor behavior, and migration notes call out those changes.
   fallback steps.
 - Generated LOVE callback assistance with `TL5006` typo/signature diagnostics,
   typo rename fixes, and a source action for missing core lifecycle callbacks.
+- Compiler-owned asset inventory and a VS Code Tua Assets Explorer grouped by
+  type and static usage, with reference navigation, dimensions, refresh,
+  reveal, and LSP-aware file rename.
+- Asset path casing warning `TL2008` and conservative unused-asset hint
+  `TL2009`; dynamic asset loading remains supported.
 
 ### Changed
 

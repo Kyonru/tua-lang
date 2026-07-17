@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tua_core::{
     require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
     AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AnalysisWarmPriority,
-    AssetLoaderKind, CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
+    AssetInventory, AssetLoaderKind, CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
@@ -895,13 +895,27 @@ impl AnalysisSnapshot {
         if old_workspace.root() != new_workspace.root()
             || old_workspace.is_ignored(old_path)
             || new_workspace.is_ignored(new_path)
-            || old_workspace.source_kind_for_path(old_path).is_none()
+        {
+            return Vec::new();
+        }
+
+        let asset_edits = self.core.asset_file_rename_edits(old_path, new_path);
+
+        if !asset_edits.is_empty() {
+            return asset_edits;
+        }
+
+        if old_workspace.source_kind_for_path(old_path).is_none()
             || new_workspace.source_kind_for_path(new_path).is_none()
         {
             return Vec::new();
         }
 
         self.core.file_rename_edits(old_path, new_path)
+    }
+
+    pub(super) fn asset_inventory(&self) -> AssetInventory {
+        self.core.asset_inventory()
     }
 
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {

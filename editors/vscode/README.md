@@ -31,6 +31,9 @@ Minimal VS Code language support for tua source files.
   probing server profile artifacts, previewing `spriteSheet` animations,
   visualizing SignalBus events across files, running source actions, reporting
   an issue, and opening Tua settings.
+- Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
+  and static usage, with reference navigation, file rename, reveal, refresh,
+  dimensions, and conservative unused-asset diagnostics.
 - Shows a Tua language status item with the server state, resolved server path,
   version, and workspace directory when available.
 - Uses stable VS Code APIs and standard LSP features. Proposed/custom editor
@@ -77,8 +80,9 @@ make extension-test
 
 The suite drives an isolated two-root workspace against a controlled LSP
 server. It covers completion freshness and cancellation, hover, definition,
-signature help, inlay hints, UTF-16 and untitled documents, file renames, and
-sprite preview opening, reload, focus, missing assets, and hover command links.
+signature help, inlay hints, UTF-16 and untitled documents, module and asset
+file renames, and sprite preview opening, reload, focus, missing assets, and
+hover command links.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
@@ -108,6 +112,7 @@ the setting.
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
+- `Tua: Refresh Asset Explorer`
 - `Tua: Show Signal Graph`
 - `Tua: Organize Imports`
 - `Tua: Sort Imports`
@@ -131,6 +136,21 @@ steps. When a result is `any`, the quick-pick title calls that out directly.
 Select a located step to open its declaration or source. Missing modules,
 explicit `any`, unknown initializers, and member access through `any` are shown
 as distinct causes.
+
+## Asset Explorer
+
+The Explorer's Tua Assets view requests one compiler-owned project inventory
+after the language server starts. It refreshes on source saves, asset file
+events, explicit refreshes, and when the view becomes visible; it does not scan
+or request inventory on each keystroke. Pending inventory work yields to typing
+and other interactive language requests.
+
+Assets are grouped by type, then Used or Unused. Expand a used asset to open its
+exact static references, use Find Asset References for VS Code's references
+view, or rename it from the item context menu. Rename uses a workspace file edit
+so `workspace/willRenameFiles` can update every compiler-identified helper or
+native LOVE path in the same operation. Unused means no static Tua/Lua loader
+literal was indexed; dynamic loading can still use the file.
 
 ## Profiling
 
@@ -171,6 +191,8 @@ Tua prefers standard LSP requests over TypeScript-specific custom protocol:
   and `tua:/builtins` virtual documents for generated builtin or LOVE stubs.
 - Asset references find every indexed Tua/Lua loader literal that resolves to
   the same file.
+- Asset inventory, casing checks, unused hints, and rename edits come from the
+  language server; the Explorer does not parse source or resolve paths itself.
 - Project-wide occurrences use references instead of automatic multi-document
   highlights.
 - Auto insert is out of scope until Tua has a safe syntax trigger; snippets and

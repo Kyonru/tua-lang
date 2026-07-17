@@ -22,6 +22,7 @@ When extending asset behavior, try to produce reusable metadata:
 
 - source span;
 - normalized relative path;
+- canonical filesystem casing;
 - asset kind;
 - extension;
 - inferred LOVE type;
@@ -30,6 +31,18 @@ When extending asset behavior, try to produce reusable metadata:
 
 The same metadata should power diagnostics, hover, completion resolve, domain
 analysis, and future editor inspectors.
+
+## Inventory And Refactors
+
+- Build project asset inventory, usage, and reference identity from cached
+  compiler metadata and the shared asset index. Editor extensions should only
+  present the result.
+- Keep unused-asset diagnostics conservative because dynamic Lua paths cannot
+  be proven dead; use a hint unless stronger evidence exists.
+- Route asset file renames through workspace file operations and compiler-owned
+  text edits so helper calls, native LOVE constructors, and domain metadata stay
+  consistent.
+- Preserve source quote style and project-relative path conventions in edits.
 
 ## Checks
 

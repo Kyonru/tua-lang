@@ -18,6 +18,47 @@ const {
 async function runWorkspaceTests() {
   await testSecondWorkspaceFolder();
   await testFileRenameEdits();
+  await testAssetRenameEdits();
+}
+
+async function testAssetRenameEdits() {
+  const { document } = await openFixture("sprite");
+  const oldUri = vscode.Uri.file(fixtures.playerAsset);
+  const newPath = path.join(path.dirname(fixtures.playerAsset), "hero.png");
+  const newUri = vscode.Uri.file(newPath);
+  const beforeRename = eventSequence();
+  const edit = new vscode.WorkspaceEdit();
+
+  edit.renameFile(oldUri, newUri);
+  assert.equal(await vscode.workspace.applyEdit(edit), true);
+
+  const request = await waitForEvent(
+    (event) =>
+      event.type === "workspace.willRenameFiles" &&
+      event.files.some(
+        (file) => file.oldUri === oldUri.toString() && file.newUri === newUri.toString(),
+      ),
+    "workspace/willRenameFiles for a LOVE asset",
+    beforeRename,
+  );
+  assert(request.editedUris.includes(document.uri.toString()));
+
+  await waitUntil(
+    () => document.getText().includes('image = "assets/hero.png"'),
+    "the asset file-rename workspace edit to update static paths",
+  );
+  assert.equal(fs.existsSync(fixtures.playerAsset), false);
+  assert.equal(fs.existsSync(newPath), true);
+  assert.equal(await document.save(), true);
+
+  await waitForEvent(
+    (event) =>
+      event.type === "workspace.didRenameFiles" &&
+      event.files.some((file) => file.newUri === newUri.toString()),
+    "workspace/didRenameFiles after the asset rename",
+    beforeRename,
+  );
+  await closeActiveEditor();
 }
 
 async function testSecondWorkspaceFolder() {

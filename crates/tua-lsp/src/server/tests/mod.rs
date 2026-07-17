@@ -7,6 +7,7 @@ use std::process;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tua_core::{CompletionAdaptiveStats, Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
 
+mod assets;
 mod code_actions;
 mod completion;
 mod diagnostics;
@@ -707,6 +708,15 @@ fn type_explanation_request(id: u64, uri: &str, position: Value) -> Value {
             },
             "position": position
         }
+    })
+}
+
+fn asset_inventory_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/assetInventory",
+        "params": null
     })
 }
 

@@ -34,7 +34,7 @@ Status meanings:
 | LuaDoc/LuaCATS interoperability | Partial | Practical aliases, classes, overloads, function types, varargs, docs, and module exports work; the full LuaLS annotation ecosystem is larger. |
 | Static project modules | Supported | `require` and static imports resolve through the project model; imports lower to `require`. |
 | LOVE 11.x catalog | Supported | Generated overloads, enums, callback snippets/validation, methods, docs, and inheritance drive semantics. |
-| Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation and navigation. |
+| Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation, casing checks, usage inventory, navigation, references, and path-preserving file rename edits. |
 | Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types. |
 | Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
 | ECS semantics | Supported | Zero-setup built-in runtime, typed world/component/query/system APIs, and static component diagnostics are enabled by default. |
@@ -51,7 +51,7 @@ Status meanings:
 | Contextual sequence and multi-token completion | Opt-in | Bounded local lanes preserve compiler completion and fail back without user-visible errors. |
 | Hover, signature help, and type explanations | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. A source-linked Explain Type command reports annotation, inference, widening, narrowing, module, field, and dynamic fallback steps for identifiers and member chains. |
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
-| References and rename | Supported | Same-file and compiler-identified project symbols are supported; ambiguous dynamic identities are rejected. |
+| References and rename | Supported | Same-file and compiler-identified project symbols are supported; static asset references update when the asset file is renamed, while ambiguous dynamic identities are rejected. |
 | Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes. |
 | Formatting and source actions | Supported | Full/range/on-type formatting plus conservative import, LOVE callback generation, and fix-all actions are available. |
 | Syntax highlighting | Supported | An immediate TextMate grammar covers Lua, Tua types/classes/enums, LuaDoc, modules, domain helpers, event names, calls, members, labels, literals, and operators. |
@@ -59,6 +59,7 @@ Status meanings:
 | Watched files and workspace folders | Supported | Source, Lua, assets, config, module creation/deletion, and folder changes refresh project state. |
 | Sprite animation preview | Preview | A sticky webview renders compiler-inspected local sprite metadata without executing project code. |
 | Signal call graph | Supported | The extension visualizes compiler-indexed event calls and navigates to exact locations. |
+| Asset Explorer | Supported | The Explorer groups compiler-indexed assets by type and static usage, publishes conservative unused-asset hints, opens references, and performs LSP-aware file renames. |
 | Debugger and runtime profiler | Out of scope | Tua provides static tooling and source-map traceback remapping, not a Lua debugger. |
 | Package management | Out of scope | Tua understands module paths but does not install Lua packages. |
 | Network-required language features | Out of scope | Core checking and token completion remain fully local. |

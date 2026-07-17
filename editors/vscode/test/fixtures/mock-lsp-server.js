@@ -128,10 +128,10 @@ function initializeResult() {
       workspace: {
         fileOperations: {
           didRename: {
-            filters: sourceFileOperationFilters(),
+            filters: fileOperationFilters(),
           },
           willRename: {
-            filters: sourceFileOperationFilters(),
+            filters: fileOperationFilters(),
           },
         },
         workspaceFolders: {
@@ -147,12 +147,12 @@ function initializeResult() {
   };
 }
 
-function sourceFileOperationFilters() {
+function fileOperationFilters() {
   return [
     {
       scheme: "file",
       pattern: {
-        glob: "**/*.{tua,lua}",
+        glob: "**/*",
         matches: "file",
       },
     },

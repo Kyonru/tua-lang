@@ -9,7 +9,9 @@ use full_moon::ast::{self, Expression};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 
-use crate::asset::{self, AssetMetadata};
+use crate::asset::{
+    self, AssetInventory, AssetLoaderKind, AssetMetadata, AssetReference, ProjectAsset,
+};
 use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
@@ -87,6 +89,7 @@ use crate::{
     TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
 
+mod asset_queries;
 mod database;
 mod editor_queries;
 mod host;

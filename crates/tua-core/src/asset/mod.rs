@@ -8,7 +8,7 @@ use full_moon::tokenizer::TokenReference;
 use full_moon::visitors::Visitor;
 
 use crate::types::{FunctionType, Type};
-use crate::{ParsedSource, SourcePosition, SourceSpan};
+use crate::{Diagnostic, ParsedSource, SourcePosition, SourceSpan};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AssetLoaderKind {
@@ -297,6 +297,7 @@ impl AssetLoaderKind {
 pub struct AssetMetadata {
     pub kind: AssetLoaderKind,
     pub relative_path: String,
+    pub canonical_path: Option<String>,
     pub extension: Option<String>,
     pub span: SourceSpan,
     pub inferred_love_type: &'static str,
@@ -313,6 +314,7 @@ impl AssetMetadata {
             AssetValidationStatus::Missing => "missing",
             AssetValidationStatus::UnsupportedExtension => "unsupported extension",
             AssetValidationStatus::WrongKind => "wrong asset type",
+            AssetValidationStatus::PathCaseMismatch => "path casing differs",
         }
     }
 
@@ -326,6 +328,12 @@ impl AssetMetadata {
 
         if let Some(extension) = &self.extension {
             lines.push(format!("extension: .{extension}"));
+        }
+
+        if self.status == AssetValidationStatus::PathCaseMismatch {
+            if let Some(canonical_path) = &self.canonical_path {
+                lines.push(format!("filesystem path: `{canonical_path}`"));
+            }
         }
 
         if let Some((width, height)) = self.dimensions {
@@ -346,7 +354,65 @@ pub enum AssetValidationStatus {
     Missing,
     UnsupportedExtension,
     WrongKind,
+    PathCaseMismatch,
     Unchecked,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum AssetCategory {
+    Image,
+    Audio,
+    AudioVideo,
+    Font,
+    Shader,
+    Video,
+}
+
+impl AssetCategory {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Image => "image",
+            Self::Audio => "audio",
+            Self::AudioVideo => "audioVideo",
+            Self::Font => "font",
+            Self::Shader => "shader",
+            Self::Video => "video",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Image => "Images",
+            Self::Audio => "Audio",
+            Self::AudioVideo => "Audio / Video",
+            Self::Font => "Fonts",
+            Self::Shader => "Shaders",
+            Self::Video => "Video",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetReference {
+    pub path: PathBuf,
+    pub span: SourceSpan,
+    pub loader_kind: AssetLoaderKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectAsset {
+    pub path: PathBuf,
+    pub relative_path: String,
+    pub category: AssetCategory,
+    pub extension: String,
+    pub dimensions: Option<(u32, u32)>,
+    pub references: Vec<AssetReference>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AssetInventory {
+    pub assets: Vec<ProjectAsset>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -360,6 +426,7 @@ pub(crate) struct AssetPathCandidate {
 pub(crate) struct AssetIndex {
     roots: Vec<PathBuf>,
     by_relative: BTreeMap<String, AssetIndexEntry>,
+    by_folded_relative: BTreeMap<String, Option<String>>,
     by_absolute: BTreeMap<PathBuf, String>,
 }
 
@@ -377,6 +444,7 @@ impl AssetIndex {
         let mut index = Self {
             roots: roots.clone(),
             by_relative: BTreeMap::new(),
+            by_folded_relative: BTreeMap::new(),
             by_absolute: BTreeMap::new(),
         };
 
@@ -419,6 +487,11 @@ impl AssetIndex {
     }
 
     fn entry_for_path(&self, relative_path: &str) -> Option<&AssetIndexEntry> {
+        self.entry_for_path_with_case(relative_path)
+            .map(|(entry, _)| entry)
+    }
+
+    fn entry_for_path_with_case(&self, relative_path: &str) -> Option<(&AssetIndexEntry, bool)> {
         let path = Path::new(relative_path);
 
         if path.is_absolute() {
@@ -427,10 +500,34 @@ impl AssetIndex {
             return self
                 .by_absolute
                 .get(&normalized)
-                .and_then(|relative| self.by_relative.get(relative));
+                .and_then(|relative| self.by_relative.get(relative))
+                .map(|entry| (entry, false));
         }
 
-        self.by_relative.get(relative_path)
+        if let Some(entry) = self.by_relative.get(relative_path) {
+            return Some((entry, false));
+        }
+
+        let canonical = self
+            .by_folded_relative
+            .get(&fold_asset_path(relative_path))?
+            .as_ref()?;
+
+        self.by_relative.get(canonical).map(|entry| (entry, true))
+    }
+
+    pub(crate) fn files(&self) -> impl Iterator<Item = (&Path, &str, &str, Option<(u32, u32)>)> {
+        self.by_absolute
+            .iter()
+            .filter_map(|(absolute_path, relative_path)| {
+                let entry = self.by_relative.get(relative_path)?;
+                Some((
+                    absolute_path.as_path(),
+                    entry.relative_path.as_str(),
+                    entry.extension.as_deref()?,
+                    entry.dimensions,
+                ))
+            })
     }
 }
 
@@ -556,6 +653,7 @@ pub(crate) fn validate_asset_with_index(
         return AssetMetadata {
             kind,
             relative_path: relative_path.to_owned(),
+            canonical_path: None,
             extension,
             span,
             inferred_love_type: kind.return_type_name(),
@@ -603,6 +701,11 @@ pub(crate) fn validate_asset_with_index(
     AssetMetadata {
         kind,
         relative_path: relative_path.to_owned(),
+        canonical_path: resolved_path.and_then(|path| {
+            asset_roots
+                .iter()
+                .find_map(|root| path.strip_prefix(root).ok().map(normalize_relative_path))
+        }),
         extension,
         span,
         inferred_love_type: kind.return_type_name(),
@@ -617,7 +720,9 @@ pub(crate) fn resolved_asset_path(
     asset_roots: &[PathBuf],
     asset_index: Option<&AssetIndex>,
 ) -> Option<PathBuf> {
-    if metadata.status != AssetValidationStatus::Valid {
+    if metadata.status != AssetValidationStatus::Valid
+        && metadata.status != AssetValidationStatus::PathCaseMismatch
+    {
         return None;
     }
 
@@ -625,6 +730,42 @@ pub(crate) fn resolved_asset_path(
         .and_then(|index| index.entry_for_path(&metadata.relative_path))
         .map(|entry| entry.absolute_path.clone())
         .or_else(|| resolve_asset_path(&metadata.relative_path, asset_roots))
+}
+
+pub(crate) fn renamed_asset_reference_path(
+    metadata: &AssetMetadata,
+    old_path: &Path,
+    new_path: &Path,
+    asset_roots: &[PathBuf],
+    asset_index: Option<&AssetIndex>,
+) -> Option<String> {
+    let old_path = normalize_path_components(old_path);
+    let new_path = normalize_path_components(new_path);
+
+    if resolved_asset_path(metadata, asset_roots, asset_index)? != old_path {
+        return None;
+    }
+
+    let canonical_path = metadata
+        .canonical_path
+        .as_deref()
+        .unwrap_or(&metadata.relative_path);
+
+    asset_roots.iter().find_map(|root| {
+        let old_relative = old_path
+            .strip_prefix(root)
+            .ok()
+            .map(normalize_relative_path)?;
+
+        if old_relative != canonical_path {
+            return None;
+        }
+
+        new_path
+            .strip_prefix(root)
+            .ok()
+            .map(normalize_relative_path)
+    })
 }
 
 struct AssetVisitor<'a> {
@@ -874,12 +1015,23 @@ fn collect_asset_index_entries(root: &Path, dir: &Path, index: &mut AssetIndex) 
         index.by_relative.insert(
             relative_path.clone(),
             AssetIndexEntry {
-                relative_path,
+                relative_path: relative_path.clone(),
                 absolute_path,
                 extension: Some(extension),
                 dimensions,
             },
         );
+        let folded = fold_asset_path(&relative_path);
+
+        index
+            .by_folded_relative
+            .entry(folded)
+            .and_modify(|existing| {
+                if existing.as_deref() != Some(relative_path.as_str()) {
+                    *existing = None;
+                }
+            })
+            .or_insert_with(|| Some(relative_path));
     }
 }
 
@@ -901,7 +1053,7 @@ fn validate_asset_from_index(
         .as_deref()
         .is_none_or(|extension| !kind.supported_extensions().contains(&extension));
     let indexed = (!unsupported)
-        .then(|| asset_index.entry_for_path(relative_path))
+        .then(|| asset_index.entry_for_path_with_case(relative_path))
         .flatten();
     let path_is_absolute = Path::new(relative_path).is_absolute();
     let roots_are_empty = asset_roots.is_empty() && asset_index.roots().is_empty();
@@ -909,6 +1061,8 @@ fn validate_asset_from_index(
         AssetValidationStatus::WrongKind
     } else if unsupported {
         AssetValidationStatus::UnsupportedExtension
+    } else if indexed.is_some_and(|(_, case_mismatch)| case_mismatch) {
+        AssetValidationStatus::PathCaseMismatch
     } else if indexed.is_some() {
         AssetValidationStatus::Valid
     } else if roots_are_empty && !path_is_absolute {
@@ -917,12 +1071,15 @@ fn validate_asset_from_index(
         AssetValidationStatus::Missing
     };
     let dimensions = indexed
+        .map(|(entry, _)| entry)
         .filter(|_| matches!(kind, AssetLoaderKind::Image | AssetLoaderKind::ImageData))
         .and_then(|entry| entry.dimensions);
+    let canonical_path = indexed.map(|(entry, _)| entry.relative_path.clone());
 
     AssetMetadata {
         kind,
         relative_path: relative_path.to_owned(),
+        canonical_path,
         extension,
         span,
         inferred_love_type: kind.return_type_name(),
@@ -1032,6 +1189,22 @@ fn source_type_label_for_extension(extension: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+pub(crate) fn asset_category_for_extension(extension: &str) -> Option<AssetCategory> {
+    match source_type_label_for_extension(extension)? {
+        "image" => Some(AssetCategory::Image),
+        "audio" => Some(AssetCategory::Audio),
+        "audio or video" => Some(AssetCategory::AudioVideo),
+        "font" => Some(AssetCategory::Font),
+        "shader" => Some(AssetCategory::Shader),
+        "video" => Some(AssetCategory::Video),
+        _ => None,
+    }
+}
+
+fn fold_asset_path(path: &str) -> String {
+    path.replace('\\', "/").to_lowercase()
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {

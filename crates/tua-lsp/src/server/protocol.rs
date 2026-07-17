@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tua_core::{
-    CodeAction, CodeActionEdit, CodeActionKind, CodeLens, CodeLensReferenceKind,
+    AssetInventory, CodeAction, CodeActionEdit, CodeActionKind, CodeLens, CodeLensReferenceKind,
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
@@ -230,6 +230,40 @@ pub(super) fn lsp_signal_graph_from_core(graph: SignalGraph) -> Value {
     })
 }
 
+pub(super) fn lsp_asset_inventory_from_core(inventory: AssetInventory) -> Value {
+    json!({
+        "assets": inventory.assets.into_iter().map(|asset| {
+            json!({
+                "uri": uri_from_path(&asset.path),
+                "path": asset.relative_path,
+                "category": asset.category.name(),
+                "categoryLabel": asset.category.label(),
+                "extension": asset.extension,
+                "dimensions": asset.dimensions.map(|(width, height)| json!({
+                    "width": width,
+                    "height": height
+                })),
+                "usageCount": asset.references.len(),
+                "references": asset.references.into_iter().map(|reference| {
+                    json!({
+                        "uri": uri_from_path(&reference.path),
+                        "range": lsp_range(reference.span),
+                        "loaderKind": reference.loader_kind.name()
+                    })
+                }).collect::<Vec<_>>()
+            })
+        }).collect::<Vec<_>>(),
+        "diagnostics": inventory.diagnostics.into_iter().map(|diagnostic| {
+            let uri = uri_from_path(&diagnostic.file);
+
+            json!({
+                "uri": uri,
+                "diagnostic": lsp_diagnostic_from_core(diagnostic)
+            })
+        }).collect::<Vec<_>>()
+    })
+}
+
 pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value {
     Value::Array(
         items
@@ -245,6 +279,7 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                 tua_core::AssetValidationStatus::Missing => "missing",
                                 tua_core::AssetValidationStatus::UnsupportedExtension => "unsupportedExtension",
                                 tua_core::AssetValidationStatus::WrongKind => "wrongKind",
+                                tua_core::AssetValidationStatus::PathCaseMismatch => "pathCaseMismatch",
                                 tua_core::AssetValidationStatus::Unchecked => "unchecked",
                             },
                             "dimensions": image.dimensions.map(|(width, height)| json!({

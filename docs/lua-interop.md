@@ -333,6 +333,17 @@ Validated asset literals also participate in navigation. Definition opens the
 resolved asset file, and references finds every indexed helper or native LOVE
 constructor string that resolves to the same asset.
 
+Asset paths are checked against the filesystem's canonical casing. A mismatch
+reports `TL2008`, which prevents a path that works on a case-insensitive
+development machine from silently failing on a case-sensitive target. Renaming
+an indexed asset through VS Code updates static helper and native LOVE
+constructor paths while preserving their quote style.
+
+The VS Code Tua Assets view groups images, audio, fonts, shaders, and video by
+used or unused status. Usage is intentionally static: `TL2009` is a hint for an
+asset with no indexed Tua/Lua literal, not a claim that dynamically constructed
+paths are dead.
+
 `Vec2` is a built-in table-shaped type for position and velocity values. The
 `vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits
 BrineVector-backed Lua. `tua build` bundles `brinevector.lua` into the output

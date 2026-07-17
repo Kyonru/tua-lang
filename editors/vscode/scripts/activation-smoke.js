@@ -106,6 +106,69 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "activation should pass trace defaults to initialization options",
     );
 
+    await waitUntil(
+      () => state.treeViews[0]?.treeDataProvider.getChildren().length === 2,
+    );
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/assetInventory"),
+      "activation should load compiler-backed asset inventory after the server starts",
+    );
+    assert.strictEqual(state.treeViews.length, 1, "activation should create one Asset Explorer");
+    assert.strictEqual(state.treeViews[0].id, "tua.assets");
+
+    const assetCategories = state.treeViews[0].treeDataProvider.getChildren();
+    const imageCategory = assetCategories.find((node) => node.category === "image");
+    const audioCategory = assetCategories.find((node) => node.category === "audio");
+    const usedGroup = state.treeViews[0].treeDataProvider
+      .getChildren(imageCategory)
+      .find((node) => node.usage === "used");
+    const unusedGroup = state.treeViews[0].treeDataProvider
+      .getChildren(audioCategory)
+      .find((node) => node.usage === "unused");
+    const usedAsset = state.treeViews[0].treeDataProvider.getChildren(usedGroup)[0];
+    const unusedAsset = state.treeViews[0].treeDataProvider.getChildren(unusedGroup)[0];
+    const assetReference = state.treeViews[0].treeDataProvider.getChildren(usedAsset)[0];
+
+    assert.strictEqual(usedAsset.asset.path, "assets/player.png");
+    assert.strictEqual(unusedAsset.asset.path, "assets/jump.wav");
+    assert.strictEqual(assetReference.reference.loaderKind, "image");
+    assert.strictEqual(
+      state.diagnosticCollections[0].entries.get(unusedAsset.asset.uri)[0].code,
+      "TL2009",
+      "unused asset diagnostics should be published from the compiler inventory",
+    );
+
+    await state.commands.get("tua.assets.findReferences")(usedAsset);
+    await state.commands.get("tua.assets.openReference")(assetReference);
+    await state.commands.get("tua.assets.rename")(usedAsset);
+    await state.commands.get("tua.assets.reveal")(unusedAsset);
+
+    assert(
+      state.executedCommands.some(
+        (entry) =>
+          entry.command === "editor.action.showReferences" &&
+          entry.args[0].toString().endsWith("/src/main.tua"),
+      ),
+      "Asset Explorer should anchor VS Code's references view in source",
+    );
+    assert(
+      state.executedCommands.some(
+        (entry) =>
+          entry.command === "vscode.open" &&
+          entry.args[0].toString().endsWith("/src/main.tua"),
+      ),
+      "Asset Explorer references should navigate to the compiler range",
+    );
+    assert(
+      state.executedCommands.some((entry) => entry.command === "revealInExplorer"),
+      "Asset Explorer should reveal assets for normal VS Code file rename",
+    );
+    assert.strictEqual(
+      state.workspaceEdits[0].renames[0].newUri.fsPath,
+      path.join(workspace, "assets", "hero.png"),
+      "Asset Explorer rename should use a workspace file edit so LSP participants can update paths",
+    );
+
     await state.commands.get("tua.output.focus")();
     assert.deepStrictEqual(state.outputShows, [true], "output focus command should show the output channel");
 
@@ -809,17 +872,22 @@ function createMockState(workspace, options = {}) {
     ["preview.enabled", options.previewEnabled ?? false],
   ]);
   const configurationListeners = [];
+  const diagnosticCollections = [];
   const documentChangeListeners = [];
+  const documentSaveListeners = [];
   const configurationUpdates = [];
   const executedCommands = [];
+  const fileWatchers = [];
   const informationMessages = [];
   const openedExternals = [];
   const outputLines = [];
   const outputShows = [];
   const quickPickCalls = [];
   const hoverProviders = [];
+  const treeViews = [];
   const webviewPanels = [];
   const warningMessages = [];
+  const workspaceEdits = [];
   let activeTextEditor;
   let statusItem;
 
@@ -845,6 +913,38 @@ function createMockState(workspace, options = {}) {
       Warning: 2,
       Error: 3,
     },
+    Diagnostic: class Diagnostic {
+      constructor(range, message, severity) {
+        this.range = range;
+        this.message = message;
+        this.severity = severity;
+      }
+    },
+    DiagnosticSeverity: {
+      Error: 0,
+      Warning: 1,
+      Information: 2,
+      Hint: 3,
+    },
+    EventEmitter: class EventEmitter {
+      constructor() {
+        this.listeners = [];
+        this.event = (listener) => {
+          this.listeners.push(listener);
+          return { dispose() {} };
+        };
+      }
+
+      dispose() {
+        this.listeners = [];
+      }
+
+      fire(value) {
+        for (const listener of this.listeners) {
+          listener(value);
+        }
+      }
+    },
     Hover: class Hover {
       constructor(contents, range) {
         this.contents = Array.isArray(contents) ? contents : [contents];
@@ -869,6 +969,28 @@ function createMockState(workspace, options = {}) {
         this.end = end;
       }
     },
+    Location: class Location {
+      constructor(uri, range) {
+        this.uri = uri;
+        this.range = range;
+      }
+    },
+    ThemeIcon: class ThemeIcon {
+      constructor(id) {
+        this.id = id;
+      }
+    },
+    TreeItem: class TreeItem {
+      constructor(label, collapsibleState = 0) {
+        this.label = label;
+        this.collapsibleState = collapsibleState;
+      }
+    },
+    TreeItemCollapsibleState: {
+      None: 0,
+      Collapsed: 1,
+      Expanded: 2,
+    },
     Uri: {
       file(filename) {
         return {
@@ -890,6 +1012,26 @@ function createMockState(workspace, options = {}) {
           toString: () => value,
         };
       },
+      joinPath(base, ...segments) {
+        const filename = path.resolve(base.fsPath, ...segments);
+        return {
+          fsPath: filename,
+          path: filename,
+          scheme: base.scheme,
+          toString() {
+            return `${base.scheme}://${filename}`;
+          },
+        };
+      },
+    },
+    WorkspaceEdit: class WorkspaceEdit {
+      constructor() {
+        this.renames = [];
+      }
+
+      renameFile(oldUri, newUri, renameOptions) {
+        this.renames.push({ oldUri, newUri, options: renameOptions });
+      }
     },
     ViewColumn: {
       Beside: 2,
@@ -917,6 +1059,24 @@ function createMockState(workspace, options = {}) {
       },
     },
     languages: {
+      createDiagnosticCollection(name) {
+        const collection = {
+          name,
+          entries: new Map(),
+          clear() {
+            collection.entries.clear();
+          },
+          dispose() {
+            collection.entries.clear();
+          },
+          set(uri, diagnostics) {
+            collection.entries.set(uri.toString(), diagnostics);
+          },
+        };
+
+        diagnosticCollections.push(collection);
+        return collection;
+      },
       createLanguageStatusItem(id, selector) {
         statusItem = {
           id,
@@ -944,6 +1104,27 @@ function createMockState(workspace, options = {}) {
             outputShows.push(preserveFocus);
           },
         };
+      },
+      createTreeView(id, viewOptions) {
+        const visibilityListeners = [];
+        const view = {
+          id,
+          treeDataProvider: viewOptions.treeDataProvider,
+          showCollapseAll: viewOptions.showCollapseAll,
+          dispose() {},
+          onDidChangeVisibility(listener) {
+            visibilityListeners.push(listener);
+            return { dispose() {} };
+          },
+          fireVisibility(visible) {
+            for (const listener of visibilityListeners) {
+              listener({ visible });
+            }
+          },
+        };
+
+        treeViews.push(view);
+        return view;
       },
       createWebviewPanel(viewType, title, column, options) {
         const panel = {
@@ -998,6 +1179,9 @@ function createMockState(workspace, options = {}) {
         informationMessages.push(message);
         return Promise.resolve(options.informationChoice);
       },
+      showInputBox() {
+        return Promise.resolve(options.inputBoxValue ?? "hero.png");
+      },
       setStatusBarMessage() {
         return { dispose() {} };
       },
@@ -1026,8 +1210,29 @@ function createMockState(workspace, options = {}) {
           },
         },
       ],
-      createFileSystemWatcher() {
-        return { dispose() {} };
+      createFileSystemWatcher(glob) {
+        const createListeners = [];
+        const changeListeners = [];
+        const deleteListeners = [];
+        const watcher = {
+          glob,
+          dispose() {},
+          onDidCreate(listener) {
+            createListeners.push(listener);
+            return { dispose() {} };
+          },
+          onDidChange(listener) {
+            changeListeners.push(listener);
+            return { dispose() {} };
+          },
+          onDidDelete(listener) {
+            deleteListeners.push(listener);
+            return { dispose() {} };
+          },
+        };
+
+        fileWatchers.push(watcher);
+        return watcher;
       },
       getConfiguration() {
         return {
@@ -1049,12 +1254,20 @@ function createMockState(workspace, options = {}) {
       asRelativePath(uri) {
         return uri.fsPath ? path.relative(workspace, uri.fsPath) : uri.toString();
       },
+      applyEdit(edit) {
+        workspaceEdits.push(edit);
+        return Promise.resolve(true);
+      },
       onDidChangeConfiguration(listener) {
         configurationListeners.push(listener);
         return { dispose() {} };
       },
       onDidChangeTextDocument(listener) {
         documentChangeListeners.push(listener);
+        return { dispose() {} };
+      },
+      onDidSaveTextDocument(listener) {
+        documentSaveListeners.push(listener);
         return { dispose() {} };
       },
       registerTextDocumentContentProvider() {
@@ -1138,6 +1351,64 @@ function createMockState(workspace, options = {}) {
         });
       }
 
+      if (method === "tua/assetInventory") {
+        const player = path.join(workspace, "assets", "player.png");
+        const jump = path.join(workspace, "assets", "jump.wav");
+        const source = path.join(workspace, "src", "main.tua");
+
+        return Promise.resolve({
+          analysisRevision: 1,
+          inventory: {
+            assets: [
+              {
+                uri: `file://${player}`,
+                path: "assets/player.png",
+                category: "image",
+                categoryLabel: "Images",
+                extension: "png",
+                dimensions: { width: 32, height: 16 },
+                usageCount: 1,
+                references: [
+                  {
+                    uri: `file://${source}`,
+                    range: {
+                      start: { line: 2, character: 21 },
+                      end: { line: 2, character: 40 },
+                    },
+                    loaderKind: "image",
+                  },
+                ],
+              },
+              {
+                uri: `file://${jump}`,
+                path: "assets/jump.wav",
+                category: "audio",
+                categoryLabel: "Audio",
+                extension: "wav",
+                dimensions: null,
+                usageCount: 0,
+                references: [],
+              },
+            ],
+            diagnostics: [
+              {
+                uri: `file://${jump}`,
+                diagnostic: {
+                  range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 0 },
+                  },
+                  severity: 4,
+                  code: "TL2009",
+                  source: "tua",
+                  message: "asset `assets/jump.wav` has no static Tua or Lua references",
+                },
+              },
+            ],
+          },
+        });
+      }
+
       if (method === "tua/inspect") {
         return Promise.resolve(mockSpriteInspection(activeTextEditor?.document));
       }
@@ -1164,8 +1435,11 @@ function createMockState(workspace, options = {}) {
     configurationListeners,
     configurationUpdates,
     commands,
+    diagnosticCollections,
     documentChangeListeners,
+    documentSaveListeners,
     executedCommands,
+    fileWatchers,
     informationMessages,
     hoverProviders,
     LanguageClient,
@@ -1190,8 +1464,10 @@ function createMockState(workspace, options = {}) {
       }
     },
     vscode,
+    treeViews,
     webviewPanels,
     warningMessages,
+    workspaceEdits,
   };
 }
 
@@ -1341,6 +1617,12 @@ function assertRegisteredCommands(state) {
     "tua.inlayHints.selectMode",
     "tua.previewSprites",
     "tua.previewSprites.reload",
+    "tua.assets.refresh",
+    "tua.assets.open",
+    "tua.assets.openReference",
+    "tua.assets.findReferences",
+    "tua.assets.rename",
+    "tua.assets.reveal",
     "tua.showSignalGraph",
     "tua.source.organizeImports",
     "tua.source.sortImports",

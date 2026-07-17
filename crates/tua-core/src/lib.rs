@@ -65,7 +65,10 @@ pub use analysis::{
     AnalysisCacheStats, AnalysisHost, AnalysisSemanticFile, AnalysisSnapshot, AnalysisSourceKind,
     AnalysisWarmPriority, BuiltinCatalogs,
 };
-pub use asset::{AssetLoaderKind, AssetMetadata, AssetValidationStatus};
+pub use asset::{
+    AssetCategory, AssetInventory, AssetLoaderKind, AssetMetadata, AssetReference,
+    AssetValidationStatus, ProjectAsset,
+};
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,

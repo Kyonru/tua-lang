@@ -578,6 +578,23 @@ fn sprite_declaration_diagnostics(
                         asset.relative_path
                     ),
                 )),
+                AssetValidationStatus::PathCaseMismatch => diagnostics.push(
+                    Diagnostic::new(
+                        path,
+                        image_span.start.line,
+                        image_span.start.column,
+                        DiagnosticSeverity::Warning,
+                        format!(
+                            "asset path casing `{}` does not match the filesystem path `{}`",
+                            asset.relative_path,
+                            asset
+                                .canonical_path
+                                .as_deref()
+                                .unwrap_or(&asset.relative_path)
+                        ),
+                    )
+                    .with_code(DiagnosticCode::ASSET_PATH_CASE),
+                ),
                 AssetValidationStatus::Valid | AssetValidationStatus::Unchecked => {}
             }
         }

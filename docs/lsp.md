@@ -74,7 +74,8 @@ selected path, version, and workspace directory when available.
   shader, or video file. References returns every indexed Tua or Lua asset
   loader literal that resolves to the same file.
 - Static LOVE asset diagnostics cover obvious missing files, unsupported
-  formats, and source type mismatches before the game runs.
+  formats, source type mismatches, and path casing that differs from the
+  filesystem before the game runs. Path casing reports warning `TL2008`.
 - Supported `value is Type` checks narrow true branches for hover, completion,
   and diagnostics; unsupported runtime targets report `TL1007`.
 - Class constructor locals expose class fields and methods for completion,
@@ -110,7 +111,8 @@ selected path, version, and workspace directory when available.
   import bindings, creating missing core LOVE callbacks (`load`, `update`, and
   `draw`), and fixing all safe diagnostics in the current file.
 - Workspace file-rename edits for static `require(...)` and `import(...)`
-  module specifiers when the move is unambiguous in the project model.
+  module specifiers, plus helper/native LOVE asset literals when the move is
+  unambiguous in the project model.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
 - The custom `tua/signalGraph` request returns typed SignalBus event calls from
@@ -126,6 +128,11 @@ selected path, version, and workspace directory when available.
   inspector items. Sprite sheet items include declaration ranges, resolved
   image asset URIs and validation status, frame metadata, animations, and the
   same `TL5004` diagnostics used by normal project analysis.
+- The low-priority `tua/assetInventory` request returns revisioned project
+  assets grouped by stable category metadata, static Tua/Lua reference ranges,
+  dimensions when cheaply available, and conservative `TL2009` hints for
+  assets with no static references. Dynamic asset loading remains valid, so
+  `TL2009` is a hint rather than proof that a file can be deleted.
 
 ## Syntax And Semantic Highlighting
 
@@ -179,6 +186,11 @@ parse Tua source or resolve asset paths independently.
 Signal graph visualization is an explicit project-inspection command backed by
 `tua/signalGraph`. The extension renders semantic results and does not maintain
 a parallel SignalBus parser.
+
+The Tua Assets Explorer is backed by `tua/assetInventory`. The extension only
+groups and presents compiler results, publishes the returned unused-asset
+hints, and starts normal VS Code file edits. Asset parsing, casing validation,
+reference identity, and rename edits stay in shared compiler analysis.
 
 TypeScript Go-style proposed editor features were evaluated and are not exposed
 today:
@@ -368,9 +380,10 @@ npm --prefix editors/vscode run test:vscode
 
 It opens an isolated two-root workspace and verifies live completion freshness,
 cancellation, hover, definition navigation, signature help, inlay hints,
-UTF-16 and untitled-document positions, file-rename edits, and sprite preview
-opening/reload/focus behavior. Sprite tests also assert that inspection uses the
-current synchronized document version. CI runs the same suite under Xvfb.
+UTF-16 and untitled-document positions, module and asset file-rename edits, and
+sprite preview opening/reload/focus behavior. Sprite tests also assert that
+inspection uses the current synchronized document version. CI runs the same
+suite under Xvfb.
 
 ## Profiling
 

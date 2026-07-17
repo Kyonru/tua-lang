@@ -14,6 +14,7 @@ const { isTuaDocument } = require("./shared/documents");
 
 let client;
 let editorDevex;
+let loveDevex;
 let extensionContext;
 let languageClientModule;
 let outputChannel;
@@ -38,13 +39,12 @@ async function activate(context) {
     isTuaDocument,
   });
   context.subscriptions.push(editorDevex);
-  context.subscriptions.push(
-    registerLoveDevex({
-      configurationTarget,
-      getClient: () => client,
-      isTuaDocument,
-    }),
-  );
+  loveDevex = registerLoveDevex({
+    configurationTarget,
+    getClient: () => client,
+    isTuaDocument,
+  });
+  context.subscriptions.push(loveDevex);
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
@@ -203,6 +203,7 @@ async function startLanguageServer() {
     await client.start();
     currentServerInfo.state = "running";
     setServerStatus("running", serverDetail(serverCommand, cwd, preflight.version));
+    void loveDevex?.refreshAssets?.();
   } catch (error) {
     outputChannel.appendLine(`Failed to start tua language server: ${formatError(error)}`);
     showServerStartupWarning(serverCommand, error);

@@ -690,6 +690,7 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "textDocument/semanticTokens/full"
             | "textDocument/semanticTokens/full/delta"
             | "textDocument/semanticTokens/range"
+            | "tua/assetInventory"
             | "workspace/symbol"
     )
 }
