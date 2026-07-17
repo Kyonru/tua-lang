@@ -42,7 +42,7 @@ async function main() {
 }
 
 async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
-  const state = createMockState(workspace);
+  const state = createMockState(workspace, { quickPickLabel: "Types Only" });
   const previousServerPath = process.env.TUA_SERVER_PATH;
   const sourceSentinel = "DO_NOT_COPY_TUA_SOURCE_CONTENT";
 
@@ -59,6 +59,11 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assertRegisteredCommands(state);
     assert.strictEqual(state.clients.length, 1, "activation should create one language client");
     assert.strictEqual(state.clients[0].starts, 1, "activation should start the client");
+    assert.strictEqual(
+      typeof state.clients[0].clientOptions.middleware?.provideInlayHints,
+      "function",
+      "activation should install the inlay hint mode middleware",
+    );
     assert.deepStrictEqual(
       state.clients[0].clientOptions.documentSelector,
       [
@@ -149,6 +154,17 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 `,
     );
     state.setActiveDocument(spriteDocument);
+
+    assert.strictEqual(
+      await state.commands.get("tua.inlayHints.selectMode")(),
+      "types",
+      "the inlay hint command should return the selected mode",
+    );
+    assert.deepStrictEqual(
+      state.quickPickCalls.at(-1).items.map((item) => item.label),
+      ["Full", "Compact", "Types Only", "Parameters Only", "Off"],
+      "the inlay hint command should expose all presentation modes in one quick pick",
+    );
 
     const initialPreview = await state.commands.get("tua.previewSprites")();
 
@@ -971,6 +987,9 @@ function createMockState(workspace, options = {}) {
         informationMessages.push(message);
         return Promise.resolve(options.informationChoice);
       },
+      setStatusBarMessage() {
+        return { dispose() {} };
+      },
       showQuickPick(items) {
         quickPickCalls.push({ items });
 
@@ -1234,11 +1253,31 @@ function mockSpriteInspection(document) {
 function createContext(extensionPath = extensionRoot, globalStoragePath = path.join(os.tmpdir(), "tua-vscode-smoke-storage")) {
   return {
     extensionPath,
+    globalState: createMemento(),
     globalStorageUri: {
       fsPath: globalStoragePath,
       scheme: "file",
     },
     subscriptions: [],
+    workspaceState: createMemento(),
+  };
+}
+
+function createMemento() {
+  const values = new Map();
+
+  return {
+    get(key, defaultValue) {
+      return values.has(key) ? values.get(key) : defaultValue;
+    },
+    update(key, value) {
+      if (value === undefined) {
+        values.delete(key);
+      } else {
+        values.set(key, value);
+      }
+      return Promise.resolve();
+    },
   };
 }
 
@@ -1254,7 +1293,7 @@ function assertRegisteredCommands(state) {
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
-    "tua.inlayHints.toggleCompact",
+    "tua.inlayHints.selectMode",
     "tua.previewSprites",
     "tua.previewSprites.reload",
     "tua.showSignalGraph",

@@ -13,8 +13,9 @@ language or editor behavior, and migration notes call out those changes.
 - A zero-setup `objectPool({...})` helper with item-aware typing, lifecycle
   completion and hover, prewarming, guarded release, cleanup hooks, and an
   on-demand bundled `tuaobjectpool.lua` runtime.
-- A VS Code command that toggles native compact inlay-hint rendering and
-  restores the previous Tua-specific hint-length preference when expanded.
+- A VS Code quick-pick and editor-toolbar command for Full, Compact, Types
+  Only, Parameters Only, and Off inlay-hint modes. Compact restores the exact
+  previous Tua-specific hint-length preference when another mode is selected.
 - Generated LOVE callback assistance with `TL5006` typo/signature diagnostics,
   typo rename fixes, and a source action for missing core lifecycle callbacks.
 

@@ -18,7 +18,7 @@ const expected = [
   "tua.resetCompletionStats",
   "tua.saveCpuProfile",
   "tua.saveHeapSummary",
-  "tua.inlayHints.toggleCompact",
+  "tua.inlayHints.selectMode",
   "tua.previewSprites",
   "tua.showSignalGraph",
   "tua.source.organizeImports",

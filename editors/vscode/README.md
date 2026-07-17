@@ -105,7 +105,7 @@ the setting.
 - `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
-- `Tua: Toggle Compact Inlay Hints`
+- `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
 - `Tua: Show Signal Graph`
 - `Tua: Organize Imports`
@@ -114,11 +114,13 @@ the setting.
 - `Tua: Fix All Safe Diagnostics`
 - `Tua: Report Issue`
 
-`Tua: Toggle Compact Inlay Hints` switches Tua editors between the full hint
-labels and VS Code's native compact ellipsis rendering. The command remembers
-and restores the previous language-specific maximum length. It changes only
-presentation; the language server continues returning complete type and
-parameter labels.
+`Tua: Select Inlay Hint Mode` is available from the command palette and the
+Tua editor toolbar. Its quick pick offers Full, Compact, Types Only, Parameters
+Only, and Off. Compact uses VS Code's native ellipsis rendering and restores
+the exact prior language-specific maximum length when another mode is selected,
+including an absent override. The other modes filter the language server's
+complete type and parameter labels without changing `editor.inlayHints.enabled`
+or unrelated VS Code preferences.
 
 ## Profiling
 

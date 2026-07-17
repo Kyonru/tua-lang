@@ -13,6 +13,7 @@ const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isTuaDocument } = require("./shared/documents");
 
 let client;
+let editorDevex;
 let extensionContext;
 let languageClientModule;
 let outputChannel;
@@ -30,13 +31,12 @@ async function activate(context) {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
-  context.subscriptions.push(
-    registerEditorDevex({
-      context,
-      configurationTarget,
-      isTuaDocument,
-    }),
-  );
+  editorDevex = registerEditorDevex({
+    context,
+    configurationTarget,
+    isTuaDocument,
+  });
+  context.subscriptions.push(editorDevex);
   context.subscriptions.push(
     registerLoveDevex({
       configurationTarget,
@@ -185,6 +185,7 @@ async function startLanguageServer() {
   const clientOptions = {
     documentSelector: STATUS_SELECTOR,
     initializationOptions,
+    middleware: editorDevex?.middleware,
     outputChannel,
     synchronize: {
       configurationSection: "tua",

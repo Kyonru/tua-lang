@@ -489,8 +489,8 @@
         "category": "Tua"
       },
       {
-        "command": "tua.inlayHints.toggleCompact",
-        "title": "Toggle Compact Inlay Hints",
+        "command": "tua.inlayHints.selectMode",
+        "title": "Select Inlay Hint Mode",
         "category": "Tua",
         "icon": "$(ellipsis)"
       },
@@ -534,7 +534,7 @@
     "menus": {
       "editor/title": [
         {
-          "command": "tua.inlayHints.toggleCompact",
+          "command": "tua.inlayHints.selectMode",
           "when": "editorLangId == tua",
           "group": "navigation@40"
         },
@@ -546,7 +546,7 @@
       ],
       "commandPalette": [
         {
-          "command": "tua.inlayHints.toggleCompact",
+          "command": "tua.inlayHints.selectMode",
           "when": "editorLangId == tua"
         }
       ]

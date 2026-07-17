@@ -19,6 +19,7 @@ async function runEditorIntelligenceTests() {
 
 async function testLiveLanguageFeatures() {
   const { document, editor } = await openFixture("intelligence");
+  await vscode.commands.executeCommand("tua.inlayHints.selectMode", "full");
   const insertion = document.lineAt(document.lineCount - 1).range.end;
   editor.selection = new vscode.Selection(insertion, insertion);
   const beforeTyping = eventSequence();
@@ -88,7 +89,7 @@ async function testLiveLanguageFeatures() {
   );
   assert(hints.some((hint) => hint.label === ": number"));
 
-  await testCompactInlayHintToggle(document);
+  await testInlayHintModes(document);
 
   for (const type of [
     "hover.request",
@@ -109,12 +110,26 @@ async function testLiveLanguageFeatures() {
   await discardActiveEditor();
 }
 
-async function testCompactInlayHintToggle(document) {
+async function testInlayHintModes(document) {
   const configuration = () =>
     vscode.workspace.getConfiguration("editor", { uri: document.uri, languageId: "tua" });
-  const previous = configuration().inspect("inlayHints.maximumLength")?.workspaceLanguageValue;
+  const previousMaximumLength = configuration().inspect(
+    "inlayHints.maximumLength",
+  )?.workspaceLanguageValue;
+  const previousEnabled = configuration().inspect("inlayHints.enabled")?.workspaceLanguageValue;
+  const range = new vscode.Range(0, 0, document.lineCount, 0);
+  const selectMode = (mode) =>
+    vscode.commands.executeCommand("tua.inlayHints.selectMode", mode);
+  const hints = () =>
+    vscode.commands.executeCommand("vscode.executeInlayHintProvider", document.uri, range);
 
   try {
+    await configuration().update(
+      "inlayHints.enabled",
+      "on",
+      vscode.ConfigurationTarget.Workspace,
+      true,
+    );
     await configuration().update(
       "inlayHints.maximumLength",
       27,
@@ -127,30 +142,51 @@ async function testCompactInlayHintToggle(document) {
       "the test host should apply Tua language-specific inlay settings",
     );
 
-    assert.equal(
-      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
-      true,
-    );
+    assert.equal(await selectMode("compact"), "compact");
     assert.equal(configuration().get("inlayHints.maximumLength"), 1);
 
-    const hints = await vscode.commands.executeCommand(
-      "vscode.executeInlayHintProvider",
-      document.uri,
-      new vscode.Range(0, 0, document.lineCount, 0),
-    );
+    const compactHints = await hints();
     assert(
-      hints.some((hint) => hint.label === ": number"),
+      compactHints.some((hint) => hint.label === ": number"),
       "compact presentation must not replace the LSP's full inlay hint labels",
     );
-
-    assert.equal(
-      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
-      false,
+    assert(
+      compactHints.some((hint) => hint.label === "value:"),
+      "compact mode should retain parameter hints",
     );
+
+    assert.equal(await selectMode("types"), "types");
     assert.equal(
       configuration().get("inlayHints.maximumLength"),
       27,
-      "expanding should restore the previous Tua language override",
+      "leaving compact mode should restore the previous Tua language override",
+    );
+    const typeHints = await hints();
+    assert(typeHints.length > 0, "types-only mode should retain type hints");
+    assert(
+      typeHints.every((hint) => hint.kind === vscode.InlayHintKind.Type),
+      "types-only mode should filter parameter hints",
+    );
+
+    assert.equal(await selectMode("parameters"), "parameters");
+    const parameterHints = await hints();
+    assert(parameterHints.length > 0, "parameters-only mode should retain parameter hints");
+    assert(
+      parameterHints.every((hint) => hint.kind === vscode.InlayHintKind.Parameter),
+      "parameters-only mode should filter type hints",
+    );
+
+    assert.equal(await selectMode("off"), "off");
+    assert.deepEqual(await hints(), [], "off mode should suppress Tua inlay hints");
+
+    assert.equal(await selectMode("full"), "full");
+    const fullHints = await hints();
+    assert(fullHints.some((hint) => hint.kind === vscode.InlayHintKind.Type));
+    assert(fullHints.some((hint) => hint.kind === vscode.InlayHintKind.Parameter));
+    assert.equal(
+      configuration().inspect("inlayHints.enabled")?.workspaceLanguageValue,
+      "on",
+      "mode changes should preserve the existing VS Code inlay hint setting",
     );
 
     await configuration().update(
@@ -159,23 +195,24 @@ async function testCompactInlayHintToggle(document) {
       vscode.ConfigurationTarget.Workspace,
       true,
     );
-    assert.equal(
-      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
-      true,
-    );
-    assert.equal(
-      await vscode.commands.executeCommand("tua.inlayHints.toggleCompact"),
-      false,
-    );
+    assert.equal(await selectMode("compact"), "compact");
+    assert.equal(await selectMode("full"), "full");
     assert.equal(
       configuration().inspect("inlayHints.maximumLength")?.workspaceLanguageValue,
       undefined,
-      "expanding should remove the temporary override when none existed before",
+      "leaving compact mode should remove the temporary override when none existed before",
     );
   } finally {
+    await selectMode("full");
     await configuration().update(
       "inlayHints.maximumLength",
-      previous,
+      previousMaximumLength,
+      vscode.ConfigurationTarget.Workspace,
+      true,
+    );
+    await configuration().update(
+      "inlayHints.enabled",
+      previousEnabled,
       vscode.ConfigurationTarget.Workspace,
       true,
     );

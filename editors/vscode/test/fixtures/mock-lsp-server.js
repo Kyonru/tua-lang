@@ -285,6 +285,15 @@ function inlayHints(message) {
   });
   respond(message.id, [
     {
+      kind: 2,
+      label: "value:",
+      paddingRight: true,
+      position: {
+        character: 0,
+        line,
+      },
+    },
+    {
       kind: 1,
       label: ": number",
       paddingLeft: true,
