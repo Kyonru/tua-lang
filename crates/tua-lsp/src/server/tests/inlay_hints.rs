@@ -38,6 +38,80 @@ damage(player, 10)
     assert_eq!(hints[0]["position"], json!({ "line": 11, "character": 12 }));
     assert_eq!(hints[2]["position"], json!({ "line": 13, "character": 7 }));
 }
+
+#[test]
+fn inlay_hints_survive_an_incomplete_edit_without_waiting_for_a_snapshot() {
+    let uri = "file:///tmp/inlay-hints-incomplete-edit.tua";
+    let before = r#"type Player = { hp: number }
+
+local function makePlayer(): Player
+  return { hp = 10 }
+end
+
+local player = makePlayer()
+"#;
+    let after = format!("{before}\nplayer");
+    let output = run_messages(vec![
+        did_open(uri, before),
+        did_change(uri, &after, 2),
+        inlay_hint_request(2, uri, 0, 0, 20, 0),
+    ]);
+    let hints = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert!(
+        inlay_hint_labels(hints).contains(&": Player"),
+        "the last incomplete line must not hide valid hints above it: {hints:#?}"
+    );
+}
+
+#[test]
+fn incomplete_edit_keeps_project_enriched_inlay_hints_from_the_warm_snapshot() {
+    let temp = TempProject::new("project-inlay-hints-incomplete-edit");
+    let before = r#"local Player = require("player")
+
+local player = Player.new("Ada")
+"#;
+    let after = format!("{before}\nplayer");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", before);
+    temp.write(
+        "src/player.tua",
+        r#"local M = {}
+
+function M.new(name: string): { name: string }
+  return { name = name }
+end
+
+return M
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, before));
+    server.send(inlay_hint_request(2, &uri, 0, 0, 10, 0));
+    server.send(did_change(&uri, &after, 2));
+    server.send(inlay_hint_request(3, &uri, 0, 0, 10, 0));
+
+    let output = server.output();
+    let before_hints = response_with_id(output, 2)["result"]
+        .as_array()
+        .expect("warm inlay hints should be an array");
+    let after_hints = response_with_id(output, 3)["result"]
+        .as_array()
+        .expect("edited inlay hints should be an array");
+
+    assert_eq!(
+        inlay_hint_labels(after_hints),
+        inlay_hint_labels(before_hints)
+    );
+    assert!(inlay_hint_labels(after_hints).contains(&": { name: string }"));
+}
 #[test]
 fn inlay_hint_returns_required_module_parameter_hints() {
     let temp = TempProject::new("required-module-inlay-hints");

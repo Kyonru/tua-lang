@@ -401,7 +401,18 @@ Servers without those profile artifact capabilities return a warning instead
 of failing the extension host. Cache stats include `usageIndex` hits and misses
 for the compact per-file member/event summaries used by project completion and
 the signal graph; unchanged files should contribute hits across snapshot
-revisions.
+revisions. They also include a `workspaceWarm` object with discovered and
+warmed and failed file counts, high/low queue depth, stale-result count, and the
+revision of the prepared project snapshot. Warm coverage is reported separately
+from foreground cache hits so idle indexing cannot make interactive hit rates
+look better than they are.
+
+Workspace warming runs only while the request scheduler is idle. It prioritizes
+open and changed files, then direct dependency neighbors, then the remaining
+`.tua` and `.lua` files. Completion, hover, definition, signature help, and
+viewport inlay requests continue on the interactive worker lane while warming
+is active. A document edit invalidates stale warm results; the coordinator only
+adopts artifacts produced for matching analysis inputs.
 
 For editor-side trace logging, set `tua.trace.server` to `off`, `messages`, or
 `verbose`, and set `tua.log.verbosity` to `off`, `error`, `info`, `debug`, or

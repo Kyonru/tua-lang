@@ -376,3 +376,207 @@ fn did_open_queues_slow_diagnostics_without_forcing_project_snapshot() {
 
     assert_eq!(after["parse"]["misses"].as_u64(), Some(2));
 }
+
+#[test]
+fn workspace_warm_queue_prioritizes_an_open_file() {
+    let temp = TempProject::new("warm-open-priority");
+    let main_source = "local main: number = 1\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main_source);
+    temp.write("src/other.tua", "local other: number = 2\n");
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main_source));
+
+    let work = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("open file should be queued for warming");
+
+    match work {
+        WorkspaceWarmWork::File { path, priority, .. } => {
+            assert_eq!(path, temp.path.join("src/main.tua"));
+            assert_eq!(priority, tua_core::AnalysisWarmPriority::High);
+        }
+        WorkspaceWarmWork::Snapshot { .. } => panic!("files must warm before the snapshot"),
+    }
+}
+
+#[test]
+fn idle_workspace_warm_adopts_files_and_prepares_the_project_snapshot() {
+    let temp = TempProject::new("idle-workspace-warm");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", "local main: number = 1\n");
+    temp.write("src/other.lua", "local other = 2\nreturn other\n");
+
+    let mut initialize = initialize_with_root(1, temp.uri());
+    initialize["params"]["capabilities"] = json!({
+        "workspace": {
+            "inlayHint": { "refreshSupport": true },
+            "semanticTokens": { "refreshSupport": true }
+        }
+    });
+    let output = run_chunked_messages(vec![
+        (Duration::ZERO, vec![initialize]),
+        (Duration::from_millis(300), vec![cache_stats_request(100)]),
+    ]);
+    let warm = &response_with_id(&output, 100)["result"]["workspaceWarm"];
+
+    assert_eq!(warm["discovered"].as_u64(), Some(2));
+    assert_eq!(warm["warmed"].as_u64(), Some(2));
+    assert_eq!(warm["queuedHigh"].as_u64(), Some(0));
+    assert_eq!(warm["queuedLow"].as_u64(), Some(0));
+    assert!(warm["snapshotReadyRevision"].is_number());
+    assert!(output
+        .iter()
+        .any(|message| message["method"] == "workspace/inlayHint/refresh"));
+    assert!(output
+        .iter()
+        .any(|message| message["method"] == "workspace/semanticTokens/refresh"));
+}
+
+#[test]
+fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
+    let uri = "file:///tmp/stale-workspace-warm.tua";
+    let before = "local value = 1\n";
+    let after = "local value = 2\n";
+    let mut server = TestServer::new();
+
+    server.send_without_drain(did_open(uri, before));
+    let work = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("opened file should be queued");
+    let warmed = server.server.analysis.clone();
+    let WorkspaceWarmWork::File { path, priority, .. } = &work else {
+        panic!("opened file should warm before the snapshot");
+    };
+
+    assert!(warmed.warm_file(path, *priority));
+    server.send_without_drain(did_change(uri, after, 2));
+    server
+        .server
+        .finish_workspace_warm(&work, Some(&warmed), true);
+
+    assert_eq!(server.server.workspace_warm.stale_results, 1);
+    let retried = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("stale file should be requeued");
+    assert!(matches!(
+        retried,
+        WorkspaceWarmWork::File {
+            priority: tua_core::AnalysisWarmPriority::High,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn shutdown_abandons_internal_workspace_warm_jobs() {
+    let uri = "file:///tmp/shutdown-workspace-warm.tua";
+    let mut server = LspServer::default();
+    let (event_tx, _event_rx) = std::sync::mpsc::channel();
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+
+    server.handle_message(did_open(uri, "local value = 1\n"));
+
+    assert!(scheduler.dispatch_next_workspace_warm(&mut server));
+    assert!(scheduler.has_in_flight());
+
+    scheduler.abandon_workspace_warm();
+
+    assert!(!scheduler.has_in_flight());
+}
+
+#[test]
+fn received_document_version_rejects_a_result_before_did_change_is_processed() {
+    let uri = "file:///tmp/transport-version-watermark.tua";
+    let mut server = LspServer::default();
+    let received_input = SharedReceivedInputState::default();
+    let (event_tx, event_rx) = std::sync::mpsc::channel();
+    let mut scheduler = RequestScheduler::new(event_tx, std::sync::Arc::clone(&received_input));
+
+    server.handle_message(did_open(uri, "local value = 1\n"));
+    received_input
+        .document_versions
+        .lock()
+        .expect("received document version lock")
+        .insert(uri.to_owned(), Some(1));
+    scheduler.dispatch(
+        &mut server,
+        slow_background_request(2, Some(uri), 10),
+        Some(1),
+    );
+
+    received_input
+        .document_versions
+        .lock()
+        .expect("received document version lock")
+        .insert(uri.to_owned(), Some(2));
+    let result = loop {
+        match event_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker result")
+        {
+            ServerEvent::RequestFinished(result) => break result,
+            ServerEvent::Input(_) => continue,
+        }
+    };
+    let output = scheduler.finish(&mut server, *result);
+
+    assert_eq!(response_with_id(&output, 2)["error"]["code"], -32801);
+    assert!(!output
+        .iter()
+        .any(|message| message["id"] == 2 && message.get("result").is_some()));
+}
+
+#[test]
+fn did_change_immediately_cancels_stale_foreground_inlay_work() {
+    let uri = "file:///tmp/cancel-stale-inlay.tua";
+    let mut server = LspServer::default();
+    let received_input = SharedReceivedInputState::default();
+    let (event_tx, _event_rx) = std::sync::mpsc::channel();
+    let mut scheduler = RequestScheduler::new(event_tx, received_input);
+
+    server.handle_message(did_open(uri, "local value = 1\n"));
+    scheduler.dispatch(&mut server, inlay_hint_request(2, uri, 0, 0, 1, 0), Some(1));
+    server.handle_message(did_change(uri, "local value = 2\n", 2));
+
+    let output = scheduler.cancel_stale_document_requests(
+        uri,
+        server.document_generations.get(uri).copied(),
+        server.document_versions.get(uri).copied(),
+    );
+
+    assert_eq!(response_with_id(&output, 2)["error"]["code"], -32801);
+}
+
+#[test]
+fn reader_preserves_the_document_version_seen_by_each_request() {
+    let uri = "file:///tmp/receive-time-version.tua";
+    let input = ReceivedInputState::default();
+    let old_request = inlay_hint_request(2, uri, 0, 0, 1, 0);
+    let new_request = inlay_hint_request(3, uri, 0, 0, 1, 0);
+
+    record_received_input(&did_open(uri, "local value = 1\n"), &input);
+    record_received_input(&old_request, &input);
+    record_received_input(&did_change(uri, "local value = 2\n", 2), &input);
+    record_received_input(&new_request, &input);
+
+    assert_eq!(
+        take_received_request_version(
+            &json!({ "jsonrpc": "2.0", "id": 2, "result": null }),
+            &input,
+        ),
+        None,
+        "a client response in the opposite JSON-RPC direction must not consume the watermark"
+    );
+    assert_eq!(take_received_request_version(&old_request, &input), Some(1));
+    assert_eq!(take_received_request_version(&new_request, &input), Some(2));
+}

@@ -9,7 +9,7 @@ mod scheduler;
 mod transport;
 mod uri;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::{self, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
@@ -25,6 +25,14 @@ use scheduler::{request_runs_on_coordinator, RequestScheduler, ServerEvent};
 use transport::{read_message, write_message};
 
 const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
+
+#[derive(Default)]
+struct ReceivedInputState {
+    document_versions: Mutex<BTreeMap<String, Option<i64>>>,
+    request_document_versions: Mutex<BTreeMap<String, i64>>,
+}
+
+type SharedReceivedInputState = Arc<ReceivedInputState>;
 
 pub fn server_name() -> &'static str {
     capabilities::SERVER_NAME
@@ -45,16 +53,19 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     let mut server = LspServer::default();
     let mut writer = writer;
     let (event_tx, event_rx) = mpsc::channel();
-    let mut scheduler = RequestScheduler::new(event_tx.clone());
+    let received_input = SharedReceivedInputState::default();
+    let mut scheduler = RequestScheduler::new(event_tx.clone(), Arc::clone(&received_input));
     let mut pending_messages = VecDeque::new();
     let mut reader_closed = false;
 
+    let reader_input = Arc::clone(&received_input);
     thread::spawn(move || {
         let mut reader = BufReader::new(reader);
 
         loop {
             match read_message(&mut reader) {
                 Ok(Some(message)) => {
+                    record_received_input(&message, &reader_input);
                     if event_tx
                         .send(ServerEvent::Input(Ok(Some(message))))
                         .is_err()
@@ -75,6 +86,14 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     });
 
     loop {
+        if pending_messages.is_empty()
+            && !reader_closed
+            && !server.shutdown_requested
+            && !server.should_exit
+        {
+            scheduler.dispatch_next_workspace_warm(&mut server);
+        }
+
         if pending_messages.is_empty() && server.should_exit && !scheduler.has_in_flight() {
             break;
         }
@@ -168,12 +187,13 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             .unwrap_or_default()
             .to_owned();
         let request = message.get("id").is_some();
+        let received_document_version = take_received_request_version(&message, &received_input);
         let changed_uri = (method == "textDocument/didChange")
             .then(|| document_uri_from_message(&message).map(str::to_owned))
             .flatten();
 
         let outbound = if request && !request_runs_on_coordinator(&method) {
-            scheduler.dispatch(&mut server, message)
+            scheduler.dispatch(&mut server, message, received_document_version)
         } else {
             let cancelled_id = (method == "$/cancelRequest")
                 .then(|| message.get("params")?.get("id").cloned())
@@ -183,9 +203,14 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             if let Some(id) = cancelled_id {
                 outbound.extend(scheduler.cancel(&id));
             }
+            if matches!(method.as_str(), "shutdown" | "exit") {
+                scheduler.abandon_workspace_warm();
+            }
             if let Some(uri) = changed_uri {
                 let generation = server.document_generations.get(&uri).copied();
-                outbound.extend(scheduler.cancel_stale_background(&uri, generation));
+                let version = server.document_versions.get(&uri).copied();
+                outbound
+                    .extend(scheduler.cancel_stale_document_requests(&uri, generation, version));
             }
 
             outbound
@@ -203,6 +228,69 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
     Ok(())
 }
 
+fn record_received_input(message: &Value, input: &ReceivedInputState) {
+    let Some(method) = message.get("method").and_then(Value::as_str) else {
+        return;
+    };
+    let uri = document_uri_from_message(message);
+
+    if let Some(uri) = uri {
+        let state = match method {
+            "textDocument/didOpen" | "textDocument/didChange" => message
+                .get("params")
+                .and_then(|params| params.get("textDocument"))
+                .and_then(|document| document.get("version"))
+                .and_then(Value::as_i64)
+                .map(Some),
+            "textDocument/didClose" => Some(None),
+            _ => None,
+        };
+
+        if let Some(state) = state {
+            input
+                .document_versions
+                .lock()
+                .expect("received document version lock poisoned")
+                .insert(uri.to_owned(), state);
+        }
+    }
+
+    let Some(request_id) = message.get("id") else {
+        return;
+    };
+    let Some(uri) = uri else {
+        return;
+    };
+    let Some(version) = input
+        .document_versions
+        .lock()
+        .expect("received document version lock poisoned")
+        .get(uri)
+        .copied()
+        .flatten()
+    else {
+        return;
+    };
+
+    input
+        .request_document_versions
+        .lock()
+        .expect("received request version lock poisoned")
+        .insert(request_id.to_string(), version);
+}
+
+fn take_received_request_version(message: &Value, input: &ReceivedInputState) -> Option<i64> {
+    message.get("method")?.as_str()?;
+    document_uri_from_message(message)?;
+    let request_id = message.get("id")?;
+
+    input
+        .request_document_versions
+        .lock()
+        .expect("received request version lock poisoned")
+        .remove(&request_id.to_string())
+}
+
 fn process_server_event(
     event: ServerEvent,
     server: &mut LspServer,
@@ -217,7 +305,7 @@ fn process_server_event(
             None => *reader_closed = true,
         },
         ServerEvent::RequestFinished(result) => {
-            for message in scheduler.finish(server, result) {
+            for message in scheduler.finish(server, *result) {
                 write_message(writer, &message)?;
             }
         }
@@ -249,13 +337,50 @@ struct LspServer {
     client_watched_files_dynamic_registration: bool,
     client_pull_diagnostics: bool,
     client_diagnostic_refresh: bool,
+    client_inlay_hint_refresh: bool,
+    client_semantic_tokens_refresh: bool,
     client_completion_label_details: bool,
     next_server_request_id: u64,
     trace_config: TraceConfig,
     trace_log_counts: TraceLogCounts,
     input_backlog_active: bool,
+    workspace_warm: WorkspaceWarmState,
     shutdown_requested: bool,
     should_exit: bool,
+}
+
+#[derive(Clone, Debug)]
+enum WorkspaceWarmWork {
+    File {
+        path: PathBuf,
+        priority: tua_core::AnalysisWarmPriority,
+        revision: u64,
+    },
+    Snapshot {
+        revision: u64,
+    },
+}
+
+impl WorkspaceWarmWork {
+    fn revision(&self) -> u64 {
+        match self {
+            Self::File { revision, .. } | Self::Snapshot { revision } => *revision,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct WorkspaceWarmState {
+    enabled: bool,
+    high: VecDeque<PathBuf>,
+    low: VecDeque<PathBuf>,
+    queued: BTreeSet<PathBuf>,
+    warmed: BTreeSet<PathBuf>,
+    failed: BTreeSet<PathBuf>,
+    files_discovered: usize,
+    stale_results: usize,
+    snapshot_ready_revision: Option<u64>,
+    snapshot_failed_revision: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -321,6 +446,174 @@ impl LspServer {
 
         self.next_server_request_id += 1;
         id
+    }
+
+    fn reset_workspace_warm_queue(&mut self) {
+        let open = self
+            .analysis
+            .open_paths()
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let paths = self.analysis.file_paths();
+        let mut state = WorkspaceWarmState {
+            enabled: true,
+            files_discovered: paths.len(),
+            ..WorkspaceWarmState::default()
+        };
+
+        for path in paths {
+            let priority = if open.contains(&path) {
+                tua_core::AnalysisWarmPriority::High
+            } else {
+                tua_core::AnalysisWarmPriority::Low
+            };
+
+            state.queue(path, priority, false);
+        }
+
+        self.workspace_warm = state;
+    }
+
+    fn queue_workspace_warm_path(
+        &mut self,
+        path: PathBuf,
+        priority: tua_core::AnalysisWarmPriority,
+        invalidated: bool,
+    ) {
+        self.workspace_warm.enabled = true;
+        self.workspace_warm.files_discovered = self.analysis.file_paths().len();
+        self.workspace_warm.snapshot_ready_revision = None;
+        self.workspace_warm.snapshot_failed_revision = None;
+        self.workspace_warm.queue(path, priority, invalidated);
+    }
+
+    fn take_next_workspace_warm_work(&mut self) -> Option<WorkspaceWarmWork> {
+        if !self.workspace_warm.enabled {
+            return None;
+        }
+
+        let revision = self.analysis.revision();
+        if let Some((path, priority)) = self.workspace_warm.pop_file() {
+            return Some(WorkspaceWarmWork::File {
+                path,
+                priority,
+                revision,
+            });
+        }
+
+        (self.workspace_warm.snapshot_ready_revision != Some(revision)
+            && self.workspace_warm.snapshot_failed_revision != Some(revision))
+        .then_some(WorkspaceWarmWork::Snapshot { revision })
+    }
+
+    fn finish_workspace_warm(
+        &mut self,
+        work: &WorkspaceWarmWork,
+        warmed_analysis: Option<&AnalysisHost>,
+        succeeded: bool,
+    ) -> Vec<Value> {
+        if work.revision() != self.analysis.revision() {
+            self.workspace_warm.stale_results += 1;
+            if let WorkspaceWarmWork::File { path, priority, .. } = work {
+                self.workspace_warm.queue(path.clone(), *priority, false);
+            }
+            return Vec::new();
+        }
+
+        match work {
+            WorkspaceWarmWork::File { path, .. } => {
+                let adopted = succeeded
+                    && warmed_analysis
+                        .is_some_and(|warmed| self.analysis.adopt_warmed_file(warmed, path));
+
+                if !adopted {
+                    self.workspace_warm.failed.insert(path.clone());
+                    return Vec::new();
+                }
+
+                self.workspace_warm.warmed.insert(path.clone());
+                for related in self.analysis.warm_related_paths(path) {
+                    self.workspace_warm
+                        .queue(related, tua_core::AnalysisWarmPriority::High, false);
+                }
+            }
+            WorkspaceWarmWork::Snapshot { revision } if succeeded => {
+                self.workspace_warm.snapshot_ready_revision = Some(*revision);
+                return self.workspace_semantic_refresh_requests();
+            }
+            WorkspaceWarmWork::Snapshot { revision } => {
+                self.workspace_warm.snapshot_failed_revision = Some(*revision);
+            }
+        }
+
+        Vec::new()
+    }
+
+    fn workspace_semantic_refresh_requests(&mut self) -> Vec<Value> {
+        let mut requests = Vec::new();
+
+        if self.client_inlay_hint_refresh {
+            requests.push(protocol::workspace_inlay_hint_refresh_request(
+                self.next_request_id(),
+            ));
+        }
+        if self.client_semantic_tokens_refresh {
+            requests.push(protocol::workspace_semantic_tokens_refresh_request(
+                self.next_request_id(),
+            ));
+        }
+
+        requests
+    }
+}
+
+impl WorkspaceWarmState {
+    fn queue(
+        &mut self,
+        path: PathBuf,
+        priority: tua_core::AnalysisWarmPriority,
+        invalidated: bool,
+    ) {
+        if invalidated {
+            self.warmed.remove(&path);
+            self.failed.remove(&path);
+        } else if self.warmed.contains(&path) {
+            return;
+        }
+        if self.failed.contains(&path) {
+            return;
+        }
+
+        if self.queued.contains(&path) {
+            if priority == tua_core::AnalysisWarmPriority::High {
+                self.low.retain(|queued| queued != &path);
+                if !self.high.contains(&path) {
+                    self.high.push_back(path);
+                }
+            }
+            return;
+        }
+
+        self.queued.insert(path.clone());
+        match priority {
+            tua_core::AnalysisWarmPriority::High => self.high.push_back(path),
+            tua_core::AnalysisWarmPriority::Low => self.low.push_back(path),
+        }
+    }
+
+    fn pop_file(&mut self) -> Option<(PathBuf, tua_core::AnalysisWarmPriority)> {
+        let (path, priority) = self
+            .high
+            .pop_front()
+            .map(|path| (path, tua_core::AnalysisWarmPriority::High))
+            .or_else(|| {
+                self.low
+                    .pop_front()
+                    .map(|path| (path, tua_core::AnalysisWarmPriority::Low))
+            })?;
+
+        self.queued.remove(&path);
+        Some((path, priority))
     }
 }
 

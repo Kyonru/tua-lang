@@ -181,10 +181,15 @@ impl LspServer {
                 self.workspace_folders = workspace_folders_from_initialize(&message);
                 self.analysis
                     .reindex_workspace(&self.workspace_folders, &self.settings);
+                self.reset_workspace_warm_queue();
                 self.client_watched_files_dynamic_registration =
                     client_supports_watched_files_dynamic_registration(&message);
                 self.client_pull_diagnostics = client_supports_pull_diagnostics(&message);
                 self.client_diagnostic_refresh = client_supports_diagnostic_refresh(&message);
+                self.client_inlay_hint_refresh =
+                    client_supports_workspace_refresh(&message, "inlayHint");
+                self.client_semantic_tokens_refresh =
+                    client_supports_workspace_refresh(&message, "semanticTokens");
                 self.client_completion_label_details =
                     client_supports_completion_label_details(&message);
 
@@ -551,6 +556,11 @@ impl LspServer {
         self.recent_document_changes.remove(&uri);
         self.analysis
             .open_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        self.queue_workspace_warm_path(
+            path_from_uri(&uri),
+            tua_core::AnalysisWarmPriority::High,
+            true,
+        );
         self.clear_semantic_token_results(&uri);
         self.pending_pull_fast_diagnostics.remove(&uri);
         let generation = self.bump_document_generation(&uri, version);
@@ -575,6 +585,11 @@ impl LspServer {
 
         self.analysis
             .update_document(uri.clone(), text, &self.workspace_folders, &self.settings);
+        self.queue_workspace_warm_path(
+            path_from_uri(&uri),
+            tua_core::AnalysisWarmPriority::High,
+            true,
+        );
         let generation = self.bump_document_generation(&uri, version);
         let now = Instant::now();
         self.recent_document_changes.insert(uri.clone(), now);
@@ -700,6 +715,7 @@ impl LspServer {
             self.pending_pull_fast_diagnostics.clear();
             self.analysis
                 .refresh_open_documents(&self.workspace_folders, &self.settings);
+            self.reset_workspace_warm_queue();
         }
 
         if self.client_pull_diagnostics {
@@ -750,6 +766,7 @@ impl LspServer {
 
         self.analysis
             .reindex_workspace(&self.workspace_folders, &self.settings);
+        self.reset_workspace_warm_queue();
         self.pending_pull_fast_diagnostics.clear();
 
         self.diagnostic_refresh_notifications()
@@ -761,6 +778,7 @@ impl LspServer {
             .reindex_workspace(&self.workspace_folders, &self.settings);
         self.analysis
             .refresh_open_documents(&self.workspace_folders, &self.settings);
+        self.reset_workspace_warm_queue();
         self.pending_slow_diagnostics.clear();
         self.pending_pull_fast_diagnostics.clear();
 
@@ -1381,6 +1399,15 @@ impl LspServer {
                 "hits": stats.completion_context_hits,
                 "misses": stats.completion_context_misses
             },
+            "workspaceWarm": {
+                "discovered": self.workspace_warm.files_discovered,
+                "warmed": self.workspace_warm.warmed.len(),
+                "failed": self.workspace_warm.failed.len(),
+                "queuedHigh": self.workspace_warm.high.len(),
+                "queuedLow": self.workspace_warm.low.len(),
+                "staleResults": self.workspace_warm.stale_results,
+                "snapshotReadyRevision": self.workspace_warm.snapshot_ready_revision
+            },
             "invalidations": stats.invalidations,
             "dependentInvalidations": stats.dependent_invalidations
         })
@@ -1757,25 +1784,39 @@ impl LspServer {
             return json!([]);
         };
         let range = request.params.get("range").and_then(lsp_source_range);
-        let snapshot = {
-            let _profile = tua_core::profile::span("lsp.inlay_hints.snapshot");
+        let core_range = range.map(|range| SourceSpan {
+            start: range.start,
+            end: range.end,
+        });
+        let cached_snapshot = self
+            .analysis
+            .cached_snapshot(&self.workspace_folders, &self.settings);
+        let hints = if let Some(snapshot) = cached_snapshot {
+            let _profile = tua_core::profile::span("lsp.inlay_hints.cached_snapshot");
+
+            core_range
+                .map(|range| snapshot.inlay_hints_in_range(&request.path, range))
+                .unwrap_or_else(|| snapshot.inlay_hints(&request.path))
+        } else if self
+            .recent_document_changes
+            .get(request.uri)
+            .is_some_and(|changed_at| {
+                changed_at.elapsed() < ACTIVE_EDIT_BACKGROUND_REQUEST_COOLDOWN
+            })
+        {
+            let _profile = tua_core::profile::span("lsp.inlay_hints.current_file");
 
             self.analysis
-                .snapshot(&self.workspace_folders, &self.settings)
-        };
-        let hints = {
-            let _profile = tua_core::profile::span("lsp.inlay_hints.query");
+                .fast_inlay_hints_for_uri(request.uri, core_range)
+                .unwrap_or_default()
+        } else {
+            let _profile = tua_core::profile::span("lsp.inlay_hints.snapshot");
+            let snapshot = self
+                .analysis
+                .snapshot(&self.workspace_folders, &self.settings);
 
-            range
-                .map(|range| {
-                    snapshot.inlay_hints_in_range(
-                        &request.path,
-                        SourceSpan {
-                            start: range.start,
-                            end: range.end,
-                        },
-                    )
-                })
+            core_range
+                .map(|range| snapshot.inlay_hints_in_range(&request.path, range))
                 .unwrap_or_else(|| snapshot.inlay_hints(&request.path))
         };
 
@@ -2182,6 +2223,17 @@ fn client_supports_diagnostic_refresh(message: &Value) -> bool {
         .and_then(|capabilities| capabilities.get("workspace"))
         .and_then(|workspace| workspace.get("diagnostics"))
         .and_then(|diagnostics| diagnostics.get("refreshSupport"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn client_supports_workspace_refresh(message: &Value, capability: &str) -> bool {
+    message
+        .get("params")
+        .and_then(|params| params.get("capabilities"))
+        .and_then(|capabilities| capabilities.get("workspace"))
+        .and_then(|workspace| workspace.get(capability))
+        .and_then(|capability| capability.get("refreshSupport"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
 }

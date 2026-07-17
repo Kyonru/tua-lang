@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use tua_core::{
     require_bindings_for_parsed_source, AnalysisCacheStats, AnalysisHost as CoreAnalysisHost,
-    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AssetLoaderKind,
-    CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
+    AnalysisSnapshot as CoreAnalysisSnapshot, AnalysisSourceKind, AnalysisWarmPriority,
+    AssetLoaderKind, CallHierarchyIncomingCall as CoreCallHierarchyIncomingCall,
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
@@ -100,6 +100,42 @@ impl AnalysisHost {
         self.core.cache_stats()
     }
 
+    pub(super) fn file_paths(&self) -> Vec<PathBuf> {
+        self.core.file_paths()
+    }
+
+    pub(super) fn open_paths(&self) -> Vec<PathBuf> {
+        self.documents
+            .values()
+            .map(|document| document.path.clone())
+            .collect()
+    }
+
+    pub(super) fn warm_file(&self, path: &Path, priority: AnalysisWarmPriority) -> bool {
+        self.core.warm_file(path, priority)
+    }
+
+    pub(super) fn adopt_warmed_file(&mut self, warmed: &AnalysisHost, path: &Path) -> bool {
+        self.core.adopt_warmed_file(&warmed.core, path)
+    }
+
+    pub(super) fn warm_related_paths(&self, path: &Path) -> Vec<PathBuf> {
+        self.core.warm_related_paths(path)
+    }
+
+    pub(super) fn cached_snapshot(
+        &self,
+        workspace_folders: &[PathBuf],
+        settings: &WorkspaceSettings,
+    ) -> Option<AnalysisSnapshot> {
+        Some(AnalysisSnapshot {
+            core: self.core.cached_snapshot()?,
+            workspace_folders: self.effective_workspace_folders(workspace_folders),
+            settings: settings.clone(),
+            project_model: self.project_model.clone(),
+        })
+    }
+
     pub(super) fn reset_completion_adaptive_stats(
         &mut self,
         roots: &[PathBuf],
@@ -159,6 +195,16 @@ impl AnalysisHost {
         let document = self.documents.get(uri)?;
 
         self.core.current_file_hover(&document.path, position)
+    }
+
+    pub(super) fn fast_inlay_hints_for_uri(
+        &self,
+        uri: &str,
+        range: Option<SourceSpan>,
+    ) -> Option<Vec<InlayHint>> {
+        let document = self.documents.get(uri)?;
+
+        Some(self.core.current_file_inlay_hints(&document.path, range))
     }
 
     pub(super) fn fast_diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {

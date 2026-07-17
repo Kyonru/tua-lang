@@ -542,7 +542,7 @@ local player: <|alias_ref|>Player = { hp = 10 }
 }
 
 #[test]
-fn snapshot_warms_semantic_facts_per_requested_file() {
+fn warm_file_builds_only_the_requested_file_and_snapshot_reuses_it() {
     let main = PathBuf::from("src/main.tua");
     let other = PathBuf::from("src/other.tua");
     let mut host = AnalysisHost::new();
@@ -562,52 +562,38 @@ local hp = enemy.hp
 "#,
     );
 
-    let snapshot = host.snapshot();
-    assert!(snapshot
-        .semantic_facts
-        .lock()
-        .expect("semantic facts lock poisoned")
-        .is_empty());
-
-    let main_index = snapshot
-        .semantic_index(&main)
-        .expect("main semantic index should warm");
-    assert!(main_index.cache_len() > 0);
-    assert_eq!(
-        snapshot
-            .semantic_facts
-            .lock()
-            .expect("semantic facts lock poisoned")
-            .len(),
-        1
-    );
-    assert!(snapshot
-        .semantic_facts
-        .lock()
-        .expect("semantic facts lock poisoned")
-        .contains_key(&normalize_path(&main)));
-    assert!(!snapshot
-        .semantic_facts
-        .lock()
-        .expect("semantic facts lock poisoned")
-        .contains_key(&normalize_path(&other)));
-
     assert!(host.warm_file(&other, AnalysisWarmPriority::High));
-    let warmed = host.snapshot();
+    let after_warm = host.cache_stats();
+
+    assert_eq!(after_warm.parse_misses, 1);
+    assert_eq!(after_warm.hir_misses, 1);
+    assert!(host.cached_snapshot().is_none());
+
+    let snapshot = host.snapshot();
 
     assert_eq!(
-        warmed
-            .semantic_facts
-            .lock()
-            .expect("semantic facts lock poisoned")
-            .len(),
-        2
+        host.cache_stats().parse_misses,
+        2,
+        "the snapshot should build the remaining cold file"
     );
-    assert!(warmed
-        .semantic_facts
-        .lock()
-        .expect("semantic facts lock poisoned")
-        .contains_key(&normalize_path(&other)));
+    assert_eq!(host.cache_stats().parse_hits, 1);
+    assert!(snapshot.semantic_index(&main).is_some());
+    assert!(snapshot.semantic_index(&other).is_some());
+}
+
+#[test]
+fn stale_warmed_file_is_not_adopted_after_an_edit() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, "local value = 1\n");
+    let warmed = host.clone();
+    assert!(warmed.warm_file(&path, AnalysisWarmPriority::Low));
+
+    host.set_file(&path, "local value = 2\n");
+
+    assert!(!host.adopt_warmed_file(&warmed, &path));
+    assert!(host.cached_snapshot().is_none());
 }
 
 #[test]

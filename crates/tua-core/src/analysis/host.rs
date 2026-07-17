@@ -460,8 +460,93 @@ impl AnalysisHost {
         snapshot
     }
 
-    pub fn warm_file(&self, path: impl AsRef<Path>, _priority: AnalysisWarmPriority) -> bool {
-        self.snapshot().semantic_index(path).is_some()
+    pub fn cached_snapshot(&self) -> Option<AnalysisSnapshot> {
+        self.snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned")
+            .as_ref()
+            .filter(|cached| cached.revision == self.revision)
+            .map(|cached| cached.snapshot.clone())
+    }
+
+    pub fn file_paths(&self) -> Vec<PathBuf> {
+        self.vfs.paths().into_iter().collect()
+    }
+
+    pub fn warm_file(&self, path: impl AsRef<Path>, priority: AnalysisWarmPriority) -> bool {
+        let span = match priority {
+            AnalysisWarmPriority::High => "analysis.warm.file.high",
+            AnalysisWarmPriority::Low => "analysis.warm.file.low",
+        };
+        let _profile = profile::span_for_path(span, path.as_ref());
+
+        self.current_analysis_file(path.as_ref()).is_some()
+    }
+
+    pub fn adopt_warmed_file(&mut self, warmed: &AnalysisHost, path: impl AsRef<Path>) -> bool {
+        if self.revision != warmed.revision
+            || self.config != warmed.config
+            || self.require_path_separator != warmed.require_path_separator
+            || self.asset_roots != warmed.asset_roots
+            || self.builtin_catalogs != warmed.builtin_catalogs
+            || self.vfs.options() != warmed.vfs.options()
+        {
+            return false;
+        }
+
+        let path = normalize_path(path.as_ref());
+        let Some(source) = self.vfs.source(&path) else {
+            return false;
+        };
+        let Some(kind) = self.vfs.kind(&path) else {
+            return false;
+        };
+        let (cached, parsed_files) = {
+            let cache = warmed.cache.borrow();
+            let Some(cached) = cache.files.get(&path).cloned() else {
+                return false;
+            };
+            let parsed_files = cache
+                .parsed_files
+                .iter()
+                .filter(|(key, _)| key.path == path)
+                .map(|(key, parsed)| (key.clone(), parsed.clone()))
+                .collect::<Vec<_>>();
+
+            (cached, parsed_files)
+        };
+
+        if cached.source != source
+            || vfs_source_kind(cached.kind) != kind
+            || warmed.vfs.source(&path) != Some(source)
+            || warmed.vfs.kind(&path) != Some(kind)
+        {
+            return false;
+        }
+
+        let mut cache = self.cache.borrow_mut();
+
+        cache.update_dependencies(&path, &cached.file.require_edges);
+        cache.files.insert(path, cached);
+        cache.parsed_files.extend(parsed_files);
+
+        true
+    }
+
+    pub fn warm_related_paths(&self, path: impl AsRef<Path>) -> Vec<PathBuf> {
+        let path = normalize_path(path.as_ref());
+        let cache = self.cache.borrow();
+        let mut related = cache
+            .dependencies
+            .get(&path)
+            .into_iter()
+            .flatten()
+            .chain(cache.importers.get(&path).into_iter().flatten())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        related.remove(&path);
+        related.into_iter().collect()
     }
 
     pub fn cache_stats(&self) -> AnalysisCacheStats {
@@ -615,6 +700,50 @@ impl AnalysisHost {
                 })
                 .or_else(|| complete_current_file_lua_field_access(&file.source, position)),
         }
+    }
+
+    pub fn current_file_inlay_hints(
+        &self,
+        path: impl AsRef<Path>,
+        range: Option<SourceSpan>,
+    ) -> Vec<InlayHint> {
+        let Some(file) = self.current_analysis_file(path.as_ref()) else {
+            return Vec::new();
+        };
+        let (parsed, base_environment) = match &file.parsed {
+            Ok(parsed) => (
+                parsed,
+                file.environment()
+                    .expect("parsed file must have a type environment")
+                    .clone(),
+            ),
+            Err(_) => {
+                let Some(degraded) = &file.degraded_semantics else {
+                    return Vec::new();
+                };
+
+                (&degraded.parsed, degraded.environment.clone())
+            }
+        };
+        let previous_snapshot = self
+            .snapshot_cache
+            .lock()
+            .expect("analysis snapshot cache lock poisoned")
+            .as_ref()
+            .map(|cached| cached.snapshot.clone());
+        let environment = if let Some(snapshot) = previous_snapshot {
+            let project_inference = snapshot.project_local_inference(parsed);
+
+            snapshot.project_type_environment_for_parsed(
+                parsed,
+                base_environment,
+                &project_inference,
+            )
+        } else {
+            base_environment
+        };
+
+        inlay_hints_parsed_source_with_environment_in_range(parsed, &environment, range)
     }
 
     pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {

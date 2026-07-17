@@ -11,20 +11,25 @@ use std::thread;
 use serde_json::json;
 use serde_json::Value;
 
+use super::analysis::AnalysisHost;
 use super::handlers::RequestTrace;
 use super::protocol::error_response;
-use super::{method_is_background_refresh, LspServer, PendingDiagnostics};
+use super::{
+    method_is_background_refresh, LspServer, PendingDiagnostics, SharedReceivedInputState,
+    WorkspaceWarmWork,
+};
 
 const REQUEST_CANCELLED: i64 = -32800;
 const CONTENT_MODIFIED: i64 = -32801;
 const INTERNAL_SLOW_DIAGNOSTICS: &str = "tua/internalSlowDiagnostics";
+const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
 
 pub(super) enum ServerEvent {
     Input(io::Result<Option<Value>>),
-    RequestFinished(WorkerResult),
+    RequestFinished(Box<WorkerResult>),
 }
 
 pub(super) struct RequestScheduler {
@@ -33,12 +38,20 @@ pub(super) struct RequestScheduler {
     jobs: BTreeMap<u64, InFlightJob>,
     request_jobs: BTreeMap<String, u64>,
     coalesced_jobs: BTreeMap<String, u64>,
+    received_input: SharedReceivedInputState,
     next_job_id: u64,
 }
 
 pub(super) struct WorkerResult {
     job_id: u64,
     response: Value,
+    warm_result: Option<WorkspaceWarmResult>,
+}
+
+struct WorkspaceWarmResult {
+    work: WorkspaceWarmWork,
+    analysis: Option<AnalysisHost>,
+    succeeded: bool,
 }
 
 struct WorkerJob {
@@ -47,26 +60,31 @@ struct WorkerJob {
     message: Value,
     method: String,
     cancelled: Arc<AtomicBool>,
+    warm_work: Option<WorkspaceWarmWork>,
 }
 
 struct InFlightJob {
     uri: Option<String>,
     generation: Option<u64>,
-    background: bool,
     cancelled: Arc<AtomicBool>,
     coalesce_key: Option<String>,
     waiters: Vec<RequestWaiter>,
     slow_diagnostics: Option<(String, PendingDiagnostics)>,
+    warm_work: Option<WorkspaceWarmWork>,
 }
 
 struct RequestWaiter {
     id: Value,
     trace: RequestTrace,
+    document_version: Option<i64>,
     cancelled: bool,
 }
 
 impl RequestScheduler {
-    pub(super) fn new(event_tx: Sender<ServerEvent>) -> Self {
+    pub(super) fn new(
+        event_tx: Sender<ServerEvent>,
+        received_input: SharedReceivedInputState,
+    ) -> Self {
         let foreground_tx = spawn_worker_lane(2, event_tx.clone());
         let background_tx = spawn_worker_lane(1, event_tx);
 
@@ -76,11 +94,17 @@ impl RequestScheduler {
             jobs: BTreeMap::new(),
             request_jobs: BTreeMap::new(),
             coalesced_jobs: BTreeMap::new(),
+            received_input,
             next_job_id: 0,
         }
     }
 
-    pub(super) fn dispatch(&mut self, server: &mut LspServer, message: Value) -> Vec<Value> {
+    pub(super) fn dispatch(
+        &mut self,
+        server: &mut LspServer,
+        message: Value,
+        received_document_version: Option<i64>,
+    ) -> Vec<Value> {
         let Some(method) = message.get("method").and_then(Value::as_str) else {
             return Vec::new();
         };
@@ -91,6 +115,10 @@ impl RequestScheduler {
         let generation = uri
             .as_ref()
             .and_then(|uri| server.document_generations.get(uri).copied());
+        let document_version = received_document_version.or_else(|| {
+            uri.as_ref()
+                .and_then(|uri| server.document_versions.get(uri).copied())
+        });
         let background = request_runs_in_background(&method);
         let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
             .then(|| coalesce_key(&method, &message, generation));
@@ -106,6 +134,7 @@ impl RequestScheduler {
                     job.waiters.push(RequestWaiter {
                         id,
                         trace,
+                        document_version,
                         cancelled: false,
                     });
                     self.request_jobs.insert(request_key, job_id);
@@ -124,19 +153,21 @@ impl RequestScheduler {
             message,
             method,
             cancelled: Arc::clone(&cancelled),
+            warm_work: None,
         };
         let in_flight = InFlightJob {
             uri,
             generation,
-            background,
             cancelled,
             coalesce_key: coalesce_key.clone(),
             waiters: vec![RequestWaiter {
                 id: id.clone(),
                 trace,
+                document_version,
                 cancelled: false,
             }],
             slow_diagnostics: None,
+            warm_work: None,
         };
 
         self.request_jobs.insert(request_key, job_id);
@@ -190,17 +221,59 @@ impl RequestScheduler {
             message,
             method: INTERNAL_SLOW_DIAGNOSTICS.to_owned(),
             cancelled: Arc::clone(&cancelled),
+            warm_work: None,
         };
         self.jobs.insert(
             job_id,
             InFlightJob {
                 uri: Some(uri.clone()),
                 generation: Some(pending.generation),
-                background: true,
                 cancelled,
                 coalesce_key: None,
                 waiters: Vec::new(),
                 slow_diagnostics: Some((uri.clone(), pending)),
+                warm_work: None,
+            },
+        );
+
+        if self.background_tx.send(worker).is_err() {
+            self.remove_job(job_id);
+            return false;
+        }
+
+        true
+    }
+
+    pub(super) fn dispatch_next_workspace_warm(&mut self, server: &mut LspServer) -> bool {
+        if self.has_in_flight() {
+            return false;
+        }
+        let Some(work) = server.take_next_workspace_warm_work() else {
+            return false;
+        };
+
+        self.next_job_id = self.next_job_id.saturating_add(1);
+        let job_id = self.next_job_id;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker = WorkerJob {
+            job_id,
+            server: server.clone(),
+            message: Value::Null,
+            method: INTERNAL_WORKSPACE_WARM.to_owned(),
+            cancelled: Arc::clone(&cancelled),
+            warm_work: Some(work.clone()),
+        };
+
+        self.jobs.insert(
+            job_id,
+            InFlightJob {
+                uri: None,
+                generation: None,
+                cancelled,
+                coalesce_key: None,
+                waiters: Vec::new(),
+                slow_diagnostics: None,
+                warm_work: Some(work),
             },
         );
 
@@ -238,29 +311,31 @@ impl RequestScheduler {
         )]
     }
 
-    pub(super) fn cancel_stale_background(
+    pub(super) fn cancel_stale_document_requests(
         &mut self,
         uri: &str,
         generation: Option<u64>,
+        document_version: Option<i64>,
     ) -> Vec<Value> {
-        let stale_job_ids = self
+        let document_job_ids = self
             .jobs
             .iter()
-            .filter_map(|(job_id, job)| {
-                (job.background && job.uri.as_deref() == Some(uri) && job.generation != generation)
-                    .then_some(*job_id)
-            })
+            .filter_map(|(job_id, job)| (job.uri.as_deref() == Some(uri)).then_some(*job_id))
             .collect::<Vec<_>>();
         let mut outbound = Vec::new();
 
-        for job_id in stale_job_ids {
+        for job_id in document_job_ids {
             let Some(job) = self.jobs.get_mut(&job_id) else {
                 continue;
             };
-            job.cancelled.store(true, Ordering::Release);
+            let stale_generation = job.generation != generation;
 
             for waiter in &mut job.waiters {
-                if waiter.cancelled {
+                let stale_version = match (waiter.document_version, document_version) {
+                    (Some(request), Some(current)) => request != current,
+                    _ => false,
+                };
+                if waiter.cancelled || (!stale_generation && !stale_version) {
                     continue;
                 }
                 waiter.cancelled = true;
@@ -271,23 +346,50 @@ impl RequestScheduler {
                     "document changed while request was running".to_owned(),
                 ));
             }
+
+            if stale_generation || job.waiters.iter().all(|waiter| waiter.cancelled) {
+                job.cancelled.store(true, Ordering::Release);
+            }
         }
 
         outbound
+    }
+
+    pub(super) fn abandon_workspace_warm(&mut self) {
+        let warm_jobs = self
+            .jobs
+            .iter()
+            .filter_map(|(job_id, job)| job.warm_work.is_some().then_some(*job_id))
+            .collect::<Vec<_>>();
+
+        for job_id in warm_jobs {
+            if let Some(job) = self.jobs.get(&job_id) {
+                job.cancelled.store(true, Ordering::Release);
+            }
+            self.remove_job(job_id);
+        }
     }
 
     pub(super) fn finish(&mut self, server: &mut LspServer, result: WorkerResult) -> Vec<Value> {
         let Some(job) = self.remove_job(result.job_id) else {
             return Vec::new();
         };
-        let stale = job
+        if let Some(warm_result) = result.warm_result {
+            return server.finish_workspace_warm(
+                &warm_result.work,
+                warm_result.analysis.as_ref(),
+                warm_result.succeeded,
+            );
+        }
+        debug_assert!(job.warm_work.is_none());
+        let stale_generation = job
             .uri
             .as_ref()
             .is_some_and(|uri| server.document_generations.get(uri).copied() != job.generation);
         let mut outbound = Vec::new();
 
         if let Some((uri, pending)) = job.slow_diagnostics {
-            if stale {
+            if stale_generation || self.received_document_version_is_stale(&uri, pending.version) {
                 return outbound;
             }
             if result.response.get("error").is_some() {
@@ -311,6 +413,10 @@ impl RequestScheduler {
             if waiter.cancelled {
                 continue;
             }
+            let stale = stale_generation
+                || job.uri.as_ref().is_some_and(|uri| {
+                    self.received_document_version_is_stale(uri, waiter.document_version)
+                });
             if stale {
                 outbound.push(error_response(
                     waiter.id,
@@ -331,6 +437,19 @@ impl RequestScheduler {
 
     pub(super) fn has_in_flight(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    fn received_document_version_is_stale(&self, uri: &str, document_version: Option<i64>) -> bool {
+        let Some(document_version) = document_version else {
+            return false;
+        };
+        let versions = self
+            .received_input
+            .document_versions
+            .lock()
+            .expect("received document version lock poisoned");
+
+        matches!(versions.get(uri), Some(version) if *version != Some(document_version))
     }
 
     fn remove_job(&mut self, job_id: u64) -> Option<InFlightJob> {
@@ -367,15 +486,47 @@ fn spawn_worker_lane(worker_count: usize, event_tx: Sender<ServerEvent>) -> Send
                 message,
                 method,
                 cancelled,
+                warm_work,
             } = job;
-            let response = if cancelled.load(Ordering::Acquire) {
-                error_response(
+            let (response, warm_result) = if let Some(work) = warm_work {
+                let succeeded = if cancelled.load(Ordering::Acquire) {
+                    false
+                } else {
+                    panic::catch_unwind(AssertUnwindSafe(|| match &work {
+                        WorkspaceWarmWork::File { path, priority, .. } => {
+                            server.analysis.warm_file(path, *priority)
+                        }
+                        WorkspaceWarmWork::Snapshot { .. } => {
+                            let _ = server
+                                .analysis
+                                .snapshot(&server.workspace_folders, &server.settings);
+                            true
+                        }
+                    }))
+                    .unwrap_or(false)
+                };
+                let analysis =
+                    matches!(work, WorkspaceWarmWork::File { .. }).then_some(server.analysis);
+
+                (
                     Value::Null,
-                    REQUEST_CANCELLED,
-                    "request cancelled".to_owned(),
+                    Some(WorkspaceWarmResult {
+                        work,
+                        analysis,
+                        succeeded,
+                    }),
+                )
+            } else if cancelled.load(Ordering::Acquire) {
+                (
+                    error_response(
+                        Value::Null,
+                        REQUEST_CANCELLED,
+                        "request cancelled".to_owned(),
+                    ),
+                    None,
                 )
             } else {
-                panic::catch_unwind(AssertUnwindSafe(|| {
+                let response = panic::catch_unwind(AssertUnwindSafe(|| {
                     execute_worker_request(&mut server, message, &method)
                 }))
                 .unwrap_or_else(|_| {
@@ -384,10 +535,16 @@ fn spawn_worker_lane(worker_count: usize, event_tx: Sender<ServerEvent>) -> Send
                         -32603,
                         "language server request worker panicked".to_owned(),
                     )
-                })
+                });
+
+                (response, None)
             };
 
-            let event = ServerEvent::RequestFinished(WorkerResult { job_id, response });
+            let event = ServerEvent::RequestFinished(Box::new(WorkerResult {
+                job_id,
+                response,
+                warm_result,
+            }));
             let _ = event_tx.send(event);
         });
     }

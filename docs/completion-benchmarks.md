@@ -22,6 +22,8 @@ prints:
   run count;
 - `completionContext` cache hits, misses, and hit rate from `tua/cacheStats`;
 - `usageIndex` per-file summary cache hits and misses from `tua/cacheStats`;
+- `workspaceWarm` coverage, queue depth, stale-result count, and prepared
+  snapshot revision without mixing idle work into foreground cache counters;
 - `analysis.completion.ranking` overhead from `TUA_PROFILE=1` profile spans;
 - `analysis.index.usage.file` and `analysis.index.usage.project` index build
   costs when profiling is enabled;

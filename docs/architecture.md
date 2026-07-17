@@ -191,9 +191,31 @@ background worker lanes. Completion, signature help, hover, definition, and
 viewport inlay hints do not queue behind diagnostics or whole-document
 refreshes. Identical refresh requests for the same document revision and range
 are coalesced, and stale results are discarded after document changes.
+Document-scoped requests are stamped with the document version observed by the
+transport reader, so a later `didChange` can overtake queued background work
+without allowing those older requests to publish against the new document.
 Debounced full diagnostics also run on the background lane. Closing a document
 removes only its unsaved VFS overlay, so project navigation immediately falls
 back to the indexed disk source.
+
+After workspace indexing, the LSP warms reusable analysis facts without
+requiring an editor feature to pay the cold cost. Open and changed files enter
+the high-priority queue, followed by their direct dependencies and importers;
+remaining `.tua` and `.lua` files warm in low-priority order. A file warm builds
+only the cached parse, HIR, scope, local type environment, diagnostics, exports,
+require edges, symbols, assets, and usage summary. Once those files are ready,
+an idle job prepares the aggregate project snapshot used by completion, hover,
+signature help, navigation, references, diagnostics, inlay hints, and other
+project queries.
+
+Warm workers use cloned analysis hosts so they never hold a shared compiler
+cache lock in front of an interactive query. Their file artifacts are adopted
+by the coordinator only when the captured analysis revision, source, source
+kind, configuration, and VFS options still match. Stale results are counted and
+requeued. During the short post-edit window before a project snapshot is ready,
+viewport inlay hints use the current-file valid or degraded semantic bundle;
+capable clients receive inlay-hint and semantic-token refresh requests when the
+project snapshot becomes ready.
 
 Each worker request has a cancellation token and captured document generation.
 Cancellation is currently cooperative at the scheduler boundary: queued work

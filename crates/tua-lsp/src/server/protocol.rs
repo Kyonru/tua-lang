@@ -65,6 +65,23 @@ pub(super) fn workspace_diagnostic_refresh_request(id: u64) -> Value {
     })
 }
 
+pub(super) fn workspace_inlay_hint_refresh_request(id: u64) -> Value {
+    workspace_refresh_request(id, "workspace/inlayHint/refresh")
+}
+
+pub(super) fn workspace_semantic_tokens_refresh_request(id: u64) -> Value {
+    workspace_refresh_request(id, "workspace/semanticTokens/refresh")
+}
+
+fn workspace_refresh_request(id: u64, method: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": null
+    })
+}
+
 pub(super) fn lsp_diagnostic_from_core(diagnostic: Diagnostic) -> Value {
     let start_line = diagnostic.line.saturating_sub(1);
     let start_character = diagnostic.column.saturating_sub(1);
