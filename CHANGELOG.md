@@ -36,6 +36,8 @@ language or editor behavior, and migration notes call out those changes.
   lifecycle operations, item types, conservative unreleased-acquire warnings,
   and source navigation, plus a quick fix for repeated zero-argument
   constructors.
+- A quick fix that generates a named Tua table type from stable local table
+  literals and annotates the local binding in the same workspace edit.
 - SignalBus graph filters for event, bus, file, listener, and emitter views,
   plus direct schema-conflict display and actions to create typed listeners or
   declarations from compiler metadata.

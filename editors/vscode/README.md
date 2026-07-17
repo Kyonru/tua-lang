@@ -31,7 +31,8 @@ Minimal VS Code language support for tua source files.
   probing server profile artifacts, previewing `spriteSheet` animations,
   visualizing SignalBus events, module dependencies, and object-pool
   lifecycles across files, explaining why the active module is included,
-  running source actions, reporting an issue, and opening Tua settings.
+  running source actions and refactors, reporting an issue, and opening Tua
+  settings.
 - Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
   and static usage, with reference navigation, file rename, reveal, refresh,
   dimensions, and conservative unused-asset diagnostics.

@@ -59,6 +59,51 @@ fn code_action_adds_missing_local_annotation() {
         ""
     );
 }
+
+#[test]
+fn code_action_generates_type_from_table_literal() {
+    let uri = "file:///tmp/code-action-table-type.tua";
+    let source = r#"local player = {
+  name = "Ada",
+  hp = 100,
+  alive = true,
+  position = { x = 0, y = 0 },
+}
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request(2, uri, 0, 0, 0, 20, Vec::new()),
+    ]);
+    let action = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| action["title"] == "Generate type `Player` from table literal")
+        .expect("table type action should be present");
+    let edits = action["edit"]["changes"][uri]
+        .as_array()
+        .expect("table type action should contain text edits");
+
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(edits.len(), 2);
+    assert_eq!(
+        edits[0]["newText"],
+        r#"type Player = {
+  name: string,
+  hp: number,
+  alive: boolean,
+  position: {
+    x: number,
+    y: number,
+  },
+}
+
+"#
+    );
+    assert_eq!(edits[1]["newText"], ": Player");
+    assert_eq!(range_text(source, &edits[1]["range"]), "");
+}
+
 #[test]
 fn code_action_rewrites_love_dot_call_and_constructor_helpers() {
     let uri = "file:///tmp/code-action-love-devex.tua";

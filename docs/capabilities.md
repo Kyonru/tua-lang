@@ -53,7 +53,7 @@ Status meanings:
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
 | References and rename | Supported | Same-file and compiler-identified project symbols are supported; static asset references update when the asset file is renamed, while ambiguous dynamic identities are rejected. |
 | Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes. |
-| Formatting and source actions | Supported | Full/range/on-type formatting plus conservative import, LOVE callback generation, and fix-all actions are available. |
+| Formatting and source actions | Supported | Full/range/on-type formatting plus conservative import, inferred annotation, table-type generation, LOVE callback generation, object-pool, and fix-all actions are available. |
 | Syntax highlighting | Supported | An immediate TextMate grammar covers Lua, Tua types/classes/enums, LuaDoc, modules, domain helpers, event names, calls, members, labels, literals, and operators. |
 | Semantic tokens and inlay hints | Supported | Full/range/delta tokens classify standard VS Code symbol roles and declaration/readonly/deprecated/modification/default-library modifiers; inferred type/parameter hints are revision-aware, and the extension offers Full, Compact, Types Only, Parameters Only, and Off presentation modes without changing server results. |
 | Watched files and workspace folders | Supported | Source, Lua, assets, config, module creation/deletion, and folder changes refresh project state. |

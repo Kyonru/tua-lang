@@ -107,6 +107,68 @@ fn adds_local_annotation_from_inferred_type() {
 }
 
 #[test]
+fn generates_type_from_stable_table_literal() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"local player = {
+  name = "Ada",
+  hp = 100,
+  alive = true,
+  position = { x = 0, y = 0 },
+}
+"#,
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range(1, 7),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Generate type `Player` from table literal")
+        .expect("table type action should be present");
+    let edits = &action.edit.changes[&parsed.path];
+
+    assert_eq!(action.kind, AssistKind::QuickFix);
+    assert_eq!(edits.len(), 2);
+    assert_eq!(
+        edits[0].new_text,
+        r#"type Player = {
+  name: string,
+  hp: number,
+  alive: boolean,
+  position: {
+    x: number,
+    y: number,
+  },
+}
+
+"#
+    );
+    assert_eq!(edits[1].new_text, ": Player");
+}
+
+#[test]
+fn skips_type_generation_for_unstable_table_literals() {
+    let parsed = parse_tua_source("src/main.tua", "local player = { hp = score }\n")
+        .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert!(actions
+        .iter()
+        .all(|action| !action.title.starts_with("Generate type `Player`")));
+}
+
+#[test]
 fn creates_object_pool_for_repeated_zero_argument_constructor_call() {
     let parsed = parse_tua_source(
         "src/main.tua",

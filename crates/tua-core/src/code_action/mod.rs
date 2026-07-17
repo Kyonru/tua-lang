@@ -107,6 +107,7 @@ pub fn code_actions_parsed_source_with_kinds(
         actions.extend(object_pool_constructor_actions(parsed, range));
 
         if diagnostics.is_empty() {
+            actions.extend(table_type_generation_actions(parsed, range));
             actions.extend(add_missing_local_annotation_actions(parsed, range));
         }
     }
@@ -880,6 +881,258 @@ fn line_indent(source: &str, line: usize) -> String {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn table_type_generation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    let mut visitor = TableTypeAssistVisitor {
+        parsed,
+        range,
+        actions: Vec::new(),
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.actions
+}
+
+struct TableTypeAssistVisitor<'a> {
+    parsed: &'a ParsedSource,
+    range: AssistRange,
+    actions: Vec<Assist>,
+}
+
+impl Visitor for TableTypeAssistVisitor<'_> {
+    fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+        let Some(action) = table_type_generation_action(self.parsed, local, self.range) else {
+            return;
+        };
+
+        self.actions.push(action);
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TableTypeField {
+    name: String,
+    ty: TableTypeValue,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TableTypeValue {
+    Primitive(&'static str),
+    Table(Vec<TableTypeField>),
+}
+
+fn table_type_generation_action(
+    parsed: &ParsedSource,
+    local: &ast::LocalAssignment,
+    range: AssistRange,
+) -> Option<Assist> {
+    if local.names().len() != 1 || local.expressions().len() != 1 {
+        return None;
+    }
+
+    let name = local.names().iter().next()?;
+    let name_text = token_text(name);
+    let local_name_span = node_span(name)?;
+    let expression = local.expressions().iter().next()?;
+    let Expression::TableConstructor(table) = expression else {
+        return None;
+    };
+
+    let stmt_span = node_span(local)?;
+    let table_span = node_span(table)?;
+
+    if !assist_range_intersects_span(
+        range,
+        SourceSpan {
+            start: local_name_span.start,
+            end: table_span.end,
+        },
+    ) {
+        return None;
+    }
+
+    if local_binding_has_annotation(&parsed.source, local_name_span, table_span) {
+        return None;
+    }
+
+    let fields = table_type_fields(table)?;
+    let base_type_name = type_name_from_local(&name_text)?;
+    let type_name = unique_type_alias_name(&parsed.source, &base_type_name)?;
+    let indent = line_indent(&parsed.source, stmt_span.start.line);
+    let insert_position = SourcePosition {
+        line: stmt_span.start.line,
+        column: 1,
+    };
+    let type_source = render_table_type_alias(&type_name, &fields, &indent);
+    let mut edit = AssistEdit::default();
+
+    edit.changes.insert(
+        parsed.path.clone(),
+        vec![
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: insert_position,
+                    end: insert_position,
+                },
+                new_text: type_source,
+            },
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: local_name_span.end,
+                    end: local_name_span.end,
+                },
+                new_text: format!(": {type_name}"),
+            },
+        ],
+    );
+
+    Some(Assist {
+        title: format!("Generate type `{type_name}` from table literal"),
+        kind: AssistKind::QuickFix,
+        edit,
+    })
+}
+
+fn local_binding_has_annotation(
+    source: &str,
+    name_span: SourceSpan,
+    table_span: SourceSpan,
+) -> bool {
+    if name_span.end.line != table_span.start.line {
+        return false;
+    }
+
+    let Some(line) = line_at(source, name_span.end.line) else {
+        return false;
+    };
+    let start = crate::source_text::byte_for_column(line, name_span.end.column);
+    let end = crate::source_text::byte_for_column(line, table_span.start.column);
+
+    line.get(start..end)
+        .is_some_and(|between| between.contains(':'))
+}
+
+fn table_type_fields(table: &TableConstructor) -> Option<Vec<TableTypeField>> {
+    let mut fields = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for field in table.fields() {
+        let Field::NameKey { key, value, .. } = field else {
+            return None;
+        };
+        let name = token_text(key);
+
+        if !is_identifier(&name) || !seen.insert(name.clone()) {
+            return None;
+        }
+
+        fields.push(TableTypeField {
+            name,
+            ty: table_type_value_from_expression(value)?,
+        });
+    }
+
+    (!fields.is_empty()).then_some(fields)
+}
+
+fn table_type_value_from_expression(expression: &Expression) -> Option<TableTypeValue> {
+    match expression {
+        Expression::Number(_) => Some(TableTypeValue::Primitive("number")),
+        Expression::String(_) => Some(TableTypeValue::Primitive("string")),
+        Expression::Symbol(symbol) => match token_text(symbol).as_str() {
+            "true" | "false" => Some(TableTypeValue::Primitive("boolean")),
+            _ => None,
+        },
+        Expression::TableConstructor(table) => {
+            Some(TableTypeValue::Table(table_type_fields(table)?))
+        }
+        Expression::Parentheses { expression, .. } => table_type_value_from_expression(expression),
+        Expression::TypeAssertion { expression, .. } => {
+            table_type_value_from_expression(expression)
+        }
+        _ => None,
+    }
+}
+
+fn type_name_from_local(local_name: &str) -> Option<String> {
+    let mut output = String::new();
+
+    for part in local_name
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+    {
+        let mut chars = part.chars();
+        let Some(first) = chars.next() else {
+            continue;
+        };
+
+        output.extend(first.to_uppercase());
+        output.extend(chars);
+    }
+
+    if output.is_empty() {
+        return None;
+    }
+
+    if output
+        .as_bytes()
+        .first()
+        .is_some_and(|byte| byte.is_ascii_digit())
+    {
+        output.insert_str(0, "Type");
+    }
+
+    is_identifier(&output).then_some(output)
+}
+
+fn unique_type_alias_name(source: &str, base: &str) -> Option<String> {
+    if !type_alias_name_exists(source, base) {
+        return Some(base.to_owned());
+    }
+
+    (2..100)
+        .map(|index| format!("{base}{index}"))
+        .find(|candidate| !type_alias_name_exists(source, candidate))
+}
+
+fn type_alias_name_exists(source: &str, name: &str) -> bool {
+    source.lines().any(|line| {
+        let Some(rest) = line.trim_start().strip_prefix("type ") else {
+            return false;
+        };
+        let candidate = rest
+            .split(|character: char| !(character == '_' || character.is_ascii_alphanumeric()))
+            .next()
+            .unwrap_or_default();
+
+        candidate == name
+    })
+}
+
+fn render_table_type_alias(type_name: &str, fields: &[TableTypeField], indent: &str) -> String {
+    let mut output = format!("{indent}type {type_name} = {{\n");
+
+    render_table_type_fields(&mut output, fields, &format!("{indent}  "));
+    output.push_str(&format!("{indent}}}\n\n"));
+    output
+}
+
+fn render_table_type_fields(output: &mut String, fields: &[TableTypeField], indent: &str) {
+    for field in fields {
+        match &field.ty {
+            TableTypeValue::Primitive(ty) => {
+                output.push_str(&format!("{indent}{}: {ty},\n", field.name));
+            }
+            TableTypeValue::Table(fields) => {
+                output.push_str(&format!("{indent}{}: {{\n", field.name));
+                render_table_type_fields(output, fields, &format!("{indent}  "));
+                output.push_str(&format!("{indent}}},\n"));
+            }
+        }
+    }
 }
 
 fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
