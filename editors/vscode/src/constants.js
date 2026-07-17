@@ -46,7 +46,12 @@ const STATUS_SELECTOR = [
   { scheme: "untitled", language: "tua" },
 ];
 
+const CONFIG_SELECTOR = [{ scheme: "file", pattern: "**/tua.toml" }];
+const DOCUMENT_SELECTOR = [...STATUS_SELECTOR, ...CONFIG_SELECTOR];
+
 module.exports = {
   COMMANDS,
+  CONFIG_SELECTOR,
+  DOCUMENT_SELECTOR,
   STATUS_SELECTOR,
 };

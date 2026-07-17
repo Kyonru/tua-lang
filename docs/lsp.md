@@ -120,6 +120,10 @@ workspace directory when available.
   unambiguous in the project model.
 - Workspace folder support and watched-file registration for `.tua`, `.lua`,
   LOVE asset extensions, and `tua.toml`.
+- `tua.toml` participates in the LSP client selector. The server provides
+  schema-backed config key/section completion, enum/default value completion,
+  hover documentation, and unknown-key quick fixes without routing config files
+  through normal Tua source analysis.
 - The custom `tua/signalGraph` request returns typed SignalBus event calls from
   the current analysis snapshot with stable bus-aware event identities, call
   roles, bus expressions, resolved payload schemas, conflict flags, inferred

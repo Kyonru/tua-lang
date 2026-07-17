@@ -10,6 +10,7 @@ use tua_core::{CompletionAdaptiveStats, Diagnostic, DiagnosticSeverity, Fixture,
 mod assets;
 mod code_actions;
 mod completion;
+mod config;
 mod diagnostics;
 mod document_features;
 mod ecs_graph;

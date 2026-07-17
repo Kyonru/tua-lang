@@ -1,0 +1,54 @@
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[emit]
+annotation_mode = "off"
+
+[format]
+indent_width = 2
+line_width = 100
+quote_style = "preserve"
+final_newline = true
+
+[jit]
+enabled = false
+variable_type_drift = true
+table_shape_drift = true
+hot_loop_hints = true
+
+[ecs]
+enabled = true
+backend = "tua"
+
+[diagnostics]
+duplicate_keys = false
+missing_requires = false
+self_assignments = false
+doc_annotations = false
+undefined_variables = false
+unused_locals = false
+unused_parameters = false
+use_before_definition = false
+duplicate_parameters = false
+wrong_argument_count = false
+bad_requires = false
+impossible_boolean_expressions = false
+duplicate_if_conditions = false
+duplicate_binary_operands = false
+float_equality = false
+const_assignments = false
+parameter_type_mismatches = false
+return_type_mismatches = false
+assignment_arity = false
+local_declaration_arity = false
+unused_assignments = false
+binary_operator_type_mismatches = false
+uncalled_local_functions = false
+formatting_lints = true
+inline_ignores = false
+inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
+inline_ignore_max_per_file = 0
+globals = []

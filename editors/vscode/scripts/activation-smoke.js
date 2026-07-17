@@ -71,8 +71,9 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
         { scheme: "file", language: "tua" },
         { scheme: "file", pattern: "**/*.tua" },
         { scheme: "untitled", language: "tua" },
+        { scheme: "file", pattern: "**/tua.toml" },
       ],
-      "document selector should cover .tua files even when VS Code language mode is wrong",
+      "document selector should cover .tua files and tua.toml",
     );
 
     assert.strictEqual(

@@ -19,6 +19,9 @@ Minimal VS Code language support for tua source files.
 - Starts `tua lsp` over stdio and surfaces the language server's diagnostics,
   hover, completion, signature help, document highlights, navigation, rename,
   inlay hint, semantic token, and symbol features.
+- Attaches the language server to `tua.toml` and provides schema-backed
+  config key/section completion, enum/default value completion, hover
+  documentation, and quick fixes for suggested unknown keys.
 - Contributes Tua editor defaults for zero-delay quick suggestions in code and
   strings and enables semantic highlighting for Tua documents.
 - Refines lexical scopes with standard VS Code semantic token types for

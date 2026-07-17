@@ -12,6 +12,18 @@ inline tables are supported. Unknown sections and keys are rejected with a
 nearby-name suggestion when one is unambiguous, and editor diagnostics select
 the precise offending key or value range.
 
+The language server attaches to `tua.toml` files in VS Code and provides
+schema-backed key completion, section completion, enum/default value
+completion, setting hover documentation, and quick fixes for unknown-key
+diagnostics that include a suggestion.
+
+Generated config templates live in `config/templates/`:
+
+- `default.toml`: the full default `tua.toml`, generated from
+  `config/schema.json` and checked against `DEFAULT_CONFIG_TEXT`.
+- `minimal.toml`: the smallest root-level project template for common new
+  projects.
+
 ## Default Config
 
 ```toml

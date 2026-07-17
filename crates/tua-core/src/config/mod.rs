@@ -12,7 +12,10 @@ use crate::{Diagnostic, DiagnosticCode};
 
 mod parser;
 
-pub use parser::parse_config;
+pub use parser::{
+    closest_config_child_name, config_section_names, config_setting_metadata,
+    config_settings_in_section, config_settings_metadata, parse_config, ConfigSettingMetadata,
+};
 
 pub const CONFIG_FILE: &str = "tua.toml";
 

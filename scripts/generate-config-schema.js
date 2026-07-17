@@ -7,6 +7,9 @@ const repoRoot = path.resolve(__dirname, "..");
 const schemaPath = path.join(repoRoot, "config", "schema.json");
 const packagePath = path.join(repoRoot, "editors", "vscode", "package.json");
 const docsPath = path.join(repoRoot, "docs", "configuration.md");
+const templateDir = path.join(repoRoot, "config", "templates");
+const defaultTemplatePath = path.join(templateDir, "default.toml");
+const minimalTemplatePath = path.join(templateDir, "minimal.toml");
 const checkOnly = process.argv.includes("--check");
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
@@ -30,9 +33,13 @@ for (const setting of schema.settings.filter((setting) => setting.editor)) {
 const generatedPackage = `${JSON.stringify(manifest, null, 2)}\n`;
 const currentDocs = fs.readFileSync(docsPath, "utf8");
 const generatedDocs = replaceGeneratedBlock(currentDocs, docsReference(schema.settings));
+const generatedDefaultTemplate = defaultTemplate(schema.settings);
+const generatedMinimalTemplate = minimalTemplate(schema.settings);
 
 checkOrWrite(packagePath, generatedPackage);
 checkOrWrite(docsPath, generatedDocs);
+checkOrWrite(defaultTemplatePath, generatedDefaultTemplate);
+checkOrWrite(minimalTemplatePath, generatedMinimalTemplate);
 
 if (checkOnly) {
   console.log(`config schema is synchronized (${schema.settings.length} TOML settings)`);
@@ -121,6 +128,58 @@ function docsReference(settings) {
   ].join("\n");
 }
 
+function defaultTemplate(settings) {
+  const root = [];
+  const sections = new Map();
+
+  for (const setting of settings) {
+    const parts = setting.path.split(".");
+    const line = `${parts.at(-1)} = ${tomlValue(setting.default)}`;
+
+    if (parts.length === 1) {
+      root.push(line);
+      continue;
+    }
+
+    const section = parts.slice(0, -1).join(".");
+    if (!sections.has(section)) {
+      sections.set(section, []);
+    }
+    sections.get(section).push(line);
+  }
+
+  const chunks = [root.join("\n")];
+
+  for (const [section, lines] of sections) {
+    chunks.push(`[${section}]\n${lines.join("\n")}`);
+  }
+
+  return `${chunks.join("\n\n")}\n`;
+}
+
+function minimalTemplate(settings) {
+  const paths = new Set(["source", "out", "target", "extension", "emit_maps"]);
+  const lines = settings
+    .filter((setting) => paths.has(setting.path))
+    .map((setting) => `${setting.path} = ${tomlValue(setting.default)}`);
+
+  return `${lines.join("\n")}\n`;
+}
+
+function tomlValue(value) {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(tomlValue).join(", ")}]`;
+  }
+
+  throw new Error(`unsupported TOML template value: ${JSON.stringify(value)}`);
+}
+
 function formatDefault(value) {
   return JSON.stringify(value).replaceAll("|", "\\|");
 }
@@ -139,7 +198,15 @@ function replaceGeneratedBlock(contents, generated) {
 }
 
 function checkOrWrite(file, generated) {
-  const current = fs.readFileSync(file, "utf8");
+  let current = null;
+
+  try {
+    current = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
 
   if (current === generated) {
     return;
@@ -150,5 +217,6 @@ function checkOrWrite(file, generated) {
     return;
   }
 
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, generated, "utf8");
 }

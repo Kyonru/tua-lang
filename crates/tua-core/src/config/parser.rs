@@ -16,11 +16,29 @@ struct ConfigSchema {
     settings: Vec<ConfigSetting>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigSettingMetadata {
+    pub path: String,
+    pub section: Option<String>,
+    pub key: String,
+    pub type_name: String,
+    pub default: serde_json::Value,
+    pub description: String,
+    pub enum_values: Vec<String>,
+    pub minimum: Option<usize>,
+}
+
 #[derive(Debug, Deserialize)]
 struct ConfigSetting {
     path: String,
-    #[cfg(test)]
+    #[serde(rename = "type")]
+    type_name: String,
     default: serde_json::Value,
+    description: String,
+    #[serde(default, rename = "enum")]
+    enum_values: Vec<String>,
+    #[serde(default)]
+    minimum: Option<usize>,
 }
 
 pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
@@ -32,6 +50,43 @@ pub fn parse_config(input: &str) -> Result<ProjectConfig, ConfigParseError> {
     }
 
     toml::from_str(input).map_err(|error| parse_error(input, error.span(), error.message()))
+}
+
+pub fn config_settings_metadata() -> Vec<ConfigSettingMetadata> {
+    config_schema()
+        .settings
+        .iter()
+        .map(ConfigSetting::metadata)
+        .collect()
+}
+
+pub fn config_setting_metadata(path: &str) -> Option<ConfigSettingMetadata> {
+    config_schema()
+        .settings
+        .iter()
+        .find(|setting| setting.path == path)
+        .map(ConfigSetting::metadata)
+}
+
+pub fn config_section_names() -> Vec<String> {
+    schema_child_names(config_schema(), "")
+        .into_iter()
+        .filter(|name| schema_has_children(config_schema(), name))
+        .map(str::to_owned)
+        .collect()
+}
+
+pub fn config_settings_in_section(section: Option<&str>) -> Vec<ConfigSettingMetadata> {
+    config_schema()
+        .settings
+        .iter()
+        .filter(|setting| setting.section().as_deref() == section)
+        .map(ConfigSetting::metadata)
+        .collect()
+}
+
+pub fn closest_config_child_name(prefix: &str, name: &str) -> Option<String> {
+    closest_name(name, schema_child_names(config_schema(), prefix)).map(str::to_owned)
 }
 
 pub(super) fn deserialize_quote_style<'de, D>(deserializer: D) -> Result<QuoteStyle, D::Error>
@@ -50,6 +105,33 @@ fn config_schema() -> &'static ConfigSchema {
     SCHEMA.get_or_init(|| {
         serde_json::from_str(CONFIG_SCHEMA_JSON).expect("config/schema.json should be valid")
     })
+}
+
+impl ConfigSetting {
+    fn metadata(&self) -> ConfigSettingMetadata {
+        ConfigSettingMetadata {
+            path: self.path.clone(),
+            section: self.section(),
+            key: self.key().to_owned(),
+            type_name: self.type_name.clone(),
+            default: self.default.clone(),
+            description: self.description.clone(),
+            enum_values: self.enum_values.clone(),
+            minimum: self.minimum,
+        }
+    }
+
+    fn section(&self) -> Option<String> {
+        self.path
+            .rsplit_once('.')
+            .map(|(section, _)| section.to_owned())
+    }
+
+    fn key(&self) -> &str {
+        self.path
+            .rsplit_once('.')
+            .map_or(self.path.as_str(), |(_, key)| key)
+    }
 }
 
 fn first_unknown_setting(
@@ -329,6 +411,35 @@ mod tests {
                 setting.path
             );
         }
+    }
+
+    #[test]
+    fn default_template_matches_default_config_text() {
+        const DEFAULT_TEMPLATE: &str = include_str!("../../../../config/templates/default.toml");
+
+        assert_eq!(DEFAULT_TEMPLATE, DEFAULT_CONFIG_TEXT);
+    }
+
+    #[test]
+    fn schema_metadata_exposes_sections_and_settings() {
+        assert!(config_section_names().contains(&"diagnostics".to_owned()));
+
+        let diagnostics = config_settings_in_section(Some("diagnostics"));
+
+        assert!(diagnostics
+            .iter()
+            .any(|setting| setting.key == "missing_requires"
+                && setting.path == "diagnostics.missing_requires"
+                && setting.type_name == "boolean"));
+
+        let quote_style = config_setting_metadata("format.quote_style")
+            .expect("quote style should be schema backed");
+
+        assert_eq!(quote_style.enum_values, ["preserve"]);
+        assert_eq!(
+            closest_config_child_name("diagnostics", "missing_requirez").as_deref(),
+            Some("missing_requires")
+        );
     }
 
     fn collect_leaf_paths(value: &toml::Value, prefix: &str, paths: &mut BTreeSet<String>) {

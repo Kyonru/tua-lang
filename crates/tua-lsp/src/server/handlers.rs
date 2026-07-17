@@ -1164,6 +1164,12 @@ impl LspServer {
     fn hover_response(&self, message: &Value) -> Option<Value> {
         let request = self.document_request(message)?;
         let position = request.position()?;
+        if is_config_uri(request.uri) {
+            let source = self.analysis.document_text(request.uri)?;
+
+            return super::config::hover_response(source, position);
+        }
+
         if let Some(hover) = self.analysis.fast_hover_for_uri(request.uri, position) {
             return Some(lsp_hover_from_core(hover));
         }
@@ -1190,6 +1196,14 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
+        if is_config_uri(request.uri) {
+            let Some(source) = self.analysis.document_text(request.uri) else {
+                return json!([]);
+            };
+
+            return super::config::completion_response(source, position);
+        }
+
         if let Some(completions) = self
             .analysis
             .fast_field_completion_for_uri(request.uri, position)
@@ -1685,6 +1699,14 @@ impl LspServer {
             })
             .unwrap_or_default();
         let requested_kinds = code_action_kinds_from_request(message);
+        if is_config_uri(request.uri) {
+            return super::config::code_action_response(
+                &request.path,
+                diagnostics,
+                &requested_kinds,
+            );
+        }
+
         let snapshot = self
             .analysis
             .snapshot(&self.workspace_folders, &self.settings);

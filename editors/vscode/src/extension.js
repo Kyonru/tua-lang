@@ -5,7 +5,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
-const { COMMANDS, STATUS_SELECTOR } = require("./constants");
+const { COMMANDS, DOCUMENT_SELECTOR, STATUS_SELECTOR } = require("./constants");
 const { registerEditorDevex } = require("./editor");
 const { registerEcsDevex } = require("./ecs");
 const { registerLoveDevex } = require("./love");
@@ -191,7 +191,7 @@ async function startLanguageServer() {
   );
 
   const clientOptions = {
-    documentSelector: STATUS_SELECTOR,
+    documentSelector: DOCUMENT_SELECTOR,
     initializationOptions,
     middleware: editorDevex?.middleware,
     outputChannel,
