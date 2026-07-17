@@ -54,6 +54,7 @@ mod source_text;
 mod sprite;
 mod text_match;
 pub mod type_database;
+pub mod type_explanation;
 pub mod types;
 mod usage_index;
 mod vector;
@@ -207,6 +208,7 @@ pub use type_database::{
     ProjectTypeBinding, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeModule,
     ProjectTypeOrigin,
 };
+pub use type_explanation::{TypeExplanation, TypeExplanationStep, TypeExplanationStepKind};
 pub use types::{
     build_type_environment, is_assignable, FunctionParameter, FunctionType, PrimitiveType,
     TableField, TableShape, Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,

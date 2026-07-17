@@ -21,6 +21,7 @@ mod scheduling;
 mod semantic_tokens;
 mod server_protocol;
 mod signature_help;
+mod type_explanation;
 mod workspace;
 
 fn run_messages(messages: Vec<Value>) -> Vec<Value> {
@@ -692,6 +693,20 @@ fn inspector_request(id: u64, uri: &str, position: Option<Value>) -> Value {
         "id": id,
         "method": "tua/inspect",
         "params": params
+    })
+}
+
+fn type_explanation_request(id: u64, uri: &str, position: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/explainType",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": position
+        }
     })
 }
 

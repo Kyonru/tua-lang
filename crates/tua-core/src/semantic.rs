@@ -34,6 +34,11 @@ pub(crate) struct SemanticModel<'a> {
     environment: &'a TypeEnvironment,
 }
 
+pub(crate) struct LocalInitializerInference {
+    pub(crate) ty: Type,
+    pub(crate) expression_span: Option<SourceSpan>,
+}
+
 impl<'a> SemanticModel<'a> {
     pub(crate) fn new(parsed: &'a ParsedSource, environment: &'a TypeEnvironment) -> Self {
         Self {
@@ -64,6 +69,32 @@ impl<'a> SemanticModel<'a> {
         };
 
         Some(ty)
+    }
+
+    pub(crate) fn local_initializer_inference(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<LocalInitializerInference> {
+        let local = self.local_assignment_value(name, position)?;
+        let expression_span = local.expression.and_then(node_span);
+        let ty = match local.expression {
+            Some(Expression::String(value)) => {
+                Type::string_literal(unquote_string(&value.to_string()))
+            }
+            Some(expression) => self.type_of_expression_return_at_depth(
+                expression,
+                local.span.start,
+                local.return_index,
+                0,
+            )?,
+            None => Type::nil(),
+        };
+
+        Some(LocalInitializerInference {
+            ty,
+            expression_span,
+        })
     }
 
     pub(crate) fn type_of_expression_return(

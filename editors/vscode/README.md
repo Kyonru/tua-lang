@@ -105,6 +105,7 @@ the setting.
 - `Tua: Reset Completion Learning Stats`
 - `Tua: Save CPU Profile`
 - `Tua: Save Heap Summary`
+- `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
 - `Tua: Preview Sprite Animations`
 - `Tua: Show Signal Graph`
@@ -121,6 +122,15 @@ the exact prior language-specific maximum length when another mode is selected,
 including an absent override. The other modes filter the language server's
 complete type and parameter labels without changing `editor.inlayHints.enabled`
 or unrelated VS Code preferences.
+
+`Tua: Explain Type / Why Is This Any?` is available from the command palette
+and the editor context menu. It asks the compiler for the type at the cursor
+and lists the contributing annotation, initializer inference, literal widening,
+control-flow narrowing, module resolution, member lookup, and dynamic fallback
+steps. When a result is `any`, the quick-pick title calls that out directly.
+Select a located step to open its declaration or source. Missing modules,
+explicit `any`, unknown initializers, and member access through `any` are shown
+as distinct causes.
 
 ## Profiling
 

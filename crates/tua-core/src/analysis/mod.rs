@@ -50,6 +50,7 @@ use crate::source_text::{
 use crate::text_match::text_matches;
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
+    widen_inferred_type,
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
@@ -82,8 +83,8 @@ use crate::{
     ModuleLink, ParsedSource, ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput,
     Reference, ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap,
     SelectionRange, SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan,
-    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypedFunction,
-    WorkspaceSymbol,
+    SymbolIndex, TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation,
+    TypeExplanationStep, TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
 
 mod database;
@@ -94,6 +95,7 @@ mod navigation_queries;
 mod project_queries;
 mod recovery;
 mod snapshot;
+mod type_explanation_queries;
 
 use database::*;
 use recovery::*;

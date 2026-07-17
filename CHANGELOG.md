@@ -16,6 +16,9 @@ language or editor behavior, and migration notes call out those changes.
 - A VS Code quick-pick and editor-toolbar command for Full, Compact, Types
   Only, Parameters Only, and Off inlay-hint modes. Compact restores the exact
   previous Tua-specific hint-length preference when another mode is selected.
+- A compiler-backed `Explain Type / Why Is This Any?` command with source-linked
+  annotation, inference, widening, narrowing, module, field, and dynamic
+  fallback steps.
 - Generated LOVE callback assistance with `TL5006` typo/signature diagnostics,
   typo rename fixes, and a source action for missing core lifecycle callbacks.
 

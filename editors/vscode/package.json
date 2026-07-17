@@ -495,6 +495,11 @@
         "icon": "$(ellipsis)"
       },
       {
+        "command": "tua.explainType",
+        "title": "Explain Type / Why Is This Any?",
+        "category": "Tua"
+      },
+      {
         "command": "tua.previewSprites",
         "title": "Preview Sprite Animations",
         "category": "Tua"
@@ -546,8 +551,19 @@
       ],
       "commandPalette": [
         {
+          "command": "tua.explainType",
+          "when": "editorLangId == tua"
+        },
+        {
           "command": "tua.inlayHints.selectMode",
           "when": "editorLangId == tua"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "tua.explainType",
+          "when": "editorLangId == tua",
+          "group": "navigation@40"
         }
       ]
     },

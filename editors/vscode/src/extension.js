@@ -34,6 +34,7 @@ async function activate(context) {
   editorDevex = registerEditorDevex({
     context,
     configurationTarget,
+    getClient: () => client,
     isTuaDocument,
   });
   context.subscriptions.push(editorDevex);

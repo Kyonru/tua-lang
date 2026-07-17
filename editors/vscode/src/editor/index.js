@@ -1,9 +1,19 @@
 "use strict";
 
 const { registerInlayHintPresentation } = require("./inlay-hints");
+const { registerTypeExplanation } = require("./type-explanation");
 
 function registerEditorDevex(options) {
-  return registerInlayHintPresentation(options);
+  const inlayHints = registerInlayHintPresentation(options);
+  const typeExplanation = registerTypeExplanation(options);
+
+  return {
+    middleware: inlayHints.middleware,
+    dispose() {
+      inlayHints.dispose();
+      typeExplanation.dispose();
+    },
+  };
 }
 
 module.exports = {

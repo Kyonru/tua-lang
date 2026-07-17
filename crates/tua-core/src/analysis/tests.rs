@@ -98,6 +98,185 @@ fn current_file_field_completion_answers_known_lua_receivers() {
 }
 
 #[test]
+fn type_explanation_reports_initializer_widening_and_field_resolution() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+type Player = { hp: number }
+
+local mode = "play"
+local modeCopy = <|mode|>mode
+
+local player: Player = { hp = 100 }
+local health = player.<|field|>hp
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let mode = snapshot
+        .explain_type("src/main.tua", fixture.position("mode"))
+        .expect("an inferred local should have a type explanation");
+    let field = snapshot
+        .explain_type("src/main.tua", fixture.position("field"))
+        .expect("a typed field should have a type explanation");
+
+    assert_eq!(mode.expression, "mode");
+    assert_eq!(mode.ty, Type::string());
+    assert!(mode.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Inference
+            && step.ty == Some(Type::string_literal("play"))
+    }));
+    assert!(mode.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Widening && step.ty == Some(Type::string())
+    }));
+
+    assert_eq!(field.expression, "player.hp");
+    assert_eq!(field.ty, Type::number());
+    assert!(field
+        .steps
+        .iter()
+        .any(|step| step.kind == TypeExplanationStepKind::Annotation));
+    assert!(field.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Field && step.ty == Some(Type::number())
+    }));
+}
+
+#[test]
+fn type_explanation_identifies_explicit_any_propagation() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local payload: any = {}
+local value = payload.<|field|>missing
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let explanation = host
+        .snapshot()
+        .explain_type("src/main.tua", fixture.position("field"))
+        .expect("an any-backed field should still explain its dynamic type");
+
+    assert_eq!(explanation.ty, Type::Any);
+    assert!(explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Dynamic && step.title == "Explicit `any` annotation"
+    }));
+    assert!(explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Dynamic && step.detail.contains("receiver is `any`")
+    }));
+}
+
+#[test]
+fn type_explanation_links_call_inference_to_function_origin() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local function makeName(): string
+  return "Ada"
+end
+
+local name = makeName()
+local copy = <|name|>name
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let explanation = host
+        .snapshot()
+        .explain_type("src/main.tua", fixture.position("name"))
+        .expect("a typed call result should have an explanation");
+    let inference = explanation
+        .steps
+        .iter()
+        .find(|step| step.kind == TypeExplanationStepKind::Inference)
+        .expect("the call result should include an inference step");
+
+    assert_eq!(explanation.ty, Type::string());
+    assert_eq!(inference.path.as_deref(), Some(Path::new("src/main.tua")));
+    assert_eq!(inference.span.map(|span| span.start.line), Some(1));
+}
+
+#[test]
+fn type_explanation_identifies_missing_required_modules() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Missing = require("missing")
+local value = Missing.<|field|>value
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let explanation = host
+        .snapshot()
+        .explain_type("src/main.tua", fixture.position("field"))
+        .expect("a missing module binding should have an explanation");
+
+    assert_eq!(explanation.ty, Type::Any);
+    assert!(explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Unresolved && step.title == "Missing module"
+    }));
+}
+
+#[test]
+fn type_explanation_uses_indexed_exports_for_required_modules() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Player = require("player")
+local player = Player.<|field|>new()
+-- file: src/player.tua
+local function new(): { hp: number }
+  return { hp = 100 }
+end
+
+return {
+  new = new,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let explanation = host
+        .snapshot()
+        .explain_type("src/main.tua", fixture.position("field"))
+        .expect("an indexed module export should have an explanation");
+
+    assert_ne!(explanation.ty, Type::Any);
+    assert!(explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Module
+            && step.title == "Resolved module"
+            && step.ty.as_ref().is_some_and(|ty| !matches!(ty, Type::Any))
+    }));
+    assert!(explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Field
+            && step.title == "Resolved member `new`"
+            && step.ty.as_ref().is_some_and(|ty| !matches!(ty, Type::Any))
+    }));
+    assert!(!explanation.steps.iter().any(|step| {
+        step.kind == TypeExplanationStepKind::Dynamic && step.title == "Initializer is dynamic"
+    }));
+}
+
+#[test]
 fn signal_graph_collects_typed_calls_across_files() {
     let mut host = AnalysisHost::new();
     let listeners = PathBuf::from("src/listeners.tua");

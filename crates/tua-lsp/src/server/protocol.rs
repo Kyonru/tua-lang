@@ -9,8 +9,8 @@ use tua_core::{
     DocumentSymbolKind, FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind,
     InspectorItem, ModuleLink, Reference, RenameEdit, RenameTarget, SelectionRange, SemanticToken,
     SemanticTokenKind, SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignatureHelp,
-    SignatureInformation, SourcePosition, SourceSpan, TextEdit, WorkspaceSymbol,
-    WorkspaceSymbolKind,
+    SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
+    TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -288,6 +288,34 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
             })
             .collect(),
     )
+}
+
+pub(super) fn lsp_type_explanation_from_core(explanation: TypeExplanation) -> Value {
+    json!({
+        "expression": explanation.expression,
+        "type": explanation.ty.to_string(),
+        "isAny": matches!(explanation.ty, tua_core::Type::Any),
+        "range": lsp_range(explanation.span),
+        "steps": explanation.steps.into_iter().map(|step| {
+            json!({
+                "kind": match step.kind {
+                    TypeExplanationStepKind::Annotation => "annotation",
+                    TypeExplanationStepKind::Inference => "inference",
+                    TypeExplanationStepKind::Widening => "widening",
+                    TypeExplanationStepKind::Narrowing => "narrowing",
+                    TypeExplanationStepKind::Module => "module",
+                    TypeExplanationStepKind::Field => "field",
+                    TypeExplanationStepKind::Dynamic => "dynamic",
+                    TypeExplanationStepKind::Unresolved => "unresolved",
+                },
+                "title": step.title,
+                "detail": step.detail,
+                "type": step.ty.map(|ty| ty.to_string()),
+                "uri": step.path.as_deref().map(uri_from_path),
+                "range": step.span.map(lsp_range),
+            })
+        }).collect::<Vec<_>>()
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

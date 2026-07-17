@@ -49,7 +49,7 @@ Status meanings:
 | Completion and completion resolve | Supported | Compiler-valid locals, fields, modules, Lua, and LOVE candidates are ranked deterministically. |
 | Project-adaptive completion ranking | Supported | Privacy-safe local frequency and structural statistics stay on-device and can be reset. |
 | Contextual sequence and multi-token completion | Opt-in | Bounded local lanes preserve compiler completion and fail back without user-visible errors. |
-| Hover and signature help | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. |
+| Hover, signature help, and type explanations | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. A source-linked Explain Type command reports annotation, inference, widening, narrowing, module, field, and dynamic fallback steps for identifiers and member chains. |
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
 | References and rename | Supported | Same-file and compiler-identified project symbols are supported; ambiguous dynamic identities are rejected. |
 | Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes. |

@@ -339,6 +339,20 @@ override. The remaining modes filter complete server-provided type and
 parameter hints in the extension. Mode changes do not rewrite
 `editor.inlayHints.enabled`, other inlay-hint preferences, or document analysis.
 
+`Tua: Explain Type / Why Is This Any?` sends the cursor and synchronized
+document revision through `tua/explainType`. The compiler returns an ordered,
+source-linked explanation covering explicit annotations, initializer inference,
+literal widening, control-flow narrowing, module resolution, member lookup,
+and permissive fallbacks. The extension presents those steps in a quick pick;
+selecting a located step opens its source. Dynamic causes distinguish explicit
+`any`, unresolved symbols or modules, unknown call results, missing fields, and
+`any` propagation instead of reporting one generic unknown result.
+
+Type explanations use the same valid or degraded semantic snapshot as hover,
+completion, and navigation. They currently target identifiers and dotted member
+chains; arbitrary runtime expressions remain intentionally unexplained when no
+stable compiler identity exists.
+
 For local smoke tests:
 
 ```bash

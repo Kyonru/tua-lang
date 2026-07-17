@@ -11,8 +11,8 @@ use tua_core::{
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
     FormatOptions, InlayHint, InspectorItem, ModuleLink, ModuleSpecifierKind, ProjectModel,
     ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget, SelectionRange,
-    SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit, VfsSourceKind,
-    WorkspaceSymbol, CONFIG_FILE,
+    SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan, TextEdit,
+    TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -914,6 +914,14 @@ impl AnalysisSnapshot {
         position: Option<SourcePosition>,
     ) -> Vec<InspectorItem> {
         self.core.inspect(path, position)
+    }
+
+    pub(super) fn explain_type(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+    ) -> Option<TypeExplanation> {
+        self.core.explain_type(path, position)
     }
 
     pub(super) fn completion(&self, path: &Path, position: SourcePosition) -> Vec<Completion> {

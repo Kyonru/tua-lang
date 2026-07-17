@@ -18,9 +18,9 @@ use super::protocol::{
     lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
     lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
     lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_text_edit, lsp_workspace_edit, lsp_workspace_symbol_from_core,
-    publish_diagnostics, response, source_position_from_lsp, workspace_diagnostic_refresh_request,
-    SourceRange,
+    lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
+    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
+    workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
@@ -235,6 +235,7 @@ impl LspServer {
             "tua/cacheStats" => response(id, self.cache_stats_response()),
             "tua/resetCompletionStats" => response(id, self.reset_completion_stats_response()),
             "tua/inspect" => response(id, self.inspector_response(&message)),
+            "tua/explainType" => response(id, self.type_explanation_response(&message)),
             "tua/signalGraph" => response(id, self.signal_graph_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
@@ -1449,6 +1450,34 @@ impl LspServer {
             "items": lsp_inspector_items_from_core(
                 snapshot.inspect(&request.path, request.position())
             )
+        })
+    }
+
+    fn type_explanation_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return json!({
+                "analysisRevision": Value::Null,
+                "documentVersion": Value::Null,
+                "explanation": Value::Null
+            });
+        };
+        let Some(position) = request.position() else {
+            return json!({
+                "analysisRevision": Value::Null,
+                "documentVersion": self.document_versions.get(request.uri).copied(),
+                "explanation": Value::Null
+            });
+        };
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+
+        json!({
+            "analysisRevision": snapshot.revision(),
+            "documentVersion": self.document_versions.get(request.uri).copied(),
+            "explanation": snapshot
+                .explain_type(&request.path, position)
+                .map(lsp_type_explanation_from_core)
         })
     }
 

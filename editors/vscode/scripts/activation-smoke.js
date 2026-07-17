@@ -166,6 +166,17 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "the inlay hint command should expose all presentation modes in one quick pick",
     );
 
+    const explanation = await state.commands.get("tua.explainType")();
+    assert.strictEqual(explanation.type, "any");
+    assert(
+      state.quickPickCalls.at(-1).options.title.includes("Why is sprite any?"),
+      "an any explanation should use the diagnostic command title",
+    );
+    assert(
+      state.quickPickCalls.at(-1).items.some((item) => item.detail.includes("dynamic escape hatch")),
+      "the type explanation should show compiler-provided inference details",
+    );
+
     const initialPreview = await state.commands.get("tua.previewSprites")();
 
     assert.deepStrictEqual(
@@ -990,8 +1001,8 @@ function createMockState(workspace, options = {}) {
       setStatusBarMessage() {
         return { dispose() {} };
       },
-      showQuickPick(items) {
-        quickPickCalls.push({ items });
+      showQuickPick(items, pickOptions = {}) {
+        quickPickCalls.push({ items, options: pickOptions });
 
         if (options.quickPickLabel) {
           return Promise.resolve(items.find((item) => item.label === options.quickPickLabel));
@@ -1131,6 +1142,10 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve(mockSpriteInspection(activeTextEditor?.document));
       }
 
+      if (method === "tua/explainType") {
+        return Promise.resolve(mockTypeExplanation(activeTextEditor?.document));
+      }
+
       return Promise.resolve("");
     }
 
@@ -1250,6 +1265,35 @@ function mockSpriteInspection(document) {
   };
 }
 
+function mockTypeExplanation(document) {
+  return {
+    analysisRevision: document?.version || 0,
+    documentVersion: document?.version,
+    explanation: {
+      expression: "sprite",
+      type: "any",
+      isAny: true,
+      range: {
+        start: { line: 0, character: 6 },
+        end: { line: 0, character: 12 },
+      },
+      steps: [
+        {
+          kind: "dynamic",
+          title: "Explicit `any` annotation",
+          detail: "`sprite` uses Tua's dynamic escape hatch.",
+          type: "any",
+          uri: document?.uri.toString(),
+          range: {
+            start: { line: 0, character: 6 },
+            end: { line: 0, character: 12 },
+          },
+        },
+      ],
+    },
+  };
+}
+
 function createContext(extensionPath = extensionRoot, globalStoragePath = path.join(os.tmpdir(), "tua-vscode-smoke-storage")) {
   return {
     extensionPath,
@@ -1293,6 +1337,7 @@ function assertRegisteredCommands(state) {
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.explainType",
     "tua.inlayHints.selectMode",
     "tua.previewSprites",
     "tua.previewSprites.reload",
