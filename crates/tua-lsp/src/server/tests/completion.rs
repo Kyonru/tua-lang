@@ -234,6 +234,7 @@ fn identifier_completion_uses_open_document_fast_path() {
     let mut server = TestServer::new();
 
     temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/other.tua", "return { value = 1 }\n");
     server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
     server.send(did_open(&uri, source));
     server.send(cache_stats_request(2));
@@ -259,6 +260,37 @@ fn identifier_completion_uses_open_document_fast_path() {
         after["parse"]["misses"].as_u64(),
         Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 1),
         "plain identifier completion should parse only the active document once while typing"
+    );
+}
+
+#[test]
+fn triggered_field_completion_uses_open_document_fast_path() {
+    let temp = TempProject::new("field-completion-fast-path");
+    let uri = temp.uri_for("src/main.tua");
+    let source = "local value = table.\n";
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/other.tua", "return { value = 1 }\n");
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), false));
+    server.send(did_open(&uri, source));
+    server.send(cache_stats_request(2));
+    server.send(trigger_character_completion_request(
+        3, &uri, source, "table.", ".",
+    ));
+    server.send(cache_stats_request(4));
+
+    for label in ["concat", "insert", "maxn", "remove", "sort"] {
+        completion_with_label(server.output(), 3, label);
+    }
+
+    let before = &response_with_id(server.output(), 2)["result"];
+    let after = &response_with_id(server.output(), 4)["result"];
+
+    assert_eq!(
+        after["parse"]["misses"].as_u64(),
+        Some(before["parse"]["misses"].as_u64().unwrap_or_default() + 1),
+        "known current-file receivers should parse only the active document"
     );
 }
 #[test]
@@ -993,6 +1025,30 @@ return {
             .to_string()
     );
 }
+
+#[test]
+fn triggered_required_module_completion_uses_open_export_snapshot() {
+    let temp = TempProject::new("open-required-module-completion");
+    let main = "local audio = require(\"audio\")\nlocal value = audio.\n";
+    let disk_audio = "return { play = function() end }\n";
+    let open_audio = "return { play = function() end, pause = function() end }\n";
+    let main_uri = temp.uri_for("src/main.tua");
+    let audio_uri = temp.uri_for("src/audio.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main);
+    temp.write("src/audio.tua", disk_audio);
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&audio_uri, open_audio));
+    server.send(did_open(&main_uri, main));
+    server.send(trigger_character_completion_request(
+        2, &main_uri, main, "audio.", ".",
+    ));
+
+    assert_completion_labels(server.output(), 2, ["pause", "play"]);
+}
+
 #[test]
 fn completion_and_local_hover_use_project_types_in_incomplete_documents() {
     let temp = TempProject::new("project-type-completion-incomplete");

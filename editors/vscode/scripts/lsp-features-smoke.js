@@ -52,6 +52,10 @@ const functions = sources.find((source) => source.file === "functions.tua");
 if (!functions) {
   fail("examples/features/src/functions.tua is missing");
 }
+const imports = sources.find((source) => source.file === "imports.tua");
+if (!imports) {
+  fail("examples/features/src/imports.tua is missing");
+}
 const cheatsheet = sources.find((source) => source.file === "lua_cheatsheet.tua");
 if (!cheatsheet) {
   fail("examples/features/src/lua_cheatsheet.tua is missing");
@@ -109,7 +113,7 @@ request("initialize", {
 }, () => {
   send({ jsonrpc: "2.0", method: "initialized", params: {} });
 
-  for (const source of [inference, modules, cheatsheet, sprites]) {
+  for (const source of [inference, imports, modules, cheatsheet, sprites]) {
     send({
       jsonrpc: "2.0",
       method: "textDocument/didOpen",
@@ -466,6 +470,96 @@ async function testClosedModuleAndFreshInlayHints() {
       }
     },
   );
+
+  let validImportHintLabels = [];
+
+  await request(
+    "textDocument/inlayHint",
+    {
+      textDocument: { uri: imports.uri },
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: imports.text.split("\n").length + 1, character: 0 },
+      },
+    },
+    (message) => {
+      validImportHintLabels = (message.result || []).map((item) => item.label);
+
+      if (validImportHintLabels.length === 0) {
+        fail("valid imports document returned no inlay hints");
+      }
+    },
+  );
+
+  const incompleteImports = imports.text.replace("\n\nreturn {", "\nplayer\nreturn {");
+
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: {
+      textDocument: { uri: imports.uri, version: 2 },
+      contentChanges: [{ text: incompleteImports }],
+    },
+  });
+
+  await request(
+    "textDocument/inlayHint",
+    {
+      textDocument: { uri: imports.uri },
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: incompleteImports.split("\n").length + 1, character: 0 },
+      },
+    },
+    (message) => {
+      const labels = (message.result || []).map((item) => item.label);
+
+      if (JSON.stringify(labels) !== JSON.stringify(validImportHintLabels)) {
+        fail(
+          `bare-identifier edit changed imports inlay hints: before=${validImportHintLabels.join(", ")} after=${labels.join(", ")}`,
+        );
+      }
+    },
+  );
+
+  const completionText = `${changedText}\nlocal smokeTable = table.\n`;
+
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: {
+      textDocument: { uri: inference.uri, version: 3 },
+      contentChanges: [{ text: completionText }],
+    },
+  });
+
+  const completionStarted = Date.now();
+
+  await request(
+    "textDocument/completion",
+    {
+      textDocument: { uri: inference.uri },
+      position: positionAfter(completionText, "smokeTable = table."),
+      context: {
+        triggerKind: 2,
+        triggerCharacter: ".",
+      },
+    },
+    (message) => {
+      const labels = (message.result || []).map((item) => item.label);
+
+      for (const label of ["concat", "insert", "remove", "sort"]) {
+        if (!labels.includes(label)) {
+          fail(`post-edit table completion missing ${label}: ${labels.join(", ")}`);
+        }
+      }
+    },
+  );
+
+  const completionElapsedMs = Date.now() - completionStarted;
+  if (completionElapsedMs > 1000) {
+    fail(`post-edit table completion exceeded 1000ms: ${completionElapsedMs}ms`);
+  }
 }
 
 function request(method, params, validate) {

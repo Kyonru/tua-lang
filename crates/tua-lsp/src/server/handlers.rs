@@ -1166,6 +1166,17 @@ impl LspServer {
         let Some(position) = request.position() else {
             return json!([]);
         };
+        if let Some(completions) = self
+            .analysis
+            .fast_field_completion_for_uri(request.uri, position)
+        {
+            return lsp_completion_array(
+                request.uri,
+                position,
+                completions,
+                self.client_completion_label_details,
+            );
+        }
         if completion_request_is_invoked(message) {
             if let Some((position, completions)) = self
                 .analysis

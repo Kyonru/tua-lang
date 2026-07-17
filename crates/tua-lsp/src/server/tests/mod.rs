@@ -428,6 +428,30 @@ fn invoked_completion_request(id: u64, uri: &str, source: &str, needle: &str) ->
     })
 }
 
+fn trigger_character_completion_request(
+    id: u64,
+    uri: &str,
+    source: &str,
+    needle: &str,
+    trigger: &str,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "textDocument/completion",
+        "params": {
+            "textDocument": {
+                "uri": uri
+            },
+            "position": lsp_position_after(source, needle),
+            "context": {
+                "triggerKind": 2,
+                "triggerCharacter": trigger
+            }
+        }
+    })
+}
+
 fn completion_resolve_request(id: u64, item: Value) -> Value {
     json!({
         "jsonrpc": "2.0",

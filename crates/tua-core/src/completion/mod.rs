@@ -675,6 +675,93 @@ pub(crate) fn complete_field_access_in_source_with_environment_and_ranking_input
     rank_completions_for_context(completions, Some(prefix.as_str()), ranking_context.as_ref())
 }
 
+pub(crate) fn complete_current_file_field_access_with_environment_and_ranking_inputs(
+    source: &str,
+    parsed: &ParsedSource,
+    position: SourcePosition,
+    environment: &TypeEnvironment,
+    ranking: CompletionRankingInputs<'_>,
+) -> Option<Vec<Completion>> {
+    let Some(CompletionContext::FieldAccess {
+        receiver_parts,
+        prefix,
+        position,
+        separator,
+        separator_span,
+    }) = completion_context(source, position)
+    else {
+        return None;
+    };
+    let root = receiver_parts.first()?;
+
+    // Required modules need the revisioned project graph so unsaved exports in another
+    // document remain authoritative over the on-disk module fallback.
+    if crate::require_bindings_for_parsed_source(parsed)
+        .iter()
+        .any(|binding| binding.alias == *root)
+    {
+        return None;
+    }
+
+    let context = CompletionContext::FieldAccess {
+        receiver_parts: receiver_parts.clone(),
+        prefix: prefix.clone(),
+        position,
+        separator,
+        separator_span,
+    };
+    let ranking_context =
+        CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
+    let mut completions = complete_fields(
+        parsed,
+        source,
+        environment,
+        FieldCompletionContext {
+            receiver_parts: &receiver_parts,
+            prefix: "",
+            position,
+            separator,
+            separator_span,
+        },
+    );
+
+    if completions.is_empty() && environment.local(root).is_none() {
+        completions = complete_lua_fields(source, &receiver_parts, "", position);
+    }
+
+    if completions.is_empty() && environment.local(root).is_none() {
+        return None;
+    }
+
+    Some(rank_completions_for_context(
+        completions,
+        Some(&prefix),
+        ranking_context.as_ref(),
+    ))
+}
+
+pub(crate) fn complete_current_file_lua_field_access(
+    source: &str,
+    position: SourcePosition,
+) -> Option<Vec<Completion>> {
+    let Some(CompletionContext::FieldAccess {
+        receiver_parts,
+        prefix,
+        position,
+        ..
+    }) = completion_context(source, position)
+    else {
+        return None;
+    };
+    let completions = complete_lua_fields(source, &receiver_parts, "", position);
+
+    if completions.is_empty() {
+        return None;
+    }
+
+    Some(rank_completions_for_prefix(completions, Some(&prefix)))
+}
+
 fn complete_parsed_source_with_context(
     parsed: &ParsedSource,
     source: &str,

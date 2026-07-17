@@ -140,6 +140,17 @@ impl AnalysisHost {
         Some((position, completions))
     }
 
+    pub(super) fn fast_field_completion_for_uri(
+        &self,
+        uri: &str,
+        position: SourcePosition,
+    ) -> Option<Vec<Completion>> {
+        let document = self.documents.get(uri)?;
+
+        self.core
+            .current_file_field_completion(&document.path, position)
+    }
+
     pub(super) fn fast_hover_for_uri(
         &self,
         uri: &str,

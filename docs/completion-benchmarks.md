@@ -202,6 +202,11 @@ default tolerance is 5%, with a 1ms minimum slack for short local runs.
   semantic fact, module graph, or LSP transport work. Rerun with
   `TUA_PROFILE_STREAM=1` and inspect `analysis.query.completion`,
   `analysis.semantic.*`, and `lsp.completion.*` spans.
+- A multi-second `.` completion for a known typed, Lua, or LOVE receiver means
+  the current-file completion lane fell back to project snapshot construction.
+  Run `make editor-regression-smoke`; its real-server post-edit `table.` request
+  has a one-second upper bound while required modules still exercise the
+  project-aware path.
 - High `analysis.completion.ranking` p95 means ranking work is too expensive for
   the candidate set. Check project usage scanning, adaptive stats lookups, and
   sort tie-breakers before adding new ranking features.

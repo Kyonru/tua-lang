@@ -14,6 +14,8 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
 use crate::completion::{
+    complete_current_file_field_access_with_environment_and_ranking_inputs,
+    complete_current_file_lua_field_access,
     complete_field_access_in_source_with_environment_and_ranking_inputs,
     complete_source_with_parsed_environment_and_ranking_inputs, filter_and_rank_completions,
     multitoken::complete_multi_token_source, CompletionAdaptiveStats, CompletionMultiTokenConfig,

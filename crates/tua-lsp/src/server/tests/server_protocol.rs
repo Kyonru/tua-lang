@@ -241,7 +241,11 @@ player.hp = player.hp - 1
     assert!(stats["usageIndex"]["hits"].is_number());
     assert!(stats["usageIndex"]["misses"].as_u64().unwrap_or(0) >= 1);
     assert!(stats["completionContext"]["hits"].is_number());
-    assert!(stats["completionContext"]["misses"].as_u64().unwrap_or(0) >= 1);
+    assert_eq!(
+        stats["completionContext"]["misses"].as_u64(),
+        Some(0),
+        "known current-file field completion should bypass the project completion cache"
+    );
     assert!(stats["invalidations"].is_number());
 }
 #[test]

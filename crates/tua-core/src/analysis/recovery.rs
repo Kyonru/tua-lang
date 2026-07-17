@@ -169,6 +169,39 @@ pub(super) fn line_is_recoverable_incomplete_edit(trimmed_code: &str) -> bool {
     trimmed_code.ends_with('.')
         || trimmed_code.ends_with(':')
         || is_bare_dotted_field_chain(trimmed_code)
+        || is_bare_identifier_expression(trimmed_code)
+}
+
+pub(super) fn is_bare_identifier_expression(value: &str) -> bool {
+    is_simple_identifier(value) && !is_lua_keyword(value)
+}
+
+fn is_lua_keyword(value: &str) -> bool {
+    matches!(
+        value,
+        "and"
+            | "break"
+            | "do"
+            | "else"
+            | "elseif"
+            | "end"
+            | "false"
+            | "for"
+            | "function"
+            | "goto"
+            | "if"
+            | "in"
+            | "local"
+            | "nil"
+            | "not"
+            | "or"
+            | "repeat"
+            | "return"
+            | "then"
+            | "true"
+            | "until"
+            | "while"
+    )
 }
 
 pub(super) fn is_bare_dotted_field_chain(value: &str) -> bool {

@@ -576,6 +576,47 @@ impl AnalysisHost {
         }
     }
 
+    pub fn current_file_field_completion(
+        &self,
+        path: impl AsRef<Path>,
+        position: SourcePosition,
+    ) -> Option<Vec<Completion>> {
+        let path = path.as_ref();
+        let file = self.current_analysis_file(path)?;
+        let ranking = || {
+            CompletionRankingInputs::from_sources(
+                &[],
+                Some(&self.completion_adaptive_stats),
+                CompletionAdaptiveStats::file_scope_hash(path),
+                &self.completion_sequence_ranking,
+            )
+        };
+
+        match &file.parsed {
+            Ok(parsed) => complete_current_file_field_access_with_environment_and_ranking_inputs(
+                &file.source,
+                parsed,
+                position,
+                file.environment()
+                    .expect("parsed file must have a type environment"),
+                ranking(),
+            ),
+            Err(_) => file
+                .degraded_semantics
+                .as_ref()
+                .and_then(|degraded| {
+                    complete_current_file_field_access_with_environment_and_ranking_inputs(
+                        &file.source,
+                        &degraded.parsed,
+                        position,
+                        &degraded.environment,
+                        ranking(),
+                    )
+                })
+                .or_else(|| complete_current_file_lua_field_access(&file.source, position)),
+        }
+    }
+
     pub fn document_links(&self, path: impl AsRef<Path>) -> Vec<ModuleLink> {
         self.current_analysis_file(path.as_ref())
             .map(|file| file.require_edges)

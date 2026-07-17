@@ -75,6 +75,29 @@ fn snapshot_prefers_open_document_over_file_contents() {
 }
 
 #[test]
+fn current_file_field_completion_answers_known_lua_receivers() {
+    let path = PathBuf::from("src/main.tua");
+    let source = "local value = table.\n";
+    let position = SourcePosition {
+        line: 1,
+        column: source.find("table.").expect("receiver should exist") + "table.".len() + 1,
+    };
+    let mut host = AnalysisHost::new();
+
+    host.open_document(&path, source);
+
+    let completions = host
+        .current_file_field_completion(&path, position)
+        .expect("Lua receivers should be authoritative without a project snapshot");
+    let labels = completions
+        .iter()
+        .map(|completion| completion.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(labels, ["concat", "insert", "maxn", "remove", "sort"]);
+}
+
+#[test]
 fn signal_graph_collects_typed_calls_across_files() {
     let mut host = AnalysisHost::new();
     let listeners = PathBuf::from("src/listeners.tua");
@@ -1259,6 +1282,44 @@ end
         1,
         "degraded hover, completion, and inlay hints should share one cached environment"
     );
+}
+
+#[test]
+fn snapshot_inlay_hints_recover_from_a_bare_identifier_statement() {
+    let valid = r#"type Player = { name: string }
+
+local function makePlayer(name: string): Player
+  return { name = name }
+end
+
+local player = makePlayer("Ada")
+local score = 1
+
+return { player = player, score = score }
+"#;
+    let invalid = valid.replace(
+        "local score = 1\n\nreturn",
+        "local score = 1\nplayer\nreturn",
+    );
+    let mut valid_host = AnalysisHost::new();
+    let mut invalid_host = AnalysisHost::new();
+
+    valid_host.set_file("src/main.tua", valid);
+    invalid_host.set_file("src/main.tua", invalid);
+
+    let valid_hints = valid_host.snapshot().inlay_hints("src/main.tua");
+    let invalid_hints = invalid_host.snapshot().inlay_hints("src/main.tua");
+
+    assert!(!valid_hints.is_empty());
+    assert_eq!(invalid_hints, valid_hints);
+}
+
+#[test]
+fn bare_identifier_recovery_preserves_lua_structure_keywords() {
+    assert!(line_is_recoverable_incomplete_edit("player"));
+    assert!(line_is_recoverable_incomplete_edit("player.position"));
+    assert!(!line_is_recoverable_incomplete_edit("end"));
+    assert!(!line_is_recoverable_incomplete_edit("return"));
 }
 
 #[test]
