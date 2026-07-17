@@ -119,6 +119,8 @@ the setting.
 - `Tua: Save Heap Summary`
 - `Tua: Open Generated Lua Beside Tua`
 - `Tua: Jump Between Tua and Generated Lua`
+- `Tua: Run LOVE Project`
+- `Tua: Restart LOVE Project`
 - `Tua: Copy Fully Qualified Symbol Name`
 - `Tua: Workspace Symbols by Module`
 - `Tua: Explain Type / Why Is This Any?`
@@ -163,6 +165,16 @@ nearest `tua.toml` `source` and `out` settings, then opens the matching emitted
 `*.lua.map.json` sidecar to jump from a Tua line to the corresponding generated
 Lua line, or from generated Lua back to the original Tua source line. Source
 maps are line-based, so the command opens the nearest mapped line at column 0.
+
+`Tua: Run LOVE Project` creates a cancellable VS Code task that runs
+`tua build` from the nearest project root and then starts LOVE from the
+configured output directory. `Tua: Restart LOVE Project` terminates the tracked
+task execution before starting a fresh one. By default the runner uses `love`
+from `PATH`, then falls back to common platform installs such as
+`/Applications/love.app/Contents/MacOS/love` on macOS. Set `tua.love.command`
+when LOVE lives somewhere else. Runtime traceback lines from emitted Lua are
+annotated with clickable Tua source locations when `emit_maps` is enabled. This
+is task execution only; debugging remains outside the Tua extension.
 
 `Tua: Copy Fully Qualified Symbol Name` copies the module-qualified name at the
 cursor, such as `systems.combat.damage`, or the current module name when the

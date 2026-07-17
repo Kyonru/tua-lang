@@ -64,8 +64,8 @@ function friends.update(dt: number)
 
     local friend_type: any = friends.types[friend_type_index]
     local friend: Friend = friends.create(friend_type.asset, friend_type.speed, friend_type.points)
-    friend.y = _HEIGHT
-    friend.x = math.random(0, _WIDTH - friend.width)
+    friend.y = screen_height
+    friend.x = math.random(0, screen_width - friend.width)
     table.insert(friends.list, friend)
   end
 

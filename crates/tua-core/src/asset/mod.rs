@@ -663,6 +663,20 @@ pub(crate) fn validate_asset_with_index(
         };
     }
 
+    if relative_path.trim().is_empty() {
+        return AssetMetadata {
+            kind,
+            relative_path: relative_path.to_owned(),
+            canonical_path: None,
+            extension,
+            span,
+            inferred_love_type: kind.return_type_name(),
+            status: AssetValidationStatus::Missing,
+            dimensions: None,
+            duration_seconds: None,
+        };
+    }
+
     if let Some(asset_index) = asset_index {
         return validate_asset_from_index(kind, relative_path, span, asset_roots, asset_index);
     }

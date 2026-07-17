@@ -19,9 +19,7 @@ local sound = require("sound")
 local particles = require("particles")
 
 local obstacles: ObstaclesModule = {}
-local block = love.graphics.newImage("assets/block.png")
-
-local block_2 = image "assets/block.png"
+local block = image "assets/block.png"
 
 function obstacles.load()
   obstacles.list = {}
@@ -35,10 +33,10 @@ function obstacles.update(dt: number)
   obstacles.spawn_timer += dt
   if obstacles.spawn_timer > obstacles.spawn_interval then
     obstacles.spawn_timer = 0
-    local obstacle_height: number = math.random(32, _HEIGHT / 4)
-    local obstacle_y: number = math.random(0, _HEIGHT - obstacle_height)
+    local obstacle_height: number = math.random(32, screen_height / 4)
+    local obstacle_y: number = math.random(0, screen_height - obstacle_height)
     table.insert(obstacles.list, {
-      x = _WIDTH,
+      x = screen_width,
       y = obstacle_y,
       width = obstacle_height,
       height = obstacle_height,
@@ -71,14 +69,12 @@ function obstacles.update(dt: number)
       particles.create_block_explosion(
         wall.x + wall.width / 2,
         wall.y + wall.height / 2,
-        wall.width / _HEIGHT
+        wall.width / screen_height
       )
       sound.play_hurt()
       table.remove(obstacles.list, i)
     end
   end
-
-  wall.x = ""
 end
 
 function obstacles.draw()

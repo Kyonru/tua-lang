@@ -69,6 +69,19 @@ fn love_full_example_builds_and_optionally_runs_with_love() {
 
     copy_dir_all(&example, temp.path()).expect("failed to copy love-full example");
 
+    let check_output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check for love-full");
+
+    assert!(
+        check_output.status.success(),
+        "tua check failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&check_output.stdout),
+        String::from_utf8_lossy(&check_output.stderr)
+    );
+
     let build_output = tua()
         .arg("build")
         .current_dir(temp.path())
@@ -99,9 +112,11 @@ fn love_full_example_builds_and_optionally_runs_with_love() {
         fs::read_to_string(temp.path().join("game/player.lua")).expect("failed to read player.lua");
 
     assert!(main_output.contains(r#"require("background")"#));
-    assert!(!main_output.contains(": number"));
+    assert!(main_output.contains("---@param dt number"));
+    assert!(!main_output.contains("function love.update(dt: number)"));
     assert!(player_output.contains("player.lives = player.lives - amount"));
-    assert!(!player_output.contains("type PlayerModule"));
+    assert!(player_output.contains("---@alias PlayerModule"));
+    assert!(!player_output.contains("type PlayerModule ="));
 
     let Some(love) = love_executable() else {
         eprintln!(

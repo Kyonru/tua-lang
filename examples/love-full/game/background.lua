@@ -22,22 +22,28 @@ function background.draw()
 end
 
 function background.draw_background(parallax)
-  if parallax.x < -_WIDTH then
-    parallax.x = _WIDTH - 1
+  if parallax.x < -screen_width then
+    parallax.x = screen_width - 1
   end
   love.graphics.draw(
     parallax.sprite,
     parallax.x,
     parallax.y,
     0,
-    _WIDTH / parallax.width,
+    screen_width / parallax.width,
     parallax.background_height / parallax.height
   )
 
   if inspect.inspecting then
     love.graphics.setColor(parallax.inspectingColor)
     love.graphics.setLineWidth(12)
-    love.graphics.rectangle("line", parallax.x, parallax.y, _WIDTH, parallax.background_height)
+    love.graphics.rectangle(
+      "line",
+      parallax.x,
+      parallax.y,
+      screen_width,
+      parallax.background_height
+    )
     love.graphics.setColor(1, 1, 1, 1)
   end
 end
@@ -49,7 +55,7 @@ function background.create_infinite_parallax(sprite, background_height, speed)
     height = sprite:getHeight(),
     background_height = background_height,
     x = 0,
-    y = _HEIGHT - background_height,
+    y = screen_height - background_height,
     inspectingColor = { 1, 0, 0, 0.5 },
     speed = speed,
   }
@@ -58,8 +64,8 @@ function background.create_infinite_parallax(sprite, background_height, speed)
     width = sprite:getWidth(),
     height = sprite:getHeight(),
     background_height = background_height,
-    x = _WIDTH,
-    y = _HEIGHT - background_height,
+    x = screen_width,
+    y = screen_height - background_height,
     inspectingColor = { 0, 1, 0, 0.5 },
     speed = speed,
   }

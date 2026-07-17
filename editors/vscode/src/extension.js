@@ -47,6 +47,7 @@ async function activate(context) {
   loveDevex = registerLoveDevex({
     configurationTarget,
     getClient: () => client,
+    getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext),
     isTuaDocument,
   });
   context.subscriptions.push(loveDevex);

@@ -3,3 +3,52 @@ out = "game"
 target = "love11-luajit"
 extension = "tua"
 emit_maps = true
+
+[emit]
+annotation_mode = "luacats"
+
+[format]
+indent_width = 2
+line_width = 100
+quote_style = "preserve"
+final_newline = true
+
+[jit]
+enabled = true
+variable_type_drift = true
+table_shape_drift = true
+hot_loop_hints = true
+
+[ecs]
+enabled = true
+backend = "tua"
+
+[diagnostics]
+duplicate_keys = true
+missing_requires = true
+self_assignments = true
+doc_annotations = true
+undefined_variables = true
+unused_locals = true
+unused_parameters = true
+use_before_definition = true
+duplicate_parameters = true
+wrong_argument_count = true
+bad_requires = true
+impossible_boolean_expressions = true
+duplicate_if_conditions = true
+duplicate_binary_operands = true
+float_equality = true
+const_assignments = true
+parameter_type_mismatches = true
+return_type_mismatches = true
+assignment_arity = true
+local_declaration_arity = true
+unused_assignments = true
+binary_operator_type_mismatches = true
+uncalled_local_functions = true
+formatting_lints = true
+inline_ignores = true
+inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
+inline_ignore_max_per_file = 0
+globals = ["screen_width", "screen_height"]

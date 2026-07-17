@@ -437,6 +437,16 @@ build output; it does not synthesize Lua or run `tua build` automatically.
 Lua lines. Source maps currently carry line provenance only, so the selected
 target column is 0.
 
+`Tua: Run LOVE Project` starts a VS Code task that runs `tua build` and then
+launches LOVE from the configured output directory. `Tua: Restart LOVE Project`
+terminates the tracked task execution and starts a fresh task, so output stays
+visible and cancellable in VS Code's task terminal. Runtime traceback lines are
+annotated with clickable Tua source locations when emitted source maps are
+available. The default runner uses `love` from `PATH`, then falls back to
+common platform installs such as `/Applications/love.app/Contents/MacOS/love`
+on macOS. Set `tua.love.command` if LOVE lives somewhere else. Tua does not
+provide a Lua debugger; external LOVE debugging remains separate.
+
 `Tua: Copy Fully Qualified Symbol Name` and `Tua: Workspace Symbols by Module`
 reuse the standard document-symbol and workspace-symbol providers. Qualified
 names use the compiler module path from `tua.toml` source roots plus the

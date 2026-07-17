@@ -6,10 +6,14 @@ const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
 const { formatError } = require("../shared/errors");
 const {
+  loadSourceMapForGeneratedPath,
+  nearestMapping,
+  resolveSourceMapPath,
+  sourceMapPathForGeneratedPath,
+} = require("./source-maps");
+const {
   generatedLuaPathForUri,
   normalizePath,
-  normalizeRelativePath,
-  replaceExtension,
 } = require("./project-layout");
 
 function registerGeneratedLuaCommand({ isTuaDocument }) {
@@ -97,7 +101,7 @@ async function jumpFromSourceToGenerated(document) {
     return undefined;
   }
 
-  const sourceMap = loadSourceMapForGeneratedPath(generatedPath);
+  const sourceMap = loadGeneratedLuaSourceMap(generatedPath);
   if (!sourceMap) {
     return undefined;
   }
@@ -115,7 +119,7 @@ async function jumpFromSourceToGenerated(document) {
 
 async function jumpFromGeneratedToSource(document) {
   const generatedPath = path.resolve(document.uri.fsPath);
-  const sourceMap = loadSourceMapForGeneratedPath(generatedPath);
+  const sourceMap = loadGeneratedLuaSourceMap(generatedPath);
   if (!sourceMap) {
     return undefined;
   }
@@ -155,7 +159,7 @@ function resolveGeneratedLuaPath(uri) {
   return resolved.path;
 }
 
-function loadSourceMapForGeneratedPath(generatedPath) {
+function loadGeneratedLuaSourceMap(generatedPath) {
   const mapPath = sourceMapPathForGeneratedPath(generatedPath);
   if (!fs.existsSync(mapPath)) {
     vscode.window.showWarningMessage(
@@ -164,78 +168,7 @@ function loadSourceMapForGeneratedPath(generatedPath) {
     return undefined;
   }
 
-  const parsed = JSON.parse(fs.readFileSync(mapPath, "utf8"));
-  if (parsed?.version !== 1) {
-    throw new Error(`unsupported source map version in ${mapPath}`);
-  }
-
-  const lineMappings = Array.isArray(parsed.lineMappings)
-    ? parsed.lineMappings
-        .map((mapping) => ({
-          generatedLine: integerLine(mapping?.generatedLine),
-          sourceLine: integerLine(mapping?.sourceLine),
-        }))
-        .filter((mapping) => mapping.generatedLine && mapping.sourceLine)
-    : [];
-  const root = sourceMapRoot(generatedPath, parsed.generated) || path.dirname(mapPath);
-
-  return {
-    generated: typeof parsed.generated === "string" ? parsed.generated : undefined,
-    lineMappings,
-    root,
-    source: typeof parsed.source === "string" ? parsed.source : undefined,
-  };
-}
-
-function sourceMapPathForGeneratedPath(generatedPath) {
-  return replaceExtension(generatedPath, ".lua.map.json");
-}
-
-function sourceMapRoot(generatedPath, generated) {
-  if (typeof generated !== "string" || path.isAbsolute(generated)) {
-    return undefined;
-  }
-
-  const normalizedGeneratedPath = normalizePath(generatedPath);
-  const relativeGeneratedPath = normalizeRelativePath(generated);
-  const suffix = `${path.sep}${relativeGeneratedPath}`;
-
-  if (!normalizedGeneratedPath.endsWith(suffix)) {
-    return undefined;
-  }
-
-  return (
-    generatedPath.slice(0, generatedPath.length - suffix.length) ||
-    path.parse(generatedPath).root
-  );
-}
-
-function resolveSourceMapPath(root, mappedPath) {
-  if (typeof mappedPath !== "string" || !mappedPath) {
-    return undefined;
-  }
-
-  return path.resolve(root, mappedPath);
-}
-
-function nearestMapping(mappings, field, targetLine) {
-  let best;
-  let bestDistance = Number.MAX_SAFE_INTEGER;
-
-  for (const mapping of mappings) {
-    const line = mapping[field];
-    const distance = Math.abs(line - targetLine);
-    if (
-      distance < bestDistance ||
-      (distance === bestDistance &&
-        (!best || mapping.generatedLine < best.generatedLine))
-    ) {
-      best = mapping;
-      bestDistance = distance;
-    }
-  }
-
-  return best;
+  return loadSourceMapForGeneratedPath(generatedPath);
 }
 
 async function openFileAtMappedLine(filePath, lineOneBased) {
@@ -256,10 +189,6 @@ async function openFileAtMappedLine(filePath, lineOneBased) {
 
 function activeLineOneBased() {
   return (vscode.window.activeTextEditor?.selection?.active?.line || 0) + 1;
-}
-
-function integerLine(value) {
-  return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 module.exports = {

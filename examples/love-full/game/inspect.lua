@@ -5,7 +5,7 @@ local inspect = {
 local canvas
 
 function inspect.load()
-  canvas = love.graphics.newCanvas(_WIDTH * 2, _HEIGHT)
+  canvas = love.graphics.newCanvas(screen_width * 2, screen_height)
   canvas:setFilter("nearest", "nearest")
   inspect.inspecting = false
 end
@@ -18,7 +18,7 @@ function inspect.draw(fn)
   love.graphics.push("all")
   love.graphics.clear()
   if inspect.inspecting then
-    love.graphics.translate(_WIDTH / 4, 0)
+    love.graphics.translate(screen_width / 4, 0)
     love.graphics.scale(0.50, 0.50)
   end
   fn()

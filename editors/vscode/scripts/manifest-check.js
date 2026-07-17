@@ -21,6 +21,8 @@ const expected = [
   "tua.saveHeapSummary",
   "tua.openGeneratedLua",
   "tua.jumpBetweenSourceAndGenerated",
+  "tua.runLoveProject",
+  "tua.restartLoveProject",
   "tua.copyQualifiedName",
   "tua.showWorkspaceSymbolsByModule",
   "tua.hover.references",

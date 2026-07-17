@@ -53,6 +53,11 @@
           "default": "tua",
           "description": "Path to the tua executable used to launch the language server."
         },
+        "tua.love.command": {
+          "type": "string",
+          "default": "love",
+          "description": "Path to the LOVE executable used by Tua: Run LOVE Project tasks. The default uses love on PATH and falls back to common platform installs when available."
+        },
         "tua.trace.server": {
           "type": "string",
           "default": "off",
@@ -507,6 +512,18 @@
         "icon": "$(arrow-swap)"
       },
       {
+        "command": "tua.runLoveProject",
+        "title": "Run LOVE Project",
+        "category": "Tua",
+        "icon": "$(play)"
+      },
+      {
+        "command": "tua.restartLoveProject",
+        "title": "Restart LOVE Project",
+        "category": "Tua",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "tua.copyQualifiedName",
         "title": "Copy Fully Qualified Symbol Name",
         "category": "Tua",
@@ -666,6 +683,16 @@
           "group": "navigation@46"
         },
         {
+          "command": "tua.runLoveProject",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation@48"
+        },
+        {
+          "command": "tua.restartLoveProject",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation@49"
+        },
+        {
           "command": "tua.showWorkspaceSymbolsByModule",
           "when": "editorLangId == tua",
           "group": "navigation@47"
@@ -692,6 +719,14 @@
         {
           "command": "tua.jumpBetweenSourceAndGenerated",
           "when": "editorLangId == tua || resourceExtname == .lua"
+        },
+        {
+          "command": "tua.runLoveProject",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.restartLoveProject",
+          "when": "workspaceFolderCount > 0"
         },
         {
           "command": "tua.copyQualifiedName",

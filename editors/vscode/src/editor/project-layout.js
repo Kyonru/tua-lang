@@ -66,22 +66,29 @@ function projectLayoutForUri(uri) {
   const sourcePath = path.resolve(uri.fsPath);
   const workspaceRoot = path.resolve(workspaceFolder.uri.fsPath);
   const configPath = findNearestConfig(path.dirname(sourcePath), workspaceRoot);
-  const configDirectory = configPath ? path.dirname(configPath) : workspaceRoot;
-  const config = configPath ? readProjectConfig(configPath) : {};
+
+  return projectLayoutForWorkspaceRoot(workspaceRoot, configPath);
+}
+
+function projectLayoutForWorkspaceRoot(workspaceRoot, configPath = undefined) {
+  const root = path.resolve(workspaceRoot);
+  const resolvedConfigPath = configPath || defaultWorkspaceConfigPath(root);
+  const configDirectory = resolvedConfigPath ? path.dirname(resolvedConfigPath) : root;
+  const config = resolvedConfigPath ? readProjectConfig(resolvedConfigPath) : {};
 
   return {
     configDirectory,
-    configPath,
-    outputDirectory: path.resolve(
-      configDirectory,
-      config.out || DEFAULT_OUTPUT_DIRECTORY,
-    ),
-    sourceDirectory: path.resolve(
-      configDirectory,
-      config.source || DEFAULT_SOURCE_DIRECTORY,
-    ),
-    workspaceRoot,
+    configPath: resolvedConfigPath,
+    outputDirectory: path.resolve(configDirectory, config.out || DEFAULT_OUTPUT_DIRECTORY),
+    sourceDirectory: path.resolve(configDirectory, config.source || DEFAULT_SOURCE_DIRECTORY),
+    workspaceRoot: root,
   };
+}
+
+function defaultWorkspaceConfigPath(workspaceRoot) {
+  const candidate = path.join(workspaceRoot, CONFIG_FILE_NAME);
+
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 function findNearestConfig(startDirectory, workspaceRoot) {
@@ -203,5 +210,7 @@ module.exports = {
   moduleNameForUri,
   normalizePath,
   normalizeRelativePath,
+  projectLayoutForUri,
+  projectLayoutForWorkspaceRoot,
   replaceExtension,
 };

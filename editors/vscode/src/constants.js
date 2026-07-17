@@ -14,6 +14,8 @@ const COMMANDS = {
   saveHeapSummary: "tua.saveHeapSummary",
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
+  runLoveProject: "tua.runLoveProject",
+  restartLoveProject: "tua.restartLoveProject",
   copyQualifiedName: "tua.copyQualifiedName",
   showWorkspaceSymbolsByModule: "tua.showWorkspaceSymbolsByModule",
   showHoverReferences: "tua.hover.references",

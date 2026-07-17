@@ -27,6 +27,28 @@ fn graph<'a>(
         ),
     >,
 ) -> ModuleGraph {
+    graph_with_options(
+        inputs,
+        ModuleGraphOptions {
+            source_roots: vec![PathBuf::from("src")],
+            output_roots: Vec::new(),
+            extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+        },
+    )
+}
+
+fn graph_with_options<'a>(
+    inputs: impl IntoIterator<
+        Item = (
+            &'a ParsedSource,
+            &'a HirModule,
+            &'a ModuleExports,
+            AnalysisSourceKind,
+        ),
+    >,
+    options: ModuleGraphOptions,
+) -> ModuleGraph {
     ModuleGraph::build(
         inputs
             .into_iter()
@@ -37,12 +59,7 @@ fn graph<'a>(
                 exports: Some(exports),
                 source_kind,
             }),
-        ModuleGraphOptions {
-            source_roots: vec![PathBuf::from("src")],
-            output_roots: Vec::new(),
-            extension: "tua".to_owned(),
-            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
-        },
+        options,
     )
 }
 
@@ -334,6 +351,97 @@ return { ok = true }
         graph.diagnostics("src/main.tua")[0].code,
         Some(DiagnosticCode::LINT_DUPLICATE_REQUIRE_CANDIDATE)
     );
+}
+
+#[test]
+fn ignores_output_candidate_when_source_module_exists() {
+    let (main, main_hir, main_exports) = tua_input(
+        "src/main.tua",
+        r#"
+local Player = require("player")
+local Background = require("background")
+local Legacy = require("legacy")
+return { player = Player, background = Background, legacy = Legacy }
+"#,
+    );
+    let (player_source, player_source_hir, player_source_exports) =
+        tua_input("src/player.tua", "return { hp = 100 }\n");
+    let (player_output, player_output_hir, player_output_exports) =
+        lua_input("game/player.lua", "return { hp = 100 }\n");
+    let (background, background_hir, background_exports) =
+        lua_input("game/background.lua", "return { draw = function() end }\n");
+    let (legacy_source, legacy_source_hir, legacy_source_exports) = lua_input(
+        "src/legacy.lua",
+        "return { clamp = function(value) return value end }\n",
+    );
+    let (legacy_output, legacy_output_hir, legacy_output_exports) = lua_input(
+        "game/legacy.lua",
+        "return { clamp = function(value) return value end }\n",
+    );
+    let graph = graph_with_options(
+        [
+            (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+            (
+                &player_source,
+                &player_source_hir,
+                &player_source_exports,
+                AnalysisSourceKind::Tua,
+            ),
+            (
+                &player_output,
+                &player_output_hir,
+                &player_output_exports,
+                AnalysisSourceKind::Lua,
+            ),
+            (
+                &background,
+                &background_hir,
+                &background_exports,
+                AnalysisSourceKind::Lua,
+            ),
+            (
+                &legacy_source,
+                &legacy_source_hir,
+                &legacy_source_exports,
+                AnalysisSourceKind::Lua,
+            ),
+            (
+                &legacy_output,
+                &legacy_output_hir,
+                &legacy_output_exports,
+                AnalysisSourceKind::Lua,
+            ),
+        ],
+        ModuleGraphOptions {
+            source_roots: vec![PathBuf::from("src")],
+            output_roots: vec![PathBuf::from("game")],
+            extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+        },
+    );
+    let module = graph
+        .module("src/main.tua")
+        .expect("main module should be indexed");
+
+    assert_eq!(
+        module.require_edges[0].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/player.tua"),
+        }
+    );
+    assert_eq!(
+        module.require_edges[1].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("game/background.lua"),
+        }
+    );
+    assert_eq!(
+        module.require_edges[2].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/legacy.lua"),
+        }
+    );
+    assert!(graph.diagnostics("src/main.tua").is_empty());
 }
 
 #[test]

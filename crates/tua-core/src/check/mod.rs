@@ -3130,14 +3130,14 @@ fn missing_asset_diagnostic(
     asset_path: &str,
 ) -> Diagnostic {
     let position = span.start;
+    let message = if asset_path.trim().is_empty() {
+        format!("{} asset path is empty", kind.asset_label())
+    } else {
+        format!("{} asset not found: {asset_path}", kind.asset_label())
+    };
 
-    Diagnostic::error(
-        path,
-        position.line,
-        position.column,
-        format!("{} asset not found: {asset_path}", kind.asset_label()),
-    )
-    .with_code(DiagnosticCode::ASSET_MISSING)
+    Diagnostic::error(path, position.line, position.column, message)
+        .with_code(DiagnosticCode::ASSET_MISSING)
 }
 
 fn wrong_asset_kind_diagnostic(

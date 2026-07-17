@@ -24,7 +24,7 @@ function particles.create_stars()
     1
   )
   ps:setDirection(math.pi)
-  ps:setEmissionArea("borderrectangle", 0, _HEIGHT, 0, false)
+  ps:setEmissionArea("borderrectangle", 0, screen_height, 0, false)
   ps:setEmissionRate(1)
   ps:setInsertMode("top")
   ps:setLinearDamping(0.003, 0.004)
@@ -41,7 +41,7 @@ function particles.create_stars()
   end
 
   particles.list[#particles.list + 1] = {
-    x = _WIDTH + 64,
+    x = screen_width + 64,
     y = 0,
     vfx = ps,
   }

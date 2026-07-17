@@ -14,10 +14,10 @@ function score.load()
   score.time = 0
   score.score = 0
   score.font = love.graphics.newFont("assets/sniglet.otf", 32)
-  score.time_x = _WIDTH - score.font:getWidth("0000")
+  score.time_x = screen_width - score.font:getWidth("0000")
   score.time_y = 16
 
-  score.score_x = _WIDTH / 2 - score.font:getWidth("0000")
+  score.score_x = screen_width / 2 - score.font:getWidth("0000")
   score.score_y = 16
 end
 

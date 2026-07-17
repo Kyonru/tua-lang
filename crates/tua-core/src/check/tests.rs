@@ -369,6 +369,35 @@ local player = image "assets/missing.png"
 }
 
 #[test]
+fn rejects_empty_love_asset_loader_paths() {
+    let temp = TempProject::new("empty-assets");
+    let source = r#"
+local helper = image ""
+local native = love.graphics.newImage("")
+"#;
+
+    temp.write("src/assets.tua", source);
+
+    let diagnostics = check_tua_source(temp.path.join("src/assets.tua"), source)
+        .expect_err("empty asset paths should be reported");
+    let codes = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        codes,
+        vec![
+            Some(DiagnosticCode::ASSET_MISSING),
+            Some(DiagnosticCode::ASSET_MISSING),
+        ]
+    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.message.contains("image asset path is empty")));
+}
+
+#[test]
 fn rejects_unsupported_love_asset_loader_extensions() {
     let temp = TempProject::new("unsupported-assets");
     let source = r#"

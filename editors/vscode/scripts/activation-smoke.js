@@ -211,6 +211,90 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "source-action commands should dispatch matching VS Code code actions",
     );
 
+    const loveDocument = mockDocument(
+      path.join(workspace, "src", "main.tua"),
+      "tua",
+      "file",
+      "function love.draw() end\n",
+    );
+    state.setActiveDocument(loveDocument);
+
+    const runLoveResult = await state.commands.get("tua.runLoveProject")();
+    assert.deepStrictEqual(
+      runLoveResult,
+      {
+        outputDirectory: path.join(workspace, "build"),
+        taskName: "Run LOVE Project",
+        workspaceRoot: workspace,
+      },
+      "run LOVE command should resolve the active Tua project layout",
+    );
+    assert.strictEqual(state.executedTasks.length, 1, "run LOVE should execute one VS Code task");
+    assert.strictEqual(state.executedTasks[0].task.name, "Run LOVE Project");
+    assert.strictEqual(state.executedTasks[0].task.definition.type, "tua");
+    assert.strictEqual(
+      state.executedTasks[0].task.execution.callback instanceof Function,
+      true,
+      "run LOVE should use a custom task terminal so output stays visible and cancellable",
+    );
+
+    await state.commands.get("tua.restartLoveProject")();
+    assert.strictEqual(state.taskTerminations.length, 1, "restart LOVE should terminate the active task");
+    assert.strictEqual(state.executedTasks.length, 2, "restart LOVE should start a fresh task");
+
+    const loveRunner = require(path.join(extensionRoot, "src", "love", "run-project.js"));
+    const fakeLove = path.join(workspace, "bin", platformLoveExecutableName());
+    assert.strictEqual(
+      loveRunner.resolveLoveCommand("love", {
+        env: { PATH: path.dirname(fakeLove) },
+        fileExists: (candidate) => candidate === fakeLove,
+        platform: process.platform,
+      }),
+      "love",
+      "run LOVE should preserve the default command when it is already on PATH",
+    );
+    assert.strictEqual(
+      loveRunner.resolveLoveCommand("love", {
+        commonCommands: ["/Applications/love.app/Contents/MacOS/love"],
+        env: { PATH: path.join(workspace, "missing-bin") },
+        fileExists: (candidate) => candidate === "/Applications/love.app/Contents/MacOS/love",
+        platform: "darwin",
+      }),
+      "/Applications/love.app/Contents/MacOS/love",
+      "run LOVE should fall back to the macOS app executable when love is not on PATH",
+    );
+    assert.strictEqual(
+      loveRunner.resolveLoveCommand("/custom/love"),
+      "/custom/love",
+      "run LOVE should respect an explicit configured executable path",
+    );
+
+    const sourceMapDirectory = path.join(workspace, "build");
+    fs.mkdirSync(sourceMapDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(sourceMapDirectory, "main.lua.map.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          generated: "build/main.lua",
+          source: "src/main.tua",
+          lineMappings: [{ generatedLine: 2, sourceLine: 1 }],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const sourceMaps = require(path.join(extensionRoot, "src", "editor", "source-maps.js"));
+    const mappedTraceback = sourceMaps.remapTracebackLine(
+      "build/main.lua:2: attempt to index nil",
+      sourceMaps.loadSourceMapsFromDirectory(sourceMapDirectory),
+    );
+    assert.strictEqual(
+      mappedTraceback,
+      `${path.join(workspace, "src", "main.tua")}:1 (generated build/main.lua:2)`,
+      "LOVE task traceback annotations should map emitted Lua lines back to Tua source maps",
+    );
+
     state.setConfiguration("preview.enabled", true);
     fs.mkdirSync(path.join(workspace, "src", "assets"), { recursive: true });
     fs.writeFileSync(path.join(workspace, "src", "assets", "player.png"), Buffer.from([0x89, b("P"), b("N"), b("G")]));
@@ -981,6 +1065,10 @@ function platformExecutableName() {
   return process.platform === "win32" ? "tua.exe" : "tua";
 }
 
+function platformLoveExecutableName() {
+  return process.platform === "win32" ? "love.exe" : "love";
+}
+
 function writeMockServer(filename) {
   if (process.platform === "win32") {
     fs.writeFileSync(filename, "@echo off\r\necho tua 0.0.0-smoke\r\nexit /b 0\r\n");
@@ -1038,6 +1126,7 @@ function createMockState(workspace, options = {}) {
   const clipboardWrites = [];
   const configuration = new Map([
     ["server.path", options.serverPath ?? "tua"],
+    ["love.command", options.loveCommand ?? "love"],
     ["trace.server", options.traceServer ?? "off"],
     ["log.verbosity", options.logVerbosity ?? "off"],
     ["preview.enabled", options.previewEnabled ?? false],
@@ -1054,6 +1143,8 @@ function createMockState(workspace, options = {}) {
   const outputLines = [];
   const outputShows = [];
   const quickPickCalls = [];
+  const executedTasks = [];
+  const taskTerminations = [];
   const hoverProviders = [];
   const treeViews = [];
   const webviewPanels = [];
@@ -1083,6 +1174,11 @@ function createMockState(workspace, options = {}) {
       Information: 1,
       Warning: 2,
       Error: 3,
+    },
+    CustomExecution: class CustomExecution {
+      constructor(callback) {
+        this.callback = callback;
+      }
     },
     Diagnostic: class Diagnostic {
       constructor(range, message, severity) {
@@ -1146,6 +1242,28 @@ function createMockState(workspace, options = {}) {
         this.range = range;
       }
     },
+    Task: class Task {
+      constructor(definition, scope, name, source, execution, problemMatchers = []) {
+        this.definition = definition;
+        this.scope = scope;
+        this.name = name;
+        this.source = source;
+        this.execution = execution;
+        this.problemMatchers = problemMatchers;
+      }
+    },
+    TaskGroup: {
+      Build: { id: "build" },
+    },
+    TaskPanelKind: {
+      Dedicated: 2,
+    },
+    TaskRevealKind: {
+      Always: 1,
+    },
+    TaskScope: {
+      Workspace: 2,
+    },
     ThemeIcon: class ThemeIcon {
       constructor(id) {
         this.id = id;
@@ -1161,6 +1279,25 @@ function createMockState(workspace, options = {}) {
       None: 0,
       Collapsed: 1,
       Expanded: 2,
+    },
+    tasks: {
+      executeTask(task) {
+        const execution = {
+          task,
+          terminate() {
+            taskTerminations.push(task);
+          },
+        };
+
+        executedTasks.push({ task, execution });
+        return Promise.resolve(execution);
+      },
+      onDidEndTask() {
+        return { dispose() {} };
+      },
+      onDidEndTaskProcess() {
+        return { dispose() {} };
+      },
     },
     Uri: {
       file(filename) {
@@ -1429,6 +1566,24 @@ function createMockState(workspace, options = {}) {
       },
       asRelativePath(uri) {
         return uri.fsPath ? path.relative(workspace, uri.fsPath) : uri.toString();
+      },
+      getWorkspaceFolder(uri) {
+        if (uri?.scheme !== "file") {
+          return undefined;
+        }
+
+        const relative = path.relative(workspace, uri.fsPath);
+        if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+          return {
+            name: "workspace",
+            uri: {
+              fsPath: workspace,
+              scheme: "file",
+            },
+          };
+        }
+
+        return undefined;
       },
       applyEdit(edit) {
         workspaceEdits.push(edit);
@@ -1794,6 +1949,7 @@ function createMockState(workspace, options = {}) {
     documentChangeListeners,
     documentSaveListeners,
     executedCommands,
+    executedTasks,
     fileWatchers,
     informationMessages,
     hoverProviders,
@@ -1802,6 +1958,7 @@ function createMockState(workspace, options = {}) {
     outputLines,
     outputShows,
     quickPickCalls,
+    taskTerminations,
     setActiveDocument(document) {
       activeTextEditor = { document };
     },
@@ -2242,6 +2399,8 @@ function assertRegisteredCommands(state) {
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.runLoveProject",
+    "tua.restartLoveProject",
     "tua.hover.references",
     "tua.hover.implementations",
     "tua.explainType",

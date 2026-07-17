@@ -1,0 +1,443 @@
+"use strict";
+
+const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const vscode = require("vscode");
+const { COMMANDS } = require("../constants");
+const {
+  projectLayoutForUri,
+  projectLayoutForWorkspaceRoot,
+} = require("../editor/project-layout");
+const { loadSourceMapsFromDirectory, remapTracebackLine } = require("../editor/source-maps");
+const { formatError } = require("../shared/errors");
+
+const TASK_TYPE = "tua";
+const TASK_NAME = "Run LOVE Project";
+
+function registerLoveProjectRunner({ getServerCommand }) {
+  let activeExecution;
+  const disposables = [
+    vscode.commands.registerCommand(COMMANDS.runLoveProject, () =>
+      runLoveProject({ getServerCommand }),
+    ),
+    vscode.commands.registerCommand(COMMANDS.restartLoveProject, () =>
+      runLoveProject({ getServerCommand, restart: true }),
+    ),
+  ];
+
+  if (vscode.tasks?.onDidEndTask) {
+    disposables.push(
+      vscode.tasks.onDidEndTask((event) => {
+        if (event.execution === activeExecution) {
+          activeExecution = undefined;
+        }
+      }),
+    );
+  }
+
+  if (vscode.tasks?.onDidEndTaskProcess) {
+    disposables.push(
+      vscode.tasks.onDidEndTaskProcess((event) => {
+        if (event.execution === activeExecution) {
+          activeExecution = undefined;
+        }
+      }),
+    );
+  }
+
+  async function runLoveProject(options) {
+    if (!vscode.workspace.isTrusted) {
+      vscode.window.showWarningMessage("Trust this workspace before running LOVE project tasks.");
+      return undefined;
+    }
+
+    if (!vscode.tasks?.executeTask) {
+      vscode.window.showErrorMessage("This VS Code version does not support task execution.");
+      return undefined;
+    }
+
+    const layout = activeProjectLayout();
+    if (!layout) {
+      vscode.window.showWarningMessage("Open a Tua project workspace before running LOVE.");
+      return undefined;
+    }
+
+    if (options.restart && activeExecution?.terminate) {
+      activeExecution.terminate();
+    }
+
+    const task = createLoveProjectTask({
+      layout,
+      loveCommand: configuredLoveCommand(),
+      tuaCommand: options.getServerCommand?.() || "tua",
+    });
+
+    activeExecution = await vscode.tasks.executeTask(task);
+
+    return {
+      outputDirectory: layout.outputDirectory,
+      taskName: TASK_NAME,
+      workspaceRoot: layout.configDirectory,
+    };
+  }
+
+  return vscode.Disposable.from(...disposables);
+}
+
+function createLoveProjectTask({ layout, loveCommand, tuaCommand }) {
+  const terminalOptions = {
+    cwd: layout.configDirectory,
+    loveCommand,
+    outputDirectory: layout.outputDirectory,
+    tuaCommand,
+  };
+  const execution = new vscode.CustomExecution(
+    async () => new LoveProjectTerminal(terminalOptions),
+  );
+  const task = new vscode.Task(
+    {
+      type: TASK_TYPE,
+      command: "runLoveProject",
+      projectRoot: layout.configDirectory,
+    },
+    vscode.TaskScope.Workspace,
+    TASK_NAME,
+    "Tua",
+    execution,
+    [],
+  );
+
+  task.detail = `Build ${layout.configDirectory} and run LOVE from ${layout.outputDirectory}.`;
+  task.presentationOptions = {
+    clear: false,
+    focus: false,
+    panel: vscode.TaskPanelKind?.Dedicated,
+    reveal: vscode.TaskRevealKind?.Always,
+  };
+
+  if (vscode.TaskGroup?.Build) {
+    task.group = vscode.TaskGroup.Build;
+  }
+
+  return task;
+}
+
+function activeProjectLayout() {
+  const document = vscode.window.activeTextEditor?.document;
+  if (document?.uri?.scheme === "file") {
+    const layout = projectLayoutForUri(document.uri);
+    if (layout) {
+      return layout;
+    }
+  }
+
+  const workspaceFolder = (vscode.workspace.workspaceFolders || []).find(
+    (folder) => folder.uri?.scheme === "file",
+  );
+  if (!workspaceFolder) {
+    return undefined;
+  }
+
+  return projectLayoutForWorkspaceRoot(workspaceFolder.uri.fsPath);
+}
+
+function configuredLoveCommand() {
+  const configured = vscode.workspace.getConfiguration("tua").get("love.command", "love");
+  const command = typeof configured === "string" && configured.trim() ? configured.trim() : "love";
+
+  return resolveLoveCommand(command);
+}
+
+function resolveLoveCommand(command, options = {}) {
+  const platform = options.platform || process.platform;
+  const env = options.env || process.env;
+  const fileExists = options.fileExists || executableFileExists;
+
+  if (!isDefaultLoveCommand(command, platform)) {
+    return command;
+  }
+
+  if (commandExistsOnPath(command, env, platform, fileExists)) {
+    return command;
+  }
+
+  return (options.commonCommands || commonLoveCommands(platform)).find(fileExists) || command;
+}
+
+class LoveProjectTerminal {
+  constructor({ cwd, loveCommand, outputDirectory, tuaCommand }) {
+    this.closeEmitter = new vscode.EventEmitter();
+    this.writeEmitter = new vscode.EventEmitter();
+    this.onDidClose = this.closeEmitter.event;
+    this.onDidWrite = this.writeEmitter.event;
+    this.cwd = cwd;
+    this.loveCommand = loveCommand;
+    this.outputDirectory = outputDirectory;
+    this.tuaCommand = tuaCommand;
+    this.activeProcess = undefined;
+    this.finished = false;
+    this.lineBuffer = "";
+    this.sourceMaps = [];
+  }
+
+  open() {
+    void this.run();
+  }
+
+  close() {
+    this.killActiveProcess();
+    this.finish(1);
+  }
+
+  async run() {
+    this.writeLine(`[tua] Building project in ${this.cwd}`);
+    const buildCode = await this.runProcess(this.tuaCommand, ["build"]);
+
+    if (this.finished) {
+      return;
+    }
+
+    if (buildCode !== 0) {
+      this.writeLine(`[tua] Build failed with exit code ${buildCode}.`);
+      this.finish(buildCode);
+      return;
+    }
+
+    this.sourceMaps = this.loadSourceMaps();
+    this.writeLine(`[tua] Starting LOVE from ${this.outputDirectory}`);
+    const loveCode = await this.runProcess(this.loveCommand, [this.outputDirectory]);
+
+    if (!this.finished) {
+      this.finish(loveCode);
+    }
+  }
+
+  runProcess(command, args) {
+    this.writeLine(`$ ${formatCommand(command, args)}`);
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let child;
+
+      const settle = (code) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.flushOutputLine();
+        if (this.activeProcess === child) {
+          this.activeProcess = undefined;
+        }
+        resolve(code);
+      };
+
+      try {
+        child = childProcess.spawn(command, args, {
+          cwd: this.cwd,
+          env: process.env,
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+      } catch (error) {
+        this.writeLine(`[tua] Failed to start ${command}: ${formatError(error)}`);
+        settle(1);
+        return;
+      }
+
+      this.activeProcess = child;
+      child.stdout.on("data", (chunk) => this.writeProcessOutput(chunk));
+      child.stderr.on("data", (chunk) => this.writeProcessOutput(chunk));
+      child.once("error", (error) => {
+        this.writeLine(`[tua] ${command} failed: ${formatError(error)}`);
+        const hint = missingExecutableHint(command, error);
+        if (hint) {
+          this.writeLine(`[tua] ${hint}`);
+        }
+        settle(1);
+      });
+      child.once("exit", (code, signal) => {
+        if (signal) {
+          settle(1);
+          return;
+        }
+
+        settle(Number.isInteger(code) ? code : 1);
+      });
+    });
+  }
+
+  writeProcessOutput(chunk) {
+    if (this.finished) {
+      return;
+    }
+
+    const normalized = chunk.toString("utf8").replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
+    const lines = `${this.lineBuffer}${normalized}`.split("\n");
+    this.lineBuffer = lines.pop() || "";
+
+    for (const line of lines) {
+      this.writeProcessLine(line);
+    }
+  }
+
+  flushOutputLine() {
+    if (!this.lineBuffer) {
+      return;
+    }
+
+    this.writeProcessLine(this.lineBuffer);
+    this.lineBuffer = "";
+  }
+
+  writeProcessLine(line) {
+    this.writeLine(line);
+
+    if (this.sourceMaps.length === 0) {
+      return;
+    }
+
+    const mapped = remapTracebackLine(line, this.sourceMaps);
+    if (!mapped) {
+      return;
+    }
+
+    for (const mappedLine of mapped.split("\n")) {
+      this.writeLine(`[tua] ${mappedLine}`);
+    }
+  }
+
+  loadSourceMaps() {
+    try {
+      const maps = loadSourceMapsFromDirectory(this.outputDirectory);
+      if (maps.length === 0) {
+        this.writeLine(
+          `[tua] No source maps found in ${this.outputDirectory}; enable emit_maps for Tua traceback links.`,
+        );
+      }
+
+      return maps;
+    } catch (error) {
+      this.writeLine(`[tua] Could not load source maps: ${formatError(error)}`);
+      return [];
+    }
+  }
+
+  writeLine(line) {
+    if (this.finished) {
+      return;
+    }
+
+    this.writeEmitter.fire(`${line}\r\n`);
+  }
+
+  killActiveProcess() {
+    if (!this.activeProcess || this.activeProcess.killed) {
+      return;
+    }
+
+    this.activeProcess.kill();
+  }
+
+  finish(code) {
+    if (this.finished) {
+      return;
+    }
+
+    this.finished = true;
+    this.closeEmitter.fire(code);
+    this.closeEmitter.dispose();
+    this.writeEmitter.dispose();
+  }
+}
+
+function formatCommand(command, args) {
+  return [command, ...args.map((arg) => quoteCommandArg(String(arg)))].join(" ");
+}
+
+function quoteCommandArg(value) {
+  if (!/[\s"'\\]/u.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/(["\\])/gu, "\\$1")}"`;
+}
+
+function missingExecutableHint(command, error) {
+  if (error?.code !== "ENOENT" || !isLoveExecutableCommand(command)) {
+    return undefined;
+  }
+
+  const macPath = "/Applications/love.app/Contents/MacOS/love";
+
+  return `Could not find LOVE. Install LOVE, add it to PATH, or set \`tua.love.command\` to the full executable path such as \`${macPath}\`.`;
+}
+
+function isLoveExecutableCommand(command) {
+  const normalized = path.basename(command).toLowerCase();
+
+  return normalized === "love" || normalized === "love.exe";
+}
+
+function isDefaultLoveCommand(command, platform) {
+  const normalized = command.toLowerCase();
+
+  return normalized === "love" || (platform === "win32" && normalized === "love.exe");
+}
+
+function commandExistsOnPath(command, env, platform, fileExists) {
+  if (!isBareCommand(command)) {
+    return fileExists(command);
+  }
+
+  const pathValue =
+    typeof env.PATH === "string" ? env.PATH : typeof env.Path === "string" ? env.Path : "";
+  if (!pathValue) {
+    return false;
+  }
+
+  const extensions =
+    platform === "win32" && path.extname(command) === "" ? ["", ".exe", ".cmd", ".bat"] : [""];
+
+  return pathValue
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((directory) =>
+      extensions.some((extension) => fileExists(path.join(directory, `${command}${extension}`))),
+    );
+}
+
+function isBareCommand(command) {
+  return !command.includes("/") && !command.includes("\\");
+}
+
+function commonLoveCommands(platform) {
+  if (platform === "darwin") {
+    return ["/Applications/love.app/Contents/MacOS/love"];
+  }
+
+  if (platform === "win32") {
+    return [
+      "C:\\Program Files\\LOVE\\love.exe",
+      "C:\\Program Files (x86)\\LOVE\\love.exe",
+    ];
+  }
+
+  return [];
+}
+
+function executableFileExists(filename) {
+  try {
+    return fs.existsSync(filename) && fs.statSync(filename).isFile();
+  } catch {
+    return false;
+  }
+}
+
+module.exports = {
+  LoveProjectTerminal,
+  createLoveProjectTask,
+  registerLoveProjectRunner,
+  resolveLoveCommand,
+};

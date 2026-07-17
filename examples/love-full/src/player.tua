@@ -134,11 +134,11 @@ function player.update(dt: number)
     if player.x ~= math.ceil(past_hit) then
       sound.play_bump()
     end
-  elseif player.x > _WIDTH - player.width then
+  elseif player.x > screen_width - player.width then
     player.velocity.x = -player.velocity.x * player.bounce_force
     local past_hit: number = player.x
 
-    player.x = _WIDTH - player.width
+    player.x = screen_width - player.width
 
     if player.x ~= math.floor(past_hit) then
       sound.play_bump()
@@ -152,10 +152,10 @@ function player.update(dt: number)
     if player.y ~= math.ceil(past_hit) then
       sound.play_bump()
     end
-  elseif player.y > _HEIGHT - player.height then
+  elseif player.y > screen_height - player.height then
     player.velocity.y = -player.velocity.y * player.bounce_force
     local past_hit: number = player.y
-    player.y = _HEIGHT - player.height
+    player.y = screen_height - player.height
     if player.y ~= math.floor(past_hit) then
       sound.play_bump()
     end

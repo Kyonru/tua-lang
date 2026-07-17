@@ -127,6 +127,8 @@ impl ModuleGraph {
                     &parsed.source,
                     &indexed_paths,
                     &search_roots,
+                    &options.source_roots,
+                    &options.output_roots,
                     &options.extension,
                     options.require_path_separator,
                 );
@@ -375,6 +377,8 @@ fn require_edges_for_source(
     source: &str,
     indexed_paths: &BTreeSet<PathBuf>,
     search_roots: &[PathBuf],
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
     extension: &str,
     separator: ModulePathSeparator,
 ) -> Vec<RequireGraphEdge> {
@@ -387,6 +391,8 @@ fn require_edges_for_source(
                         &literal.module,
                         indexed_paths,
                         search_roots,
+                        source_roots,
+                        output_roots,
                         extension,
                         separator,
                     );
@@ -399,6 +405,8 @@ fn require_edges_for_source(
                         &literal.module,
                         indexed_paths,
                         search_roots,
+                        source_roots,
+                        output_roots,
                         extension,
                         separator,
                     ) {
@@ -444,6 +452,8 @@ fn imported_module_candidates(
     specifier: &str,
     indexed_paths: &BTreeSet<PathBuf>,
     search_roots: &[PathBuf],
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
     extension: &str,
     separator: ModulePathSeparator,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
@@ -478,8 +488,15 @@ fn imported_module_candidates(
         );
     }
 
-    let candidates =
-        existing_candidates(specifier, indexed_paths, search_roots, extension, separator);
+    let candidates = existing_candidates(
+        specifier,
+        indexed_paths,
+        search_roots,
+        source_roots,
+        output_roots,
+        extension,
+        separator,
+    );
 
     Ok((candidates, search_roots.to_vec()))
 }
@@ -572,6 +589,8 @@ fn existing_candidates(
     module: &str,
     indexed_paths: &BTreeSet<PathBuf>,
     search_roots: &[PathBuf],
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
     extension: &str,
     separator: ModulePathSeparator,
 ) -> Vec<PathBuf> {
@@ -584,6 +603,13 @@ fn existing_candidates(
             let candidate = normalize_path(candidate);
 
             if module_candidate_exists(&candidate, indexed_paths)
+                && !is_shadowed_output_candidate(
+                    &candidate,
+                    indexed_paths,
+                    source_roots,
+                    output_roots,
+                    extension,
+                )
                 && !candidates.contains(&candidate)
             {
                 candidates.push(candidate);
@@ -592,6 +618,47 @@ fn existing_candidates(
     }
 
     candidates
+}
+
+fn is_shadowed_output_candidate(
+    candidate: &Path,
+    indexed_paths: &BTreeSet<PathBuf>,
+    source_roots: &[PathBuf],
+    output_roots: &[PathBuf],
+    extension: &str,
+) -> bool {
+    if extension == "lua"
+        || candidate
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("lua")
+    {
+        return false;
+    }
+
+    let Some(output_root) = output_roots
+        .iter()
+        .filter(|root| candidate.starts_with(root))
+        .max_by_key(|root| root.components().count())
+    else {
+        return false;
+    };
+    let Ok(relative) = candidate.strip_prefix(output_root) else {
+        return false;
+    };
+
+    let source_extensions = module_extensions(extension);
+
+    source_roots.iter().any(|source_root| {
+        let source_base = source_root.join(relative);
+
+        source_extensions.iter().any(|source_extension| {
+            let source_candidate = normalize_path(source_base.with_extension(source_extension));
+
+            source_candidate != candidate
+                && module_candidate_exists(&source_candidate, indexed_paths)
+        })
+    })
 }
 
 fn export_entries_for_module(
