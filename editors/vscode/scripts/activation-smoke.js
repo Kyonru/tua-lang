@@ -497,6 +497,43 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "ECS component and query locations should open in the editor",
     );
 
+    await state.commands.get("tua.showObjectPoolExplorer")();
+
+    assert.strictEqual(
+      state.webviewPanels.length,
+      5,
+      "Object Pool Explorer should open one webview panel",
+    );
+    const objectPoolPanel = state.webviewPanels[4];
+    assert(
+      objectPoolPanel.html.includes("Object Pool Explorer") &&
+        objectPoolPanel.html.includes('"name":"bullets"') &&
+        objectPoolPanel.html.includes('"kind":"acquire"') &&
+        objectPoolPanel.html.includes('"kind":"release"') &&
+        objectPoolPanel.html.includes("unreleasedAcquire") &&
+        objectPoolPanel.html.includes("openLocation"),
+      "Object Pool Explorer should render pools, lifecycle operations, insights, and navigation",
+    );
+    assertWebviewScriptsParse(objectPoolPanel.html, "Object Pool Explorer");
+    assert(
+      state.clients[0].requests.some((request) => request.method === "tua/objectPoolGraph"),
+      "Object Pool Explorer should request compiler-backed lifecycle graph data",
+    );
+
+    await objectPoolPanel.messageListener({
+      command: "openLocation",
+      uri: `file://${path.join(workspace, "src", "pools.tua")}`,
+      range: {
+        start: { line: 6, character: 6 },
+        end: { line: 6, character: 12 },
+      },
+    });
+    assert.strictEqual(
+      state.executedCommands.at(-1).command,
+      "vscode.open",
+      "Object Pool Explorer locations should open in the editor",
+    );
+
     await state.commands.get("tua.copyDebugInfo")();
 
     const copiedDebugInfo = state.clipboardWrites.at(-1);
@@ -1579,6 +1616,10 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve(mockEcsGraph(workspace));
       }
 
+      if (method === "tua/objectPoolGraph") {
+        return Promise.resolve(mockObjectPoolGraph(workspace));
+      }
+
       if (method === "tua/assetInventory") {
         const player = path.join(workspace, "assets", "player.png");
         const jump = path.join(workspace, "assets", "jump.wav");
@@ -1903,6 +1944,75 @@ function mockEcsGraph(workspace) {
   };
 }
 
+function mockObjectPoolGraph(workspace) {
+  const uri = `file://${path.join(workspace, "src", "pools.tua")}`;
+  const poolRange = {
+    start: { line: 0, character: 6 },
+    end: { line: 0, character: 13 },
+  };
+  const acquireRange = {
+    start: { line: 6, character: 6 },
+    end: { line: 6, character: 12 },
+  };
+  const releaseRange = {
+    start: { line: 7, character: 17 },
+    end: { line: 7, character: 25 },
+  };
+  const poolId = "pool:bullets";
+  const acquireId = "operation:bullets:acquire:leaked";
+
+  return {
+    analysisRevision: 13,
+    graph: {
+      pools: [
+        {
+          id: poolId,
+          uri,
+          name: "bullets",
+          itemType: "Bullet",
+          range: poolRange,
+          nameRange: poolRange,
+        },
+      ],
+      operations: [
+        {
+          id: acquireId,
+          uri,
+          poolId,
+          poolName: "bullets",
+          kind: "acquire",
+          itemName: "leaked",
+          range: acquireRange,
+          itemRange: acquireRange,
+        },
+        {
+          id: "operation:bullets:release:released",
+          uri,
+          poolId,
+          poolName: "bullets",
+          kind: "release",
+          itemName: "released",
+          range: releaseRange,
+          itemRange: releaseRange,
+        },
+      ],
+      insights: [
+        {
+          id: "insight:bullets:leaked",
+          kind: "unreleasedAcquire",
+          title: "No visible release",
+          message: "Acquired object `leaked` has no later same-file release or clear.",
+          uri,
+          range: acquireRange,
+          poolId,
+          acquireOperationId: acquireId,
+          itemName: "leaked",
+        },
+      ],
+    },
+  };
+}
+
 function mockSpriteInspection(document) {
   const source = document?.getText?.() || "";
   const name = /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*spriteSheet\s*\(/.exec(source)?.[1];
@@ -2058,6 +2168,7 @@ function assertRegisteredCommands(state) {
     "tua.showSignalGraph",
     "tua.showModuleGraph",
     "tua.showEcsExplorer",
+    "tua.showObjectPoolExplorer",
     "tua.whyModuleIncluded",
     "tua.source.organizeImports",
     "tua.source.sortImports",

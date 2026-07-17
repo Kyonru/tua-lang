@@ -1594,6 +1594,73 @@ local clean = true
         .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)));
 }
 
+#[test]
+fn object_pool_graph_tracks_lifecycle_and_warns_for_visible_unreleased_acquire() {
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        "src/pool.tua",
+        r#"type Bullet = { active: boolean }
+local bullets = objectPool({
+  create = function(): Bullet
+    return { active = false }
+  end,
+})
+
+local leaked = bullets:acquire()
+local released = bullets:acquire()
+bullets:release(released)
+"#,
+    );
+
+    let snapshot = host.snapshot();
+    let graph = snapshot.object_pool_graph();
+    let diagnostics = snapshot.pipeline_diagnostics("src/pool.tua");
+
+    assert_eq!(graph.pools.len(), 1);
+    assert_eq!(graph.pools[0].name, "bullets");
+    assert_eq!(graph.pools[0].item_type_label, "Bullet");
+    assert_eq!(
+        graph
+            .operations
+            .iter()
+            .map(|operation| operation.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            crate::ObjectPoolOperationKind::Acquire,
+            crate::ObjectPoolOperationKind::Acquire,
+            crate::ObjectPoolOperationKind::Release,
+        ]
+    );
+    assert_eq!(graph.insights.len(), 1);
+    assert_eq!(graph.insights[0].item_name, "leaked");
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::DOMAIN_OBJECT_POOL_LIFECYCLE)
+            && diagnostic.message.contains("leaked")
+    }));
+}
+
+#[test]
+fn object_pool_graph_ignores_non_pool_object_pool_overrides() {
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        "src/pool.tua",
+        r#"local function objectPool()
+  return "custom"
+end
+
+local notPool = objectPool()
+"#,
+    );
+
+    let graph = host.snapshot().object_pool_graph();
+
+    assert!(graph.pools.is_empty());
+    assert!(graph.operations.is_empty());
+    assert!(graph.insights.is_empty());
+}
+
 fn completion_labels(completions: &[Completion]) -> Vec<String> {
     completions
         .iter()

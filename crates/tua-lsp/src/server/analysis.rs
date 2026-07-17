@@ -927,6 +927,10 @@ impl AnalysisSnapshot {
         self.core.ecs_graph()
     }
 
+    pub(super) fn object_pool_graph(&self) -> tua_core::ObjectPoolGraph {
+        self.core.object_pool_graph()
+    }
+
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
         self.core.hover(path, position)
     }

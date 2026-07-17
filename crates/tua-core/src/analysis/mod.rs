@@ -99,6 +99,7 @@ mod host;
 mod inspector_queries;
 mod module_queries;
 mod navigation_queries;
+mod object_pool_queries;
 mod project_queries;
 mod recovery;
 mod snapshot;
@@ -203,6 +204,7 @@ struct AnalysisFile {
     assets: Vec<AssetMetadata>,
     usage_index: Arc<FileUsageIndex>,
     ecs_index: Arc<crate::ecs::EcsFileIndex>,
+    object_pool_index: Arc<crate::object_pool::ObjectPoolFileIndex>,
     #[allow(dead_code)]
     symbols: Vec<SymbolIndexEntry>,
 }

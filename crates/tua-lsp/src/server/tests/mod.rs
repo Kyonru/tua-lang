@@ -19,6 +19,7 @@ mod inlay_hints;
 mod inspector;
 mod module_graph;
 mod navigation;
+mod object_pool_graph;
 mod recovery;
 mod scheduling;
 mod semantic_tokens;
@@ -736,6 +737,15 @@ fn ecs_graph_request(id: u64) -> Value {
         "jsonrpc": "2.0",
         "id": id,
         "method": "tua/ecsGraph",
+        "params": null
+    })
+}
+
+fn object_pool_graph_request(id: u64) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tua/objectPoolGraph",
         "params": null
     })
 }

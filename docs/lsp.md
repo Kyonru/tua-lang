@@ -15,9 +15,10 @@ The VS Code extension starts this server and surfaces editor features for
 
 The extension also contributes command-palette actions to restart the language
 server, focus the Tua output channel, select a server binary, copy debug
-information, copy analysis cache statistics, visualize SignalBus events, report
-an issue, and open Tua settings. A language status item shows the server state,
-selected path, version, and workspace directory when available.
+information, copy analysis cache statistics, visualize SignalBus events,
+inspect object-pool lifecycles, report an issue, and open Tua settings. A
+language status item shows the server state, selected path, version, and
+workspace directory when available.
 
 ## Current Capabilities
 
@@ -109,7 +110,8 @@ selected path, version, and workspace directory when available.
   and delta semantic tokens.
 - Source actions for organizing imports, sorting imports, removing unused static
   import bindings, creating missing core LOVE callbacks (`load`, `update`, and
-  `draw`), and fixing all safe diagnostics in the current file.
+  `draw`), wrapping repeated zero-argument constructors in an `objectPool`
+  helper, and fixing all safe diagnostics in the current file.
 - Workspace file-rename edits for static `require(...)` and `import(...)`
   module specifiers, plus helper/native LOVE asset literals when the move is
   unambiguous in the project model.
@@ -139,6 +141,11 @@ selected path, version, and workspace directory when available.
   non-diagnostic performance insights. Module-qualified component references
   resolve through normal compiler definitions. The VS Code ECS Explorer opens
   every declaration and query use at its compiler-owned range.
+- The low-priority `tua/objectPoolGraph` request returns cached object-pool
+  lifecycle facts: pool declarations, item types inferred from `create`
+  callbacks, visible `acquire`, `release`, `clear`, and `prewarm` calls, and
+  conservative lifecycle insights. The VS Code Object Pool Explorer opens every
+  pool and lifecycle operation at its compiler-owned range.
 - SignalBus event strings use the same semantic index for completion, payload
   signature help, hover, definition, references, and rename. Typed listener and
   `declare` callback conflicts publish `TL5005`; untyped or unresolved buses
@@ -221,6 +228,13 @@ ECS Explorer` requests `tua/ecsGraph`; the extension filters and presents the
 structured snapshot but does not parse ECS calls. The request uses the
 background lane and yields to interactive editor work. Allocation findings are
 returned as inspector insights only and are never published as diagnostics.
+
+Object-pool visualization follows that same boundary. `Tua: Show Object Pool
+Explorer` requests `tua/objectPoolGraph`; the extension presents pool
+declarations, lifecycle operations, and conservative unreleased-acquire
+warnings without parsing source in JavaScript. The warning is intentionally
+narrow: it only reports a statically visible same-file local acquired from a
+known pool when no later same-file `release(local)` or `clear()` call is found.
 
 The Tua Assets Explorer is backed by `tua/assetInventory`. The extension only
 groups and presents compiler results, publishes the returned unused-asset
@@ -342,7 +356,9 @@ primitive:
 - factory-return inference, so an annotated `create(): Bullet` makes
   `pool:acquire()` return `Bullet`;
 - typed `release`, `prewarm`, count, ownership, and cleanup methods;
-- permissive `any` item behavior when the factory return is not annotated.
+- permissive `any` item behavior when the factory return is not annotated;
+- conservative `TL5007` warnings for visible same-file acquires that do not
+  reach a later same-file release or pool clear.
 
 Builds inject `require("tuaobjectpool")` and copy the bundled runtime only when
 `objectPool` is used.
@@ -416,9 +432,10 @@ npm --prefix editors/vscode run test:vscode
 It opens an isolated two-root workspace and verifies live completion freshness,
 cancellation, hover, definition navigation, signature help, inlay hints,
 UTF-16 and untitled-document positions, module and asset file-rename edits,
-module dependency graph requests and panel reuse, and sprite preview
-opening/reload/focus behavior. Sprite tests also assert that inspection uses
-the current synchronized document version. CI runs the same suite under Xvfb.
+module dependency graph, ECS Explorer, Object Pool Explorer, Asset Explorer,
+and sprite preview opening/reload/focus behavior. Sprite tests also assert that
+inspection uses the current synchronized document version. CI runs the same
+suite under Xvfb.
 
 ## Profiling
 

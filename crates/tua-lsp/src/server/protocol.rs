@@ -8,11 +8,12 @@ use tua_core::{
     DiagnosticCode, DiagnosticSeverity, DocumentHighlight, DocumentHighlightKind, DocumentSymbol,
     DocumentSymbolKind, EcsAccessKind, EcsComponentUse, EcsGraph, EcsInsightKind, EcsQueryKind,
     FoldingRange, FoldingRangeKind, Hover, InlayHint, InlayHintKind, InspectorItem,
-    ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind, Reference,
-    RenameEdit, RenameTarget, RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind,
-    SemanticTokenModifier, SignalGraph, SignalGraphCallRole, SignalGraphParameter, SignatureHelp,
-    SignatureInformation, SourcePosition, SourceSpan, TextEdit, TypeExplanation,
-    TypeExplanationStepKind, WorkspaceSymbol, WorkspaceSymbolKind,
+    ModuleDependencyGraph, ModuleExportOrigin, ModuleLink, ModuleSpecifierKind, ObjectPoolGraph,
+    ObjectPoolInsightKind, ObjectPoolOperationKind, Reference, RenameEdit, RenameTarget,
+    RequireResolution, SelectionRange, SemanticToken, SemanticTokenKind, SemanticTokenModifier,
+    SignalGraph, SignalGraphCallRole, SignalGraphParameter, SignatureHelp, SignatureInformation,
+    SourcePosition, SourceSpan, TextEdit, TypeExplanation, TypeExplanationStepKind,
+    WorkspaceSymbol, WorkspaceSymbolKind,
 };
 
 use super::analysis::{
@@ -426,6 +427,53 @@ pub(super) fn lsp_ecs_graph_from_core(graph: EcsGraph) -> Value {
                 "uri": uri_from_path(&insight.path),
                 "range": lsp_range(insight.span),
                 "subjectId": insight.subject_id
+            })
+        }).collect::<Vec<_>>()
+    })
+}
+
+pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
+    json!({
+        "pools": graph.pools.into_iter().map(|pool| {
+            json!({
+                "id": pool.id,
+                "uri": uri_from_path(&pool.path),
+                "name": pool.name,
+                "itemType": pool.item_type_label,
+                "range": lsp_range(pool.span),
+                "nameRange": lsp_range(pool.name_span)
+            })
+        }).collect::<Vec<_>>(),
+        "operations": graph.operations.into_iter().map(|operation| {
+            json!({
+                "id": operation.id,
+                "uri": uri_from_path(&operation.path),
+                "poolId": operation.pool_id,
+                "poolName": operation.pool_name,
+                "kind": match operation.kind {
+                    ObjectPoolOperationKind::Acquire => "acquire",
+                    ObjectPoolOperationKind::Release => "release",
+                    ObjectPoolOperationKind::Clear => "clear",
+                    ObjectPoolOperationKind::Prewarm => "prewarm",
+                },
+                "itemName": operation.item_name,
+                "range": lsp_range(operation.span),
+                "itemRange": operation.item_span.map(lsp_range)
+            })
+        }).collect::<Vec<_>>(),
+        "insights": graph.insights.into_iter().map(|insight| {
+            json!({
+                "id": insight.id,
+                "kind": match insight.kind {
+                    ObjectPoolInsightKind::UnreleasedAcquire => "unreleasedAcquire",
+                },
+                "title": insight.title,
+                "message": insight.message,
+                "uri": uri_from_path(&insight.path),
+                "range": lsp_range(insight.span),
+                "poolId": insight.pool_id,
+                "acquireOperationId": insight.acquire_operation_id,
+                "itemName": insight.item_name
             })
         }).collect::<Vec<_>>()
     })

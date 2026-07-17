@@ -425,6 +425,31 @@ fn build_analysis_file(
 
         diagnostics.extend(crate::ecs::diagnostics(path, &source));
     }
+    let object_pool_index = {
+        let _profile = profile::span_for_path("analysis.index.object_pool.file", path);
+
+        Arc::new(
+            parsed
+                .as_ref()
+                .ok()
+                .map(|parsed| {
+                    crate::object_pool::object_pool_file_index(
+                        parsed,
+                        &semantics
+                            .as_ref()
+                            .expect("parsed file must have semantic facts")
+                            .environment,
+                    )
+                })
+                .unwrap_or_default(),
+        )
+    };
+    if parsed.is_ok() {
+        let _profile = profile::span_for_path("analysis.object_pool.diagnostics", path);
+        let graph = crate::object_pool::object_pool_graph([object_pool_index.as_ref()]);
+
+        diagnostics.extend(crate::object_pool::diagnostics_for_graph(&graph, path));
+    }
     let diagnostics = deduplicate_diagnostics(diagnostics);
     let exports = {
         let _profile = profile::span_for_path("analysis.index.exports", path);
@@ -501,6 +526,7 @@ fn build_analysis_file(
         assets,
         usage_index,
         ecs_index,
+        object_pool_index,
         symbols,
     }
 }

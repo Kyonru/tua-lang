@@ -160,6 +160,10 @@ pub use module_index::{
     resolve_required_module, ModuleExportField, ModuleExports, RequireBinding, RequiredModule,
 };
 pub use module_link::{module_links_tua_source, ModuleLink, ModuleSpecifierKind};
+pub use object_pool::{
+    ObjectPoolGraph, ObjectPoolGraphInsight, ObjectPoolGraphOperation, ObjectPoolGraphPool,
+    ObjectPoolInsightKind, ObjectPoolOperationKind,
+};
 pub use parser::{
     extract_lua_source_model, extract_tua_source_model, normalize_tua_source,
     parse_lua_doc_annotations, parse_lua_doc_annotations_with_options, parse_lua_source,

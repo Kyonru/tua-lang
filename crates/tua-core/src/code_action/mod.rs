@@ -104,6 +104,7 @@ pub fn code_actions_parsed_source_with_kinds(
             extension,
         ));
         actions.extend(love_constructor_helper_actions(parsed, range));
+        actions.extend(object_pool_constructor_actions(parsed, range));
 
         if diagnostics.is_empty() {
             actions.extend(add_missing_local_annotation_actions(parsed, range));
@@ -734,6 +735,151 @@ fn plain_field_chain_from_function_call(function_call: &FunctionCall) -> Option<
     }
 
     Some(parts)
+}
+
+fn object_pool_constructor_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {
+    let candidates = repeated_zero_arg_constructor_calls(parsed);
+
+    candidates
+        .iter()
+        .filter(|candidate| assist_range_intersects_span(range, candidate.span))
+        .filter_map(|candidate| object_pool_constructor_action(parsed, candidate))
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct RepeatedConstructorCall {
+    parts: Vec<String>,
+    span: SourceSpan,
+}
+
+fn repeated_zero_arg_constructor_calls(parsed: &ParsedSource) -> Vec<RepeatedConstructorCall> {
+    let mut visitor = ConstructorCallCollector::default();
+    visitor.visit_ast(&parsed.ast);
+
+    visitor
+        .calls
+        .into_iter()
+        .filter(|(_, calls)| calls.len() > 1)
+        .flat_map(|(_, calls)| calls)
+        .collect()
+}
+
+#[derive(Default)]
+struct ConstructorCallCollector {
+    calls: BTreeMap<String, Vec<RepeatedConstructorCall>>,
+}
+
+impl Visitor for ConstructorCallCollector {
+    fn visit_function_call(&mut self, function_call: &FunctionCall) {
+        let Some(parts) = zero_arg_constructor_parts(function_call) else {
+            return;
+        };
+        let Some(span) = node_span(function_call) else {
+            return;
+        };
+
+        self.calls
+            .entry(parts.join("."))
+            .or_default()
+            .push(RepeatedConstructorCall { parts, span });
+    }
+}
+
+fn zero_arg_constructor_parts(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let parts = plain_field_chain_from_function_call(function_call)?;
+
+    if parts.len() < 2 || parts.last()? != "new" {
+        return None;
+    }
+
+    let call = anonymous_call(function_call)?;
+    if !call_arguments(call).is_empty() {
+        return None;
+    }
+
+    Some(parts)
+}
+
+fn object_pool_constructor_action(
+    parsed: &ParsedSource,
+    candidate: &RepeatedConstructorCall,
+) -> Option<Assist> {
+    let constructor = source_text_for_span(&parsed.source, candidate.span)?.to_owned();
+    let owner = candidate
+        .parts
+        .get(candidate.parts.len().saturating_sub(2))?;
+    let pool_name = unique_pool_name(&parsed.source, &format!("{}Pool", lower_first(owner)))?;
+    let indent = line_indent(&parsed.source, candidate.span.start.line);
+    let insert_position = SourcePosition {
+        line: candidate.span.start.line,
+        column: 1,
+    };
+    let pool_source = format!(
+        "{indent}local {pool_name} = objectPool({{\n{indent}  create = function()\n{indent}    return {constructor}\n{indent}  end,\n{indent}}})\n\n"
+    );
+    let mut edit = AssistEdit::default();
+
+    edit.changes.insert(
+        parsed.path.clone(),
+        vec![
+            TextEdit {
+                path: parsed.path.clone(),
+                span: SourceSpan {
+                    start: insert_position,
+                    end: insert_position,
+                },
+                new_text: pool_source,
+            },
+            TextEdit {
+                path: parsed.path.clone(),
+                span: candidate.span,
+                new_text: format!("{pool_name}:acquire()"),
+            },
+        ],
+    );
+
+    Some(Assist {
+        title: format!("Create objectPool for repeated `{constructor}`"),
+        kind: AssistKind::QuickFix,
+        edit,
+    })
+}
+
+fn lower_first(value: &str) -> String {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return "object".to_owned();
+    };
+
+    first.to_lowercase().chain(chars).collect()
+}
+
+fn unique_pool_name(source: &str, base: &str) -> Option<String> {
+    if !is_identifier_start(*base.as_bytes().first()?) {
+        return None;
+    }
+    if !base.bytes().all(is_identifier_continue) {
+        return None;
+    }
+
+    if !source.contains(base) {
+        return Some(base.to_owned());
+    }
+
+    (2..100)
+        .map(|index| format!("{base}{index}"))
+        .find(|candidate| !source.contains(candidate))
+}
+
+fn line_indent(source: &str, line: usize) -> String {
+    line_at(source, line)
+        .map(|line| {
+            line.chars()
+                .take_while(|character| character.is_whitespace())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn add_missing_local_annotation_actions(parsed: &ParsedSource, range: AssistRange) -> Vec<Assist> {

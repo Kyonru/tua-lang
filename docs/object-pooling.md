@@ -118,3 +118,24 @@ built-in ECS already reuses destroyed numeric entity IDs.
 The pool tracks object identity, active state, and ownership. Duplicate and
 foreign releases return `false`, making lifecycle mistakes observable without
 silently corrupting the available stack.
+
+## Editor Assistance
+
+The language server keeps object-pool facts in the shared semantic snapshot:
+
+- completion, hover, signature help, inlay hints, definition, and semantic
+  highlighting understand `objectPool` and its lifecycle methods;
+- a quick fix can wrap repeated zero-argument constructor calls such as
+  `Bullet.new()` in a new `objectPool({...})` declaration and rewrite the
+  selected call to `bulletPool:acquire()`;
+- `TL5007` warns when a directly acquired same-file local, such as
+  `local bullet = bullets:acquire()`, has no later same-file
+  `bullets:release(bullet)` or `bullets:clear()` call;
+- `Tua: Show Object Pool Explorer` opens a compiler-backed view of pool
+  declarations, `acquire`, `release`, `clear`, and `prewarm` calls, and
+  lifecycle warnings.
+
+The lifecycle warning is conservative. It does not try to prove ownership
+through aliases, closures, module boundaries, or dynamic control flow. When a
+pool is intentionally handed to another owner, release explicitly in the same
+file or treat the warning as a prompt to make the ownership boundary clearer.

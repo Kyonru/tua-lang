@@ -29,9 +29,9 @@ Minimal VS Code language support for tua source files.
   the output channel, selecting a server binary, copying debug information,
   copying or saving cache statistics, resetting completion learning stats,
   probing server profile artifacts, previewing `spriteSheet` animations,
-  visualizing SignalBus events and module dependencies across files, explaining
-  why the active module is included, running source actions, reporting an issue,
-  and opening Tua settings.
+  visualizing SignalBus events, module dependencies, and object-pool
+  lifecycles across files, explaining why the active module is included,
+  running source actions, reporting an issue, and opening Tua settings.
 - Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
   and static usage, with reference navigation, file rename, reveal, refresh,
   dimensions, and conservative unused-asset diagnostics.
@@ -82,8 +82,9 @@ make extension-test
 The suite drives an isolated two-root workspace against a controlled LSP
 server. It covers completion freshness and cancellation, hover, definition,
 signature help, inlay hints, UTF-16 and untitled documents, module and asset
-file renames, module graph and ECS Explorer opening and reuse, and sprite
-preview opening, reload, focus, missing assets, and hover command links.
+file renames, module graph, ECS Explorer, Object Pool Explorer opening and
+reuse, and sprite preview opening, reload, focus, missing assets, and hover
+command links.
 
 Use `Tua: Select Server` to switch between the bundled/default server and
 workspace-local binaries such as `target/debug/tua` or `target/release/tua`.
@@ -116,6 +117,8 @@ the setting.
 - `Tua: Refresh Asset Explorer`
 - `Tua: Show Signal Graph`
 - `Tua: Show Module Dependency Graph`
+- `Tua: Show ECS Explorer`
+- `Tua: Show Object Pool Explorer`
 - `Tua: Why Is This Module Included?`
 - `Tua: Organize Imports`
 - `Tua: Sort Imports`

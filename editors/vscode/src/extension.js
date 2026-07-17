@@ -10,6 +10,7 @@ const { registerEditorDevex } = require("./editor");
 const { registerEcsDevex } = require("./ecs");
 const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
+const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSignalDevex } = require("./signals");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isTuaDocument } = require("./shared/documents");
@@ -51,6 +52,7 @@ async function activate(context) {
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(registerModuleDevex({ getClient: () => client }));
   context.subscriptions.push(registerEcsDevex({ getClient: () => client }));
+  context.subscriptions.push(registerObjectPoolDevex({ getClient: () => client }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);

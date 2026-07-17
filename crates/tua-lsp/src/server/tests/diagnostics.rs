@@ -116,6 +116,33 @@ events:on("player.hit", function(player: string, damage: string) end)
 }
 
 #[test]
+fn did_open_publishes_object_pool_unreleased_acquire_diagnostic() {
+    let uri = "file:///tmp/object-pool-lifecycle.tua";
+    let source = r#"local bullets = objectPool({
+  create = function()
+    return {}
+  end,
+})
+
+local leaked = bullets:acquire()
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL5007")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], 2);
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("leaked")));
+}
+
+#[test]
 fn did_open_publishes_love_callback_diagnostics() {
     let uri = "file:///tmp/love-callback-diagnostics.tua";
     let source = r#"function love.udpate(dt: number)

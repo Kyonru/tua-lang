@@ -35,7 +35,7 @@ Status meanings:
 | Static project modules | Supported | `require` and static imports resolve through the project model; imports lower to `require`. |
 | LOVE 11.x catalog | Supported | Generated overloads, enums, callback snippets/validation, methods, docs, and inheritance drive semantics. |
 | Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation, casing checks, usage inventory, navigation, references, and path-preserving file rename edits. |
-| Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types. |
+| Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types, and visible same-file unreleased acquires produce conservative lifecycle warnings. |
 | Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
 | ECS semantics | Supported | Zero-setup built-in runtime, typed world/component/query/system APIs, and static component diagnostics are enabled by default. |
 | Generics | Deferred | Concrete function types and container behavior take priority. |
@@ -61,6 +61,7 @@ Status meanings:
 | Signal call graph | Supported | The extension visualizes compiler-indexed event calls, filters by event/bus/file/listener/emitter, shows schema conflicts, opens exact locations, and creates typed listener or declaration snippets from semantic metadata. |
 | Module dependency explorer | Supported | A compiler-backed graph shows `require`/`import` edges, unresolved modules, cycles, reverse dependencies, exported surfaces, and deterministic root-to-module inclusion paths. |
 | ECS Explorer | Supported | A compiler-backed project view lists static components, systems, and queries; infers conservative read/write access; navigates component relationships; and presents allocation patterns as non-diagnostic insights. |
+| Object Pool Explorer | Supported | A compiler-backed project view lists pool declarations, item types, lifecycle operations, and conservative unreleased-acquire warnings with source navigation. |
 | Asset Explorer | Supported | The Explorer groups compiler-indexed assets by type and static usage, publishes conservative unused-asset hints, opens references, and performs LSP-aware file renames. |
 | Debugger and runtime profiler | Out of scope | Tua provides static tooling and source-map traceback remapping, not a Lua debugger. |
 | Package management | Out of scope | Tua understands module paths but does not install Lua packages. |

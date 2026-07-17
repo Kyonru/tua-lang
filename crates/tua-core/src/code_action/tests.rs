@@ -107,6 +107,37 @@ fn adds_local_annotation_from_inferred_type() {
 }
 
 #[test]
+fn creates_object_pool_for_repeated_zero_argument_constructor_call() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"local first = Bullet.new()
+local second = Bullet.new()
+"#,
+    )
+    .expect("source should parse");
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[],
+        range(1, 17),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Create objectPool for repeated `Bullet.new()`")
+        .expect("object pool action should be offered");
+    let edits = &action.edit.changes[&parsed.path];
+
+    assert_eq!(action.kind, AssistKind::QuickFix);
+    assert_eq!(edits.len(), 2);
+    assert!(edits[0]
+        .new_text
+        .contains("local bulletPool = objectPool({"));
+    assert!(edits[0].new_text.contains("return Bullet.new()"));
+    assert_eq!(edits[1].new_text, "bulletPool:acquire()");
+}
+
+#[test]
 fn renames_a_misspelled_love_callback() {
     let source = "function love.udpate(dt: number)\nend\n";
     let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");

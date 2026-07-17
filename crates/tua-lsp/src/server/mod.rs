@@ -693,6 +693,7 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "tua/assetInventory"
             | "tua/ecsGraph"
             | "tua/moduleGraph"
+            | "tua/objectPoolGraph"
             | "workspace/symbol"
     )
 }

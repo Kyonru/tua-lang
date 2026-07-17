@@ -24,6 +24,7 @@ const COMMANDS = {
   showSignalGraph: "tua.showSignalGraph",
   showModuleGraph: "tua.showModuleGraph",
   showEcsExplorer: "tua.showEcsExplorer",
+  showObjectPoolExplorer: "tua.showObjectPoolExplorer",
   whyModuleIncluded: "tua.whyModuleIncluded",
   organizeImports: "tua.source.organizeImports",
   sortImports: "tua.source.sortImports",

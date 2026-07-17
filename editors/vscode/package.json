@@ -557,6 +557,12 @@
         "icon": "$(symbol-structure)"
       },
       {
+        "command": "tua.showObjectPoolExplorer",
+        "title": "Show Object Pool Explorer",
+        "category": "Tua",
+        "icon": "$(database)"
+      },
+      {
         "command": "tua.whyModuleIncluded",
         "title": "Why Is This Module Included?",
         "category": "Tua",
@@ -621,6 +627,10 @@
         },
         {
           "command": "tua.whyModuleIncluded",
+          "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.showObjectPoolExplorer",
           "when": "editorLangId == tua"
         },
         {

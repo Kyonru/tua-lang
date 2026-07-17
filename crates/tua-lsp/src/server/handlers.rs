@@ -15,8 +15,8 @@ use super::protocol::{
     lsp_document_symbol_from_core, lsp_ecs_graph_from_core, lsp_folding_range_from_core,
     lsp_full_document_text_edit, lsp_hover_from_core, lsp_inlay_hint_from_core,
     lsp_inspector_items_from_core, lsp_location_from_core, lsp_module_dependency_graph_from_core,
-    lsp_prepare_rename_from_core, lsp_reference_location, lsp_resolved_completion_item,
-    lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
+    lsp_object_pool_graph_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
+    lsp_resolved_completion_item, lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
     lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
     lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
     lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
@@ -240,6 +240,7 @@ impl LspServer {
             "tua/assetInventory" => response(id, self.asset_inventory_response()),
             "tua/moduleGraph" => response(id, self.module_dependency_graph_response()),
             "tua/ecsGraph" => response(id, self.ecs_graph_response()),
+            "tua/objectPoolGraph" => response(id, self.object_pool_graph_response()),
             "tua/signalGraph" => response(id, self.signal_graph_response()),
             "textDocument/prepareCallHierarchy" => {
                 response(id, self.prepare_call_hierarchy_response(&message))
@@ -1466,6 +1467,17 @@ impl LspServer {
         json!({
             "analysisRevision": snapshot.revision(),
             "graph": lsp_ecs_graph_from_core(snapshot.ecs_graph())
+        })
+    }
+
+    fn object_pool_graph_response(&self) -> Value {
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+
+        json!({
+            "analysisRevision": snapshot.revision(),
+            "graph": lsp_object_pool_graph_from_core(snapshot.object_pool_graph())
         })
     }
 

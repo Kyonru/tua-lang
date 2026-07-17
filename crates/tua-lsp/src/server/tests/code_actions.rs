@@ -330,6 +330,39 @@ fn code_action_creates_missing_love_callbacks() {
         "\nfunction love.load(arg, unfilteredArg)\nend\n\nfunction love.draw()\nend\n"
     );
 }
+
+#[test]
+fn code_action_creates_object_pool_for_repeated_constructor_call() {
+    let uri = "file:///tmp/code-action-object-pool.tua";
+    let source = r#"local first = Bullet.new()
+local second = Bullet.new()
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request(2, uri, 0, 14, 0, 26, Vec::new()),
+    ]);
+    let action = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| {
+            action["title"]
+                .as_str()
+                .is_some_and(|title| title.contains("objectPool"))
+        })
+        .expect("objectPool constructor action should be present");
+    let edits = action["edit"]["changes"][uri]
+        .as_array()
+        .expect("objectPool action should contain text edits");
+
+    assert_eq!(action["kind"], "quickfix");
+    assert_eq!(edits.len(), 2);
+    assert!(edits[0]["newText"]
+        .as_str()
+        .is_some_and(|text| text.contains("local bulletPool = objectPool({")));
+    assert_eq!(edits[1]["newText"], "bulletPool:acquire()");
+    assert_eq!(range_text(source, &edits[1]["range"]), "Bullet.new()");
+}
 #[test]
 fn code_action_source_fix_all_uses_current_safe_diagnostics() {
     let temp = TempProject::new("code-action-fix-all");

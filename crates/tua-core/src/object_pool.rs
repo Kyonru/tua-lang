@@ -1,3 +1,17 @@
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, Suffix};
+use full_moon::node::Node;
+use full_moon::visitors::Visitor;
+
+use crate::ast_utils::{
+    assignment_expression_for_local, field_chain_before_first_call,
+    plain_field_chain_from_expression, token_text,
+};
+use crate::diagnostic::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
+use crate::parser::{ParsedSource, SourcePosition, SourceSpan};
+use crate::semantic::SemanticModel;
 use crate::types::{FunctionType, TableField, Type, TypeEnvironment};
 use crate::{TypedFunction, TypedParameter};
 
@@ -205,6 +219,426 @@ pub(crate) const fn workflow_snippet() -> &'static str {
 
 pub(crate) fn runtime_source() -> &'static str {
     include_str!("../../../vendor/runtime/tuaobjectpool.lua")
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectPoolOperationKind {
+    Acquire,
+    Release,
+    Clear,
+    Prewarm,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectPoolInsightKind {
+    UnreleasedAcquire,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ObjectPoolGraph {
+    pub pools: Vec<ObjectPoolGraphPool>,
+    pub operations: Vec<ObjectPoolGraphOperation>,
+    pub insights: Vec<ObjectPoolGraphInsight>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectPoolGraphPool {
+    pub id: String,
+    pub path: PathBuf,
+    pub name: String,
+    pub item_type_label: String,
+    pub span: SourceSpan,
+    pub name_span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectPoolGraphOperation {
+    pub id: String,
+    pub path: PathBuf,
+    pub pool_id: Option<String>,
+    pub pool_name: String,
+    pub kind: ObjectPoolOperationKind,
+    pub item_name: Option<String>,
+    pub span: SourceSpan,
+    pub item_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectPoolGraphInsight {
+    pub id: String,
+    pub kind: ObjectPoolInsightKind,
+    pub title: String,
+    pub message: String,
+    pub path: PathBuf,
+    pub span: SourceSpan,
+    pub pool_id: String,
+    pub acquire_operation_id: String,
+    pub item_name: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ObjectPoolFileIndex {
+    pub pools: Vec<ObjectPoolGraphPool>,
+    pub operations: Vec<ObjectPoolGraphOperation>,
+}
+
+#[derive(Clone, Debug)]
+struct LocalCallBinding {
+    name: String,
+    name_span: SourceSpan,
+}
+
+pub(crate) fn object_pool_file_index(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> ObjectPoolFileIndex {
+    let mut bindings = LocalCallBindingVisitor::default();
+    bindings.visit_ast(&parsed.ast);
+
+    let mut visitor = ObjectPoolVisitor {
+        path: &parsed.path,
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
+        bindings: bindings.bindings,
+        index: ObjectPoolFileIndex::default(),
+    };
+
+    visitor.visit_ast(&parsed.ast);
+    visitor.index
+}
+
+pub(crate) fn object_pool_graph<'a>(
+    indexes: impl IntoIterator<Item = &'a ObjectPoolFileIndex>,
+) -> ObjectPoolGraph {
+    let mut graph = ObjectPoolGraph::default();
+
+    for index in indexes {
+        graph.pools.extend(index.pools.iter().cloned());
+        graph.operations.extend(index.operations.iter().cloned());
+    }
+
+    let pool_ids = graph
+        .pools
+        .iter()
+        .map(|pool| ((pool.path.clone(), pool.name.clone()), pool.id.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    for operation in &mut graph.operations {
+        operation.pool_id = pool_ids
+            .get(&(operation.path.clone(), operation.pool_name.clone()))
+            .cloned();
+    }
+
+    graph.insights = unreleased_acquire_insights(&graph.operations);
+
+    graph.pools.sort_by(|left, right| {
+        left.name.cmp(&right.name).then_with(|| {
+            item_order(
+                &left.path,
+                left.name_span,
+                &left.id,
+                &right.path,
+                right.name_span,
+                &right.id,
+            )
+        })
+    });
+    graph.operations.sort_by(|left, right| {
+        item_order(
+            &left.path,
+            left.span,
+            &left.id,
+            &right.path,
+            right.span,
+            &right.id,
+        )
+    });
+    graph.insights.sort_by(|left, right| {
+        item_order(
+            &left.path,
+            left.span,
+            &left.id,
+            &right.path,
+            right.span,
+            &right.id,
+        )
+    });
+
+    graph
+}
+
+pub(crate) fn diagnostics_for_graph(graph: &ObjectPoolGraph, path: &Path) -> Vec<Diagnostic> {
+    graph
+        .insights
+        .iter()
+        .filter(|insight| insight.path == path)
+        .map(|insight| {
+            Diagnostic::new(
+                insight.path.clone(),
+                insight.span.start.line,
+                insight.span.start.column,
+                DiagnosticSeverity::Warning,
+                insight.message.clone(),
+            )
+            .with_range(
+                insight.span.start.line,
+                insight.span.start.column,
+                insight.span.end.line,
+                insight.span.end.column,
+            )
+            .with_code(DiagnosticCode::DOMAIN_OBJECT_POOL_LIFECYCLE)
+        })
+        .collect()
+}
+
+fn unreleased_acquire_insights(
+    operations: &[ObjectPoolGraphOperation],
+) -> Vec<ObjectPoolGraphInsight> {
+    operations
+        .iter()
+        .filter(|operation| operation.kind == ObjectPoolOperationKind::Acquire)
+        .filter_map(|acquire| {
+            let pool_id = acquire.pool_id.as_ref()?;
+            let item_name = acquire.item_name.as_ref()?;
+            let released = operations.iter().any(|candidate| {
+                candidate.pool_id.as_ref() == Some(pool_id)
+                    && candidate.path == acquire.path
+                    && position_key(candidate.span.start) > position_key(acquire.span.start)
+                    && (candidate.kind == ObjectPoolOperationKind::Clear
+                        || (candidate.kind == ObjectPoolOperationKind::Release
+                            && candidate.item_name.as_ref() == Some(item_name)))
+            });
+
+            if released {
+                return None;
+            }
+
+            Some(ObjectPoolGraphInsight {
+                id: format!("{}:unreleased", acquire.id),
+                kind: ObjectPoolInsightKind::UnreleasedAcquire,
+                title: "Acquired object has no visible release".to_owned(),
+                message: format!(
+                    "Object `{item_name}` is acquired from `{}` but no later same-file `{}:release({item_name})` or `{}:clear()` is visible.",
+                    acquire.pool_name, acquire.pool_name, acquire.pool_name
+                ),
+                path: acquire.path.clone(),
+                span: acquire.item_span.unwrap_or(acquire.span),
+                pool_id: pool_id.clone(),
+                acquire_operation_id: acquire.id.clone(),
+                item_name: item_name.clone(),
+            })
+        })
+        .collect()
+}
+
+#[derive(Default)]
+struct LocalCallBindingVisitor {
+    bindings: BTreeMap<(usize, usize), LocalCallBinding>,
+}
+
+impl Visitor for LocalCallBindingVisitor {
+    fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+        let names = local.names().iter().collect::<Vec<_>>();
+        let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+        for (index, name) in names.into_iter().enumerate() {
+            let Some((expression, _)) = assignment_expression_for_local(&expressions, index) else {
+                continue;
+            };
+            let Expression::FunctionCall(call) = expression else {
+                continue;
+            };
+            let (Some(name_span), Some(call_span)) = (node_span(name), node_span(call)) else {
+                continue;
+            };
+
+            self.bindings.insert(
+                position_key(call_span.start),
+                LocalCallBinding {
+                    name: token_text(name),
+                    name_span,
+                },
+            );
+        }
+    }
+}
+
+struct ObjectPoolVisitor<'a> {
+    path: &'a Path,
+    environment: &'a TypeEnvironment,
+    semantic: SemanticModel<'a>,
+    bindings: BTreeMap<(usize, usize), LocalCallBinding>,
+    index: ObjectPoolFileIndex,
+}
+
+impl Visitor for ObjectPoolVisitor<'_> {
+    fn visit_function_call(&mut self, call: &FunctionCall) {
+        let Some(parts) = field_chain_before_first_call(call) else {
+            return;
+        };
+        let Some(span) = node_span(call) else {
+            return;
+        };
+        let binding = self.bindings.get(&position_key(span.start)).cloned();
+
+        if parts.len() == 1 && is_constructor(&parts[0]) {
+            self.record_pool(span, binding);
+            return;
+        }
+
+        let Some(method) = parts.last() else {
+            return;
+        };
+        let Some(kind) = operation_kind(method) else {
+            return;
+        };
+        if !self.receiver_has_object_pool_member(&parts, span.start) {
+            return;
+        }
+
+        self.record_operation(call, span, &parts[..parts.len() - 1], kind, binding);
+    }
+}
+
+impl ObjectPoolVisitor<'_> {
+    fn receiver_has_object_pool_member(&self, parts: &[String], position: SourcePosition) -> bool {
+        let Some((method, receiver)) = parts.split_last() else {
+            return false;
+        };
+        let Some(receiver_type) = self.semantic.type_of_field_chain(receiver, position) else {
+            return false;
+        };
+
+        typed_member(self.environment, &receiver_type, method).is_some()
+    }
+
+    fn record_pool(&mut self, span: SourceSpan, binding: Option<LocalCallBinding>) {
+        let Some(binding) = binding else {
+            return;
+        };
+        let Some(item_type) = self
+            .semantic
+            .type_of_field_chain(std::slice::from_ref(&binding.name), span.start)
+            .and_then(|ty| pool_item_type(self.environment, &ty))
+        else {
+            return;
+        };
+
+        self.index.pools.push(ObjectPoolGraphPool {
+            id: graph_id("pool", self.path, binding.name_span.start),
+            path: self.path.to_path_buf(),
+            name: binding.name,
+            item_type_label: item_type.to_string(),
+            span,
+            name_span: binding.name_span,
+        });
+    }
+
+    fn record_operation(
+        &mut self,
+        call: &FunctionCall,
+        span: SourceSpan,
+        receiver_parts: &[String],
+        kind: ObjectPoolOperationKind,
+        binding: Option<LocalCallBinding>,
+    ) {
+        let (item_name, item_span) = match kind {
+            ObjectPoolOperationKind::Acquire => binding
+                .map(|binding| (Some(binding.name), Some(binding.name_span)))
+                .unwrap_or((None, None)),
+            ObjectPoolOperationKind::Release => argument_expression(call, 0)
+                .and_then(|expression| {
+                    let span = node_span(expression)?;
+                    let item_name = plain_field_chain_from_expression(expression)?.join(".");
+                    Some((Some(item_name), Some(span)))
+                })
+                .unwrap_or((None, None)),
+            ObjectPoolOperationKind::Clear | ObjectPoolOperationKind::Prewarm => (None, None),
+        };
+
+        self.index.operations.push(ObjectPoolGraphOperation {
+            id: graph_id(operation_kind_name(kind), self.path, span.start),
+            path: self.path.to_path_buf(),
+            pool_id: None,
+            pool_name: receiver_parts.join("."),
+            kind,
+            item_name,
+            span,
+            item_span,
+        });
+    }
+}
+
+fn operation_kind(method: &str) -> Option<ObjectPoolOperationKind> {
+    match method {
+        "acquire" => Some(ObjectPoolOperationKind::Acquire),
+        "release" => Some(ObjectPoolOperationKind::Release),
+        "clear" => Some(ObjectPoolOperationKind::Clear),
+        "prewarm" => Some(ObjectPoolOperationKind::Prewarm),
+        _ => None,
+    }
+}
+
+fn operation_kind_name(kind: ObjectPoolOperationKind) -> &'static str {
+    match kind {
+        ObjectPoolOperationKind::Acquire => "acquire",
+        ObjectPoolOperationKind::Release => "release",
+        ObjectPoolOperationKind::Clear => "clear",
+        ObjectPoolOperationKind::Prewarm => "prewarm",
+    }
+}
+
+fn argument_expression(call: &FunctionCall, index: usize) -> Option<&Expression> {
+    let call = call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+
+    match call {
+        Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }) => {
+            arguments.iter().nth(index)
+        }
+        Call::MethodCall(method) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn item_order(
+    left_path: &Path,
+    left_span: SourceSpan,
+    left_id: &str,
+    right_path: &Path,
+    right_span: SourceSpan,
+    right_id: &str,
+) -> std::cmp::Ordering {
+    left_path
+        .cmp(right_path)
+        .then_with(|| position_key(left_span.start).cmp(&position_key(right_span.start)))
+        .then_with(|| left_id.cmp(right_id))
+}
+
+fn graph_id(kind: &str, path: &Path, position: SourcePosition) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        kind,
+        path.to_string_lossy(),
+        position.line,
+        position.column
+    )
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
+}
+
+fn node_span<T: Node>(node: &T) -> Option<SourceSpan> {
+    Some(SourceSpan {
+        start: SourcePosition::from_full_moon(node.start_position()?),
+        end: SourcePosition::from_full_moon(node.end_position()?),
+    })
 }
 
 fn typed_function(

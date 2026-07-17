@@ -279,7 +279,10 @@ listener or no-op declaration from known payloads.
 callback return type flows through `acquire`, while unannotated factories stay
 permissive. The helper targets measured allocation and garbage-collection
 pressure in short-lived gameplay objects; it is not a replacement for normal
-tables or ECS population queries.
+tables or ECS population queries. The language server can visualize the
+lifecycle through `Tua: Show Object Pool Explorer`, and it publishes
+conservative `TL5007` warnings when a directly acquired same-file local has no
+later visible release or pool clear.
 
 ## Boundaries
 

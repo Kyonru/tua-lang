@@ -32,6 +32,10 @@ language or editor behavior, and migration notes call out those changes.
 - A compiler-backed VS Code ECS Explorer for project components, systems,
   queries, conservative callback read/write access, exact source navigation,
   and non-diagnostic allocation insights.
+- A compiler-backed VS Code Object Pool Explorer for pool declarations,
+  lifecycle operations, item types, conservative unreleased-acquire warnings,
+  and source navigation, plus a quick fix for repeated zero-argument
+  constructors.
 - SignalBus graph filters for event, bus, file, listener, and emitter views,
   plus direct schema-conflict display and actions to create typed listeners or
   declarations from compiler metadata.
