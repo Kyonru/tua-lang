@@ -44,6 +44,25 @@ async function testLiveLanguageFeatures() {
     targetPosition,
   );
   assert.match(hoverText(hovers), /target_value.*number/s);
+  assert.match(hoverText(hovers), /command:tua\.hover\.references/);
+  assert.match(hoverText(hovers), /command:tua\.hover\.implementations/);
+
+  const referenceCount = await vscode.commands.executeCommand("tua.hover.references", {
+    uri: document.uri.toString(),
+    position: {
+      line: targetPosition.line,
+      character: targetPosition.character,
+    },
+  });
+  assert(referenceCount >= 2);
+  const implementationCount = await vscode.commands.executeCommand("tua.hover.implementations", {
+    uri: document.uri.toString(),
+    position: {
+      line: targetPosition.line,
+      character: targetPosition.character,
+    },
+  });
+  assert.equal(implementationCount, 1);
 
   const definitions = await vscode.commands.executeCommand(
     "vscode.executeDefinitionProvider",
@@ -96,6 +115,17 @@ async function testLiveLanguageFeatures() {
   assert.equal(signatures.signatures[0].label, "greet(name: string): string");
   assert.equal(signatures.activeParameter, 0);
 
+  const eventPosition = positionAfter(document, 'events:emit("player.hit');
+  const eventHovers = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    eventPosition,
+  );
+  const eventHoverText = hoverText(eventHovers);
+  assert.match(eventHoverText, /command:tua\.hover\.references/);
+  assert.match(eventHoverText, /command:tua\.showSignalGraph/);
+  assert.doesNotMatch(eventHoverText, /command:tua\.hover\.implementations/);
+
   const hints = await vscode.commands.executeCommand(
     "vscode.executeInlayHintProvider",
     document.uri,
@@ -108,6 +138,8 @@ async function testLiveLanguageFeatures() {
   for (const type of [
     "hover.request",
     "definition.request",
+    "references.request",
+    "implementation.request",
     "signature.request",
     "inlay.request",
   ]) {

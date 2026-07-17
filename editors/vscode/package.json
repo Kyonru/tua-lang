@@ -513,6 +513,16 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "tua.hover.references",
+        "title": "Show References from Hover",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.hover.implementations",
+        "title": "Show Implementations from Hover",
+        "category": "Tua"
+      },
+      {
         "command": "tua.inlayHints.selectMode",
         "title": "Select Inlay Hint Mode",
         "category": "Tua",
@@ -533,6 +543,11 @@
         "title": "Refresh Asset Explorer",
         "category": "Tua",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "tua.assets.preview",
+        "title": "Preview Asset",
+        "category": "Tua"
       },
       {
         "command": "tua.assets.open",
@@ -681,12 +696,24 @@
           "when": "workspaceFolderCount > 0"
         },
         {
+          "command": "tua.hover.references",
+          "when": "false"
+        },
+        {
+          "command": "tua.hover.implementations",
+          "when": "false"
+        },
+        {
           "command": "tua.whyModuleIncluded",
           "when": "editorLangId == tua"
         },
         {
           "command": "tua.showObjectPoolExplorer",
           "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.assets.preview",
+          "when": "false"
         },
         {
           "command": "tua.assets.open",

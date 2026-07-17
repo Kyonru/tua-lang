@@ -107,6 +107,9 @@ function createWorkspaceFixtures(workspaceOne, workspaceTwo) {
       "local hover_probe = target_value",
       "local call_probe = greet(",
       "local inlay_probe = target_value",
+      "local events = signal()",
+      'events:on("player.hit", function() end)',
+      'events:emit("player.hit")',
       "",
     ].join("\n"),
   );

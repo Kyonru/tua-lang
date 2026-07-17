@@ -33,6 +33,8 @@ Minimal VS Code language support for tua source files.
   lifecycles across files, explaining why the active module is included,
   running source actions and refactors, reporting an issue, and opening Tua
   settings.
+- Adds trusted hover action links for references, implementations, SignalBus
+  event graphs, sprite sheet previews, and resolved asset previews.
 - Adds a compiler-backed Tua Assets view to the Explorer, grouped by asset type
   and static usage, with reference navigation, file rename, reveal, refresh,
   dimensions, and conservative unused-asset diagnostics.
@@ -196,6 +198,10 @@ so `workspace/willRenameFiles` can update every compiler-identified helper or
 native LOVE path in the same operation. Unused means no static Tua/Lua loader
 literal was indexed; dynamic loading can still use the file.
 
+Hovering a resolved static asset literal offers Preview Asset. The hover action
+uses the same language-server inventory as the Explorer and opens the resolved
+file through VS Code's normal preview flow.
+
 ## Profiling
 
 `Tua: Save Cache Stats` writes the current `tua/cacheStats` response as JSON
@@ -231,6 +237,8 @@ or submit external reports automatically.
 Tua prefers standard LSP requests over TypeScript-specific custom protocol:
 
 - Hover uses `textDocument/hover`; no separate verbose-hover command exists.
+  The extension can add trusted command links to hover results, but references
+  and implementations still call standard VS Code/LSP providers.
 - Source navigation uses definition, type-definition, validated asset targets,
   and `tua:/builtins` virtual documents for generated builtin or LOVE stubs.
 - Asset references find every indexed Tua/Lua loader literal that resolves to

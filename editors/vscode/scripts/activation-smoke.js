@@ -141,6 +141,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     await state.commands.get("tua.assets.findReferences")(usedAsset);
     await state.commands.get("tua.assets.openReference")(assetReference);
+    await state.commands.get("tua.assets.preview")({ uri: usedAsset.asset.uri });
     await state.commands.get("tua.assets.rename")(usedAsset);
     await state.commands.get("tua.assets.reveal")(unusedAsset);
 
@@ -159,6 +160,14 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
           entry.args[0].toString().endsWith("/src/main.tua"),
       ),
       "Asset Explorer references should navigate to the compiler range",
+    );
+    assert(
+      state.executedCommands.some(
+        (entry) =>
+          entry.command === "vscode.open" &&
+          entry.args[0].toString().endsWith("/assets/player.png"),
+      ),
+      "asset preview should open the resolved asset URI",
     );
     assert(
       state.executedCommands.some((entry) => entry.command === "revealInExplorer"),
@@ -2155,11 +2164,14 @@ function assertRegisteredCommands(state) {
     "tua.resetCompletionStats",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
+    "tua.hover.references",
+    "tua.hover.implementations",
     "tua.explainType",
     "tua.inlayHints.selectMode",
     "tua.previewSprites",
     "tua.previewSprites.reload",
     "tua.assets.refresh",
+    "tua.assets.preview",
     "tua.assets.open",
     "tua.assets.openReference",
     "tua.assets.findReferences",

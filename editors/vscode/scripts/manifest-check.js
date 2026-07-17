@@ -22,10 +22,13 @@ const expected = [
   "tua.jumpBetweenSourceAndGenerated",
   "tua.copyQualifiedName",
   "tua.showWorkspaceSymbolsByModule",
+  "tua.hover.references",
+  "tua.hover.implementations",
   "tua.explainType",
   "tua.inlayHints.selectMode",
   "tua.previewSprites",
   "tua.assets.refresh",
+  "tua.assets.preview",
   "tua.assets.open",
   "tua.assets.openReference",
   "tua.assets.findReferences",
@@ -79,14 +82,17 @@ for (const command of [
 
 const commandPalette = manifest.contributes?.menus?.commandPalette || [];
 for (const command of [
+  "tua.assets.preview",
   "tua.assets.open",
   "tua.assets.openReference",
   "tua.assets.findReferences",
   "tua.assets.rename",
   "tua.assets.reveal",
+  "tua.hover.references",
+  "tua.hover.implementations",
 ]) {
   if (!commandPalette.some((item) => item.command === command && item.when === "false")) {
-    console.error(`Asset node command should be hidden from the command palette: ${command}`);
+    console.error(`Hover or asset node command should be hidden from the command palette: ${command}`);
     process.exit(1);
   }
 }

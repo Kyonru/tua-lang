@@ -127,7 +127,8 @@ workspace directory when available.
   `Tua: Show Signal Graph` command uses this data for event, bus, file,
   listener, and emitter filtering, conflict inspection, source navigation, and
   typed listener/declaration creation without merging independent same-named
-  events.
+  events. Hover links can open the graph from SignalBus event strings, but the
+  graph data still comes from this request.
 - The low-priority `tua/moduleGraph` request returns the compiler's revisioned
   project module graph: Tua/Lua files, static `require` and `import` edges,
   resolved, missing, invalid, or duplicate resolution states, structured
@@ -156,12 +157,15 @@ workspace directory when available.
 - The general `tua/inspect` request returns structured, revisioned document
   inspector items. Sprite sheet items include declaration ranges, resolved
   image asset URIs and validation status, frame metadata, animations, and the
-  same `TL5004` diagnostics used by normal project analysis.
+  same `TL5004` diagnostics used by normal project analysis. The VS Code sprite
+  hover action reuses this inspector data.
 - The low-priority `tua/assetInventory` request returns revisioned project
   assets grouped by stable category metadata, static Tua/Lua reference ranges,
   dimensions when cheaply available, and conservative `TL2009` hints for
-  assets with no static references. Dynamic asset loading remains valid, so
-  `TL2009` is a hint rather than proof that a file can be deleted.
+  assets with no static references. VS Code asset hover previews reuse this
+  inventory instead of resolving paths in the extension. Dynamic asset loading
+  remains valid, so `TL2009` is a hint rather than proof that a file can be
+  deleted.
 
 ## Syntax And Semantic Highlighting
 

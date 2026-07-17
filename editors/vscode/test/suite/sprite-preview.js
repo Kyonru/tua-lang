@@ -46,6 +46,31 @@ async function runSpritePreviewTests() {
   );
   const beforePreview = hoverInspection.sequence;
 
+  const beforeAssetHover = eventSequence();
+  const imagePath = /image\s*=\s*["']([^"']+)/.exec(document.getText())?.[1];
+  assert(imagePath, "sprite fixture should include an image asset path");
+  const assetPosition = positionAfter(document, imagePath);
+  const assetHovers = await vscode.commands.executeCommand(
+    "vscode.executeHoverProvider",
+    document.uri,
+    assetPosition,
+  );
+  const assetHoverLink = assetHovers
+    .flatMap((hover) => hover.contents || [])
+    .find(
+      (content) =>
+        typeof content !== "string" &&
+        String(content.value || "").includes("command:tua.assets.preview"),
+    );
+
+  assert.match(hoverText(assetHovers), /command:tua\.assets\.preview/);
+  assert(assetHoverLink?.isTrusted.enabledCommands.includes("tua.assets.preview"));
+  await waitForEvent(
+    (event) => event.type === "assetInventory.request" && event.count > 0,
+    "asset hover action inventory lookup",
+    beforeAssetHover,
+  );
+
   const opened = await vscode.commands.executeCommand("tua.previewSprites");
   assert.deepEqual(opened, {
     animationCount: 1,

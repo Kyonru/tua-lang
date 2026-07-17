@@ -83,6 +83,12 @@ function handleMessage(message) {
     case "textDocument/definition":
       definition(message);
       return;
+    case "textDocument/references":
+      references(message);
+      return;
+    case "textDocument/implementation":
+      implementation(message);
+      return;
     case "textDocument/documentSymbol":
       documentSymbols(message);
       return;
@@ -94,6 +100,9 @@ function handleMessage(message) {
       return;
     case "tua/inspect":
       inspectDocument(message);
+      return;
+    case "tua/assetInventory":
+      assetInventory(message);
       return;
     case "tua/moduleGraph":
       moduleGraph(message);
@@ -131,7 +140,9 @@ function initializeResult() {
       definitionProvider: true,
       documentSymbolProvider: true,
       hoverProvider: true,
+      implementationProvider: true,
       inlayHintProvider: true,
+      referencesProvider: true,
       signatureHelpProvider: {
         retriggerCharacters: [")"],
         triggerCharacters: ["(", ","],
@@ -267,6 +278,33 @@ function definition(message) {
     id: message.id,
   });
   respond(message.id, declaration);
+}
+
+function references(message) {
+  const context = requestContext(message);
+  const locations = referenceLocations(context);
+
+  log({
+    type: "references.request",
+    ...context,
+    count: locations.length,
+    id: message.id,
+  });
+  respond(message.id, locations);
+}
+
+function implementation(message) {
+  const context = requestContext(message);
+  const declaration = declarationLocation(context.uri, context.word);
+  const locations = declaration ? [declaration] : [];
+
+  log({
+    type: "implementation.request",
+    ...context,
+    count: locations.length,
+    id: message.id,
+  });
+  respond(message.id, locations);
 }
 
 function documentSymbols(message) {
@@ -453,6 +491,44 @@ function inspectDocument(message) {
             ],
       },
     ],
+  });
+}
+
+function assetInventory(message) {
+  const root = workspaceFolders[0]?.uri
+    ? fileURLToPath(workspaceFolders[0].uri)
+    : process.cwd();
+  const paths = assetPathsInSources();
+  if (paths.length === 0) {
+    paths.push("assets/player.png");
+  }
+  const assets = paths.map((assetPath) => {
+    const resolvedPath = path.join(root, "src", ...assetPath.split("/"));
+    const references = assetReferences(assetPath);
+
+    return {
+      uri: pathToFileURL(resolvedPath).toString(),
+      path: assetPath,
+      category: "image",
+      categoryLabel: "Images",
+      extension: path.extname(assetPath).slice(1),
+      dimensions: { width: 16, height: 16 },
+      usageCount: references.length,
+      references,
+    };
+  });
+
+  log({
+    type: "assetInventory.request",
+    count: assets.reduce((total, asset) => total + asset.references.length, 0),
+    id: message.id,
+  });
+  respond(message.id, {
+    analysisRevision: eventSequence,
+    inventory: {
+      assets,
+      diagnostics: [],
+    },
   });
 }
 
@@ -832,6 +908,78 @@ function declarationLocation(uri, word) {
   }
 
   return null;
+}
+
+function referenceLocations(context) {
+  if (!context.word) {
+    return [];
+  }
+
+  const document = documents.get(context.uri);
+  const source = document?.text || readUri(context.uri);
+  const pattern = new RegExp(`\\b${escapeRegExp(context.word)}\\b`, "g");
+  const locations = [];
+  let match;
+
+  while ((match = pattern.exec(source))) {
+    locations.push({
+      uri: context.uri,
+      range: offsetRange(source, match.index, match.index + context.word.length),
+    });
+  }
+
+  return locations;
+}
+
+function assetReferences(assetPath) {
+  const references = [];
+
+  for (const [uri, source] of sourceTexts()) {
+    let index = source.indexOf(assetPath);
+    while (index >= 0) {
+      references.push({
+        uri,
+        range: offsetRange(source, index, index + assetPath.length),
+        loaderKind: "image",
+      });
+      index = source.indexOf(assetPath, index + assetPath.length);
+    }
+  }
+
+  return references;
+}
+
+function assetPathsInSources() {
+  const paths = new Set();
+  const pattern = /assets\/[A-Za-z0-9_./-]+\.(?:bmp|exr|hdr|jpe?g|pic|png|tga|flac|mp3|ogg|wav|otf|ttf|frag|fs|glsl|vert|vs|ogm|ogv)/g;
+
+  for (const source of sourceTexts().values()) {
+    for (const match of source.matchAll(pattern)) {
+      paths.add(match[0]);
+    }
+  }
+
+  return [...paths].sort();
+}
+
+function sourceTexts() {
+  const sources = new Map();
+
+  for (const [uri, document] of documents) {
+    sources.set(uri, document.text);
+  }
+
+  for (const folder of workspaceFolders) {
+    const sourceDirectory = path.join(fileURLToPath(folder.uri), "src");
+    for (const filePath of tuaFiles(sourceDirectory)) {
+      const uri = pathToFileURL(filePath).toString();
+      if (!sources.has(uri)) {
+        sources.set(uri, readFile(filePath));
+      }
+    }
+  }
+
+  return sources;
 }
 
 function offsetRange(text, start, end) {

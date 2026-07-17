@@ -15,6 +15,7 @@ function registerAssetExplorerFeature(options) {
 
   disposables.push(
     vscode.commands.registerCommand(COMMANDS.refreshAssets, () => controller.refresh()),
+    vscode.commands.registerCommand(COMMANDS.previewAsset, (target) => previewAsset(target)),
     vscode.commands.registerCommand(COMMANDS.openAsset, (node) => openAsset(node)),
     vscode.commands.registerCommand(COMMANDS.openAssetReference, (node) => openReference(node)),
     vscode.commands.registerCommand(COMMANDS.findAssetReferences, (node) =>
@@ -122,6 +123,16 @@ async function openAsset(node) {
   if (uri) {
     await vscode.commands.executeCommand("vscode.open", uri, { preview: true });
   }
+}
+
+async function previewAsset(target) {
+  const uri = assetPreviewUri(target);
+  if (uri) {
+    await vscode.commands.executeCommand("vscode.open", uri, { preview: true });
+    return uri.toString();
+  }
+
+  return undefined;
 }
 
 async function revealAsset(node) {
@@ -254,6 +265,19 @@ function diagnosticSeverity(severity) {
 
 function assetUri(node) {
   return node?.asset?.uri ? vscode.Uri.parse(node.asset.uri) : undefined;
+}
+
+function assetPreviewUri(target) {
+  if (target?.asset?.uri) {
+    return vscode.Uri.parse(target.asset.uri);
+  }
+  if (typeof target?.uri === "string") {
+    return vscode.Uri.parse(target.uri);
+  }
+  if (typeof target === "string") {
+    return vscode.Uri.parse(target);
+  }
+  return undefined;
 }
 
 module.exports = {
