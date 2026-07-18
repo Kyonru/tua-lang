@@ -2474,6 +2474,58 @@ particle.s<|complete|>peed
 }
 
 #[test]
+fn snapshot_preserves_exported_class_constructor_and_member_types() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Classes = require("classes")
+local manager = Classes.BeatManager.new()
+local first = manager.<|hover|>steps[1]
+manager:<|complete|>add(1)
+manager:add("wrong")
+-- file: src/classes.tua
+final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number): number {
+    table.insert(self.steps, step)
+    return step
+  }
+}
+
+return {
+  BeatManager = BeatManager,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("hover"))
+        .expect("exported class field should hover");
+
+    assert!(labels.contains(&"add".to_owned()), "{labels:?}");
+    assert_eq!(hover.contents, "(field) steps: number[]");
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

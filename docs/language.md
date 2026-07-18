@@ -101,8 +101,9 @@ Useful static facts include:
 - inferred returns for simple unannotated functions;
 - multiple returns where known Lua or LOVE functions provide them;
 - table-shape fields and optional fields;
-- array-like table literals, string-key table indexing, and simple loop
-  variables from numeric `for`, `ipairs`, and `pairs`;
+- `T[]` arrays, including class fields initialized with `{}`, array-like table
+  literals, string-key table indexing, and simple loop variables from numeric
+  `for`, `ipairs`, and `pairs`;
 - static prototype-style metatable inheritance and typed `__pairs`/`__ipairs`
   iterator facts where visible;
 - module exports from simple `return { name = value }` tables;
@@ -410,6 +411,27 @@ type SaveSlot = {
 Optional target fields may be absent. Present optional fields must still match
 their declared type.
 
+## Arrays, Dictionaries, And Tuples
+
+Use `T[]` for arrays. Tua does not require or provide a `Table<T>` generic:
+
+```tua
+local steps: number[] = {}
+local names: string[] = { "major", "minor" }
+local byName: { [string]: number } = {}
+type Position = [number, number]
+```
+
+An empty table literal is accepted as the initial value of an annotated array
+or dictionary. Once annotated, writes, indexed reads, `table.insert`, `ipairs`,
+and supported editor features use the declared element type. Parentheses are
+required when the array element is a union or function type:
+
+```tua
+local values: (number | string)[] = {}
+local callbacks: ((dt: number) -> nil)[] = {}
+```
+
 ## Union Types
 
 ```tua
@@ -460,7 +482,7 @@ Aliases are erased at runtime, so `is` only accepts an alias when it resolves to
 a supported primitive. Class targets use generated `__type_id` / `__is`
 metadata, so inherited class checks are supported for class syntax. Erased
 table-shape aliases, structural checks, manual-metatable inheritance checks, and
-generic targets such as `Array<string>` are not runtime-checkable in v1 and are
+container targets such as `string[]` are not runtime-checkable in v1 and are
 rejected before Lua is emitted.
 
 ## Classes
@@ -483,13 +505,16 @@ open class Entity {
 
 final class Particle extends Entity {
   speed: number = 120
+  trail: number[]
 
   init(x: number, y: number) {
     super(x, y)
+    self.trail = {}
   }
 
   override final update(dt: number) {
     self.x += self.speed * dt
+    table.insert(self.trail, self.x)
   }
 }
 
@@ -503,13 +528,28 @@ particle.update(0.016)
 private members, getters/setters, generic classes, mixins, and multiple
 inheritance are not part of v1.
 
+Class fields use the same native types as locals and aliases, including `T[]`,
+dictionaries, tuples, unions, function types, and scoped `Self`. Assigning `{}`
+to an annotated array or dictionary field is valid. Fields not declared by the
+class or an ancestor are rejected; use `any` only when a deliberately dynamic
+object is required.
+
+Constructors return the declared class type, and methods keep their exact
+parameter and return types across hover, completion, signature help, checking,
+definition, outlines, workspace symbols, and static module exports. Duplicate
+`init` declarations, inheritance cycles, extending non-open classes, missing or
+spurious `override`, and override signature drift are diagnosed.
+
 Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
 When a constructor is proven to contain only field defaults, `self.field = ...`,
 and a flattenable `super(...)`, Tua emits a direct table constructor. Otherwise
 it preserves explicit init calls. Calls to known final methods on known class
 instances can lower to direct local function calls; non-final calls keep normal
-virtual dispatch.
+virtual dispatch. Locally inferred native class instances accept both
+`instance.method(...)` and `instance:method(...)`; use Lua's colon form for
+instances obtained through module or dynamic boundaries so the receiver is
+explicit in the emitted Lua.
 
 ## Function Annotations
 

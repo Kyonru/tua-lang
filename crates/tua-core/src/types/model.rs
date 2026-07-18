@@ -301,6 +301,13 @@ impl TableShape {
             .map(|(name, field)| (name.as_str(), field))
     }
 
+    pub fn is_plain_empty(&self) -> bool {
+        self.fields.is_empty()
+            && self.metatable.is_none()
+            && !self.self_index
+            && self.constructor_methods.is_empty()
+    }
+
     pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
         self.semantic_fields_at_depth(0)
     }
@@ -622,6 +629,9 @@ impl fmt::Display for Type {
                     }
                 }
                 write!(formatter, " }}")
+            }
+            Type::Array(item) if matches!(item.as_ref(), Type::Union(_) | Type::Function(_)) => {
+                write!(formatter, "({item})[]")
             }
             Type::Array(item) => write!(formatter, "{item}[]"),
             Type::Tuple(items) => {

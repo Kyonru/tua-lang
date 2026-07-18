@@ -2401,6 +2401,103 @@ local first: number = manager.steps[1]
 }
 
 #[test]
+fn accepts_empty_and_class_typed_arrays_in_class_fields() {
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+final class Step {
+  value: number
+
+  init(value: number) {
+    self.value = value
+  }
+}
+
+final class BeatManager {
+  steps: Step[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: Step): number {
+    table.insert(self.steps, step)
+    return step.value
+  }
+}
+
+local manager = BeatManager.new()
+local value: number = manager.add(Step.new(1))
+local first: Step = manager.steps[1]
+"#,
+    )
+    .expect("class-typed arrays should accept empty initialization and preserve item types");
+}
+
+#[test]
+fn checks_class_method_parameter_and_return_types() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+final class Counter {
+  value: number
+
+  init() {
+    self.value = 0
+  }
+
+  add(amount: number): number {
+    return self.value + amount
+  }
+}
+
+local counter = Counter.new()
+local value: string = counter.add(counter, "wrong")
+"#,
+    )
+    .expect_err("class method calls should use their declared signature");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
+fn rejects_unknown_class_members_but_keeps_any_dynamic() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+final class Counter {
+  value: number
+  dynamic: any
+
+  init() {
+    self.value = 0
+    self.missing = 1
+    self.dynamic.missing = 1
+  }
+
+  read(): number {
+    return self.other
+  }
+}
+"#,
+    )
+    .expect_err("unknown closed class members should be rejected");
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_CLASS))
+            .count(),
+        2
+    );
+    assert!(diagnostics
+        .iter()
+        .all(|diagnostic| !diagnostic.message.contains("dynamic")));
+}
+
+#[test]
 fn rejects_extending_final_classes_and_overriding_final_methods() {
     let diagnostics = check_tua_source(
         "src/classes.tua",
@@ -2424,6 +2521,56 @@ class Child extends Base {
     assert!(diagnostics
         .iter()
         .any(|diagnostic| diagnostic.message.contains("extends final class")));
+}
+
+#[test]
+fn rejects_duplicate_initializers_inheritance_cycles_and_override_type_drift() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+open class First extends Second {
+  init() {
+  }
+
+  init(value: number) {
+  }
+
+}
+
+open class Second extends First {
+}
+"#,
+    )
+    .expect_err("invalid class structure should be diagnosed before type checking");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("duplicate class member `init`")));
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("inheritance cycle")));
+
+    let diagnostics = check_tua_source(
+        "src/overrides.tua",
+        r#"
+open class Base {
+  update(value: number): number {
+    return value
+  }
+}
+
+final class Child extends Base {
+  override update(value: string): number {
+    return 1
+  }
+}
+"#,
+    )
+    .expect_err("override signatures should remain compatible");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.message.contains("signature incompatible")));
 }
 
 #[test]

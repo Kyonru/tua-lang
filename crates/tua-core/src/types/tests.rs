@@ -14,10 +14,60 @@ fn primitive_assignability_requires_matching_primitives() {
 }
 
 #[test]
+fn arrays_parenthesize_union_and_function_item_types() {
+    let union = Type::array(Type::union([Type::number(), Type::string()]));
+    let function = Type::array(Type::function_returns([Type::number()], [Type::string()]));
+
+    assert_eq!(union.to_string(), "(number | string)[]");
+    assert_eq!(function.to_string(), "((number) -> string)[]");
+}
+
+#[test]
+fn class_value_types_do_not_capture_methods_from_prefixed_class_names() {
+    let parsed = parse_tua_source(
+        "src/classes.tua",
+        r#"
+final class Beat {
+  tick() {
+  }
+}
+
+final class Beat_Manager {
+  reset() {
+  }
+}
+"#,
+    )
+    .expect("classes should parse");
+    let environment = build_type_environment(&parsed).expect("classes should type-check");
+    let Type::Table(beat) = environment
+        .class_value_type("Beat")
+        .expect("class value should exist")
+    else {
+        panic!("class value should be a table");
+    };
+
+    assert!(beat.field("new").is_some());
+    assert!(beat.field("tick").is_some());
+    assert!(beat.field("Manager_reset").is_none());
+}
+
+#[test]
 fn any_is_assignable_in_both_directions() {
     assert!(is_assignable(&Type::Any, &Type::number()));
     assert!(is_assignable(&Type::number(), &Type::Any));
     assert!(is_assignable(&Type::Any, &Type::empty_table()));
+}
+
+#[test]
+fn empty_table_literals_initialize_arrays_and_dictionaries() {
+    let empty = Type::empty_table();
+
+    assert!(is_assignable(&empty, &Type::array(Type::number())));
+    assert!(is_assignable(
+        &empty,
+        &Type::dictionary(Type::string(), Type::number())
+    ));
 }
 
 #[test]
@@ -75,6 +125,27 @@ fn declared_aliases_do_not_inherit_nominal_type_relations() {
         .with_nominal_supertype("Image", "Drawable");
 
     assert!(!context.is_assignable(&Type::alias("Image"), &Type::alias("Drawable")));
+}
+
+#[test]
+fn class_aliases_can_opt_into_nominal_inheritance() {
+    let mut context = TypeContext::new()
+        .with_alias(TypeAlias::new("Entity", Type::empty_table()))
+        .with_alias(TypeAlias::new("Particle", Type::empty_table()));
+    context.insert_nominal_alias_supertype("Particle", "Entity");
+
+    assert!(context.is_assignable(&Type::alias("Particle"), &Type::alias("Entity")));
+    assert!(!context.is_assignable(&Type::alias("Entity"), &Type::alias("Particle")));
+}
+
+#[test]
+fn class_alias_targets_reject_structurally_matching_plain_tables() {
+    let shape = Type::table([("x", TableField::required(Type::number()))]);
+    let mut context = TypeContext::new().with_alias(TypeAlias::new("Entity", shape.clone()));
+    context.insert_nominal_alias("Entity");
+
+    assert!(!context.is_assignable(&shape, &Type::alias("Entity")));
+    assert!(context.is_assignable(&Type::alias("Entity"), &shape));
 }
 
 #[test]
@@ -529,6 +600,38 @@ end
 
     assert_eq!(function.parameters[0].ty, Type::alias("Account"));
     assert_eq!(function.return_type, Some(Type::alias("Account")));
+}
+
+#[test]
+fn resolves_self_type_inside_native_class_methods() {
+    let parsed = parse_tua_source(
+        "src/classes.tua",
+        r#"
+final class Node {
+  parent: Self | nil
+
+  init(parent: Self | nil) {
+    self.parent = parent
+  }
+
+  attach(child: Self): Self {
+    child.parent = self
+    return child
+  }
+}
+"#,
+    )
+    .expect("class source should parse");
+    let environment = build_type_environment(&parsed).expect("Self should resolve in classes");
+    let Type::Table(node) = environment.alias("Node").expect("Node alias should exist") else {
+        panic!("Node should resolve to a class shape");
+    };
+    let Type::Function(attach) = &node.field("attach").expect("attach should exist").ty else {
+        panic!("attach should retain its function signature");
+    };
+
+    assert_eq!(attach.parameters[1].ty, Type::alias("Node"));
+    assert_eq!(attach.return_types_or_any(), &[Type::alias("Node")]);
 }
 
 #[test]

@@ -86,6 +86,42 @@ hooks.on
 }
 
 #[test]
+fn completes_class_methods_with_exact_signatures() {
+    let source = r#"
+final class Counter {
+  value: number
+
+  init() {
+    self.value = 0
+  }
+
+  add(amount: number): number {
+    return self.value + amount
+  }
+}
+
+local counter = Counter.new()
+counter.ad
+"#;
+    let completions = complete_tua_source(
+        "src/classes.tua",
+        source,
+        position_after(source, "counter.ad"),
+    )
+    .expect("class method completion should succeed");
+    let add = completions
+        .iter()
+        .find(|completion| completion.label == "add")
+        .expect("add should complete");
+
+    assert_eq!(add.kind, CompletionKind::Function);
+    assert_eq!(
+        add.detail.as_deref(),
+        Some("field: (self: Counter, amount: number) -> number")
+    );
+}
+
+#[test]
 fn completes_lua_doc_annotation_tags_after_marker() {
     let fixture = Fixture::parse(
         r#"---@p<|cursor|>

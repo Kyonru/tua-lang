@@ -14,6 +14,7 @@ pub(crate) struct ClassDeclaration {
     pub is_final: bool,
     pub fields: Vec<ClassField>,
     pub init: Option<ClassMethod>,
+    pub duplicate_init_spans: Vec<SourceSpan>,
     pub methods: Vec<ClassMethod>,
     pub span: SourceSpan,
     pub name_span: SourceSpan,
@@ -75,6 +76,9 @@ struct FlattenedField {
     name: String,
     value: String,
 }
+
+type ClassMethodParameterSignature = (TuaType, bool, bool);
+type ClassMethodSignature = (Vec<ClassMethodParameterSignature>, Vec<TuaType>);
 
 pub(crate) fn parse_class_declarations(
     path: &Path,
@@ -138,10 +142,55 @@ pub(crate) fn class_method_is_final(
     };
 
     class.is_final
-        || class
-            .methods
-            .iter()
-            .any(|candidate| candidate.name == method && candidate.is_final)
+        || class_method_declaration(classes, class_name, method)
+            .is_some_and(|(_, method)| method.is_final)
+}
+
+pub(crate) fn class_method_exists(
+    classes: &[ClassDeclaration],
+    class_name: &str,
+    method: &str,
+) -> bool {
+    class_method_declaration(classes, class_name, method).is_some()
+}
+
+pub(crate) fn class_method_owner<'a>(
+    classes: &'a [ClassDeclaration],
+    class_name: &str,
+    method: &str,
+) -> Option<&'a str> {
+    class_method_declaration(classes, class_name, method).map(|(class, _)| class.name.as_str())
+}
+
+fn class_method_declaration<'a>(
+    classes: &'a [ClassDeclaration],
+    class_name: &str,
+    method: &str,
+) -> Option<(&'a ClassDeclaration, &'a ClassMethod)> {
+    class_method_declaration_with_visited(classes, class_name, method, &mut BTreeSet::new())
+}
+
+fn class_method_declaration_with_visited<'a>(
+    classes: &'a [ClassDeclaration],
+    class_name: &str,
+    method: &str,
+    visited: &mut BTreeSet<String>,
+) -> Option<(&'a ClassDeclaration, &'a ClassMethod)> {
+    if !visited.insert(class_name.to_owned()) {
+        return None;
+    }
+    let class = class_by_name(classes, class_name)?;
+
+    class
+        .methods
+        .iter()
+        .find(|candidate| candidate.name == method)
+        .map(|method| (class, method))
+        .or_else(|| {
+            class.parent.as_deref().and_then(|parent| {
+                class_method_declaration_with_visited(classes, parent, method, visited)
+            })
+        })
 }
 
 fn class_blocks(source: &str) -> Vec<ClassBlock> {
@@ -252,6 +301,7 @@ fn parse_class_body(
 ) -> ClassDeclaration {
     let mut fields = Vec::new();
     let mut init = None;
+    let mut duplicate_init_spans = Vec::new();
     let mut methods = Vec::new();
     let mut cursor = 0usize;
 
@@ -264,7 +314,11 @@ fn parse_class_body(
 
         if let Some((method, next)) = parse_class_method(source, body, header.body_start, cursor) {
             if method.name == "init" {
-                init = Some(method);
+                if init.is_some() {
+                    duplicate_init_spans.push(method.name_span);
+                } else {
+                    init = Some(method);
+                }
             } else {
                 methods.push(method);
             }
@@ -289,6 +343,7 @@ fn parse_class_body(
         is_final: header.is_final,
         fields,
         init,
+        duplicate_init_spans,
         methods,
         span: SourceSpan {
             start: header.span_start,
@@ -653,6 +708,7 @@ fn flatten_class_constructor(
     classes: &[ClassDeclaration],
 ) -> Option<Vec<FlattenedField>> {
     let mut substitutions = BTreeMap::new();
+    let mut visiting = BTreeSet::new();
     let parameters = class
         .init
         .as_ref()
@@ -663,14 +719,19 @@ fn flatten_class_constructor(
         substitutions.insert(parameter.clone(), parameter.clone());
     }
 
-    flatten_class_constructor_with_substitutions(class, classes, &substitutions)
+    flatten_class_constructor_with_substitutions(class, classes, &substitutions, &mut visiting)
 }
 
 fn flatten_class_constructor_with_substitutions(
     class: &ClassDeclaration,
     classes: &[ClassDeclaration],
     substitutions: &BTreeMap<String, String>,
+    visiting: &mut BTreeSet<String>,
 ) -> Option<Vec<FlattenedField>> {
+    if !visiting.insert(class.name.clone()) {
+        return None;
+    }
+
     let mut fields = Vec::new();
 
     if let Some(parent_name) = &class.parent {
@@ -698,6 +759,7 @@ fn flatten_class_constructor_with_substitutions(
             parent,
             classes,
             &parent_substitutions,
+            visiting,
         )?);
     }
 
@@ -778,6 +840,18 @@ fn leading_super_args(body: &str) -> Option<String> {
 }
 
 fn inherited_type_ids(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> Vec<usize> {
+    inherited_type_ids_with_visited(class, classes, &mut BTreeSet::new())
+}
+
+fn inherited_type_ids_with_visited(
+    class: &ClassDeclaration,
+    classes: &[ClassDeclaration],
+    visited: &mut BTreeSet<String>,
+) -> Vec<usize> {
+    if !visited.insert(class.name.clone()) {
+        return Vec::new();
+    }
+
     let mut ids = Vec::new();
 
     if let Some(parent) = class
@@ -785,7 +859,7 @@ fn inherited_type_ids(class: &ClassDeclaration, classes: &[ClassDeclaration]) ->
         .as_ref()
         .and_then(|parent| class_by_name(classes, parent))
     {
-        ids.extend(inherited_type_ids(parent, classes));
+        ids.extend(inherited_type_ids_with_visited(parent, classes, visited));
     }
 
     ids.push(class.type_id);
@@ -805,6 +879,10 @@ fn validate_classes(path: &Path, classes: &[ClassDeclaration], diagnostics: &mut
         }
 
         validate_class_members(path, class, diagnostics);
+    }
+
+    if validate_inheritance_cycles(path, classes, diagnostics) {
+        return;
     }
 
     for class in classes {
@@ -858,6 +936,47 @@ fn validate_class_members(
             ));
         }
     }
+
+    for span in &class.duplicate_init_spans {
+        diagnostics.push(class_diagnostic(
+            path,
+            span.start,
+            "duplicate class member `init`",
+        ));
+    }
+}
+
+fn validate_inheritance_cycles(
+    path: &Path,
+    classes: &[ClassDeclaration],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> bool {
+    let mut reported = BTreeSet::new();
+
+    for class in classes {
+        let mut chain = BTreeSet::new();
+        let mut current = Some(class);
+
+        while let Some(candidate) = current {
+            if !chain.insert(candidate.name.clone()) {
+                if reported.insert(candidate.name.clone()) {
+                    diagnostics.push(class_diagnostic(
+                        path,
+                        candidate.name_span.start,
+                        format!("inheritance cycle involving class `{}`", candidate.name),
+                    ));
+                }
+                break;
+            }
+
+            current = candidate
+                .parent
+                .as_deref()
+                .and_then(|parent| class_by_name(classes, parent));
+        }
+    }
+
+    !reported.is_empty()
 }
 
 fn validate_overrides(
@@ -893,9 +1012,52 @@ fn validate_overrides(
                     format!("method `{}` overrides final parent method", method.name),
                 ))
             }
+            (true, Some(parent_method))
+                if !class_method_signatures_match(method, parent_method) =>
+            {
+                diagnostics.push(class_diagnostic(
+                    path,
+                    method.name_span.start,
+                    format!(
+                        "method `{}` has a signature incompatible with its parent method",
+                        method.name
+                    ),
+                ))
+            }
             _ => {}
         }
     }
+}
+
+fn class_method_signatures_match(method: &ClassMethod, parent: &ClassMethod) -> bool {
+    let Some((method_parameters, method_returns)) = class_method_signature(method) else {
+        return false;
+    };
+    let Some((parent_parameters, parent_returns)) = class_method_signature(parent) else {
+        return false;
+    };
+
+    method_parameters == parent_parameters && method_returns == parent_returns
+}
+
+fn class_method_signature(method: &ClassMethod) -> Option<ClassMethodSignature> {
+    let return_type = method.return_type.as_deref().unwrap_or("any");
+    let signature = parse_tua_type_text(&format!("({}) -> {return_type}", method.parameters));
+    let TuaType::Function {
+        parameters,
+        returns,
+    } = signature
+    else {
+        return None;
+    };
+
+    Some((
+        parameters
+            .into_iter()
+            .map(|parameter| (parameter.ty, parameter.optional, parameter.variadic))
+            .collect(),
+        returns,
+    ))
 }
 
 fn inherited_method<'a>(

@@ -101,6 +101,36 @@ fn symbols_are_returned_in_source_order() {
     );
 }
 
+#[test]
+fn classes_include_typed_field_constructor_and_method_children() {
+    let source = r#"
+final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number): number {
+    return step
+  }
+}
+"#;
+    let symbols =
+        document_symbols_tua_source("src/classes.tua", source).expect("class source should parse");
+    let class = find_symbol(&symbols, "BeatManager");
+
+    assert_eq!(class.kind, DocumentSymbolKind::Class);
+    assert_eq!(names(&class.children), vec!["steps", "init", "add"]);
+    assert_eq!(class.children[0].detail.as_deref(), Some("number[]"));
+    assert_eq!(class.children[1].kind, DocumentSymbolKind::Constructor);
+    assert_eq!(class.children[2].kind, DocumentSymbolKind::Method);
+    assert_eq!(
+        class.children[2].detail.as_deref(),
+        Some("(step: number) -> number")
+    );
+}
+
 fn document_symbols() -> Vec<DocumentSymbol> {
     document_symbols_tua_source("src/main.tua", SOURCE).expect("source should parse")
 }

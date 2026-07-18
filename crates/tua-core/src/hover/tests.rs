@@ -616,6 +616,35 @@ account:withdraw(10)
 }
 
 #[test]
+fn hovers_native_class_fields_and_methods_with_exact_types() {
+    let source = r#"
+final class Counter {
+  values: number[]
+
+  init() {
+    self.values = {}
+  }
+
+  add(amount: number): number {
+    return amount
+  }
+}
+
+local counter = Counter.new()
+local first = counter.values[1]
+local value = counter.add(1)
+"#;
+
+    assert_hover_in_source(source, "values[1]", 0, "(field) values: number[]");
+    assert_hover_in_source(
+        source,
+        "add(1)",
+        0,
+        "(field) add: (self: Counter, amount: number) -> number",
+    );
+}
+
+#[test]
 fn hovers_self_index_constructor_instance_methods() {
     let source = r#"
 local Account = {}

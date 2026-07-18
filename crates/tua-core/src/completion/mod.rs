@@ -1029,12 +1029,7 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             "Lua repeat/until loop",
             "repeat\n  ${1}\nuntil ${0:condition}",
         ),
-        (
-            "do",
-            None,
-            "Lua do/end block",
-            "do\n  ${0}\nend",
-        ),
+        ("do", None, "Lua do/end block", "do\n  ${0}\nend"),
         (
             crate::sprite::HELPER_NAME,
             None,
@@ -1433,7 +1428,7 @@ fn format_tua_type(ty: &TuaType) -> String {
 
             format!("{{ {fields} }}")
         }
-        TuaType::Array(item) => format!("{}[]", format_tua_type(item)),
+        TuaType::Array(item) => format!("{}[]", format_tua_array_item(item)),
         TuaType::Tuple(items) => format!(
             "[{}]",
             items
@@ -1482,6 +1477,16 @@ fn format_tua_type(ty: &TuaType) -> String {
                 format!("fun({parameters}): {returns}")
             }
         }
+    }
+}
+
+fn format_tua_array_item(ty: &TuaType) -> String {
+    let rendered = format_tua_type(ty);
+
+    if matches!(ty, TuaType::Union(_) | TuaType::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
     }
 }
 

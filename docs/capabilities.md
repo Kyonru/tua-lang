@@ -25,10 +25,10 @@ Status meanings:
 | Lua 5.1/LuaJIT syntax and emission | Supported | Tua emits readable Lua compatible with LuaJIT and LOVE 11.x. |
 | Local, parameter, return, and field annotations | Supported | Annotations are checked and erased. |
 | Aliases, table shapes, optional fields, unions, literals | Supported | Structural checking is available where stable types are known. |
-| Arrays, dictionaries, tuples, and typed loops | Supported | Common indexing, `pairs`, and `ipairs` inference is implemented. |
+| Arrays, dictionaries, tuples, and typed loops | Supported | Native `T[]` syntax, grouped union/function elements, `{}` initialization, indexing, `table.insert`, `pairs`, and `ipairs` inference are implemented. |
 | Native function types and typed varargs | Supported | Native and LuaDoc function forms share one semantic type. |
 | Default parameters and compound assignments | Supported | Lowered to readable Lua with source provenance. |
-| Classes, inheritance, final members, and enums | Supported | Class/runtime identity and enum values are checked and lowered. |
+| Classes, inheritance, final members, and enums | Supported | Class fields use native types including arrays and `Self`; constructors/methods retain exact types across modules, invalid members and inheritance/override drift are diagnosed, and class/runtime identity is lowered. |
 | Runtime `is` narrowing | Partial | Primitive, supported alias, class, and known metatable checks narrow; arbitrary structural runtime proof is rejected. |
 | Inferred local reassignment contracts | Supported | Tua locals retain stable widened types; explicit `any` remains dynamic. |
 | LuaDoc/LuaCATS interoperability | Partial | Practical aliases, classes, overloads, function types, varargs, docs, and module exports work; the full LuaLS annotation ecosystem is larger. |
@@ -52,7 +52,7 @@ Status meanings:
 | Hover, signature help, and type explanations | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. A source-linked Explain Type command reports annotation, inference, widening, narrowing, module, field, and dynamic fallback steps for identifiers and member chains. |
 | Definition, type definition, implementation | Supported | Known local, module, field, type, asset, and builtin identities navigate conservatively. |
 | References and rename | Supported | Same-file and compiler-identified project symbols are supported; static asset references update when the asset file is renamed, while ambiguous dynamic identities are rejected. |
-| Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure and known callers use shared semantic indexes; the VS Code extension can copy module-qualified symbol names and show workspace symbols grouped by module. |
+| Symbols, call hierarchy, links, code lens | Supported | Document/workspace structure includes classes, constructors, methods, fields, and known callers through shared semantic indexes; the VS Code extension can copy module-qualified symbol names and show workspace symbols grouped by module. |
 | Formatting and source actions | Supported | Full/range/on-type formatting plus conservative import, inferred annotation, extract local/function, inline local, table-type generation, LOVE callback generation, object-pool, and fix-all actions are available. |
 | Syntax highlighting | Supported | An immediate TextMate grammar covers Lua, Tua types/classes/enums, LuaDoc, modules, domain helpers, event names, calls, members, labels, literals, and operators. |
 | Semantic tokens and inlay hints | Supported | Full/range/delta tokens classify standard VS Code symbol roles and declaration/readonly/deprecated/modification/default-library modifiers; inferred type/parameter hints are revision-aware, and the extension offers Full, Compact, Types Only, Parameters Only, and Off presentation modes without changing server results. |

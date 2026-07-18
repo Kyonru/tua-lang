@@ -20,7 +20,7 @@ pub enum LoweringKind {
     Import,
     RuntimeTypeCheck,
     Class,
-    FinalClassCall,
+    ClassCall,
     CompoundAssignment,
     Sprite,
     Annotation,

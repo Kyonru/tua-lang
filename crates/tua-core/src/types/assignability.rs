@@ -8,6 +8,8 @@ const MAX_ALIAS_DEPTH: usize = 64;
 pub struct TypeContext {
     aliases: BTreeMap<String, Type>,
     nominal_supertypes: BTreeMap<String, BTreeSet<String>>,
+    nominal_aliases: BTreeSet<String>,
+    nominal_alias_supertypes: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl TypeContext {
@@ -48,6 +50,26 @@ impl TypeContext {
             .insert(supertype.into());
     }
 
+    pub fn insert_nominal_alias_supertype(
+        &mut self,
+        type_name: impl Into<String>,
+        supertype: impl Into<String>,
+    ) {
+        let type_name = type_name.into();
+        let supertype = supertype.into();
+
+        self.nominal_aliases.insert(type_name.clone());
+        self.nominal_aliases.insert(supertype.clone());
+        self.nominal_alias_supertypes
+            .entry(type_name)
+            .or_default()
+            .insert(supertype);
+    }
+
+    pub fn insert_nominal_alias(&mut self, name: impl Into<String>) {
+        self.nominal_aliases.insert(name.into());
+    }
+
     pub fn is_assignable(&self, source: &Type, target: &Type) -> bool {
         self.is_assignable_inner(source, target, 0)
     }
@@ -64,6 +86,18 @@ impl TypeContext {
         match (source, target) {
             (Type::Any, _) | (_, Type::Any) => true,
             (Type::Alias(source), Type::Alias(target))
+                if self.is_nominal_alias_type(source) || self.is_nominal_alias_type(target) =>
+            {
+                self.is_nominal_alias_subtype(source, target, depth + 1)
+            }
+            (Type::Union(sources), _) => sources
+                .iter()
+                .all(|source| self.is_assignable_inner(source, target, depth + 1)),
+            (_, Type::Union(targets)) => targets
+                .iter()
+                .any(|target| self.is_assignable_inner(source, target, depth + 1)),
+            (_, Type::Alias(target)) if self.is_nominal_alias_type(target) => false,
+            (Type::Alias(source), Type::Alias(target))
                 if self.alias(source).is_none()
                     && self.alias(target).is_none()
                     && self.is_nominal_subtype(source, target, depth + 1) =>
@@ -76,12 +110,6 @@ impl TypeContext {
             (_, Type::Alias(name)) if self.alias(name).is_some() => self
                 .alias(name)
                 .is_some_and(|resolved| self.is_assignable_inner(source, resolved, depth + 1)),
-            (Type::Union(sources), _) => sources
-                .iter()
-                .all(|source| self.is_assignable_inner(source, target, depth + 1)),
-            (_, Type::Union(targets)) => targets
-                .iter()
-                .any(|target| self.is_assignable_inner(source, target, depth + 1)),
             (Type::StringLiteral(_), Type::Primitive(super::PrimitiveType::String)) => true,
             (Type::Primitive(super::PrimitiveType::String), Type::StringLiteral(_)) => false,
             (Type::StringLiteral(source), Type::StringLiteral(target)) => source == target,
@@ -91,6 +119,11 @@ impl TypeContext {
             }
             (Type::Table(source), Type::Table(target)) => {
                 self.is_table_assignable(source, target, depth + 1)
+            }
+            (Type::Table(source), Type::Array(_) | Type::Dictionary { .. })
+                if source.is_plain_empty() =>
+            {
+                true
             }
             (Type::Array(source), Type::Array(target)) => {
                 self.is_assignable_inner(source, target, depth + 1)
@@ -135,6 +168,29 @@ impl TypeContext {
                     supertype == target || self.is_nominal_subtype(supertype, target, depth + 1)
                 })
             })
+    }
+
+    fn is_nominal_alias_subtype(&self, source: &str, target: &str, depth: usize) -> bool {
+        if source == target {
+            return true;
+        }
+
+        if depth >= MAX_ALIAS_DEPTH {
+            return false;
+        }
+
+        self.nominal_alias_supertypes
+            .get(source)
+            .is_some_and(|supertypes| {
+                supertypes.iter().any(|supertype| {
+                    supertype == target
+                        || self.is_nominal_alias_subtype(supertype, target, depth + 1)
+                })
+            })
+    }
+
+    fn is_nominal_alias_type(&self, name: &str) -> bool {
+        self.nominal_aliases.contains(name)
     }
 
     fn is_function_assignable(

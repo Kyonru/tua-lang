@@ -17,7 +17,10 @@ use crate::format::FormatOptions;
 use crate::inline_ignore::apply_inline_ignores;
 use crate::lint::lint_parsed_source;
 use crate::love_conf;
-use crate::module_index::required_module_export_type_for_fields;
+use crate::module_index::{
+    require_bindings_for_parsed_source, required_module_export_type_for_fields,
+    required_module_exports_for_receiver,
+};
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
@@ -218,6 +221,7 @@ struct Checker<'a> {
     scoped_locals: Vec<BTreeMap<String, Type>>,
     scoped_local_contracts: Vec<BTreeMap<String, Type>>,
     stable_inferred_locals: bool,
+    unresolved_required_module_aliases: BTreeSet<String>,
     asset_roots: Vec<PathBuf>,
     asset_index: Option<&'a asset::AssetIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
@@ -239,6 +243,10 @@ impl<'a> Checker<'a> {
             scoped_locals: Vec::new(),
             scoped_local_contracts: Vec::new(),
             stable_inferred_locals: parsed.raw.language == ParsedLanguage::Tua,
+            unresolved_required_module_aliases: unresolved_required_module_aliases(
+                parsed,
+                environment,
+            ),
             asset_roots: if asset_index.is_some() {
                 normalize_asset_roots_without_fs(asset_roots)
             } else {
@@ -489,18 +497,14 @@ impl<'a> Checker<'a> {
                 .get(index)
                 .and_then(|specifier| *specifier)
                 .is_some();
-            let ty = specifiers
-                .get(index)
-                .and_then(|specifier| *specifier)
-                .and_then(|_| self.environment.local(&name).cloned())
-                .or_else(
-                    || match assignment_expression_for_local(&expressions, index) {
-                        Some((expression, return_index)) => {
-                            self.infer_expression_return(expression, return_index)
-                        }
-                        None => Some(Type::nil()),
-                    },
-                );
+            let ty = self.environment.local(&name).cloned().or_else(|| {
+                match assignment_expression_for_local(&expressions, index) {
+                    Some((expression, return_index)) => {
+                        self.infer_expression_return(expression, return_index)
+                    }
+                    None => Some(Type::nil()),
+                }
+            });
 
             if let Some(ty) = ty {
                 let ty = if has_annotation {
@@ -533,6 +537,10 @@ impl<'a> Checker<'a> {
             let source = self.infer_expression(expression);
             let target = self.infer_var_assignment_target(variable);
 
+            if target.is_none() {
+                self.check_unknown_class_assignment_member(variable);
+            }
+
             if let (Some(source), Some(target)) = (&source, &target) {
                 self.check_type_assignable(expression, source, target);
             }
@@ -544,6 +552,10 @@ impl<'a> Checker<'a> {
     fn check_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
         let source = self.infer_expression(assignment.rhs());
         let target = self.infer_var_assignment_target(assignment.lhs());
+
+        if target.is_none() {
+            self.check_unknown_class_assignment_member(assignment.lhs());
+        }
 
         if let (Some(source), Some(target)) = (&source, &target) {
             self.check_type_assignable(assignment.rhs(), source, target);
@@ -828,6 +840,10 @@ impl<'a> Checker<'a> {
     }
 
     fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
+        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+            return;
+        }
+
         if !self.context.is_assignable(source, target) {
             let target = self.display_type_for_mismatch(target);
             self.diagnostics.push(mismatch_diagnostic(
@@ -1011,7 +1027,12 @@ impl<'a> Checker<'a> {
         for suffix in expression.suffixes() {
             match suffix {
                 Suffix::Index(Index::Dot { name, .. }) => {
-                    current = self.resolve_table_field_type(&current, &token_text(name))?;
+                    let field = token_text(name);
+                    let Some(next) = self.resolve_table_field_type(&current, &field) else {
+                        self.report_unknown_class_member(name, &current, &field);
+                        return None;
+                    };
+                    current = next;
                 }
                 Suffix::Index(Index::Brackets { expression, .. }) => {
                     let key = self.index_key_type(expression)?;
@@ -1022,6 +1043,51 @@ impl<'a> Checker<'a> {
         }
 
         Some(current)
+    }
+
+    fn check_unknown_class_assignment_member(&mut self, variable: &Var) {
+        let Some(parts) = plain_field_chain_from_var(variable) else {
+            return;
+        };
+        let Some((field, receiver_parts)) = parts.split_last() else {
+            return;
+        };
+        if receiver_parts.is_empty() {
+            return;
+        }
+        let Some(receiver_type) = self.resolve_field_chain_type(receiver_parts) else {
+            return;
+        };
+
+        self.report_unknown_class_member(variable, &receiver_type, field);
+    }
+
+    fn report_unknown_class_member(&mut self, node: &impl Node, ty: &Type, field: &str) {
+        let Type::Alias(class_name) = ty else {
+            return;
+        };
+        if !self.environment.is_class(class_name) {
+            return;
+        }
+
+        let Some(position) = node_span(node).map(|span| span.start) else {
+            return;
+        };
+        let diagnostic = Diagnostic::error(
+            &self.parsed.path,
+            position.line,
+            position.column,
+            format!("unknown member `{field}` on class `{class_name}`"),
+        )
+        .with_code(DiagnosticCode::TYPE_CLASS);
+
+        if !self.diagnostics.iter().any(|existing| {
+            existing.line == diagnostic.line
+                && existing.column == diagnostic.column
+                && existing.message == diagnostic.message
+        }) {
+            self.diagnostics.push(diagnostic);
+        }
     }
 
     fn index_key_type(&mut self, expression: &Expression) -> Option<Type> {
@@ -1314,6 +1380,14 @@ impl<'a> Checker<'a> {
                 {
                     return Some(Callable::ExternalFunction(function));
                 }
+            }
+
+            if let Some(callable) = self
+                .resolve_field_chain_type(&parts)
+                .as_ref()
+                .and_then(|ty| callable_from_type(ty, self.environment))
+            {
+                return Some(callable);
             }
 
             if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
@@ -1619,7 +1693,7 @@ impl<'a> Checker<'a> {
         let mut arguments = call_arguments(function_call).unwrap_or_default();
 
         if !is_method_call(function_call) {
-            if let Some(receiver_type) = self.final_class_dot_call_receiver_type(function_call) {
+            if let Some(receiver_type) = self.class_dot_call_receiver_type(function_call) {
                 arguments.insert(0, CallArgument::Inferred(receiver_type));
             }
             return arguments;
@@ -1639,11 +1713,11 @@ impl<'a> Checker<'a> {
         arguments
     }
 
-    fn final_class_dot_call_receiver_type(&self, function_call: &FunctionCall) -> Option<Type> {
+    fn class_dot_call_receiver_type(&self, function_call: &FunctionCall) -> Option<Type> {
         let dot_call = dot_method_call(function_call)?;
         let class_name = self.class_name_for_receiver(&dot_call.receiver, dot_call.position)?;
 
-        if !classes::class_method_is_final(
+        if !classes::class_method_exists(
             &self.parsed.class_declarations,
             &class_name,
             &dot_call.method,
@@ -1854,6 +1928,18 @@ impl<'a> Checker<'a> {
 
     fn resolve_field_chain_type(&self, parts: &[String]) -> Option<Type> {
         let (root, fields) = parts.split_first()?;
+        let local_type = self.infer_named_value(root).and_then(|mut current| {
+            for field in fields {
+                current = self.resolve_table_field_type(&current, field)?;
+            }
+
+            Some(current)
+        });
+
+        if local_type.is_some() {
+            return local_type;
+        }
+
         if !fields.is_empty() {
             if let Some(export) = required_module_export_type_for_fields(self.parsed, root, fields)
             {
@@ -1861,13 +1947,7 @@ impl<'a> Checker<'a> {
             }
         }
 
-        let mut current = self.infer_named_value(root)?;
-
-        for field in fields {
-            current = self.resolve_table_field_type(&current, field)?;
-        }
-
-        Some(current)
+        None
     }
 
     fn resolve_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
@@ -3264,6 +3344,97 @@ fn mismatch_found_label(expected: &Type, found: &Type) -> String {
         found.to_string()
     } else {
         widen_inferred_type(found).to_string()
+    }
+}
+
+fn unresolved_required_module_aliases(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> BTreeSet<String> {
+    let mut aliases = BTreeSet::new();
+
+    for binding in require_bindings_for_parsed_source(parsed) {
+        let Some(exports) = required_module_exports_for_receiver(parsed, &binding.alias) else {
+            continue;
+        };
+
+        for field in exports.fields.values() {
+            collect_unresolved_aliases(&field.ty, environment, &mut aliases);
+        }
+    }
+
+    aliases
+}
+
+fn collect_unresolved_aliases(
+    ty: &Type,
+    environment: &TypeEnvironment,
+    aliases: &mut BTreeSet<String>,
+) {
+    match ty {
+        Type::Alias(name) => {
+            if environment.alias(name).is_none() {
+                aliases.insert(name.clone());
+            }
+        }
+        Type::Union(types) | Type::Tuple(types) => {
+            for ty in types {
+                collect_unresolved_aliases(ty, environment, aliases);
+            }
+        }
+        Type::Function(function) => {
+            for parameter in &function.parameters {
+                collect_unresolved_aliases(&parameter.ty, environment, aliases);
+            }
+            if let Some(vararg) = function.vararg_type.as_deref() {
+                collect_unresolved_aliases(vararg, environment, aliases);
+            }
+            for return_type in function.return_types_or_any() {
+                collect_unresolved_aliases(return_type, environment, aliases);
+            }
+        }
+        Type::Table(table) => {
+            for (_, field) in table.fields() {
+                collect_unresolved_aliases(&field.ty, environment, aliases);
+            }
+        }
+        Type::Array(item) => collect_unresolved_aliases(item, environment, aliases),
+        Type::Dictionary { key, value } => {
+            collect_unresolved_aliases(key, environment, aliases);
+            collect_unresolved_aliases(value, environment, aliases);
+        }
+        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => {}
+    }
+}
+
+fn type_contains_any_alias(ty: &Type, aliases: &BTreeSet<String>) -> bool {
+    match ty {
+        Type::Alias(name) => aliases.contains(name),
+        Type::Union(types) | Type::Tuple(types) => {
+            types.iter().any(|ty| type_contains_any_alias(ty, aliases))
+        }
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .any(|parameter| type_contains_any_alias(&parameter.ty, aliases))
+                || function
+                    .vararg_type
+                    .as_deref()
+                    .is_some_and(|ty| type_contains_any_alias(ty, aliases))
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(|ty| type_contains_any_alias(ty, aliases))
+        }
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_contains_any_alias(&field.ty, aliases)),
+        Type::Array(item) => type_contains_any_alias(item, aliases),
+        Type::Dictionary { key, value } => {
+            type_contains_any_alias(key, aliases) || type_contains_any_alias(value, aliases)
+        }
+        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => false,
     }
 }
 

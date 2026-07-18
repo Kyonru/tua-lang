@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::ecs;
@@ -19,6 +19,7 @@ pub struct ProjectTypeDatabase {
 pub struct ProjectTypeModule {
     pub path: PathBuf,
     pub source_kind: AnalysisSourceKind,
+    class_names: BTreeSet<String>,
     aliases: BTreeMap<String, ProjectTypeBinding>,
     locals: BTreeMap<String, ProjectTypeBinding>,
     functions: BTreeMap<String, TypedFunction>,
@@ -62,6 +63,7 @@ impl ProjectTypeDatabase {
             let mut module = ProjectTypeModule {
                 path: path.clone(),
                 source_kind: input.source_kind,
+                class_names: BTreeSet::new(),
                 aliases: BTreeMap::new(),
                 locals: BTreeMap::new(),
                 functions: BTreeMap::new(),
@@ -70,6 +72,9 @@ impl ProjectTypeDatabase {
 
             if let Some(environment) = input.environment {
                 for (name, ty) in environment.aliases() {
+                    if environment.is_class(name) {
+                        module.class_names.insert(name.to_owned());
+                    }
                     module.aliases.insert(
                         name.to_owned(),
                         ProjectTypeBinding {
@@ -232,6 +237,12 @@ impl ProjectTypeDatabase {
                 let key = (binding.module_path.clone(), binding.name.clone());
 
                 if resolving.contains(&key) {
+                    if self
+                        .module(&binding.module_path)
+                        .is_some_and(|module| module.class_names.contains(&binding.name))
+                    {
+                        return Type::Any;
+                    }
                     return ty.clone();
                 }
 

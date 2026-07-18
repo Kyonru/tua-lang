@@ -470,7 +470,12 @@ impl AnalysisSnapshot {
         self.symbol_index
             .entries_for_path(path)
             .into_iter()
-            .filter(|entry| entry.kind == SymbolIndexKind::TypeAlias)
+            .filter(|entry| {
+                matches!(
+                    entry.kind,
+                    SymbolIndexKind::Class | SymbolIndexKind::TypeAlias
+                )
+            })
             .filter(|entry| alias_counts.get(&entry.name).copied().unwrap_or_default() == 1)
             .map(|entry| {
                 reference_code_lens(
@@ -488,7 +493,10 @@ impl AnalysisSnapshot {
         let mut counts = BTreeMap::new();
 
         for entry in self.symbol_index.entries() {
-            if entry.kind != SymbolIndexKind::TypeAlias {
+            if !matches!(
+                entry.kind,
+                SymbolIndexKind::Class | SymbolIndexKind::TypeAlias
+            ) {
                 continue;
             }
 

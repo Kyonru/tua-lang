@@ -757,6 +757,40 @@ fn unknown_call_returns_none() {
     assert_eq!(help, None);
 }
 
+#[test]
+fn returns_native_class_constructor_and_method_signatures() {
+    let source = r#"
+final class Counter {
+  value: number
+
+  init(value: number) {
+    self.value = value
+  }
+
+  add(amount: number): number {
+    return self.value + amount
+  }
+}
+
+local counter = Counter.new(1)
+counter:add(
+)
+"#;
+    let constructor = signature_at(source, "Counter.new(")
+        .expect("class constructor should provide signature help");
+    let method =
+        signature_at(source, "counter:add(").expect("class method should provide signature help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function Counter.new(value: number): Counter"
+    );
+    assert_eq!(
+        method.signatures[0].label,
+        "function counter:add(amount: number): number"
+    );
+}
+
 fn signature_at(source: &str, needle: &str) -> Option<SignatureHelp> {
     signature_help_tua_source("src/main.tua", source, position_after(source, needle))
         .expect("signature help should not fail")

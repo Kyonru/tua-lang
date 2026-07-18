@@ -1154,6 +1154,7 @@ pub(super) fn lsp_workspace_symbol_from_core(symbol: WorkspaceSymbol) -> Value {
 
 fn lsp_workspace_symbol_kind(kind: WorkspaceSymbolKind) -> u8 {
     match kind {
+        WorkspaceSymbolKind::Class => 5,
         WorkspaceSymbolKind::Module => 2,
         WorkspaceSymbolKind::Function => 12,
         WorkspaceSymbolKind::TypeAlias => 23,
@@ -1386,7 +1387,10 @@ fn lsp_folding_range_kind(kind: FoldingRangeKind) -> &'static str {
 
 fn lsp_symbol_kind(kind: DocumentSymbolKind) -> u8 {
     match kind {
+        DocumentSymbolKind::Class => 5,
+        DocumentSymbolKind::Method => 6,
         DocumentSymbolKind::Field => 8,
+        DocumentSymbolKind::Constructor => 9,
         DocumentSymbolKind::Function => 12,
         DocumentSymbolKind::Local | DocumentSymbolKind::Parameter => 13,
         DocumentSymbolKind::ModuleExports => 19,

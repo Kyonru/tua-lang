@@ -335,6 +335,7 @@ impl AnalysisSnapshot {
     ) -> TypeEnvironment {
         let _profile = profile::span("analysis.semantic.environment");
         let environment = base_environment
+            .with_local_types(self.project_module_binding_types(parsed))
             .with_local_types(project_inference.local_types.clone())
             .with_local_types(self.project_local_annotation_types(parsed));
 
@@ -345,6 +346,31 @@ impl AnalysisSnapshot {
         } else {
             environment
         }
+    }
+
+    pub(super) fn project_module_binding_types(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<(String, Type)> {
+        require_bindings_for_parsed_source(parsed)
+            .into_iter()
+            .filter_map(|binding| {
+                let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
+                let exports = self.module_exports(module_path)?;
+                let ty = Type::table(exports.fields.iter().map(|(name, field)| {
+                    (
+                        name.clone(),
+                        TableField::required(self.type_database.resolve_type(
+                            &self.module_graph,
+                            module_path,
+                            &field.ty,
+                        )),
+                    )
+                }));
+
+                Some((binding.alias, ty))
+            })
+            .collect()
     }
 
     pub(super) fn project_local_annotation_types(
@@ -958,7 +984,7 @@ impl AnalysisSnapshot {
         path: &Path,
         file: &AnalysisFile,
     ) -> Vec<Diagnostic> {
-        if file.require_edges.is_empty()
+        if file.hir().is_none_or(|hir| hir.require_bindings.is_empty())
             || file
                 .semantics()
                 .is_some_and(|semantics| !semantics.environment_diagnostics.is_empty())

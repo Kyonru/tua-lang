@@ -579,6 +579,13 @@ impl DeclarationIndex {
 
         for symbol in hir.symbols() {
             match symbol.kind {
+                HirSymbolKind::Class => {
+                    index.insert_declaration(
+                        symbol.name_span,
+                        &symbol.name,
+                        SemanticTokenKind::Class,
+                    );
+                }
                 HirSymbolKind::TypeAlias => {
                     let kind = parsed
                         .type_aliases

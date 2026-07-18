@@ -232,6 +232,10 @@ open class Entity {
 
   update(dt: number) {
   }
+
+  move(dx: number) {
+    self.x += dx
+  }
 }
 
 final class Particle extends Entity {
@@ -249,7 +253,10 @@ final class Particle extends Entity {
 local particle = Particle.new(1, 2)
 particle.update(0.1)
 particle:update(0.2)
+particle.move(1)
+particle:move(2)
 local entity = Entity.new(0, 0)
+entity.update(0.25)
 entity:update(0.3)
 
 if particle is Entity then
@@ -267,6 +274,9 @@ end
     ));
     assert!(emitted.contains("Particle_update(particle, 0.1)"));
     assert!(emitted.contains("Particle_update(particle, 0.2)"));
+    assert!(emitted.contains("Entity_move(particle, 1)"));
+    assert!(emitted.contains("Entity_move(particle, 2)"));
+    assert!(emitted.contains("entity.update(entity, 0.25)"));
     assert!(emitted.contains("entity:update(0.3)"));
     assert!(emitted.contains(".__is[Entity.__type_id] == true"));
 }

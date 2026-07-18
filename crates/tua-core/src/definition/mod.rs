@@ -11,7 +11,9 @@ use full_moon::node::Node;
 use crate::hir::{lower_parsed_source, HirModule, HirSymbol, HirSymbolKind};
 use crate::module_index::resolve_module_specifier;
 use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
-use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::parser::{
+    parse_lua_source, parse_tua_type_text, ParsedSource, SourcePosition, SourceSpan, TuaType,
+};
 use crate::semantic::SemanticModel;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
@@ -189,7 +191,7 @@ impl<'a> DefinitionResolver<'a> {
                 return Some(Definition {
                     path: self.parsed.path.clone(),
                     span: target.span,
-                    kind: DefinitionKind::TableField,
+                    kind: target.kind,
                 });
             }
         }
@@ -286,6 +288,13 @@ impl<'a> DefinitionResolver<'a> {
     }
 
     fn value_type(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        let environment = self.semantic_environment();
+        let semantic = SemanticModel::new(self.parsed, &environment);
+
+        if let Some(ty) = semantic.type_of_name(name, position) {
+            return Some(ty);
+        }
+
         let mut candidates = Vec::new();
 
         candidates.extend(self.parsed.local_annotations.iter().filter_map(|local| {
@@ -317,6 +326,10 @@ impl<'a> DefinitionResolver<'a> {
 
         match ty {
             Type::Alias(name) => {
+                if let Some(target) = class_member_target(self.parsed, name, field, depth + 1) {
+                    return Some(target);
+                }
+
                 let alias = self
                     .parsed
                     .type_aliases
@@ -333,6 +346,7 @@ impl<'a> DefinitionResolver<'a> {
                             Some(FieldTarget {
                                 span,
                                 ty: type_from_tua_type(&candidate.ty),
+                                kind: DefinitionKind::TableField,
                             })
                         }),
                     other => self.field_target(&type_from_tua_type(other), field, depth + 1),
@@ -415,6 +429,48 @@ impl<'a> DefinitionResolver<'a> {
 struct FieldTarget {
     span: SourceSpan,
     ty: Type,
+    kind: DefinitionKind,
+}
+
+fn class_member_target(
+    parsed: &ParsedSource,
+    class_name: &str,
+    member: &str,
+    depth: usize,
+) -> Option<FieldTarget> {
+    if depth >= MAX_FIELD_DEFINITION_DEPTH {
+        return None;
+    }
+
+    let class = parsed
+        .class_declarations
+        .iter()
+        .find(|class| class.name == class_name)?;
+
+    if let Some(field) = class.fields.iter().find(|field| field.name == member) {
+        return Some(FieldTarget {
+            span: field.name_span,
+            ty: type_from_tua_type(&field.parsed_ty),
+            kind: DefinitionKind::TableField,
+        });
+    }
+
+    if let Some(method) = class.methods.iter().find(|method| method.name == member) {
+        return Some(FieldTarget {
+            span: method.name_span,
+            ty: type_from_tua_type(&parse_tua_type_text(&format!(
+                "({}) -> {}",
+                method.parameters,
+                method.return_type.as_deref().unwrap_or("any")
+            ))),
+            kind: DefinitionKind::Function,
+        });
+    }
+
+    class
+        .parent
+        .as_deref()
+        .and_then(|parent| class_member_target(parsed, parent, member, depth + 1))
 }
 
 #[derive(Clone, Debug)]
@@ -566,7 +622,7 @@ fn first_module_span(parsed: &ParsedSource) -> Option<SourceSpan> {
 
 fn definition_from_hir_symbol(path: &Path, symbol: &HirSymbol) -> Option<Definition> {
     let kind = match symbol.kind {
-        HirSymbolKind::TypeAlias => DefinitionKind::TypeAlias,
+        HirSymbolKind::Class | HirSymbolKind::TypeAlias => DefinitionKind::TypeAlias,
         HirSymbolKind::Local => DefinitionKind::Local,
         HirSymbolKind::Function => DefinitionKind::Function,
         HirSymbolKind::Parameter => DefinitionKind::Parameter,
@@ -853,6 +909,10 @@ impl<'a> ModuleDefinitionIndex<'a> {
 
         match ty {
             Type::Alias(name) => {
+                if let Some(target) = class_member_target(parsed, name, field, depth + 1) {
+                    return Some(target);
+                }
+
                 let alias = parsed
                     .type_aliases
                     .iter()
@@ -868,6 +928,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
                             Some(FieldTarget {
                                 span,
                                 ty: type_from_tua_type(&candidate.ty),
+                                kind: DefinitionKind::TableField,
                             })
                         }),
                     other => {
@@ -881,6 +942,7 @@ impl<'a> ModuleDefinitionIndex<'a> {
             Type::Table(table) => table.semantic_field(field).map(|field| FieldTarget {
                 span: default_span(),
                 ty: field.ty.clone(),
+                kind: DefinitionKind::TableField,
             }),
             Type::Any
             | Type::Function(_)

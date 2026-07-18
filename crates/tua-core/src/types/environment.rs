@@ -30,6 +30,8 @@ pub struct TypeEnvironment {
     path: PathBuf,
     aliases: BTreeMap<String, Type>,
     alias_docs: BTreeMap<String, String>,
+    class_names: BTreeSet<String>,
+    class_parents: BTreeMap<String, String>,
     locals: BTreeMap<String, Type>,
     local_docs: BTreeMap<String, String>,
     functions: Vec<TypedFunction>,
@@ -54,6 +56,72 @@ impl TypeEnvironment {
 
     pub fn aliases(&self) -> impl Iterator<Item = (&str, &Type)> {
         self.aliases.iter().map(|(name, ty)| (name.as_str(), ty))
+    }
+
+    pub(crate) fn is_class(&self, name: &str) -> bool {
+        self.class_names.contains(name)
+    }
+
+    pub(crate) fn class_constructor(&self, name: &str) -> Option<&TypedFunction> {
+        self.is_class(name)
+            .then(|| format!("{name}_new"))
+            .and_then(|constructor| self.function(&constructor))
+    }
+
+    pub(crate) fn class_value_type(&self, name: &str) -> Option<Type> {
+        if !self.is_class(name) {
+            return None;
+        }
+
+        let mut fields = BTreeMap::new();
+        self.collect_class_value_fields(name, &mut fields, &mut BTreeSet::new());
+
+        Some(Type::table(fields))
+    }
+
+    fn collect_class_value_fields(
+        &self,
+        name: &str,
+        fields: &mut BTreeMap<String, TableField>,
+        visited: &mut BTreeSet<String>,
+    ) {
+        if !visited.insert(name.to_owned()) {
+            return;
+        }
+
+        if let Some(parent) = self.class_parents.get(name) {
+            self.collect_class_value_fields(parent, fields, visited);
+        }
+
+        if let Some(constructor) = self
+            .class_constructor(name)
+            .and_then(TypedFunction::as_type)
+        {
+            fields.insert("new".to_owned(), TableField::required(constructor));
+        }
+
+        let prefix = format!("{name}_");
+        for function in &self.functions {
+            let Some(function_name) = function.name.as_deref() else {
+                continue;
+            };
+            if generated_class_function_owner(function_name, &self.class_names).as_deref()
+                != Some(name)
+            {
+                continue;
+            }
+            let Some(method_name) = function_name.strip_prefix(&prefix) else {
+                continue;
+            };
+
+            if matches!(method_name, "init" | "new") {
+                continue;
+            }
+
+            if let Some(ty) = function.as_type() {
+                fields.insert(method_name.to_owned(), TableField::required(ty));
+            }
+        }
     }
 
     pub fn local(&self, name: &str) -> Option<&Type> {
@@ -88,6 +156,14 @@ impl TypeEnvironment {
 
         for &(type_name, supertype) in lua::love_type_supertypes() {
             context.insert_nominal_supertype(type_name, supertype);
+        }
+
+        for class in &self.class_names {
+            context.insert_nominal_alias(class);
+        }
+
+        for (class, parent) in &self.class_parents {
+            context.insert_nominal_alias_supertype(class, parent);
         }
 
         context
@@ -210,7 +286,8 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
     let builtin_aliases = builtin_aliases.into_iter().collect::<Vec<_>>();
     let mut diagnostics = Vec::new();
-    let alias_names = collect_alias_names(parsed, &mut diagnostics);
+    let mut alias_names = collect_alias_names(parsed, &mut diagnostics);
+    collect_class_names(parsed, &mut alias_names);
     let doc_aliases = lua_doc_alias_declarations(parsed, &alias_names, &mut diagnostics);
     let alias_names = alias_names
         .into_iter()
@@ -248,6 +325,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
     let mut locals = BTreeMap::new();
     let mut local_docs = BTreeMap::new();
     let mut functions = Vec::new();
+    let class_names = parsed
+        .class_declarations
+        .iter()
+        .map(|class| class.name.clone())
+        .collect::<BTreeSet<_>>();
 
     for alias in &parsed.type_aliases {
         if aliases.contains_key(&alias.name) {
@@ -322,6 +404,7 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
             &parsed.path,
             function,
             &alias_names,
+            &class_names,
             &mut diagnostics,
         ));
     }
@@ -351,17 +434,47 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         }
     }
 
+    register_class_constructor_types(parsed, &mut functions);
+    register_class_method_types(parsed, &mut aliases, &functions);
+
     (
         TypeEnvironment {
             path: parsed.path.clone(),
             aliases,
             alias_docs,
+            class_names,
+            class_parents: parsed
+                .class_declarations
+                .iter()
+                .filter_map(|class| {
+                    class
+                        .parent
+                        .as_ref()
+                        .map(|parent| (class.name.clone(), parent.clone()))
+                })
+                .collect(),
             locals,
             local_docs,
             functions,
         },
         diagnostics,
     )
+}
+
+fn register_class_constructor_types(parsed: &ParsedSource, functions: &mut [TypedFunction]) {
+    for class in &parsed.class_declarations {
+        let constructor_name = format!("{}_new", class.name);
+        let Some(constructor) = functions
+            .iter_mut()
+            .find(|function| function.name.as_deref() == Some(constructor_name.as_str()))
+        else {
+            continue;
+        };
+        let instance_type = Type::alias(class.name.clone());
+
+        constructor.return_type = Some(instance_type.clone());
+        constructor.return_types = vec![instance_type];
+    }
 }
 
 fn collect_alias_names(
@@ -382,6 +495,14 @@ fn collect_alias_names(
     }
 
     names
+}
+
+fn collect_class_names(parsed: &ParsedSource, names: &mut BTreeSet<String>) {
+    for class in &parsed.class_declarations {
+        // Class normalization emits a synthetic empty alias with this name.
+        // The parsed class declaration replaces that placeholder below.
+        names.insert(class.name.clone());
+    }
 }
 
 fn register_class_aliases(
@@ -456,17 +577,70 @@ fn collect_class_alias_fields(
     }
 }
 
+fn register_class_method_types(
+    parsed: &ParsedSource,
+    aliases: &mut BTreeMap<String, Type>,
+    functions: &[TypedFunction],
+) {
+    for class in &parsed.class_declarations {
+        let Some(Type::Table(mut table)) = aliases.get(&class.name).cloned() else {
+            continue;
+        };
+
+        collect_class_method_types(parsed, &class.name, functions, &mut table);
+        aliases.insert(class.name.clone(), Type::Table(table));
+    }
+}
+
+fn collect_class_method_types(
+    parsed: &ParsedSource,
+    class_name: &str,
+    functions: &[TypedFunction],
+    table: &mut super::TableShape,
+) {
+    let Some(class) = parsed
+        .class_declarations
+        .iter()
+        .find(|candidate| candidate.name == class_name)
+    else {
+        return;
+    };
+
+    if let Some(parent) = &class.parent {
+        collect_class_method_types(parsed, parent, functions, table);
+    }
+
+    for method in &class.methods {
+        let generated_name = format!("{}_{}", class.name, method.name);
+        let ty = functions
+            .iter()
+            .find(|function| function.name.as_deref() == Some(generated_name.as_str()))
+            .and_then(TypedFunction::as_type)
+            .unwrap_or(Type::Any);
+
+        table.insert(method.name.clone(), TableField::required(ty));
+    }
+}
+
 fn resolve_function_annotation(
     path: &Path,
     function: &ParsedFunctionAnnotation,
     alias_names: &BTreeSet<String>,
+    class_names: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> TypedFunction {
-    let self_type = function
+    let implicit_self_type = function
         .name
         .as_deref()
         .and_then(|name| function_self_type(name, alias_names));
-    let context = TypeResolutionContext::from_self_type(self_type.clone());
+    let context_self_type = implicit_self_type.clone().or_else(|| {
+        function
+            .name
+            .as_deref()
+            .and_then(|name| generated_class_function_owner(name, class_names))
+            .map(Type::alias)
+    });
+    let context = TypeResolutionContext::from_self_type(context_self_type);
     let mut parameters = function
         .parameters
         .iter()
@@ -486,7 +660,7 @@ fn resolve_function_annotation(
     let mut parameter_count = function.parameter_count;
     let mut required_parameter_count = function.required_parameter_count;
 
-    if let Some(receiver_type) = self_type {
+    if let Some(receiver_type) = implicit_self_type {
         parameters.insert(
             0,
             TypedParameter {
@@ -516,6 +690,14 @@ fn resolve_function_annotation(
         documentation: None,
         overloads: Vec::new(),
     }
+}
+
+fn generated_class_function_owner(name: &str, class_names: &BTreeSet<String>) -> Option<String> {
+    class_names
+        .iter()
+        .filter(|class| name.starts_with(&format!("{class}_")))
+        .max_by_key(|class| class.len())
+        .cloned()
 }
 
 fn function_self_type(name: &str, alias_names: &BTreeSet<String>) -> Option<Type> {

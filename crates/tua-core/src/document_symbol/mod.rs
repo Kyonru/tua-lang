@@ -15,6 +15,9 @@ pub struct DocumentSymbol {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DocumentSymbolKind {
+    Class,
+    Constructor,
+    Method,
     TypeAlias,
     Function,
     Local,
@@ -44,6 +47,7 @@ pub fn document_symbols_parsed_source_with_hir(
 ) -> Vec<DocumentSymbol> {
     let mut symbols = Vec::new();
 
+    symbols.extend(class_symbols(parsed, hir));
     symbols.extend(type_alias_symbols(parsed, hir));
     symbols.extend(function_symbols(parsed, hir));
     symbols.extend(local_symbols(parsed, hir));
@@ -55,6 +59,61 @@ pub fn document_symbols_parsed_source_with_hir(
     symbols.sort_by_key(|symbol| position_key(symbol.range.start));
 
     symbols
+}
+
+fn class_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSymbol> {
+    hir.symbols()
+        .iter()
+        .filter(|symbol| symbol.kind == HirSymbolKind::Class)
+        .filter_map(|symbol| {
+            let class = parsed
+                .class_declarations
+                .iter()
+                .find(|class| class.name == symbol.name)?;
+            let children = hir
+                .symbols()
+                .iter()
+                .filter(|child| child.parent == Some(symbol.id))
+                .filter_map(|child| match child.kind {
+                    HirSymbolKind::TableField => Some(document_symbol(DocumentSymbol {
+                        name: child.name.clone(),
+                        kind: DocumentSymbolKind::Field,
+                        detail: child.ty.as_ref().map(format_tua_type),
+                        range: child.origin_span,
+                        selection_range: child.name_span,
+                        children: Vec::new(),
+                    })),
+                    HirSymbolKind::Function => Some(document_symbol(DocumentSymbol {
+                        name: child.name.clone(),
+                        kind: if child.name == "init" {
+                            DocumentSymbolKind::Constructor
+                        } else {
+                            DocumentSymbolKind::Method
+                        },
+                        detail: child.ty.as_ref().map(format_tua_type),
+                        range: child.origin_span,
+                        selection_range: child.name_span,
+                        children: Vec::new(),
+                    })),
+                    _ => None,
+                })
+                .collect();
+            let detail = class
+                .parent
+                .as_ref()
+                .map(|parent| format!("class extends {parent}"))
+                .or_else(|| Some("class".to_owned()));
+
+            Some(document_symbol(DocumentSymbol {
+                name: symbol.name.clone(),
+                kind: DocumentSymbolKind::Class,
+                detail,
+                range: symbol.origin_span,
+                selection_range: symbol.name_span,
+                children,
+            }))
+        })
+        .collect()
 }
 
 fn type_alias_symbols(parsed: &ParsedSource, hir: &HirModule) -> Vec<DocumentSymbol> {
@@ -267,7 +326,7 @@ fn format_tua_type(ty: &TuaType) -> String {
 
             format!("{{ {fields} }}")
         }
-        TuaType::Array(item) => format!("{}[]", format_tua_type(item)),
+        TuaType::Array(item) => format!("{}[]", format_tua_array_item(item)),
         TuaType::Tuple(items) => format!(
             "[{}]",
             items
@@ -316,6 +375,16 @@ fn format_tua_type(ty: &TuaType) -> String {
                 format!("({params}) -> {returns}")
             }
         }
+    }
+}
+
+fn format_tua_array_item(ty: &TuaType) -> String {
+    let rendered = format_tua_type(ty);
+
+    if matches!(ty, TuaType::Union(_) | TuaType::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
     }
 }
 

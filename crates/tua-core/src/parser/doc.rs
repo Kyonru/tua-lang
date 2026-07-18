@@ -687,6 +687,15 @@ fn balanced_delimiter_end(line: &str, cursor: usize, open: char, close: char) ->
 
 pub(crate) fn parse_type_text(text: &str) -> TuaType {
     let text = text.trim();
+
+    // Function return types may contain top-level unions and array suffixes, so
+    // recognize the complete function form before applying outer precedence.
+    if let Some(function) =
+        parse_function_type_text(text).or_else(|| parse_native_function_type_text(text))
+    {
+        return function;
+    }
+
     let union = split_top_level(text, '|');
 
     if union.len() > 1 {
@@ -704,12 +713,12 @@ pub(crate) fn parse_type_text(text: &str) -> TuaType {
         }
     }
 
-    if is_quoted_string_literal(text) {
-        return TuaType::StringLiteral(unquote_literal(text).unwrap_or_else(|| text.to_owned()));
-    }
-
     if let Some(base) = text.strip_suffix("[]") {
         return TuaType::Array(Box::new(parse_type_text(base)));
+    }
+
+    if is_quoted_string_literal(text) {
+        return TuaType::StringLiteral(unquote_literal(text).unwrap_or_else(|| text.to_owned()));
     }
 
     if let Some(inner) = text
@@ -724,8 +733,8 @@ pub(crate) fn parse_type_text(text: &str) -> TuaType {
         );
     }
 
-    if let Some(function) = parse_function_type_text(text) {
-        return function;
+    if let Some(inner) = parenthesized_type_inner(text) {
+        return parse_type_text(inner);
     }
 
     if text == "identifier" {
@@ -812,6 +821,75 @@ fn parse_function_type_text(text: &str) -> Option<TuaType> {
         parameters,
         returns,
     })
+}
+
+fn parse_native_function_type_text(text: &str) -> Option<TuaType> {
+    let arrow = top_level_arrow_index(text)?;
+    let parameters = parenthesized_type_inner(text[..arrow].trim())?;
+    let returns = text[arrow + 2..].trim();
+
+    if returns.is_empty() {
+        return None;
+    }
+
+    let parameters = split_top_level(parameters, ',')
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .map(parse_function_type_parameter)
+        .collect();
+    let returns = parenthesized_type_inner(returns)
+        .map(|inner| {
+            let parts = split_top_level(inner, ',');
+
+            if parts.len() > 1 {
+                parts.into_iter().map(parse_type_text).collect()
+            } else {
+                vec![parse_type_text(returns)]
+            }
+        })
+        .unwrap_or_else(|| vec![parse_type_text(returns)]);
+
+    Some(TuaType::Function {
+        parameters,
+        returns,
+    })
+}
+
+fn parenthesized_type_inner(text: &str) -> Option<&str> {
+    let text = text.trim();
+    let rest = text.strip_prefix('(')?;
+    let close = matching_delimiter_index(rest, '(', ')')?;
+
+    (close + 1 == rest.len()).then(|| &rest[..close])
+}
+
+fn top_level_arrow_index(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, ch) in text.char_indices() {
+        if let Some(current_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == current_quote {
+                quote = None;
+            }
+
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' => quote = Some(ch),
+            '{' | '[' | '(' | '<' => depth += 1,
+            '}' | ']' | ')' | '>' => depth = depth.saturating_sub(1),
+            '-' if depth == 0 && text[index..].starts_with("->") => return Some(index),
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn parse_function_type_parameter(text: &str) -> FunctionTypeParameter {

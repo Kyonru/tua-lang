@@ -660,6 +660,15 @@ impl<'a> ExportInferer<'a> {
     }
 
     fn local_type(&mut self, name: &str) -> Option<Type> {
+        if let Some(ty) = self
+            .environment
+            .and_then(|environment| environment.class_value_type(name))
+        {
+            self.locals.insert(name.to_owned(), ty.clone());
+
+            return Some(ty);
+        }
+
         if let Some(function) = self
             .environment
             .and_then(|environment| environment.function(name))

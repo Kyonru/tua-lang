@@ -107,7 +107,15 @@ The semantic type model is gradual:
   contract.
 
 Generics are not part of the current language. Native function types and
-LuaDoc `fun(...)` annotations share one semantic representation.
+LuaDoc `fun(...)` annotations share one semantic representation. Arrays use
+native `T[]` syntax; grouped union and function elements use `(T | U)[]` and
+`((value: T) -> U)[]`. An empty table literal can initialize an explicitly
+typed array or dictionary.
+
+Class fields accept the same native type surface. Constructors return the
+declared class type, method signatures are checked exactly, and class exports
+retain constructor/member types through static project modules. Classes are
+closed by default: only `open class` declarations can be extended.
 
 ## Modules And Lua Interoperability
 

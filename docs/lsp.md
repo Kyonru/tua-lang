@@ -79,8 +79,10 @@ workspace directory when available.
   filesystem before the game runs. Path casing reports warning `TL2008`.
 - Supported `value is Type` checks narrow true branches for hover, completion,
   and diagnostics; unsupported runtime targets report `TL1007`.
-- Class constructor locals expose class fields and methods for completion,
-  hover, diagnostics, and optimized final-method calls.
+- Class constructors return the declared class type locally and through static
+  module exports. Exact array fields and method signatures drive completion,
+  hover, signature help, diagnostics, definition, document outlines, workspace
+  symbols, and optimized final-method calls.
 - LOVE object method completions prefer colon-call snippets and can rewrite
   `player.setF`-style completion sites to `player:setFilter(...)`.
 - LOVE callback completions are generated from the pinned LOVE catalog and can

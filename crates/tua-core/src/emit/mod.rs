@@ -149,7 +149,7 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
         let operations = lower_runtime_type_check_operations(&document, parsed)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_final_class_method_call_operations(&document, parsed);
+        let operations = lower_class_method_call_operations(&document, parsed);
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         let operations = lower_compound_assignment_operations(&document);
@@ -376,7 +376,7 @@ fn class_runtime_is_check(value: &str, target: &str) -> String {
     )
 }
 
-fn lower_final_class_method_call_operations(
+fn lower_class_method_call_operations(
     document: &lowering::LoweringDocument,
     parsed: &ParsedSource,
 ) -> Vec<lowering::LoweringOperation> {
@@ -408,11 +408,11 @@ fn lower_final_class_method_call_operations(
             let receiver = &output[index..index + identifier_end];
 
             if let Some(class_name) = local_classes.get(receiver) {
-                if let Some((replacement, end)) = final_class_method_call_replacement(
-                    &output, index, receiver, class_name, parsed,
-                ) {
+                if let Some((replacement, end)) =
+                    class_method_call_replacement(&output, index, receiver, class_name, parsed)
+                {
                     operations.push(document.operation(
-                        LoweringKind::FinalClassCall,
+                        LoweringKind::ClassCall,
                         index..end,
                         replacement,
                     ));
@@ -466,7 +466,7 @@ fn inferred_class_locals(output: &str, parsed: &ParsedSource) -> BTreeMap<String
     locals
 }
 
-fn final_class_method_call_replacement(
+fn class_method_call_replacement(
     output: &str,
     receiver_start: usize,
     receiver: &str,
@@ -487,7 +487,7 @@ fn final_class_method_call_replacement(
     let method_end = consume_identifier(&output[method_start..])?;
     let method = &output[method_start..method_start + method_end];
 
-    if !classes::class_method_is_final(&parsed.class_declarations, class_name, method) {
+    if !classes::class_method_exists(&parsed.class_declarations, class_name, method) {
         return None;
     }
 
@@ -498,10 +498,21 @@ fn final_class_method_call_replacement(
 
     let close = find_matching_paren(output, cursor)?;
     let args = output[cursor + 1..close].trim();
-    let replacement = if args.is_empty() {
-        format!("{class_name}_{method}({receiver})")
+    let is_final = classes::class_method_is_final(&parsed.class_declarations, class_name, method);
+    if !is_final && separator == ':' {
+        return None;
+    }
+
+    let target = if is_final {
+        let owner = classes::class_method_owner(&parsed.class_declarations, class_name, method)?;
+        format!("{owner}_{method}")
     } else {
-        format!("{class_name}_{method}({receiver}, {args})")
+        format!("{receiver}.{method}")
+    };
+    let replacement = if args.is_empty() {
+        format!("{target}({receiver})")
+    } else {
+        format!("{target}({receiver}, {args})")
     };
 
     Some((replacement, close + 1))
@@ -922,7 +933,7 @@ fn luacats_type(ty: &TuaType) -> String {
                 format!("{{ {} }}", rendered_fields)
             }
         }
-        TuaType::Array(item) => format!("{}[]", luacats_type(item)),
+        TuaType::Array(item) => format!("{}[]", luacats_array_item(item)),
         TuaType::Tuple(items) => format!(
             "[{}]",
             items
@@ -967,6 +978,16 @@ fn luacats_type(ty: &TuaType) -> String {
                 format!("fun({parameters}): {returns}")
             }
         }
+    }
+}
+
+fn luacats_array_item(ty: &TuaType) -> String {
+    let rendered = luacats_type(ty);
+
+    if matches!(ty, TuaType::Union(_) | TuaType::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
     }
 }
 
@@ -1088,7 +1109,7 @@ fn luacats_type_from_type(ty: &Type) -> String {
                 format!("{{ {fields} }}")
             }
         }
-        Type::Array(item) => format!("{}[]", luacats_type_from_type(item)),
+        Type::Array(item) => format!("{}[]", luacats_array_item_from_type(item)),
         Type::Tuple(items) => format!(
             "[{}]",
             items
@@ -1104,6 +1125,16 @@ fn luacats_type_from_type(ty: &Type) -> String {
                 luacats_type_from_type(value)
             )
         }
+    }
+}
+
+fn luacats_array_item_from_type(ty: &Type) -> String {
+    let rendered = luacats_type_from_type(ty);
+
+    if matches!(ty, Type::Union(_) | Type::Function(_)) {
+        format!("({rendered})")
+    } else {
+        rendered
     }
 }
 

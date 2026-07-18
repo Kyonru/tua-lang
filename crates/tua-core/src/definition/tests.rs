@@ -334,6 +334,30 @@ account.deposit(account, 25)
 }
 
 #[test]
+fn resolves_class_constructor_instance_fields_and_methods() {
+    let source = r#"
+final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number): number {
+    return step
+  }
+}
+
+local manager = BeatManager.new()
+local first = manager.steps[1]
+local added = manager.add(manager, 1)
+"#;
+
+    assert_definition_in_source(source, "steps[1]", 0, DefinitionKind::TableField, "steps");
+    assert_definition_in_source(source, "add(manager", 0, DefinitionKind::Function, "add");
+}
+
+#[test]
 fn unknown_symbols_and_any_fields_have_no_definition() {
     assert_no_definition("missing.value", 0);
     assert_no_definition("payload.value", "payload.".len());

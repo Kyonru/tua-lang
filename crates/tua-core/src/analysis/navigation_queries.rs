@@ -966,7 +966,8 @@ impl AnalysisSnapshot {
         let _profile = profile::span("analysis.references.index.build");
         let global_functions = self.global_function_definitions();
         let global_aliases = self.global_type_alias_definitions();
-        let type_alias_names = self.symbol_index.names_for_kind(SymbolIndexKind::TypeAlias);
+        let mut type_alias_names = self.symbol_index.names_for_kind(SymbolIndexKind::TypeAlias);
+        type_alias_names.extend(self.symbol_index.names_for_kind(SymbolIndexKind::Class));
         let mut index = ReverseReferenceIndex::default();
 
         for file in self.files.values() {
@@ -1241,7 +1242,7 @@ impl AnalysisSnapshot {
             };
 
             for symbol in hir.symbols() {
-                if symbol.kind != HirSymbolKind::TypeAlias {
+                if !matches!(symbol.kind, HirSymbolKind::Class | HirSymbolKind::TypeAlias) {
                     continue;
                 }
                 let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);

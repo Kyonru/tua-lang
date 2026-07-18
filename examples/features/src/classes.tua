@@ -11,19 +11,29 @@ open class Entity {
 
   update(dt: number) {
   }
+
+  move(dx: number, dy: number): Self {
+    self.x += dx
+    self.y += dy
+
+    return self
+  }
 }
 
 -- `final` is an optimization contract: known calls to final methods can lower
 -- to direct local function calls instead of virtual table dispatch.
 final class Particle extends Entity {
   speed: number = 120
+  trail: number[]
 
   init(x: number, y: number) {
     super(x, y)
+    self.trail = {}
   }
 
   override final update(dt: number) {
     self.x += self.speed * dt
+    table.insert(self.trail, self.x)
   }
 }
 

@@ -734,7 +734,7 @@ fn definition_kind_for_scope_declaration(kind: &ScopeDeclarationKind) -> Option<
 
 fn definition_kind_for_hir_symbol(kind: HirSymbolKind) -> Option<DefinitionKind> {
     match kind {
-        HirSymbolKind::TypeAlias => Some(DefinitionKind::TypeAlias),
+        HirSymbolKind::Class | HirSymbolKind::TypeAlias => Some(DefinitionKind::TypeAlias),
         HirSymbolKind::TableField => None,
         HirSymbolKind::Local => Some(DefinitionKind::Local),
         HirSymbolKind::Function => Some(DefinitionKind::Function),

@@ -57,6 +57,46 @@ end
 }
 
 #[test]
+fn indexes_classes_and_original_methods_without_generated_symbols() {
+    let temp = TempProject::new("workspace-symbols-classes");
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "src/beats.tua",
+        r#"final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number) {
+    table.insert(self.steps, step)
+  }
+}
+"#,
+    );
+
+    let symbols = workspace_symbols_from_dir(temp.path(), "").expect("workspace should index");
+
+    assert_symbol(
+        &symbols,
+        "BeatManager",
+        WorkspaceSymbolKind::Class,
+        Some("beats"),
+    );
+    assert_symbol(
+        &symbols,
+        "add",
+        WorkspaceSymbolKind::Function,
+        Some("BeatManager"),
+    );
+    assert!(!symbols
+        .iter()
+        .any(|symbol| symbol.name.starts_with("BeatManager_")));
+}
+
+#[test]
 fn fuzzy_matches_symbol_names_and_qualified_module_names() {
     let temp = TempProject::new("workspace-symbols-fuzzy");
 

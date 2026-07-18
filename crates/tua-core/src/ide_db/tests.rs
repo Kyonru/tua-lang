@@ -117,6 +117,56 @@ end
 }
 
 #[test]
+fn workspace_symbol_index_preserves_class_kind_and_method_container() {
+    let parsed = parse_tua_source(
+        "src/beats.tua",
+        r#"
+final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number) {
+    table.insert(self.steps, step)
+  }
+}
+"#,
+    )
+    .expect("class source should parse");
+    let hir = lower_parsed_source(&parsed);
+    let graph = ModuleGraph::build(
+        [ModuleGraphInput {
+            path: &parsed.path,
+            parsed: Some(&parsed),
+            hir: Some(&hir),
+            exports: None,
+            source_kind: AnalysisSourceKind::Tua,
+        }],
+        ModuleGraphOptions {
+            source_roots: vec![PathBuf::from("src")],
+            output_roots: Vec::new(),
+            extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+        },
+    );
+    let index = SymbolIndex::build(
+        [(&parsed.path, Some(&hir))],
+        &graph,
+        &[PathBuf::from("src")],
+    );
+    let symbols = index.workspace_symbols("");
+
+    assert!(symbols.iter().any(|symbol| {
+        symbol.name == "BeatManager" && symbol.kind == WorkspaceSymbolKind::Class
+    }));
+    assert!(symbols.iter().any(|symbol| {
+        symbol.name == "add" && symbol.container_name.as_deref() == Some("BeatManager")
+    }));
+}
+
+#[test]
 fn importable_symbols_are_export_entries_sorted_by_name_and_module() {
     let player = parse_tua_source(
         "src/player.tua",

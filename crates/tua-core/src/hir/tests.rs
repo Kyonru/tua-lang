@@ -140,3 +140,79 @@ return {
 
     assert_eq!(module.exports[0].value, HirExportValue::Unknown);
 }
+
+#[test]
+fn lowers_classes_with_original_fields_and_methods() {
+    let parsed = parse_tua_source(
+        "src/classes.tua",
+        r#"
+final class BeatManager {
+  steps: number[]
+
+  init() {
+    self.steps = {}
+  }
+
+  add(step: number): number {
+    table.insert(self.steps, step)
+    return step
+  }
+}
+"#,
+    )
+    .expect("class source should parse");
+    let module = lower_parsed_source(&parsed);
+    let class = module
+        .symbols()
+        .iter()
+        .find(|symbol| symbol.kind == HirSymbolKind::Class)
+        .expect("class symbol should exist");
+    let children = module
+        .symbols()
+        .iter()
+        .filter(|symbol| symbol.parent == Some(class.id))
+        .map(|symbol| (symbol.kind, symbol.name.as_str()))
+        .collect::<Vec<_>>();
+
+    assert!(children.contains(&(HirSymbolKind::TableField, "steps")));
+    assert!(children.contains(&(HirSymbolKind::Function, "init")));
+    assert!(children.contains(&(HirSymbolKind::Function, "add")));
+    assert!(!module
+        .symbols()
+        .iter()
+        .any(|symbol| symbol.name == "BeatManager_add"));
+}
+
+#[test]
+fn class_artifact_filter_preserves_source_authored_shadowing_locals() {
+    let parsed = parse_tua_source(
+        "src/classes.tua",
+        r#"
+final class BeatManager {
+  update(dt: number) {
+  }
+}
+
+do
+  local BeatManager = {}
+end
+"#,
+    )
+    .expect("class source should parse");
+    let module = lower_parsed_source(&parsed);
+    let beat_managers = module
+        .symbols()
+        .iter()
+        .filter(|symbol| symbol.name == "BeatManager")
+        .map(|symbol| symbol.kind)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        beat_managers,
+        vec![HirSymbolKind::Class, HirSymbolKind::Local]
+    );
+    assert!(!module
+        .symbols()
+        .iter()
+        .any(|symbol| symbol.name == "BeatManager_update"));
+}

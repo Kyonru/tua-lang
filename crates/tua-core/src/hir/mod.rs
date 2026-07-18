@@ -1,8 +1,10 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use full_moon::ast::{self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix};
 use full_moon::node::Node;
 
+use crate::{classes::ClassMethod, parser::parse_tua_type_text};
 use crate::{
     require_bindings_for_parsed_source, ParsedSource, SourcePosition, SourceSpan, TableFieldType,
     TuaType,
@@ -33,6 +35,7 @@ pub struct HirSymbol {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HirSymbolKind {
+    Class,
     TypeAlias,
     TableField,
     Local,
@@ -48,6 +51,7 @@ pub struct HirDeclaration {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HirDeclarationKind {
+    Class,
     TypeAlias,
     TableField,
     Local,
@@ -93,7 +97,10 @@ impl HirModule {
             .filter(|symbol| {
                 matches!(
                     symbol.kind,
-                    HirSymbolKind::Local | HirSymbolKind::Function | HirSymbolKind::Parameter
+                    HirSymbolKind::Class
+                        | HirSymbolKind::Local
+                        | HirSymbolKind::Function
+                        | HirSymbolKind::Parameter
                 ) && symbol.name == name
                     && starts_before_or_at(symbol.name_span, position)
             })
@@ -101,9 +108,10 @@ impl HirModule {
     }
 
     pub fn definition_for_type_alias(&self, name: &str) -> Option<&HirSymbol> {
-        self.symbols
-            .iter()
-            .find(|symbol| symbol.kind == HirSymbolKind::TypeAlias && symbol.name == name)
+        self.symbols.iter().find(|symbol| {
+            matches!(symbol.kind, HirSymbolKind::Class | HirSymbolKind::TypeAlias)
+                && symbol.name == name
+        })
     }
 
     pub fn symbol_at_span(&self, span: SourceSpan) -> Option<&HirSymbol> {
@@ -112,6 +120,13 @@ impl HirModule {
 }
 
 pub fn lower_parsed_source(parsed: &ParsedSource) -> HirModule {
+    let class_generated_lines = parsed
+        .raw
+        .parser_provenance
+        .iter()
+        .enumerate()
+        .filter_map(|(index, provenance)| provenance.class_generated.then_some(index + 1))
+        .collect();
     let mut lower = HirLowerer {
         module: HirModule {
             path: parsed.path.clone(),
@@ -120,8 +135,10 @@ pub fn lower_parsed_source(parsed: &ParsedSource) -> HirModule {
             require_bindings: Vec::new(),
             exports: Vec::new(),
         },
+        class_generated_lines,
     };
 
+    lower.collect_classes(parsed);
     lower.collect_type_aliases(parsed);
     lower.collect_block(parsed.ast.nodes(), None);
     lower.collect_require_bindings(parsed);
@@ -131,11 +148,58 @@ pub fn lower_parsed_source(parsed: &ParsedSource) -> HirModule {
 
 struct HirLowerer {
     module: HirModule,
+    class_generated_lines: BTreeSet<usize>,
 }
 
 impl HirLowerer {
+    fn collect_classes(&mut self, parsed: &ParsedSource) {
+        for class in &parsed.class_declarations {
+            let class_id = self.push_symbol(HirSymbolInput {
+                name: class.name.clone(),
+                kind: HirSymbolKind::Class,
+                name_span: class.name_span,
+                origin_span: class.span,
+                parent: None,
+                ty: Some(TuaType::Named(class.name.clone())),
+            });
+            self.push_declaration(class_id, HirDeclarationKind::Class);
+
+            for field in &class.fields {
+                let field_id = self.push_symbol(HirSymbolInput {
+                    name: field.name.clone(),
+                    kind: HirSymbolKind::TableField,
+                    name_span: field.name_span,
+                    origin_span: field.span,
+                    parent: Some(class_id),
+                    ty: Some(field.parsed_ty.clone()),
+                });
+                self.push_declaration(field_id, HirDeclarationKind::TableField);
+            }
+
+            for method in class.init.iter().chain(class.methods.iter()) {
+                let method_id = self.push_symbol(HirSymbolInput {
+                    name: method.name.clone(),
+                    kind: HirSymbolKind::Function,
+                    name_span: method.name_span,
+                    origin_span: method.span,
+                    parent: Some(class_id),
+                    ty: Some(class_method_type(method)),
+                });
+                self.push_declaration(method_id, HirDeclarationKind::Function);
+            }
+        }
+    }
+
     fn collect_type_aliases(&mut self, parsed: &ParsedSource) {
         for alias in &parsed.type_aliases {
+            if parsed
+                .class_declarations
+                .iter()
+                .any(|class| class.name == alias.name)
+            {
+                continue;
+            }
+
             let Some(name_span) = alias.name_span.or(alias.span) else {
                 continue;
             };
@@ -198,6 +262,9 @@ impl HirLowerer {
         match stmt {
             ast::Stmt::LocalAssignment(local) => self.collect_local_assignment(local, parent),
             ast::Stmt::LocalFunction(function) => {
+                if self.is_class_generated(function.name()) {
+                    return;
+                }
                 let function_id = self.collect_local_function(function, parent);
                 self.collect_function_body(function.body(), function_id.or(parent));
             }
@@ -231,6 +298,10 @@ impl HirLowerer {
         parent: Option<HirSymbolId>,
     ) {
         for name in local.names() {
+            if self.is_class_generated(name) {
+                continue;
+            }
+
             let Some(name_span) = node_span(name) else {
                 continue;
             };
@@ -367,7 +438,10 @@ impl HirLowerer {
             .find(|symbol| {
                 matches!(
                     symbol.kind,
-                    HirSymbolKind::Local | HirSymbolKind::Function | HirSymbolKind::Parameter
+                    HirSymbolKind::Class
+                        | HirSymbolKind::Local
+                        | HirSymbolKind::Function
+                        | HirSymbolKind::Parameter
                 ) && symbol.name == name
             })
             .map(|symbol| HirExportValue::Symbol(symbol.id))
@@ -395,6 +469,19 @@ impl HirLowerer {
             .declarations
             .push(HirDeclaration { symbol, kind });
     }
+
+    fn is_class_generated(&self, node: &impl Node) -> bool {
+        node.start_position()
+            .is_some_and(|position| self.class_generated_lines.contains(&position.line()))
+    }
+}
+
+fn class_method_type(method: &ClassMethod) -> TuaType {
+    parse_tua_type_text(&format!(
+        "({}) -> {}",
+        method.parameters,
+        method.return_type.as_deref().unwrap_or("any")
+    ))
 }
 
 struct HirSymbolInput {

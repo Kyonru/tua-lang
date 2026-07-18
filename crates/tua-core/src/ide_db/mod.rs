@@ -36,6 +36,7 @@ pub enum SymbolIndexId {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SymbolIndexKind {
+    Class,
     TypeAlias,
     Function,
     Module,
@@ -226,6 +227,7 @@ impl SymbolIndexEntry {
         matches!(
             self.kind,
             SymbolIndexKind::Module
+                | SymbolIndexKind::Class
                 | SymbolIndexKind::TypeAlias
                 | SymbolIndexKind::Function
                 | SymbolIndexKind::Export
@@ -236,6 +238,7 @@ impl SymbolIndexEntry {
         WorkspaceSymbol {
             name: self.name.clone(),
             kind: match self.kind {
+                SymbolIndexKind::Class => WorkspaceSymbolKind::Class,
                 SymbolIndexKind::TypeAlias => WorkspaceSymbolKind::TypeAlias,
                 SymbolIndexKind::Function => WorkspaceSymbolKind::Function,
                 SymbolIndexKind::Module => WorkspaceSymbolKind::Module,
@@ -259,6 +262,7 @@ struct ScoredSymbolEntry<'a> {
 
 fn symbol_index_kind(kind: HirSymbolKind) -> SymbolIndexKind {
     match kind {
+        HirSymbolKind::Class => SymbolIndexKind::Class,
         HirSymbolKind::TypeAlias => SymbolIndexKind::TypeAlias,
         HirSymbolKind::TableField => SymbolIndexKind::Field,
         HirSymbolKind::Local => SymbolIndexKind::Local,
@@ -330,12 +334,13 @@ fn symbol_entry_key(entry: &SymbolIndexEntry) -> (PathBuf, u8, usize, usize, Str
 fn symbol_kind_key(kind: SymbolIndexKind) -> u8 {
     match kind {
         SymbolIndexKind::Module => 0,
-        SymbolIndexKind::TypeAlias => 1,
-        SymbolIndexKind::Function => 2,
-        SymbolIndexKind::Local => 3,
-        SymbolIndexKind::Parameter => 4,
-        SymbolIndexKind::Field => 5,
-        SymbolIndexKind::Export => 6,
+        SymbolIndexKind::Class => 1,
+        SymbolIndexKind::TypeAlias => 2,
+        SymbolIndexKind::Function => 3,
+        SymbolIndexKind::Local => 4,
+        SymbolIndexKind::Parameter => 5,
+        SymbolIndexKind::Field => 6,
+        SymbolIndexKind::Export => 7,
     }
 }
 

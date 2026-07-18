@@ -188,6 +188,27 @@ fn class_array_fields_parse_after_lowering() {
 }
 
 #[test]
+fn class_fields_parse_grouped_and_function_array_types() {
+    let source = r#"final class Registry {
+  values: (number | string)[]
+  handlers: ((value: number) -> string)[]
+}
+"#;
+    let parsed = parse_tua_source("src/classes.tua", source)
+        .expect("grouped and function class array fields should parse");
+    let class = &parsed.class_declarations[0];
+
+    assert!(matches!(
+        &class.fields[0].parsed_ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Union(types) if types.len() == 2)
+    ));
+    assert!(matches!(
+        &class.fields[1].parsed_ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Function { .. })
+    ));
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",

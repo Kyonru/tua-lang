@@ -229,7 +229,7 @@ impl From<SourceSpan> for SpanKey {
 
 fn target_for_hir_symbol(path: &std::path::Path, symbol: &HirSymbol) -> Option<DefinitionTarget> {
     let kind = match symbol.kind {
-        HirSymbolKind::TypeAlias => DefinitionKind::TypeAlias,
+        HirSymbolKind::Class | HirSymbolKind::TypeAlias => DefinitionKind::TypeAlias,
         HirSymbolKind::Local => DefinitionKind::Local,
         HirSymbolKind::Function => DefinitionKind::Function,
         HirSymbolKind::Parameter => DefinitionKind::Parameter,

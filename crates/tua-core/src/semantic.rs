@@ -317,6 +317,12 @@ impl<'a> SemanticModel<'a> {
             }
         }
 
+        if fields == ["new"] {
+            if let Some(function) = self.environment.class_constructor(root) {
+                return Some(function.clone());
+            }
+        }
+
         if let Some(function) = self.prototype_typed_function_for_call_parts(parts, position) {
             return Some(function);
         }
@@ -519,7 +525,7 @@ impl<'a> SemanticModel<'a> {
                         .trim_start()
                         .starts_with('(')
                 {
-                    return Some(class_instance_type(self.parsed, &class.name));
+                    return Some(Type::alias(class.name.clone()));
                 }
             }
         }
@@ -1601,43 +1607,6 @@ fn module_exports_table_type(exports: ModuleExports) -> Type {
             .into_iter()
             .map(|(name, field)| (name, TableField::required(field.ty))),
     )
-}
-
-fn class_instance_type(parsed: &ParsedSource, class_name: &str) -> Type {
-    let mut fields = BTreeMap::<String, TableField>::new();
-
-    collect_class_instance_fields(parsed, class_name, &mut fields);
-
-    Type::table(fields)
-}
-
-fn collect_class_instance_fields(
-    parsed: &ParsedSource,
-    class_name: &str,
-    fields: &mut BTreeMap<String, TableField>,
-) {
-    let Some(class) = parsed
-        .class_declarations
-        .iter()
-        .find(|candidate| candidate.name == class_name)
-    else {
-        return;
-    };
-
-    if let Some(parent) = &class.parent {
-        collect_class_instance_fields(parsed, parent, fields);
-    }
-
-    for field in &class.fields {
-        fields.insert(
-            field.name.clone(),
-            TableField::required(type_from_tua_type(&field.parsed_ty)),
-        );
-    }
-
-    for method in &class.methods {
-        fields.insert(method.name.clone(), TableField::required(Type::Any));
-    }
 }
 
 fn local_assignment_value_in_block<'a>(

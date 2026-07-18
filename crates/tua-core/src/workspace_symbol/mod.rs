@@ -1,8 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::hir::HirSymbolKind;
 use crate::{
-    load_config_from_dir, parse_tua_source, Diagnostic, DiagnosticCode, SourcePosition, SourceSpan,
+    load_config_from_dir, lower_parsed_source, parse_tua_source, Diagnostic, DiagnosticCode,
+    SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,6 +19,7 @@ pub struct WorkspaceSymbol {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkspaceSymbolKind {
+    Class,
     TypeAlias,
     Function,
     Module,
@@ -74,32 +77,28 @@ pub fn workspace_symbols_from_files(
             container_name: None,
         });
 
-        symbols.extend(parsed.type_aliases.iter().filter_map(|alias| {
-            let range = alias.span?;
-            let selection_range = alias.name_span.unwrap_or(range);
+        let hir = lower_parsed_source(&parsed);
+        symbols.extend(hir.symbols().iter().filter_map(|symbol| {
+            let kind = match symbol.kind {
+                HirSymbolKind::Class => WorkspaceSymbolKind::Class,
+                HirSymbolKind::TypeAlias => WorkspaceSymbolKind::TypeAlias,
+                HirSymbolKind::Function => WorkspaceSymbolKind::Function,
+                HirSymbolKind::TableField | HirSymbolKind::Local | HirSymbolKind::Parameter => {
+                    return None;
+                }
+            };
 
             Some(WorkspaceSymbol {
-                name: alias.name.clone(),
-                kind: WorkspaceSymbolKind::TypeAlias,
+                name: symbol.name.clone(),
+                kind,
                 path: path.clone(),
-                range,
-                selection_range,
-                container_name: Some(module_name.clone()),
-            })
-        }));
-
-        symbols.extend(parsed.function_annotations.iter().filter_map(|function| {
-            let name = function.name.clone()?;
-            let range = function.span?;
-            let selection_range = function.name_span.unwrap_or(range);
-
-            Some(WorkspaceSymbol {
-                name,
-                kind: WorkspaceSymbolKind::Function,
-                path: path.clone(),
-                range,
-                selection_range,
-                container_name: Some(module_name.clone()),
+                range: symbol.origin_span,
+                selection_range: symbol.name_span,
+                container_name: symbol
+                    .parent
+                    .and_then(|parent| hir.symbol(parent))
+                    .map(|parent| parent.name.clone())
+                    .or_else(|| Some(module_name.clone())),
             })
         }));
     }
