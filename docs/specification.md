@@ -152,6 +152,12 @@ Domain helpers must prefer ordinary Lua-compatible APIs. `spriteSheet({...})`,
 rather than executable third-party plugins. Experimental editor presentation
 remains explicitly preview-gated.
 
+The sprite domain may describe anim8 grid cell size, left/top origin, border
+spacing, zero-based row/column ranges, per-animation grid overrides, numeric or
+table durations, and `onLoop` method strings or callbacks. These facts must
+remain shared across diagnostics, completion, inspection, preview, and Lua
+emission.
+
 ## CLI Contract
 
 The `tua` executable provides:

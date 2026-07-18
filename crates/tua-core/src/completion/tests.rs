@@ -217,7 +217,8 @@ fn completes_love_builtin_type_names() {
         vec![
             "Image".to_owned(),
             "ImageData".to_owned(),
-            "CompressedImageData".to_owned()
+            "CompressedImageData".to_owned(),
+            "SpriteAnimationConfig".to_owned()
         ]
     );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
@@ -872,7 +873,7 @@ fn completes_tua_and_lua_statement_snippets() {
             "spr",
             "spr",
             "spriteSheet",
-            "local ${1:Player} = spriteSheet({\n  image = \"${2:assets/player.png}\",\n  frame = { width = ${3:16}, height = ${4:16} },\n  animations = {\n    ${5:idle} = { from = ${6:0}, to = ${7:3}, fps = ${8:8} },\n  },\n})",
+            "local ${1:Player} = spriteSheet({\n  image = \"${2:assets/player.png}\",\n  frame = { width = ${3:16}, height = ${4:16}, left = ${5:0}, top = ${6:0}, border = ${7:0} },\n  animations = {\n    ${8:idle} = { from = ${9:0}, to = ${10:3}, row = ${11:0}, fps = ${12:8} },\n  },\n})",
         ),
         (
             "sig",
@@ -930,6 +931,90 @@ fn completes_tua_and_lua_statement_snippets() {
         assert!(completion.is_snippet);
         assert_eq!(completion.insert_text.as_deref(), Some(insert_text));
     }
+}
+
+#[test]
+fn completes_nested_sprite_sheet_configuration_fields() {
+    let frame_source = r#"local Background = spriteSheet({
+  image = "assets/background.png",
+  frame = {
+    width = 256,
+    height = 256,
+    le
+  },
+  animations = {
+    idle = { from = 0, to = 3, row = 0, fps = 8 },
+  },
+})
+"#;
+    let frame_completions = complete_tua_source(
+        "src/sprites.tua",
+        frame_source,
+        position_after(frame_source, "    le"),
+    )
+    .expect("sprite frame completion should succeed");
+    let left = frame_completions
+        .iter()
+        .find(|completion| completion.label == "left")
+        .expect("left should complete in frame configuration");
+
+    assert_eq!(left.insert_text.as_deref(), Some("left = ${1:0},"));
+
+    let animation_source = r#"local Background = spriteSheet({
+  image = "assets/background.png",
+  frame = { width = 256, height = 256 },
+  animations = {
+    idle = {
+      from = 0,
+      to = 3,
+      fps = 8,
+      onL
+    },
+  },
+})
+"#;
+    let animation_completions = complete_tua_source(
+        "src/sprites.tua",
+        animation_source,
+        position_after(animation_source, "      onL"),
+    )
+    .expect("sprite animation completion should succeed");
+    let on_loop = animation_completions
+        .iter()
+        .find(|completion| completion.label == "onLoop")
+        .expect("onLoop should complete in animation configuration");
+
+    assert_eq!(
+        on_loop.insert_text.as_deref(),
+        Some("onLoop = \"${1:pauseAtEnd}\",")
+    );
+}
+
+#[test]
+fn completes_sprite_on_loop_method_values() {
+    let source = r#"local Background = spriteSheet({
+  image = "assets/background.png",
+  frame = { width = 256, height = 256 },
+  animations = {
+    idle = { column = 0, durations = 1, onLoop = "pa" },
+  },
+})
+"#;
+    let completions = complete_tua_source(
+        "src/sprites.tua",
+        source,
+        position_after(source, "onLoop = \"pa"),
+    )
+    .expect("sprite onLoop value completion should succeed");
+
+    assert_eq!(
+        labels(&completions),
+        vec![
+            "pause".to_owned(),
+            "pauseAtEnd".to_owned(),
+            "pauseAtStart".to_owned(),
+        ]
+    );
 }
 
 #[test]

@@ -386,7 +386,31 @@ request("initialize", {
         if (sprite.name !== "Player" || sprite.image?.status !== "valid") {
           fail(`sprite inspection returned invalid declaration metadata: ${JSON.stringify(sprite)}`);
         }
-        if (sprite.frame?.width !== 128 || sprite.animations?.length !== 2) {
+        const animations = Object.fromEntries(
+          (sprite.animations || []).map((animation) => [animation.name, animation]),
+        );
+        const frame = sprite.frame;
+        const orange = animations.orange;
+        const blue = animations.blue;
+        const green = animations.green;
+
+        if (
+          frame?.width !== 128 ||
+          frame.height !== 128 ||
+          frame.left !== 0 ||
+          frame.top !== 0 ||
+          frame.border !== 0 ||
+          sprite.animations?.length !== 3 ||
+          orange?.column !== 1 ||
+          orange.durations !== "1" ||
+          blue?.row !== 1 ||
+          blue.onLoop !== "pauseAtEnd" ||
+          blue.loop !== false ||
+          green?.frame?.width !== 64 ||
+          green.frame.height !== 64 ||
+          !green.durations?.includes("0.5") ||
+          !green.onLoop?.startsWith("function(")
+        ) {
           fail(`sprite inspection returned invalid animation metadata: ${JSON.stringify(sprite)}`);
         }
       },

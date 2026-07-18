@@ -373,9 +373,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
     aliases
         .entry(vector::TYPE_NAME.to_owned())
         .or_insert_with(vector::vec2_type);
-    aliases
-        .entry(sprite::TYPE_NAME.to_owned())
-        .or_insert_with(sprite::sprite_sheet_type);
+    for (name, ty) in sprite::builtin_aliases() {
+        aliases.entry(name).or_insert(ty);
+    }
     aliases
         .entry(crate::signal::TYPE_NAME.to_owned())
         .or_insert_with(crate::signal::signal_bus_type);

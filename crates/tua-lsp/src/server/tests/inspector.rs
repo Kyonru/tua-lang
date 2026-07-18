@@ -5,10 +5,16 @@ fn inspector_returns_compiler_backed_sprite_metadata_and_diagnostics() {
     let temp = TempProject::new("sprite-inspector");
     let source = r#"local Player = spriteSheet({
   image = "assets/player.png",
-  frame = { width = 16, height = 16 },
+  frame = { width = 16, height = 16, left = 2, top = 4, border = 1 },
   animations = {
-    idle = { from = 0, to = 3, fps = 8 },
-    idle = { from = 4, to = 2, fps = 12, loop = false },
+    idle = { from = 0, to = 3, row = 1, fps = 8 },
+    idle = {
+      from = 4,
+      to = 2,
+      frame = { width = 8, height = 12, left = 6, top = 10, border = 2 },
+      durations = 0.25,
+      onLoop = "pauseAtEnd",
+    },
   },
 })
 local selected = Player
@@ -38,8 +44,16 @@ local selected = Player
     assert_eq!(sprite["image"]["status"], "valid");
     assert_eq!(sprite["frame"]["width"], 16);
     assert_eq!(sprite["frame"]["height"], 16);
+    assert_eq!(sprite["frame"]["left"], 2);
+    assert_eq!(sprite["frame"]["top"], 4);
+    assert_eq!(sprite["frame"]["border"], 1);
     assert_eq!(sprite["animations"][0]["name"], "idle");
     assert_eq!(sprite["animations"][0]["fps"], 8.0);
+    assert_eq!(sprite["animations"][0]["row"], 1);
+    assert_eq!(sprite["animations"][1]["frame"]["width"], 8);
+    assert_eq!(sprite["animations"][1]["frame"]["left"], 6);
+    assert_eq!(sprite["animations"][1]["durations"], "0.25");
+    assert_eq!(sprite["animations"][1]["onLoop"], "pauseAtEnd");
     assert_eq!(sprite["animations"][1]["loop"], false);
 
     let messages = sprite["diagnostics"]

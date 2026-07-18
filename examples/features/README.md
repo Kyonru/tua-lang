@@ -98,9 +98,10 @@ make build-features
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.
 - `src/sprites.tua` covers the experimental built-in `spriteSheet({...})`
-  helper: sprite sheet image validation, frame size metadata, animation
-  frame ranges, FPS, non-looping animation mode, anim8-backed Lua emission, and
-  bundled `anim8.lua` build output.
+  helper: image validation, grid size/origin/border metadata, row/column ranges,
+  per-animation frame overrides, FPS or anim8 duration tables, `onLoop`
+  callbacks/methods, nested configuration completion, anim8-backed Lua
+  emission, and bundled `anim8.lua` build output.
 - `src/signals.tua` covers the built-in `signal()` helper: inferred
   `SignalBus` locals, method completion/hover/signature help for event
   registration and emission, known event-name string completion, typed

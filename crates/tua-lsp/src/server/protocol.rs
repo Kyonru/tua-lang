@@ -530,6 +530,9 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                         json!({
                             "width": frame.width,
                             "height": frame.height,
+                            "left": frame.left,
+                            "top": frame.top,
+                            "border": frame.border,
                             "range": lsp_range(frame.span)
                         })
                     });
@@ -546,7 +549,19 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                 "name": animation.name,
                                 "from": animation.from,
                                 "to": animation.to,
+                                "row": animation.row,
+                                "column": animation.column,
+                                "frame": animation.frame.map(|frame| json!({
+                                    "width": frame.width,
+                                    "height": frame.height,
+                                    "left": frame.left,
+                                    "top": frame.top,
+                                    "border": frame.border,
+                                    "range": lsp_range(frame.span)
+                                })),
                                 "fps": animation.fps,
+                                "durations": animation.durations,
+                                "onLoop": animation.on_loop,
                                 "loop": animation.looping,
                                 "range": lsp_range(animation.span),
                                 "selectionRange": lsp_range(animation.name_span)

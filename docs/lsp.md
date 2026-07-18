@@ -162,9 +162,11 @@ workspace directory when available.
   remain permissive.
 - The general `tua/inspect` request returns structured, revisioned document
   inspector items. Sprite sheet items include declaration ranges, resolved
-  image asset URIs and validation status, frame metadata, animations, and the
-  same `TL5004` diagnostics used by normal project analysis. The VS Code sprite
-  hover action reuses this inspector data.
+  image asset URIs and validation status, grid origin/border metadata,
+  per-animation frame geometry, row/column selectors, timing/loop metadata, and
+  the same `TL5004` diagnostics used by normal project analysis. Nested sprite
+  configuration and common `onLoop` method strings complete from the same core
+  schema. The VS Code sprite hover action and preview reuse this inspector data.
 - The low-priority `tua/assetInventory` request returns revisioned project
   assets grouped by stable category metadata, static Tua/Lua reference ranges,
   dimensions when cheaply available, and conservative `TL2009` hints for

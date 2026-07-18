@@ -36,7 +36,7 @@ Status meanings:
 | LOVE 11.x catalog | Supported | Generated overloads, enums, callback snippets/validation, methods, docs, and inheritance drive semantics. |
 | Asset helpers and metadata | Supported | Known images, sounds, fonts, shaders, and related assets support validation, casing checks, usage inventory, navigation, references, and path-preserving file rename edits. |
 | Vec2, SignalBus, and object-pool helpers | Supported | Ordinary APIs emit vendored helper modules only when used; typed pool factories preserve acquired item types, and visible same-file unreleased acquires produce conservative lifecycle warnings. |
-| Sprite-sheet semantics | Preview | `spriteSheet({...})` analysis and anim8 emission work; editor preview remains gated. |
+| Sprite-sheet semantics | Preview | `spriteSheet({...})` supports typed nested completion, grid offsets/borders, row/column ranges, per-animation frame overrides, anim8 durations/`onLoop`, diagnostics, inspection, and anim8 emission; editor preview remains gated. |
 | ECS semantics | Supported | Zero-setup built-in runtime, typed world/component/query/system APIs, and static component diagnostics are enabled by default. |
 | Generics | Deferred | Concrete function types and container behavior take priority. |
 | Executable third-party plugins | Out of scope | Domain behavior stays first-class until a stable trust and ownership model exists. |

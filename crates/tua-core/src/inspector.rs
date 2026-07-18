@@ -39,6 +39,9 @@ pub struct SpriteAssetInspection {
 pub struct SpriteFrameInspection {
     pub width: u32,
     pub height: u32,
+    pub left: u32,
+    pub top: u32,
+    pub border: u32,
     pub span: SourceSpan,
 }
 
@@ -47,7 +50,12 @@ pub struct SpriteAnimationInspection {
     pub name: String,
     pub from: u32,
     pub to: u32,
+    pub row: u32,
+    pub column: Option<u32>,
+    pub frame: Option<SpriteFrameInspection>,
     pub fps: f64,
+    pub durations: Option<String>,
+    pub on_loop: Option<String>,
     pub looping: bool,
     pub span: SourceSpan,
     pub name_span: SourceSpan,

@@ -669,6 +669,54 @@ type mismatches such as using an audio file where an image is expected. Today
 that optional binary metadata is conservative; for example, valid PNG headers
 can provide dimensions, while audio duration is left unknown.
 
+### Sprite Sheets And Anim8
+
+`spriteSheet({...})` validates a local sprite image and lowers named animations
+to the bundled anim8 runtime. Grid and animation coordinates are zero-based in
+Tua; lowering converts them to anim8's one-based selectors:
+
+```tua
+local background = spriteSheet({
+  image = "assets/images/spritesheet_stall.png",
+  frame = { width = 256, height = 256, left = 2, top = 4, border = 1 },
+  animations = {
+    orange = { column = 1, row = 0, durations = 1 },
+    blue = { from = 0, to = 3, row = 1, fps = 8, onLoop = "pauseAtEnd" },
+    green = {
+      from = 0,
+      to = 3,
+      row = 2,
+      frame = { width = 128, height = 64, left = 8, top = 16, border = 2 },
+      durations = { 0.1, 0.5, 0.1, 0.1 },
+      onLoop = function(animation, loops)
+        if loops > 1 then
+          animation:pause()
+        end
+      end,
+    },
+  },
+})
+```
+
+`frame.width` and `frame.height` define the default grid cell. `left` and `top`
+move the grid origin, while `border` represents spacing around adjacent cells.
+An animation may provide its own `frame` when a sheet contains regions with
+different cell sizes or origins. Use `column` for one cell, or `from`/`to` for
+an inclusive column range; `row` defaults to `0`.
+
+`fps` is shorthand for a uniform `1 / fps` duration. `durations` accepts the
+same number or table passed to `anim8.newAnimation`, including individual
+values such as `{ 0.1, 0.5, 0.1 }` and ranges such as
+`{ ['3-5'] = 0.2 }`. `onLoop` accepts an animation method string such as
+`"pauseAtEnd"` or a function receiving `(animation, loops)`. The older
+`loop = false` form remains supported as shorthand for `onLoop =
+"pauseAtEnd"`, but it cannot be combined with `onLoop`.
+
+Completion inside the nested configuration suggests sheet, frame, and
+animation fields, inserts their value shapes, and completes common `onLoop`
+method strings. The compiler rejects conflicting selector, timing, and loop
+forms before emitting anim8 calls.
+
 `Vec2` is a built-in table-shaped type for common position and velocity code.
 The constructor has signature `function vec2(x: number, y: number): Vec2`.
 Fields `position.x` and `position.y` complete and hover as `number`. Tua also

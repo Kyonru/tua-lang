@@ -17,7 +17,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, love_conf, object_pool, signal, vector};
+use crate::{asset, ecs, love_conf, object_pool, signal, sprite, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -875,6 +875,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
             position,
         } => complete_string_argument_values(
             parsed,
+            source,
             environment,
             &callee_parts,
             active_parameter,
@@ -889,7 +890,9 @@ fn complete_parsed_source_with_context_and_ranking_options(
             complete_import_paths(&parsed.path, prefix.as_str())
         }
         CompletionContext::Identifier { prefix, position } => {
-            complete_identifier_items(parsed, environment, prefix.as_str(), position)
+            complete_sprite_config_items(parsed, source, prefix.as_str(), position).unwrap_or_else(
+                || complete_identifier_items(parsed, environment, prefix.as_str(), position),
+            )
         }
     };
 
@@ -1490,6 +1493,73 @@ fn format_tua_array_item(ty: &TuaType) -> String {
     }
 }
 
+fn complete_sprite_config_items(
+    parsed: &ParsedSource,
+    source: &str,
+    prefix: &str,
+    position: SourcePosition,
+) -> Option<Vec<Completion>> {
+    if !table_key_completion_position(source, prefix, position) {
+        return None;
+    }
+    let context = sprite::config_context_at(parsed, position)?;
+
+    Some(
+        sprite::config_completion_items(context)
+            .iter()
+            .filter(|item| completion_text_matches(item.label, prefix))
+            .map(|item| Completion {
+                label: item.label.to_owned(),
+                kind: CompletionKind::Field,
+                detail: Some(item.detail.to_owned()),
+                documentation: Some(item.documentation.to_owned()),
+                insert_text: Some(item.insert_text.to_owned()),
+                filter_text: None,
+                is_snippet: true,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect(),
+    )
+}
+
+fn table_key_completion_position(source: &str, prefix: &str, position: SourcePosition) -> bool {
+    let Some(line) = line_at(source, position.line) else {
+        return false;
+    };
+    let before_cursor = line
+        .chars()
+        .take(position.column.saturating_sub(1))
+        .collect::<String>();
+    let key_start = before_cursor
+        .char_indices()
+        .nth_back(prefix.chars().count().saturating_sub(1))
+        .map(|(index, _)| index)
+        .unwrap_or(before_cursor.len());
+    let before_key = before_cursor[..key_start].trim_end();
+
+    before_key.is_empty() || before_key.ends_with(['{', ','])
+}
+
+fn sprite_on_loop_value_position(source: &str, position: SourcePosition) -> bool {
+    let Some(line) = line_at(source, position.line) else {
+        return false;
+    };
+    let before_cursor = line
+        .chars()
+        .take(position.column.saturating_sub(1))
+        .collect::<String>();
+    let Some(quote_start) = before_cursor.rfind(['\'', '"']) else {
+        return false;
+    };
+    let Some((field, _)) = before_cursor[..quote_start].rsplit_once('=') else {
+        return false;
+    };
+
+    field.trim_end().ends_with("onLoop")
+}
+
 fn complete_identifier_items(
     parsed: &ParsedSource,
     environment: &TypeEnvironment,
@@ -1785,6 +1855,7 @@ fn complete_fields(
 
 fn complete_string_argument_values(
     parsed: &ParsedSource,
+    source: &str,
     environment: &TypeEnvironment,
     callee_parts: &[String],
     active_parameter: usize,
@@ -1794,6 +1865,29 @@ fn complete_string_argument_values(
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
     let semantic = SemanticModel::new(parsed, environment);
+
+    if sprite::config_context_at(parsed, position) == Some(sprite::SpriteConfigContext::Animation)
+        && sprite_on_loop_value_position(source, position)
+    {
+        return sprite::on_loop_method_values()
+            .iter()
+            .filter(|value| completion_text_matches(value, prefix))
+            .map(|value| Completion {
+                label: (*value).to_owned(),
+                kind: CompletionKind::Value,
+                detail: Some("anim8 onLoop method".to_owned()),
+                documentation: Some(
+                    "Animation method invoked by anim8 whenever the animation loops.".to_owned(),
+                ),
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect();
+    }
 
     if let Some(completions) = complete_signal_event_names(
         parsed,

@@ -29,7 +29,8 @@ leaving the normal Lua and LOVE workflow.
   `imageData`, `canvas`, `quad`, `spriteBatch`, and `particles`, with static
   path validation for helpers and native LOVE constructors that load assets.
 - An experimental built-in `spriteSheet({...})` helper that validates sprite
-  sheet image paths and frame ranges through first-class sprite analysis, then
+  sheet image paths, grid geometry, row/column ranges, duration tables, and loop
+  callbacks through first-class sprite analysis and nested completion, then
   emits readable anim8-backed Lua with bundled `anim8.lua` build output.
 - Built-in `Vec2` and `vec2(x, y)` for common LOVE position/velocity code,
   backed by bundled BrineVector output.

@@ -747,7 +747,7 @@ local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:get
 local Player = {
   image = PlayerImage,
   grid = PlayerGrid,
-  frame = { width = 16, height = 16 },
+  frame = { width = 16, height = 16, left = 0, top = 0, border = 0 },
   animations = {
     idle = anim8.newAnimation(PlayerGrid("1-4", 1), 1 / 8),
     run = anim8.newAnimation(PlayerGrid("5-10", 1), 1 / 12, "pauseAtEnd"),

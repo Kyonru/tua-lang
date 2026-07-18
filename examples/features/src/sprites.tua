@@ -4,10 +4,22 @@
 -- `tua build` writes bundled anim8.lua when generated Lua requires it.
 local Player = spriteSheet({
   image = "assets/player.png",
-  frame = { width = 128, height = 128 },
+  frame = { width = 128, height = 128, left = 0, top = 0, border = 0 },
   animations = {
-    idle = { from = 0, to = 3, fps = 8 },
-    run = { from = 4, to = 9, fps = 12, loop = false },
+    orange = { column = 1, row = 0, durations = 1 },
+    blue = { from = 0, to = 3, row = 1, fps = 8, onLoop = "pauseAtEnd" },
+    green = {
+      from = 0,
+      to = 3,
+      row = 2,
+      frame = { width = 64, height = 64, left = 4, top = 8, border = 1 },
+      durations = { 0.1, 0.5, 0.1, 0.1 },
+      onLoop = function(animation, loops)
+        if loops > 1 then
+          animation:pause()
+        end
+      end,
+    },
   },
 })
 

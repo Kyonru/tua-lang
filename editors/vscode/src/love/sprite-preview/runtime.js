@@ -204,8 +204,7 @@ function spritePreviewRuntime(sprites) {
       window.addEventListener("resize", updateZoom);
 
       image.addEventListener("load", () => {
-        canvas.width = sprite.frame.width;
-        canvas.height = sprite.frame.height;
+        updateCanvasDimensions();
         context.imageSmoothingEnabled = false;
         sheetContext.imageSmoothingEnabled = false;
         sheetValue.textContent = image.naturalWidth + "x" + image.naturalHeight;
@@ -222,7 +221,8 @@ function spritePreviewRuntime(sprites) {
       image.src = sprite.imageUri;
 
       function tick(time) {
-        if (playing && time - lastTime >= 1000 / (animation.fps * speedScale)) {
+        const fps = Math.max(0.001, animation.fps || 1);
+        if (playing && time - lastTime >= 1000 / (fps * speedScale)) {
           lastTime = time;
           const frames = animationFrames(animation);
           if (animation.loop || frameOffset < frames.length - 1) {
@@ -237,6 +237,7 @@ function spritePreviewRuntime(sprites) {
       }
 
       function updateAll() {
+        updateCanvasDimensions();
         updateTabs();
         updatePlayButton();
         updateZoom();
@@ -259,21 +260,23 @@ function spritePreviewRuntime(sprites) {
       function updateZoom() {
         zoomScale = Number(zoomInput.value) || zoomScale;
 
+        const frame = animationFrame();
         const fitScale = containedFrameScale();
         const displayScale = fitScale * zoomScale;
 
         zoomValue.textContent = zoomScale === 1 ? "Fit" : Math.round(zoomScale * 100) + "%";
-        canvas.style.width = Math.max(1, Math.floor(sprite.frame.width * displayScale)) + "px";
-        canvas.style.height = Math.max(1, Math.floor(sprite.frame.height * displayScale)) + "px";
+        canvas.style.width = Math.max(1, Math.floor(frame.width * displayScale)) + "px";
+        canvas.style.height = Math.max(1, Math.floor(frame.height * displayScale)) + "px";
       }
 
       function containedFrameScale() {
+        const frame = animationFrame();
         const availableWidth = Math.max(1, stageFrame.clientWidth - 24);
         const availableHeight = Math.max(1, stageFrame.clientHeight - 24);
 
         return Math.max(
           1,
-          Math.min(availableWidth / sprite.frame.width, availableHeight / sprite.frame.height),
+          Math.min(availableWidth / frame.width, availableHeight / frame.height),
         );
       }
 
@@ -281,11 +284,12 @@ function spritePreviewRuntime(sprites) {
         const frames = animationFrames(animation);
         const frame = currentFrame();
         const rect = sourceRect(frame);
+        const geometry = animationFrame();
 
         frameValue.textContent = frame + " (" + (frameOffset + 1) + "/" + frames.length + ")";
-        rectValue.textContent = rect.x + "," + rect.y + " " + sprite.frame.width + "x" + sprite.frame.height;
-        rangeValue.textContent = animation.from + ".." + animation.to;
-        fpsValue.textContent = animation.fps + " fps";
+        rectValue.textContent = rect.x + "," + rect.y + " " + geometry.width + "x" + geometry.height;
+        rangeValue.textContent = animation.from + ".." + animation.to + ", row " + animation.row;
+        fpsValue.textContent = animation.durations || (animation.fps + " fps");
         modeValue.textContent = animation.loop ? "Loop" : "Pause at end";
         frameCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s");
       }
@@ -299,14 +303,15 @@ function spritePreviewRuntime(sprites) {
 
       function drawFrame() {
         const rect = sourceRect(currentFrame());
+        const frame = animationFrame();
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(
           image,
           rect.x,
           rect.y,
-          sprite.frame.width,
-          sprite.frame.height,
+          frame.width,
+          frame.height,
           0,
           0,
           canvas.width,
@@ -317,6 +322,7 @@ function spritePreviewRuntime(sprites) {
       function drawSheet() {
         const scale = Math.max(1, Math.min(8, Math.floor(320 / Math.max(image.naturalWidth, image.naturalHeight))));
         const rect = sourceRect(currentFrame());
+        const frame = animationFrame();
 
         sheetCanvas.width = image.naturalWidth * scale;
         sheetCanvas.height = image.naturalHeight * scale;
@@ -329,8 +335,8 @@ function spritePreviewRuntime(sprites) {
         sheetContext.strokeRect(
           rect.x * scale + sheetContext.lineWidth / 2,
           rect.y * scale + sheetContext.lineWidth / 2,
-          sprite.frame.width * scale - sheetContext.lineWidth,
-          sprite.frame.height * scale - sheetContext.lineWidth,
+          frame.width * scale - sheetContext.lineWidth,
+          frame.height * scale - sheetContext.lineWidth,
         );
       }
 
@@ -356,12 +362,26 @@ function spritePreviewRuntime(sprites) {
       }
 
       function sourceRect(frame) {
-        const columns = Math.max(1, Math.floor(image.naturalWidth / sprite.frame.width));
+        const geometry = animationFrame();
 
         return {
-          x: (frame % columns) * sprite.frame.width,
-          y: Math.floor(frame / columns) * sprite.frame.height,
+          x: geometry.left + frame * geometry.width + (frame + 1) * geometry.border,
+          y: geometry.top + animation.row * geometry.height + (animation.row + 1) * geometry.border,
         };
+      }
+
+      function animationFrame() {
+        return animation.frame || sprite.frame;
+      }
+
+      function updateCanvasDimensions() {
+        const frame = animationFrame();
+
+        if (canvas.width !== frame.width || canvas.height !== frame.height) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+          context.imageSmoothingEnabled = false;
+        }
       }
 
       return section;

@@ -39,8 +39,13 @@ function spriteViewModel(webview, item) {
       (animation) => ({
         fps: finiteNumber(animation.fps, 0),
         from: integer(animation.from, 0),
+        column: animation.column == null ? undefined : integer(animation.column, 0),
+        durations: animation.durations == null ? undefined : String(animation.durations),
+        frame: frameViewModel(animation.frame),
         loop: animation.loop !== false,
         name: String(animation.name || ""),
+        onLoop: animation.onLoop == null ? undefined : String(animation.onLoop),
+        row: integer(animation.row, 0),
         to: integer(animation.to, 0),
       }),
     ),
@@ -51,18 +56,24 @@ function spriteViewModel(webview, item) {
         severity: integer(diagnostic.severity, 1),
       }),
     ),
-    frame:
-      item.frame && finiteNumber(item.frame.width) > 0 && finiteNumber(item.frame.height) > 0
-        ? {
-            height: integer(item.frame.height, 0),
-            width: integer(item.frame.width, 0),
-          }
-        : undefined,
+    frame: frameViewModel(item.frame),
     imagePath: String(item.image?.path || ""),
     imageStatus: String(item.image?.status || "unchecked"),
     imageUri: imageUri ? webview.asWebviewUri(imageUri).toString() : undefined,
     name: item.name,
   };
+}
+
+function frameViewModel(frame) {
+  return frame && finiteNumber(frame.width) > 0 && finiteNumber(frame.height) > 0
+    ? {
+        border: integer(frame.border, 0),
+        height: integer(frame.height, 0),
+        left: integer(frame.left, 0),
+        top: integer(frame.top, 0),
+        width: integer(frame.width, 0),
+      }
+    : undefined;
 }
 
 function spritePreviewWebviewOptions(viewModel) {
