@@ -122,6 +122,37 @@ counter.ad
 }
 
 #[test]
+fn completes_self_fields_and_methods_inside_native_classes() {
+    let source = r#"
+open class Entity {
+  position: number
+
+  move(amount: number) {
+  }
+}
+
+final class Player extends Entity {
+  speed: number
+
+  init() {
+    self.
+  }
+
+  update(dt: number) {
+  }
+}
+"#;
+    let completions =
+        complete_tua_source("src/classes.tua", source, position_after(source, "self."))
+            .expect("class self completion should succeed");
+    let labels = labels(&completions);
+
+    for expected in ["move", "position", "speed", "update"] {
+        assert!(labels.contains(&expected.to_owned()), "{labels:?}");
+    }
+}
+
+#[test]
 fn completes_lua_doc_annotation_tags_after_marker() {
     let fixture = Fixture::parse(
         r#"---@p<|cursor|>

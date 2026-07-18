@@ -645,6 +645,21 @@ local value = counter.add(1)
 }
 
 #[test]
+fn hovers_self_fields_inside_native_classes() {
+    let source = r#"
+final class Counter {
+  value: number
+
+  read(): number {
+    return self.value
+  }
+}
+"#;
+
+    assert_hover_in_source(source, "self.value", 5, "(field) value: number");
+}
+
+#[test]
 fn hovers_self_index_constructor_instance_methods() {
     let source = r#"
 local Account = {}

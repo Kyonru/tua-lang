@@ -540,6 +540,10 @@ definition, outlines, workspace symbols, and static module exports. Duplicate
 `init` declarations, inheritance cycles, extending non-open classes, missing or
 spurious `override`, and override signature drift are diagnosed.
 
+Inside `init` and instance methods, `self` resolves to the enclosing class.
+Completion after `self.` and member hover include declared and inherited fields
+and methods with their exact types.
+
 Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
 When a constructor is proven to contain only field defaults, `self.field = ...`,

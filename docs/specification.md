@@ -95,6 +95,9 @@ Tua accepts Lua syntax plus these erased or LuaJIT-safe additions:
 - static imports that lower to ordinary `require` calls;
 - LOVE-focused built-ins expressed as ordinary calls or declarations.
 
+Within class initializers and instance methods, `self` has the enclosing class
+type, including inherited fields and methods.
+
 The semantic type model is gradual:
 
 - `any` is the explicit dynamic escape hatch;

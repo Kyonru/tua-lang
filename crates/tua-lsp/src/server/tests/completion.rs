@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn completion_returns_class_members_for_self_inside_methods() {
+    let uri = "file:///tmp/class-self-completion.tua";
+    let source = r#"
+final class Counter {
+  value: number
+
+  add(amount: number): number {
+    return self.value + amount
+  }
+
+  reset() {
+    self.
+  }
+}
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        completion_request(2, uri, source, "self."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["value", "add", "reset"]);
+}
+
+#[test]
 fn hover_and_completion_surface_love_asset_metadata() {
     let temp = TempProject::new("asset-metadata");
     let source = r#"

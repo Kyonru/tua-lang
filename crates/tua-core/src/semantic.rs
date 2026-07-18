@@ -467,9 +467,8 @@ impl<'a> SemanticModel<'a> {
         }
 
         let ty = self
-            .environment
-            .local(name)
-            .cloned()
+            .class_self_type_at_position(name, position)
+            .or_else(|| self.environment.local(name).cloned())
             .or_else(|| love_conf::parameter_type_at_position(self.parsed, name, position))
             .or_else(|| {
                 self.environment
@@ -500,6 +499,24 @@ impl<'a> SemanticModel<'a> {
             .or_else(|| self.parameter_type_at_position(name, position))?;
 
         Some(self.apply_table_mutations_to_name(name, ty, position, depth + 1))
+    }
+
+    fn class_self_type_at_position(&self, name: &str, position: SourcePosition) -> Option<Type> {
+        if name != "self" {
+            return None;
+        }
+
+        self.parsed
+            .class_declarations
+            .iter()
+            .find(|class| {
+                class
+                    .init
+                    .iter()
+                    .chain(&class.methods)
+                    .any(|method| contains_position(method.span, position))
+            })
+            .map(|class| Type::alias(class.name.clone()))
     }
 
     fn class_instance_local_type(&self, name: &str, position: SourcePosition) -> Option<Type> {

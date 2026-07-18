@@ -46,7 +46,7 @@ Status meanings:
 | Capability | Status | Current contract |
 | --- | --- | --- |
 | Push and pull diagnostics | Supported | Fast current-file diagnostics precede debounced project diagnostics; stale work is discarded. |
-| Completion and completion resolve | Supported | Compiler-valid locals, fields, modules, Lua, and LOVE candidates are ranked deterministically. |
+| Completion and completion resolve | Supported | Compiler-valid locals, fields, modules, Lua, and LOVE candidates are ranked deterministically; class-scoped `self` completion includes declared and inherited fields and methods. |
 | Project-adaptive completion ranking | Supported | Privacy-safe local frequency and structural statistics stay on-device and can be reset. |
 | Contextual sequence and multi-token completion | Opt-in | Bounded local lanes preserve compiler completion and fail back without user-visible errors. |
 | Hover, signature help, and type explanations | Supported | Includes Tua, LuaDoc, module, LOVE overload, asset, SignalBus, object-pool, and documentation facts. A source-linked Explain Type command reports annotation, inference, widening, narrowing, module, field, and dynamic fallback steps for identifiers and member chains. |
