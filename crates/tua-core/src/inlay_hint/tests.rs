@@ -509,6 +509,43 @@ return {
 }
 
 #[test]
+fn hints_required_lua_module_literal_key_table_index_types() {
+    let temp = TempProject::new("required-lua-module-literal-key-index-hints");
+    let source = r#"local Constants = require("shared.constants.scale")
+local currentScale = "--^---^"
+local scale = Constants.SCALE_BY_VALUE[currentScale]
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write(
+        "src/shared/constants/scale.lua",
+        r#"local SCALE_BY_NAME = {
+  major = '--^---^',
+}
+
+local SCALE_BY_VALUE = {
+  ['--^---^'] = 'major',
+}
+
+return {
+  SCALE_BY_VALUE = SCALE_BY_VALUE,
+  SCALE_BY_NAME = SCALE_BY_NAME,
+}
+"#,
+    );
+
+    let hints = inlay_hints_tua_source(temp.path.join("src/main.tua"), source)
+        .expect("source should parse");
+    let type_hints = hints_at_line(&hints, 3)
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(type_hints, vec![": string"]);
+}
+
+#[test]
 fn hints_imported_module_alias_call_parameters() {
     let temp = TempProject::new("imported-module-alias-inlay-hints");
     let source = r#"local Functions = import("./functions")

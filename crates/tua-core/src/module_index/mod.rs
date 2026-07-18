@@ -466,12 +466,14 @@ impl<'a> ExportInferer<'a> {
                 }
             }
             ast::Stmt::LocalAssignment(local) => {
-                if self.environment.is_some() {
-                    return;
-                }
-
                 for (name, expression) in local.names().iter().zip(local.expressions()) {
                     let name = token_text(name);
+                    if self
+                        .environment
+                        .is_some_and(|environment| environment.local(&name).is_some())
+                    {
+                        continue;
+                    }
 
                     let inferred = self.infer_expression(expression);
 
@@ -616,11 +618,7 @@ impl<'a> ExportInferer<'a> {
                 "nil" => Type::nil(),
                 _ => Type::Any,
             },
-            Expression::TableConstructor(table) => Type::table(
-                self.infer_table_fields(table)
-                    .into_iter()
-                    .map(|(name, field)| (name, TableField::required(field.ty))),
-            ),
+            Expression::TableConstructor(table) => self.infer_table_type(table),
             Expression::Function(function) => function_type_from_body(function.body()),
             Expression::Parentheses { expression, .. } => self.infer_expression(expression),
             Expression::Var(Var::Name(name)) => {
@@ -628,6 +626,37 @@ impl<'a> ExportInferer<'a> {
             }
             _ => Type::Any,
         }
+    }
+
+    fn infer_table_type(&mut self, table: &TableConstructor) -> Type {
+        let mut fields = Vec::new();
+        let mut array_items = Vec::new();
+
+        for field in table.fields() {
+            match field {
+                Field::NameKey { key, value, .. } => {
+                    fields.push((
+                        token_text(key),
+                        TableField::required(self.infer_expression(value)),
+                    ));
+                }
+                Field::ExpressionKey { key, value, .. } => {
+                    let ty = self.infer_expression(value);
+
+                    if let Some(key) = string_literal_expression(key) {
+                        fields.push((key, TableField::required(ty)));
+                    } else if expression_is_number(key) {
+                        array_items.push(ty);
+                    }
+                }
+                Field::NoKey(value) => {
+                    array_items.push(self.infer_expression(value));
+                }
+                _ => {}
+            }
+        }
+
+        table_or_array_type(fields, array_items)
     }
 
     fn local_type(&mut self, name: &str) -> Option<Type> {
@@ -888,6 +917,49 @@ fn function_body_from_expression(expression: &Expression) -> Option<&ast::Functi
         Expression::Function(function) => Some(function.body()),
         Expression::Parentheses { expression, .. } => function_body_from_expression(expression),
         _ => None,
+    }
+}
+
+fn string_literal_expression(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::String(value) => Some(unquote_string(&value.to_string())),
+        Expression::Parentheses { expression, .. } => string_literal_expression(expression),
+        _ => None,
+    }
+}
+
+fn expression_is_number(expression: &Expression) -> bool {
+    match expression {
+        Expression::Number(_) => true,
+        Expression::Parentheses { expression, .. } => expression_is_number(expression),
+        _ => false,
+    }
+}
+
+fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>) -> Type {
+    let table = (!fields.is_empty()).then(|| Type::table(fields));
+    let array = (!array_items.is_empty()).then(|| Type::array(union_types(array_items)));
+
+    match (table, array) {
+        (Some(table), Some(array)) => Type::union([table, array]),
+        (Some(table), None) => table,
+        (None, Some(array)) => array,
+        (None, None) => Type::empty_table(),
+    }
+}
+
+fn union_types(types: Vec<Type>) -> Type {
+    let mut unique = Vec::new();
+    for ty in types {
+        if !unique.contains(&ty) {
+            unique.push(ty);
+        }
+    }
+
+    match unique.len() {
+        0 => Type::Any,
+        1 => unique.into_iter().next().unwrap_or(Type::Any),
+        _ => Type::union(unique),
     }
 }
 

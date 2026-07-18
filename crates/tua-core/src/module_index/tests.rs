@@ -41,6 +41,39 @@ return {
 }
 
 #[test]
+fn infers_exports_from_returned_local_tables_with_string_literal_keys() {
+    let parsed = parse_lua_source(
+        "src/scale.lua",
+        r#"
+local SCALE_BY_VALUE = {
+  ['--^---^'] = 'major',
+  ['-^---^-'] = 'dorian',
+}
+
+return {
+  SCALE_BY_VALUE = SCALE_BY_VALUE,
+}
+"#,
+    )
+    .expect("Lua source should parse");
+
+    let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+    let Some(Type::Table(scale_by_value)) = exports.field("SCALE_BY_VALUE") else {
+        panic!("SCALE_BY_VALUE export should be a table");
+    };
+
+    assert_eq!(
+        scale_by_value.field("--^---^").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+    assert_eq!(
+        scale_by_value.field("-^---^-").map(|field| &field.ty),
+        Some(&Type::string())
+    );
+}
+
+#[test]
 fn infers_typed_anonymous_function_exports_from_returned_tua_table() {
     let parsed = parse_tua_source(
         "src/audio.tua",
