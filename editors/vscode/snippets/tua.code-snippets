@@ -70,6 +70,17 @@
     ],
     "description": "Create an if statement."
   },
+  "If Else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} then",
+      "  ${2}",
+      "else",
+      "  ${0}",
+      "end"
+    ],
+    "description": "Create an if/else statement."
+  },
   "For Range": {
     "prefix": "fori",
     "body": [
@@ -87,6 +98,42 @@
       "end"
     ],
     "description": "Create a pairs loop."
+  },
+  "For Ipairs": {
+    "prefix": "forip",
+    "body": [
+      "for ${1:index}, ${2:value} in ipairs(${3:table}) do",
+      "  ${0}",
+      "end"
+    ],
+    "description": "Create an ipairs loop."
+  },
+  "While": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} do",
+      "  ${0}",
+      "end"
+    ],
+    "description": "Create a while loop."
+  },
+  "Repeat Until": {
+    "prefix": "repeat",
+    "body": [
+      "repeat",
+      "  ${1}",
+      "until ${0:condition}"
+    ],
+    "description": "Create a repeat/until loop."
+  },
+  "Do Block": {
+    "prefix": "do",
+    "body": [
+      "do",
+      "  ${0}",
+      "end"
+    ],
+    "description": "Create a do/end block."
   },
   "LOVE Load": {
     "prefix": "loveload",

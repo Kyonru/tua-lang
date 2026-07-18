@@ -947,85 +947,132 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
     [
         (
             "local",
+            None,
             "Lua local declaration",
             "local ${1:name} = ${0:nil}",
         ),
         (
             "local function",
+            Some("lfn"),
             "Lua local function declaration",
             "local function ${1:name}(${2})\n  ${0}\nend",
         ),
         (
             "function",
+            Some("fn"),
             "Lua function declaration",
             "function ${1:name}(${2})\n  ${0}\nend",
         ),
         (
             "type",
+            None,
             "Tua type alias declaration",
             "type ${1:Name} = {\n  ${0}\n}",
         ),
         (
             "class",
+            None,
             "Tua class declaration",
             "class ${1:Name} {\n  ${0}\n}",
         ),
         (
             "open class",
+            Some("openclass"),
             "Tua inheritable class declaration",
             "open class ${1:Name} {\n  ${0}\n}",
         ),
         (
             "final class",
+            Some("finalclass"),
             "Tua final class declaration",
             "final class ${1:Name} {\n  ${0}\n}",
         ),
         (
             "if",
+            None,
             "Lua if statement",
             "if ${1:condition} then\n  ${0}\nend",
         ),
         (
+            "if else",
+            Some("ifelse"),
+            "Lua if/else statement",
+            "if ${1:condition} then\n  ${2}\nelse\n  ${0}\nend",
+        ),
+        (
             "for",
+            Some("fori"),
             "Lua numeric for loop",
             "for ${1:i} = ${2:1}, ${3:n} do\n  ${0}\nend",
         ),
         (
+            "for pairs",
+            Some("forp"),
+            "Lua pairs loop",
+            "for ${1:key}, ${2:value} in pairs(${3:table}) do\n  ${0}\nend",
+        ),
+        (
+            "for ipairs",
+            Some("forip"),
+            "Lua ipairs loop",
+            "for ${1:index}, ${2:value} in ipairs(${3:table}) do\n  ${0}\nend",
+        ),
+        (
             "while",
+            None,
             "Lua while loop",
             "while ${1:condition} do\n  ${0}\nend",
         ),
         (
+            "repeat",
+            None,
+            "Lua repeat/until loop",
+            "repeat\n  ${1}\nuntil ${0:condition}",
+        ),
+        (
+            "do",
+            None,
+            "Lua do/end block",
+            "do\n  ${0}\nend",
+        ),
+        (
             crate::sprite::HELPER_NAME,
+            None,
             "Tua sprite sheet helper",
             crate::sprite::sprite_sheet_snippet(),
         ),
         (
             signal::CONSTRUCTOR_NAME,
+            None,
             "Tua signal bus helper",
             signal::signal_snippet(),
         ),
         (
             object_pool::CONSTRUCTOR_NAME,
+            None,
             "Tua object pool helper",
             object_pool::workflow_snippet(),
         ),
         (
             "ecs component",
+            None,
             "Tua ECS component and world workflow",
             ecs::workflow_snippet(),
         ),
     ]
     .into_iter()
-    .filter(|(label, _, _)| include_ecs || *label != "ecs component")
-    .filter(|(label, _, _)| completion_text_matches(label, prefix))
-    .map(|(label, detail, insert_text)| Completion {
+    .filter(|(label, _, _, _)| include_ecs || *label != "ecs component")
+    .filter(|(label, filter_text, _, _)| {
+        completion_text_matches(label, prefix)
+            || filter_text.is_some_and(|filter_text| completion_text_matches(filter_text, prefix))
+    })
+    .map(|(label, filter_text, detail, insert_text)| Completion {
         label: label.to_owned(),
         kind: CompletionKind::Snippet,
         detail: Some(detail.to_owned()),
         documentation: None,
         insert_text: Some(insert_text.to_owned()),
-        filter_text: None,
+        filter_text: filter_text.map(str::to_owned),
         is_snippet: true,
         module_path: None,
         source_module: None,

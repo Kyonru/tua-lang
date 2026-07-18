@@ -844,6 +844,43 @@ fn completes_tua_and_lua_statement_snippets() {
             "signal",
             "local ${1:signals} = signal()\n${1:signals}:on(\"${2:event}\", function(${3})\n  ${0}\nend)",
         ),
+        (
+            "ife",
+            "ife",
+            "if else",
+            "if ${1:condition} then\n  ${2}\nelse\n  ${0}\nend",
+        ),
+        (
+            "fori",
+            "fori",
+            "for",
+            "for ${1:i} = ${2:1}, ${3:n} do\n  ${0}\nend",
+        ),
+        (
+            "forp",
+            "forp",
+            "for pairs",
+            "for ${1:key}, ${2:value} in pairs(${3:table}) do\n  ${0}\nend",
+        ),
+        (
+            "forip",
+            "forip",
+            "for ipairs",
+            "for ${1:index}, ${2:value} in ipairs(${3:table}) do\n  ${0}\nend",
+        ),
+        (
+            "whi",
+            "whi",
+            "while",
+            "while ${1:condition} do\n  ${0}\nend",
+        ),
+        (
+            "rep",
+            "rep",
+            "repeat",
+            "repeat\n  ${1}\nuntil ${0:condition}",
+        ),
+        ("do", "do", "do", "do\n  ${0}\nend"),
     ] {
         let completions =
             complete_tua_source("src/main.tua", source, position_after(source, needle))
