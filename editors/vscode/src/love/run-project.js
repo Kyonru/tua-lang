@@ -15,7 +15,7 @@ const { formatError } = require("../shared/errors");
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 
-function registerLoveProjectRunner({ getServerCommand }) {
+function registerLoveProjectRunner({ appendOutputLine, getServerCommand }) {
   let activeExecution;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, () =>
@@ -68,6 +68,7 @@ function registerLoveProjectRunner({ getServerCommand }) {
     }
 
     const task = createLoveProjectTask({
+      appendOutputLine,
       layout,
       loveCommand: configuredLoveCommand(),
       tuaCommand: options.getServerCommand?.() || "tua",
@@ -85,8 +86,9 @@ function registerLoveProjectRunner({ getServerCommand }) {
   return vscode.Disposable.from(...disposables);
 }
 
-function createLoveProjectTask({ layout, loveCommand, tuaCommand }) {
+function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaCommand }) {
   const terminalOptions = {
+    appendOutputLine,
     cwd: layout.configDirectory,
     loveCommand,
     outputDirectory: layout.outputDirectory,
@@ -166,11 +168,12 @@ function resolveLoveCommand(command, options = {}) {
 }
 
 class LoveProjectTerminal {
-  constructor({ cwd, loveCommand, outputDirectory, tuaCommand }) {
+  constructor({ appendOutputLine, cwd, loveCommand, outputDirectory, tuaCommand }) {
     this.closeEmitter = new vscode.EventEmitter();
     this.writeEmitter = new vscode.EventEmitter();
     this.onDidClose = this.closeEmitter.event;
     this.onDidWrite = this.writeEmitter.event;
+    this.appendOutputLine = appendOutputLine;
     this.cwd = cwd;
     this.loveCommand = loveCommand;
     this.outputDirectory = outputDirectory;
@@ -329,6 +332,7 @@ class LoveProjectTerminal {
       return;
     }
 
+    this.appendOutputLine?.(line);
     this.writeEmitter.fire(`${line}\r\n`);
   }
 

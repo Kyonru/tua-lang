@@ -284,6 +284,14 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       true,
       "run LOVE should use a custom task terminal so output stays visible and cancellable",
     );
+    const loveTerminal = await state.executedTasks[0].task.execution.callback();
+    const outputLineCount = state.outputLines.length;
+    loveTerminal.writeLine("hello from love");
+    assert.deepStrictEqual(
+      state.outputLines.slice(outputLineCount),
+      ["hello from love"],
+      "run LOVE task output should also be mirrored to the Tua output channel",
+    );
 
     await state.commands.get("tua.restartLoveProject")();
     assert.strictEqual(state.taskTerminations.length, 1, "restart LOVE should terminate the active task");

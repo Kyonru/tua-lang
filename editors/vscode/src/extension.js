@@ -45,6 +45,7 @@ async function activate(context) {
   });
   context.subscriptions.push(editorDevex);
   loveDevex = registerLoveDevex({
+    appendOutputLine: (line) => outputChannel?.appendLine(line),
     configurationTarget,
     getClient: () => client,
     getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext),

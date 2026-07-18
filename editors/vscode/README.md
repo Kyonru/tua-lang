@@ -98,8 +98,9 @@ From there you can:
 - Asset-path understanding for both Tua helpers and native LOVE constructors
   that load files.
 - `Tua: Run LOVE Project` and `Tua: Restart LOVE Project` as cancellable VS Code
-  tasks, with emitted Lua traceback lines mapped back to original Tua files
-  when source maps are enabled.
+  tasks. Runtime `print(...)`, stdout, and stderr are mirrored into both the
+  task terminal and the `tua` output channel, and emitted Lua traceback lines
+  are mapped back to original Tua files when source maps are enabled.
 - Compiler-backed sprite sheet inspection and preview through
   `spriteSheet({...})` metadata. Preview is currently gated by
   `tua.preview.enabled`.
@@ -125,6 +126,7 @@ From there you can:
 - `Tua: Initialize Tua Project`
 - `Tua: Run LOVE Project`
 - `Tua: Restart LOVE Project`
+- `Tua: Focus Output`
 - `Tua: Open Generated Lua Beside Tua`
 - `Tua: Jump Between Tua and Generated Lua`
 
