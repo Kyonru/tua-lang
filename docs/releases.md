@@ -9,6 +9,17 @@ extension under one version. The authoritative value is
 `[workspace.package].version` in the root `Cargo.toml`; generated package
 metadata is checked by `make version-drift-check`.
 
+## Published Channels
+
+- [GitHub Releases](https://github.com/Kyonru/tua-lang/releases) ship the
+  standalone `tua` archives, platform VSIX packages, per-file checksums, and
+  the combined `SHA256SUMS` manifest.
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua)
+  and [Open VSX](https://open-vsx.org/extension/tua-lang/tua) publish the same
+  platform VSIX packages after the matching GitHub release is published.
+- [GitHub Pages](https://kyonru.github.io/tua-lang/) serves the public
+  documentation site from the repository's `main` branch.
+
 ## Supported Release Artifacts
 
 Tagged releases build these server and VSIX pairs:
@@ -72,6 +83,8 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
 4. Tag the exact commit as `v<version>` and push the tag.
 5. The release workflow validates the tag and changelog, builds all platform
    pairs, verifies checksums, and publishes the GitHub release.
+6. The extension publish workflow downloads the published release VSIX assets
+   and pushes them to Visual Studio Marketplace and Open VSX.
 
 Manual workflow dispatch is accepted only when it runs from the exact matching
 tag. This prevents an untagged branch from publishing versioned artifacts.

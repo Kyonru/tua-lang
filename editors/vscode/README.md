@@ -26,7 +26,10 @@ Code without changing the normal Lua and LOVE workflow.
 
 ## Quick Start
 
-1. Install the extension.
+1. Install the extension from the
+   [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua),
+   [Open VSX](https://open-vsx.org/extension/tua-lang/tua), or a
+   [GitHub release VSIX](https://github.com/Kyonru/tua-lang/releases).
 2. Run `Tua: Initialize Tua Project`.
 3. Open `src/main.tua`.
 4. Run `Tua: Run LOVE Project`.
@@ -187,10 +190,11 @@ executed.
 ## Docs
 
 - [Project docs](https://kyonru.github.io/tua-lang)
-- [Language server details](https://github.com/Kyonru/tua-lang/blob/main/docs/lsp.md)
-- [Configuration reference](https://github.com/Kyonru/tua-lang/blob/main/docs/configuration.md)
-- [Language overview](https://github.com/Kyonru/tua-lang/blob/main/docs/language.md)
-- [Examples](https://github.com/Kyonru/tua-lang/blob/main/docs/examples.md)
+- [Installation](https://kyonru.github.io/tua-lang/installation/)
+- [Language server details](https://kyonru.github.io/tua-lang/lsp/)
+- [Configuration reference](https://kyonru.github.io/tua-lang/configuration/)
+- [Language overview](https://kyonru.github.io/tua-lang/language/)
+- [Examples](https://kyonru.github.io/tua-lang/examples/)
 
 ## Privacy and Support
 

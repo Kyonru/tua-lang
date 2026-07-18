@@ -39,6 +39,9 @@ Each tagged release provides standalone `tua` server archives and VSIX packages
 for Linux x64, Windows x64, macOS Intel, and macOS Apple silicon. Choose the
 artifact matching your operating system and architecture.
 
+Release downloads live on
+[GitHub Releases](https://github.com/Kyonru/tua-lang/releases).
+
 Release VSIX packages contain the matching server binary. They do not download
 a server during activation. Verify downloads against the release's
 `SHA256SUMS` before installation; see
@@ -63,6 +66,12 @@ cargo run -p tua-cli -- build
 ## VS Code Extension
 
 The extension lives in `editors/vscode`.
+
+Install it from one of these published channels:
+
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua)
+- [Open VSX](https://open-vsx.org/extension/tua-lang/tua)
+- [GitHub release VSIX packages](https://github.com/Kyonru/tua-lang/releases)
 
 Install dependencies and check the activation script:
 

@@ -1,23 +1,67 @@
 # tua
 
-tua is a typed Lua superset that compiles to plain Lua 5.1-compatible source
-for LuaJIT and LÖVE projects. Types are erased at compile time, so emitted Lua
-can run without a tua runtime.
+Typed Lua source-to-source tooling for LuaJIT and LOVE projects.
 
-The repository contains the compiler core, CLI, VS Code extension, bundled
-examples, and a broad language-server feature set.
+[Documentation](https://kyonru.github.io/tua-lang/) ·
+[GitHub Releases](https://github.com/Kyonru/tua-lang/releases) ·
+[VS Code Extension](editors/vscode/README.md)
 
-- [Specification](docs/specification.md) defines the current language and
-  toolchain contract.
-- [Capability Matrix](docs/capabilities.md) records current language and editor
-  support.
-- [Roadmap](docs/roadmap.md) tracks product direction as Now, Next, and Later.
-- [Object Pooling](docs/object-pooling.md) documents the built-in typed pool
-  and when reuse is worth its lifecycle cost.
-- [Releases](docs/releases.md) documents artifacts, checksums, compatibility,
-  and migration policy.
-- [CHANGELOG.md](CHANGELOG.md) records release-level changes.
-- [docs/](docs/index.md) contains the Zensical documentation site source.
+Tua starts with normal Lua syntax, adds erased type syntax and a small amount
+of LuaJIT-safe sugar, then emits readable Lua 5.1-compatible code. It is built
+for projects that want stronger editor feedback, static checks, and build
+tooling without leaving the normal Lua and LOVE workflow.
+
+This repository contains the compiler core, CLI, language server, VS Code
+extension, documentation site, and bundled example projects.
+
+## What Tua Provides
+
+- Erased local, function, alias, table-shape, optional-field, and union types.
+- Readable Lua 5.1-compatible output for LuaJIT and LOVE 11.x.
+- A CLI for `init`, `check`, `fmt`, `lint`, `build`, `traceback`, `watch`, and
+  `lsp`.
+- A compiler-backed language server and VS Code extension with diagnostics,
+  completion, hover, signature help, rename, references, semantic tokens,
+  inlay hints, document/workspace symbols, and more.
+- LOVE-aware helpers, API catalogs, callback guidance, and asset-path
+  validation for both Tua helpers and native LOVE constructors.
+- Opt-in built-in helpers such as `Vec2`, `spriteSheet({...})`, ECS, and
+  typed `objectPool({...})`.
+- Mixed-source builds where `.tua` files compile to `.lua`, while plain `.lua`
+  files and assets are copied into the build output for runnable LOVE folders.
+
+## What You Can Do With It
+
+- Write typed gameplay code that still ships as ordinary Lua source.
+- Keep existing Lua modules and gradually adopt `.tua` where stronger tooling
+  helps.
+- Build LOVE projects with editor-aware assets, generated-Lua/source-map
+  navigation, and project graphs for modules, signals, ECS, and object pools.
+- Use one versioned toolchain across the CLI, language server, release VSIXs,
+  and documentation.
+
+## VS Code Extension
+
+The extension lives in `editors/vscode` and is distributed through GitHub
+release VSIXs plus registry publishing for Visual Studio Marketplace and Open
+VSX. Published VSIX packages bundle the matching `tua` server binary for each
+platform, so extension installs do not download a server at activation time.
+
+It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
+generated Lua inspection, project commands for running LOVE, and explorers for
+assets, modules, signals, ECS, and object pools.
+
+## Learn More
+
+- [Documentation site](https://kyonru.github.io/tua-lang/)
+- [Installation](https://kyonru.github.io/tua-lang/installation/)
+- [Quickstart](https://kyonru.github.io/tua-lang/quickstart/)
+- [Language overview](https://kyonru.github.io/tua-lang/language/)
+- [CLI reference](https://kyonru.github.io/tua-lang/cli/)
+- [Language server](https://kyonru.github.io/tua-lang/lsp/)
+- [Examples](https://kyonru.github.io/tua-lang/examples/)
+- [Releases and compatibility](https://kyonru.github.io/tua-lang/releases/)
+- [CHANGELOG.md](CHANGELOG.md)
 
 The original v1 specification and commit-by-commit implementation roadmap are
 preserved under [`docs/archive/`](docs/archive/) for historical reference.
