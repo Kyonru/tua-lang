@@ -1455,6 +1455,50 @@ emit_maps = true
 }
 
 #[test]
+fn build_skips_nested_git_metadata_directories() {
+    let temp = TempDir::new("build-skips-git-metadata");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+target = "love11-luajit"
+extension = "tua"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/vendor/love.js/.git/objects/pack"))
+        .expect("failed to create nested git metadata");
+    fs::write(temp.path().join("src/main.tua"), "return 1\n").expect("failed to write source");
+    fs::write(
+        temp.path().join("src/vendor/love.js/index.html"),
+        "<!doctype html>\n",
+    )
+    .expect("failed to write asset");
+    fs::write(
+        temp.path()
+            .join("src/vendor/love.js/.git/objects/pack/pack.pack"),
+        "pack\n",
+    )
+    .expect("failed to write git pack");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(temp
+        .path()
+        .join("build/vendor/love.js/index.html")
+        .is_file());
+    assert!(!temp.path().join("build/vendor/love.js/.git").exists());
+}
+
+#[test]
 fn build_warns_and_keeps_generated_lua_when_lua_asset_collides_with_tua_output() {
     let temp = TempDir::new("build-collision");
 

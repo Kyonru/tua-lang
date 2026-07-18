@@ -59,6 +59,10 @@ fn discover_files_into<T>(
             .map_err(|source| io_diagnostic(&path, source))?;
 
         if file_type.is_dir() {
+            if is_vcs_metadata_dir(&path) {
+                continue;
+            }
+
             if excluded_dir.is_some_and(|excluded| paths_same_location(&path, excluded)) {
                 continue;
             }
@@ -72,6 +76,12 @@ fn discover_files_into<T>(
     }
 
     Ok(())
+}
+
+fn is_vcs_metadata_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| matches!(value, ".git" | ".hg" | ".svn"))
 }
 
 impl SourceKind {
