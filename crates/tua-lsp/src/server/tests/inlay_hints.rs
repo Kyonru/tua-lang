@@ -1,6 +1,32 @@
 use super::*;
 
 #[test]
+fn inlay_hints_ignore_generated_class_nodes_and_keep_source_positions() {
+    let uri = "file:///tmp/class-inlay-hints.tua";
+    let source = r#"open class Entity {
+  x: number
+  y: number
+}
+
+local particle = Entity.new()
+
+return {
+  particle = particle,
+}
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        inlay_hint_request(2, uri, 0, 0, 20, 0),
+    ]);
+    let hints = response_with_id(&output, 2)["result"]
+        .as_array()
+        .expect("inlay hints should be an array");
+
+    assert_eq!(inlay_hint_labels(hints), vec![": Entity"]);
+    assert_eq!(hints[0]["position"], json!({ "line": 5, "character": 14 }));
+}
+
+#[test]
 fn inlay_hint_returns_local_type_and_parameter_hints() {
     let uri = "file:///tmp/inlay-hints.tua";
     let source = r#"type Player = { hp: number }

@@ -56,6 +56,7 @@ pub(crate) fn inlay_hints_parsed_source_with_environment_in_range(
     range: Option<SourceSpan>,
 ) -> Vec<InlayHint> {
     let mut collector = InlayHintCollector {
+        parsed,
         semantic: SemanticModel::new(parsed, environment),
         environment,
         range,
@@ -71,6 +72,7 @@ pub(crate) fn inlay_hints_parsed_source_with_environment_in_range(
 }
 
 struct InlayHintCollector<'a> {
+    parsed: &'a ParsedSource,
     semantic: SemanticModel<'a>,
     environment: &'a TypeEnvironment,
     range: Option<SourceSpan>,
@@ -287,7 +289,12 @@ impl<'a> InlayHintCollector<'a> {
         }
     }
 
-    fn push_hint(&mut self, hint: InlayHint) {
+    fn push_hint(&mut self, mut hint: InlayHint) {
+        let Some(position) = self.source_position(hint.position) else {
+            return;
+        };
+        hint.position = position;
+
         if self
             .range
             .is_none_or(|range| range_contains_position(range, hint.position))
@@ -297,14 +304,42 @@ impl<'a> InlayHintCollector<'a> {
     }
 
     fn node_overlaps_range(&self, node: &impl Node) -> bool {
-        let Some(range) = self.range else {
-            return true;
-        };
         let Some(span) = node_span(node) else {
-            return true;
+            return self.range.is_none();
+        };
+        let Some(span) = self.source_span(span) else {
+            return false;
         };
 
-        span_overlaps_range(span, range)
+        self.range
+            .is_none_or(|range| span_overlaps_range(span, range))
+    }
+
+    fn source_span(&self, parser_span: SourceSpan) -> Option<SourceSpan> {
+        Some(SourceSpan {
+            start: self.source_position(parser_span.start)?,
+            end: self.source_position(parser_span.end)?,
+        })
+    }
+
+    fn source_position(&self, parser_position: SourcePosition) -> Option<SourcePosition> {
+        let provenance = self
+            .parsed
+            .raw
+            .parser_provenance
+            .get(parser_position.line.saturating_sub(1))?;
+        if provenance.class_generated {
+            return None;
+        }
+
+        Some(SourcePosition {
+            line: provenance.source_span.start.line,
+            column: provenance
+                .source_span
+                .start
+                .column
+                .saturating_add(parser_position.column.saturating_sub(1)),
+        })
     }
 }
 

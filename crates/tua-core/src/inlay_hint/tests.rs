@@ -162,6 +162,34 @@ local first = manager.steps[1]
 }
 
 #[test]
+fn class_generated_nodes_do_not_emit_or_shift_hints() {
+    let source = r#"open class Entity {
+  x: number
+  y: number
+}
+
+local particle = Entity.new()
+
+return {
+  particle = particle,
+}
+"#;
+    let hints = inlay_hints_tua_source("src/classes.tua", source).expect("source should parse");
+
+    assert_eq!(
+        hints,
+        vec![InlayHint {
+            position: SourcePosition {
+                line: 6,
+                column: "local particle".len() + 1,
+            },
+            label: ": Entity".to_owned(),
+            kind: InlayHintKind::Type,
+        }]
+    );
+}
+
+#[test]
 fn hints_loop_variable_types_from_iterator_metamethods() {
     let source = r#"
 ---@param value any
