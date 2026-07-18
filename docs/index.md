@@ -54,6 +54,10 @@ cargo run -p tua-cli -- build
 
 A minimal source file:
 
+<div class="tua-code-compare" markdown="1">
+<div class="tua-code-compare__pane" markdown="1">
+<p class="tua-code-compare__label">Tua</p>
+
 ```tua
 type Player = {
   name: string,
@@ -71,7 +75,9 @@ local player = makePlayer("Ada")
 player.hp -= 10
 ```
 
-Emitted Lua:
+</div>
+<div class="tua-code-compare__pane" markdown="1">
+<p class="tua-code-compare__label">Generated Lua</p>
 
 ```lua
 local function makePlayer(name)
@@ -84,6 +90,9 @@ end
 local player = makePlayer("Ada")
 player.hp = player.hp - 10
 ```
+
+</div>
+</div>
 
 ## Documentation
 

@@ -1,3 +1,7 @@
+---
+icon: lucide/workflow
+---
+
 # Entity Component Systems
 
 Tua includes a small entity component system through the built-in `ecs`

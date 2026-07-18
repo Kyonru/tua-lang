@@ -16,17 +16,33 @@ and LOVE-aware tooling on top.
 
 Most Lua code is already valid Tua:
 
-```tua
-local function makePlayer(name)
-  return {
-    name = name,
-    hp = 100,
-  }
-end
+=== "Tua"
 
-local player = makePlayer("Ada")
-print(player.name)
-```
+    ```tua
+    local function makePlayer(name)
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
+
+    local player = makePlayer("Ada")
+    print(player.name)
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local function makePlayer(name)
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
+
+    local player = makePlayer("Ada")
+    print(player.name)
+    ```
 
 This is still dynamic Lua. If Tua cannot prove a value's shape, it stays
 permissive instead of guessing.
@@ -36,33 +52,35 @@ permissive instead of guessing.
 The first useful move is typing the data that crosses module or function
 boundaries:
 
-```tua
-type Player = {
-  name: string,
-  hp: number,
-  alive: boolean,
-}
+=== "Tua"
 
-local function makePlayer(name: string): Player
-  return {
-    name = name,
-    hp = 100,
-    alive = true,
-  }
-end
-```
+    ```tua
+    type Player = {
+      name: string,
+      hp: number,
+      alive: boolean,
+    }
 
-The emitted Lua removes the type syntax:
+    local function makePlayer(name: string): Player
+      return {
+        name = name,
+        hp = 100,
+        alive = true,
+      }
+    end
+    ```
 
-```lua
-local function makePlayer(name)
-  return {
-    name = name,
-    hp = 100,
-    alive = true,
-  }
-end
-```
+=== "Generated Lua"
+
+    ```lua
+    local function makePlayer(name)
+      return {
+        name = name,
+        hp = 100,
+        alive = true,
+      }
+    end
+    ```
 
 Use annotations where they buy clarity: constructors, public module functions,
 state tables, configuration tables, and gameplay entities.
@@ -72,16 +90,26 @@ state tables, configuration tables, and gameplay entities.
 Lua code often uses `nil` for missing state. Tua models that with unions and
 optional fields:
 
-```tua
-type SaveSlot = {
-  name?: string,
-  player: Player | nil,
-}
+=== "Tua"
 
-local slot: SaveSlot = {
-  player = nil,
-}
-```
+    ```tua
+    type SaveSlot = {
+      name?: string,
+      player: Player | nil,
+    }
+
+    local slot: SaveSlot = {
+      player = nil,
+    }
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local slot = {
+      player = nil,
+    }
+    ```
 
 Optional fields may be absent. Union values are accepted when they match one of
 the members.
@@ -91,19 +119,30 @@ the members.
 Many Lua and LOVE APIs use strings as modes. Tua can make those choices
 explicit:
 
-```tua
-type LoadMode = "static" | "stream"
+=== "Tua"
 
-enum FilterMode
-  "linear"
-  "nearest"
-end
+    ```tua
+    type LoadMode = "static" | "stream"
 
-local function configure(mode: LoadMode, filter: FilterMode)
-end
+    enum FilterMode
+      "linear"
+      "nearest"
+    end
 
-configure("static", "nearest")
-```
+    local function configure(mode: LoadMode, filter: FilterMode)
+    end
+
+    configure("static", "nearest")
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local function configure(mode, filter)
+    end
+
+    configure("static", "nearest")
+    ```
 
 Literal unions are the underlying type feature. `enum` is just erased sugar for
 longer lists, so it emits no runtime table or constants.
@@ -112,42 +151,82 @@ longer lists, so it emits no runtime table or constants.
 
 Tua preserves Lua's module style:
 
-```tua
--- src/player.tua
-type Player = {
-  name: string,
-  hp: number,
-}
+=== "Tua"
 
-local function makePlayer(name: string): Player
-  return {
-    name = name,
-    hp = 100,
-  }
-end
+    ```tua
+    -- src/player.tua
+    type Player = {
+      name: string,
+      hp: number,
+    }
 
-return {
-  makePlayer = makePlayer,
-}
-```
+    local function makePlayer(name: string): Player
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
 
-```tua
--- src/main.tua
-local Player = require("player")
+    return {
+      makePlayer = makePlayer,
+    }
+    ```
 
-local player = Player.makePlayer("Ada")
-player.hp -= 10
-```
+=== "Generated Lua"
+
+    ```lua
+    -- src/player.tua
+    local function makePlayer(name)
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
+
+    return {
+      makePlayer = makePlayer,
+    }
+    ```
+
+Usage:
+
+=== "Tua"
+
+    ```tua
+    -- src/main.tua
+    local Player = require("player")
+
+    local player = Player.makePlayer("Ada")
+    player.hp -= 10
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    -- src/main.tua
+    local Player = require("player")
+
+    local player = Player.makePlayer("Ada")
+    player.hp = player.hp - 10
+    ```
 
 When you want a source-file-relative child import, use the Tua-only helper form:
 
-```tua
-local Player = import("./player")
-```
+=== "Tua"
 
-That emits a normal Lua `require("player")`. Keep `require(...)` for package
-roots, third-party Lua libraries, and dynamic module loading. For modules outside
-the current folder, use the project module name, such as `import("engine.foo")`.
+    ```tua
+    local Player = import("./player")
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local Player = require("player")
+    ```
+
+Keep `require(...)` for package roots, third-party Lua libraries, and dynamic
+module loading. For modules outside the current folder, use the project module
+name, such as `import("engine.foo")`.
 
 Simple returned module tables give the language server enough information for
 hover, completion, go to definition, references, and rename.
@@ -178,12 +257,23 @@ return {
 Then a `.tua` caller can get typed hover, completion, and diagnostics when the
 module is resolved:
 
-```tua
-local Enemies = require("enemies")
+=== "Tua"
 
-local enemy = Enemies.makeEnemy()
-enemy.hp -= 5
-```
+    ```tua
+    local Enemies = require("enemies")
+
+    local enemy = Enemies.makeEnemy()
+    enemy.hp -= 5
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local Enemies = require("enemies")
+
+    local enemy = Enemies.makeEnemy()
+    enemy.hp = enemy.hp - 5
+    ```
 
 See [Lua Interop](lua-interop.md) for the supported annotation subset and
 interop rules.
@@ -192,32 +282,34 @@ interop rules.
 
 Tua includes a built-in LOVE API catalog and small asset loader helpers:
 
-```tua
-local playerImage = image "assets/player.png"
-local jumpSound = sound "assets/jump.wav"
-local themeMusic = music "assets/theme.ogg"
-local uiFont = font("assets/ui.ttf", 18)
-local waveShader = shader "assets/wave.glsl"
-local position: Vec2 = vec2(100, 200)
+=== "Tua"
 
-playerImage:setFilter("nearest")
-jumpSound:play()
-```
+    ```tua
+    local playerImage = image "assets/player.png"
+    local jumpSound = sound "assets/jump.wav"
+    local themeMusic = music "assets/theme.ogg"
+    local uiFont = font("assets/ui.ttf", 18)
+    local waveShader = shader "assets/wave.glsl"
+    local position: Vec2 = vec2(100, 200)
 
-These lower to ordinary LOVE calls:
+    playerImage:setFilter("nearest")
+    jumpSound:play()
+    ```
 
-```lua
-local playerImage = love.graphics.newImage("assets/player.png")
-local jumpSound = love.audio.newSource("assets/jump.wav", "static")
-local themeMusic = love.audio.newSource("assets/theme.ogg", "stream")
-local uiFont = love.graphics.newFont("assets/ui.ttf", 18)
-local waveShader = love.graphics.newShader("assets/wave.glsl")
-local __tua_vec2 = require("brinevector")
-local position = __tua_vec2(100, 200)
+=== "Generated Lua"
 
-playerImage:setFilter("nearest")
-jumpSound:play()
-```
+    ```lua
+    local playerImage = love.graphics.newImage("assets/player.png")
+    local jumpSound = love.audio.newSource("assets/jump.wav", "static")
+    local themeMusic = love.audio.newSource("assets/theme.ogg", "stream")
+    local uiFont = love.graphics.newFont("assets/ui.ttf", 18)
+    local waveShader = love.graphics.newShader("assets/wave.glsl")
+    local __tua_vec2 = require("brinevector")
+    local position = __tua_vec2(100, 200)
+
+    playerImage:setFilter("nearest")
+    jumpSound:play()
+    ```
 
 Because Tua knows `playerImage` is an `Image` and `jumpSound` is a `Source`, the
 editor can show LOVE method completions, hovers, and signature help. Tua can
@@ -238,13 +330,26 @@ LOVE builds and falls back to table vectors where JIT/FFI is not the right fit.
 
 Tua's built-in ECS needs no require or configuration:
 
-```tua
-local Position = ecs.component("Position", { x = "number", y = "number" })
-local world = ecs.world()
-local player = world:create()
+=== "Tua"
 
-world:add(player, Position, { x = 120, y = 80 })
-```
+    ```tua
+    local Position = ecs.component("Position", { x = "number", y = "number" })
+    local world = ecs.world()
+    local player = world:create()
+
+    world:add(player, Position, { x = 120, y = 80 })
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local ecs = require("tuaecs")
+    local Position = ecs.component("Position", { x = "number", y = "number" })
+    local world = ecs.world()
+    local player = world:create()
+
+    world:add(player, Position, { x = 120, y = 80 })
+    ```
 
 Tua can complete and hover the ECS API, show signatures for world methods, and
 diagnose clear component/query mistakes. Use ECS for large groups such as
@@ -257,22 +362,42 @@ performance guidance, and runtime overrides.
 
 Tua also includes a typed object pool with no require or configuration:
 
-```tua
-type Bullet = { x: number, y: number, active: boolean }
+=== "Tua"
 
-local bullets = objectPool({
-  create = function(): Bullet
-    return { x = 0, y = 0, active = false }
-  end,
-  reset = function(bullet: Bullet)
-    bullet.active = false
-  end,
-  initial = 128,
-})
+    ```tua
+    type Bullet = { x: number, y: number, active: boolean }
 
-local bullet = bullets:acquire()
-bullets:release(bullet)
-```
+    local bullets = objectPool({
+      create = function(): Bullet
+        return { x = 0, y = 0, active = false }
+      end,
+      reset = function(bullet: Bullet)
+        bullet.active = false
+      end,
+      initial = 128,
+    })
+
+    local bullet = bullets:acquire()
+    bullets:release(bullet)
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local __tua_object_pool = require("tuaobjectpool")
+    local bullets = __tua_object_pool({
+      create = function()
+        return { x = 0, y = 0, active = false }
+      end,
+      reset = function(bullet)
+        bullet.active = false
+      end,
+      initial = 128,
+    })
+
+    local bullet = bullets:acquire()
+    bullets:release(bullet)
+    ```
 
 The factory's return annotation makes acquired values retain `Bullet` editor
 and checker support. Use pooling for measured high-churn allocations such as
@@ -285,15 +410,31 @@ prewarming, cleanup, and ECS integration.
 
 LOVE object methods usually need Lua's colon-call syntax so `self` is passed:
 
-```tua
-playerImage:setFilter("nearest")
-```
+=== "Tua"
+
+    ```tua
+    playerImage:setFilter("nearest")
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    playerImage:setFilter("nearest")
+    ```
 
 Dot-style calls can be wrong:
 
-```tua
-playerImage.setFilter("nearest")
-```
+=== "Tua"
+
+    ```tua
+    playerImage.setFilter("nearest")
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    playerImage.setFilter("nearest")
+    ```
 
 When Tua knows the receiver is a LOVE object, it warns about the dot call and
 editor completions prefer colon-call snippets.
@@ -312,13 +453,25 @@ writes inside loops. It is intentionally conservative and never changes
 emitted Lua. Incompatible inferred-local reassignment is already a core Tua
 type error:
 
-```tua
-local value = 1
-value = "later" -- TL1003 in every .tua project
+=== "Tua"
 
-local player = { hp = 10 }
-player.name = "late field" -- TL4033 when JIT guidance is enabled
-```
+    ```tua
+    local value = 1
+    value = "later" -- TL1003 in every .tua project
+
+    local player = { hp = 10 }
+    player.name = "late field" -- TL4033 when JIT guidance is enabled
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local value = 1
+    value = "later" -- TL1003 in every .tua project
+
+    local player = { hp = 10 }
+    player.name = "late field" -- TL4033 when JIT guidance is enabled
+    ```
 
 Use this for code paths where stable shapes matter. Leave it off for migration
 work, prototyping, or runtime-shaped Lua.
@@ -328,10 +481,19 @@ work, prototyping, or runtime-shaped Lua.
 Tua is not trying to make Lua stop being Lua. These are fine places to stay
 permissive:
 
-```tua
-local adapter: any = require("runtime_adapter")
-local value = adapter.makeSomething(dynamicInput)
-```
+=== "Tua"
+
+    ```tua
+    local adapter: any = require("runtime_adapter")
+    local value = adapter.makeSomething(dynamicInput)
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local adapter = require("runtime_adapter")
+    local value = adapter.makeSomething(dynamicInput)
+    ```
 
 Use `any` deliberately when a value is runtime-shaped, third-party, or
 metatable-heavy. Add annotations later if that code becomes important to the

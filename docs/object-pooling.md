@@ -1,3 +1,7 @@
+---
+icon: lucide/package
+---
+
 # Object Pooling
 
 Tua includes a small object pool through the built-in `objectPool` helper. It

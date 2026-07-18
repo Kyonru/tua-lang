@@ -44,6 +44,8 @@ nav = [
   ] },
 ]
 
+extra_css = ["assets/code-compare.css"]
+
 [project.theme]
 language = "en"
 favicon = "assets/icon.svg"
