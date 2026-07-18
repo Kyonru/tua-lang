@@ -1103,10 +1103,26 @@ impl<'a> Checker<'a> {
 
     fn setmetatable_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
         let (target, meta) = setmetatable_arguments(function_call)?;
+        if let Some(class_type) = self.class_setmetatable_instance_type(meta) {
+            return Some(class_type);
+        }
         let base = self.infer_expression(target)?;
         let meta = self.infer_expression(meta)?;
 
         Some(merge_static_metatable(base, meta))
+    }
+
+    fn class_setmetatable_instance_type(&self, expression: &Expression) -> Option<Type> {
+        let Expression::Var(Var::Name(name)) = expression else {
+            return None;
+        };
+        let name = token_text(name);
+
+        self.parsed
+            .class_declarations
+            .iter()
+            .any(|class| class.name == name)
+            .then_some(Type::alias(name))
     }
 
     fn object_pool_call_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {

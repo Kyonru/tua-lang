@@ -13,6 +13,7 @@ use crate::ast_utils::plain_field_chain_from_var;
 use crate::classes;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
+pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
 pub(crate) use model::ParserLineProvenance;
 pub use model::{

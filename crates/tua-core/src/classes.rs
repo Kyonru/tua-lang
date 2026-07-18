@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::path::Path;
 
-use crate::parser::{SourcePosition, SourceSpan};
+use crate::parser::{parse_tua_type_text, SourcePosition, SourceSpan, TuaType};
 use crate::{Diagnostic, DiagnosticCode};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,6 +24,7 @@ pub(crate) struct ClassDeclaration {
 pub(crate) struct ClassField {
     pub name: String,
     pub ty: String,
+    pub parsed_ty: TuaType,
     pub default: Option<String>,
     pub span: SourceSpan,
     pub name_span: SourceSpan,
@@ -409,6 +410,7 @@ fn parse_class_field(
     Some((
         ClassField {
             name,
+            parsed_ty: parse_tua_type_text(&ty),
             ty,
             default,
             span: SourceSpan {
@@ -426,13 +428,7 @@ fn parse_class_field(
 
 fn lower_class_declaration(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> String {
     let mut output = String::new();
-    let type_fields = inherited_fields(class, classes);
-
-    output.push_str(&format!("type {} = {{\n", class.name));
-    for field in &type_fields {
-        output.push_str(&format!("  {}: {},\n", field.name, field.ty));
-    }
-    output.push_str("}\n\n");
+    output.push_str(&format!("type {} = {{}}\n\n", class.name));
     output.push_str(&format!("local {} = {{}}\n", class.name));
     output.push_str(&format!("{}.__index = {}\n", class.name, class.name));
     output.push_str(&format!("{}.__type_id = {}\n", class.name, class.type_id));
@@ -707,23 +703,32 @@ fn flatten_class_constructor_with_substitutions(
 
     for field in &class.fields {
         if let Some(default) = &field.default {
+            let value = substitute_expr(default, substitutions)?;
+            if !is_flattenable_constructor_value(&value) {
+                return None;
+            }
             fields.push(FlattenedField {
                 name: field.name.clone(),
-                value: substitute_expr(default, substitutions)?,
+                value,
             });
         }
     }
 
     if let Some(init) = &class.init {
         for (name, value) in self_assignments(&init.body, class.parent.is_some())? {
-            fields.push(FlattenedField {
-                name,
-                value: substitute_expr(&value, substitutions)?,
-            });
+            let value = substitute_expr(&value, substitutions)?;
+            if !is_flattenable_constructor_value(&value) {
+                return None;
+            }
+            fields.push(FlattenedField { name, value });
         }
     }
 
     Some(fields)
+}
+
+fn is_flattenable_constructor_value(value: &str) -> bool {
+    !value.trim_start().starts_with('{')
 }
 
 fn self_assignments(body: &str, allow_leading_super: bool) -> Option<Vec<(String, String)>> {
@@ -770,21 +775,6 @@ fn leading_super_args(body: &str) -> Option<String> {
     }
 
     None
-}
-
-fn inherited_fields(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> Vec<ClassField> {
-    let mut fields = Vec::new();
-
-    if let Some(parent) = class
-        .parent
-        .as_ref()
-        .and_then(|parent| class_by_name(classes, parent))
-    {
-        fields.extend(inherited_fields(parent, classes));
-    }
-
-    fields.extend(class.fields.clone());
-    fields
 }
 
 fn inherited_type_ids(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> Vec<usize> {

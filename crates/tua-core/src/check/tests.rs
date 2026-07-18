@@ -2357,6 +2357,50 @@ particle.x = particle.speed
 }
 
 #[test]
+fn accepts_class_any_fields_initialized_with_table_literals() {
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+final class BeatManager {
+  steps: any
+  y: number
+
+  init(y: number) {
+    self.steps = {}
+    self.y = y
+  }
+}
+
+local manager: BeatManager = BeatManager.new(1)
+manager.steps = {}
+"#,
+    )
+    .expect("class any fields should accept table literal assignments");
+}
+
+#[test]
+fn accepts_class_array_fields_and_indexing() {
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+final class BeatManager {
+  steps: number[]
+  y: number
+
+  init(y: number) {
+    self.steps = { 1, 2, 3 }
+    self.y = y
+  }
+}
+
+local manager: BeatManager = BeatManager.new(1)
+local first: number = manager.steps[1]
+"#,
+    )
+    .expect("class array fields should type-check and support indexing");
+}
+
+#[test]
 fn rejects_extending_final_classes_and_overriding_final_methods() {
     let diagnostics = check_tua_source(
         "src/classes.tua",

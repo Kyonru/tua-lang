@@ -685,7 +685,7 @@ fn balanced_delimiter_end(line: &str, cursor: usize, open: char, close: char) ->
     None
 }
 
-fn parse_type_text(text: &str) -> TuaType {
+pub(crate) fn parse_type_text(text: &str) -> TuaType {
     let text = text.trim();
     let union = split_top_level(text, '|');
 

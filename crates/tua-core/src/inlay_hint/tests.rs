@@ -135,6 +135,33 @@ end
 }
 
 #[test]
+fn hints_class_array_constructor_and_index_types() {
+    let source = r#"
+final class BeatManager {
+  steps: number[]
+  y: number
+
+  init(y: number) {
+    self.steps = { 1, 2, 3 }
+    self.y = y
+  }
+}
+
+local manager = BeatManager.new(1)
+local first = manager.steps[1]
+"#;
+    let hints = inlay_hints_tua_source("src/classes.tua", source).expect("source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(type_hints.contains(&": BeatManager"));
+    assert!(type_hints.contains(&": number"));
+}
+
+#[test]
 fn hints_loop_variable_types_from_iterator_metamethods() {
     let source = r#"
 ---@param value any

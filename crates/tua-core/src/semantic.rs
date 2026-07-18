@@ -533,10 +533,26 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<Type> {
         let (target, meta) = setmetatable_arguments(function_call)?;
+        if let Some(class_type) = self.class_setmetatable_instance_type(meta) {
+            return Some(class_type);
+        }
         let base = self.type_of_expression_return_at_depth(target, position, 0, 0)?;
         let meta = self.type_of_expression_return_at_depth(meta, position, 0, 0)?;
 
         Some(crate::types::MetatableFacts::from_type(&meta).apply_to_type(base))
+    }
+
+    fn class_setmetatable_instance_type(&self, expression: &Expression) -> Option<Type> {
+        let Expression::Var(Var::Name(name)) = expression else {
+            return None;
+        };
+        let name = token_text(name);
+
+        self.parsed
+            .class_declarations
+            .iter()
+            .any(|class| class.name == name)
+            .then_some(Type::alias(name))
     }
 
     fn apply_table_mutations_to_name(
@@ -1615,7 +1631,7 @@ fn collect_class_instance_fields(
     for field in &class.fields {
         fields.insert(
             field.name.clone(),
-            TableField::required(Type::named(field.ty.clone())),
+            TableField::required(type_from_tua_type(&field.parsed_ty)),
         );
     }
 

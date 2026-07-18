@@ -171,6 +171,23 @@ final class Player extends Entity {
 }
 
 #[test]
+fn class_array_fields_parse_after_lowering() {
+    let source = r#"final class BeatManager {
+  steps: number[]
+  y: number
+
+  init(y: number) {
+    self.steps = { 1, 2, 3 }
+    self.y = y
+  }
+}
+"#;
+
+    parse_tua_source("src/classes.tua", source)
+        .expect("class array field syntax should parse after lowering");
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",

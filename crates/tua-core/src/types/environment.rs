@@ -304,6 +304,8 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         aliases.entry(name).or_insert(ty);
     }
 
+    register_class_aliases(parsed, &alias_names, &mut aliases, &mut diagnostics);
+
     for local in &parsed.local_annotations {
         let ty = resolve_tua_type(
             &parsed.path,
@@ -380,6 +382,78 @@ fn collect_alias_names(
     }
 
     names
+}
+
+fn register_class_aliases(
+    parsed: &ParsedSource,
+    alias_names: &BTreeSet<String>,
+    aliases: &mut BTreeMap<String, Type>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for class in &parsed.class_declarations {
+        aliases.insert(
+            class.name.clone(),
+            class_alias_type(parsed, &class.name, alias_names, diagnostics),
+        );
+    }
+}
+
+fn class_alias_type(
+    parsed: &ParsedSource,
+    class_name: &str,
+    alias_names: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Type {
+    let context = TypeResolutionContext::with_self_type(Type::alias(class_name.to_owned()));
+    let mut fields = BTreeMap::new();
+    collect_class_alias_fields(
+        parsed,
+        class_name,
+        alias_names,
+        diagnostics,
+        &context,
+        &mut fields,
+    );
+    Type::table(fields)
+}
+
+fn collect_class_alias_fields(
+    parsed: &ParsedSource,
+    class_name: &str,
+    alias_names: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+    context: &TypeResolutionContext,
+    fields: &mut BTreeMap<String, TableField>,
+) {
+    let Some(class) = parsed
+        .class_declarations
+        .iter()
+        .find(|candidate| candidate.name == class_name)
+    else {
+        return;
+    };
+
+    if let Some(parent) = &class.parent {
+        collect_class_alias_fields(parsed, parent, alias_names, diagnostics, context, fields);
+    }
+
+    for field in &class.fields {
+        fields.insert(
+            field.name.clone(),
+            TableField::required(resolve_tua_type_with_context(
+                &parsed.path,
+                &field.parsed_ty,
+                Some(field.span),
+                alias_names,
+                diagnostics,
+                context,
+            )),
+        );
+    }
+
+    for method in &class.methods {
+        fields.insert(method.name.clone(), TableField::required(Type::Any));
+    }
 }
 
 fn resolve_function_annotation(
@@ -2852,6 +2926,9 @@ fn setmetatable_return_type(
     current_function: &str,
 ) -> Option<Type> {
     let (target, meta) = setmetatable_arguments(function_call)?;
+    if let Some(class_type) = class_setmetatable_instance_type(parsed, meta) {
+        return Some(class_type);
+    }
     let base = infer_expression_type(
         parsed,
         target,
@@ -2870,6 +2947,22 @@ fn setmetatable_return_type(
     )?;
 
     Some(merge_static_metatable(base, meta))
+}
+
+fn class_setmetatable_instance_type(
+    parsed: &ParsedSource,
+    expression: &Expression,
+) -> Option<Type> {
+    let Expression::Var(Var::Name(name)) = expression else {
+        return None;
+    };
+    let name = token_text(name);
+
+    parsed
+        .class_declarations
+        .iter()
+        .any(|class| class.name == name)
+        .then_some(Type::alias(name))
 }
 
 fn setmetatable_arguments(function_call: &FunctionCall) -> Option<(&Expression, &Expression)> {
