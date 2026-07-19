@@ -1,0 +1,37 @@
+-- Feature: typed finite state machines backed by lua-state-machine.
+-- Static event and state names become completions, literal unions, event
+-- methods, callback snippets, hover details, and signature help.
+local trafficLight = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+    { name = "calm", from = "red", to = "yellow" },
+    { name = "clear", from = { "yellow", "red" }, to = "green" },
+  },
+  callbacks = {
+    onenterred = function(
+      self: StateMachine,
+      event: "calm" | "clear" | "panic" | "warn",
+      from: "green" | "red" | "yellow",
+      to: "green" | "red" | "yellow"
+      )
+      print("entered", self.current, event, from, to)
+    end,
+  },
+})
+
+-- Feature: event methods and state/event arguments use configured names.
+local warned = trafficLight:warn("pedestrian waiting")
+local canPanic, panicState = trafficLight:can("panic")
+
+if canPanic then
+  trafficLight:panic()
+end
+
+return {
+  trafficLight = trafficLight,
+  warned = warned,
+  panicState = panicState,
+  current = trafficLight.current,
+}

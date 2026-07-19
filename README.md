@@ -25,8 +25,8 @@ extension, documentation site, and bundled example projects.
   inlay hints, document/workspace symbols, and more.
 - LOVE-aware helpers, API catalogs, callback guidance, and asset-path
   validation for both Tua helpers and native LOVE constructors.
-- Opt-in built-in helpers such as `Vec2`, `spriteSheet({...})`, ECS, and
-  typed `objectPool({...})`.
+- Opt-in built-in helpers such as `Vec2`, `spriteSheet({...})`, typed state
+  machines, ECS, and object pools.
 - Mixed-source builds where `.tua` files compile to `.lua`, while plain `.lua`
   files and assets are copied into the build output for runnable LOVE folders.
 
@@ -57,6 +57,7 @@ assets, modules, signals, ECS, and object pools.
 - [Installation](https://kyonru.github.io/tua-lang/installation/)
 - [Quickstart](https://kyonru.github.io/tua-lang/quickstart/)
 - [Language overview](https://kyonru.github.io/tua-lang/language/)
+- [Typed state machines](https://kyonru.github.io/tua-lang/state-machines/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)

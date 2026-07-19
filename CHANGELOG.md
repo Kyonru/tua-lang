@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- A zero-setup `stateMachine({...})` helper backed by lua-state-machine, with
+  derived state/event unions, generated event methods, callback and value
+  completion, and an on-demand bundled `tuastatemachine.lua` runtime.
 - A zero-setup `ecs` module with a bundled data-oriented `tuaecs.lua` runtime,
   documented completion, hover, named signatures, world queries, and systems.
 - A zero-setup `objectPool({...})` helper with item-aware typing, lifecycle

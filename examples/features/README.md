@@ -107,6 +107,10 @@ make build-features
   registration and emission, known event-name string completion, typed
   payload schemas inferred from listener callbacks or `declare(...)`,
   payload-checked `emit(...)` calls, and bundled `tuasignal.lua` build output.
+- `src/state_machine.tua` covers the built-in `stateMachine({...})` helper:
+  statically derived state and event unions, event methods, callback names,
+  state/event string suggestions, hover and signature help, and on-demand
+  `tuastatemachine.lua` build output.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

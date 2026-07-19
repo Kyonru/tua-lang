@@ -17,7 +17,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, love_conf, object_pool, signal, sprite, vector};
+use crate::{asset, ecs, love_conf, object_pool, signal, sprite, state_machine, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -890,7 +890,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
             complete_import_paths(&parsed.path, prefix.as_str())
         }
         CompletionContext::Identifier { prefix, position } => {
-            complete_sprite_config_items(parsed, source, prefix.as_str(), position).unwrap_or_else(
+            complete_domain_config_items(parsed, source, prefix.as_str(), position).unwrap_or_else(
                 || complete_identifier_items(parsed, environment, prefix.as_str(), position),
             )
         }
@@ -1052,6 +1052,12 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             object_pool::workflow_snippet(),
         ),
         (
+            state_machine::CONSTRUCTOR_NAME,
+            None,
+            "Tua finite state machine helper",
+            state_machine::workflow_snippet(),
+        ),
+        (
             "ecs component",
             None,
             "Tua ECS component and world workflow",
@@ -1131,6 +1137,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
         .chain(vector::builtin_type_names().iter().copied())
         .chain(signal::builtin_type_names().iter().copied())
         .chain(object_pool::builtin_type_names().iter().copied())
+        .chain(state_machine::builtin_type_names().iter().copied())
         .chain(
             ecs::builtin_type_names()
                 .iter()
@@ -1493,7 +1500,7 @@ fn format_tua_array_item(ty: &TuaType) -> String {
     }
 }
 
-fn complete_sprite_config_items(
+fn complete_domain_config_items(
     parsed: &ParsedSource,
     source: &str,
     prefix: &str,
@@ -1502,6 +1509,28 @@ fn complete_sprite_config_items(
     if !table_key_completion_position(source, prefix, position) {
         return None;
     }
+
+    if let Some(items) = state_machine::config_completion_items(parsed, position) {
+        return Some(
+            items
+                .into_iter()
+                .filter(|item| completion_text_matches(&item.label, prefix))
+                .map(|item| Completion {
+                    label: item.label,
+                    kind: CompletionKind::Field,
+                    detail: Some(item.detail),
+                    documentation: Some(item.documentation),
+                    insert_text: Some(item.insert_text),
+                    filter_text: None,
+                    is_snippet: true,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect(),
+        );
+    }
+
     let context = sprite::config_context_at(parsed, position)?;
 
     Some(
@@ -1813,6 +1842,7 @@ fn complete_fields(
     {
         let documentation = ecs::typed_member(environment, &receiver_type, &name)
             .or_else(|| object_pool::typed_member(environment, &receiver_type, &name))
+            .or_else(|| state_machine::typed_member(environment, &receiver_type, &name))
             .and_then(|function| function.documentation);
 
         completions.insert(
@@ -1866,6 +1896,25 @@ fn complete_string_argument_values(
     let _profile = profile::span("analysis.completion.string_argument");
     let semantic = SemanticModel::new(parsed, environment);
 
+    if let Some(items) = state_machine::string_value_completion_items(parsed, position) {
+        return items
+            .into_iter()
+            .filter(|item| completion_text_matches(&item.label, prefix))
+            .map(|item| Completion {
+                label: item.label,
+                kind: CompletionKind::Value,
+                detail: Some(item.detail),
+                documentation: Some(item.documentation),
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect();
+    }
+
     if sprite::config_context_at(parsed, position) == Some(sprite::SpriteConfigContext::Animation)
         && sprite_on_loop_value_position(source, position)
     {
@@ -1899,6 +1948,34 @@ fn complete_string_argument_values(
         project_data,
     ) {
         return completions;
+    }
+
+    if let Some((method, receiver_parts)) = callee_parts.split_last() {
+        if let Some(receiver_type) = semantic.type_of_field_chain(receiver_parts, position) {
+            if let Some(items) = state_machine::method_string_completion_items(
+                environment,
+                &receiver_type,
+                method,
+                active_parameter,
+            ) {
+                return items
+                    .into_iter()
+                    .filter(|item| completion_text_matches(&item.label, prefix))
+                    .map(|item| Completion {
+                        label: item.label,
+                        kind: CompletionKind::Value,
+                        detail: Some(item.detail),
+                        documentation: Some(item.documentation),
+                        insert_text: None,
+                        filter_text: None,
+                        is_snippet: false,
+                        module_path: None,
+                        source_module: None,
+                        additional_text_edits: Vec::new(),
+                    })
+                    .collect();
+            }
+        }
     }
 
     if let Some(function) = semantic.function_type_for_call_parts(callee_parts, position) {

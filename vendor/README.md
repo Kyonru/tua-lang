@@ -11,5 +11,12 @@ generated project output.
   helper emission. `tua build` copies it to `build/anim8.lua` only when generated
   Lua requires it, and only when the project did not already provide its own
   `anim8.lua`.
+- `runtime/tuasignal.lua`, `runtime/tuaecs.lua`, and
+  `runtime/tuaobjectpool.lua` are Tua's bundled signal, ECS, and object-pool
+  runtimes. They follow the same require-driven copy and project-override
+  rules.
+- `runtime/tuastatemachine.lua` is the lua-state-machine-compatible runtime
+  used by `stateMachine({...})`. It is adapted from Kyle Conroy's MIT-licensed
+  lua-state-machine implementation and retains the upstream license header.
 
 Vendored files should keep their upstream license headers intact.

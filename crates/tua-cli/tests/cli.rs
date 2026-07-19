@@ -1155,6 +1155,87 @@ fn build_does_not_overwrite_project_brinevector_runtime() {
 }
 
 #[test]
+fn build_writes_state_machine_runtime_when_helper_is_used() {
+    let temp = TempDir::new("build-state-machine-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+return light
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime = fs::read_to_string(temp.path().join("build/tuastatemachine.lua"))
+        .expect("failed to read state machine runtime");
+
+    assert!(stdout.contains("built 2 file(s)"));
+    assert!(emitted.contains(r#"local __tua_state_machine = require("tuastatemachine").create"#));
+    assert!(emitted.contains("local light = __tua_state_machine({"));
+    assert!(runtime.contains("Copyright (c) 2012 Kyle Conroy"));
+    assert!(runtime.contains("function machine.create(options)"));
+}
+
+#[test]
+fn build_does_not_overwrite_project_state_machine_runtime() {
+    let temp = TempDir::new("build-custom-state-machine-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+return light
+"#,
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/tuastatemachine.lua"),
+        "return { create = function(options) return { custom = true } end }\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let runtime = fs::read_to_string(temp.path().join("build/tuastatemachine.lua"))
+        .expect("failed to read custom runtime");
+
+    assert_eq!(
+        runtime,
+        "return { create = function(options) return { custom = true } end }\n"
+    );
+}
+
+#[test]
 fn build_writes_anim8_runtime_when_sprite_sheet_helper_is_used() {
     let temp = TempDir::new("build-sprite-runtime");
 

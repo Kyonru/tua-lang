@@ -52,6 +52,7 @@ mod signal;
 pub mod signature_help;
 mod source_text;
 mod sprite;
+mod state_machine;
 mod text_match;
 pub mod type_database;
 pub mod type_explanation;
@@ -255,4 +256,8 @@ pub fn tuaecs_runtime_source() -> &'static str {
 
 pub fn tuaobjectpool_runtime_source() -> &'static str {
     object_pool::runtime_source()
+}
+
+pub fn tuastatemachine_runtime_source() -> &'static str {
+    state_machine::runtime_source()
 }

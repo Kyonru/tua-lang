@@ -30,7 +30,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
     FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, love_callback, lua, object_pool, signal, sprite, vector};
+use crate::{asset, love_callback, lua, object_pool, signal, sprite, state_machine, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -507,7 +507,9 @@ impl<'a> Checker<'a> {
             });
 
             if let Some(ty) = ty {
-                let ty = if has_annotation {
+                let preserve_literal_unions =
+                    state_machine::type_is_state_machine(self.environment, &ty);
+                let ty = if has_annotation || preserve_literal_unions {
                     ty
                 } else {
                     widen_inferred_type(&ty)
@@ -1151,6 +1153,10 @@ impl<'a> Checker<'a> {
                     self.check_typed_function_call_arguments(function_call, &function);
                 self.check_signal_emit_payload_call(function_call);
 
+                if let Some(ty) = self.state_machine_call_return_type(function_call) {
+                    return vec![ty];
+                }
+
                 if let Some(ty) = self.object_pool_call_return_type(function_call) {
                     return vec![ty];
                 }
@@ -1209,6 +1215,20 @@ impl<'a> Checker<'a> {
         };
 
         Some(object_pool::pool_type_from_options(&options))
+    }
+
+    fn state_machine_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        if parts.len() != 1 || !state_machine::is_constructor(&parts[0]) {
+            return None;
+        }
+        if self.environment.local(&parts[0]).is_some()
+            || self.environment.function(&parts[0]).is_some()
+        {
+            return None;
+        }
+
+        state_machine::machine_type_from_call(function_call)
     }
 
     fn record_setmetatable_call(&mut self, function_call: &FunctionCall) {
@@ -1360,6 +1380,12 @@ impl<'a> Checker<'a> {
             if object_pool::is_constructor(root) {
                 return Some(Callable::from_typed_function(
                     &object_pool::constructor_typed_function(),
+                ));
+            }
+
+            if state_machine::is_constructor(root) {
+                return Some(Callable::from_typed_function(
+                    &state_machine::constructor_typed_function(),
                 ));
             }
         }

@@ -11,7 +11,7 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, ecs, infer_module_exports, object_pool, parse_tua_source, signal, vector,
+    asset, ecs, infer_module_exports, object_pool, parse_tua_source, signal, state_machine, vector,
     AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault, ParsedSource, ProjectWorkspace,
     SourcePosition, SourceSpan, TuaType, Type,
 };
@@ -1440,10 +1440,13 @@ fn lower_builtin_call_operations(
     let mut brinevector_span = None;
     let mut tuasignal_span = None;
     let mut tuaobjectpool_span = None;
+    let mut tuastatemachine_span = None;
     let mut tuaecs_span = None;
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let explicit_object_pool_binding =
         explicit_binding_position(parsed, object_pool::CONSTRUCTOR_NAME);
+    let explicit_state_machine_binding =
+        explicit_binding_position(parsed, state_machine::CONSTRUCTOR_NAME);
 
     while index < output.len() {
         let rest = &output[index..];
@@ -1546,6 +1549,33 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if can_start_builtin_call(&output, index) && state_machine::is_constructor(name) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
+                let source_span = document.source_span_at(index);
+                let binding_is_active = explicit_state_machine_binding.is_some_and(|position| {
+                    (position.line, position.column)
+                        <= (source_span.start.line, source_span.start.column)
+                });
+
+                if !binding_is_active {
+                    if let Some((replacement, end)) = lower_runtime_constructor_call(
+                        &output,
+                        argument_start,
+                        state_machine::EMITTED_CONSTRUCTOR_LOCAL,
+                    ) {
+                        tuastatemachine_span.get_or_insert(source_span);
+                        operations.push(lowering::LoweringOperation::replace(
+                            index..end,
+                            replacement,
+                            source_span,
+                            LoweringKind::BuiltinCall,
+                        ));
+                        index = end;
+                        continue;
+                    }
+                }
+            }
+
             if ecs_enabled && name == ecs::MODULE_NAME {
                 let field_start = skip_whitespace(&output, index + identifier_end);
 
@@ -1577,6 +1607,7 @@ fn lower_builtin_call_operations(
     if brinevector_span.is_some()
         || tuasignal_span.is_some()
         || tuaobjectpool_span.is_some()
+        || tuastatemachine_span.is_some()
         || tuaecs_span.is_some()
     {
         let leading_whitespace =
@@ -1621,6 +1652,18 @@ fn lower_builtin_call_operations(
                 "local {} = require(\"{}\")\n",
                 object_pool::EMITTED_CONSTRUCTOR_LOCAL,
                 object_pool::RUNTIME_MODULE,
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    if let Some(source_span) = tuastatemachine_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\").create\n",
+                state_machine::EMITTED_CONSTRUCTOR_LOCAL,
+                state_machine::RUNTIME_MODULE,
             ),
             source_span,
             LoweringKind::BuiltinCall,

@@ -1148,6 +1148,54 @@ bullets:release(bullet)
 }
 
 #[test]
+fn hovers_typed_builtin_state_machine_constructor_local_and_event() {
+    let source = r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+  },
+})
+light:warn()
+"#;
+    let constructor = hover_tua_source(
+        "src/state_machine.tua",
+        source,
+        position_at(source, "stateMachine"),
+    )
+    .expect("hover should not fail")
+    .expect("stateMachine constructor should hover");
+    let machine = hover_tua_source(
+        "src/state_machine.tua",
+        source,
+        position_at(source, "light ="),
+    )
+    .expect("hover should not fail")
+    .expect("StateMachine local should hover");
+    let warn = hover_tua_source(
+        "src/state_machine.tua",
+        source,
+        position_at(source, "warn()"),
+    )
+    .expect("hover should not fail")
+    .expect("derived event should hover");
+
+    assert_eq!(
+        constructor.contents,
+        "function stateMachine(options: StateMachineOptions): StateMachine"
+    );
+    assert_eq!(machine.contents, "local light: StateMachine");
+    assert_eq!(
+        machine.documentation.as_deref(),
+        Some("States: `\"green\" | \"red\" | \"yellow\"`. Events: `\"panic\" | \"warn\"`.")
+    );
+    assert_eq!(
+        warn.contents,
+        "function StateMachine:warn(...: any): boolean"
+    );
+}
+
+#[test]
 fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
     let source = r#"
 local function loadPlayerImage()

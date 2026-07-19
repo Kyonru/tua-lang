@@ -73,6 +73,8 @@ forcing the whole project into a strict type system.
   guidance, callback snippets, diagnostics, and fixes.
 - [Signals](#signals): typed event names, payloads, navigation, and the Signal
   Graph.
+- [State machines](#state-machines): configured state/event unions, generated
+  event methods, and callback suggestions.
 - [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
 - [Entity component systems](#entity-component-systems): the built-in `ecs`
   module and ECS Explorer.
@@ -274,6 +276,12 @@ local batch = spriteBatch(player, 128)
 local sparks = particles(player, 64)
 local position: Vec2 = vec2(100, 200)
 local events = signal()
+local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
 
 type PlayerState = {
   name: string,
@@ -311,6 +319,13 @@ local __tua_vec2 = require("brinevector")
 local position = __tua_vec2(100, 200)
 local __tua_signal = require("tuasignal")
 local events = __tua_signal()
+local __tua_state_machine = require("tuastatemachine").create
+local light = __tua_state_machine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
 
 local hero = { name = "Ada", hp = 10 }
 
@@ -324,9 +339,9 @@ events:emit("player.hit", hero, 4)
 events:emit("game.paused", "menu")
 ```
 
-When generated Lua needs `brinevector`, `tuasignal`, or `tuaobjectpool`, `tua
-build` writes the bundled runtime file into the output directory unless the
-project already provides one.
+When generated Lua needs `brinevector`, `tuasignal`, `tuastatemachine`, or
+`tuaobjectpool`, `tua build` writes the bundled runtime file into the output
+directory unless the project already provides one.
 
 ### Signals
 
@@ -346,6 +361,16 @@ registering a listener.
 `Tua: Show Signal Graph` visualizes those indexed events across files, filters
 by bus/file/listener/emitter, shows conflicting schemas, and can create a typed
 listener or no-op declaration from known payloads.
+
+### State Machines
+
+`stateMachine({...})` derives exact state and event unions from a static
+configuration. Configured events become callable methods, callback keys such
+as `onbeforewarn` and `onenteryellow` complete inside `callbacks`, and `is` and
+`can` suggest only valid names. Builds lower the helper to the bundled
+`tuastatemachine.lua` runtime based on lua-state-machine. See
+[State Machines](state-machines.md) for callbacks, wildcard transitions,
+asynchronous transitions, and dynamic configuration boundaries.
 
 ### Object Pools
 

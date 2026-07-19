@@ -286,7 +286,11 @@ position.
 
     assert_eq!(
         labels(&type_completions),
-        vec!["Vec2".to_owned(), "BezierCurve".to_owned()]
+        vec![
+            "Vec2".to_owned(),
+            "BezierCurve".to_owned(),
+            "StateMachineEvent".to_owned(),
+        ]
     );
     assert_eq!(type_completions[0].kind, CompletionKind::TypeAlias);
     assert_eq!(type_completions[0].detail.as_deref(), Some("built-in type"));
@@ -421,6 +425,178 @@ bullets:
         .is_some_and(|documentation| documentation.contains("duplicate releases")));
     assert!(labels(&item_fields).contains(&"x".to_owned()));
     assert!(labels(&item_fields).contains(&"active".to_owned()));
+}
+
+#[test]
+fn completes_typed_state_machine_events_callbacks_and_values() {
+    let options_source = r#"local light = stateMachine({
+  ini
+})
+"#;
+    let option_completions = complete_tua_source(
+        "src/state_machine.tua",
+        options_source,
+        position_after(options_source, "  ini"),
+    )
+    .expect("state machine option completion should succeed");
+    assert_eq!(labels(&option_completions), vec!["initial".to_owned()]);
+
+    let event_config_source = r#"local light = stateMachine({
+  events = {
+    {
+      fr
+    },
+  },
+})
+"#;
+    let event_config_completions = complete_tua_source(
+        "src/state_machine.tua",
+        event_config_source,
+        position_after(event_config_source, "      fr"),
+    )
+    .expect("state machine event configuration completion should succeed");
+    assert_eq!(labels(&event_config_completions), vec!["from".to_owned()]);
+
+    let source = r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+  },
+  callbacks = {
+  },
+})
+"#;
+    let callback_source = source.replace("  callbacks = {\n", "  callbacks = {\n    on\n");
+    let callbacks = complete_tua_source(
+        "src/state_machine.tua",
+        &callback_source,
+        position_after(&callback_source, "    on"),
+    )
+    .expect("state machine callback completion should succeed");
+    let method_source = format!("{source}light:\n");
+    let methods = complete_tua_source(
+        "src/state_machine.tua",
+        &method_source,
+        position_after(&method_source, "light:"),
+    )
+    .expect("state machine method completion should succeed");
+
+    let callback_labels = labels(&callbacks);
+    for expected in [
+        "onbeforewarn",
+        "onafterpanic",
+        "onleaveyellow",
+        "onenterred",
+        "onstatechange",
+    ] {
+        assert!(
+            callback_labels.contains(&expected.to_owned()),
+            "missing callback {expected}: {callback_labels:?}"
+        );
+    }
+    let on_enter_red = callbacks
+        .iter()
+        .find(|completion| completion.label == "onenterred")
+        .expect("onenterred should complete");
+    assert!(on_enter_red.is_snippet);
+    assert!(on_enter_red
+        .insert_text
+        .as_deref()
+        .is_some_and(|text| text.contains("event: \"panic\" | \"warn\"")));
+
+    let method_labels = labels(&methods);
+    for expected in ["warn", "panic", "is", "can", "cannot", "current"] {
+        assert!(
+            method_labels.contains(&expected.to_owned()),
+            "missing member {expected}: {method_labels:?}"
+        );
+    }
+
+    let state_source = source.replace("initial = \"green\"", "initial = \"gr\"");
+    let states = complete_tua_source(
+        "src/state_machine.tua",
+        &state_source,
+        position_after(&state_source, "initial = \"gr"),
+    )
+    .expect("state machine state completion should succeed");
+    assert_eq!(labels(&states), vec!["green".to_owned()]);
+
+    let event_source = format!("{source}light:can(\"pa\")\n");
+    let events = complete_tua_source(
+        "src/state_machine.tua",
+        &event_source,
+        position_after(&event_source, "light:can(\"pa"),
+    )
+    .expect("state machine event completion should succeed");
+    assert_eq!(labels(&events), vec!["panic".to_owned()]);
+}
+
+#[test]
+fn preserves_typed_state_machine_members_across_required_modules() {
+    let root = temp_project_dir("required_state_machine_completion");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("test dirs should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("light.tua"),
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+  },
+})
+
+return light
+"#,
+    )
+    .expect("state machine module should be written");
+    let provider = parse_tua_source(
+        src.join("light.tua"),
+        fs::read_to_string(src.join("light.tua")).expect("state machine module should be read"),
+    )
+    .expect("state machine module should parse");
+    let exports = crate::infer_module_exports(&provider).expect("module exports should infer");
+    assert!(
+        exports.field("warn").is_some(),
+        "machine module lost derived event fields: {exports:?}"
+    );
+
+    let main_path = src.join("main.tua");
+    let member_source = r#"local light = require("light")
+light:
+"#;
+    let members = complete_tua_source(
+        &main_path,
+        member_source,
+        position_after(member_source, "light:"),
+    )
+    .expect("required state machine member completion should succeed");
+    let event_source = r#"local light = require("light")
+light:can("pa")
+"#;
+    let events = complete_tua_source(
+        &main_path,
+        event_source,
+        position_after(event_source, "light:can(\"pa"),
+    )
+    .expect("required state machine event completion should succeed");
+
+    assert!(
+        labels(&members).contains(&"warn".to_owned()),
+        "{:?}",
+        labels(&members)
+    );
+    assert!(
+        labels(&members).contains(&"panic".to_owned()),
+        "{:?}",
+        labels(&members)
+    );
+    assert_eq!(labels(&events), vec!["panic".to_owned()]);
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
 }
 
 #[test]
@@ -911,6 +1087,12 @@ fn completes_tua_and_lua_statement_snippets() {
             "sig",
             "signal",
             "local ${1:signals} = signal()\n${1:signals}:on(\"${2:event}\", function(${3})\n  ${0}\nend)",
+        ),
+        (
+            "sta",
+            "sta",
+            "stateMachine",
+            "local ${1:machine} = stateMachine({\n  initial = \"${2:idle}\",\n  events = {\n    { name = \"${3:start}\", from = \"${2:idle}\", to = \"${4:running}\" },\n    { name = \"${5:stop}\", from = \"${4:running}\", to = \"${2:idle}\" },\n  },\n  callbacks = {\n    onenter${4:running} = function(self, event, from, to)\n      ${0}\n    end,\n  },\n})",
         ),
         (
             "ife",

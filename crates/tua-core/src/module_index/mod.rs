@@ -13,7 +13,7 @@ use crate::ast_utils::plain_field_chain_from_var;
 use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
-use crate::semantic::resolve_aliases;
+use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::types::{
     build_type_environment, function_type_from_tua_signature, FunctionParameter, FunctionType,
     TableField, Type, TypeEnvironment, TypedFunction,
@@ -620,6 +620,15 @@ impl<'a> ExportInferer<'a> {
             },
             Expression::TableConstructor(table) => self.infer_table_type(table),
             Expression::Function(function) => function_type_from_body(function.body()),
+            Expression::FunctionCall(_) => self
+                .environment
+                .and_then(|environment| {
+                    let position = node_span(expression)?.start;
+                    SemanticModel::new(self.parsed, environment)
+                        .type_of_expression_return(expression, position, 0)
+                })
+                .map(|ty| self.resolve_export_type(&ty))
+                .unwrap_or(Type::Any),
             Expression::Parentheses { expression, .. } => self.infer_expression(expression),
             Expression::Var(Var::Name(name)) => {
                 self.local_type(&token_text(name)).unwrap_or(Type::Any)

@@ -11,7 +11,9 @@ use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, To
 use crate::hir::{lower_parsed_source, HirSymbolKind};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TypeAliasKind};
 use crate::source_text::{byte_for_column, line_at};
-use crate::{ecs, lua, object_pool, parse_tua_source, signal, sprite, vector, Diagnostic};
+use crate::{
+    ecs, lua, object_pool, parse_tua_source, signal, sprite, state_machine, vector, Diagnostic,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticToken {
@@ -1526,6 +1528,7 @@ fn is_builtin_type(name: &str) -> bool {
         || vector::builtin_type_names().contains(&name)
         || signal::builtin_type_names().contains(&name)
         || object_pool::builtin_type_names().contains(&name)
+        || state_machine::builtin_type_names().contains(&name)
         || sprite::builtin_type_names().contains(&name)
         || ecs::builtin_type_names().contains(&name)
 }

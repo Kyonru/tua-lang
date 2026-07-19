@@ -21,6 +21,7 @@ local Ecs = require("ecs")
 local Classes = require("classes")
 local Sprites = require("sprites")
 local Signals = require("signals")
+local StateMachine = require("state_machine")
 
 return {
   types = Types,
@@ -46,4 +47,5 @@ return {
   classes = Classes,
   sprites = Sprites,
   signals = Signals,
+  state_machine = StateMachine,
 }

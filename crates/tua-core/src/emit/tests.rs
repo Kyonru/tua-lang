@@ -856,6 +856,53 @@ local bullets = objectPool({ create = function() return {} end })
 }
 
 #[test]
+fn snapshot_lowers_builtin_state_machine_constructor_to_bundled_runtime() {
+    let emitted = emit_tua_source(
+        "src/state_machine.tua",
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+light:warn()
+"#,
+    )
+    .expect("stateMachine constructor calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_state_machine = require("tuastatemachine").create
+local light = __tua_state_machine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+light:warn()
+"#
+    );
+}
+
+#[test]
+fn snapshot_preserves_an_explicit_state_machine_binding() {
+    let emitted = emit_tua_source(
+        "src/state_machine.tua",
+        r#"local stateMachine = require("project_state_machine").create
+local light = stateMachine({ events = {} })
+"#,
+    )
+    .expect("explicit stateMachine binding should emit unchanged");
+
+    assert_eq!(
+        emitted,
+        r#"local stateMachine = require("project_state_machine").create
+local light = stateMachine({ events = {} })
+"#
+    );
+}
+
+#[test]
 fn snapshot_injects_builtin_ecs_runtime_when_ecs_is_used() {
     let emitted = emit_tua_source(
         "src/ecs.tua",

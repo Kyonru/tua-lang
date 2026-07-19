@@ -212,6 +212,104 @@ local result: string = objectPool({})
 }
 
 #[test]
+fn accepts_typed_builtin_state_machine_events_and_states() {
+    check_tua_source(
+        "src/state_machine.tua",
+        r#"
+local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+    { name = "reset", from = { "red", "yellow" }, to = "green" },
+  },
+  callbacks = {
+    onenterred = function(
+      self: StateMachine,
+      event: "panic" | "reset" | "warn",
+      from: "green" | "red" | "yellow",
+      to: "green" | "red" | "yellow"
+    )
+      print(self.current, event, from, to)
+    end,
+  },
+})
+
+local current: "green" | "red" | "yellow" = light.current
+local moving: "panic" | "reset" | "warn" | nil = light.currentTransitioningEvent
+local warned: boolean = light:warn("payload")
+local canPanic: boolean, destination: "green" | "red" | "yellow" | nil = light:can("panic")
+local isGreen: boolean = light:is("green")
+light:reset()
+"#,
+    )
+    .expect("static state machines should derive event methods and state unions");
+}
+
+#[test]
+fn rejects_unknown_typed_state_machine_states_and_events() {
+    let state_diagnostics = check_tua_source(
+        "src/state_machine.tua",
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+  },
+})
+light:is("blue")
+"#,
+    )
+    .expect_err("unknown states should be rejected");
+    assert_single_mismatch(
+        &state_diagnostics,
+        r#"expected "green" | "red" | "yellow", found "blue""#,
+    );
+
+    let event_diagnostics = check_tua_source(
+        "src/state_machine.tua",
+        r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+light:can("panic")
+"#,
+    )
+    .expect_err("unknown events should be rejected");
+    assert_single_mismatch(&event_diagnostics, r#"expected "warn", found "panic""#);
+}
+
+#[test]
+fn preserves_an_explicit_state_machine_function_binding() {
+    check_tua_source(
+        "src/custom_state_machine.tua",
+        r#"local function stateMachine(options: any): string
+  return "custom"
+end
+
+local result: string = stateMachine({})
+"#,
+    )
+    .expect("an explicit stateMachine function should override the built-in helper");
+}
+
+#[test]
+fn keeps_dynamic_state_machine_configuration_gradual() {
+    check_tua_source(
+        "src/dynamic_state_machine.tua",
+        r#"local options: any = loadStateMachineOptions()
+local machine = stateMachine(options)
+local current: string = machine.current
+local canFire: boolean = machine:can("runtime.event")
+machine:transition("runtime.event")
+"#,
+    )
+    .expect("computed state machine configuration should use the generic surface");
+}
+
+#[test]
 fn checks_signal_emit_payloads_from_typed_listener_callbacks() {
     check_tua_source(
         "src/signals.tua",

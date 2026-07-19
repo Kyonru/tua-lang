@@ -404,6 +404,37 @@ bullets:release(
 }
 
 #[test]
+fn returns_typed_builtin_state_machine_constructor_and_event_signatures() {
+    let constructor = signature_at("local light = stateMachine(\n", "stateMachine(")
+        .expect("stateMachine should have signature help");
+    let can_source = r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+    { name = "panic", from = "yellow", to = "red" },
+  },
+})
+light:can(
+"#;
+    let warn_source = can_source.replace("light:can(", "light:warn(");
+    let can = signature_at(can_source, "light:can(").expect("StateMachine:can should have help");
+    let warn = signature_at(&warn_source, "light:warn(").expect("derived event should have help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function stateMachine(options: StateMachineOptions): StateMachine"
+    );
+    assert_eq!(
+        can.signatures[0].label,
+        "function light:can(event: \"panic\" | \"warn\"): boolean, \"green\" | \"red\" | \"yellow\" | nil"
+    );
+    assert_eq!(
+        warn.signatures[0].label,
+        "function light:warn(...: any): boolean"
+    );
+}
+
+#[test]
 fn returns_builtin_signal_constructor_and_method_signatures() {
     let constructor =
         signature_at("local events = signal(\n", "signal(").expect("signal should have help");

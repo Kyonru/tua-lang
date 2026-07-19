@@ -78,6 +78,30 @@ local active = bullets:activeCount()
 }
 
 #[test]
+fn hints_builtin_state_machine_type_without_expanding_its_shape() {
+    let source = r#"local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = "warn", from = "green", to = "yellow" },
+  },
+})
+local current = light.current
+"#;
+    let hints = inlay_hints_tua_source("src/state_machine.tua", source)
+        .expect("state machine source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![": StateMachine", ": \"green\" | \"yellow\""]
+    );
+}
+
+#[test]
 fn hints_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {

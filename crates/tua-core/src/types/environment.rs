@@ -18,7 +18,7 @@ use crate::parser::{
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::source_text::function_name_table_field;
-use crate::{asset, lua, object_pool, sprite, vector, Diagnostic, DiagnosticCode};
+use crate::{asset, lua, object_pool, sprite, state_machine, vector, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
@@ -318,6 +318,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            state_machine::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -380,6 +385,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         .entry(crate::signal::TYPE_NAME.to_owned())
         .or_insert_with(crate::signal::signal_bus_type);
     for (name, ty) in object_pool::builtin_aliases() {
+        aliases.entry(name).or_insert(ty);
+    }
+    for (name, ty) in state_machine::builtin_aliases() {
         aliases.entry(name).or_insert(ty);
     }
     for (name, ty) in builtin_aliases {
@@ -2506,7 +2514,15 @@ fn infer_local_assignment_types(
             None => continue,
         };
 
-        let ty = if parsed.raw.language == ParsedLanguage::Tua {
+        let preserve_literal_unions = match assignment_expression_for_local(&expressions, index) {
+            Some((Expression::FunctionCall(call), _)) => {
+                state_machine::machine_type_from_call(call).is_some()
+                    && !locals.contains_key(state_machine::CONSTRUCTOR_NAME)
+                    && !function_types.contains_key(state_machine::CONSTRUCTOR_NAME)
+            }
+            _ => false,
+        };
+        let ty = if parsed.raw.language == ParsedLanguage::Tua && !preserve_literal_unions {
             widen_inferred_type(&ty)
         } else {
             ty
@@ -3012,6 +3028,14 @@ fn infer_function_call_return_types(
             return Vec::new();
         };
 
+        if state_machine::is_constructor(name)
+            && !locals.contains_key(name)
+            && !function_types.contains_key(name)
+        {
+            return vec![state_machine::machine_type_from_call(function_call)
+                .unwrap_or_else(|| Type::alias(state_machine::TYPE_NAME))];
+        }
+
         if object_pool::is_constructor(name)
             && !locals.contains_key(name)
             && !function_types.contains_key(name)
@@ -3045,6 +3069,10 @@ fn infer_function_call_return_types(
             .or_else(|| {
                 crate::signal::is_constructor(name)
                     .then(|| Type::Function(crate::signal::constructor_type()))
+            })
+            .or_else(|| {
+                state_machine::is_constructor(name)
+                    .then(|| Type::Function(state_machine::constructor_type()))
             });
 
         return function_type

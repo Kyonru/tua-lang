@@ -1,5 +1,6 @@
 use crate::{
-    asset, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite, vector,
+    asset, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
+    state_machine, vector,
 };
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
@@ -48,6 +49,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .chain(VECTOR_ITEMS.iter())
         .chain(SIGNAL_ITEMS.iter())
         .chain(OBJECT_POOL_ITEMS.iter())
+        .chain(STATE_MACHINE_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -159,6 +161,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .chain(VECTOR_ITEMS.iter())
             .chain(SIGNAL_ITEMS.iter())
             .chain(OBJECT_POOL_ITEMS.iter())
+            .chain(STATE_MACHINE_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -250,6 +253,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         "Shader" => Some(SHADER_ITEMS),
         signal::TYPE_NAME => Some(SIGNAL_BUS_ITEMS),
         object_pool::TYPE_NAME => Some(OBJECT_POOL_METHOD_ITEMS),
+        state_machine::TYPE_NAME => Some(STATE_MACHINE_METHOD_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
         "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
         "World" => Some(WORLD_ITEMS),
@@ -264,8 +268,10 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(VECTOR_ITEMS.iter())
         .chain(SIGNAL_ITEMS.iter())
         .chain(OBJECT_POOL_ITEMS.iter())
+        .chain(STATE_MACHINE_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .chain(OBJECT_POOL_METHOD_ITEMS.iter())
+        .chain(STATE_MACHINE_METHOD_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
         .chain(IMAGE_ITEMS.iter())
@@ -788,6 +794,7 @@ const ASSET_LOADERS: &[LuaItem] = &[
 const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];
 const SIGNAL_ITEMS: &[LuaItem] = &[signal_item()];
 const OBJECT_POOL_ITEMS: &[LuaItem] = &[object_pool_item()];
+const STATE_MACHINE_ITEMS: &[LuaItem] = &[state_machine_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -814,6 +821,15 @@ const fn object_pool_item() -> LuaItem {
         kind: LuaItemKind::Function,
         detail: object_pool::detail(),
         documentation: object_pool::documentation(),
+    }
+}
+
+const fn state_machine_item() -> LuaItem {
+    LuaItem {
+        label: state_machine::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: state_machine::detail(),
+        documentation: state_machine::documentation(),
     }
 }
 
@@ -973,6 +989,45 @@ const OBJECT_POOL_METHOD_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function ObjectPool:capacity(): number",
         "Return the total number of objects owned by the pool.",
+    ),
+];
+
+const STATE_MACHINE_METHOD_ITEMS: &[LuaItem] = &[
+    item(
+        "is",
+        LuaItemKind::Function,
+        "function StateMachine:is(state: string): boolean",
+        "Return whether the machine is currently in the selected state.",
+    ),
+    item(
+        "can",
+        LuaItemKind::Function,
+        "function StateMachine:can(event: string): boolean, string | nil",
+        "Return whether an event can fire and its destination state.",
+    ),
+    item(
+        "cannot",
+        LuaItemKind::Function,
+        "function StateMachine:cannot(event: string): boolean",
+        "Return whether an event cannot fire from the current state.",
+    ),
+    item(
+        "todot",
+        LuaItemKind::Function,
+        "function StateMachine:todot(filename: string): nil",
+        "Write the configured transition graph as a Graphviz DOT file.",
+    ),
+    item(
+        "transition",
+        LuaItemKind::Function,
+        "function StateMachine:transition(event: string): boolean | nil",
+        "Resume a pending asynchronous transition for the selected event.",
+    ),
+    item(
+        "cancelTransition",
+        LuaItemKind::Function,
+        "function StateMachine:cancelTransition(event: string): nil",
+        "Cancel a pending asynchronous transition for the selected event.",
     ),
 ];
 

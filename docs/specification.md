@@ -43,7 +43,8 @@ modules:
 - `signal()` emits a `tuasignal` require when used;
 - `spriteSheet({...})` emits an `anim8` require when used;
 - the built-in `ecs` module emits a `tuaecs` require when used;
-- `objectPool({...})` emits a `tuaobjectpool` require when used.
+- `objectPool({...})` emits a `tuaobjectpool` require when used;
+- `stateMachine({...})` emits a `tuastatemachine` require when used.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same
@@ -156,9 +157,15 @@ loader calls provide diagnostics, completion, hover metadata, definition, and
 references without executing project code.
 
 Domain helpers lower to ordinary Lua-compatible APIs. `spriteSheet({...})`,
-`signal()`, and the built-in `ecs` module are first-class compiler domains
-rather than executable third-party plugins. Experimental editor presentation
-is explicitly preview-gated.
+`signal()`, `stateMachine({...})`, and the built-in `ecs` module are first-class
+compiler domains rather than executable third-party plugins. Experimental
+editor presentation is explicitly preview-gated.
+
+Static state-machine configuration derives exact state and event literal
+unions, event methods, callback names, and state/event argument completion.
+Computed configuration remains valid through the generic gradual
+`StateMachine` surface; analysis does not execute configuration code to infer
+dynamic names.
 
 The sprite domain describes anim8 grid cell size, left/top origin, border
 spacing, zero-based row/column ranges, per-animation grid overrides, numeric or

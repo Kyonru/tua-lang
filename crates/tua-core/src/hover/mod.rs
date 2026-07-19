@@ -16,8 +16,8 @@ use crate::types::{
     TypedFunctionOverload,
 };
 use crate::{
-    definition_parsed_source, ecs, object_pool, parse_tua_source, Definition, DefinitionKind,
-    Diagnostic, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
+    definition_parsed_source, ecs, object_pool, parse_tua_source, state_machine, Definition,
+    DefinitionKind, Diagnostic, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -112,14 +112,23 @@ impl<'a> HoverResolver<'a> {
                 .semantic
                 .type_of_field_chain(&field_parts[..field_parts.len() - 1], position)
             {
-                if let Some(function) = ecs::typed_member(
-                    self.environment,
-                    &receiver_type,
-                    &current_part.text,
-                )
-                .or_else(|| {
-                    object_pool::typed_member(self.environment, &receiver_type, &current_part.text)
-                }) {
+                if let Some(function) =
+                    ecs::typed_member(self.environment, &receiver_type, &current_part.text)
+                        .or_else(|| {
+                            object_pool::typed_member(
+                                self.environment,
+                                &receiver_type,
+                                &current_part.text,
+                            )
+                        })
+                        .or_else(|| {
+                            state_machine::typed_member(
+                                self.environment,
+                                &receiver_type,
+                                &current_part.text,
+                            )
+                        })
+                {
                     return Some(self.function_hover(&function, position, current_part.span));
                 }
             }
@@ -188,6 +197,14 @@ impl<'a> HoverResolver<'a> {
             if let Some(hover) =
                 object_pool_local_hover(self.environment, &current_part.text, ty, current_part.span)
             {
+                return Some(hover);
+            }
+            if let Some(hover) = state_machine_local_hover(
+                self.environment,
+                &current_part.text,
+                ty,
+                current_part.span,
+            ) {
                 return Some(hover);
             }
 
@@ -307,6 +324,9 @@ impl<'a> HoverResolver<'a> {
     ) -> Option<Hover> {
         let ty = self.semantic.type_of_local_assignment(name, position)?;
         if let Some(hover) = object_pool_local_hover(self.environment, name, &ty, hover_span) {
+            return Some(hover);
+        }
+        if let Some(hover) = state_machine_local_hover(self.environment, name, &ty, hover_span) {
             return Some(hover);
         }
 
@@ -684,6 +704,15 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
             .find(|item| item.label == field);
     }
 
+    if state_machine::type_is_state_machine(environment, ty) {
+        if let Some(item) = lua::type_field_items(state_machine::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
     if let Type::Alias(name) = ty {
         if let Some(item) = lua::type_field_items(name, field)
             .into_iter()
@@ -725,6 +754,22 @@ fn object_pool_local_hover(
         contents: format!("local {name}: {}", object_pool::TYPE_NAME),
         span: Some(span),
         documentation,
+        context: Vec::new(),
+    })
+}
+
+fn state_machine_local_hover(
+    environment: &TypeEnvironment,
+    name: &str,
+    ty: &Type,
+    span: SourceSpan,
+) -> Option<Hover> {
+    let (states, events) = state_machine::type_summary(environment, ty)?;
+
+    Some(Hover {
+        contents: format!("local {name}: {}", state_machine::TYPE_NAME),
+        span: Some(span),
+        documentation: Some(format!("States: `{states}`. Events: `{events}`.")),
         context: Vec::new(),
     })
 }
