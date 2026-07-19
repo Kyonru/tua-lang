@@ -43,6 +43,7 @@ fn default_config_matches_spec() {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            type_libraries: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Off,
             },
@@ -56,6 +57,28 @@ fn default_config_matches_spec() {
     assert_eq!(
         parse_config(DEFAULT_CONFIG_TEXT).expect("default config text should parse"),
         ProjectConfig::default()
+    );
+}
+
+#[test]
+fn parses_declaration_only_type_libraries() {
+    let config = parse_config(
+        r#"
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    )
+    .expect("type library config should parse");
+
+    assert_eq!(
+        config.type_libraries,
+        vec![TypeLibraryConfig {
+            path: PathBuf::from("lib/feel/types"),
+            declaration_prefix: "feel".to_owned(),
+            runtime_prefix: "lib.feel".to_owned(),
+        }]
     );
 }
 
@@ -130,6 +153,7 @@ globals = ["Game", "World"]
             target: "love11-luajit".to_owned(),
             extension: "tl".to_owned(),
             emit_maps: false,
+            type_libraries: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Luacats,
             },

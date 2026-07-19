@@ -26,6 +26,7 @@ main = \"main.tua\"
 target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
+type_libraries = []
 
 [emit]
 annotation_mode = \"off\"
@@ -91,6 +92,7 @@ pub struct ProjectConfig {
     pub target: String,
     pub extension: String,
     pub emit_maps: bool,
+    pub type_libraries: Vec<TypeLibraryConfig>,
     pub emit: EmitConfig,
     pub format: FormatConfig,
     pub jit: JitConfig,
@@ -107,6 +109,7 @@ impl Default for ProjectConfig {
             target: "love11-luajit".to_owned(),
             extension: "tua".to_owned(),
             emit_maps: true,
+            type_libraries: Vec::new(),
             emit: EmitConfig::default(),
             format: FormatConfig::default(),
             jit: JitConfig::default(),
@@ -114,6 +117,14 @@ impl Default for ProjectConfig {
             diagnostics: DiagnosticsConfig::default(),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TypeLibraryConfig {
+    pub path: PathBuf,
+    pub declaration_prefix: String,
+    pub runtime_prefix: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

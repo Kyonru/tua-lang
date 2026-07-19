@@ -79,6 +79,9 @@ Completion combines syntax context with local and project semantics. It covers:
 - `require(...)` and static `import(...)` paths, module members, and
   auto-import candidates;
 - LOVE globals, object methods, enums, callbacks, and asset paths;
+- expected-type table constructors, including union discriminators, recursive
+  array/table members, and contextually typed callbacks from configured
+  declaration libraries;
 - table configuration for sprites, state machines, stores, ECS, object pools,
   Signals, and other Tua helpers;
 - statement snippets for `if`/`then`/`end`, loops, `repeat`/`until`, `do`/`end`,
@@ -88,6 +91,13 @@ Function and method items can insert argument placeholders. Known literal
 choices become snippet choices, and LOVE object methods prefer colon-call
 syntax. Completion resolve adds documentation, signatures, source context, and
 LOVE wiki links when available.
+
+Configured declaration-only libraries are indexed during workspace reindexing
+and refreshed for file changes reported by the editor.
+Their `---@meta` modules can describe the runtime module returned by a different
+`require(...)` prefix, without copying the declarations into a build or
+fetching packages from the editor. See
+[Declaration-Only Type Libraries](configuration.md#declaration-only-type-libraries).
 
 Hover reports inferred or declared types, documentation, module context, asset
 metadata, and LOVE documentation. Signature help appears after `(` and `,`,

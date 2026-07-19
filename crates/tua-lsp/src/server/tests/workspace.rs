@@ -106,6 +106,54 @@ end
     assert_eq!(combat_symbols[1]["containerName"], "systems.combat");
     assert_eq!(combat_symbols[2]["containerName"], "systems.combat");
 }
+
+#[test]
+fn configured_type_library_drives_expected_table_completion() {
+    let temp = TempProject::new("type-library-completion");
+    let main = r#"local feel = require("lib.feel")
+
+feel.define("button.press", {
+  { dummy },
+})
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    );
+    temp.write("src/main.tua", main);
+    temp.write(
+        "lib/feel/types/feel.lua",
+        r#"---@meta feel
+---@class AnimateStep
+---@field kind "animate"
+---@field duration number
+---@class EmitStep
+---@field kind "emit"
+---@field event string
+---@alias Step AnimateStep|EmitStep
+---@param name string
+---@param steps Step[]
+local function define(name, steps) end
+return { define = define }
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, main),
+        completion_request(2, &uri, main, "  { "),
+    ]);
+
+    assert_completion_labels(&output, 2, ["duration", "event", "kind"]);
+}
 #[test]
 fn workspace_symbol_searches_all_workspace_folders() {
     let game = TempProject::new("workspace-folder-game");

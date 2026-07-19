@@ -99,7 +99,8 @@ pub use completion::{
 pub use config::{
     init_project, load_config_from_dir, parse_config, AnnotationMode, ConfigError,
     ConfigParseError, DiagnosticsConfig, EcsConfig, EmitConfig, FormatConfig, InitResult,
-    JitConfig, LoadedConfig, ProjectConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT,
+    JitConfig, LoadedConfig, ProjectConfig, TypeLibraryConfig, CONFIG_FILE, DEFAULT_CONFIG_TEXT,
+    DEFAULT_MAIN_TEXT,
 };
 pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,
@@ -181,6 +182,7 @@ pub use parser::{
     TypedSourceModel,
 };
 pub use project::project_description;
+pub use project_model::ProjectTypeLibrary;
 pub use project_model::{
     LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel, ProjectModelOptions,
     ProjectTarget, ProjectWorkspace,

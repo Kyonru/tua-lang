@@ -34,6 +34,7 @@ fn graph<'a>(
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     )
 }
@@ -116,6 +117,68 @@ return {
     assert_eq!(export.origin, ModuleExportOrigin::Tua);
     assert!(matches!(export.field.ty, Type::Function(_)));
     assert!(export.symbol_id.is_some());
+}
+
+#[test]
+fn declaration_modules_overlay_require_without_changing_import_resolution() {
+    let (main, main_hir, main_exports) = tua_input(
+        "src/main.tua",
+        r#"
+local required = require("lib.feel")
+local imported = import("lib.feel")
+return { required = required, imported = imported }
+"#,
+    );
+    let (runtime, runtime_hir, runtime_exports) =
+        lua_input("src/lib/feel.lua", "return { runtime = true }\n");
+    let (declaration, declaration_hir, declaration_exports) = lua_input(
+        "lib/feel/types/feel.lua",
+        "---@meta feel\nreturn { declared = true }\n",
+    );
+    let declaration_path = PathBuf::from("lib/feel/types/feel.lua");
+    let graph = graph_with_options(
+        [
+            (&main, &main_hir, &main_exports, AnalysisSourceKind::Tua),
+            (
+                &runtime,
+                &runtime_hir,
+                &runtime_exports,
+                AnalysisSourceKind::Lua,
+            ),
+            (
+                &declaration,
+                &declaration_hir,
+                &declaration_exports,
+                AnalysisSourceKind::Lua,
+            ),
+        ],
+        ModuleGraphOptions {
+            source_roots: vec![PathBuf::from("src")],
+            output_roots: Vec::new(),
+            extension: "tua".to_owned(),
+            require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::from([(
+                "lib.feel".to_owned(),
+                declaration_path.clone(),
+            )]),
+        },
+    );
+    let module = graph
+        .module("src/main.tua")
+        .expect("main module should be indexed");
+
+    assert_eq!(
+        module.require_edges[0].resolution,
+        RequireResolution::Resolved {
+            path: declaration_path,
+        }
+    );
+    assert_eq!(
+        module.require_edges[1].resolution,
+        RequireResolution::Resolved {
+            path: PathBuf::from("src/lib/feel.lua"),
+        }
+    );
 }
 
 #[test]
@@ -417,6 +480,7 @@ return { player = Player, background = Background, legacy = Legacy }
             output_roots: vec![PathBuf::from("game")],
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let module = graph

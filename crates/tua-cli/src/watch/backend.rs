@@ -46,25 +46,33 @@ impl WatchBackend {
     pub(super) fn start(
         workspace_root: &Path,
         source_root: &Path,
+        additional_roots: &[PathBuf],
         poll_interval: Duration,
         force_poll: bool,
     ) -> Result<(Self, Option<Error>), Error> {
         if !force_poll {
-            match Self::native(workspace_root, source_root) {
+            match Self::native(workspace_root, source_root, additional_roots) {
                 Ok(backend) => return Ok((backend, None)),
                 Err(native_error) => {
-                    return Self::poll(workspace_root, source_root, poll_interval)
-                        .map(|backend| (backend, Some(native_error)));
+                    return Self::poll(
+                        workspace_root,
+                        source_root,
+                        additional_roots,
+                        poll_interval,
+                    )
+                    .map(|backend| (backend, Some(native_error)));
                 }
             }
         }
 
-        Self::poll(workspace_root, source_root, poll_interval).map(|backend| (backend, None))
+        Self::poll(workspace_root, source_root, additional_roots, poll_interval)
+            .map(|backend| (backend, None))
     }
 
     pub(super) fn poll(
         workspace_root: &Path,
         source_root: &Path,
+        additional_roots: &[PathBuf],
         poll_interval: Duration,
     ) -> Result<Self, Error> {
         let (sender, receiver) = mpsc::channel();
@@ -84,11 +92,15 @@ impl WatchBackend {
             last_reconcile: Instant::now(),
         };
 
-        backend.watch_roots(workspace_root, source_root)?;
+        backend.watch_roots(workspace_root, source_root, additional_roots)?;
         Ok(backend)
     }
 
-    fn native(workspace_root: &Path, source_root: &Path) -> Result<Self, Error> {
+    fn native(
+        workspace_root: &Path,
+        source_root: &Path,
+        additional_roots: &[PathBuf],
+    ) -> Result<Self, Error> {
         let (sender, receiver) = mpsc::channel();
         let watcher = notify::recommended_watcher(move |event| {
             let _ = sender.send(event);
@@ -101,7 +113,7 @@ impl WatchBackend {
             last_reconcile: Instant::now(),
         };
 
-        backend.watch_roots(workspace_root, source_root)?;
+        backend.watch_roots(workspace_root, source_root, additional_roots)?;
         Ok(backend)
     }
 
@@ -157,17 +169,34 @@ impl WatchBackend {
         Ok(batch)
     }
 
-    fn watch_roots(&mut self, workspace_root: &Path, source_root: &Path) -> Result<(), Error> {
+    fn watch_roots(
+        &mut self,
+        workspace_root: &Path,
+        source_root: &Path,
+        additional_roots: &[PathBuf],
+    ) -> Result<(), Error> {
         if paths_same_location(workspace_root, source_root) {
-            return self
-                .watcher_mut()
-                .watch(workspace_root, RecursiveMode::Recursive);
+            self.watcher_mut()
+                .watch(workspace_root, RecursiveMode::Recursive)?;
+        } else {
+            self.watcher_mut()
+                .watch(workspace_root, RecursiveMode::NonRecursive)?;
+            self.watcher_mut()
+                .watch(source_root, RecursiveMode::Recursive)?;
         }
 
-        self.watcher_mut()
-            .watch(workspace_root, RecursiveMode::NonRecursive)?;
-        self.watcher_mut()
-            .watch(source_root, RecursiveMode::Recursive)
+        for root in additional_roots {
+            if root.starts_with(source_root)
+                || (paths_same_location(workspace_root, source_root)
+                    && root.starts_with(workspace_root))
+            {
+                continue;
+            }
+
+            self.watcher_mut().watch(root, RecursiveMode::Recursive)?;
+        }
+
+        Ok(())
     }
 
     fn watcher_mut(&mut self) -> &mut dyn Watcher {

@@ -139,9 +139,22 @@ Static `import` syntax is convenience syntax that lowers to `require`; it does
 not introduce a separate module runtime. Tua does not add JavaScript-style
 `export` declarations or type-only runtime modules.
 
+Configured declaration-only type libraries recursively index local `.lua`
+declarations. A declaration `---@meta` identity is mapped from its configured
+declaration prefix to the runtime prefix used by `require(...)`. Declaration
+files contribute types and editor semantics only: they are never emitted,
+copied, executed, packaged, or fetched from the network. Static `import(...)`
+continues to require a real project module.
+
 LuaDoc/LuaCATS annotations support practical aliases, classes, fields,
 functions, overloads, typed varargs, and module exports. Unsupported annotations
 degrade conservatively, and semantic analysis does not execute project code.
+
+An expected table type also drives constructor completion. Known union members
+contribute fields and string-literal values; existing literal fields narrow
+discriminated unions; array, dictionary, tuple, and named-field steps propagate
+the expectation into nested constructors; and expected function fields provide
+callback parameter types.
 
 ## LOVE Semantics
 

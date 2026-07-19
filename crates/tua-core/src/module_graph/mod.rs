@@ -23,6 +23,7 @@ pub struct ModuleGraph {
     exports_by_symbol: BTreeMap<(PathBuf, HirSymbolId), Vec<ModuleExportEntry>>,
     diagnostics: BTreeMap<PathBuf, Vec<Diagnostic>>,
     cycles: Vec<Vec<PathBuf>>,
+    declaration_modules: BTreeMap<String, PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -40,6 +41,7 @@ pub struct ModuleGraphOptions {
     pub output_roots: Vec<PathBuf>,
     pub extension: String,
     pub require_path_separator: ModulePathSeparator,
+    pub declaration_modules: BTreeMap<String, PathBuf>,
 }
 
 #[derive(Clone, Copy)]
@@ -50,6 +52,7 @@ struct ModuleResolutionContext<'a> {
     output_roots: &'a [PathBuf],
     extension: &'a str,
     separator: ModulePathSeparator,
+    declaration_modules: &'a BTreeMap<String, PathBuf>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -111,7 +114,10 @@ impl ModuleGraph {
         options: ModuleGraphOptions,
     ) -> Self {
         let inputs = inputs.into_iter().collect::<Vec<_>>();
-        let mut graph = Self::default();
+        let mut graph = Self {
+            declaration_modules: options.declaration_modules.clone(),
+            ..Self::default()
+        };
         let indexed_paths = inputs
             .iter()
             .map(|input| normalize_path(input.path))
@@ -124,6 +130,7 @@ impl ModuleGraph {
             output_roots: &options.output_roots,
             extension: &options.extension,
             separator: options.require_path_separator,
+            declaration_modules: &options.declaration_modules,
         };
 
         for input in &inputs {
@@ -179,6 +186,10 @@ impl ModuleGraph {
 
     pub fn module(&self, path: impl AsRef<Path>) -> Option<&ModuleGraphModule> {
         self.modules.get(&normalize_path(path))
+    }
+
+    pub fn declaration_module(&self, module: &str) -> Option<&Path> {
+        self.declaration_modules.get(module).map(PathBuf::as_path)
     }
 
     pub fn modules(&self) -> impl Iterator<Item = &ModuleGraphModule> {
@@ -392,7 +403,12 @@ fn require_edges_for_source(
         .map(|literal| {
             let resolution = match literal.kind {
                 ModuleSpecifierKind::Require => {
-                    let candidates = existing_candidates(&literal.module, context);
+                    let candidates = context
+                        .declaration_modules
+                        .get(&literal.module)
+                        .cloned()
+                        .map(|path| vec![path])
+                        .unwrap_or_else(|| existing_candidates(&literal.module, context));
 
                     resolution_for_candidates(candidates, context.search_roots.to_vec())
                 }

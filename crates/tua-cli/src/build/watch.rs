@@ -18,7 +18,7 @@ impl WatchBuildSession {
         let source_dir = workspace.primary_source_root().to_path_buf();
         let out_dir = workspace.primary_output_root().to_path_buf();
         let in_place = paths_same_location(&source_dir, &out_dir);
-        let source_files = discover_build_files(
+        let mut source_files = discover_build_files(
             &source_dir,
             &workspace.config().extension,
             (!in_place).then_some(out_dir.as_path()),
@@ -26,6 +26,7 @@ impl WatchBuildSession {
         .map_err(|error| {
             CliError::from_diagnostics("failed to discover source files", vec![error])
         })?;
+        source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
         let mut host = AnalysisHost::with_config(workspace.config().clone());
 
         host.set_source_roots(workspace.source_roots().iter().cloned());
@@ -39,7 +40,7 @@ impl WatchBuildSession {
             in_place,
             host,
         };
-        let mut diagnostics = Vec::new();
+        let mut diagnostics = load_type_libraries(&mut session.host, &session.workspace);
         let mut tua_paths = BTreeSet::new();
         let mut asset_paths = BTreeSet::new();
         let tua_output_owners = tua_output_owners_for_paths(
@@ -119,6 +120,23 @@ impl WatchBuildSession {
         }
 
         for path in changed {
+            if self.workspace.is_type_library_path(&path) {
+                match read_source_file(&path) {
+                    Ok(source) => {
+                        let _ =
+                            self.host
+                                .update_file_with_kind(&path, source, AnalysisSourceKind::Lua);
+                        surface_roots.insert(path);
+                    }
+                    Err(diagnostic) => {
+                        diagnostics.push(diagnostic);
+                        surface_roots.insert(path.clone());
+                        self.host.remove_file(path);
+                    }
+                }
+                continue;
+            }
+
             let source_kind = SourceKind::for_path(&path, &extension);
 
             match source_kind {

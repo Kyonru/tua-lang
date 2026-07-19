@@ -80,8 +80,9 @@ flowchart TD
 ### Inputs And Identity
 
 `ProjectModel` interprets workspace configuration: source and output roots,
-asset roots, ignored paths, file associations, and module paths. `Vfs` stores
-the corresponding source files. An open document overlay takes precedence over
+declaration-only type-library roots and module-prefix mappings, asset roots,
+ignored paths, file associations, and module paths. `Vfs` stores the
+corresponding analysis files. An open document overlay takes precedence over
 the disk copy until the document closes, so editor requests always analyze the
 text the user can see.
 
@@ -96,6 +97,13 @@ cached products and advances that revision.
 `AnalysisSnapshot` is an immutable view of one revision. It combines cached
 per-file facts with project-wide indexes and exposes stable query APIs to the
 CLI and LSP.
+
+Declaration libraries enter the VFS as Lua analysis inputs, but remain outside
+source roots, require search roots, asset copying, and emission. During snapshot
+construction, `---@meta` identities are mapped to configured runtime
+`require(...)` names and added as declaration overlays in the shared module
+graph. The type database and editor queries consume that same resolved module
+instead of maintaining a separate external-library path.
 
 | Use | API |
 | --- | --- |

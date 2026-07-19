@@ -528,6 +528,31 @@ impl AnalysisHost {
                 }
             }
 
+            for library in workspace.type_libraries() {
+                let sources = {
+                    let _trace = tua_core::profile::diagnostics_span(
+                        tua_core::profile::DiagnosticsTraceCategory::DiscoverFiles,
+                    );
+
+                    discover_type_library_sources(library.root(), workspace, settings)
+                };
+
+                for path in sources {
+                    if open_paths.contains(&path) {
+                        continue;
+                    }
+
+                    if let Ok(source) = fs::read_to_string(&path) {
+                        let _trace = tua_core::profile::diagnostics_span(
+                            tua_core::profile::DiagnosticsTraceCategory::ReadVfsUpdate,
+                        );
+
+                        self.core
+                            .set_file_with_kind(path, source, AnalysisSourceKind::Lua);
+                    }
+                }
+            }
+
             for (path, _source) in &open_documents {
                 if workspace.source_kind_for_path(path).is_none()
                     || workspace.is_ignored(path)
@@ -657,6 +682,12 @@ impl AnalysisHost {
 
         self.core.set_source_roots(source_roots);
         self.core.set_output_roots(output_roots);
+        self.core.set_type_libraries(
+            model
+                .workspaces()
+                .iter()
+                .flat_map(|workspace| workspace.type_libraries().iter().cloned()),
+        );
         self.core
             .set_require_path_separator(settings.module_path_separator());
         self.core
@@ -1335,18 +1366,64 @@ fn discover_project_sources_into(
         };
 
         if file_type.is_dir() {
-            if !workspace.is_ignored(&path)
+            if !workspace.is_type_library_path(&path)
+                && !workspace.is_ignored(&path)
                 && !settings.is_ignored(&path, &[workspace.root().to_path_buf()])
             {
                 discover_project_sources_into(&path, workspace, settings, files);
             }
         } else if file_type.is_file()
+            && !workspace.is_type_library_path(&path)
             && !workspace.is_ignored(&path)
             && !settings.is_ignored(&path, &[workspace.root().to_path_buf()])
         {
             if let Some(kind) = workspace.source_kind_for_path(&path) {
                 files.push((path, source_kind_from_vfs(kind)));
             }
+        }
+    }
+}
+
+fn discover_type_library_sources(
+    root: &Path,
+    workspace: &ProjectWorkspace,
+    settings: &WorkspaceSettings,
+) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+
+    discover_type_library_sources_into(root, workspace, settings, &mut files);
+    files.sort();
+    files
+}
+
+fn discover_type_library_sources_into(
+    dir: &Path,
+    workspace: &ProjectWorkspace,
+    settings: &WorkspaceSettings,
+    files: &mut Vec<PathBuf>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+
+        if workspace.is_ignored(&path)
+            || settings.is_ignored(&path, &[workspace.root().to_path_buf()])
+        {
+            continue;
+        }
+
+        if file_type.is_dir() {
+            discover_type_library_sources_into(&path, workspace, settings, files);
+        } else if file_type.is_file()
+            && path.extension().and_then(|extension| extension.to_str()) == Some("lua")
+        {
+            files.push(path);
         }
     }
 }

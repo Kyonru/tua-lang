@@ -5,9 +5,10 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use full_moon::ast::{self, Expression};
+use full_moon::ast::{self, Expression, Field, FunctionCall, TableConstructor};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::visitors::Visitor;
 
 use crate::asset::{
     self, AssetInventory, AssetLoaderKind, AssetMetadata, AssetReference, ProjectAsset,
@@ -81,14 +82,14 @@ use crate::{
     CallHierarchySymbol, CallHierarchySymbolTarget, CodeLens, CodeLensReferenceKind,
     CodeLensReferenceTarget, CodeLensTarget, Completion, CompletionKind, Definition,
     DefinitionKind, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange, Hover, InlayHint,
-    ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
-    ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput, ModuleGraphOptions,
-    ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource, ProjectConfig,
-    ProjectTypeDatabase, ProjectTypeDatabaseInput, Reference, ReferenceKind, RenameEdit,
-    RenameTarget, RequireResolution, ScopeMap, SelectionRange, SemanticIndex, SemanticToken,
-    SignatureHelp, SourcePosition, SourceSpan, SymbolIndex, TableField, TextEdit, TuaType, Type,
-    TypeEnvironment, TypeExplanation, TypeExplanationStep, TypeExplanationStepKind, TypedFunction,
-    WorkspaceSymbol,
+    LuaDocAnnotationKind, ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph,
+    ModuleDependencyModule, ModuleExportField, ModuleExports, ModuleGraph, ModuleGraphInput,
+    ModuleGraphOptions, ModuleInclusionPath, ModuleInclusionStep, ModuleLink, ParsedSource,
+    ProjectConfig, ProjectTypeDatabase, ProjectTypeDatabaseInput, ProjectTypeLibrary, Reference,
+    ReferenceKind, RenameEdit, RenameTarget, RequireResolution, ScopeMap, SelectionRange,
+    SemanticIndex, SemanticToken, SignatureHelp, SourcePosition, SourceSpan, SymbolIndex,
+    TableField, TextEdit, TuaType, Type, TypeEnvironment, TypeExplanation, TypeExplanationStep,
+    TypeExplanationStepKind, TypedFunction, WorkspaceSymbol,
 };
 
 mod asset_queries;
@@ -151,6 +152,7 @@ pub struct AnalysisHost {
     completion_cache: Arc<Mutex<BTreeMap<CompletionRequestKey, Vec<Completion>>>>,
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
+    type_libraries: Vec<ProjectTypeLibrary>,
     snapshot_cache: Arc<Mutex<Option<CachedAnalysisSnapshot>>>,
     revision: u64,
 }
@@ -1093,12 +1095,14 @@ fn signal_event_hover(
 fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
     match ty {
         Type::Table(table) => {
-            fields.extend(
-                table
-                    .semantic_fields()
-                    .into_iter()
-                    .map(|(name, field)| (name.to_owned(), field.ty.clone())),
-            );
+            for (name, field) in table.semantic_fields() {
+                let ty = field.ty.clone();
+
+                fields
+                    .entry(name.to_owned())
+                    .and_modify(|current| *current = Type::union([current.clone(), ty.clone()]))
+                    .or_insert(ty);
+            }
         }
         Type::Union(types) => {
             for ty in types {
@@ -1113,6 +1117,408 @@ fn collect_type_fields(ty: &Type, fields: &mut BTreeMap<String, Type>) {
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => {}
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ExpectedTableType {
+    ty: Type,
+    origin_path: PathBuf,
+    table: TableConstructor,
+}
+
+#[derive(Clone, Debug)]
+enum ExpectedTableStep {
+    Field(String),
+    Element,
+}
+
+#[derive(Default)]
+struct ExpectedTableSyntaxCollector {
+    tables: Vec<TableConstructor>,
+    calls: Vec<FunctionCall>,
+    locals: Vec<ast::LocalAssignment>,
+}
+
+impl Visitor for ExpectedTableSyntaxCollector {
+    fn visit_table_constructor(&mut self, table: &TableConstructor) {
+        self.tables.push(table.clone());
+    }
+
+    fn visit_function_call(&mut self, call: &FunctionCall) {
+        self.calls.push(call.clone());
+    }
+
+    fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+        self.locals.push(local.clone());
+    }
+}
+
+fn expected_table_syntax(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Option<ExpectedTableSyntax> {
+    let mut collector = ExpectedTableSyntaxCollector::default();
+    collector.visit_ast(&parsed.ast);
+    let table = collector
+        .tables
+        .into_iter()
+        .filter(|table| node_span(table).is_some_and(|span| span_contains_position(span, position)))
+        .min_by_key(|table| node_span(table).map(table_span_size))?;
+
+    Some(ExpectedTableSyntax {
+        table,
+        calls: collector.calls,
+        locals: collector.locals,
+    })
+}
+
+struct ExpectedTableSyntax {
+    table: TableConstructor,
+    calls: Vec<FunctionCall>,
+    locals: Vec<ast::LocalAssignment>,
+}
+
+fn expression_path_to_table(
+    expression: &Expression,
+    target: SourceSpan,
+) -> Option<Vec<ExpectedTableStep>> {
+    let span = node_span(expression)?;
+
+    if !span_contains_span(span, target) {
+        return None;
+    }
+
+    match expression {
+        Expression::TableConstructor(table) => {
+            if node_span(table) == Some(target) {
+                return Some(Vec::new());
+            }
+
+            for field in table.fields() {
+                let (value, step) = match field {
+                    Field::NameKey { key, value, .. } => {
+                        (value, ExpectedTableStep::Field(token_text(key)))
+                    }
+                    Field::ExpressionKey { key, value, .. } => {
+                        let step = string_literal_expression_value(key)
+                            .map(ExpectedTableStep::Field)
+                            .unwrap_or(ExpectedTableStep::Element);
+                        (value, step)
+                    }
+                    Field::NoKey(value) => (value, ExpectedTableStep::Element),
+                    _ => continue,
+                };
+
+                if let Some(mut path) = expression_path_to_table(value, target) {
+                    path.insert(0, step);
+                    return Some(path);
+                }
+            }
+
+            None
+        }
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. }
+        | Expression::UnaryOperator { expression, .. } => {
+            expression_path_to_table(expression, target)
+        }
+        _ => None,
+    }
+}
+
+fn string_literal_expression_value(expression: &Expression) -> Option<String> {
+    let Expression::String(token) = expression else {
+        return None;
+    };
+
+    unquote_string_literal(&token_text(token))
+}
+
+fn unquote_string_literal(value: &str) -> Option<String> {
+    value
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .or_else(|| {
+            value
+                .strip_prefix('\'')
+                .and_then(|value| value.strip_suffix('\''))
+        })
+        .map(str::to_owned)
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
+}
+
+fn span_contains_position(span: SourceSpan, position: SourcePosition) -> bool {
+    position_key(span.start) <= position_key(position)
+        && position_key(position) <= position_key(span.end)
+}
+
+fn span_contains_span(parent: SourceSpan, child: SourceSpan) -> bool {
+    position_key(parent.start) <= position_key(child.start)
+        && position_key(child.end) <= position_key(parent.end)
+}
+
+fn table_span_size(span: SourceSpan) -> (usize, usize) {
+    (
+        span.end.line.saturating_sub(span.start.line),
+        span.end.column.saturating_sub(span.start.column),
+    )
+}
+
+fn call_argument_table_path(
+    call: &FunctionCall,
+    target: SourceSpan,
+) -> Option<(usize, Vec<ExpectedTableStep>)> {
+    let arguments = call.suffixes().find_map(|suffix| match suffix {
+        ast::Suffix::Call(ast::Call::AnonymousCall(arguments)) => Some(arguments),
+        ast::Suffix::Call(ast::Call::MethodCall(method)) => Some(method.args()),
+        _ => None,
+    })?;
+
+    match arguments {
+        ast::FunctionArgs::Parentheses { arguments, .. } => {
+            arguments
+                .iter()
+                .enumerate()
+                .find_map(|(index, expression)| {
+                    expression_path_to_table(expression, target).map(|path| (index, path))
+                })
+        }
+        ast::FunctionArgs::TableConstructor(table) if node_span(table) == Some(target) => {
+            Some((0, Vec::new()))
+        }
+        ast::FunctionArgs::String(_) | ast::FunctionArgs::TableConstructor(_) => None,
+        _ => None,
+    }
+}
+
+fn typed_function_parameter_type(
+    function: &TypedFunction,
+    argument_index: usize,
+    is_method: bool,
+) -> Option<Type> {
+    let mut types = Vec::new();
+
+    if let Some(ty) = parameter_type_for_call(
+        &function.parameters,
+        function.vararg_type.as_ref(),
+        argument_index,
+        is_method,
+    ) {
+        types.push(ty);
+    }
+    for overload in &function.overloads {
+        if let Some(ty) = parameter_type_for_call(
+            &overload.parameters,
+            overload.vararg_type.as_ref(),
+            argument_index,
+            is_method,
+        ) {
+            types.push(ty);
+        }
+    }
+
+    match types.len() {
+        0 => None,
+        1 => types.pop(),
+        _ => Some(Type::union(types)),
+    }
+}
+
+fn parameter_type_for_call(
+    parameters: &[crate::TypedParameter],
+    vararg_type: Option<&Type>,
+    argument_index: usize,
+    is_method: bool,
+) -> Option<Type> {
+    let parameters = if is_method
+        && parameters.first().is_some_and(|parameter| {
+            parameter.name == "self" || (parameter.name.is_empty() && parameter.ty == Type::Any)
+        }) {
+        &parameters[1..]
+    } else {
+        parameters
+    };
+
+    parameters
+        .get(argument_index)
+        .map(|parameter| parameter.ty.clone())
+        .or_else(|| vararg_type.cloned())
+}
+
+fn table_string_value_field(table: &TableConstructor, position: SourcePosition) -> Option<String> {
+    table.fields().iter().find_map(|field| match field {
+        Field::NameKey { key, value, .. }
+            if matches!(value, Expression::String(_))
+                && node_span(value).is_some_and(|span| span_contains_position(span, position)) =>
+        {
+            Some(token_text(key))
+        }
+        Field::ExpressionKey { key, value, .. }
+            if matches!(value, Expression::String(_))
+                && node_span(value).is_some_and(|span| span_contains_position(span, position)) =>
+        {
+            string_literal_expression_value(key)
+        }
+        _ => None,
+    })
+}
+
+fn table_named_fields(table: &TableConstructor) -> BTreeSet<String> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| match field {
+            Field::NameKey { key, .. } => Some(token_text(key)),
+            Field::ExpressionKey { key, .. } => string_literal_expression_value(key),
+            Field::NoKey(_) => None,
+            _ => None,
+        })
+        .collect()
+}
+
+fn table_field_key_position(table: &TableConstructor, position: SourcePosition) -> bool {
+    let Some(field) = table
+        .fields()
+        .iter()
+        .find(|field| node_span(*field).is_some_and(|span| span_contains_position(span, position)))
+    else {
+        return true;
+    };
+
+    match field {
+        Field::NameKey { key, .. } => {
+            node_span(key).is_some_and(|span| span_contains_position(span, position))
+        }
+        Field::ExpressionKey { key, .. } => {
+            node_span(key).is_some_and(|span| span_contains_position(span, position))
+        }
+        Field::NoKey(Expression::Var(ast::Var::Name(name))) => {
+            node_span(name).is_some_and(|span| span_contains_position(span, position))
+        }
+        Field::NoKey(_) => false,
+        _ => false,
+    }
+}
+
+fn table_callback_field_at_position(
+    table: &TableConstructor,
+    position: SourcePosition,
+) -> Option<(String, &ast::AnonymousFunction)> {
+    table.fields().iter().find_map(|field| {
+        let (name, value) = match field {
+            Field::NameKey { key, value, .. } => (token_text(key), value),
+            Field::ExpressionKey { key, value, .. } => {
+                (string_literal_expression_value(key)?, value)
+            }
+            Field::NoKey(_) => return None,
+            _ => return None,
+        };
+        let Expression::Function(function) = value else {
+            return None;
+        };
+
+        node_span(function)
+            .is_some_and(|span| span_contains_position(span, position))
+            .then_some((name, function.as_ref()))
+    })
+}
+
+fn collect_function_parameter_types(ty: &Type, index: usize, types: &mut Vec<Type>) {
+    match ty {
+        Type::Function(function) => {
+            if let Some(parameter) = function.parameters.get(index) {
+                types.push(parameter.ty.clone());
+            } else if let Some(vararg) = function.vararg_type.as_deref() {
+                types.push(vararg.clone());
+            }
+        }
+        Type::Union(items) => {
+            for item in items {
+                collect_function_parameter_types(item, index, types);
+            }
+        }
+        Type::Alias(_)
+        | Type::Any
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
+    }
+}
+
+fn table_string_literal_fields(table: &TableConstructor) -> Vec<(String, String)> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| match field {
+            Field::NameKey { key, value, .. } => {
+                Some((token_text(key), string_literal_expression_value(value)?))
+            }
+            Field::ExpressionKey { key, value, .. } => Some((
+                string_literal_expression_value(key)?,
+                string_literal_expression_value(value)?,
+            )),
+            Field::NoKey(_) => None,
+            _ => None,
+        })
+        .collect()
+}
+
+fn string_literal_prefix_before(source: &str, position: SourcePosition) -> Option<String> {
+    let line = line_at(source, position.line)?;
+    let cursor = byte_for_position_column(line, position.column).min(line.len());
+    let prefix = &line[..cursor];
+    let quote = prefix
+        .char_indices()
+        .rev()
+        .find(|(_, character)| matches!(character, '"' | '\''))?
+        .0;
+
+    Some(prefix[quote + 1..].to_owned())
+}
+
+fn collect_string_literal_values(ty: &Type, values: &mut BTreeSet<String>) {
+    match ty {
+        Type::StringLiteral(value) => {
+            values.insert(value.clone());
+        }
+        Type::Union(types) => {
+            for ty in types {
+                collect_string_literal_values(ty, values);
+            }
+        }
+        Type::Alias(_)
+        | Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => {}
+    }
+}
+
+fn type_contains_string_literal(ty: &Type, literal: &str) -> bool {
+    match ty {
+        Type::StringLiteral(value) => value == literal,
+        Type::Union(types) => types
+            .iter()
+            .any(|ty| type_contains_string_literal(ty, literal)),
+        Type::Alias(_)
+        | Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => false,
     }
 }
 
@@ -1236,39 +1642,6 @@ fn identifier_prefix_before(source: &str, position: SourcePosition) -> Option<St
     }
 
     Some(line[start..cursor].to_owned())
-}
-
-fn typed_initializer_is_open(source: &str, start_line: usize, position: SourcePosition) -> bool {
-    let Some(first_line) = line_at(source, start_line) else {
-        return false;
-    };
-
-    if !first_line.contains("local ") || !first_line.contains(':') || !first_line.contains("= {") {
-        return false;
-    }
-
-    let mut depth = 0isize;
-
-    for line_number in start_line..=position.line {
-        let Some(line) = line_at(source, line_number) else {
-            continue;
-        };
-        let end = if line_number == position.line {
-            byte_for_position_column(line, position.column)
-        } else {
-            line.len()
-        };
-
-        for byte in line[..end].bytes() {
-            match byte {
-                b'{' => depth += 1,
-                b'}' => depth -= 1,
-                _ => {}
-            }
-        }
-    }
-
-    depth > 0
 }
 
 fn byte_for_position_column(line: &str, column: usize) -> usize {

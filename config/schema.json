@@ -38,6 +38,12 @@
       "description": "Write Lua source-map sidecars during builds."
     },
     {
+      "path": "type_libraries",
+      "type": "array",
+      "default": [],
+      "description": "Declaration-only LuaCATS libraries mapped from declaration module identities to runtime require prefixes."
+    },
+    {
       "path": "emit.annotation_mode",
       "type": "string",
       "default": "off",

@@ -19,6 +19,7 @@ pub struct ProjectWorkspace {
     ignored_paths: Vec<String>,
     file_associations: Vec<ProjectFileAssociation>,
     require_roots: Vec<PathBuf>,
+    type_libraries: Vec<ProjectTypeLibrary>,
     require_path_separator: ModulePathSeparator,
     target: ProjectTarget,
 }
@@ -44,6 +45,13 @@ pub struct ProjectTarget {
     pub raw: String,
     pub lua_version: LuaVersion,
     pub love_version: Option<LoveVersion>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectTypeLibrary {
+    root: PathBuf,
+    declaration_prefix: String,
+    runtime_prefix: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -194,6 +202,15 @@ impl ProjectWorkspace {
         }
 
         let target = ProjectTarget::parse(&config.target);
+        let type_libraries = config
+            .type_libraries
+            .iter()
+            .map(|library| ProjectTypeLibrary {
+                root: workspace_path(&root, &library.path),
+                declaration_prefix: library.declaration_prefix.clone(),
+                runtime_prefix: library.runtime_prefix.clone(),
+            })
+            .collect();
 
         Self {
             root,
@@ -205,6 +222,7 @@ impl ProjectWorkspace {
             ignored_paths: options.ignored_paths.clone(),
             file_associations: options.file_associations.clone(),
             require_roots,
+            type_libraries,
             require_path_separator: options.require_path_separator,
             target,
         }
@@ -288,6 +306,18 @@ impl ProjectWorkspace {
 
     pub fn require_roots(&self) -> &[PathBuf] {
         &self.require_roots
+    }
+
+    pub fn type_libraries(&self) -> &[ProjectTypeLibrary] {
+        &self.type_libraries
+    }
+
+    pub fn is_type_library_path(&self, path: impl AsRef<Path>) -> bool {
+        let path = normalize_path(path);
+
+        self.type_libraries
+            .iter()
+            .any(|library| path.starts_with(library.root()))
     }
 
     pub fn require_path_separator(&self) -> ModulePathSeparator {
@@ -448,6 +478,32 @@ impl ProjectWorkspace {
         parts.insert(0, ".".to_owned());
 
         Some(parts.join("/"))
+    }
+}
+
+impl ProjectTypeLibrary {
+    pub fn new(
+        root: impl Into<PathBuf>,
+        declaration_prefix: impl Into<String>,
+        runtime_prefix: impl Into<String>,
+    ) -> Self {
+        Self {
+            root: normalize_path(root.into()),
+            declaration_prefix: declaration_prefix.into(),
+            runtime_prefix: runtime_prefix.into(),
+        }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn declaration_prefix(&self) -> &str {
+        &self.declaration_prefix
+    }
+
+    pub fn runtime_prefix(&self) -> &str {
+        &self.runtime_prefix
     }
 }
 

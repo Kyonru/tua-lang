@@ -1,5 +1,61 @@
 use super::*;
 
+fn declaration_modules(
+    files: &BTreeMap<PathBuf, AnalysisFile>,
+    libraries: &[ProjectTypeLibrary],
+) -> BTreeMap<String, PathBuf> {
+    let mut modules = BTreeMap::new();
+
+    for library in libraries {
+        for (path, file) in files {
+            if !path.starts_with(library.root()) {
+                continue;
+            }
+
+            let Some(meta_name) = file.parsed.as_ref().ok().and_then(declaration_meta_name) else {
+                continue;
+            };
+            let prefix = library.declaration_prefix();
+            let suffix = if meta_name == prefix {
+                ""
+            } else if let Some(suffix) = meta_name.strip_prefix(prefix) {
+                if !suffix.starts_with('.') {
+                    continue;
+                }
+                suffix
+            } else {
+                continue;
+            };
+            let runtime_name = format!("{}{suffix}", library.runtime_prefix());
+
+            modules.entry(runtime_name).or_insert_with(|| path.clone());
+        }
+    }
+
+    modules
+}
+
+fn declaration_meta_name(parsed: &ParsedSource) -> Option<&str> {
+    parsed.lua_doc_annotations.iter().find_map(|annotation| {
+        let LuaDocAnnotationKind::Meta(meta) = &annotation.kind else {
+            return None;
+        };
+        let expression = meta.expression.as_deref()?.trim();
+
+        Some(
+            expression
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+                .or_else(|| {
+                    expression
+                        .strip_prefix('\'')
+                        .and_then(|value| value.strip_suffix('\''))
+                })
+                .unwrap_or(expression),
+        )
+    })
+}
+
 impl AnalysisHost {
     pub fn new() -> Self {
         Self::default()
@@ -32,6 +88,18 @@ impl AnalysisHost {
         }
 
         self.require_path_separator = separator;
+        self.invalidate_all_analysis();
+        self.bump_revision();
+    }
+
+    pub fn set_type_libraries(&mut self, libraries: impl IntoIterator<Item = ProjectTypeLibrary>) {
+        let libraries = libraries.into_iter().collect::<Vec<_>>();
+
+        if self.type_libraries == libraries {
+            return;
+        }
+
+        self.type_libraries = libraries;
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -353,6 +421,7 @@ impl AnalysisHost {
                     output_roots: vfs.options().output_roots.clone(),
                     extension: self.config.extension.clone(),
                     require_path_separator: self.require_path_separator,
+                    declaration_modules: declaration_modules(&files, &self.type_libraries),
                 },
             )
         };

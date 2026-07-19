@@ -904,6 +904,191 @@ fn snapshot_keeps_project_inputs() {
 }
 
 #[test]
+fn meta_declarations_resolve_runtime_module_prefixes_without_becoming_source_roots() {
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_type_libraries([ProjectTypeLibrary::new(
+        "lib/feel/types",
+        "feel",
+        "lib.feel",
+    )]);
+    host.set_file_with_kind(
+        "src/main.tua",
+        "local love = require(\"lib.feel.love\")\nreturn love\n",
+        AnalysisSourceKind::Tua,
+    );
+    host.set_file_with_kind(
+        "lib/feel/types/love.lua",
+        "---@meta feel.love\nreturn { supported = true }\n",
+        AnalysisSourceKind::Lua,
+    );
+
+    let snapshot = host.snapshot();
+
+    assert_eq!(
+        snapshot
+            .module_graph()
+            .resolve_require("src/main.tua", "lib.feel.love"),
+        Some(&RequireResolution::Resolved {
+            path: PathBuf::from("lib/feel/types/love.lua"),
+        })
+    );
+    assert_eq!(snapshot.source_roots(), &[PathBuf::from("src")]);
+}
+
+#[test]
+fn declaration_library_drives_recursive_discriminated_table_completion() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local feel = require("lib.feel")
+
+feel.define("field", {
+  { <|field|>dummy },
+})
+
+feel.define("literal", {
+  { kind = "an<|literal|>" },
+})
+
+feel.define("animate", {
+  { kind = "animate", <|animate|>dummy },
+})
+
+feel.define("nested", {
+  { kind = "parallel", steps = {
+    { <|nested|>dummy },
+  } },
+})
+
+feel.play("button.press", {}, {
+  emit = function(event, ctx)
+    local copy = <|callback_hover|>event
+    event.<|callback|>
+    ctx.target.<|callback_nested|>
+  end,
+  <|options|>dummy
+})
+
+-- file: lib/feel/types/feel.lua
+---@meta feel
+
+---@class FeelAnimateStep
+---@field kind "animate"
+---@field duration number
+---@field to table<string, number>
+---@field ease? string
+
+---@class FeelEmitStep
+---@field kind "emit"
+---@field event string
+---@field payload? table
+
+---@class FeelParallelStep
+---@field kind "parallel"
+---@field steps FeelSequenceInput[]
+
+---@alias FeelStep FeelAnimateStep|FeelEmitStep|FeelParallelStep|table
+---@alias FeelStepInput FeelStep|fun(ctx: FeelContext)|string|number|boolean|nil
+---@alias FeelSequenceInput string|FeelStepInput|FeelStepInput[]|nil|false
+
+---@class FeelTarget
+---@field values table<string, number>
+
+---@class FeelContext
+---@field target? FeelTarget
+
+---@class FeelEvent
+---@field kind string
+---@field payload? any
+---@field step FeelStep
+
+---@class FeelPlayOptions
+---@field restart? boolean
+---@field key? string
+---@field emit? fun(event: FeelEvent, ctx: FeelContext)
+
+local feel = {}
+
+---@param name string
+---@param sequence FeelSequenceInput
+function feel.define(name, sequence) end
+
+---@overload fun(name: string, target?: FeelTarget, options?: FeelPlayOptions)
+---@overload fun(sequence: FeelSequenceInput, target?: FeelTarget, options?: FeelPlayOptions)
+---@param nameOrSequence FeelSequenceInput
+---@param target? FeelTarget
+---@param options? FeelPlayOptions
+function feel.play(nameOrSequence, target, options) end
+
+return feel
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_type_libraries([ProjectTypeLibrary::new(
+        "lib/feel/types",
+        "feel",
+        "lib.feel",
+    )]);
+    for file in fixture.files() {
+        host.set_file_with_kind(
+            &file.path,
+            file.source.clone(),
+            if file
+                .path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                == Some("lua")
+            {
+                AnalysisSourceKind::Lua
+            } else {
+                AnalysisSourceKind::Tua
+            },
+        );
+    }
+
+    let snapshot = host.snapshot();
+    let field = completion_labels(&snapshot.completion("src/main.tua", fixture.position("field")));
+    let literal =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("literal")));
+    let animate =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("animate")));
+    let nested =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("nested")));
+    let options =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("options")));
+    let callback =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("callback")));
+    let callback_nested = completion_labels(
+        &snapshot.completion("src/main.tua", fixture.position("callback_nested")),
+    );
+    let callback_hover = snapshot
+        .hover("src/main.tua", fixture.position("callback_hover"))
+        .expect("expected callback parameter type should provide hover");
+
+    assert!(field.contains(&"duration".to_owned()), "{field:?}");
+    assert!(field.contains(&"event".to_owned()), "{field:?}");
+    assert_eq!(literal, vec!["animate".to_owned()]);
+    assert!(animate.contains(&"duration".to_owned()), "{animate:?}");
+    assert!(animate.contains(&"to".to_owned()), "{animate:?}");
+    assert!(!animate.contains(&"event".to_owned()), "{animate:?}");
+    assert!(nested.contains(&"kind".to_owned()), "{nested:?}");
+    assert!(nested.contains(&"duration".to_owned()), "{nested:?}");
+    assert!(options.contains(&"restart".to_owned()), "{options:?}");
+    assert!(options.contains(&"key".to_owned()), "{options:?}");
+    assert!(!options.contains(&"emit".to_owned()), "{options:?}");
+    assert!(callback.contains(&"kind".to_owned()), "{callback:?}");
+    assert!(callback.contains(&"payload".to_owned()), "{callback:?}");
+    assert!(
+        callback_nested.contains(&"values".to_owned()),
+        "{callback_nested:?}"
+    );
+    assert!(callback_hover.contents.contains("kind: string"));
+}
+
+#[test]
 fn pipeline_diagnostics_deduplicate_overlapping_project_require_diagnostics() {
     let path = PathBuf::from("src/main.tua");
     let mut config = ProjectConfig::default();

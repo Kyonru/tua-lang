@@ -5,6 +5,7 @@ use crate::{
     infer_module_exports, lower_parsed_source, parse_tua_source, AnalysisSourceKind,
     ModuleGraphInput, ModuleGraphOptions,
 };
+use std::collections::BTreeMap;
 
 #[test]
 fn indexes_hir_symbols_modules_and_exports() {
@@ -42,6 +43,7 @@ return {
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let index = SymbolIndex::build(
@@ -98,6 +100,7 @@ end
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let index = SymbolIndex::build(
@@ -149,6 +152,7 @@ final class BeatManager {
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let index = SymbolIndex::build(
@@ -216,6 +220,7 @@ return { makeEnemy = makeEnemy }
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let index = SymbolIndex::build(
@@ -279,6 +284,7 @@ return { makePlayer = makePlayer }
             output_roots: Vec::new(),
             extension: "tua".to_owned(),
             require_path_separator: crate::vfs::ModulePathSeparator::Dot,
+            declaration_modules: BTreeMap::new(),
         },
     );
     let index = SymbolIndex::build(

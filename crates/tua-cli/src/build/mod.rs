@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{
-    discover_build_files, io_diagnostic, paths_same_location, read_source_file, SourceFile,
-    SourceKind,
+    discover_build_files, io_diagnostic, load_type_libraries, paths_same_location,
+    read_source_file, SourceFile, SourceKind,
 };
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
 use tua_core::{
@@ -119,12 +119,13 @@ pub(crate) fn build_project(
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let source_files = discover_build_files(
+    let mut source_files = discover_build_files(
         &source_dir,
         &workspace.config().extension,
         (!in_place).then_some(&out_dir),
     )
     .map_err(|error| CliError::from_diagnostics("failed to discover source files", vec![error]))?;
+    source_files.retain(|source_file| !workspace.is_type_library_path(&source_file.path));
     let annotation_mode = workspace.config().emit.annotation_mode;
 
     Ok(build_project_files(
@@ -207,6 +208,7 @@ fn build_project_files(
     host.set_source_roots(workspace.source_roots().iter().cloned());
     host.set_output_roots(workspace.output_roots().iter().cloned());
     host.set_asset_roots(workspace.asset_roots());
+    diagnostics.extend(load_type_libraries(&mut host, &workspace));
 
     for unit in &units {
         match unit {

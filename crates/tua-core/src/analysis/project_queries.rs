@@ -157,6 +157,13 @@ impl AnalysisSnapshot {
             return module_completions;
         }
 
+        let contextual_completions =
+            self.project_contextual_parameter_completions(parsed, source, position);
+
+        if !contextual_completions.is_empty() {
+            return contextual_completions;
+        }
+
         let table_literal_completions =
             self.project_table_literal_completions(parsed, source, position);
 
@@ -208,6 +215,13 @@ impl AnalysisSnapshot {
 
         if !module_completions.is_empty() {
             return module_completions;
+        }
+
+        let contextual_completions =
+            self.project_contextual_parameter_completions(parsed, source, position);
+
+        if !contextual_completions.is_empty() {
+            return contextual_completions;
         }
 
         let field_completions = complete_field_access_in_source_with_environment_and_ranking_inputs(
@@ -782,31 +796,36 @@ impl AnalysisSnapshot {
             .find(|binding| binding.alias == receiver)?
             .module;
 
-        for candidate in self.indexed_module_candidates(&module) {
-            if self.type_database.module(&candidate).is_some() {
-                return self
-                    .type_database
-                    .module(&candidate)
-                    .map(|module| module.path.as_path());
-            }
-        }
+        let path = self
+            .resolved_module_path(&parsed.path, &module)
+            .or_else(|| self.module_graph.declaration_module(&module))
+            .or_else(|| {
+                self.indexed_module_candidates(&module)
+                    .into_iter()
+                    .find(|candidate| self.type_database.module(candidate).is_some())
+                    .and_then(|candidate| {
+                        self.type_database
+                            .module(&candidate)
+                            .map(|module| module.path.as_path())
+                    })
+            })?;
 
-        None
+        self.type_database
+            .module(path)
+            .map(|module| module.path.as_path())
     }
 
-    pub(super) fn indexed_module_candidates(&self, module: &str) -> Vec<PathBuf> {
-        let mut relative = PathBuf::new();
-
-        for part in module.split('.').filter(|part| !part.is_empty()) {
-            relative.push(part);
-        }
-
-        let mut candidates = Vec::new();
+    fn indexed_module_candidates(&self, module: &str) -> Vec<PathBuf> {
+        let relative = module
+            .split('.')
+            .filter(|part| !part.is_empty())
+            .collect::<PathBuf>();
         let extensions = if self.config.extension == "lua" {
             vec!["lua"]
         } else {
             vec![self.config.extension.as_str(), "lua"]
         };
+        let mut candidates = Vec::new();
 
         for root in self.source_roots() {
             for extension in &extensions {
@@ -828,20 +847,57 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
-        let Some((ty, prefix)) = self.table_literal_annotation_type(parsed, source, position)
-        else {
+        let Some(expected) = self.expected_table_type(parsed, position) else {
             return Vec::new();
         };
-        let ty = self
-            .type_database
-            .resolve_type(&self.module_graph, &parsed.path, &ty);
+        if let Some(field) = table_string_value_field(&expected.table, position) {
+            let Some(prefix) = string_literal_prefix_before(source, position) else {
+                return Vec::new();
+            };
+            let Some(field_ty) =
+                self.field_type_for_type(&expected.origin_path, &expected.ty, &field)
+            else {
+                return Vec::new();
+            };
+            let field_ty = self.type_database.resolve_type(
+                &self.module_graph,
+                &expected.origin_path,
+                &field_ty,
+            );
+            let mut values = BTreeSet::new();
+
+            collect_string_literal_values(&field_ty, &mut values);
+
+            return values
+                .into_iter()
+                .filter(|value| text_matches(value, &prefix))
+                .map(|value| Completion {
+                    label: value.clone(),
+                    kind: CompletionKind::Value,
+                    detail: Some(format!("literal: \"{value}\"")),
+                    documentation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect();
+        }
+        if !table_field_key_position(&expected.table, position) {
+            return Vec::new();
+        }
+
+        let prefix = identifier_prefix_before(source, position).unwrap_or_default();
+        let existing_fields = table_named_fields(&expected.table);
         let mut fields = BTreeMap::new();
 
-        collect_type_fields(&ty, &mut fields);
+        collect_type_fields(&expected.ty, &mut fields);
 
         fields
             .into_iter()
-            .filter(|(name, _)| text_matches(name, &prefix))
+            .filter(|(name, _)| !existing_fields.contains(name) && text_matches(name, &prefix))
             .map(|(name, ty)| Completion {
                 label: name,
                 kind: CompletionKind::Field,
@@ -855,6 +911,360 @@ impl AnalysisSnapshot {
                 additional_text_edits: Vec::new(),
             })
             .collect()
+    }
+
+    pub(super) fn project_contextual_parameter_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index != 0 || chain.parts.len() != 1 {
+            return None;
+        }
+
+        let part = chain.parts.first()?;
+        let (ty, _) = self.contextual_callback_parameter_type(parsed, &part.text, position)?;
+
+        Some(Hover {
+            contents: format!("local {}: {ty}", part.text),
+            span: Some(part.span),
+            documentation: None,
+            context: vec!["context: expected callback type".to_owned()],
+        })
+    }
+
+    fn project_contextual_parameter_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let Some(crate::completion::context::CompletionContext::FieldAccess {
+            receiver_parts,
+            prefix,
+            ..
+        }) = crate::completion::context::completion_context(source, position)
+        else {
+            return Vec::new();
+        };
+        let Some((root, fields)) = receiver_parts.split_first() else {
+            return Vec::new();
+        };
+        let Some((mut ty, origin_path)) =
+            self.contextual_callback_parameter_type(parsed, root, position)
+        else {
+            return Vec::new();
+        };
+
+        for field in fields {
+            let Some(next) = self.field_type_for_type(&origin_path, &ty, field) else {
+                return Vec::new();
+            };
+            ty = next;
+        }
+        ty = self
+            .type_database
+            .resolve_type(&self.module_graph, &origin_path, &ty);
+        let mut completions = BTreeMap::new();
+
+        collect_type_fields(&ty, &mut completions);
+
+        completions
+            .into_iter()
+            .filter(|(name, _)| text_matches(name, &prefix))
+            .map(|(name, ty)| Completion {
+                label: name,
+                kind: completion_kind_for_type(&ty),
+                detail: Some(format!("field: {ty}")),
+                documentation: None,
+                insert_text: None,
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect()
+    }
+
+    fn contextual_callback_parameter_type(
+        &self,
+        parsed: &ParsedSource,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<(Type, PathBuf)> {
+        let expected = self.expected_table_type(parsed, position)?;
+        let (field, function) = table_callback_field_at_position(&expected.table, position)?;
+        let parameter_index =
+            function
+                .body()
+                .parameters()
+                .iter()
+                .enumerate()
+                .find_map(|(index, parameter)| match parameter {
+                    ast::Parameter::Name(parameter) if token_text(parameter) == name => Some(index),
+                    ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,
+                    _ => None,
+                })?;
+        let field_ty = self.field_type_for_type(&expected.origin_path, &expected.ty, &field)?;
+        let field_ty =
+            self.type_database
+                .resolve_type(&self.module_graph, &expected.origin_path, &field_ty);
+        let mut parameter_types = Vec::new();
+
+        collect_function_parameter_types(&field_ty, parameter_index, &mut parameter_types);
+
+        let ty = match parameter_types.len() {
+            0 => return None,
+            1 => parameter_types.pop()?,
+            _ => Type::union(parameter_types),
+        };
+
+        Some((
+            self.type_database
+                .resolve_type(&self.module_graph, &expected.origin_path, &ty),
+            expected.origin_path,
+        ))
+    }
+
+    fn expected_table_type(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<ExpectedTableType> {
+        let syntax = expected_table_syntax(parsed, position)?;
+        let target_span = node_span(&syntax.table)?;
+        let mut calls = syntax
+            .calls
+            .iter()
+            .filter(|call| {
+                node_span(*call).is_some_and(|span| span_contains_span(span, target_span))
+            })
+            .collect::<Vec<_>>();
+
+        calls.sort_by_key(|call| node_span(*call).map(table_span_size));
+
+        for call in calls {
+            let Some((argument_index, steps)) = call_argument_table_path(call, target_span) else {
+                continue;
+            };
+            let Some((ty, origin_path)) =
+                self.expected_call_argument_type(parsed, call, argument_index)
+            else {
+                continue;
+            };
+            let Some(ty) = self.expected_type_after_table_steps(&origin_path, ty, &steps) else {
+                continue;
+            };
+            let ty = self.narrow_expected_table_type(&origin_path, ty, &syntax.table);
+
+            return Some(ExpectedTableType {
+                ty,
+                origin_path,
+                table: syntax.table,
+            });
+        }
+
+        let mut locals = syntax
+            .locals
+            .iter()
+            .filter(|local| {
+                node_span(*local).is_some_and(|span| span_contains_span(span, target_span))
+            })
+            .collect::<Vec<_>>();
+
+        locals.sort_by_key(|local| node_span(*local).map(table_span_size));
+
+        for local in locals {
+            let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+            for (index, name) in local.names().iter().enumerate() {
+                let Some((expression, return_index)) =
+                    assignment_expression_for_local(&expressions, index)
+                else {
+                    continue;
+                };
+                if return_index != 0 {
+                    continue;
+                }
+                let Some(steps) = expression_path_to_table(expression, target_span) else {
+                    continue;
+                };
+                let name = token_text(name);
+                let Some(annotation) = parsed.local_annotations.iter().find(|annotation| {
+                    annotation.name == name
+                        && annotation.name_span.is_some_and(|span| {
+                            node_span(local)
+                                .is_some_and(|local_span| span_contains_span(local_span, span))
+                        })
+                }) else {
+                    continue;
+                };
+                let Some(ty) = self.project_type_from_tua_type(parsed, &annotation.ty) else {
+                    continue;
+                };
+                let origin_path = parsed.path.clone();
+                let Some(ty) = self.expected_type_after_table_steps(&origin_path, ty, &steps)
+                else {
+                    continue;
+                };
+                let ty = self.narrow_expected_table_type(&origin_path, ty, &syntax.table);
+
+                return Some(ExpectedTableType {
+                    ty,
+                    origin_path,
+                    table: syntax.table,
+                });
+            }
+        }
+
+        None
+    }
+
+    fn expected_call_argument_type(
+        &self,
+        parsed: &ParsedSource,
+        call: &FunctionCall,
+        argument_index: usize,
+    ) -> Option<(Type, PathBuf)> {
+        let parts = field_chain_before_first_call(call)?;
+        let (root, fields) = parts.split_first()?;
+        let is_method = call
+            .suffixes()
+            .any(|suffix| matches!(suffix, ast::Suffix::Call(ast::Call::MethodCall(_))));
+
+        if !fields.is_empty() {
+            if let Some(module_path) = self.indexed_required_module_path(parsed, root) {
+                let function = if fields.len() == 1 {
+                    self.type_database
+                        .module(module_path)
+                        .and_then(|module| module.function(&fields[0]))
+                        .cloned()
+                } else {
+                    self.type_database.typed_function_for_fields(
+                        &self.module_graph,
+                        &parsed.path,
+                        root,
+                        fields,
+                    )
+                };
+
+                if let Some(function) = function {
+                    let ty = typed_function_parameter_type(&function, argument_index, is_method)?;
+                    let ty = self
+                        .type_database
+                        .resolve_type(&self.module_graph, module_path, &ty);
+
+                    return Some((ty, module_path.to_path_buf()));
+                }
+            }
+        }
+
+        let environment = self.semantic_environment(parsed);
+        let semantic = SemanticModel::new(parsed, &environment);
+        let function = semantic.typed_function_for_call(call, node_span(call)?.start)?;
+        let ty = typed_function_parameter_type(&function, argument_index, is_method)?;
+        let ty = self
+            .type_database
+            .resolve_type(&self.module_graph, &parsed.path, &ty);
+
+        Some((ty, parsed.path.clone()))
+    }
+
+    fn expected_type_after_table_steps(
+        &self,
+        origin_path: &Path,
+        mut ty: Type,
+        steps: &[ExpectedTableStep],
+    ) -> Option<Type> {
+        for step in steps {
+            ty = match step {
+                ExpectedTableStep::Field(field) => {
+                    self.field_type_for_type(origin_path, &ty, field)?
+                }
+                ExpectedTableStep::Element => self.expected_table_element_type(origin_path, &ty)?,
+            };
+        }
+
+        Some(
+            self.type_database
+                .resolve_type(&self.module_graph, origin_path, &ty),
+        )
+    }
+
+    fn expected_table_element_type(&self, origin_path: &Path, ty: &Type) -> Option<Type> {
+        match self
+            .type_database
+            .resolve_type(&self.module_graph, origin_path, ty)
+        {
+            Type::Array(item) => Some(*item),
+            Type::Tuple(items) => Some(Type::union(items)),
+            Type::Dictionary { value, .. } => Some(*value),
+            Type::Union(types) => {
+                let items = types
+                    .iter()
+                    .filter_map(|ty| self.expected_table_element_type(origin_path, ty))
+                    .collect::<Vec<_>>();
+
+                (!items.is_empty()).then(|| Type::union(items))
+            }
+            Type::Any
+            | Type::Alias(_)
+            | Type::Function(_)
+            | Type::Primitive(_)
+            | Type::StringLiteral(_)
+            | Type::Table(_) => None,
+        }
+    }
+
+    fn narrow_expected_table_type(
+        &self,
+        origin_path: &Path,
+        mut ty: Type,
+        table: &TableConstructor,
+    ) -> Type {
+        for (field, literal) in table_string_literal_fields(table) {
+            let matching = self.table_types_matching_literal(origin_path, &ty, &field, &literal);
+
+            if !matching.is_empty() {
+                ty = Type::union(matching);
+            }
+        }
+
+        ty
+    }
+
+    fn table_types_matching_literal(
+        &self,
+        origin_path: &Path,
+        ty: &Type,
+        field: &str,
+        literal: &str,
+    ) -> Vec<Type> {
+        match self
+            .type_database
+            .resolve_type(&self.module_graph, origin_path, ty)
+        {
+            Type::Union(types) => types
+                .iter()
+                .flat_map(|ty| self.table_types_matching_literal(origin_path, ty, field, literal))
+                .collect(),
+            candidate @ Type::Table(_) => self
+                .field_type_for_type(origin_path, &candidate, field)
+                .filter(|field_ty| type_contains_string_literal(field_ty, literal))
+                .map(|_| vec![candidate])
+                .unwrap_or_default(),
+            Type::Alias(_)
+            | Type::Any
+            | Type::Function(_)
+            | Type::Primitive(_)
+            | Type::StringLiteral(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => Vec::new(),
+        }
     }
 
     pub(super) fn project_module_field_completions(

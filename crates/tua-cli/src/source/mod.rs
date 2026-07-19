@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use tua_core::{Diagnostic, DiagnosticCode};
+use tua_core::{AnalysisHost, AnalysisSourceKind, Diagnostic, DiagnosticCode, ProjectWorkspace};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SourceKind {
@@ -41,6 +41,48 @@ pub(crate) fn discover_build_files(
 
 pub(crate) fn read_source_file(path: &Path) -> Result<String, Diagnostic> {
     fs::read_to_string(path).map_err(|source| io_diagnostic(path, source))
+}
+
+pub(crate) fn load_type_libraries(
+    host: &mut AnalysisHost,
+    workspace: &ProjectWorkspace,
+) -> Vec<Diagnostic> {
+    host.set_type_libraries(workspace.type_libraries().iter().cloned());
+
+    let mut diagnostics = Vec::new();
+
+    for library in workspace.type_libraries() {
+        let paths = match discover_lua_files(library.root()) {
+            Ok(paths) => paths,
+            Err(diagnostic) => {
+                diagnostics.push(diagnostic);
+                continue;
+            }
+        };
+
+        for path in paths {
+            match read_source_file(&path) {
+                Ok(source) => host.set_file_with_kind(path, source, AnalysisSourceKind::Lua),
+                Err(diagnostic) => diagnostics.push(diagnostic),
+            }
+        }
+    }
+
+    diagnostics
+}
+
+pub(crate) fn discover_lua_files(root: &Path) -> Result<Vec<PathBuf>, Diagnostic> {
+    let mut paths = Vec::new();
+
+    discover_files_into(
+        root,
+        None,
+        &|path| has_extension(path, "lua").then(|| path.to_path_buf()),
+        &mut paths,
+    )?;
+    paths.sort();
+
+    Ok(paths)
 }
 
 fn discover_files_into<T>(

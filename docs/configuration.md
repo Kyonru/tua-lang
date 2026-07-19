@@ -33,6 +33,7 @@ main = "main.tua"
 target = "love11-luajit"
 extension = "tua"
 emit_maps = true
+type_libraries = []
 
 [emit]
 annotation_mode = "off"
@@ -99,6 +100,7 @@ the behavior and tradeoffs of each option.
 | `target` | string | `"love11-luajit"` | - |
 | `extension` | string | `"tua"` | - |
 | `emit_maps` | boolean | `true` | - |
+| `type_libraries` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
 | `format.line_width` | integer | `100` | `tua.format.lineWidth` |
@@ -167,6 +169,41 @@ path, so `main = "love/boot.tua"` emits both `build/love/boot.lua` and
 `*.lua.map` v3 sidecars next to each generated `.lua` file. They support
 generated-Lua navigation, `tua traceback`, and source-mapped Lua debugging;
 they are not loaded by the game at runtime.
+
+## Declaration-Only Type Libraries
+
+`type_libraries` indexes third-party LuaCATS declarations without treating
+them as source files or runtime dependencies. Replace the default
+`type_libraries = []` line with one array entry per installed library:
+
+```toml title="tua.toml"
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+```
+
+Each entry has three required fields:
+
+- `path` is a directory, relative to the project root unless absolute. Tua
+  recursively indexes its `.lua` files as declarations.
+- `declaration_prefix` is the module namespace used by `---@meta`, such as
+  `feel` and `feel.love`.
+- `runtime_prefix` is the namespace used by project `require(...)` calls. The
+  example maps `---@meta feel` to `require("lib.feel")` and
+  `---@meta feel.love` to `require("lib.feel.love")`.
+
+Declaration libraries are analysis-only. Tua never copies, emits, executes, or
+packages their files, and the editor performs no network fetching. A static
+`import(...)` still resolves a real project module because it represents
+runtime/build code; only `require(...)` receives the declaration overlay.
+Changes under configured roots are watched by `tua watch`. The language server
+indexes them during workspace reindexing and refreshes changes reported by the
+editor.
+
+The installed library owns its declarations. Updating a vendored or
+package-managed Feel checkout therefore updates Tua completion without a Tua
+release and without bundling Feel itself.
 
 ## Emit
 

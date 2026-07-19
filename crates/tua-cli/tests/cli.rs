@@ -1039,6 +1039,51 @@ return {
 }
 
 #[test]
+fn build_indexes_type_libraries_without_copying_or_emitting_them() {
+    let temp = TempDir::new("build-type-library");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"
+source = "src"
+out = "build"
+
+[[type_libraries]]
+path = "src/vendor-types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/vendor-types"))
+        .expect("failed to create type library");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local feel = require(\"lib.feel\")\nreturn feel\n",
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/vendor-types/feel.lua"),
+        "---@meta feel\nreturn { define = function() end }\n",
+    )
+    .expect("failed to write declaration");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("stdout should be UTF-8"),
+        "built 1 file(s)\n"
+    );
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(!temp.path().join("build/vendor-types").exists());
+}
+
+#[test]
 fn build_preserves_custom_relative_paths_with_only_extension_changed() {
     let temp = TempDir::new("build-custom-layout");
 
@@ -2355,6 +2400,97 @@ fn watch_test_guard() -> MutexGuard<'static, ()> {
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[test]
+fn watch_rechecks_importers_after_declaration_library_changes() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-declaration-types");
+
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("lib/feel/types"))
+        .expect("failed to create declaration library");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local feel = require("lib.feel")
+local value: number = feel.accept(10)
+return value
+"#,
+    )
+    .expect("failed to write importer");
+    let declaration_path = temp.path().join("lib/feel/types/feel.lua");
+    fs::write(
+        &declaration_path,
+        r#"---@meta feel
+local feel = {}
+---@param value number
+---@return number
+function feel.accept(value) return value end
+return feel
+"#,
+    )
+    .expect("failed to write initial declarations");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || temp.path().join("build/main.lua").is_file(),
+        Duration::from_secs(3),
+        "watch did not run the initial declaration-aware build",
+    );
+
+    fs::write(
+        declaration_path,
+        r#"---@meta feel
+local feel = {}
+---@param value string
+---@return string
+function feel.accept(value) return value end
+return feel
+"#,
+    )
+    .expect("failed to change declarations");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(
+        stdout.contains("initial build: built 1 file(s)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("changed 1 file(s)"), "{stdout}");
+    assert!(
+        stdout.contains("rebuild: 0 file(s) emitted with errors"),
+        "{stdout}"
+    );
+    assert!(stderr.contains("src/main.tua"), "{stderr}");
+    assert!(stderr.contains("expected string, found number"), "{stderr}");
+    assert!(!temp.path().join("build/lib/feel/types/feel.lua").exists());
 }
 
 fn wait_for_child_output(mut child: process::Child, timeout: Duration) -> Output {

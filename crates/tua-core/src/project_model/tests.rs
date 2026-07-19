@@ -86,6 +86,35 @@ extension = "tu"
 }
 
 #[test]
+fn resolves_type_library_roots_without_adding_runtime_require_roots() {
+    let project = TempProject::new("type-libraries");
+
+    project.write(
+        "tua.toml",
+        r#"
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    );
+
+    let model = ProjectModel::load([project.path().to_path_buf()]).expect("model should load");
+    let workspace = model.primary_workspace().expect("workspace should exist");
+    let library = workspace
+        .type_libraries()
+        .first()
+        .expect("type library should be resolved");
+
+    assert_eq!(library.root(), project.path().join("lib/feel/types"));
+    assert_eq!(library.declaration_prefix(), "feel");
+    assert_eq!(library.runtime_prefix(), "lib.feel");
+    assert!(!workspace
+        .require_roots()
+        .contains(&library.root().to_path_buf()));
+}
+
+#[test]
 fn duplicates_configured_main_source_to_root_main_lua() {
     let project = TempProject::new("main-output");
 

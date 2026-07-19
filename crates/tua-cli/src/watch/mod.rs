@@ -10,7 +10,9 @@ use crate::build::{
 };
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
-use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
+use crate::source::{
+    discover_build_files, discover_lua_files, io_diagnostic, paths_same_location, SourceKind,
+};
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for};
 use backend::{ReceiveError, WatchBackend, WatchBatch};
 use tua_core::{
@@ -71,6 +73,7 @@ struct WatchLayout {
     out_dir: PathBuf,
     in_place: bool,
     extension: String,
+    type_library_roots: Vec<PathBuf>,
 }
 
 struct ReloadedWatch {
@@ -105,9 +108,20 @@ impl WatchLayout {
             config_path: cwd.join(CONFIG_FILE),
             in_place: paths_same_location(&source_dir, &out_dir),
             extension: workspace.config().extension.clone(),
+            type_library_roots: workspace
+                .type_libraries()
+                .iter()
+                .map(|library| library.root().to_path_buf())
+                .collect(),
             source_dir,
             out_dir,
         }
+    }
+
+    fn is_type_library_path(&self, path: &Path) -> bool {
+        self.type_library_roots
+            .iter()
+            .any(|root| path.starts_with(root))
     }
 }
 
@@ -174,6 +188,7 @@ fn run_watch_with_options<W: Write, E: Write>(
     let (mut watcher, fallback_error) = WatchBackend::start(
         cwd,
         &layout.source_dir,
+        &layout.type_library_roots,
         options.poll_interval,
         options.force_poll,
     )
@@ -203,8 +218,13 @@ fn run_watch_with_options<W: Write, E: Write>(
                     stdout,
                     &format!("native file watcher failed ({error}); using polling fallback"),
                 )?;
-                watcher = WatchBackend::poll(cwd, &layout.source_dir, options.poll_interval)
-                    .map_err(watch_backend_error)?;
+                watcher = WatchBackend::poll(
+                    cwd,
+                    &layout.source_dir,
+                    &layout.type_library_roots,
+                    options.poll_interval,
+                )
+                .map_err(watch_backend_error)?;
                 WatchBatch::rescan_all()
             }
             Err(ReceiveError::Backend(error)) => return Err(watch_backend_error(error)),
@@ -303,6 +323,7 @@ fn reload_watch(cwd: &Path, options: WatchOptions) -> Result<ReloadedWatch, CliE
     let (watcher, fallback_error) = WatchBackend::start(
         cwd,
         &layout.source_dir,
+        &layout.type_library_roots,
         options.poll_interval,
         options.force_poll,
     )
@@ -348,6 +369,9 @@ fn snapshot_watch_tree(
     };
 
     for source_file in source_files {
+        if layout.is_type_library_path(&source_file.path) {
+            continue;
+        }
         if layout.in_place && source_file.kind == SourceKind::Asset {
             continue;
         }
@@ -356,6 +380,28 @@ fn snapshot_watch_tree(
         let fingerprint = fingerprint_path(&path, previous, batch)?;
 
         files.insert(path, fingerprint);
+    }
+
+    for root in &layout.type_library_roots {
+        let paths = match fs::metadata(root) {
+            Ok(metadata) if metadata.is_dir() => discover_lua_files(root)?,
+            Ok(_) => {
+                return Err(io_diagnostic(
+                    root,
+                    io::Error::new(
+                        io::ErrorKind::NotADirectory,
+                        "type library root is not a directory",
+                    ),
+                ));
+            }
+            Err(source) if source.kind() == io::ErrorKind::NotFound => Vec::new(),
+            Err(source) => return Err(io_diagnostic(root, source)),
+        };
+
+        for path in paths {
+            let fingerprint = fingerprint_path(&path, previous, batch)?;
+            files.insert(path, fingerprint);
+        }
     }
 
     if layout.config_path.is_file() {

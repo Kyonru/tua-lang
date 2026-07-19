@@ -73,6 +73,10 @@ impl AnalysisSnapshot {
             return Some(hover);
         }
 
+        if let Some(hover) = self.project_contextual_parameter_hover(parsed, position) {
+            return Some(hover);
+        }
+
         if let Some(environment) = degraded_environment {
             return hover_parsed_source_with_environment(parsed, position, environment).or_else(
                 || self.project_symbol_hover_with_environment(parsed, position, environment),
@@ -778,30 +782,6 @@ impl AnalysisSnapshot {
                 format!("module: {}", path.display()),
             ],
         })
-    }
-
-    pub(super) fn table_literal_annotation_type(
-        &self,
-        parsed: &ParsedSource,
-        source: &str,
-        position: SourcePosition,
-    ) -> Option<(Type, String)> {
-        let prefix = identifier_prefix_before(source, position)?;
-        let annotation = parsed
-            .local_annotations
-            .iter()
-            .filter(|annotation| {
-                let Some(name_span) = annotation.name_span else {
-                    return false;
-                };
-
-                name_span.start.line <= position.line
-                    && typed_initializer_is_open(source, name_span.start.line, position)
-            })
-            .max_by_key(|annotation| annotation.name_span.map(|span| position_key(span.start)))?;
-        let ty = self.project_type_from_tua_type(parsed, &annotation.ty)?;
-
-        Some((ty, prefix))
     }
 
     pub(super) fn assist_source_root_for_path(&self, path: &Path) -> PathBuf {

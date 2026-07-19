@@ -217,6 +217,41 @@ These annotations can contribute to checking, module export inference, hover,
 completion, signature help, semantic highlighting, and parameter
 documentation.
 
+### External Declaration Libraries
+
+Third-party packages can keep their runtime and declarations separate. Add a
+[`type_libraries`](configuration.md#declaration-only-type-libraries) entry and
+Tua connects each `---@meta` identity to the configured runtime `require`
+prefix. The declarations participate in module exports, aliases, classes,
+overloads, hover, signature help, definition lookup, and completion, but never
+enter emitted output.
+
+For example, Feel can remain installed under `lib/feel` while its published
+`types` directory describes `feel`, `feel.love`, and related declaration
+modules. Mapping `feel` to `lib.feel` lets this source use those types:
+
+```tua
+local feel = require("lib.feel")
+
+feel.define("button.press", {
+  { kind = "emit", event = "sound", payload = { cue = "click" } },
+  { kind = "animate", duration = 0.06, to = { scale = 0.92 } },
+})
+```
+
+Table-constructor completion is expected-type driven rather than tied to Feel.
+LuaCATS unions with literal discriminator fields suggest the available literal
+values, narrow later fields after a discriminator such as `kind = "animate"`,
+follow recursive arrays/tables such as `parallel.steps`, and contextually type
+callback parameters. The same behavior applies to any declaration-typed Lua
+table DSL.
+
+Completion remains bounded by the declarations. A field typed as plain
+`string` has no literal values to suggest, runtime registrations such as
+`feel.define("button.press", ...)` are not indexed as name catalogs, and a
+generic `table<string, number>` cannot infer keys from a particular runtime
+target.
+
 ### Supported Type Forms
 
 | Shape | Example |
