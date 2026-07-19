@@ -2,52 +2,57 @@
 icon: lucide/book-open-check
 ---
 
-# Tua Language And Toolchain Specification
+# Tua Language And Toolchain Reference
 
-This is the canonical specification for current Tua behavior. It defines the
-contract shared by the compiler, CLI, language server, and editor extension.
-Detailed syntax examples live in [Language](language.md), and implemented
-surface status lives in [Capabilities](capabilities.md).
+This page documents the implemented behavior shared by the Tua compiler, CLI,
+language server, and VS Code extension. Detailed syntax examples live in
+[Language](language.md). Editor behavior is documented in
+[Language Server](lsp.md), and project settings live in
+[Configuration](configuration.md).
 
-## Purpose
+!!! info "Implemented behavior, not a design plan"
+    This reference describes the current contract. Pending repository work is
+    tracked separately from the public documentation.
+
+## Overview
 
 Tua is a gradual typed Lua superset that emits readable Lua 5.1-compatible
 source for LuaJIT and LOVE 11.x projects. It is source-to-source tooling, not a
 new VM. Types improve diagnostics and editor intelligence and are erased before
 runtime.
 
-Tua must preserve ordinary Lua workflows:
+Tua preserves ordinary Lua workflows:
 
 - normal Lua control flow, tables, functions, metatables, and `require` remain
   valid foundations;
 - emitted code remains inspectable and debuggable as Lua;
 - `.lua` modules and LuaDoc annotations interoperate with `.tua` modules;
 - dynamic code remains possible through `any` and conservative analysis;
-- language additions must remain compatible with LuaJIT and LOVE.
+- language additions emit LuaJIT- and LOVE-compatible code.
 
 ## Runtime And Emission
 
-The default target is `love11-luajit`. Generated code must avoid Lua 5.2+
-runtime-only syntax and behavior.
+The default target is `love11-luajit`. Generated code uses Lua 5.1-compatible
+syntax and avoids Lua 5.2+ runtime-only behavior.
 
 Tua's type syntax is erased. Straightforward Tua code requires no Tua runtime.
 Some source-used built-ins lower to ordinary Lua APIs backed by vendored
 modules:
 
-- `vec2(...)` can emit a `brinevector` require;
-- `signal()` can emit a `tuasignal` require;
-- `spriteSheet({...})` can emit an `anim8` require;
-- the built-in `ecs` module can emit a `tuaecs` require.
-- `objectPool({...})` can emit a `tuaobjectpool` require.
+- `vec2(...)` emits a `brinevector` require when used;
+- `signal()` emits a `tuasignal` require when used;
+- `spriteSheet({...})` emits an `anim8` require when used;
+- the built-in `ecs` module emits a `tuaecs` require when used;
+- `objectPool({...})` emits a `tuaobjectpool` require when used.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same
 name. This helper model is part of Tua's build output, not a replacement VM or
 an always-present runtime.
 
-Lowering must preserve source provenance. Source maps and `tua traceback`
-translate generated Lua locations back to Tua source locations where mappings
-are available.
+Lowering preserves source provenance. Source maps and `tua traceback` translate
+generated Lua locations back to Tua source locations where mappings are
+available.
 
 ## Project Model
 
@@ -109,9 +114,9 @@ The semantic type model is gradual:
 - ordinary `.lua` sources remain permissive unless annotations establish a
   contract.
 
-Generics are not part of the current language. Native function types and
-LuaDoc `fun(...)` annotations share one semantic representation. Arrays use
-native `T[]` syntax; grouped union and function elements use `(T | U)[]` and
+Generics are not part of Tua. Native function types and LuaDoc `fun(...)`
+annotations share one semantic representation. Arrays use native `T[]` syntax;
+grouped union and function elements use `(T | U)[]` and
 `((value: T) -> U)[]`. An empty table literal can initialize an explicitly
 typed array or dictionary.
 
@@ -126,13 +131,13 @@ Normal `require("module")` is the runtime module mechanism. Tua resolves static
 module strings through configured project roots and indexes exports for
 checking and editor navigation.
 
-Static `import` syntax is convenience syntax and must lower to `require`; it
-does not introduce an incompatible module runtime. Tua does not add JavaScript-
-style `export` declarations or type-only runtime modules.
+Static `import` syntax is convenience syntax that lowers to `require`; it does
+not introduce a separate module runtime. Tua does not add JavaScript-style
+`export` declarations or type-only runtime modules.
 
 LuaDoc/LuaCATS annotations support practical aliases, classes, fields,
 functions, overloads, typed varargs, and module exports. Unsupported annotations
-must degrade conservatively and must not execute project code.
+degrade conservatively, and semantic analysis does not execute project code.
 
 ## LOVE Semantics
 
@@ -141,27 +146,27 @@ catalog owns function signatures, overloads, enums, callback identity, object
 methods, and inheritance used by checking and editor features.
 
 Top-level `love.<callback>` declarations use that catalog for snippets,
-documentation, and validation. Lua callbacks may omit unused parameters, but a
-declaration must not require values LOVE does not supply, and explicit
-parameter annotations must accept the corresponding generated type. Close
-callback-name typos use stable domain diagnostic `TL5006`.
+documentation, and validation. Lua callbacks can omit unused parameters. The
+checker reports declarations that require values LOVE does not supply or use
+explicit parameter annotations incompatible with the generated callback type.
+Close callback-name typos use stable domain diagnostic `TL5006`.
 
 LOVE asset paths are resolved relative to configured asset roots. Supported
-loader calls can provide diagnostics, completion, hover metadata, definition,
-and references without executing project code.
+loader calls provide diagnostics, completion, hover metadata, definition, and
+references without executing project code.
 
-Domain helpers must prefer ordinary Lua-compatible APIs. `spriteSheet({...})`,
+Domain helpers lower to ordinary Lua-compatible APIs. `spriteSheet({...})`,
 `signal()`, and the built-in `ecs` module are first-class compiler domains
 rather than executable third-party plugins. Experimental editor presentation
-remains explicitly preview-gated.
+is explicitly preview-gated.
 
-The sprite domain may describe anim8 grid cell size, left/top origin, border
+The sprite domain describes anim8 grid cell size, left/top origin, border
 spacing, zero-based row/column ranges, per-animation grid overrides, numeric or
-table durations, and `onLoop` method strings or callbacks. These facts must
-remain shared across diagnostics, completion, inspection, preview, and Lua
-emission.
+table durations, and `onLoop` method strings or callbacks. One shared semantic
+model supplies these facts to diagnostics, completion, inspection, preview,
+and Lua emission.
 
-## CLI Contract
+## CLI
 
 The `tua` executable provides:
 
@@ -179,20 +184,21 @@ A successful default build does not emit files that have blocking errors.
 `--emit-on-error` is an explicit recovery mode and still exits unsuccessfully
 when errors exist.
 
-## Editor Contract
+## Editor Integration
 
 The language server is the semantic authority for diagnostics, completion,
 hover, signature help, definitions, references, rename, symbols, semantic
 tokens, inlay hints, code actions, formatting, file operations, and domain
 inspection.
 
-Editor clients may present those results but must not duplicate Tua parsing or
+The VS Code extension presents those results without duplicating Tua parsing or
 type inference. Requests capture a document revision; stale background results
 are cancelled or discarded after newer edits. Compiler facts determine valid
-candidates before deterministic ranking signals can reorder completion.
+candidates before deterministic ranking signals reorder completion.
 
 No source content or completion-learning data is sent off-device by default.
-Any future model integration requires explicit configuration and policy gates.
+Completion providers are local-only. The model-integration setting is an inert
+policy gate and does not enable a network-backed provider.
 
 ## Diagnostics
 
@@ -200,26 +206,23 @@ Diagnostics use stable `TLxxxx` codes grouped by syntax, type, asset/build,
 lint/project, and domain families. Suppression comments can target exact codes
 or documented groups but cannot alter inference, lowering, or runtime behavior.
 
-The compiler and language server must use the same semantic diagnostics for an
-identical project snapshot. Editor-only presentation must not invent a parallel
-type-checking path.
+The compiler and language server use the same semantic diagnostics for an
+identical project snapshot. The editor presents those diagnostics without a
+parallel type-checking path.
 
-## Compatibility And Non-Goals
+## Compatibility And Boundaries
 
-Current compatibility targets are Lua 5.1-style syntax, LuaJIT, and LOVE 11.x.
+Compatibility targets are Lua 5.1-style syntax, LuaJIT, and LOVE 11.x.
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
 
-The following are not current goals:
+Tua does not provide:
 
 - a new Lua VM or Lua 5.2+ output target;
 - a package manager;
 - whole-program optimization or minification;
 - arbitrary execution of project code for semantic discovery;
+- a Lua debugger or runtime profiler;
 - perfect proof of dynamic keys, metatables, or shape-changing tables;
 - an executable third-party plugin registry;
 - network-required core completion;
 - full LuaHelper or Luau compatibility.
-
-The historical initial v1 contract remains available in
-[Historical Tua v1 Specification](archive/specification-v1-initial.md). It is a
-record of earlier decisions, not the current normative source.

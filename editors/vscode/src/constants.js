@@ -11,6 +11,7 @@ const COMMANDS = {
   saveCacheStats: "tua.saveCacheStats",
   showServerHealth: "tua.showServerHealth",
   resetCompletionStats: "tua.resetCompletionStats",
+  toggleExperimentalCompletions: "tua.completion.toggleExperimental",
   saveCpuProfile: "tua.saveCpuProfile",
   saveHeapSummary: "tua.saveHeapSummary",
   openGeneratedLua: "tua.openGeneratedLua",

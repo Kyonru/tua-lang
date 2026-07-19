@@ -78,12 +78,12 @@ Module-qualified references such as `Components.Position` resolve through the
 same project definition index as go-to-definition. Dynamic component lists stay
 unresolved rather than being guessed.
 
-The Insights tab reports conservative performance observations, not compiler
-errors. It currently highlights queries wider than three components because the
-bundled runtime allocates a temporary values table per match, table or closure
-allocations inside per-entity system callbacks, and LOVE resource construction
-inside those callbacks. These observations are prompts to profile; they do not
-change diagnostics or builds.
+!!! note "Insights are profiling prompts"
+    The Insights tab reports conservative performance observations, not
+    compiler errors. It currently highlights queries wider than three
+    components, allocations inside per-entity callbacks, and LOVE resource
+    construction inside those callbacks. These observations are prompts to
+    profile; they do not change diagnostics or builds.
 
 ## When ECS Helps
 

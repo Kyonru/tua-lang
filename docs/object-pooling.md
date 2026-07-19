@@ -43,10 +43,11 @@ bullet.active = true
 bullets:release(bullet)
 ```
 
-Annotating the factory return as `Bullet` is important. It lets completion,
-hover, checking, signatures, and inlay hints carry `Bullet` through
-`bullets:acquire()`. An unannotated factory remains valid and permissive, but
-its acquired values have type `any`.
+!!! tip "Annotate the factory return"
+    A return annotation such as `Bullet` lets completion, hover, checking,
+    signatures, and inlay hints carry the item type through
+    `bullets:acquire()`. An unannotated factory remains valid and permissive,
+    but its acquired values have type `any`.
 
 The `reset` hook runs before a released object becomes available again. Keep it
 small and deterministic. If resetting fails, the object remains active instead
@@ -114,10 +115,11 @@ ECS and pooling solve different problems:
 - ECS organizes data and iterates populations by component composition.
 - Object pooling reuses expensive or high-churn values.
 
-Do not use a pool as a second list of active entities. Let ECS queries own
-population iteration and use a pool only for values whose allocation cost is
-measurable, such as complex component payloads or external LOVE objects. The
-built-in ECS already reuses destroyed numeric entity IDs.
+!!! warning "Do not duplicate active ownership"
+    Do not use a pool as a second list of active entities. Let ECS queries own
+    population iteration and use a pool only for values whose allocation cost
+    is measurable, such as complex component payloads or external LOVE objects.
+    The built-in ECS already reuses destroyed numeric entity IDs.
 
 The pool tracks object identity, active state, and ownership. Duplicate and
 foreign releases return `false`, making lifecycle mistakes observable without

@@ -4,10 +4,10 @@ icon: lucide/unplug
 
 # External API Bridge Design
 
-Tua may eventually expose a local API session for tools that need structured
-project facts without pretending to be an editor. This page is a design record,
-not an implemented feature. No bridge starts today unless a future command or
-preview setting explicitly starts it.
+!!! warning "Design only: no bridge is implemented"
+    Tua may eventually expose a local API session for tools that need structured
+    project facts without pretending to be an editor. No bridge command or
+    server exists today, and `tua lsp` does not start one.
 
 ## Goals
 

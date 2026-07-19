@@ -4,708 +4,370 @@ icon: lucide/workflow
 
 # Architecture
 
-This page is the contributor guide for Tua's compiler and language-server
-architecture. It also maps rust-analyzer's crate architecture to Tua's current
-shape. The goal is not to copy rust-analyzer directly.
-The goal is to borrow boundaries that make a Lua/LOVE-sized language tool
-faster, easier to reason about, and less likely to grow one-off feature paths.
+Tua is organized around one reusable language engine. The CLI and language
+server provide different transports and lifecycles, but both read the same
+project model, semantic data, diagnostics, and generated Lua from `tua-core`.
 
-Language behavior belongs in the canonical
-[Specification](specification.md). Product priorities belong in the
-[Roadmap](roadmap.md), while completed commit-sized planning is preserved in
-the [historical v1 ledger](archive/implementation-ledger-v1.md). This page
-explains where code belongs and how data should flow through the implementation.
+This page documents the current implementation boundaries for contributors.
+For language behavior, see the
+[Language and Toolchain Reference](specification.md).
 
-Reference point: the current rust-analyzer `crates/` tree includes architecture
-families such as `base-db`, `ide-db`, `vfs`, `vfs-notify`, `project-model`,
-`parser`, `syntax`, `hir`, `hir-def`, `hir-expand`, `hir-ty`, `ide`,
-`ide-assists`, `ide-completion`, `ide-diagnostics`, `test-fixture`,
-`test-utils`, and `profile`. The [gap matrix](#gap-matrix) near the end of this
-guide maps those ideas to Tua's smaller architecture.
+!!! warning "Keep semantics in shared analysis"
+    A CLI command, LSP handler, or VS Code feature must not recreate parser,
+    type, module, or domain knowledge. Add the fact or query to `tua-core`, then
+    adapt its result at the edge.
 
-## Current Tua Shape
+## At A Glance
+
+```mermaid
+flowchart LR
+  Editor[VS Code] --> Extension[editors/vscode]
+  Extension -->|starts tua lsp| CLI[tua executable]
+  CLI --> LSP[tua-lsp]
+  CLI --> Core[tua-core]
+  LSP --> Core
+  Core --> Lua[Lua emission and provenance]
+  CLI --> Output[Lua files and assets]
+```
+
+The implementation follows four rules:
+
+1. **One semantic authority.** Parsing, types, module resolution, diagnostics,
+   and editor facts live in `tua-core`.
+2. **Revisioned queries.** Mutable project inputs belong to `AnalysisHost`;
+   requests read immutable `AnalysisSnapshot` values.
+3. **Side effects stay at the edges.** The CLI owns disk output and watch
+   events. The LSP owns JSON-RPC and protocol conversion. The extension owns
+   VS Code integration.
+4. **Dynamic Lua stays conservative.** Static analysis reports what source and
+   configured catalogs establish. It does not execute project code or invent
+   identities for dynamic values.
+
+## Repository Boundaries
+
+| Path | Owns | Does not own |
+| --- | --- | --- |
+| `crates/tua-core` | Source models, parser, HIR, scopes, types, checking, linting, diagnostics, project model, VFS, module graph, IDE queries, domain analysis, lowering, and Lua emission | Filesystem watching, JSON-RPC, terminal presentation, or editor UI |
+| `crates/tua-cli` | Arguments, command orchestration, project discovery, builds, output files, asset copying, watch mode, source maps, traceback mapping, and terminal diagnostics | Independent language or editor semantics |
+| `crates/tua-lsp` | Stdio transport, scheduling, cancellation, document synchronization, settings, capability advertising, URI and position conversion, and LSP request routing | Parsing or inferring source in handlers |
+| `editors/vscode` | Language registration, grammar, settings, tasks, extension activation, server discovery, custom views, packaging, and extension tests | Type inference or project analysis in TypeScript |
+
+The Rust dependency direction is intentionally small:
 
 ```mermaid
 flowchart TD
   CLI[tua-cli] --> Core[tua-core]
-  LSP[tua-lsp] --> Core
-  VSCode[editors/vscode] --> LSP
-
-  Core --> Parser[parser]
-  Core --> Types[types and SemanticModel]
-  Core --> Check[check and lint]
-  Core --> Emit[emit]
-  Core --> IDE[hover, completion, definition, references, rename, symbols]
-  Core --> Project[module index and workspace helpers]
-
-  CLI --> Build[build, check, watch, init]
-  LSP --> Protocol[LSP protocol conversion and server state]
+  CLI --> LSP[tua-lsp]
+  LSP --> Core
 ```
 
-The current implementation already has a broad feature surface: diagnostics,
-hover, completion, signature help, go to definition, references, rename,
-document symbols, workspace symbols, document links, code actions, call
-hierarchy, inlay hints, semantic tokens, LuaDoc support, LOVE helpers, and
-watched-file updates.
+`tua-core` must remain usable without an editor or command-line process. This
+keeps semantic tests fast and lets future integrations reuse the same engine.
 
-The main architectural gap is not missing editor surface. The analysis domain
-now has explicit host, snapshot, database, recovery, editor-query,
-navigation-query, and project-query modules. The remaining work is to keep
-moving shared semantic knowledge out of compatibility helpers and into
-dependency-tracked snapshot facts as those helpers are retired.
+## Core Analysis Model
 
-## Crates And Ownership
+```mermaid
+flowchart TD
+  Inputs[Config, roots, catalogs, and files] --> Host[AnalysisHost]
+  Overlays[Open document overlays] --> Host
+  Host --> Snapshot[AnalysisSnapshot at revision N]
+  Snapshot --> FileFacts[Per-file semantic facts]
+  Snapshot --> ProjectFacts[Project indexes and graphs]
+  FileFacts --> Queries[Diagnostics, IDE, and compiler queries]
+  ProjectFacts --> Queries
+```
 
-`crates/tua-cli` owns command-line behavior: argument parsing, project
-initialization, `check`, `build`, `watch`, process exit codes, and user-facing
-diagnostic printing. It should call `tua-core` for language work. It should not
-implement parser, type, module, or IDE behavior locally.
+### Inputs And Identity
 
-`crates/tua-core` owns the language implementation. Parser, source models, HIR,
-type representation, type checking, diagnostics, lowering, emission, project
-modeling, VFS, module graphs, LOVE/Lua catalogs, and pure IDE queries all live
-here. When a behavior must be shared by CLI and LSP, it belongs in this crate.
+`ProjectModel` interprets workspace configuration: source and output roots,
+asset roots, ignored paths, file associations, and module paths. `Vfs` stores
+the corresponding source files. An open document overlay takes precedence over
+the disk copy until the document closes, so editor requests always analyze the
+text the user can see.
 
-`crates/tua-lsp` owns JSON-RPC/LSP transport, server state, capability
-advertising, protocol conversion, and workspace/document notifications. Request
-handlers should mostly convert LSP positions and URIs into core query inputs,
-read an `AnalysisSnapshot` or a current-file `AnalysisHost` query, then convert
-core results back into LSP shapes.
+Paths are normalized before they become analysis identities. Module, symbol,
+asset, and reverse-reference indexes should use those normalized identities
+instead of retaining ad hoc path strings.
 
-`editors/vscode` owns editor packaging: language registration, grammar,
-extension activation, bundled/server binary discovery, debug launch tasks,
-configuration settings, and VS Code smoke scripts. It should not duplicate core
-language rules in TypeScript.
+`AnalysisHost` owns mutable inputs and the current revision. Updating a file,
+document overlay, project option, or builtin catalog invalidates the affected
+cached products and advances that revision.
 
-External tooling that needs structured project facts should follow the
-[external API bridge design](external-api-bridge.md). That bridge is not
-implemented today; any future implementation should stay disabled by default,
-local-only, and backed by the same `AnalysisHost` / `AnalysisSnapshot` queries as
-CLI and LSP features.
+`AnalysisSnapshot` is an immutable view of one revision. It combines cached
+per-file facts with project-wide indexes and exposes stable query APIs to the
+CLI and LSP.
 
-## Analysis Data Flow
+| Use | API |
+| --- | --- |
+| Update configuration, roots, catalogs, disk files, or open documents | `AnalysisHost` |
+| Serve a fast query against the current file during typing | Current-file `AnalysisHost` query |
+| Resolve modules, symbols, references, assets, or project types | `AnalysisSnapshot` query |
+| Keep several related reads internally consistent | One shared `AnalysisSnapshot` |
 
-Project-aware feature requests should follow the same path:
+!!! tip "Snapshot once per logical operation"
+    A handler or command that needs several project facts should take one
+    snapshot and reuse it. Taking snapshots between related reads can mix
+    revisions and duplicate project work.
 
-1. The CLI or LSP updates `AnalysisHost` inputs: project config, workspace
-   folders, source roots, ignored paths, disk files, open-document overlays, and
-   builtin catalogs.
-2. The caller takes an immutable `AnalysisSnapshot`.
-3. The snapshot reads normalized files through the VFS and project model.
-4. Cached per-file queries parse source, extract typed source models, lower HIR,
-   build scopes, collect diagnostics, collect exports, resolve type data, and
-   collect compact member usage, proximity, SignalBus event summaries, and
-   static ECS component/system/query summaries.
-5. Project queries build require edges, module exports, symbol indexes,
-   project-aware type information, a revisioned project usage index, and lazy
-   reverse-reference indexes from indexed files. The usage index aggregates
-   per-file summaries and does not retain project source text.
-6. IDE queries such as hover, completion, definition, references, rename,
-   inlay hints, semantic tokens, document symbols, call hierarchy, and code
-   actions read from the snapshot instead of rereading files or rebuilding
-   project state during a request.
+### Per-File Products
 
-A successfully parsed cached file always has one semantic bundle containing its
-HIR, scope map, and base type environment, even when type checking reports
-diagnostics. Temporarily invalid text follows the recovery boundary instead: a
-lossy parse, HIR, and base environment are stored once with the cached file,
-then project-enriched degraded facts are cached once per snapshot revision.
-Feature queries must not feed degraded parses back into the valid-file semantic
-cache or rebuild standalone environments as a fallback.
+The per-file pipeline produces reusable semantic data rather than a separate
+parse for every feature:
 
-Request handlers should be deterministic. If two handlers need the same
-semantic fact, that fact should move into `tua-core` or the analysis snapshot
-instead of being recomputed independently.
+```mermaid
+flowchart LR
+  Source --> Normalize[Normalize syntax]
+  Normalize --> Parse[Parsed source]
+  Parse --> HIR[HIR and scopes]
+  HIR --> Types[Type environment]
+  Types --> Summary[Exports, usages, assets, and domain summaries]
+  Types --> Diagnostics[Check and lint diagnostics]
+```
 
-Current-file IDE requests that do not need project indexes should stay on the
-lighter `AnalysisHost` path. Document symbols, document links, document
-highlights, selection ranges, folding ranges, and semantic tokens can reuse the
-same cached per-file analysis without building the module graph, project type
-database, workspace symbol index, or call-hierarchy maps. This keeps editor
-startup and typing-adjacent requests responsive while preserving the snapshot
-path for project-aware features.
+A successfully parsed file has one semantic bundle containing its HIR, scope
+map, and base type environment. Other per-file products include module exports
+and require edges, symbols, member usages, asset references, and compact
+summaries for Signals, ECS, and object pools.
 
-## Where Code Belongs
+Temporarily invalid text follows the shared recovery path. The lossy parse and
+degraded environment are cached for that snapshot so hover, completion, and
+other typing features can keep working without polluting the valid semantic
+cache.
 
-Parser and syntax recovery code belongs under `crates/tua-core/src/parser`.
-Keep raw syntax parsing, Tua normalization, typed source extraction, LuaDoc
-annotation parsing, and source-span utilities separate enough that incomplete
-editor text can still produce best-effort IDE results.
+!!! warning "Do not add feature-specific fallback parsing"
+    If an editor feature fails on incomplete source, improve the shared parser
+    recovery or degraded semantic facts. A private fallback environment inside
+    completion, hover, or an LSP handler will drift from the checker.
 
-Type representation and assignability belongs under `crates/tua-core/src/types`.
-Project-aware type lookup belongs in the type database and should use module
-aliases, require edges, LuaDoc annotations, LOVE/Lua catalogs, and HIR symbols
-through the snapshot. Avoid adding hover-only or completion-only type logic.
+### Project Products
 
-Diagnostics belong in the shared diagnostic/check/lint pipeline. Parser,
-project, type, lint, asset, and emission diagnostics should use stable codes and
-flow through the same CLI and LSP formatting paths. First-class sprite and ECS
-validation runs while each cached `AnalysisFile` is built: sprite validation
-consumes parser-owned declarations and indexed assets, while ECS validation is
-enabled by default and remains gated by project configuration for explicit
-opt-out.
+Snapshots aggregate per-file summaries into project-aware structures:
 
-Emission belongs under `crates/tua-core/src/emit` and build orchestration belongs
-in CLI build code. The emitter should preserve readable Lua 5.1/LuaJIT output
-and should not depend on LSP-only concepts. Lowering passes flow through an
-ordered `LoweringDocument`; its final `LuaEmission` contains generated Lua plus
-source-span provenance and a lowering kind for every generated line. CLI builds
-must consume that provenance for source maps instead of reparsing source or
-reverse-engineering generated text. Core source-backed passes emit validated
-`LoweringOperation` insertions and replacements with explicit provenance.
-Operations are deterministic and reject overlaps, invalid ranges, and UTF-8
-splits. Class parser normalization uses the same operation boundary and stores
-generated-line ownership for syntax-token provenance. LuaCats aliases and
-declaration comments are explicit insertion operations; no whole-document text
-rewrite remains. Lowering remains compiler-owned so external callbacks cannot
-overlap or reorder core passes. Source-map goldens cover import replacements,
-LuaCats insertions, multiline erased syntax, and non-ASCII source. CLI
-integration also executes emitted Lua and remaps the captured runtime traceback
-through those serialized maps.
+- `ModuleGraph` connects imports and exports.
+- `ProjectTypeDatabase` resolves exported and cross-file types.
+- Symbol and usage indexes support workspace symbols, references, rename,
+  call hierarchy, and ranking.
+- Asset indexes support validation, completion, hover metadata, and rename.
+- Signal, ECS, and object-pool graphs support diagnostics and structured
+  inspector views.
 
-Project and file identity code belongs in the project model, VFS, module graph,
-and analysis host. Do not resolve `require(...)`, static `import(...)`,
-ignored paths, output roots, or open unsaved buffers separately in feature
-handlers.
+Project indexes retain compact facts rather than duplicating all project source
+text. Reverse relationships are derived from indexed files and reused by
+navigation queries.
 
-IDE features should have a pure core query first and a protocol conversion
-layer second. For example, go-to-definition logic belongs in `tua-core`; LSP
-code should only map URI/position inputs and `Location` outputs.
+### Query Surface
 
-LOVE and Lua builtin behavior belongs in curated catalogs and shared semantic
-resolution paths. A LOVE method return type, signature, or completion should be
-visible to hover, completion, signature help, diagnostics, and inlay hints
-through the same resolver.
-
-Compiler-owned game helpers follow that same rule. ECS and object-pool facts
-must resolve through shared types before catalog fallbacks so checking,
-completion, hover, signature help, inlay hints, navigation, and emission do not
-drift into feature-specific answers.
-
-Project ECS inspection aggregates cached per-file ECS summaries. Imported
-component identity is resolved through the normal definition query and module
-graph; the VS Code extension receives only structured facts through
-`tua/ecsGraph`. Performance observations remain inspector data rather than
-diagnostics because they describe patterns to measure, not invalid programs.
-
-Performance-sensitive IDE features should reuse snapshot semantic facts rather
-than rebuilding type environments in each feature. Completion, completion
-resolve, hover, signature help, definition, inlay hints, and semantic tokens
-use cached valid or degraded project-aware environments. Standalone
-`*_tua_source` helpers remain useful for isolated tests and compatibility APIs,
-and recovery owns the few lexical compatibility fallbacks needed when malformed
-text cannot produce degraded semantic facts.
-
-Open and changed documents should publish fast current-file diagnostics first,
-then queue full project-aware diagnostics behind a short debounce. The stdio
-coordinator keeps document synchronization and cancellation on the transport
-thread, while revision-captured analysis state runs on separate interactive and
-background worker lanes. Completion, signature help, hover, definition, and
-viewport inlay hints do not queue behind diagnostics or whole-document
-refreshes. Identical refresh requests for the same document revision and range
-are coalesced, and stale results are discarded after document changes.
-Document-scoped requests are stamped with the document version observed by the
-transport reader, so a later `didChange` can overtake queued background work
-without allowing those older requests to publish against the new document.
-Debounced full diagnostics also run on the background lane. Closing a document
-removes only its unsaved VFS overlay, so project navigation immediately falls
-back to the indexed disk source.
-
-After workspace indexing, the LSP warms reusable analysis facts without
-requiring an editor feature to pay the cold cost. Open and changed files enter
-the high-priority queue, followed by their direct dependencies and importers;
-remaining `.tua` and `.lua` files warm in low-priority order. A file warm builds
-only the cached parse, HIR, scope, local type environment, diagnostics, exports,
-require edges, symbols, assets, and usage summary. Once those files are ready,
-an idle job prepares the aggregate project snapshot used by completion, hover,
-signature help, navigation, references, diagnostics, inlay hints, and other
-project queries.
-
-Warm workers use cloned analysis hosts so they never hold a shared compiler
-cache lock in front of an interactive query. Their file artifacts are adopted
-by the coordinator only when the captured analysis revision, source, source
-kind, configuration, and VFS options still match. Stale results are counted and
-requeued. During the short post-edit window before a project snapshot is ready,
-viewport inlay hints use the current-file valid or degraded semantic bundle;
-capable clients receive inlay-hint and semantic-token refresh requests when the
-project snapshot becomes ready.
-
-Each worker request has a cancellation token and captured document generation.
-Cancellation is currently cooperative at the scheduler boundary: queued work
-is skipped and stale or cancelled results are suppressed, but a core query that
-has already entered may finish on its worker before being discarded. Core query
-implementations should remain pure and side-effect-free so deeper cancellation
-checkpoints can be added without changing protocol behavior.
-
-`AnalysisHost` memoizes the latest `AnalysisSnapshot` by revision. Repeated
-requests against unchanged inputs should reuse the warm snapshot, including
-shared lazy indexes such as semantic facts, completion lists, usage summaries,
-degraded semantic facts, definition lookup results, and reverse references.
-Completion cache keys carry the snapshot revision as well as their semantic
-context so stale snapshots cannot seed newer revisions. Any file,
-open-document, config, builtin, root, or asset-root change increments the
-revision and forces the next snapshot to rebuild from the file-granular cache;
-unchanged files reuse their cached usage summaries.
-
-CLI watch mode registers `notify`'s platform watcher before the initial build,
-with `PollWatcher` and content comparison as the setup/runtime fallback.
-Platform events only wake a quiet-window debounce. The CLI then computes one
-authoritative snapshot diff, rehashing event-affected files even when size and
-modification time are unchanged. Native mode also performs a low-frequency
-content reconciliation so a silently dropped platform event cannot hide a
-change indefinitely. This normalizes edits, additions, deletions, rename pairs,
-assets, and `tua.toml` changes across watcher backends.
-
-Watch mode keeps one `AnalysisHost` while the project configuration is stable.
-A changed module reports whether its exported or visible type surface changed;
-removals always count as surface changes. Require-target changes are tracked
-separately and rebuild revision-level project indexes without evicting importers
-when the module's export and type surfaces remain stable. The watcher unions
-reverse dependency closures from the snapshots before and after a debounced
-batch, which avoids a CLI-specific require scanner. Export/type invalidation
-follows transitive importers, while emission remains CLI owned. A valid
-`tua.toml` change replaces the build session and watcher roots together; an
-invalid edit is reported while the previous valid session remains active.
-
-## Adding A Core Query
-
-1. Define the core result type near the domain that owns the behavior.
-2. Add a current-file host query for file-local IDE features, or a snapshot
-   method when the query depends on project indexes.
-3. Reuse HIR, scope maps, the module graph, the symbol index, the
-   reverse-reference index, and the type database before adding a syntax walk.
-4. Return `any` or `None` consistently for dynamic Lua that cannot be proven.
-5. Add focused core tests, preferably with the fixture DSL when the query needs
-   multiple files, cursor markers, or expected diagnostics.
-6. Update examples or docs when the query changes what users can observe in the
-   editor.
-
-Compatibility helpers such as `*_tua_source(...)` may stay for small unit tests
-and CLI-like one-file calls, but new project-aware behavior should route through
-`AnalysisSnapshot`.
-
-## Adding An LSP Feature
-
-1. Advertise the capability in the LSP capability builder.
-2. Add a handler that translates LSP URI, range, position, or params into a
-   snapshot query.
-3. Keep request-time work inside protocol conversion plus one core query. Avoid
-   disk reads, ad hoc require resolution, or local type inference in handlers.
-4. Convert core ranges using the shared 1-based core to 0-based LSP helpers.
-5. Add LSP tests for capability advertisement, normal results, unresolved
-   results, and behavior after open-document edits or watched-file changes when
-   relevant.
-6. If the feature has user-visible behavior, add or update an example with `--`
-   comments naming the feature being demonstrated.
-
-## VFS Overlay Example
-
-The core analysis layer now keeps file identity in a small virtual file system.
-Disk files and open editor documents share the same normalized path, so an
-unsaved editor buffer can temporarily replace disk content without changing the
-file's identity.
+The public analysis API is the integration boundary. A minimal core consumer
+looks like this:
 
 ```rust
+use std::path::PathBuf;
 use tua_core::{AnalysisHost, AnalysisSourceKind, SourcePosition};
 
-let path = "game/src/player.tua";
+let path = PathBuf::from("src/main.tua");
 let mut host = AnalysisHost::new();
-
-host.set_source_roots([std::path::PathBuf::from("game/src")]);
-host.set_output_roots([std::path::PathBuf::from("game/build")]);
+host.set_source_roots([PathBuf::from("src")]);
 host.set_file_with_kind(
-    path,
-    "type Player = { hp: number }\nlocal player: Player = { hp = 10 }\n",
-    AnalysisSourceKind::Tua,
-);
-
-host.open_document_with_kind(
-    "game\\src\\player.tua",
-    "type Enemy = { hp: number }\nlocal enemy: Enemy = { hp = 5 }\n",
+    path.clone(),
+    "local score: number = 0\n",
     AnalysisSourceKind::Tua,
 );
 
 let snapshot = host.snapshot();
-
-assert!(snapshot.is_open_document("./game/src/player.tua"));
-assert!(snapshot
-    .hover("game/src/player.tua", SourcePosition { line: 2, column: 14 })
-    .unwrap()
-    .contents
-    .contains("Enemy"));
-
-host.close_document("game/src/player.tua");
-
-let snapshot = host.snapshot();
-
-assert!(!snapshot.is_open_document("game/src/player.tua"));
-assert!(snapshot
-    .hover("game/src/player.tua", SourcePosition { line: 2, column: 15 })
-    .unwrap()
-    .contents
-    .contains("Player"));
+let hover = snapshot.hover(&path, SourcePosition { line: 1, column: 8 });
 ```
 
-The same VFS helpers normalize `file://` URIs with spaces, backslash-separated
-paths from Windows-style clients, source roots, build output roots, ignored
-paths, and module-relative paths such as `entities.player` or
-`entities/player`.
+Snapshot queries cover diagnostics, completion, hover, signature help,
+inlay hints, semantic tokens, symbols, links, code actions, navigation,
+references, rename, call hierarchy, module graphs, assets, type explanations,
+and domain inspectors. Prefer extending that surface over exposing internal
+parser or cache types to another crate.
 
-### Project Model Example
+## Editor Request Flow
 
-Project modeling now sits between raw config parsing and request handlers. A
-handler or CLI command should ask the model for roots, targets, and require
-paths instead of rebuilding those rules locally.
+```mermaid
+sequenceDiagram
+  participant E as Editor
+  participant L as tua-lsp
+  participant H as AnalysisHost
+  participant S as AnalysisSnapshot
+  participant C as tua-core query
 
-```rust
-use tua_core::{ProjectModel, ProjectModelOptions};
-
-let model = ProjectModel::load_with_options(ProjectModelOptions {
-    // Each workspace folder keeps its own tua.toml and roots.
-    workspace_folders: vec!["examples/project-model".into()],
-
-    // Editor settings can add associations without changing tua.toml.
-    file_associations: vec![],
-
-    ..ProjectModelOptions::default()
-})?;
-
-let workspace = model.primary_workspace().unwrap();
-
-// The CLI emits only the primary source root by default, but the model can
-// represent multiple roots for future indexing and generated-source workflows.
-assert_eq!(workspace.primary_source_root().ends_with("src"), true);
-
-// Require resolution is rooted in the project model, not the current file's
-// parent directory.
-let main = workspace.primary_source_root().join("main.tua");
-assert_eq!(
-    model.resolve_required_module(&main, "entities.player").unwrap(),
-    workspace.primary_source_root().join("entities/player.tua")
-);
+  E->>L: didOpen / didChange
+  L->>H: update document overlay
+  H-->>L: new revision
+  E->>L: completion / hover / definition
+  alt file-local request
+    L->>H: run current-file query
+    H->>C: read cached file facts
+    C-->>L: core result
+  else project-aware request
+    L->>H: request snapshot
+    H-->>S: freeze revision
+    S->>C: read semantic and project facts
+    C-->>L: core result
+  end
+  L-->>E: LSP result
 ```
 
-### Query Cache Example
+The server separates transport and scheduling from language work. Interactive
+requests use the responsive worker path, while indexing and diagnostics can be
+debounced or warmed in the background. Current-file diagnostics can appear
+quickly during typing; project-aware diagnostics follow when the relevant
+snapshot is ready.
 
-The analysis cache stores file products as one unit, while dependency
-invalidation distinguishes require-target, export, and visible-type surfaces.
-It is not yet a fully incremental syntax query database, but it gives the LSP
-and future IDE queries stable boundaries for reusing expensive per-file and
-per-revision work.
+Results are associated with document versions and analysis revisions. The
+server discards stale work instead of publishing it over newer text. Cancellation
+is cooperative at the scheduling boundary: a core query that already started
+may finish, but its stale result must not be applied.
 
-```rust
-use tua_core::AnalysisHost;
+LSP handlers should have a narrow shape:
 
-let mut host = AnalysisHost::new();
+1. Convert URI, position, and settings into core inputs.
+2. Select a current-file query or take one snapshot.
+3. Call a typed `tua-core` query.
+4. Convert the core result into an LSP response.
 
-host.set_file("src/main.tua", r#"local value: number = 1"#);
-host.set_file("src/player.tua", "return { hp = 100 }");
+If a handler starts parsing text, resolving a module, or constructing a type,
+the behavior belongs lower in the stack.
 
-// First snapshot parses files and builds derived per-file query products:
-// type environments, diagnostics, module exports, require edges, and symbols.
-let first = host.snapshot();
-assert!(first.parse("src/main.tua").is_some());
+## Build And Watch Flow
 
-let stats_after_first = host.cache_stats();
-
-// The second snapshot reuses the same revision-cached snapshot. It does not
-// need to walk files or bump per-file cache counters at all.
-let _second = host.snapshot();
-assert_eq!(host.cache_stats(), stats_after_first);
-
-// Editing a file invalidates that file. Export or visible-type changes also
-// invalidate known importers through the cached dependency graph. A change to
-// require targets alone refreshes project indexes but keeps importers reusable.
-host.set_file("src/player.tua", "return { hp = 200 }");
-let _third = host.snapshot();
-assert!(host.cache_stats().invalidations > 0);
+```mermaid
+flowchart LR
+  Config[Project config] --> Discover[CLI source discovery]
+  Discover --> Host[AnalysisHost]
+  Host --> Check[Core diagnostics]
+  Check --> Emit[Core lowering and LuaEmission]
+  Emit --> Write[CLI output and source maps]
+  Assets[Asset roots] --> Copy[CLI asset copy]
+  Copy --> Write
 ```
 
-### Parser Layer Example
+The build path is split by responsibility:
 
-Parser output is split into explicit layers while `ParsedSource` remains the
-compatibility aggregate used by older emit/type/check code.
+1. The CLI loads configuration, discovers project files, and updates one
+   `AnalysisHost`.
+2. Core analysis checks the same sources and dependencies used by editor
+   features.
+3. Core lowering returns `LuaEmission`: generated Lua plus source provenance.
+4. The CLI writes Lua, helper runtimes that are actually required, assets, and
+   source maps.
+5. Runtime traceback mapping consumes compiler provenance instead of guessing
+   line offsets from generated text.
 
-```rust
-use tua_core::{extract_tua_source_model, normalize_tua_source, parse_raw_tua_source};
+Watch mode keeps a long-lived host while project configuration remains stable.
+File events update the VFS, invalidate affected importers, and rebuild from the
+new snapshot. Filesystem watching and output suppression stay in `tua-cli`;
+semantic invalidation stays in `tua-core`.
 
-let normalized = normalize_tua_source("type Slot = { name?: string }\n");
-assert_eq!(normalized.parser_source, "type Slot = { name: string? }\n");
+## Semantic Ownership
 
-let raw = parse_raw_tua_source("src/slot.tua", normalized.original)?;
+Use this map when deciding where a change belongs:
 
-// Raw syntax is Lua/Luau-compatible parser output with source spans.
-assert!(raw.span.is_some());
+| Concern | Primary modules |
+| --- | --- |
+| Surface syntax, normalization, comments, and spans | `parser`, parser source models |
+| Declarations, expressions, scopes, and semantic identity | `hir`, `scope`, `semantic_index` |
+| Type representation, inference, assignability, and project exports | `types`, `type_database` |
+| User-facing errors, warnings, inline ignores, and lints | `check`, `diagnostic`, `inline_ignore`, `lint` |
+| Roots, files, module paths, imports, and project identity | `project_model`, `vfs`, `module_graph`, `module_index`, `module_link` |
+| Revisioned inputs, cached products, recovery, and public queries | `analysis` |
+| Completion, hover, navigation, symbols, refactors, and editor data | Corresponding `tua-core` feature module, exposed through `analysis` |
+| Lowering, helper selection, generated Lua, and provenance | `emit` |
+| LOVE, assets, sprites, Signals, ECS, pools, and vectors | Shared domain modules and analysis queries |
 
-// Typed extraction is a separate semantic-source pass over the raw tree.
-let typed = extract_tua_source_model(&raw)?;
-assert_eq!(typed.type_aliases[0].name, "Slot");
-```
+Domain support follows the same architecture as language support. LOVE and Lua
+catalogs contribute typed facts; asset and gameplay helpers contribute indexed
+summaries; editor features consume those facts through shared queries. Custom
+VS Code views render structured results but do not derive them.
 
-### HIR Module Example
+## Architecture Invariants
 
-The HIR-like layer lowers a parsed file into stable same-file symbols. IDE
-features should prefer this model for declarations and same-file symbol identity
-before falling back to syntax walks or dynamic Lua behavior.
+These are review requirements, not future goals:
 
-```rust
-use tua_core::{lower_parsed_source, parse_tua_source, HirExportValue, HirSymbolKind};
+- Core IDE queries do not read files directly from disk.
+- LSP handlers and extension code do not duplicate semantic analysis.
+- Diagnostics use the shared diagnostic model and stable Tua codes.
+- A snapshot never observes half of a newer revision.
+- Invalid-source support uses shared recovery rather than one-off parsers.
+- Cross-file features use normalized project identities and indexes.
+- Dynamic project code is never executed to answer an editor query.
+- Generated output remains portable Lua 5.1-compatible code with source
+  provenance.
+- Optional helper runtimes are emitted only when lowering requires them.
 
-let parsed = parse_tua_source(
-    "src/player.tua",
-    r#"
-type Player = { hp: number }
-local M = {}
-return { player = M, dynamic = make_player() }
-"#,
-)?;
+The external tooling bridge is not implemented. Its design is documented in
+[External API Bridge](external-api-bridge.md); an implementation must remain
+local-only, disabled by default, and backed by the same snapshot queries.
 
-let module = lower_parsed_source(&parsed);
+## Change Workflows
 
-// Symbols have stable ids and origin spans for hover, navigation, edits, and
-// semantic highlighting.
-let player = module.definition_for_type_alias("Player").unwrap();
-assert_eq!(player.kind, HirSymbolKind::TypeAlias);
+### Add Or Change Language Behavior
 
-// Simple exports point at known symbols. Dynamic exports stay unknown instead
-// of being guessed.
-assert!(matches!(module.exports[0].value, HirExportValue::Symbol(_)));
-assert_eq!(module.exports[1].value, HirExportValue::Unknown);
-```
+1. Update parser normalization and source models where syntax changes.
+2. Represent declarations and expressions in shared HIR and scope data.
+3. Implement type behavior in the shared environment and type database.
+4. Add checker diagnostics and lowering from the same semantics.
+5. Expose reusable facts through analysis queries for editor features.
+6. Add focused parser, checker, emitter, and analysis tests, then update the
+   language documentation and examples.
 
-### Require Graph Example
+### Add An IDE Or LSP Feature
 
-The module graph is built from the snapshot's indexed files, HIR modules, and
-project roots. It resolves `require(...)` and static `import(...)` edges,
-keeps partial results for missing modules and cycles, and indexes public exports
-without rereading files during hover or go-to-definition requests.
+1. Define a protocol-neutral result type and query in `tua-core`.
+2. Reuse semantic files, project indexes, and shared resolvers.
+3. Add focused core tests for valid, incomplete, and cross-file source.
+4. Add a thin `tua-lsp` conversion and handler with protocol tests.
+5. Change `editors/vscode` only when VS Code needs custom UI or configuration.
 
-```rust
-use tua_core::{
-    AnalysisHost, AnalysisSourceKind, DiagnosticCode, SourcePosition,
-};
+### Add A Domain Inspector
 
-let mut host = AnalysisHost::new();
+1. Extract a compact summary while analyzing each file.
+2. Aggregate summaries in a revisioned snapshot graph.
+3. Expose structured graph data through a core query.
+4. Route a custom LSP request only if standard LSP cannot represent it.
+5. Keep rendering and interaction in the extension.
 
-host.set_source_roots(["src".into()]);
-host.set_file_with_kind(
-    "src/main.tua",
-    r#"local Player = require("player")
-local player = Player.new()
-"#,
-    AnalysisSourceKind::Tua,
-);
-host.set_file_with_kind(
-    "src/player.tua",
-    r#"local function new()
-  return { hp = 100 }
-end
+### Change Build Or Watch Behavior
 
-return { new = new }
-"#,
-    AnalysisSourceKind::Tua,
-);
+Put language lowering and provenance in `tua-core`. Put source discovery,
+filesystem events, generated-file writes, asset copying, and terminal reporting
+in `tua-cli`. Test invalidation with an existing host rather than rebuilding a
+new analysis world for every event.
 
-let snapshot = host.snapshot();
-let graph = snapshot.module_graph();
+## Verification
 
-assert!(graph.export("src/player.tua", "new").is_some());
-assert_eq!(graph.diagnostics("src/main.tua"), []);
+Test at the layer that owns the behavior, then run the integration boundary it
+affects:
 
-let definition = snapshot
-    .definition("src/main.tua", SourcePosition { line: 2, column: 22 })
-    .unwrap();
+| Change | Focused verification |
+| --- | --- |
+| Parser, types, diagnostics, IDE facts, or emission | `cargo test -p tua-core` |
+| LSP routing, freshness, protocol conversion, or scheduling | `cargo test -p tua-lsp` |
+| CLI commands, builds, source maps, or watch mode | `cargo test -p tua-cli` |
+| Real editor and closed-file behavior | `make editor-regression-smoke` |
+| Documentation structure and examples | `make docs-build` |
+| Main repository checks | `make verify` |
 
-assert_eq!(definition.path.ends_with("src/player.tua"), true);
-
-host.set_file_with_kind(
-    "src/broken.tua",
-    r#"local Missing = require("missing")
-"#,
-    AnalysisSourceKind::Tua,
-);
-
-let snapshot = host.snapshot();
-assert!(snapshot
-    .module_graph()
-    .diagnostics("src/broken.tua")
-    .iter()
-    .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISSING_REQUIRE)));
-```
-
-### Scope Map Example
-
-Scope maps are the reusable lexical layer above HIR. They track locals,
-parameters, module aliases, globals, table-shape fields, declaration spans, use
-spans, shadowing, and unresolved names through one lookup path.
-
-```rust
-use tua_core::{
-    parse_tua_source, scope_map_parsed_source_with_globals, ScopeDeclarationKind,
-    ScopeGlobalKind,
-};
-
-let parsed = parse_tua_source(
-    "src/main.tua",
-    r#"
-local Player = require("player")
-local value = 1
-
-do
-  local value = 2
-  print(Player.make(), value, configured)
-end
-"#,
-)?;
-let scopes = scope_map_parsed_source_with_globals(&parsed, ["configured"]);
-
-let values = scopes
-    .declarations()
-    .iter()
-    .filter(|declaration| declaration.name == "value")
-    .collect::<Vec<_>>();
-
-// Same-name locals are separate symbols, and the inner one records that it
-// shadows the outer one.
-assert_eq!(values.len(), 2);
-assert_eq!(values[1].shadows, Some(values[0].id));
-
-let player = scopes
-    .declarations()
-    .iter()
-    .find(|declaration| declaration.name == "Player")
-    .unwrap();
-
-assert_eq!(
-    player.kind,
-    ScopeDeclarationKind::ModuleAlias {
-        module: "player".to_owned()
-    }
-);
-assert_eq!(
-    scopes.globals().get("configured").map(|global| global.kind),
-    Some(ScopeGlobalKind::Configured)
-);
-```
-
-### Project Type Database Example
-
-The project type database is built from snapshot-indexed files, cached
-per-file type environments, lexical module aliases, and the module graph. It
-resolves type aliases, LuaDoc-provided types, exported function signatures, and
-module field chains across indexed files without reading from disk during a
-request.
-
-```rust
-use tua_core::{AnalysisHost, AnalysisSourceKind, TableField, Type};
-
-let mut host = AnalysisHost::new();
-
-host.set_source_roots(["src".into()]);
-host.set_file_with_kind(
-    "src/main.tua",
-    r#"local Types = require("types")
-local player: Types.Player = nil
-"#,
-    AnalysisSourceKind::Tua,
-);
-host.set_file_with_kind(
-    "src/types.tua",
-    r#"type Player = { hp: number }
-
-return {}
-"#,
-    AnalysisSourceKind::Tua,
-);
-
-let snapshot = host.snapshot();
-let binding = snapshot
-    .type_database()
-    .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Types.Player")
-    .unwrap();
-
-assert_eq!(
-    binding.ty,
-    Type::table([("hp", TableField::required(Type::number()))])
-);
-assert!(snapshot.diagnostics("src/main.tua").is_empty());
-```
-
-## Gap Matrix
-
-| rust-analyzer area | Purpose in rust-analyzer | Tua equivalent today | Status | Roadmap |
-| --- | --- | --- | --- | --- |
-| `base-db` | Stores stable inputs, file IDs, crate graph, and query base data. | `AnalysisHost`/`AnalysisSnapshot`, VFS, project model inputs, and a file-granular query cache. | Partial | 53, 56 |
-| `vfs`, `vfs-notify` | Tracks files, changes, paths, and file watching. | Core VFS plus LSP watched-file handling and CLI source discovery. | Partial | 54 |
-| `project-model` | Models Cargo workspaces, packages, targets, cfg, and sysroot. | Core `ProjectModel` for workspace folders, source/out roots, require roots, file associations, Lua target, and LOVE target. | Existing | 55 |
-| `parser` | Parses token streams into syntax. | Raw Lua/Tua parser APIs over full_moon plus normalization for Tua-only syntax. | Existing | 57 |
-| `syntax` | Typed syntax tree and syntax utilities. | Raw parsed source, normalized source, and typed source extraction models in `tua-core::parser`. | Partial | 57 |
-| `hir`, `hir-def`, `hir-expand` | Lowers syntax into semantic definitions and handles expansion. | `HirModule` with stable same-file symbols, declarations, require bindings, and simple module exports. | Partial | 58 |
-| `hir-ty` | Type inference and type checking over HIR. | `types`, `check`, `SemanticModel`, project type database, and Lua/LOVE builtin catalogs. | Partial | 61, 62 |
-| `ide-db` | Shared IDE database and symbol indexes. | `AnalysisSnapshot`, file-granular cache, module graph, export index, lexical scope maps, project type database, revisioned project usage index, workspace symbol scans, lazy reverse-reference index, and LSP analysis helpers. | Partial | 59, 60, 61, 64, 65, 70.20 |
-| `ide` | User-facing IDE queries. | Core modules for hover, completion, definition, references, rename, symbols, etc. | Existing | 65 |
-| `ide-completion` | Completion-specific query and rendering logic. | `completion` module and LSP completion conversion. | Existing | 64, 65 |
-| `ide-diagnostics` | Diagnostic query layer. | Parser/check/lint/project diagnostics called by CLI and LSP. | Partial | 63 |
-| `ide-assists` | Code actions and refactor assists. | `code_action` module with conservative quick fixes, source import/LOVE callback actions, and safe file fix-all. | Partial | 66, 89 |
-| `ide-ssr` | Structural search and replace. | No equivalent planned for v1. | Out of scope | None |
-| `test-fixture`, `test-utils` | Fixture DSLs and shared test support. | Many focused tests with ad hoc fixtures and temp projects. | Partial | 52 |
-| `profile` | Performance tracing and benchmark support. | Opt-in `TUA_PROFILE` tracing, LSP latency benchmark fixtures, completion-specific profiling, and cache stats reporting. | Existing | 69, 77.5 |
-| `proc-macro-*`, `mbe`, `tt` | Rust macro expansion infrastructure. | No equivalent; Tua has no macro or executable extension expansion surface. | Out of scope | None |
-| `load-cargo`, `toolchain` | Rust toolchain and Cargo loading. | No equivalent; Tua project model stays Lua/LOVE-focused. | Out of scope | None |
-
-## Architecture Evolution
-
-The initial architecture work landed in this order, with some
-rust-analyzer-like pieces intentionally
-kept smaller than their Rust equivalents:
-
-1. Add fixture DSL support so architecture changes can be tested clearly.
-2. Introduce `AnalysisHost` and immutable `AnalysisSnapshot`.
-3. Add VFS/open-file overlays and a project model.
-4. Add dependency-tracked query caching.
-5. Split parser output from the semantic source model.
-6. Lower files into HIR-like modules with stable IDs.
-7. Build require graphs, scope maps, project-aware type data, and symbol indexes.
-8. Route diagnostics and IDE features through the snapshot.
-9. Move code actions and call hierarchy onto the shared model.
-10. Add selection/folding ranges, profiling, and this contributor architecture
-    guide.
-
-Deferred precision work remains in later roadmap items: richer flow-sensitive
-narrowing, broader LuaLS/LuaCATS annotation compatibility, and future LOVE
-domain extensions.
+Use the smallest focused test while iterating. Before merging a cross-layer
+change, include the relevant integration test and run `make diff-check`.
 
 ## Non-Goals
 
-- Do not create a Rust clone. Tua targets Lua 5.1/LuaJIT/LOVE projects.
-- Do not add a macro system equivalent to Rust macros.
-- Do not run project code to discover symbols or assets.
-- Do not add an executable extension API as a back door for arbitrary expression rewriting.
-- Do not replace readable Lua output with optimized or minified compiler output.
-- Do not move everything into separate crates until the boundary has earned its
-  cost.
+- Tua does not run user code to improve static analysis.
+- Tua does not make the VS Code extension a second language engine.
+- Tua does not require an LSP process to compile a project.
+- Tua does not optimize architecture around giant-workspace machinery before
+  measurements justify the complexity.
+- Tua does not hide generated output behind an opaque runtime; emitted Lua is a
+  readable, debuggable build artifact.
 
-## Commit Mapping
+## Related Guides
 
-| Roadmap item | Architecture gap |
-| --- | --- |
-| 51 | This matrix and architecture gap documentation. |
-| 52 | Test fixture and project fixture foundation. |
-| 53 | Analysis host/snapshot boundary. |
-| 54 | VFS and open-document overlays. |
-| 55 | Project model for roots, targets, config, and require paths. |
-| 56 | Dependency-tracked query cache. |
-| 57 | Syntax tree versus semantic source model split. |
-| 58 | HIR-like semantic module lowering. |
-| 59 | Require graph and export index. |
-| 60 | Lexical scope maps. |
-| 61 | Project-aware type database. |
-| 62 | Flow-sensitive narrowing. |
-| 63 | Incremental diagnostics pipeline. |
-| 64 | Shared symbol index. |
-| 65 | LSP feature routing through `AnalysisSnapshot`. |
-| 66 | Code action framework over snapshot data. |
-| 67 | Selection and folding ranges. |
-| 68 | Call hierarchy over require graph and symbols. |
-| 69 | Analysis tracing and benchmarks. |
-| 70 | Final contributor architecture guide after implementation. |
+- [Language and Toolchain Reference](specification.md)
+- [Configuration](configuration.md)
+- [Lua Interoperability](lua-interop.md)
+- [Diagnostics](luahelper-code-matrix.md)
+- [Completion Benchmarks](completion-benchmarks.md)
+- [External API Bridge](external-api-bridge.md)

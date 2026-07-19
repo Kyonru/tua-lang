@@ -1,5 +1,7 @@
 {
   "tua.preview.enabled": true,
   "[tua]": {
-  }
+  },
+  "tua.completion.sequenceRanking.enabled": true,
+  "tua.completion.multiToken.enabled": true
 }

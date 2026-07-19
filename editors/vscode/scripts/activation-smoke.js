@@ -803,6 +803,50 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "reset completion stats should report success",
     );
 
+    await state.commands.get("tua.completion.toggleExperimental")();
+
+    assert.deepStrictEqual(
+      state.configurationUpdates.slice(-2),
+      [
+        {
+          section: "tua",
+          key: "completion.sequenceRanking.enabled",
+          value: true,
+          target: state.vscode.ConfigurationTarget.Workspace,
+        },
+        {
+          section: "tua",
+          key: "completion.multiToken.enabled",
+          value: true,
+          target: state.vscode.ConfigurationTarget.Workspace,
+        },
+      ],
+      "experimental completion toggle should enable both feature gates for the workspace",
+    );
+
+    await state.commands.get("tua.completion.toggleExperimental")();
+
+    assert.deepStrictEqual(
+      state.configurationUpdates.slice(-2).map((update) => update.value),
+      [false, false],
+      "experimental completion toggle should disable both gates when both are enabled",
+    );
+
+    state.setConfiguration("completion.multiToken.enabled", true);
+    await state.commands.get("tua.completion.toggleExperimental")();
+
+    assert.deepStrictEqual(
+      state.configurationUpdates.slice(-2).map((update) => update.value),
+      [true, true],
+      "a mixed experimental completion state should be normalized to enabled",
+    );
+    assert(
+      state.informationMessages.some((message) =>
+        message.includes("experimental completion features enabled for this workspace"),
+      ),
+      "experimental completion toggle should report the new state",
+    );
+
     await state.commands.get("tua.saveCpuProfile")();
 
     const cpuProfileRequest = state.clients[1].requests.find(
@@ -2482,6 +2526,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCacheStats",
     "tua.showServerHealth",
     "tua.resetCompletionStats",
+    "tua.completion.toggleExperimental",
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.runLoveProject",

@@ -63,10 +63,9 @@ assets, modules, signals, ECS, and object pools.
 - [Releases and compatibility](https://kyonru.github.io/tua-lang/releases/)
 - [CHANGELOG.md](CHANGELOG.md)
 
-The original v1 specification and commit-by-commit implementation roadmap are
-preserved under [`docs/archive/`](docs/archive/) for historical reference.
-
 ## Development
+
+Pending contributor priorities are tracked in [`ROADMAP.md`](ROADMAP.md).
 
 ```sh
 cargo test --workspace

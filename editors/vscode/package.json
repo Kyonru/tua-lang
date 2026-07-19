@@ -497,6 +497,11 @@
         "category": "Tua"
       },
       {
+        "command": "tua.completion.toggleExperimental",
+        "title": "Toggle Experimental Completions",
+        "category": "Tua"
+      },
+      {
         "command": "tua.saveCpuProfile",
         "title": "Save CPU Profile",
         "category": "Tua"

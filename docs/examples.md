@@ -30,7 +30,9 @@ make build-love-minimal
 make run-love-minimal
 ```
 
-`make run-love-minimal` requires LOVE to be installed.
+!!! info "LOVE is required only for run targets"
+    Build targets work without LOVE. `make run-love-minimal` and
+    `make run-love-full` require a local LOVE installation.
 
 ## `examples/love-full`
 

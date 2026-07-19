@@ -1,173 +1,231 @@
 ---
-icon: lucide/clipboard-list
+icon: lucide/circle-alert
 ---
 
-# LuaHelper Code Matrix
+# Diagnostic Codes
 
-This matrix maps LuaHelper check identifiers, warning settings, and annotation
-tags to Tua's current core and LSP behavior. It is an implementation inventory,
-not a promise that Tua will clone LuaHelper one-for-one.
+This page defines Tua's stable `TLxxxx` error, warning, and hint codes. The
+compiler, CLI, language server, and VS Code extension use the same codes for the
+same semantic conditions.
 
-LuaHelper's source uses numeric `CheckError*` constants, while Tua exposes stable
-`TLxxxx` diagnostic codes. The rows below map behavior, not code names.
+!!! info "Canonical user-facing reference"
+    The implementation registry lives in
+    `crates/tua-core/src/diagnostic/mod.rs`. This page defines what each
+    registered code means and how users control it.
 
-## Sources
+## Reading A Diagnostic
 
-| Key | Source |
-| --- | --- |
-| `LH-ERR` | [`luahelper-lsp/langserver/check/common/err_info.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/common/err_info.go) |
-| `LH-WARN` | [`luahelper-vscode/package.json`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-vscode/package.json) |
-| `LH-ANN` | [`luahelper-lsp/langserver/check/annotation/annotatelexer/annotate_token.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/annotation/annotatelexer/annotate_token.go) |
-| `LH-ANN-INFO` | [`luahelper-lsp/langserver/check/common/annotate_info.go`](https://github.com/Tencent/LuaHelper/blob/master/luahelper-lsp/langserver/check/common/annotate_info.go) |
+CLI diagnostics use this shape:
 
-## Status Legend
+```text
+src/player.tua:12:15 error TL1003: type mismatch: expected number, found string
+```
 
-- **implemented**: Tua core reports/checks it and `tua-lsp` surfaces it.
-- **core-only**: core behavior exists, but no editor-specific feature is mapped.
-- **lsp-only**: editor behavior exists, but there is no matching core diagnostic.
-- **partial**: some common cases work, but LuaHelper has broader behavior.
-- **missing**: not implemented yet and mapped to a roadmap item.
-- **out of scope**: intentionally not planned for Tua's LuaJIT/LOVE focus.
+- The path and position identify the primary source range.
+- The severity is `error`, `warning`, `info`, or `hint`.
+- The `TLxxxx` code identifies the condition independently of wording.
+- The message explains the values, names, paths, or constraints involved.
 
-## Diagnostic And Check Codes
+Errors block normal build emission. Warnings and hints do not block emission,
+but `check` and `lint` can still report a failing command when enabled
+diagnostics are present.
 
-| LuaHelper code/tag | Source | Tua core checker/lint | `tua-lsp` editor surface | State | Commit / migration notes |
-| --- | --- | --- | --- | --- | --- |
-| `CheckErrorSyntax = 1` | `LH-ERR` | `TL0001` parse diagnostics. | Published diagnostics. | implemented | Landed in parser phases 7-8. |
-| `CheckErrorNoDefine = 2` | `LH-ERR`, `luahelper.Warn.CheckNoDefine` in `LH-WARN` | `TL4004` undefined variables when `undefined_variables` is enabled. | Published diagnostics; respects config/global allow-list. | implemented | Phase 36. |
-| `CheckErrorCycleDefine = 3` | `LH-ERR`, `luahelper.Warn.CheckAfterDefine` in `LH-WARN` | `TL4020` require cycles and `TL4007` use-before-local where provable. | Published diagnostics after project indexing/watched changes. | partial | Load-order/global-cycle proof remains narrower; see 59, 60, 62. |
-| `CheckErrorLocalNoUse = 4` | `LH-ERR`, `luahelper.Warn.CheckLocalNoUse` in `LH-WARN` | `TL4005` unused locals. | Published diagnostics and remove-unused-local quick fix. | implemented | Phases 36 and 44. |
-| `CheckErrorTableDuplicateKey = 5` | `LH-ERR`, `luahelper.Warn.CheckTableDuplicateKey` in `LH-WARN` | `TL4001` duplicate literal table keys. | Published diagnostics and duplicate-key rename quick fix. | implemented | Phases 36, 44. |
-| `CheckErrorNoFile = 6` | `LH-ERR`, `luahelper.Warn.CheckReferNoFile` in `LH-WARN` | `TL4002` missing require, `TL4010` bad require, `TL2004` missing LOVE asset. | Diagnostics, document links for resolved requires, create-missing-require quick fix. | implemented | Phases 37, 44, 48.6, 59. |
-| `CheckErrorAssignParamNum = 7` | `LH-ERR`, `luahelper.Warn.CheckAssignParamNum` in `LH-WARN` | `TL4027` assignment arity when `assignment_arity` is enabled and value count is statically known. | Published diagnostics; unknown multi-return and vararg sources stay permissive. | implemented | Phase 70.24. |
-| `CheckErrorLocalParamNum = 8` | `LH-ERR`, `luahelper.Warn.CheckLocalDefineParamNum` in `LH-WARN` | `TL4028` local declaration arity when `local_declaration_arity` is enabled and initializer count is statically known. | Published diagnostics. | implemented | Phase 70.24. |
-| `CheckErrorGotoLabel = 9` | `LH-ERR`, `luahelper.Warn.CheckGotoLable` in `LH-WARN` | No `goto` support goal for Lua 5.1/LuaJIT output. | No LSP diagnostic. | out of scope | Tua targets LuaJIT/LOVE and does not plan Lua 5.2+ `goto` analysis in v1. |
-| `CheckErrorCallParam = 10` | `LH-ERR`, `luahelper.Warn.CheckFuncParam` in `LH-WARN` | `TL1004` / `TL4009` wrong argument count. | Diagnostics plus signature help for known calls. | implemented | Phases 16, 37, 41. |
-| `CheckErrorImportVar = 11` | `LH-ERR`, `luahelper.Warn.CheckImportModuleVar` in `LH-WARN` | Module fields and exports are checked for `require(...)` and static `import(...)` bindings. Arbitrary custom import functions are not modeled. | Hover/completion/definition/references for indexed module exports. | partial | Owner: project model/module graph for any future configurable import helpers. See 55, 59, 61. |
-| `CheckErrorNotIfVar = 12` | `LH-ERR`, `luahelper.Warn.CheckIfNotVar` in `LH-WARN` | Some impossible comparisons and flow-sensitive narrowing exist; no dedicated "used after negative guard" diagnostic. | Hover/checking use narrowed facts in supported guards. | partial | Owner: type flow. Planned expansion in 62. |
-| `CheckErrorDuplicateParam = 13` | `LH-ERR`, `luahelper.Warn.CheckFunctionDuplicateParam` in `LH-WARN` | `TL4008` duplicate function parameters. | Published diagnostics. | implemented | Phase 37. |
-| `CheckErrorDuplicateExp = 14` | `LH-ERR`, `luahelper.Warn.CheckBinaryExpressionDuplicate` in `LH-WARN` | `TL4013` duplicate binary operands. | Published diagnostics. | implemented | Phase 37. |
-| `CheckErrorOrAlwaysTrue = 15` | `LH-ERR`, `luahelper.Warn.CheckErrorOrAlwaysTrue` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
-| `CheckErrorAndAlwaysFalse = 16` | `LH-ERR`, `luahelper.Warn.CheckErrorAndAlwaysFalse` in `LH-WARN` | `TL4011` covers some impossible boolean expressions. | Published diagnostics. | partial | More boolean identities belong in 37/62 fixture expansion. |
-| `CheckErrorNoUseAssign = 17` | `LH-ERR`, `luahelper.Warn.CheckNoUseAssign` in `LH-WARN` | `TL4029` unused assignments when `unused_assignments` is enabled; `TL4005` and `TL4003` still cover adjacent declaration/self-assignment cases. | Published diagnostics; remove-unused-local and remove-self-assignment quick fixes remain separate. | implemented | Phase 70.24. |
-| `CheckErrorAnnotate = 18` | `LH-ERR`, `luahelper.Warn.CheckAnnotateType` in `LH-WARN` | `TL0003` malformed doc annotations when `doc_annotations` is enabled. | Diagnostics, annotation completions, hover/signature docs for supported tags. | implemented | Phases 33, 34, 38, 40, 41, 70.10. |
-| `CheckErrorDuplicateIf = 19` | `LH-ERR`, `luahelper.Warn.CheckDuplicateIf` in `LH-WARN` | `TL4012` duplicate `if`/`elseif` conditions. | Published diagnostics. | implemented | Phase 37. |
-| `CheckErrorSelfAssign = 20` | `LH-ERR`, `luahelper.Warn.CheckSelfAssign` in `LH-WARN` | `TL4003` self-assignment. | Published diagnostics and remove-self-assignment quick fix. | implemented | Phases 36, 44. |
-| `CheckErrorFloatEq = 21` | `LH-ERR`, `luahelper.Warn.CheckFloatEq` in `LH-WARN` | `TL4014` float equality. | Published diagnostics. | implemented | Phase 37. |
-| `CheckErrorClassField = 22` | `LH-ERR` | Table-shape field checks exist for known Tua/LuaDoc types; LuaHelper class-field behavior is broader. | Completion/hover/definition for known fields. | partial | Owner: LuaDoc types/metatable facts. Planned in 70.10, 70.11, 70.13. |
-| `CheckErrorConstAssign = 23` | `LH-ERR` | `TL4015` const assignment when const metadata is known. | Published diagnostics. | implemented | Phase 37. |
-| `CheckErrorCallParamType = 24` | `LH-ERR` | `TL1003` / `TL4016` function argument type mismatch. | Diagnostics plus signature help/completions for literals such as LOVE modes. | implemented | Phases 15, 16, 37, 41, 48.5. |
-| `CheckErrorFuncRetErr = 25` | `LH-ERR` | `TL1003` / `TL4017` function return type mismatch. | Published diagnostics; hover/inlay use inferred returns. | implemented | Phases 16, 37, 61. |
-| `CheckErrorAssignType = 26` | `LH-ERR` | Annotated locals, stable inferred `.tua` local contracts, compound assignments, and known table fields check via `TL1003`; `any`, unknown expressions, and unannotated `.lua` locals remain gradual. | Published diagnostics; hover and completion retain the declaration contract while flow narrowing remains local to guarded blocks. | implemented | Phases 15, 61, 62. |
-| `CheckErrorBinopType = 27` | `LH-ERR` | `TL4030` binary operator type mismatch when `binary_operator_type_mismatches` is enabled and both operand types are statically known. | Published diagnostics; dynamic/`any` operands remain permissive. | implemented | Phase 70.24. |
-| `CheckErrorLocFuncNotCall = 28` | `LH-ERR` | `TL4031` local function referenced but never directly called when `uncalled_local_functions` is enabled. | Published diagnostics. | implemented | Phase 70.24. |
-| `CheckErrorEnumValue = 29` | `LH-ERR` | Tua enum sugar rejects duplicate enum members; LuaDoc `---@enum` is currently shallow metadata. | Diagnostics for Tua enum syntax; completions from literal unions. | partial | Owner: LuaDoc annotation lowering. Planned in 70.10. |
+!!! note "A code can have more than one severity"
+    The code identifies a condition, not a fixed severity. For example,
+    `TL2003` is an error when two Tua sources target the same output, but a
+    warning when a copied Lua asset would overwrite generated Lua. `TL5006` is
+    a warning for a likely callback-name typo and an error for an incompatible
+    callback declaration.
 
-## LuaHelper Warning Settings
+## Code Ranges
 
-LuaHelper exposes many check constants through VS Code settings. Tua's closest
-equivalent is `[diagnostics]` in `tua.toml` plus `tua.diagnostics.*` editor
-overrides.
-
-| LuaHelper setting | Maps to | Tua config / LSP setting | State |
-| --- | --- | --- | --- |
-| `luahelper.Warn.AllEnable` | Global warning master toggle. | No single master toggle; individual `[diagnostics]` keys are explicit. | intentionally divergent |
-| `luahelper.Warn.CheckSyntax` | `CheckErrorSyntax`. | Always-on syntax diagnostics. | implemented |
-| `luahelper.Warn.CheckNoDefine` | `CheckErrorNoDefine`. | `undefined_variables` / `tua.diagnostics.undefinedVariables`. | implemented |
-| `luahelper.Warn.CheckAfterDefine` | `CheckErrorCycleDefine`. | `use_before_definition`, `missing_requires`, require-cycle diagnostics. | partial |
-| `luahelper.Warn.CheckLocalNoUse` | `CheckErrorLocalNoUse`. | `unused_locals` / `tua.diagnostics.unusedLocals`. | implemented |
-| `luahelper.Warn.CheckTableDuplicateKey` | `CheckErrorTableDuplicateKey`. | `duplicate_keys` / `tua.diagnostics.duplicateKeys`. | implemented |
-| `luahelper.Warn.CheckReferNoFile` | `CheckErrorNoFile`. | `missing_requires`, `bad_requires`, asset diagnostics. | implemented |
-| `luahelper.Warn.CheckAssignParamNum` | `CheckErrorAssignParamNum`. | `assignment_arity` / `tua.diagnostics.assignmentArity`. | implemented |
-| `luahelper.Warn.CheckLocalDefineParamNum` | `CheckErrorLocalParamNum`. | `local_declaration_arity` / `tua.diagnostics.localDeclarationArity`. | implemented |
-| `luahelper.Warn.CheckGotoLable` | `CheckErrorGotoLabel`. | No Tua setting. | out of scope |
-| `luahelper.Warn.CheckFuncParam` | `CheckErrorCallParam`. | `wrong_argument_count` / `tua.diagnostics.wrongArgumentCount`. | implemented |
-| `luahelper.Warn.CheckImportModuleVar` | `CheckErrorImportVar`. | Require graph and module export indexing. | partial |
-| `luahelper.Warn.CheckIfNotVar` | `CheckErrorNotIfVar`. | Flow-sensitive narrowing diagnostics. | partial, 62 |
-| `luahelper.Warn.CheckFunctionDuplicateParam` | `CheckErrorDuplicateParam`. | `duplicate_parameters` / `tua.diagnostics.duplicateParameters`. | implemented |
-| `luahelper.Warn.CheckBinaryExpressionDuplicate` | `CheckErrorDuplicateExp`. | `duplicate_binary_operands` / `tua.diagnostics.duplicateBinaryOperands`. | implemented |
-| `luahelper.Warn.CheckErrorOrAlwaysTrue` | `CheckErrorOrAlwaysTrue`. | `impossible_boolean_expressions`. | partial |
-| `luahelper.Warn.CheckErrorAndAlwaysFalse` | `CheckErrorAndAlwaysFalse`. | `impossible_boolean_expressions`. | partial |
-| `luahelper.Warn.CheckNoUseAssign` | `CheckErrorNoUseAssign`. | `unused_assignments` / `tua.diagnostics.unusedAssignments`. | implemented |
-| `luahelper.Warn.CheckAnnotateType` | `CheckErrorAnnotate`. | `doc_annotations` / `tua.diagnostics.docAnnotations`. | implemented |
-| `luahelper.Warn.CheckDuplicateIf` | `CheckErrorDuplicateIf`. | `duplicate_if_conditions` / `tua.diagnostics.duplicateIfConditions`. | implemented |
-| `luahelper.Warn.CheckSelfAssign` | `CheckErrorSelfAssign`. | `self_assignments` / `tua.diagnostics.selfAssignments`. | implemented |
-| `luahelper.Warn.CheckFloatEq` | `CheckErrorFloatEq`. | `float_equality` / `tua.diagnostics.floatEquality`. | implemented |
-
-## Annotation And Documentation Tags
-
-LuaHelper's annotation lexer recognizes the tags and keywords below. Tua also
-parses several LuaLS/LuaCATS tags that LuaHelper's lexer does not name directly;
-those live in [Lua Interop](lua-interop.md).
-
-| LuaHelper tag/type keyword | Source | Tua core behavior | `tua-lsp` editor surface | State | Commit / migration notes |
-| --- | --- | --- | --- | --- | --- |
-| `---@class` | `LH-ANN`, `LH-ANN-INFO` | Parses and lowers class/table shape aliases. | Hover, completion, signature docs, semantic tokens. | implemented | Phases 33, 34, 40, 47. |
-| `---@field` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower fields including optional fields and literal unions. | Field completion/hover/definition where shape is known. | implemented | Phases 33, 34, 70.10. |
-| `---@alias` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower aliases, literal unions, arrays, dictionaries, function types. | Hover/completion/semantic tokens. | implemented | Phases 33, 34, 70.10. |
-| `---@type` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower local/global type docs where statically attachable. | Hover/inlay/diagnostics where attached. | implemented | Phases 33, 34. |
-| `---@param` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower function parameter types and docs. | Signature help and parameter documentation. | implemented | Phases 33, 34, 41. |
-| `---@return` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower single and multi-return annotation data. | Hover/signature help for known functions. | implemented | Phases 33, 34, 41, 61. |
-| `---@generic` | `LH-ANN`, `LH-ANN-INFO` | Parsed and preserved with spans; no full generic solver. | Semantic/annotation awareness only. | partial | Owner: types. Generics remain deferred; 70.10 tracks shallow compatibility. |
-| `---@overload` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower overload function signatures attached to known functions. | Signature help lists overloads, selects by argument position, and call diagnostics check matching overloads. | implemented | Phase 70.25. |
-| `---@vararg` | `LH-ANN`, `LH-ANN-INFO` | Parses/lower typed varargs for annotated `...` functions. | Signature help shows `...: T`; call diagnostics check extra arguments. | implemented | Phase 70.25. |
-| `---@enum start` / `---@enum end` | `LH-ANN`, `LH-ANN-INFO` | Tua has enum sugar and shallow `---@enum`; LuaHelper block enum semantics are not fully lowered. | Literal-union completions work when lowered from Tua/LuaCATS aliases. | partial | Owner: LuaDoc lowering. Planned in 70.10. |
-| `const` modifier | `LH-ANN` | Const metadata can drive `TL4015` where known. | Published diagnostics. | implemented | Phase 37. |
-| `public` / `protected` / `private` | `LH-ANN` | Visibility can be parsed where present but does not enforce access rules. | May appear as metadata; no access diagnostics. | intentionally shallow | Tua avoids object-visibility semantics for v1 unless a LOVE/library use case proves it. |
-| `fun(...)` type | `LH-ANN` | Function type forms lower to the same semantic representation as native Tua `(parameters) -> returns` callback types, including names and typed varargs. | Hover, completion details, checking, module exports, and signature help where attached. | implemented | Phases 13, 70.10. Native function types completed 2026-07-16. |
-| `table<...>` type | `LH-ANN` | Key-value table forms are parsed/lowered to table/container types. | Hover/completion where shape is known. | implemented | Phase 70.10. |
-| `identifier` type keyword | `LH-ANN` | Treated as `string` in LuaDoc type positions; Tua does not model a separate name-like type. | Hover/signature/checking display and enforce it as `string`. | intentionally shallow | Phase 70.25. This keeps common LuaHelper stubs useful without adding a new erased primitive. |
-
-## Code Actions And Quick Fix Families
-
-The fetched LuaHelper tree does not expose a dedicated LSP code-action or quick
-fix source file by that name. Its VS Code package contributes formatter and
-debugger commands, while diagnostics are driven by the check constants above.
-
-Tua currently has conservative code actions for:
-
-- create missing require target (`TL4002` / related missing-require diagnostics);
-- add missing local annotation from inferred type;
-- remove unused local (`TL4005`);
-- rename duplicate table key (`TL4001`);
-- remove self-assignment (`TL4003`);
-- remove trailing whitespace (`TL4021`);
-- rename close LOVE callback typos (`TL5006`);
-- apply the LOVE dot-method colon fix (`TL4018`);
-- create missing core LOVE callbacks, organize/sort imports, remove unused
-  static import bindings, and fix all safe diagnostics in a file through source
-  actions.
-
-Any future LuaHelper-style quick fix should be added through the analysis
-snapshot assist framework from roadmap 66, with exact workspace-edit tests.
-
-## Core-Only And LSP-Only Rows
-
-This inventory currently does not identify a LuaHelper `CheckError*` row that is
-implemented in Tua core but unavailable through `tua-lsp`: diagnostics flow
-through the shared snapshot before publication.
-
-It also does not identify a LuaHelper diagnostic/code row that is implemented
-only in `tua-lsp` without core support. Tua has LSP-only presentation features
-such as semantic tokens and document symbols, but those are protocol features,
-not LuaHelper diagnostic codes.
-
-## Missing Rows By Owner
-
-| Owner | Missing/partial LuaHelper rows | Follow-up |
+| Range | Category | Covers |
 | --- | --- | --- |
-| `lint/types` | broader inferred assignment-type changes beyond annotated/known assignments | 61, 62 |
-| `types/flow` | negative-guard use diagnostics and broader boolean identities | 62 |
-| `project-model/module` | configurable non-`require` custom import helper modeling | Optional future config work after 55/59/61; static relative Tua `import("./...")` is built in, while arbitrary import functions stay dynamic. |
-| `types/lua-doc` | LuaHelper enum blocks and class-field precision | 70.10, 70.11, 70.13 |
+| `TL0001-TL0999` | Syntax | Parsing, Tua syntax normalization, and malformed annotations. |
+| `TL1000-TL1999` | Type | Type names, assignments, calls, classes, and runtime checks. |
+| `TL2000-TL2999` | Build and assets | Lowering, emission, filesystem output, and asset validation. |
+| `TL3000-TL3999` | Project configuration | Reading and validating `tua.toml`. |
+| `TL4000-TL4999` | Lint and guidance | Optional correctness/style checks, module diagnostics, and LuaJIT guidance. |
+| `TL5000-TL5999` | Game domains | LOVE callbacks, sprites, signals, ECS, and object pools. |
 
-## Maintenance Rules
+Unused numbers are reserved. A number appearing inside a category range is not
+valid unless it is listed below.
 
-- Add a row when Tua implements a new LuaHelper-equivalent diagnostic, annotation,
-  quick fix, or editor feature.
-- Move a row to **implemented** only when both core behavior and LSP surfacing
-  have tests.
-- Keep source links pinned to LuaHelper files or docs that actually define the
-  behavior.
-- Prefer a Tua-specific non-goal over a vague "missing" row when LuaHelper
-  behavior does not fit LuaJIT/LOVE source-to-source tooling.
+## Syntax Codes
+
+| Code | Meaning | Control |
+| --- | --- | --- |
+| `TL0001` | Source cannot be parsed as valid Lua/Tua syntax. | Always enabled. |
+| `TL0002` | Compound-assignment syntax or its target is invalid. | Always enabled. |
+| `TL0003` | A supported LuaDoc annotation is malformed. | `diagnostics.doc_annotations` |
+
+## Type Codes
+
+| Code | Meaning | Control |
+| --- | --- | --- |
+| `TL1001` | A referenced type name is unknown in the current scope. | Always enabled. |
+| `TL1002` | A type alias or class-backed type name is declared more than once. | Always enabled. |
+| `TL1003` | A value is not assignable to its declared or inferred type contract. | Always enabled. |
+| `TL1004` | A statically known function call has the wrong argument count. | Always enabled for core typed calls. |
+| `TL1005` | A comparison is provably impossible because the operand types do not overlap. | Always enabled; warning. |
+| `TL1006` | LuaDoc declarations conflict while building one type environment. | Always enabled. |
+| `TL1007` | A runtime `is` check cannot be represented safely for the requested type. | Always enabled. |
+| `TL1008` | A class declaration, inheritance relation, override, constructor, or member access violates class rules. | Always enabled. |
+
+`TL1003` is the general type-contract error used for annotated assignments,
+stable inferred locals, fields, arguments, returns, and compatible container
+operations. More specialized optional lint codes such as `TL4016` and
+`TL4017` are used by the configurable lint pipeline.
+
+## Build And Asset Codes
+
+| Code | Meaning | Control |
+| --- | --- | --- |
+| `TL2001` | A compound assignment parsed successfully but cannot be lowered safely. | Always enabled. |
+| `TL2002` | Tua could not read or write a source, asset, map, or emitted output file. | Always enabled. |
+| `TL2003` | Multiple inputs target one output path, or a copied file would overwrite generated Lua. | Always enabled; severity depends on the collision. |
+| `TL2004` | A statically known asset path is empty or does not exist. | Always enabled for supported asset loaders. |
+| `TL2005` | An asset extension is unsupported by the selected loader. | Always enabled for supported asset loaders. |
+| `TL2006` | An asset exists but belongs to the wrong asset kind for the selected loader. | Always enabled for supported asset loaders. |
+| `TL2007` | Internal lowering operations overlap or cannot be applied safely. | Always enabled. |
+| `TL2008` | Asset-path letter casing differs from the filesystem's canonical path. | Always enabled; warning. |
+| `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |
+
+## Configuration Codes
+
+| Code | Meaning | Control |
+| --- | --- | --- |
+| `TL3001` | `tua.toml` is malformed, contains an unknown setting, or uses an invalid value. | Always enabled. |
+| `TL3002` | `tua.toml` could not be read. | Always enabled. |
+
+## Lint And Guidance Codes
+
+Most `TL4xxx` diagnostics are opt-in. Formatting diagnostics are the exception:
+`diagnostics.formatting_lints` defaults to `true`.
+
+| Code | Meaning | Configuration |
+| --- | --- | --- |
+| `TL4001` | A literal table declares the same key more than once. | `duplicate_keys` |
+| `TL4002` | A static `require` or `import` target cannot be resolved. | `missing_requires` |
+| `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
+| `TL4004` | A variable read has no known declaration or allowed global. | `undefined_variables` |
+| `TL4005` | A local is declared but never used. | `unused_locals` |
+| `TL4006` | A function parameter is never used. | `unused_parameters` |
+| `TL4007` | A local is read before its declaration. | `use_before_definition` |
+| `TL4008` | A function declares the same parameter more than once. | `duplicate_parameters` |
+| `TL4009` | A lint-known call has the wrong argument count. | `wrong_argument_count` |
+| `TL4010` | A static module specifier is invalid or resolves through an unsupported form. | `bad_requires` |
+| `TL4011` | A boolean expression is provably constant or impossible. | `impossible_boolean_expressions` |
+| `TL4012` | An `if` or `elseif` chain repeats the same condition. | `duplicate_if_conditions` |
+| `TL4013` | A suspicious binary expression repeats the same operand. | `duplicate_binary_operands` |
+| `TL4014` | Code compares a floating-point literal for exact equality. | `float_equality` |
+| `TL4015` | Code assigns to a name recognized as constant. | `const_assignments` |
+| `TL4016` | A known function argument does not match its parameter type. | `parameter_type_mismatches` |
+| `TL4017` | A function return does not match its declared return type. | `return_type_mismatches` |
+| `TL4018` | A known LOVE object method uses `.` instead of `:`, so `self` would not be passed. | Always enabled; warning with quick fix. |
+| `TL4019` | More than one project file can satisfy the same module specifier. | `bad_requires` |
+| `TL4020` | The static module graph contains a require/import cycle. | `bad_requires` |
+| `TL4021` | A line contains trailing whitespace. | `formatting_lints` |
+| `TL4022` | Indentation does not match the configured formatting style. | `formatting_lints` |
+| `TL4023` | Spacing around `then`, `do`, or related keywords is inconsistent. | `formatting_lints` |
+| `TL4024` | Token, comma, bracket, or assignment spacing is inconsistent. | `formatting_lints` |
+| `TL4025` | An inline-ignore directive, scope, group, or code is invalid. | `inline_ignores` |
+| `TL4026` | An inline-ignore directive did not suppress any matching diagnostic. | `inline_ignores` |
+| `TL4027` | Assignment target count differs from the statically known value count. | `assignment_arity` |
+| `TL4028` | Local declaration count differs from the statically known initializer count. | `local_declaration_arity` |
+| `TL4029` | A value assigned to a local is never read. | `unused_assignments` |
+| `TL4030` | A binary operator receives statically incompatible operand types. | `binary_operator_type_mismatches` |
+| `TL4031` | A local function is referenced but never directly called. | `uncalled_local_functions` |
+| `TL4032` | A local changes between LuaJIT-unfriendly value types. | `jit.enabled` and `jit.variable_type_drift` |
+| `TL4033` | A table gains late fields or changes known field types in a LuaJIT-unfriendly way. | `jit.enabled` and `jit.table_shape_drift` |
+| `TL4034` | A hot loop writes through a dynamic table key. | `jit.enabled` and `jit.hot_loop_hints` |
+| `TL4035` | A line exceeds `format.line_width`. | `formatting_lints` |
+
+Configuration keys in this table live under `[diagnostics]` unless they start
+with `jit.`. VS Code can override matching diagnostic settings for the running
+language server without rewriting `tua.toml`.
+
+## Domain Codes
+
+| Code | Meaning | Control |
+| --- | --- | --- |
+| `TL5002` | An ECS component value does not match its declared static schema. | Built-in ECS analysis. |
+| `TL5003` | An ECS query or system references an unknown or invalid component. | Built-in ECS analysis. |
+| `TL5004` | A `spriteSheet({...})` declaration has invalid frame, animation, duration, selector, or loop configuration. | Sprite-sheet analysis. |
+| `TL5005` | One SignalBus event is used with conflicting payload schemas. | Signal analysis. |
+| `TL5006` | A LOVE callback name is likely misspelled or its declared signature is incompatible with LOVE. | LOVE callback analysis; severity depends on the condition. |
+| `TL5007` | A directly visible object-pool acquisition has no later release or pool clear in the same file. | Object-pool analysis; conservative warning. |
+
+## Enable Optional Diagnostics
+
+Optional lints can be enabled individually:
+
+```toml title="tua.toml"
+[diagnostics]
+undefined_variables = true
+unused_locals = true
+missing_requires = true
+parameter_type_mismatches = true
+```
+
+Use `tua lint --strict` to enable every optional lint for that command. Inline
+ignore behavior remains controlled by project or editor configuration.
+
+See [Configuration](configuration.md#diagnostics) for every setting and its
+VS Code override.
+
+## Suppress A Diagnostic
+
+Inline suppression is disabled by default. Enable it first:
+
+```toml title="tua.toml"
+[diagnostics]
+inline_ignores = true
+```
+
+Then target one code:
+
+```tua
+-- tua-ignore-next-line TL1003
+local legacyCount: number = dynamicValue()
+
+player.setFilter("nearest") -- tua-ignore-line TL4018
+```
+
+Directives can also target category groups such as `TL1000`, `TL2000`,
+`TL3000`, `TL4000`, and `TL5000`, or names such as `syntax`, `type`,
+`lowering`, `config`, `lint`, and `domain`. `TL0000` is the numeric syntax
+group.
+
+!!! warning "Suppressions only hide diagnostics"
+    An inline ignore never changes inference, lowering, emitted Lua, or runtime
+    behavior. Invalid directives report `TL4025`, and directives that match
+    nothing report `TL4026`.
+
+## Quick Fixes
+
+Some diagnostics expose conservative editor fixes:
+
+| Code | Available fix |
+| --- | --- |
+| `TL4001` | Rename a duplicate table key. |
+| `TL4002` | Create a missing project module. |
+| `TL4003` | Remove a self-assignment. |
+| `TL4005` | Remove an unused local. |
+| `TL4018` | Replace a LOVE dot-method call with colon syntax. |
+| `TL4021` | Remove trailing whitespace. |
+| `TL5006` | Rename a close LOVE callback typo. |
+
+Not every diagnostic has a safe mechanical fix. Tua omits an action when the
+correct edit depends on runtime intent.
+
+## Maintaining The Registry
+
+When adding or changing a diagnostic:
+
+1. Add or update the `DiagnosticCode` constant and `is_known` registry in
+   `crates/tua-core/src/diagnostic/mod.rs`.
+2. Keep the code inside its category range and preserve existing code meanings.
+3. Add focused core tests for code, severity, range, and message behavior.
+4. Update this page and any related configuration or feature documentation.
+5. Add exact LSP or code-action tests when the editor surface changes.

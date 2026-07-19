@@ -215,13 +215,15 @@ other Tua tokens:
 
 ## Custom VS Code Feature Evaluation
 
-The VS Code extension intentionally stays on stable VS Code APIs plus standard
-LSP requests. The `tua:/builtins` virtual document provider is used for
-generated builtin and LOVE stubs. Experimental visual tooling, such as the
-sprite animation preview command, is explicit and gated by `tua.preview.enabled`;
-sprite sheet hovers may offer a trusted command link, but the preview itself is
-still a command/webview rather than an LSP hover payload. Both the hover link
-and preview request sprite facts through `tua/inspect`; the extension does not
+!!! info "Experimental visual tooling is opt-in"
+    The extension uses stable VS Code APIs and standard LSP requests by default.
+    Experimental visual tooling, such as sprite animation preview, is gated by
+    `tua.preview.enabled` and remains a command/webview rather than an LSP hover
+    payload.
+
+The `tua:/builtins` virtual document provider is used for generated builtin and
+LOVE stubs. Sprite sheet hovers may offer a trusted command link; both the link
+and preview request sprite facts through `tua/inspect`. The extension does not
 parse Tua source or resolve asset paths independently.
 
 Signal graph visualization is an explicit project-inspection command backed by
@@ -387,8 +389,6 @@ Type-definition and implementation requests follow the same rule: known aliases,
 table shapes, module exports, and typed receiver methods navigate to concrete
 origins, while ambiguous dynamic dispatch returns no locations.
 
-The current gap breakdown lives in the [LSP parity matrix](lsp-parity.md).
-
 ## VS Code
 
 The extension lives in `editors/vscode`.
@@ -408,6 +408,12 @@ extension does not observe every text edit or invoke
 stale timer callbacks. `make extension-test` types through a real editor host
 and verifies request version, cursor position, freshness, and suggestion-widget
 acceptance.
+
+`Tua: Toggle Experimental Completions` updates the workspace-level gates for
+contextual sequence ranking and multi-token suggestions together. If either is
+off, the command enables both; if both are on, it disables both. It does not
+change advanced multi-token behavior, candidate limits, time budgets, or the
+future model-integration policy gate.
 
 `Tua: Select Inlay Hint Mode`, available from the command palette and the Tua
 editor toolbar, offers Full, Compact, Types Only, Parameters Only, and Off.
@@ -482,8 +488,9 @@ suite under Xvfb.
 
 ## Profiling
 
-Profiling is disabled by default. Normal CLI and LSP output stays clean unless
-the `TUA_PROFILE` environment variable is set.
+!!! note "Profiling is opt-in"
+    Profiling is disabled by default. Normal CLI and LSP output stays clean
+    unless the `TUA_PROFILE` environment variable is set.
 
 To profile request latency against the checked-in small, medium, and large LSP
 benchmark fixtures:

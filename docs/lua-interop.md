@@ -4,216 +4,241 @@ icon: lucide/repeat-2
 
 # Lua Interop
 
-Tua is designed for existing Lua projects. It preserves normal Lua `require`
-semantics and emits plain Lua files.
+Tua is designed for mixed Lua and Tua projects. Both languages use normal Lua
+modules at runtime, `.lua` files can live beside `.tua` files, and generated
+output remains ordinary Lua.
 
-## Requiring Lua From Tua
+!!! info "One project, one Lua module system"
+    `require("module")` is the runtime module mechanism for both Lua and Tua.
+    Tua's static `import(...)` helper only adds compile-time path rules and
+    editor guarantees; it still emits a normal `require(...)` call.
 
-```tua
-local Legacy = require("legacy")
+## Choose A Module Form
 
-local clamped = Legacy.clamp(score, 0, 100)
+| Form | Use it for | Runtime output |
+| --- | --- | --- |
+| `require("module")` | Lua packages, mixed Lua/Tua modules, and dynamic module names | Preserved as `require("module")` |
+| `import("shared")` | Statically known Tua project modules | Lowered to `require("shared")` |
+| `import("./player")` | A child Tua module relative to the current source file | Lowered to the configured project module path |
+
+Static imports reject parent traversal such as `import("../shared")`. Use a
+project module name such as `import("shared")` or `import("engine.shared")`
+instead. Use `require(...)` when a module comes from an external package or its
+name is computed at runtime.
+
+A typical mixed project needs no special directory:
+
+```text
+src/
+|-- main.tua
+|-- player.tua
+`-- legacy.lua
 ```
 
-Tua can resolve required `.lua` files for navigation and module export inference
-when the module shape is simple enough to analyze.
+During `tua build`, Tua sources emit as Lua and plain Lua sources are copied
+unchanged when the source and output roots differ. Both are then loaded through
+the same runtime module paths under `build/`.
 
-Dynamic Lua remains permissive. Unknown values usually become `any` or stay
-quiet instead of producing speculative diagnostics.
+## Use A Lua Module From Tua
 
-## Static Imports Between Tua Modules
+Tua can infer simple Lua module exports, but LuaDoc annotations provide stable
+types and documentation at the boundary.
 
-Tua files can bind project modules with a static `import(...)` helper:
+```lua title="src/legacy.lua"
+---@alias EnemyKind "friendly" | "hostile"
+
+---@class Enemy
+---@field name string display name
+---@field hp number remaining health
+---@field kind EnemyKind
+
+---@param name string
+---@return Enemy
+local function makeEnemy(name)
+  return {
+    name = name,
+    hp = 20,
+    kind = "hostile",
+  }
+end
+
+return {
+  makeEnemy = makeEnemy,
+}
+```
+
+The returned table becomes the module export surface:
+
+```tua title="src/main.tua"
+local Legacy = require("legacy")
+
+local enemy = Legacy.makeEnemy("slime")
+enemy.hp -= 5
+```
+
+The editor can complete `Legacy.makeEnemy`, show its signature and
+documentation, infer `enemy` as `Enemy`, and complete `enemy.name`, `enemy.hp`,
+and `enemy.kind`.
+
+!!! tip "Keep exports statically visible"
+    Return a table literal, or return a local that contains a clear table
+    literal, when you want Tua to understand a Lua module's fields. Runtime
+    mutation, computed export names, and complex metatable construction remain
+    dynamic and may produce `any`.
+
+## Import Tua Modules Statically
+
+Use `import(...)` when both sides are Tua project modules and you want the
+specifier checked as a static project path:
 
 ```tua
 local Player = import("./player")
 local Shared = import("shared")
 ```
 
-This is compile-time sugar only. Child paths such as `./player` resolve from the
-current source file; cross-folder modules use project module names such as
-`shared` or `engine.foo`. Parent traversal such as `../shared` is rejected. Static
-imports participate in the same module graph as `require(...)` and emit normal
-Lua `require("...")` calls. Use `require(...)` directly for external Lua
-packages and runtime-computed module names.
+Static imports participate in the same project module graph as
+`require("...")`. They support module completion, diagnostics, navigation,
+rename-aware path updates, dependency-cycle inspection, and exported type
+inference before lowering to Lua.
 
-In VS Code, run `Tua: Show Module Dependency Graph` to inspect that shared
-graph. The explorer shows resolved and unresolved imports, dependency cycles,
-reverse dependencies, and each module's inferred exported surface. Run `Tua:
-Why Is This Module Included?` from a `.tua` editor to focus the active file and
-follow the deterministic shortest chain of static imports from a project root
-candidate. Every dependency and path step opens the original `require` or
-`import` range; the extension does not need the target file to be open.
+In VS Code:
 
-## Requiring Tua From Lua
+- **Tua: Show Module Dependency Graph** displays resolved and unresolved
+  imports, cycles, reverse dependencies, and inferred exports.
+- **Tua: Why Is This Module Included?** shows the shortest static path from a
+  project root candidate to the active file.
 
-Tua builds `.tua` files into `.lua` files under the configured output directory.
-Lua code should require the emitted module path at runtime.
+Every graph step opens the original `require` or `import` range. The extension
+reads the compiler's module graph instead of parsing source independently.
 
-Source:
+## Use A Tua Module From Lua
 
-```tua
--- src/player.tua
-local function makePlayer(name: string)
-  return { name = name, hp = 100 }
-end
+!!! warning "Lua loads emitted modules"
+    Lua cannot require `.tua` source directly. Build the project first, run Lua
+    from the configured output directory, and require the emitted module path.
 
-return {
-  makePlayer = makePlayer,
-}
-```
+=== "Tua"
 
-Output:
+    ```tua title="src/player.tua"
+    type Player = {
+      name: string,
+      hp: number,
+    }
 
-```lua
--- build/player.lua
-local function makePlayer(name)
-  return { name = name, hp = 100 }
-end
+    local function makePlayer(name: string): Player
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
 
-return {
-  makePlayer = makePlayer,
-}
-```
+    return {
+      makePlayer = makePlayer,
+    }
+    ```
 
-Lua:
+=== "Generated Lua"
+
+    ```lua title="build/player.lua"
+    local function makePlayer(name)
+      return {
+        name = name,
+        hp = 100,
+      }
+    end
+
+    return {
+      makePlayer = makePlayer,
+    }
+    ```
+
+Lua code running from `build/` can load the module normally:
 
 ```lua
 local Player = require("player")
 local player = Player.makePlayer("Ada")
 ```
 
-## Builtins And Stubs
+### Preserve Types For Lua Tools
 
-Tua includes a curated Lua catalog and a built-in LOVE catalog generated from
-`love2d-community/love-api` for completions, hover, signature help, enum-like
-string values, and LOVE object methods. The parser also understands a
-LuaHelper/LuaLS-style annotation subset, so plain Lua files can provide typed
-functions, aliases, fields, documentation, and simple module exports to `.tua`
-callers.
+Tua erases annotations by default. If generated Lua will be consumed in an
+editor that understands LuaCATS/LuaLS comments, enable annotation-preserving
+emission:
 
-LOVE call diagnostics use the generated overload variants, and generated
-object supertypes participate in checking. For example, `Image` is accepted
-where LOVE expects `Drawable`, and overloads such as
-`love.graphics.newFont(path, size)` are checked directly from the catalog.
-
-The catalog is pinned by `scripts/love-api-revision.txt`. Maintainers can
-regenerate or verify all catalog surfaces with:
-
-```bash
-make generate-love-api LOVE_API_ROOT=/path/to/love-api
-make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
+```toml title="tua.toml"
+[emit]
+annotation_mode = "luacats"
 ```
 
-Top-level LOVE callback identity, declaration snippets, function docs,
-parameter docs, overloads, enums, object methods, and object inheritance all
-come from that pinned source. For example, completing
-`function love.filedropped` inserts `filedropped(file) ... end`, and completion
-details describe the generated `DroppedFile` parameter.
-
-The same catalog validates top-level callback declarations. Lua callbacks may
-omit parameters they do not use; Tua reports `TL5006` only for close callback
-name typos, required parameters LOVE does not provide, or explicit parameter
-types that cannot accept the generated callback value. The editor can rename a
-close typo and generate missing `love.load`, `love.update`, and `love.draw`
-declarations through code actions.
-
-## LuaDoc Annotations
-
-Tua can parse a LuaHelper/LuaLS-style annotation subset in both `.lua` and
-`.tua` files. In practice, annotations are most useful at interop boundaries:
-plain Lua modules, third-party libraries, returned module tables, and functions
-called from typed Tua code.
-
-Supported tags include:
-
-- `---@class`
-- `---@field`
-- `---@alias`
-- `---@type`
-- `---@param`
-- `---@return`
-- `---@overload`
-- `---@vararg`
-- `---@generic`
-- `---@version`
-- `---@enum`
-- `---@meta`
-- `---@module`
-- `---@diagnostic`
-- `---@cast`
-- `---@as`
-- `---@deprecated`
-- `---@nodiscard`
-
-Tua uses supported annotations for type environments, module export inference,
-hover, completion, signature help, and parameter documentation where the
-surrounding Lua is simple enough to analyze.
-
-Supported type forms include primitive names, aliases, unions, string literal
-types such as `"static" | "stream"`, optional shorthand such as `number?`,
-arrays such as `Image[]`, tuples such as `[number, number]`, dictionaries such
-as `{ [string]: Source }`, key-value tables such as `table<string, Image>`, and
-function types such as `fun(path: string): Image`. The LuaHelper `identifier`
-type keyword is treated as `string`; Tua does not currently model it as a
-separate name-like type. Inside `---@class` fields and annotations attached to
-named colon methods, `Self` resolves to the class or receiver type being
-described.
-
-LuaDoc `fun(...)` types and native Tua callback types share one semantic
-representation. For example, Lua's
-`fun(value: number, ...: string): string` is compatible with Tua's
-`(value: number, ...string) -> string`. Parameter names and typed varargs remain
-available to hover, completion, signature help, checking, and simple module
-exports across `.lua` and `.tua` boundaries. Native callback aliases emitted in
-LuaCATS mode are serialized back to `fun(...)` syntax.
-
-`---@overload` entries add extra call signatures for a known function. Signature
-help can show and select those overloads, and call diagnostics use the matching
-overload when Tua can prove one applies. `---@vararg T` types extra `...`
-arguments for annotated vararg functions.
-
-Some LuaLS tags are currently preserved as metadata with spans and docs but do
-not change type checking yet. This includes `---@meta`, `---@module`,
-`---@diagnostic`, `---@cast`, `---@as`, `---@deprecated`, and `---@nodiscard`.
-They are parsed so editor features can grow around them without making current
-Lua code fail.
+The runtime code stays plain Lua, while useful aliases, locals, function
+signatures, and stable module exports receive generated comments:
 
 ```lua
----@alias Health number
+---@alias Player { name: string, hp: number }
 
----@class Player
----@field name string
----@field hp Health
-
----@param name string player name
----@return Player created player
+---@param name string
+---@return Player
 local function makePlayer(name)
   return {
     name = name,
     hp = 100,
   }
 end
+
+---@class PlayerExports
+---@field makePlayer fun(name: string): Player
+return {
+  makePlayer = makePlayer,
+}
 ```
 
-Literal unions are useful for APIs with a small set of valid string values:
+LuaCATS mode affects generated documentation comments only. It does not add a
+runtime dependency or change Lua behavior.
 
-```lua
----@alias LoadMode "static" | "stream"
+## LuaDoc Support
 
----@param path string
----@param mode LoadMode
----@return Image
-local function loadImage(path, mode)
-  return love.graphics.newImage(path)
-end
-```
+Tua parses LuaHelper/LuaLS-style annotations in both `.lua` and `.tua` files.
+The most useful annotations establish types at module and callback boundaries.
 
-When called from Tua, `"static"` and `"stream"` are accepted, other literal
-strings are rejected, and the editor can complete valid values inside string
-arguments.
+### Type-Bearing Tags
 
-Overloads are useful for Lua libraries that accept a few distinct call shapes:
+| Tag | Current use |
+| --- | --- |
+| `---@class` | Declares a named table or object shape. |
+| `---@field` | Adds a typed field, optional field, visibility metadata, and documentation to a class. |
+| `---@alias` | Declares a reusable type alias or literal union. |
+| `---@type` | Types an attached local or value where the relationship is statically clear. |
+| `---@param` | Types and documents a function parameter. |
+| `---@return` | Types and documents one or more function returns. |
+| `---@overload` | Adds another callable signature to a known function. |
+| `---@vararg` | Types extra `...` arguments. |
+
+These annotations can contribute to checking, module export inference, hover,
+completion, signature help, semantic highlighting, and parameter
+documentation.
+
+### Supported Type Forms
+
+| Shape | Example |
+| --- | --- |
+| Primitive or alias | `number`, `string`, `boolean`, `nil`, `Enemy` |
+| Union or literal choice | `number \| nil`, `"static" \| "stream"` |
+| Optional shorthand | `number?` |
+| Array | `Image[]` |
+| Tuple | `[number, string]` |
+| Dictionary | `{ [string]: Source }` |
+| LuaDoc key-value table | `table<string, Image>` |
+| Function | `fun(path: string): Image` |
+| Receiver identity | `Self` inside supported class and colon-method annotations |
+
+The LuaHelper `identifier` type is treated as `string`. LuaDoc
+`fun(value: number, ...: string): string` and native Tua
+`(value: number, ...string) -> string` lower to the same semantic function
+type.
+
+### Overloads And Typed Varargs
+
+Use overloads for a small set of distinct call shapes:
 
 ```lua
 ---@overload fun(path: string): Image
@@ -227,152 +252,98 @@ local function loadAsset(path, mode)
 end
 ```
 
-Typed varargs keep flexible Lua functions checked without making them rigid:
+Signature help selects among known overloads, and call diagnostics use a
+matching overload when Tua can prove one applies.
+
+Use `---@vararg` to type flexible Lua functions:
 
 ```lua
 ---@param message string
 ---@vararg identifier
-local function log(message, ...)
+local function logLabels(message, ...)
   print(message, ...)
 end
 ```
 
-`---@generic` is parsed as interoperability metadata, but Tua does not have a
-generic solver or native generic function syntax. Generics remain deferred
-until a concrete container or identity-preserving API requires them.
+### Parsed Metadata
 
-Malformed annotation diagnostics are controlled by `doc_annotations` in
-`tua.toml`.
+Tua also recognizes `---@generic`, `---@version`, `---@enum`, `---@meta`,
+`---@module`, `---@diagnostic`, `---@cast`, `---@as`, `---@deprecated`, and
+`---@nodiscard`. Some of these tags are preserved with source spans and
+documentation but do not currently change type checking.
 
-### Annotated Lua Module Example
+!!! note "Recognition does not imply full LuaLS semantics"
+    Tua implements the practical annotation subset needed for typed Lua
+    boundaries. `---@generic` is metadata only because Tua has no generic
+    solver, and advanced LuaLS annotation behavior degrades conservatively
+    instead of making valid Lua fail.
 
-```lua
----@param value number
----@param min number
----@param max number
----@return number clamped
-local function clamp(value, min, max)
-  if value < min then
-    return min
-  end
+Malformed supported annotations can report diagnostics when enabled:
 
-  if value > max then
-    return max
-  end
-
-  return value
-end
-
-return {
-  clamp = clamp,
-}
+```toml title="tua.toml"
+[diagnostics]
+doc_annotations = true
 ```
 
-When this file is required from Tua, the language server can use the annotated
-signature for hover, completion, signature help, and argument diagnostics.
+## Builtins, LOVE, And External APIs
+
+Tua includes a curated Lua catalog and a LOVE 11.x catalog generated from a
+pinned `love2d-community/love-api` revision. These catalogs provide completion,
+hover, signature help, literal choices, callback validation, object methods,
+and object inheritance without requiring project stubs.
+
+Values returned from known LOVE constructors retain object types:
 
 ```tua
-local Legacy = require("legacy")
-
-local score = Legacy.clamp(125, 0, 100)
-```
-
-### Annotated Types From Lua
-
-Lua modules can also provide named table shapes to Tua callers:
-
-```lua
----@class Enemy
----@field name string
----@field hp number
-
----@return Enemy
-local function makeEnemy()
-  return {
-    name = "slime",
-    hp = 20,
-  }
-end
-
-return {
-  makeEnemy = makeEnemy,
-}
-```
-
-```tua
-local Enemies = require("enemies")
-
-local enemy = Enemies.makeEnemy()
-enemy.hp -= 5
-```
-
-The analyzer does not run Lua code to discover symbols. Keep module returns
-explicit when you want editor tooling to understand exports.
-
-## LOVE Interop Helpers
-
-Tua also includes small typed LOVE asset loader helpers:
-
-```tua
-local player: Image = image "assets/player.png"
-local jump: Source = sound "assets/jump.wav"
-local theme: Source = music "assets/theme.ogg"
-local ui: Font = font("assets/ui.ttf", 18)
-local wave: Shader = shader "assets/wave.glsl"
-local position: Vec2 = vec2(100, 200)
-```
-
-They emit plain LOVE calls in generated Lua:
-
-```lua
 local player = love.graphics.newImage("assets/player.png")
 local jump = love.audio.newSource("assets/jump.wav", "static")
-local theme = love.audio.newSource("assets/theme.ogg", "stream")
-local ui = love.graphics.newFont("assets/ui.ttf", 18)
-local wave = love.graphics.newShader("assets/wave.glsl")
-local __tua_vec2 = require("brinevector")
-local position = __tua_vec2(100, 200)
-```
 
-Values inferred as LOVE API objects expose generated object methods in
-completion, such as `player:getWidth()`, `jump:play()`, or `file:open("r")`.
-
-Validated asset literals also participate in navigation. Definition opens the
-resolved asset file, and references finds every indexed helper or native LOVE
-constructor string that resolves to the same asset.
-
-Asset paths are checked against the filesystem's canonical casing. A mismatch
-reports `TL2008`, which prevents a path that works on a case-insensitive
-development machine from silently failing on a case-sensitive target. Renaming
-an indexed asset through VS Code updates static helper and native LOVE
-constructor paths while preserving their quote style.
-
-The VS Code Tua Assets view groups images, audio, fonts, shaders, and video by
-used or unused status. Usage is intentionally static: `TL2009` is a hint for an
-asset with no indexed Tua/Lua literal, not a claim that dynamically constructed
-paths are dead.
-
-`Vec2` is a built-in table-shaped type for position and velocity values. The
-`vec2(x, y)` constructor type-checks number arguments, returns `Vec2`, and emits
-BrineVector-backed Lua. `tua build` bundles `brinevector.lua` into the output
-folder when needed, unless the project already provides that module.
-
-Use colon-call syntax for LOVE object methods:
-
-```tua
 player:setFilter("nearest")
 jump:play()
 ```
 
-When Tua can prove the receiver is a LOVE object, dot-style calls such as
-`player.setFilter("nearest")` produce warning `TL4018`. LOVE method
-completions prefer colon-call snippets and can rewrite the separator when a
-completion is accepted after `.`.
+Use colon syntax for object methods. When Tua proves a LOVE receiver, a
+dot-style call such as `player.setFilter("nearest")` reports `TL4018`, and
+completion can rewrite the separator.
+
+For libraries outside the built-in catalogs, keep their Lua modules in the
+project and annotate public boundaries, or provide simple annotated Lua stub
+modules that return the same export shape as the runtime library.
+
+??? note "Maintaining the generated LOVE catalog"
+    The catalog revision is pinned in `scripts/love-api-revision.txt`.
+    Maintainers can regenerate or verify all generated surfaces with:
+
+    ```bash
+    make generate-love-api LOVE_API_ROOT=/path/to/love-api
+    make love-api-drift-check LOVE_API_ROOT=/path/to/love-api
+    ```
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| A required Lua module is `any` | Return a statically visible table and annotate its public functions or values. |
+| A module field does not complete | Confirm the field is present in the returned export table rather than added dynamically later. |
+| A module path is unresolved | Check `source`, file location, spelling, and the configured require-path separator. Use `require` for external packages. |
+| A parent relative import is rejected | Replace `import("../shared")` with a project module name such as `import("shared")`. |
+| Lua cannot load a Tua module | Run `tua build` and execute from the output directory so Lua sees the emitted `.lua` file. |
+| Generated Lua has no type comments | Set `[emit].annotation_mode = "luacats"`; the default is `"off"`. |
+| A malformed annotation stays quiet | Enable `[diagnostics].doc_annotations`. |
+
+!!! warning "Static analysis never executes project Lua"
+    Tua does not run `require(...)`, callbacks, metatable setup, or library code
+    to discover types. Computed exports and runtime-only identities remain
+    `any` unless a stable annotation or statically visible shape describes
+    them.
 
 ## Practical Guidance
 
-- Keep module returns explicit when you want editor tooling to understand them.
-- Prefer returned table literals or locals containing table literals for module
-  exports.
-- Add Tua annotations at call boundaries where dynamic Lua and typed Tua meet.
-- Use `any` intentionally for values that are truly dynamic.
+- Keep module return tables explicit.
+- Annotate public parameters, returns, callbacks, and exported shapes rather
+  than every internal local.
+- Prefer static `import(...)` for known Tua project modules and `require(...)`
+  for Lua or dynamic package boundaries.
+- Enable LuaCATS emission when generated Lua is a public or editor-consumed
+  artifact.
+- Use `any` deliberately when a value is genuinely dynamic.

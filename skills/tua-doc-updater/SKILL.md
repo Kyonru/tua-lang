@@ -11,14 +11,15 @@ separate docs request when the implementation changed.
 ## Check These Surfaces
 
 - `docs/specification.md` for the canonical language/toolchain contract.
-- `docs/roadmap.md` for Now, Next, and Later product direction.
-- `docs/capabilities.md` for current language and editor support.
+- `ROADMAP.md` for pending repository priorities.
+- Focused pages under `docs/` for current language, editor, CLI, configuration,
+  and workflow behavior.
 - `docs/archive/` only for dated historical snapshots; do not update archived
   ledgers as if they were current plans.
 - `docs/` for user-facing documentation.
 - `zensical.toml` for docs navigation.
 - `examples/` READMEs and sources for runnable, commented examples.
-- `README.md` and `TODO.md` for project-level summaries.
+- `README.md` for the project-level summary.
 
 ## Update Rules
 
@@ -36,10 +37,11 @@ separate docs request when the implementation changed.
   the matching reference page.
 - If the spec contract changed, update `docs/specification.md` before or with
   user-facing docs.
-- If implementation changes current support, update `docs/capabilities.md` and
-  detailed parity docs where relevant.
-- If product priorities change, update the Now, Next, or Later outcome without
-  adding commit-number ledgers back to the public roadmap.
+- If implementation changes current support, update `docs/specification.md`
+  and the focused feature page. Update the diagnostic-code reference when
+  codes, severity behavior, settings, or fixes change.
+- If product priorities change, update the relevant outcome in root
+  `ROADMAP.md`. Do not add planning matrices to the public docs site.
 - If a new docs page is added, add it to `zensical.toml`.
 - If an example source changes, rebuild or explain why generated output is not
   committed.
@@ -52,7 +54,7 @@ separate docs request when the implementation changed.
 - Run `make diff-check`.
 - Run example build/check targets when example docs or source changed.
 - Search for stale terms such as `tlua`, `scaffold`, `not implemented`, and old
-  roadmap item numbers when renaming or reframing features.
+  planning references when renaming or reframing features.
 
 ## Skill Maintenance
 

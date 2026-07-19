@@ -134,6 +134,7 @@ From there you can:
 
 - `Tua: Explain Type / Why Is This Any?`
 - `Tua: Select Inlay Hint Mode`
+- `Tua: Toggle Experimental Completions`
 - `Tua: Copy Fully Qualified Symbol Name`
 - `Tua: Workspace Symbols by Module`
 - `Tua: Organize Imports`
@@ -179,6 +180,9 @@ Important VS Code settings:
   `trace`).
 - `tua.preview.enabled`: enables experimental editor previews such as sprite
   animation preview.
+- `tua.completion.sequenceRanking.enabled` and
+  `tua.completion.multiToken.enabled`: experimental completion lanes controlled
+  together by `Tua: Toggle Experimental Completions`.
 
 Project behavior still comes primarily from `tua.toml`, and the extension
 attaches to that file directly for configuration authoring.

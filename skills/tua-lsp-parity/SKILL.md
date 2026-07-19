@@ -16,7 +16,8 @@ Use mature editors as references without copying their entire scope.
 
 ## Before Implementing
 
-- Check `docs/lsp-parity.md` and the relevant roadmap item.
+- Check `docs/lsp.md`, `docs/specification.md`, and root `ROADMAP.md` when the
+  work affects a current priority.
 - Identify the semantic source of truth before changing protocol output.
 - Prefer core query tests before LSP JSON tests.
 - Keep `.lua` and `.tua` behavior aligned where the feature is language-neutral.

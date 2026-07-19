@@ -10,9 +10,8 @@ not to reshuffle code for its own sake.
 
 ## First Checks
 
-- Read current priorities in `docs/roadmap.md`, current support in
-  `docs/capabilities.md`, and the architecture guide. Use the archived v1
-  implementation ledger only when historical context is genuinely needed.
+- Read current priorities in root `ROADMAP.md`, current behavior in
+  `docs/specification.md` and focused feature docs, and the architecture guide.
 - Inspect the current implementation before proposing new modules.
 - Identify whether the request is a local bug, a missing shared abstraction, or
   a project-model gap.
@@ -59,7 +58,8 @@ Offer a smaller architectural step that can be tested and committed.
 ## Expected Finish
 
 - Update tests around the architecture boundary touched.
-- Update docs or roadmap if the architecture surface changes.
+- Update focused docs when behavior changes and root `ROADMAP.md` when
+  priorities change.
 - Run the narrowest meaningful checks, then broader checks when the blast radius
   crosses crate boundaries.
 

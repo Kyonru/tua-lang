@@ -86,6 +86,10 @@ function registerLifecycleCommands() {
     vscode.commands.registerCommand(COMMANDS.copyCacheStats, copyCacheStats),
     vscode.commands.registerCommand(COMMANDS.saveCacheStats, saveCacheStats),
     vscode.commands.registerCommand(COMMANDS.resetCompletionStats, resetCompletionStats),
+    vscode.commands.registerCommand(
+      COMMANDS.toggleExperimentalCompletions,
+      toggleExperimentalCompletions,
+    ),
     vscode.commands.registerCommand(COMMANDS.saveCpuProfile, () =>
       saveServerProfileArtifact("cpuProfile", "CPU profile"),
     ),
@@ -612,6 +616,25 @@ async function resetCompletionStats() {
       `Failed to reset Tua completion learning stats: ${formatError(error)}`,
     );
   }
+}
+
+async function toggleExperimentalCompletions() {
+  const configuration = vscode.workspace.getConfiguration("tua");
+  const sequenceRankingEnabled = configuration.get(
+    "completion.sequenceRanking.enabled",
+    false,
+  );
+  const multiTokenEnabled = configuration.get("completion.multiToken.enabled", false);
+  const enabled = !(sequenceRankingEnabled && multiTokenEnabled);
+  const target = configurationTarget();
+
+  await configuration.update("completion.sequenceRanking.enabled", enabled, target);
+  await configuration.update("completion.multiToken.enabled", enabled, target);
+
+  const scope = hasWorkspaceFolders() ? "for this workspace" : "globally";
+  const message = `Tua experimental completion features ${enabled ? "enabled" : "disabled"} ${scope}.`;
+  outputChannel?.appendLine(message);
+  vscode.window.showInformationMessage(message);
 }
 
 async function saveServerProfileArtifact(kind, label) {

@@ -13,6 +13,70 @@ feedback matters, lightly annotated around module boundaries, or left as normal
 dynamic Lua. Unknown and highly dynamic values fall back to `any` instead of
 forcing the whole project into a strict type system.
 
+!!! tip "New to Tua?"
+    This page is a feature reference. If you are writing your first Tua
+    project, start with [Learn Tua](learn.md) and return here when you need exact
+    syntax or behavior.
+
+## Find A Feature
+
+### Types And Data
+
+- [Primitive types and `any`](#primitive-types): `number`, `string`, `boolean`,
+  `nil`, and the dynamic escape hatch.
+- [Local inference and reassignment](#inferred-local-reassignment): inferred
+  binding contracts, widening, and reassignment checks.
+- [Type aliases and `Self`](#type-aliases): reusable erased type names and
+  recursive shapes.
+- [Table shapes](#table-shapes) and [optional fields](#optional-fields): typed
+  Lua records and `field?: Type`.
+- [Arrays, dictionaries, and tuples](#arrays-dictionaries-and-tuples): `T[]`,
+  `{ [Key]: Value }`, and `[T, U]`.
+- [Union types](#union-types): `T | U` values and nilable state.
+- [Literal choices and enums](#literal-choices-and-enums): exact string choices
+  and erased enum declarations.
+- [Runtime `is` checks](#runtime-is-checks): runtime-compatible checks with
+  branch narrowing.
+
+### Functions And Objects
+
+- [Functions, parameters, and returns](#functions-parameters-and-returns):
+  annotations, defaults, optional parameters, and typed varargs.
+- [Function types](#function-types): `(value: T) -> U` callbacks and named
+  signatures, including multiple Lua returns.
+- [Classes](#classes): fields, constructors, `self`, inheritance, `super`,
+  `override`, and final dispatch.
+- [Practical metatable typing](#practical-metatable-typing): conservative
+  support for common Lua object and metamethod patterns.
+- [Compound assignment](#compound-assignment): `+=`, `-=`, `*=`, `/=`, and
+  `%=` lowering.
+
+### Modules And Lua
+
+- [Modules and interop](#modules-and-interop): `require(...)`, static
+  `import(...)`, exported module tables, and mixed `.lua`/`.tua` projects.
+- [Source-to-source emission](#source-to-source-model): erased types, readable
+  Lua output, LuaCATS emission, and runtime compatibility.
+- [Gradual-analysis boundaries](#boundaries): patterns that intentionally stay
+  dynamic or conservative.
+
+### LOVE And Game Features
+
+- [LOVE API catalog](#love-api-catalog): callbacks, signatures, enums, object
+  methods, and inheritance.
+- [Asset loaders](#asset-loaders): typed image, sound, music, font, shader,
+  canvas, quad, sprite-batch, and particle helpers.
+- [Sprite sheets and anim8](#sprite-sheets-and-anim8): frame geometry,
+  animation ranges, durations, and loop callbacks.
+- [Vectors](#vectors): built-in `Vec2` and the `vec2(...)` constructor.
+- [LOVE methods and callbacks](#love-methods-and-callbacks): colon-call
+  guidance, callback snippets, diagnostics, and fixes.
+- [Signals](#signals): typed event names, payloads, navigation, and the Signal
+  Graph.
+- [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
+- [Entity component systems](#entity-component-systems): the built-in `ecs`
+  module and ECS Explorer.
+
 ## Overview
 
 Tua source is still Lua in the places where runtime behavior matters:
@@ -82,7 +146,7 @@ LuaCATS comments (`---@alias`, `---@type`, `---@param`, `---@return`, and stable
 `---@field` exports) with emitted Lua. Sugar such as `-=` is lowered to Lua
 5.1-compatible assignment.
 
-## What Tua Tries To Know
+## Semantic Model
 
 Tua's semantic model is shared by the checker, hover, completion, definition,
 signature help, inlay hints, references, rename, and other editor features. The
@@ -185,11 +249,15 @@ Lua interop is deliberately practical rather than magical. See
 [Lua Interop](lua-interop.md) for LuaDoc/LuaLS-style annotations, required Lua
 module inference, and mixed `.lua`/`.tua` project guidance.
 
-## LOVE-Focused Layer
+## LOVE APIs And Game Runtime Helpers {#love-focused-layer}
+
+### LOVE API Catalog
 
 Tua is designed around LOVE projects, so the language server includes built-in
 Lua and LOVE catalogs. Those catalogs power completions, hover, signature help,
 simple call diagnostics, virtual definitions, and object method knowledge.
+
+### Helper Overview
 
 Tua also includes small source-level helpers for common asset loading:
 
@@ -258,7 +326,11 @@ events:emit("game.paused", "menu")
 
 When generated Lua needs `brinevector`, `tuasignal`, or `tuaobjectpool`, `tua
 build` writes the bundled runtime file into the output directory unless the
-project already provides one. `SignalBus` completions include `on`, `once`, `declare`, `emit`,
+project already provides one.
+
+### Signals
+
+`SignalBus` completions include `on`, `once`, `declare`, `emit`,
 `off`, `clear`, `has`, `listeners`, and Hump-style aliases such as `register`
 and `remove`. In the first string argument of those event-name methods, the
 language server suggests known event names from existing `SignalBus` calls,
@@ -275,6 +347,8 @@ registering a listener.
 by bus/file/listener/emitter, shows conflicting schemas, and can create a typed
 listener or no-op declaration from known payloads.
 
+### Object Pools
+
 `objectPool({...})` creates a reusable pool with `acquire`, `release`,
 `prewarm`, ownership, count, and cleanup methods. An annotated `create`
 callback return type flows through `acquire`, while unannotated factories stay
@@ -285,23 +359,13 @@ lifecycle through `Tua: Show Object Pool Explorer`, and it publishes
 conservative `TL5007` warnings when a directly acquired same-file local has no
 later visible release or pool clear.
 
-## Boundaries
+### Entity Component Systems
 
-Tua does not try to statically prove every Lua pattern. These remain gradual or
-limited by design:
-
-- dynamic metatable construction, computed `__index` chains, and runtime
-  `getmetatable` mutation;
-- arbitrary mutation of table shapes over time;
-- values stored through `_G` or unknown globals;
-- runtime-computed `require` paths;
-- advanced LuaDoc generics and complex annotation forms;
-- package management and dependency installation;
-- runtime validation after code starts running.
-
-Prefer annotations at module boundaries, constructors, returned module tables,
-and LOVE-facing asset or object code. Leave highly dynamic glue as Lua. That is
-the intended shape: typed where it pays rent, permissive where Lua is being Lua.
+The built-in `ecs` module provides typed components, worlds, systems, and
+queries without a package install or explicit `require`. Builds that use it
+write the bundled `tuaecs.lua` runtime, and **Tua: Show ECS Explorer** exposes
+the compiler's component and system model. See
+[Entity Component Systems](ecs.md) for the full API and workflow.
 
 ## Primitive Types
 
@@ -555,7 +619,7 @@ virtual dispatch. Locally inferred native class instances accept both
 instances obtained through module or dynamic boundaries so the receiver is
 explicit in the emitted Lua.
 
-## Function Annotations
+## Functions, Parameters, And Returns
 
 ```tua
 local function damage(player: Player, amount: number): Player
@@ -574,7 +638,34 @@ end
 ```
 
 Tua checks known argument counts, known argument types, and annotated return
-types.
+types. Trailing parameters can be optional or provide a Lua default value:
+
+```tua
+local function heal(player: Player, amount: number = 5): Player
+  player.hp += amount
+  return player
+end
+
+local function describe(player: Player, mode?: string): string
+  if mode ~= nil then
+    return mode
+  end
+
+  return player.name
+end
+```
+
+`amount: number = 5` inserts the default expression when the argument is `nil`.
+`mode?: string` accepts an omitted argument and has type `string | nil` inside
+the function. Default and optional parameters must be trailing.
+
+Use `...: Type` for typed varargs:
+
+```tua
+local function logAll(prefix: string, ...: string)
+  print(prefix, ...)
+end
+```
 
 ## Function Types
 
@@ -612,14 +703,15 @@ LuaDoc/LuaCATS function types such as
 When `annotation_mode = "luacats"` is enabled, native callback aliases emit
 compatible `---@alias ... fun(...)` annotations.
 
-Tua intentionally does not add generics alongside this feature. Generic
-functions and containers remain deferred until a concrete identity-preserving
-API needs them and can justify the extra inference and syntax complexity.
+Generics are not part of Tua. Arrays, dictionaries, tuples, concrete aliases,
+and gradual `any` cover the supported container and dynamic boundaries.
 
-## LOVE Asset And Vector Helpers
+## LOVE Assets, Sprites, Vectors, And Callbacks
 
 Tua includes built-in LOVE knowledge for common game code. Asset loader helpers
 infer LOVE object types and emit ordinary LOVE API calls:
+
+### Asset Loaders
 
 ```tua
 local player = image "assets/player.png"
@@ -721,6 +813,8 @@ animation fields, inserts their value shapes, and completes common `onLoop`
 method strings. The compiler rejects conflicting selector, timing, and loop
 forms before emitting anim8 calls.
 
+### Vectors
+
 `Vec2` is a built-in table-shaped type for common position and velocity code.
 The constructor has signature `function vec2(x: number, y: number): Vec2`.
 Fields `position.x` and `position.y` complete and hover as `number`. Tua also
@@ -728,6 +822,8 @@ models common BrineVector properties and operations such as `length`,
 `normalized`, `dot`, `rotated`, and vector arithmetic. BrineVector uses
 LuaJIT/FFI when appropriate and falls back to table vectors on platforms where
 that is a better runtime choice.
+
+### LOVE Methods And Callbacks
 
 Prefer `:` for LOVE object methods. These methods usually need `self`, and Lua
 passes `self` only for colon calls. When Tua knows the receiver is a LOVE object,
@@ -834,3 +930,21 @@ player.hp = player.hp - amount
 ```
 
 Complex left-hand sides such as calls and computed indexes are rejected.
+
+## Boundaries
+
+Tua does not statically prove every Lua pattern. These remain gradual or
+conservative:
+
+- dynamic metatable construction, computed `__index` chains, and runtime
+  `getmetatable` mutation;
+- arbitrary mutation of table shapes over time;
+- values stored through `_G` or unknown globals;
+- runtime-computed `require` paths;
+- advanced LuaDoc generics and complex annotation forms;
+- package management and dependency installation;
+- runtime validation after code starts running.
+
+Annotations are most useful at module boundaries, constructors, returned
+module tables, and LOVE-facing asset or object code. Highly dynamic glue can
+remain ordinary Lua or use an explicit `any` boundary.

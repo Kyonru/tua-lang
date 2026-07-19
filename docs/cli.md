@@ -96,12 +96,13 @@ annotation lines. Multiline erased types and non-ASCII source text retain their
 original source-line ownership. Map files are line-based metadata only and are
 not counted as emitted runtime files.
 
-Use `--emit-on-error` when you want parseable/lowerable files to emit while the
-command still exits non-zero:
+!!! warning "Recovery emission still reports failure"
+    Use `--emit-on-error` when you want parseable/lowerable files to emit while
+    errors remain. The command still exits non-zero.
 
-```bash
-cargo run -p tua-cli -- build --emit-on-error
-```
+    ```bash
+    cargo run -p tua-cli -- build --emit-on-error
+    ```
 
 ## `traceback`
 

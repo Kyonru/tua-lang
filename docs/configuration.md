@@ -299,7 +299,8 @@ call site through `initial`, `prewarm`, `reset`, and `dispose`. See
 Formatting lints are enabled by default so `tua check`, `tua lint`, and editor
 diagnostics enforce the same baseline style as `tua fmt`. Other optional lints
 remain disabled until enabled here, by editor settings, or through
-`tua lint --strict`.
+`tua lint --strict`. See [Diagnostic Codes](luahelper-code-matrix.md) for the
+meaning and control of every `TLxxxx` code.
 
 ```toml
 [diagnostics]
@@ -446,8 +447,11 @@ exists for migration-heavy files, but it must be added to
 
 Codes may be exact (`TL1003`) or category groups (`TL1000`, `TL4000`, `TL5000`,
 `type`, `lint`, `domain`). If no code is supplied, the comment suppresses all non-syntax
-diagnostics for that target. Invalid codes and unused suppressions produce
-warnings, and suppression never changes type inference or emitted Lua.
+diagnostics for that target.
+
+!!! warning "Suppressions do not change program behavior"
+    Invalid codes and unused suppressions produce warnings. A suppression only
+    hides matching diagnostics; it never changes type inference or emitted Lua.
 
 `inline_ignore_scopes`
 : Lists the suppression directives accepted by this project. The default allows
@@ -477,11 +481,11 @@ Configuration precedence is:
 2. The nearest applicable `tua.toml`.
 3. Editor settings sent by the LSP client.
 
-Editor settings are an in-memory overlay for the running language server. They
-do not rewrite `tua.toml`.
-
-For diagnostic toggles, use `true` or `false` to override the project config.
-Leave the value unset or `null` to inherit from `tua.toml`.
+!!! info "Editor settings are temporary overlays"
+    Editor settings apply in memory to the running language server and do not
+    rewrite `tua.toml`. For diagnostic toggles, use `true` or `false` to
+    override project configuration; leave a value unset or `null` to inherit
+    from `tua.toml`.
 
 Supported editor settings:
 
@@ -516,3 +520,9 @@ Supported editor settings:
   sent off-device. It does not enable proposed VS Code APIs,
   source-definition/multi-document-highlight/auto-insert behavior, or the
   external API bridge design.
+
+Run **Tua: Toggle Experimental Completions** to switch both
+`tua.completion.sequenceRanking.enabled` and
+`tua.completion.multiToken.enabled` for the current workspace. If either
+feature is off, the command enables both; if both are on, it disables both.
+Advanced multi-token and model-integration policy settings are not changed.

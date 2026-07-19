@@ -42,6 +42,11 @@ VSIX has an individual `.sha256` file, and the release includes one
 
 ## Verify A Download
 
+!!! warning "Verify release artifacts before installing them"
+    Release assets are checksummed rather than code-signed today. Compare the
+    downloaded archive or VSIX against its entry in `SHA256SUMS` before running
+    or installing it.
+
 On Linux:
 
 ```bash
