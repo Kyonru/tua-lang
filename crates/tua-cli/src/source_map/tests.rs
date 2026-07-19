@@ -95,6 +95,63 @@ fn source_map_serializes_static_import_provenance() {
 }
 
 #[test]
+fn debugger_source_map_serializes_standard_v3_mappings() {
+    let mappings = vec![
+        LineMapping {
+            generated_line: 1,
+            source_line: 1,
+        },
+        LineMapping {
+            generated_line: 2,
+            source_line: 2,
+        },
+        LineMapping {
+            generated_line: 3,
+            source_line: 8,
+        },
+        LineMapping {
+            generated_line: 4,
+            source_line: 3,
+        },
+    ];
+    let map = debugger_source_map_json(
+        Path::new("project"),
+        Path::new("project/src/main.tua"),
+        Path::new("project/build/main.lua"),
+        &mappings,
+    );
+
+    assert_eq!(
+        map,
+        json!({
+            "version": 3,
+            "file": "main.lua",
+            "sourceRoot": "..",
+            "sources": ["src/main.tua"],
+            "names": [],
+            "mappings": "AAAA;AACA;AAMA;AALA",
+        })
+    );
+}
+
+#[test]
+fn debugger_source_map_uses_nested_output_depth_for_source_root() {
+    let map = debugger_source_map_json(
+        Path::new("project"),
+        Path::new("project/src/systems/player.tua"),
+        Path::new("project/build/systems/player.lua"),
+        &[LineMapping {
+            generated_line: 1,
+            source_line: 5,
+        }],
+    );
+
+    assert_eq!(map["sourceRoot"], "../..");
+    assert_eq!(map["sources"], json!(["src/systems/player.tua"]));
+    assert_eq!(map["mappings"], "AAIA");
+}
+
+#[test]
 fn source_map_serializes_luacats_annotation_provenance() {
     let source = "type Label = string\nlocal title: Label = \"Olá\"\n";
     let emission = tua_core::emit_tua_source_artifact_with_mode(

@@ -24,6 +24,7 @@
   ],
   "activationEvents": [
     "onCommand:tua.initProject",
+    "onCommand:tua.debugLoveProject",
     "onLanguage:tua",
     "workspaceContains:**/*.tua"
   ],
@@ -35,6 +36,11 @@
     "test:vscode": "node test/run.js"
   },
   "contributes": {
+    "breakpoints": [
+      {
+        "language": "tua"
+      }
+    ],
     "configurationDefaults": {
       "[tua]": {
         "editor.quickSuggestions": {
@@ -57,7 +63,7 @@
         "tua.love.command": {
           "type": "string",
           "default": "love",
-          "description": "Path to the LOVE executable used by Tua: Run LOVE Project tasks. The default uses love on PATH and falls back to common platform installs when available."
+          "description": "Path to the LOVE executable used by Tua: Run LOVE Project and Tua: Debug LOVE Project. The default uses love on PATH and falls back to common platform installs when available."
         },
         "tua.trace.server": {
           "type": "string",
@@ -530,6 +536,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "tua.debugLoveProject",
+        "title": "Debug LOVE Project",
+        "category": "Tua",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "tua.restartLoveProject",
         "title": "Restart LOVE Project",
         "category": "Tua",
@@ -700,9 +712,14 @@
           "group": "navigation@48"
         },
         {
-          "command": "tua.restartLoveProject",
+          "command": "tua.debugLoveProject",
           "when": "workspaceFolderCount > 0",
           "group": "navigation@49"
+        },
+        {
+          "command": "tua.restartLoveProject",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation@50"
         },
         {
           "command": "tua.showWorkspaceSymbolsByModule",
@@ -737,6 +754,10 @@
         },
         {
           "command": "tua.runLoveProject",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "tua.debugLoveProject",
           "when": "workspaceFolderCount > 0"
         },
         {

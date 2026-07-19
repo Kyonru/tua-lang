@@ -216,11 +216,7 @@ impl WatchBuildSession {
             filter_tua_output_collisions_for_sources(&tua_output_collisions, &tua_paths);
 
         push_tua_output_collision_diagnostics(&mut diagnostics, &relevant_tua_output_collisions);
-        remove_colliding_outputs(
-            &tua_output_collisions,
-            self.workspace.config().emit_maps,
-            &mut diagnostics,
-        );
+        remove_colliding_outputs(&tua_output_collisions, &mut diagnostics);
 
         for path in &tua_paths {
             if snapshot.source(path).is_none() {
@@ -290,6 +286,8 @@ impl WatchBuildSession {
                             ) {
                                 diagnostics.push(diagnostic);
                             }
+                        } else {
+                            remove_source_maps(&output_path, &mut diagnostics);
                         }
                     }
                     Err(diagnostic) => diagnostics.push(diagnostic),

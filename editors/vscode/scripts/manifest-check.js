@@ -24,6 +24,7 @@ const expected = [
   "tua.openGeneratedLua",
   "tua.jumpBetweenSourceAndGenerated",
   "tua.runLoveProject",
+  "tua.debugLoveProject",
   "tua.restartLoveProject",
   "tua.copyQualifiedName",
   "tua.showWorkspaceSymbolsByModule",
@@ -54,6 +55,11 @@ const missing = expected.filter((command) => !commands.has(command));
 
 if (missing.length > 0) {
   console.error(`Missing contributed commands: ${missing.join(", ")}`);
+  process.exit(1);
+}
+
+if (!(manifest.contributes?.breakpoints || []).some((entry) => entry.language === "tua")) {
+  console.error("Missing Tua breakpoint contribution.");
   process.exit(1);
 }
 

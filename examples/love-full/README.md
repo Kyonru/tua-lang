@@ -21,6 +21,10 @@ cargo run -p tua-cli -- build
 love game
 ```
 
+In VS Code, **Tua: Debug LOVE Project** builds this output, starts LOVE through
+Second Local Lua Debugger, and maps `.tua` breakpoints and stack frames back
+from the generated Lua. No debugger bootstrap is kept in project source.
+
 The generated files are emitted into `game/` and ignored by git. For automated
 runtime validation, set `TUA_LOVE_FULL_SMOKE=1`; the game starts, uses stubbed
 audio, loads core modules, runs one update tick, and exits.

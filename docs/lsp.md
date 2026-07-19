@@ -293,9 +293,19 @@ tracked task. `print(...)`, stdout, stderr, and mapped runtime traceback
 locations appear in the task terminal and the `tua` output channel. Configure a
 non-standard LOVE executable with `tua.love.command`.
 
-!!! note "Runtime debugging is separate"
-    Tua maps generated tracebacks but does not provide a Lua debugger. Use an
-    external debugger when breakpoints and runtime inspection are required.
+**Tua: Debug LOVE Project** builds the same output and launches the optional
+[Second Local Lua Debugger](installation.md#optional-love-debugging) adapter against
+generated Lua. Standard `*.lua.map` files let breakpoints placed in `.tua` bind
+to generated lines and map stopped stack frames back to Tua. The adapter
+provides stepping, variables, watches, conditional breakpoints, and evaluation;
+Tua owns only build and source-map integration.
+
+!!! info "Generated Lua is the debug target"
+    Tua writes the debugger bootstrap only to the freshly generated
+    `build/conf.lua`, creating that output file when needed and adjusting
+    existing maps when it prepends a line. It does not modify project source.
+    Unmapped generated helper lines are skipped by default; use the generated
+    Lua navigation commands when inspecting lowering details.
 
 ## VS Code Commands
 
@@ -309,6 +319,7 @@ Open the command palette and type **Tua**. The most useful commands are:
 | **Tua: Open Generated Lua Beside Tua** | Inspect emitted Lua for the active source |
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
 | **Tua: Run LOVE Project** / **Restart LOVE Project** | Build and run LOVE in a VS Code task |
+| **Tua: Debug LOVE Project** | Build and debug generated Lua with breakpoints mapped to Tua |
 | **Tua: Workspace Symbols by Module** | Browse compiler symbols grouped by module |
 | **Tua: Why Is This Module Included?** | Show the active module's shortest root-to-module path |
 | **Tua: Organize Imports** / **Sort Imports** / **Remove Unused Imports** | Apply compiler-backed source actions |

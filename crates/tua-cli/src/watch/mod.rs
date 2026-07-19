@@ -11,7 +11,7 @@ use crate::build::{
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, io_diagnostic, paths_same_location, SourceKind};
-use crate::source_map::source_map_path_for;
+use crate::source_map::{debugger_source_map_path_for, source_map_path_for};
 use backend::{ReceiveError, WatchBackend, WatchBatch};
 use tua_core::{
     format_diagnostics_for_cli, load_config_from_dir, Diagnostic, LoadedConfig, ProjectWorkspace,
@@ -438,6 +438,7 @@ fn remove_deleted_outputs(
 
                 if source_kind == SourceKind::Tua {
                     paths.push(source_map_path_for(&output_path));
+                    paths.push(debugger_source_map_path_for(&output_path));
                 }
 
                 paths

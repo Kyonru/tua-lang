@@ -34,6 +34,18 @@ For an existing project, open the folder containing `tua.toml`. The extension
 starts the bundled server and discovers the project configuration
 automatically.
 
+### Optional: LOVE Debugging
+
+Install
+[Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode)
+to use breakpoints, stepping, variables, watches, and the debug console. Then
+run **Tua: Debug LOVE Project**. If the debugger is missing, Tua offers to open
+its installation flow.
+
+Tua still executes generated Lua. The extension builds the project, emits
+standard source maps, and maps `.tua` breakpoints and stack frames through the
+Lua debugger. Keep `emit_maps = true`, which is the default.
+
 ### Install A VSIX Manually
 
 Download the VSIX matching your operating system and architecture from
@@ -115,6 +127,14 @@ verifies native quick suggestions against a controlled LSP server. Set
 `VSCODE_EXECUTABLE_PATH` to use a specific VS Code installation; otherwise the
 test uses the standard macOS installation when present or downloads the latest
 stable test build.
+
+!!! info "Testing the LOVE debugger bridge"
+    Automated extension tests intentionally disable every installed extension.
+    To test **Tua: Debug LOVE Project** manually, install Second Local Lua
+    Debugger in the same VS Code build and profile, then launch **Run Extension
+    (All Examples)** or **Run Extension (Debug Server)**. Both development
+    profiles keep installed extensions enabled so the `lua-local` debug adapter
+    is available.
 
 Build a VSIX with the current platform's Tua server binary:
 

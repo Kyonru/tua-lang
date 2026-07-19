@@ -7,6 +7,7 @@
 /examples/love-full/game/player.lua
 /examples/love-full/game/score.lua
 /examples/love-full/game/*.lua.map.json
+/examples/love-full/game/*.lua.map
 /editors/vscode/node_modules/
 /editors/vscode/bin/
 /editors/vscode/*.vsix

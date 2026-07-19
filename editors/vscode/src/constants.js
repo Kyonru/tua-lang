@@ -17,6 +17,7 @@ const COMMANDS = {
   openGeneratedLua: "tua.openGeneratedLua",
   jumpBetweenSourceAndGenerated: "tua.jumpBetweenSourceAndGenerated",
   runLoveProject: "tua.runLoveProject",
+  debugLoveProject: "tua.debugLoveProject",
   restartLoveProject: "tua.restartLoveProject",
   copyQualifiedName: "tua.copyQualifiedName",
   showWorkspaceSymbolsByModule: "tua.showWorkspaceSymbolsByModule",

@@ -36,7 +36,8 @@ extension, documentation site, and bundled example projects.
 - Keep existing Lua modules and gradually adopt `.tua` where stronger tooling
   helps.
 - Build LOVE projects with editor-aware assets, generated-Lua/source-map
-  navigation, and project graphs for modules, signals, ECS, and object pools.
+  navigation, source-mapped Lua debugging, and project graphs for modules,
+  signals, ECS, and object pools.
 - Use one versioned toolchain across the CLI, language server, release VSIXs,
   and documentation.
 
@@ -48,8 +49,8 @@ VSX. Published VSIX packages bundle the matching `tua` server binary for each
 platform, so extension installs do not download a server at activation time.
 
 It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
-generated Lua inspection, project commands for running LOVE, and explorers for
-assets, modules, signals, ECS, and object pools.
+generated Lua inspection, project commands for running or debugging LOVE, and
+explorers for assets, modules, signals, ECS, and object pools.
 
 ## Learn More
 

@@ -163,10 +163,10 @@ path, so `main = "love/boot.tua"` emits both `build/love/boot.lua` and
 : Source extension to discover. The default is `tua`.
 
 `emit_maps`
-: When `true`, `tua build` writes a `*.lua.map.json` sidecar next to each
-generated `.lua` file. These line maps are optional metadata for remapping Lua
-traceback lines back to `.tua` source with `tua traceback`; they are not loaded
-by the game at runtime.
+: When `true`, `tua build` writes `*.lua.map.json` Tua provenance and standard
+`*.lua.map` v3 sidecars next to each generated `.lua` file. They support
+generated-Lua navigation, `tua traceback`, and source-mapped Lua debugging;
+they are not loaded by the game at runtime.
 
 ## Emit
 

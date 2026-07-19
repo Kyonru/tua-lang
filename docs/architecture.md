@@ -251,10 +251,15 @@ The build path is split by responsibility:
 2. Core analysis checks the same sources and dependencies used by editor
    features.
 3. Core lowering returns `LuaEmission`: generated Lua plus source provenance.
-4. The CLI writes Lua, helper runtimes that are actually required, assets, and
-   source maps.
+4. The CLI writes Lua, helper runtimes that are actually required, assets, Tua
+   provenance maps, and standard debugger-compatible source maps.
 5. Runtime traceback mapping consumes compiler provenance instead of guessing
    line offsets from generated text.
+
+The VS Code LOVE debug command consumes those build artifacts rather than
+adding debugger semantics to the compiler or language server. It launches an
+external Lua debug adapter against generated Lua and lets the adapter resolve
+Tua breakpoints and stack frames through the standard maps.
 
 Watch mode keeps a long-lived host while project configuration remains stable.
 File events update the VFS, invalidate affected importers, and rebuild from the

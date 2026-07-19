@@ -90,13 +90,19 @@ its normal mirrored output path.
 - collisions between generated `.lua` and sibling/copied `.lua` files are
   reported as warnings.
 
-When `emit_maps = true`, build also writes `*.lua.map.json` sidecars next to
-generated Lua files. Their line mappings come from compiler lowering provenance,
-including generated default guards, helper runtime imports, classes, runtime
-checks, compound assignments, sprite expansions, static imports, and LuaCATS
-annotation lines. Multiline erased types and non-ASCII source text retain their
-original source-line ownership. Map files are line-based metadata only and are
-not counted as emitted runtime files.
+When `emit_maps = true`, build writes two source-map sidecars next to each
+generated Lua file:
+
+- `*.lua.map.json` is Tua's explicit provenance format used by generated-Lua
+  navigation and `tua traceback`;
+- `*.lua.map` is a standard source map v3 file used by compatible Lua debuggers.
+
+Both derive from compiler lowering provenance, including generated default
+guards, helper runtime imports, classes, runtime checks, compound assignments,
+sprite expansions, static imports, and LuaCATS annotation lines. Multiline
+erased types and non-ASCII source text retain their original source-line
+ownership. Map files are line-based metadata only and are not counted as
+emitted runtime files.
 
 !!! warning "Recovery emission still reports failure"
     Use `--emit-on-error` when you want parseable/lowerable files to emit while

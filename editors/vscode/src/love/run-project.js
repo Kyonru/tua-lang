@@ -441,6 +441,8 @@ function executableFileExists(filename) {
 
 module.exports = {
   LoveProjectTerminal,
+  activeProjectLayout,
+  configuredLoveCommand,
   createLoveProjectTask,
   registerLoveProjectRunner,
   resolveLoveCommand,

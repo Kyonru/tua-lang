@@ -9,7 +9,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use tua_core::{CONFIG_FILE, DEFAULT_CONFIG_TEXT, DEFAULT_MAIN_TEXT};
 
 fn tua() -> Command {
@@ -475,6 +475,22 @@ return {
     assert!(nested_map["lineMappings"]
         .as_array()
         .is_some_and(|mappings| !mappings.is_empty()));
+
+    let debugger_map = fs::read_to_string(temp.path().join("build/systems/player/core.lua.map"))
+        .expect("failed to read debugger source map");
+    let debugger_map: Value =
+        serde_json::from_str(&debugger_map).expect("debugger source map should be JSON");
+
+    assert_eq!(debugger_map["version"], 3);
+    assert_eq!(debugger_map["file"], "core.lua");
+    assert_eq!(debugger_map["sourceRoot"], "../../..");
+    assert_eq!(
+        debugger_map["sources"],
+        json!(["src/systems/player/core.tua"])
+    );
+    assert!(debugger_map["mappings"]
+        .as_str()
+        .is_some_and(|mappings| !mappings.is_empty()));
 }
 
 #[test]
@@ -614,6 +630,7 @@ emit_maps = true
     );
     assert!(!temp.path().join("build/main.lua").exists());
     assert!(!temp.path().join("build/main.lua.map.json").exists());
+    assert!(!temp.path().join("build/main.lua.map").exists());
 }
 
 #[test]
@@ -633,6 +650,11 @@ emit_maps = false
     .expect("failed to write config");
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
     fs::write(temp.path().join("src/main.tua"), "return 1\n").expect("failed to write source");
+    fs::create_dir_all(temp.path().join("build")).expect("failed to create stale output");
+    fs::write(temp.path().join("build/main.lua.map.json"), "{}\n")
+        .expect("failed to write stale Tua source map");
+    fs::write(temp.path().join("build/main.lua.map"), "{}\n")
+        .expect("failed to write stale debugger source map");
 
     let output = tua()
         .arg("build")
@@ -643,6 +665,7 @@ emit_maps = false
     assert!(output.status.success());
     assert!(temp.path().join("build/main.lua").is_file());
     assert!(!temp.path().join("build/main.lua.map.json").exists());
+    assert!(!temp.path().join("build/main.lua.map").exists());
 }
 
 #[test]

@@ -8,7 +8,7 @@ use crate::source::{
     discover_build_files, io_diagnostic, paths_same_location, read_source_file, SourceFile,
     SourceKind,
 };
-use crate::source_map::{source_map_path_for, write_source_map};
+use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
 use tua_core::{
     anim8_runtime_source, baton_runtime_source, brinevector_runtime_source,
     emit_tua_source_with_workspace_artifact, format_diagnostics_for_cli, tuaecs_runtime_source,
@@ -262,11 +262,7 @@ fn build_project_files(
         }
     }
 
-    remove_colliding_outputs(
-        &tua_output_collisions,
-        workspace.config().emit_maps,
-        &mut diagnostics,
-    );
+    remove_colliding_outputs(&tua_output_collisions, &mut diagnostics);
 
     if has_errors(&diagnostics) && !emit_on_error {
         return BuildOutcome {
@@ -322,6 +318,8 @@ fn build_project_files(
                                 ) {
                                     diagnostics.push(diagnostic);
                                 }
+                            } else {
+                                remove_source_maps(&output_path, &mut diagnostics);
                             }
                         }
                         Err(diagnostic) => diagnostics.push(diagnostic),
@@ -602,16 +600,17 @@ pub(crate) fn push_tua_output_collision_diagnostics(
 
 pub(crate) fn remove_colliding_outputs(
     collisions: &BTreeMap<PathBuf, Vec<PathBuf>>,
-    emit_maps: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for output_path in collisions.keys() {
         remove_output_if_exists(output_path, diagnostics);
-
-        if emit_maps {
-            remove_output_if_exists(&source_map_path_for(output_path), diagnostics);
-        }
+        remove_source_maps(output_path, diagnostics);
     }
+}
+
+fn remove_source_maps(output_path: &Path, diagnostics: &mut Vec<Diagnostic>) {
+    remove_output_if_exists(&source_map_path_for(output_path), diagnostics);
+    remove_output_if_exists(&debugger_source_map_path_for(output_path), diagnostics);
 }
 
 fn remove_output_if_exists(path: &Path, diagnostics: &mut Vec<Diagnostic>) {

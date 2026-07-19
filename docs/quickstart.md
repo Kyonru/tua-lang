@@ -75,6 +75,18 @@ stderr into both the task terminal and the `tua` output channel.
 Use **Tua: Restart LOVE Project** after changes. If LOVE is not found, set
 `tua.love.command` to the LOVE executable path in VS Code settings.
 
+To debug instead of only run, install
+[Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode)
+and use **Tua: Debug LOVE Project**. Breakpoints can be placed directly in
+`.tua` files; Tua builds standard source maps while the Lua debugger provides
+stepping, variables, watches, and expression evaluation.
+
+!!! info "The runtime still executes Lua"
+    Debug sessions launch the generated files under `build/`. Tua maps source
+    locations in both directions, so normal mapped stops open `.tua` while
+    **Tua: Open Generated Lua Beside Tua** remains available when you need to
+    inspect the exact runtime code.
+
 ## 4. Use The Editor
 
 Normal VS Code editing is the primary Tua workflow. The extension provides
@@ -85,6 +97,8 @@ These commands are useful immediately:
 
 - **Tua: Open Generated Lua Beside Tua** shows the emitted file for the active
   saved source file.
+- **Tua: Debug LOVE Project** builds and starts a source-mapped Lua debug
+  session for the project.
 - **Tua: Explain Type / Why Is This Any?** traces where the selected value's
   type came from or where static information was lost.
 - **Tua: Select Inlay Hint Mode** switches between full, compact, type-only,

@@ -53,9 +53,10 @@ feature, and it does not overwrite a project-provided module with the same
 name. This helper model is part of Tua's build output, not a replacement VM or
 an always-present runtime.
 
-Lowering preserves source provenance. Source maps and `tua traceback` translate
-generated Lua locations back to Tua source locations where mappings are
-available.
+Lowering preserves source provenance. Tua writes its `*.lua.map.json` format
+for navigation and traceback remapping plus standard `*.lua.map` v3 sidecars
+for compatible Lua debuggers. Both translate generated Lua locations back to
+Tua source where mappings are available.
 
 ## Project Model
 
@@ -218,6 +219,12 @@ type inference. Requests capture a document revision; stale background results
 are cancelled or discarded after newer edits. Compiler facts determine valid
 candidates before deterministic ranking signals reorder completion.
 
+LOVE debugging remains Lua debugging. The extension builds generated Lua,
+prepares a build-output-only debugger bootstrap, and launches the optional
+Second Local Lua Debugger adapter. Tua source maps bind `.tua` breakpoints and
+map stopped stack frames back to source; the external adapter owns execution,
+stepping, variables, watches, and evaluation.
+
 No source content or completion-learning data is sent off-device by default.
 Completion providers are local-only. The model-integration setting is an inert
 policy gate and does not enable a network-backed provider.
@@ -243,7 +250,7 @@ Tua does not provide:
 - a package manager;
 - whole-program optimization or minification;
 - arbitrary execution of project code for semantic discovery;
-- a Lua debugger or runtime profiler;
+- a bundled Lua debugger, VM, or runtime profiler;
 - perfect proof of dynamic keys, metatables, or shape-changing tables;
 - an executable third-party plugin registry;
 - network-required core completion;

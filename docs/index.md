@@ -100,7 +100,7 @@ end
   inlay hints, formatting, generated-Lua inspection, and project explorers.
 - **A practical build toolchain.** `tua check`, `tua build`, and `tua watch`
   check `.tua`, emit `.lua`, copy ordinary Lua and assets, and preserve source
-  information for traceback mapping.
+  information for traceback mapping and Lua debugger integration.
 - **LOVE-aware development.** Built-in LOVE APIs, callbacks, object methods,
   enums, asset paths, sprites, vectors, Signals, state stores, state machines,
   ECS, and object pools receive dedicated checking and editor support.

@@ -350,6 +350,133 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "LOVE task traceback annotations should map emitted Lua lines back to Tua source maps",
     );
 
+    const debuggerBridge = require(path.join(extensionRoot, "src", "love", "debug-project.js"));
+    assert.strictEqual(
+      debuggerBridge.DEBUGGER_EXTENSION_ID,
+      "ismoh-games.second-local-lua-debugger-vscode",
+      "debug LOVE should recommend the maintained debugger fork",
+    );
+    assert.strictEqual(
+      debuggerBridge.findDebuggerExtension({
+        getExtension(id) {
+          return id === "tomblind.local-lua-debugger-vscode" ? { id } : undefined;
+        },
+      }).id,
+      "tomblind.local-lua-debugger-vscode",
+      "debug LOVE should keep the original debugger as a compatibility fallback",
+    );
+    const debugLayout = projectLayout.projectLayoutForWorkspaceRoot(workspace);
+    fs.writeFileSync(path.join(sourceMapDirectory, "main.lua"), "return true\n");
+    fs.writeFileSync(path.join(sourceMapDirectory, "conf.lua"), "function love.conf(t) end\n");
+    fs.writeFileSync(
+      path.join(sourceMapDirectory, "conf.lua.map.json"),
+      `${JSON.stringify({
+        version: 1,
+        generated: "build/conf.lua",
+        source: "src/conf.tua",
+        lineMappings: [{ generatedLine: 1, sourceLine: 1 }],
+      })}\n`,
+    );
+    fs.writeFileSync(
+      path.join(sourceMapDirectory, "conf.lua.map"),
+      `${JSON.stringify({
+        version: 3,
+        file: "conf.lua",
+        sourceRoot: "..",
+        sources: ["src/conf.tua"],
+        names: [],
+        mappings: "AAAA",
+      })}\n`,
+    );
+
+    const debugConfiguration = debuggerBridge.createLoveDebugConfiguration({
+      layout: debugLayout,
+      loveCommand: "/Applications/love.app/Contents/MacOS/love",
+    });
+    assert.deepStrictEqual(
+      debugConfiguration,
+      {
+        type: "lua-local",
+        request: "launch",
+        name: "Debug LOVE Project (Tua)",
+        program: {
+          command: "/Applications/love.app/Contents/MacOS/love",
+          communication: "pipe",
+        },
+        args: [path.join(workspace, "build")],
+        cwd: workspace,
+        scriptRoots: [path.join(workspace, "build")],
+        stepUnmappedLines: false,
+        stopOnEntry: false,
+        scriptFiles: ["build/**/*.lua"],
+      },
+      "debug LOVE should launch the Lua debugger against generated scripts",
+    );
+
+    const debugOutput = debuggerBridge.prepareLoveDebugOutput(sourceMapDirectory);
+    assert.strictEqual(debugOutput.bootstrapPath, path.join(sourceMapDirectory, "conf.lua"));
+    assert(
+      fs.readFileSync(debugOutput.bootstrapPath, "utf8").startsWith(debuggerBridge.DEBUG_BOOTSTRAP),
+      "debug LOVE should bootstrap lldebugger in generated conf.lua only",
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua.map.json"), "utf8"))
+        .lineMappings[0].generatedLine,
+      2,
+      "debug bootstrap should shift Tua navigation mappings",
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua.map"), "utf8")).mappings,
+      ";AAAA",
+      "debug bootstrap should leave its generated line unmapped in standard source maps",
+    );
+    assert.strictEqual(
+      debuggerBridge.hasDebuggerSourceMap(sourceMapDirectory),
+      true,
+      "debug LOVE should detect emitted standard source maps",
+    );
+    debugOutput.restore();
+    assert.strictEqual(
+      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
+      "function love.conf(t) end\n",
+      "debug output restoration should remove the generated bootstrap",
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua.map.json"), "utf8"))
+        .lineMappings[0].generatedLine,
+      1,
+      "debug output restoration should restore Tua navigation mappings",
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(path.join(sourceMapDirectory, "conf.lua.map"), "utf8")).mappings,
+      "AAAA",
+      "debug output restoration should restore standard source maps",
+    );
+
+    const debugResult = await state.commands.get("tua.debugLoveProject")();
+    assert.deepStrictEqual(
+      debugResult,
+      {
+        bootstrapPath: path.join(sourceMapDirectory, "conf.lua"),
+        outputDirectory: sourceMapDirectory,
+        debuggerType: "lua-local",
+      },
+      "debug LOVE should build, prepare generated output, and start the Lua debugger",
+    );
+    assert.strictEqual(state.startedDebugSessions.length, 1);
+    assert.strictEqual(state.startedDebugSessions[0].configuration.type, "lua-local");
+    assert.deepStrictEqual(
+      state.startedDebugSessions[0].configuration.scriptFiles,
+      ["build/**/*.lua"],
+      "debug LOVE should pre-cache generated scripts for Tua breakpoint mapping",
+    );
+    state.fireDebugTermination(state.startedDebugSessions[0]);
+    assert.strictEqual(
+      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
+      "function love.conf(t) end\n",
+      "ending the LOVE debug session should restore generated conf.lua",
+    );
+
     state.setConfiguration("preview.enabled", true);
     fs.mkdirSync(path.join(workspace, "src", "assets"), { recursive: true });
     fs.writeFileSync(path.join(workspace, "src", "assets", "player.png"), Buffer.from([0x89, b("P"), b("N"), b("G")]));
@@ -1261,6 +1388,7 @@ function createMockState(workspace, options = {}) {
   ]);
   const configurationListeners = [];
   const diagnosticCollections = [];
+  const debugTerminationListeners = [];
   const documentChangeListeners = [];
   const documentSaveListeners = [];
   const configurationUpdates = [];
@@ -1273,6 +1401,7 @@ function createMockState(workspace, options = {}) {
   const quickPickCalls = [];
   const executedTasks = [];
   const taskTerminations = [];
+  const startedDebugSessions = [];
   const hoverProviders = [];
   const treeViews = [];
   const webviewPanels = [];
@@ -1487,6 +1616,23 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve();
       },
     },
+    debug: {
+      onDidTerminateDebugSession(listener) {
+        debugTerminationListeners.push(listener);
+        return {
+          dispose() {
+            const index = debugTerminationListeners.indexOf(listener);
+            if (index >= 0) {
+              debugTerminationListeners.splice(index, 1);
+            }
+          },
+        };
+      },
+      startDebugging(folder, configuration) {
+        startedDebugSessions.push({ folder, configuration });
+        return Promise.resolve(true);
+      },
+    },
     env: {
       clipboard: {
         writeText(value) {
@@ -1497,6 +1643,11 @@ function createMockState(workspace, options = {}) {
       openExternal(uri) {
         openedExternals.push(uri);
         return Promise.resolve(true);
+      },
+    },
+    extensions: {
+      getExtension(id) {
+        return options.debuggerInstalled === false ? undefined : { id };
       },
     },
     languages: {
@@ -2079,6 +2230,14 @@ function createMockState(workspace, options = {}) {
     executedCommands,
     executedTasks,
     fileWatchers,
+    fireDebugTermination(session) {
+      for (const listener of debugTerminationListeners) {
+        listener({
+          configuration: session.configuration,
+          type: session.configuration.type,
+        });
+      }
+    },
     informationMessages,
     hoverProviders,
     LanguageClient,
@@ -2086,6 +2245,7 @@ function createMockState(workspace, options = {}) {
     outputLines,
     outputShows,
     quickPickCalls,
+    startedDebugSessions,
     taskTerminations,
     setActiveDocument(document) {
       activeTextEditor = { document };
@@ -2530,6 +2690,7 @@ function assertRegisteredCommands(state) {
     "tua.saveCpuProfile",
     "tua.saveHeapSummary",
     "tua.runLoveProject",
+    "tua.debugLoveProject",
     "tua.restartLoveProject",
     "tua.hover.references",
     "tua.hover.implementations",

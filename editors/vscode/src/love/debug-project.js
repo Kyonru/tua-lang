@@ -1,0 +1,392 @@
+"use strict";
+
+const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const vscode = require("vscode");
+const { COMMANDS } = require("../constants");
+const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
+const { formatError } = require("../shared/errors");
+const { activeProjectLayout, configuredLoveCommand } = require("./run-project");
+
+const DEBUGGER_EXTENSION_ID = "ismoh-games.second-local-lua-debugger-vscode";
+const LEGACY_DEBUGGER_EXTENSION_ID = "tomblind.local-lua-debugger-vscode";
+const DEBUGGER_EXTENSION_IDS = [DEBUGGER_EXTENSION_ID, LEGACY_DEBUGGER_EXTENSION_ID];
+const DEBUGGER_TYPE = "lua-local";
+const DEBUG_BOOTSTRAP =
+  'if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then require("lldebugger").start(); function love.errorhandler(message) error(message, 2) end end\n';
+
+function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
+  const preparedOutputs = new Set();
+  const terminationDisposable = vscode.debug.onDidTerminateDebugSession((session) => {
+    for (const prepared of preparedOutputs) {
+      if (debugSessionTargetsOutput(session, prepared.outputDirectory)) {
+        restorePreparedOutput(preparedOutputs, prepared);
+      }
+    }
+  });
+  const commandDisposable = vscode.commands.registerCommand(COMMANDS.debugLoveProject, async () => {
+    if (!vscode.workspace.isTrusted) {
+      vscode.window.showWarningMessage("Trust this workspace before debugging a LOVE project.");
+      return undefined;
+    }
+
+    const layout = activeProjectLayout();
+    if (!layout) {
+      vscode.window.showWarningMessage("Open a Tua project workspace before debugging LOVE.");
+      return undefined;
+    }
+
+    if (!findDebuggerExtension()) {
+      const install = "Install Second Local Lua Debugger";
+      const choice = await vscode.window.showErrorMessage(
+        "Tua debugging uses the Second Local Lua Debugger extension for Lua execution, stepping, and inspection.",
+        install,
+      );
+      if (choice === install) {
+        await vscode.commands.executeCommand(
+          "workbench.extensions.installExtension",
+          DEBUGGER_EXTENSION_ID,
+        );
+      }
+      return undefined;
+    }
+
+    const tuaCommand = getServerCommand?.() || "tua";
+    appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
+    const buildCode = await runBuildCommand({
+      appendOutputLine,
+      cwd: layout.configDirectory,
+      tuaCommand,
+    });
+    if (buildCode !== 0) {
+      appendOutputLine?.(`[tua] Debug build failed with exit code ${buildCode}.`);
+      vscode.window.showErrorMessage("Tua build failed. Open the Tua output for details.");
+      await vscode.commands.executeCommand(COMMANDS.focusOutput);
+      return undefined;
+    }
+
+    let prepared;
+    try {
+      prepared = prepareLoveDebugOutput(layout.outputDirectory);
+    } catch (error) {
+      appendOutputLine?.(`[tua] Could not prepare LOVE debug output: ${formatError(error)}`);
+      vscode.window.showErrorMessage(`Could not prepare LOVE debug output: ${formatError(error)}`);
+      return undefined;
+    }
+    const pendingOutput = {
+      outputDirectory: layout.outputDirectory,
+      restore: prepared.restore,
+    };
+    preparedOutputs.add(pendingOutput);
+
+    if (!hasDebuggerSourceMap(layout.outputDirectory)) {
+      vscode.window.showWarningMessage(
+        "No Tua debugger source maps were emitted. Enable emit_maps in tua.toml to bind breakpoints in .tua files.",
+      );
+    }
+
+    const folder = vscode.workspace.getWorkspaceFolder(
+      vscode.Uri.file(layout.configDirectory),
+    );
+    const configuration = createLoveDebugConfiguration({
+      layout,
+      loveCommand: configuredLoveCommand(),
+    });
+    let started;
+    try {
+      started = await vscode.debug.startDebugging(folder, configuration);
+    } catch (error) {
+      restorePreparedOutput(preparedOutputs, pendingOutput);
+      vscode.window.showErrorMessage(
+        `Second Local Lua Debugger did not start the LOVE project: ${formatError(error)}`,
+      );
+      return undefined;
+    }
+
+    if (!started) {
+      restorePreparedOutput(preparedOutputs, pendingOutput);
+      vscode.window.showErrorMessage("Second Local Lua Debugger did not start the LOVE project.");
+      return undefined;
+    }
+
+    appendOutputLine?.(`[tua] Debugging LOVE from ${layout.outputDirectory}`);
+    return {
+      bootstrapPath: prepared.bootstrapPath,
+      outputDirectory: layout.outputDirectory,
+      debuggerType: DEBUGGER_TYPE,
+    };
+  });
+
+  return vscode.Disposable.from(commandDisposable, terminationDisposable, {
+    dispose() {
+      for (const prepared of preparedOutputs) {
+        prepared.restore();
+      }
+      preparedOutputs.clear();
+    },
+  });
+}
+
+function findDebuggerExtension(extensions = vscode.extensions) {
+  return DEBUGGER_EXTENSION_IDS.map((id) => extensions?.getExtension(id)).find(Boolean);
+}
+
+function debugSessionTargetsOutput(session, outputDirectory) {
+  const configuration = session?.configuration;
+  const type = session?.type || configuration?.type;
+  if (type !== DEBUGGER_TYPE || !Array.isArray(configuration?.args)) {
+    return false;
+  }
+
+  const expected = path.resolve(outputDirectory);
+  return configuration.args.some(
+    (argument) => typeof argument === "string" && path.resolve(argument) === expected,
+  );
+}
+
+function restorePreparedOutput(preparedOutputs, prepared) {
+  preparedOutputs.delete(prepared);
+  prepared.restore();
+}
+
+function createLoveDebugConfiguration({ layout, loveCommand }) {
+  const scriptGlob = debuggerScriptGlob(layout);
+  const configuration = {
+    type: DEBUGGER_TYPE,
+    request: "launch",
+    name: "Debug LOVE Project (Tua)",
+    program: {
+      command: loveCommand,
+      communication: "pipe",
+    },
+    args: [layout.outputDirectory],
+    cwd: layout.configDirectory,
+    scriptRoots: [layout.outputDirectory],
+    stepUnmappedLines: false,
+    stopOnEntry: false,
+  };
+
+  if (scriptGlob) {
+    configuration.scriptFiles = [scriptGlob];
+  }
+
+  return configuration;
+}
+
+function debuggerScriptGlob(layout) {
+  const relative = path.relative(layout.workspaceRoot, layout.outputDirectory);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return undefined;
+  }
+
+  const directory = relative.split(path.sep).filter(Boolean).join("/");
+  return directory ? `${directory}/**/*.lua` : "**/*.lua";
+}
+
+function prepareLoveDebugOutput(outputDirectory) {
+  const mainPath = path.join(outputDirectory, "main.lua");
+  if (!fs.existsSync(mainPath)) {
+    throw new Error(`generated LOVE entrypoint was not found at ${mainPath}`);
+  }
+
+  const bootstrapPath = path.join(outputDirectory, "conf.lua");
+  const trackedPaths = [
+    bootstrapPath,
+    sourceMapPathForGeneratedPath(bootstrapPath),
+    `${bootstrapPath}.map`,
+  ];
+  const before = snapshotFiles(trackedPaths);
+  const source = fs.existsSync(bootstrapPath) ? fs.readFileSync(bootstrapPath, "utf8") : "";
+  if (!source.startsWith(DEBUG_BOOTSTRAP)) {
+    fs.writeFileSync(bootstrapPath, `${DEBUG_BOOTSTRAP}${source}`);
+    shiftTuaSourceMap(bootstrapPath);
+    shiftDebuggerSourceMap(bootstrapPath);
+  }
+
+  const prepared = snapshotFiles(trackedPaths);
+  let restored = false;
+  return {
+    bootstrapPath,
+    restore() {
+      if (restored) {
+        return;
+      }
+      restored = true;
+      restoreUnchangedFiles(before, prepared);
+    },
+  };
+}
+
+function snapshotFiles(paths) {
+  return new Map(
+    paths.map((filename) => [
+      filename,
+      fs.existsSync(filename) ? fs.readFileSync(filename) : undefined,
+    ]),
+  );
+}
+
+function restoreUnchangedFiles(before, prepared) {
+  for (const [filename, original] of before) {
+    const current = fs.existsSync(filename) ? fs.readFileSync(filename) : undefined;
+    const preparedContents = prepared.get(filename);
+    if (!sameFileContents(current, preparedContents)) {
+      continue;
+    }
+
+    if (original === undefined) {
+      fs.rmSync(filename, { force: true });
+    } else {
+      fs.writeFileSync(filename, original);
+    }
+  }
+}
+
+function sameFileContents(left, right) {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return left.equals(right);
+}
+
+function shiftTuaSourceMap(generatedPath) {
+  const mapPath = sourceMapPathForGeneratedPath(generatedPath);
+  if (!fs.existsSync(mapPath)) {
+    return;
+  }
+
+  const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
+  if (map?.version !== 1 || !Array.isArray(map.lineMappings)) {
+    return;
+  }
+
+  map.lineMappings = map.lineMappings.map((mapping) => ({
+    ...mapping,
+    generatedLine: Number.isInteger(mapping?.generatedLine)
+      ? mapping.generatedLine + 1
+      : mapping?.generatedLine,
+  }));
+  fs.writeFileSync(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+}
+
+function shiftDebuggerSourceMap(generatedPath) {
+  const mapPath = `${generatedPath}.map`;
+  if (!fs.existsSync(mapPath)) {
+    return;
+  }
+
+  const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
+  if (map?.version !== 3 || typeof map.mappings !== "string") {
+    return;
+  }
+
+  map.mappings = `;${map.mappings}`;
+  fs.writeFileSync(mapPath, `${JSON.stringify(map)}\n`);
+}
+
+function hasDebuggerSourceMap(directory) {
+  if (!fs.existsSync(directory)) {
+    return false;
+  }
+
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory() && hasDebuggerSourceMap(entryPath)) {
+      return true;
+    }
+    if (entry.isFile() && entry.name.endsWith(".lua.map")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function runBuildCommand({ appendOutputLine, cwd, tuaCommand }) {
+  appendOutputLine?.(`$ ${quoteCommandArg(tuaCommand)} build`);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+    const settle = (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      flushBufferedLines(stdout, appendOutputLine);
+      flushBufferedLines(stderr, appendOutputLine);
+      resolve(code);
+    };
+    let child;
+
+    try {
+      child = childProcess.spawn(tuaCommand, ["build"], {
+        cwd,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    } catch (error) {
+      appendOutputLine?.(`[tua] ${tuaCommand} failed: ${formatError(error)}`);
+      settle(1);
+      return;
+    }
+
+    child.stdout.on("data", (chunk) => {
+      const result = consumeLines(stdout, chunk, appendOutputLine);
+      stdout = result;
+    });
+    child.stderr.on("data", (chunk) => {
+      const result = consumeLines(stderr, chunk, appendOutputLine);
+      stderr = result;
+    });
+    child.once("error", (error) => {
+      appendOutputLine?.(`[tua] ${tuaCommand} failed: ${formatError(error)}`);
+      settle(1);
+    });
+    child.once("exit", (code, signal) => settle(signal ? 1 : Number.isInteger(code) ? code : 1));
+  });
+}
+
+function consumeLines(buffer, chunk, appendOutputLine) {
+  const normalized = `${buffer}${chunk.toString("utf8")}`
+    .replace(/\r\n/gu, "\n")
+    .replace(/\r/gu, "\n");
+  const lines = normalized.split("\n");
+  const remainder = lines.pop() || "";
+
+  for (const line of lines) {
+    appendOutputLine?.(line);
+  }
+
+  return remainder;
+}
+
+function flushBufferedLines(buffer, appendOutputLine) {
+  if (buffer) {
+    appendOutputLine?.(buffer);
+  }
+}
+
+function quoteCommandArg(value) {
+  if (!/[\s"'\\]/u.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/(["\\])/gu, "\\$1")}"`;
+}
+
+module.exports = {
+  DEBUG_BOOTSTRAP,
+  DEBUGGER_EXTENSION_ID,
+  DEBUGGER_EXTENSION_IDS,
+  createLoveDebugConfiguration,
+  debugSessionTargetsOutput,
+  debuggerScriptGlob,
+  findDebuggerExtension,
+  hasDebuggerSourceMap,
+  prepareLoveDebugOutput,
+  registerLoveProjectDebugger,
+};

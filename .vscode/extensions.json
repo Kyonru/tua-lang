@@ -2,7 +2,8 @@
   "recommendations": [
     "rust-lang.rust-analyzer",
     "vadimcn.vscode-lldb",
-    "tamasfe.even-better-toml"
+    "tamasfe.even-better-toml",
+    "ismoh-games.second-local-lua-debugger-vscode"
   ],
   "unwantedRecommendations": []
 }
