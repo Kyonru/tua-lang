@@ -6,7 +6,24 @@ use tua_cli::{
     CommandName, HELP,
 };
 
+const CLI_STACK_SIZE: usize = 8 * 1024 * 1024;
+
 fn main() -> ExitCode {
+    let command = std::thread::Builder::new()
+        .name("tua-main".to_owned())
+        .stack_size(CLI_STACK_SIZE)
+        .spawn(run_main);
+
+    match command {
+        Ok(command) => command.join().unwrap_or(ExitCode::FAILURE),
+        Err(error) => {
+            eprintln!("error: failed to start tua command thread: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_main() -> ExitCode {
     match parse_args(env::args().skip(1)) {
         Ok(CliAction::Help) => {
             print!("{HELP}");

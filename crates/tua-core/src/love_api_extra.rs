@@ -1,5 +1,5 @@
 // Generated from love2d-community/love-api 11.5 modules/enums and modules/types.
-// Source revision: 4b2d89510eabd320791c4a8157e6e6656c34ec09
+// Source revision: 447486c14b7af6ffb610c47d9b800703b4e628f4
 // Source data: https://github.com/love2d-community/love-api
 // Regenerate with: make generate-love-api LOVE_API_ROOT=/path/to/love-api
 

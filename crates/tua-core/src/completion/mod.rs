@@ -875,16 +875,17 @@ fn complete_parsed_source_with_context_and_ranking_options(
             active_parameter,
             prefix,
             position,
-        } => complete_string_argument_values(
-            parsed,
-            source,
-            environment,
-            &callee_parts,
-            active_parameter,
-            prefix.as_str(),
-            position,
-            ranking.project_data,
-        ),
+        } => {
+            let string_context = StringArgumentCompletionContext {
+                callee_parts: &callee_parts,
+                active_parameter,
+                prefix: prefix.as_str(),
+                position,
+                project_data: ranking.project_data,
+            };
+
+            complete_string_argument_values(parsed, source, environment, string_context)
+        }
         CompletionContext::RequirePath { prefix } => {
             complete_require_paths(&parsed.path, prefix.as_str())
         }
@@ -1848,6 +1849,15 @@ struct FieldCompletionContext<'a> {
     separator_span: crate::SourceSpan,
 }
 
+#[derive(Clone, Copy)]
+struct StringArgumentCompletionContext<'a> {
+    callee_parts: &'a [String],
+    active_parameter: usize,
+    prefix: &'a str,
+    position: SourcePosition,
+    project_data: CompletionProjectData<'a>,
+}
+
 fn complete_fields(
     parsed: &ParsedSource,
     source: &str,
@@ -1926,13 +1936,16 @@ fn complete_string_argument_values(
     parsed: &ParsedSource,
     source: &str,
     environment: &TypeEnvironment,
-    callee_parts: &[String],
-    active_parameter: usize,
-    prefix: &str,
-    position: SourcePosition,
-    project_data: CompletionProjectData<'_>,
+    context: StringArgumentCompletionContext<'_>,
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
+    let StringArgumentCompletionContext {
+        callee_parts,
+        active_parameter,
+        prefix,
+        position,
+        project_data,
+    } = context;
     let semantic = SemanticModel::new(parsed, environment);
 
     if let Some(items) = input::string_value_completion_items(parsed, position) {

@@ -437,23 +437,23 @@ impl LintVisitor<'_> {
         rhs: &Expression,
     ) {
         match binop {
-            ast::BinOp::And(_) => {
-                if boolean_literal(lhs) == Some(false) || boolean_literal(rhs) == Some(false) {
-                    self.diagnostics.push(impossible_boolean_diagnostic(
-                        &self.parsed.path,
-                        node_position(binop),
-                        false,
-                    ));
-                }
+            ast::BinOp::And(_)
+                if boolean_literal(lhs) == Some(false) || boolean_literal(rhs) == Some(false) =>
+            {
+                self.diagnostics.push(impossible_boolean_diagnostic(
+                    &self.parsed.path,
+                    node_position(binop),
+                    false,
+                ));
             }
-            ast::BinOp::Or(_) => {
-                if boolean_literal(lhs) == Some(true) || boolean_literal(rhs) == Some(true) {
-                    self.diagnostics.push(impossible_boolean_diagnostic(
-                        &self.parsed.path,
-                        node_position(binop),
-                        true,
-                    ));
-                }
+            ast::BinOp::Or(_)
+                if boolean_literal(lhs) == Some(true) || boolean_literal(rhs) == Some(true) =>
+            {
+                self.diagnostics.push(impossible_boolean_diagnostic(
+                    &self.parsed.path,
+                    node_position(binop),
+                    true,
+                ));
             }
             _ => {}
         }
@@ -2283,17 +2283,16 @@ impl<'a> FormattingAnalyzer<'a> {
                         );
                     }
                 }
-                b')' | b']' => {
+                b')' | b']'
                     if previous_code_index(bytes, mask, index)
-                        .is_some_and(|previous| previous + 1 < index)
-                    {
-                        self.push(
-                            DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                            line_number,
-                            index + 1,
-                            format!("remove whitespace before `{}`", bytes[index] as char),
-                        );
-                    }
+                        .is_some_and(|previous| previous + 1 < index) =>
+                {
+                    self.push(
+                        DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
+                        line_number,
+                        index + 1,
+                        format!("remove whitespace before `{}`", bytes[index] as char),
+                    );
                 }
                 _ => {}
             }

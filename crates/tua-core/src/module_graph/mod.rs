@@ -42,6 +42,16 @@ pub struct ModuleGraphOptions {
     pub require_path_separator: ModulePathSeparator,
 }
 
+#[derive(Clone, Copy)]
+struct ModuleResolutionContext<'a> {
+    indexed_paths: &'a BTreeSet<PathBuf>,
+    search_roots: &'a [PathBuf],
+    source_roots: &'a [PathBuf],
+    output_roots: &'a [PathBuf],
+    extension: &'a str,
+    separator: ModulePathSeparator,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModuleGraphModule {
     pub path: PathBuf,
@@ -107,6 +117,14 @@ impl ModuleGraph {
             .map(|input| normalize_path(input.path))
             .collect::<BTreeSet<_>>();
         let search_roots = search_roots(&inputs, &options);
+        let resolution_context = ModuleResolutionContext {
+            indexed_paths: &indexed_paths,
+            search_roots: &search_roots,
+            source_roots: &options.source_roots,
+            output_roots: &options.output_roots,
+            extension: &options.extension,
+            separator: options.require_path_separator,
+        };
 
         for input in &inputs {
             let path = normalize_path(input.path);
@@ -122,16 +140,8 @@ impl ModuleGraph {
             };
 
             if let Some(parsed) = input.parsed {
-                module.require_edges = require_edges_for_source(
-                    &path,
-                    &parsed.source,
-                    &indexed_paths,
-                    &search_roots,
-                    &options.source_roots,
-                    &options.output_roots,
-                    &options.extension,
-                    options.require_path_separator,
-                );
+                module.require_edges =
+                    require_edges_for_source(&path, &parsed.source, resolution_context);
             }
 
             if let Some(exports) = input.exports {
@@ -375,41 +385,19 @@ impl ModuleGraph {
 fn require_edges_for_source(
     source_path: &Path,
     source: &str,
-    indexed_paths: &BTreeSet<PathBuf>,
-    search_roots: &[PathBuf],
-    source_roots: &[PathBuf],
-    output_roots: &[PathBuf],
-    extension: &str,
-    separator: ModulePathSeparator,
+    context: ModuleResolutionContext<'_>,
 ) -> Vec<RequireGraphEdge> {
     module_specifier_literals(source)
         .into_iter()
         .map(|literal| {
             let resolution = match literal.kind {
                 ModuleSpecifierKind::Require => {
-                    let candidates = existing_candidates(
-                        &literal.module,
-                        indexed_paths,
-                        search_roots,
-                        source_roots,
-                        output_roots,
-                        extension,
-                        separator,
-                    );
+                    let candidates = existing_candidates(&literal.module, context);
 
-                    resolution_for_candidates(candidates, search_roots.to_vec())
+                    resolution_for_candidates(candidates, context.search_roots.to_vec())
                 }
                 ModuleSpecifierKind::Import => {
-                    match imported_module_candidates(
-                        source_path,
-                        &literal.module,
-                        indexed_paths,
-                        search_roots,
-                        source_roots,
-                        output_roots,
-                        extension,
-                        separator,
-                    ) {
+                    match imported_module_candidates(source_path, &literal.module, context) {
                         Ok((candidates, search_roots)) => {
                             resolution_for_candidates(candidates, search_roots)
                         }
@@ -450,26 +438,15 @@ fn resolution_for_candidates(
 fn imported_module_candidates(
     source_path: &Path,
     specifier: &str,
-    indexed_paths: &BTreeSet<PathBuf>,
-    search_roots: &[PathBuf],
-    source_roots: &[PathBuf],
-    output_roots: &[PathBuf],
-    extension: &str,
-    separator: ModulePathSeparator,
+    context: ModuleResolutionContext<'_>,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
     if is_child_relative_import_specifier(specifier) {
         let search_roots = source_path
             .parent()
             .map(|path| vec![normalize_path(path)])
             .unwrap_or_default();
-        let candidates = child_relative_import_candidates(
-            source_path,
-            specifier,
-            indexed_paths,
-            search_roots,
-            extension,
-            separator,
-        )?;
+        let candidates =
+            child_relative_import_candidates(source_path, specifier, search_roots, context)?;
 
         return Ok(candidates);
     }
@@ -488,26 +465,16 @@ fn imported_module_candidates(
         );
     }
 
-    let candidates = existing_candidates(
-        specifier,
-        indexed_paths,
-        search_roots,
-        source_roots,
-        output_roots,
-        extension,
-        separator,
-    );
+    let candidates = existing_candidates(specifier, context);
 
-    Ok((candidates, search_roots.to_vec()))
+    Ok((candidates, context.search_roots.to_vec()))
 }
 
 fn child_relative_import_candidates(
     source_path: &Path,
     specifier: &str,
-    indexed_paths: &BTreeSet<PathBuf>,
     search_roots: Vec<PathBuf>,
-    extension: &str,
-    separator: ModulePathSeparator,
+    context: ModuleResolutionContext<'_>,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
     let parent = source_path
         .parent()
@@ -515,9 +482,10 @@ fn child_relative_import_candidates(
     let base = normalize_path(parent.join(specifier));
 
     if let Some(file_extension) = base.extension().and_then(|extension| extension.to_str()) {
-        if file_extension != "lua" && file_extension != extension {
+        if file_extension != "lua" && file_extension != context.extension {
             return Err(format!(
-                "import specifier must be extensionless or end in `.{extension}`/`.lua`"
+                "import specifier must be extensionless or end in `.{}`/`.lua`",
+                context.extension
             ));
         }
     }
@@ -526,14 +494,14 @@ fn child_relative_import_candidates(
     let import_candidates = if base.extension().is_some() {
         vec![base]
     } else {
-        import_module_candidates(&base, &module_extensions(extension))
+        import_module_candidates(&base, &module_extensions(context.extension))
     };
 
     for candidate in import_candidates {
         let candidate = normalize_path(candidate);
 
-        if module_candidate_exists(&candidate, indexed_paths)
-            && module_name_for_any_root(&search_roots, &candidate, separator).is_some()
+        if module_candidate_exists(&candidate, context.indexed_paths)
+            && module_name_for_any_root(&search_roots, &candidate, context.separator).is_some()
             && !candidates.contains(&candidate)
         {
             candidates.push(candidate);
@@ -585,30 +553,22 @@ fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
     candidates
 }
 
-fn existing_candidates(
-    module: &str,
-    indexed_paths: &BTreeSet<PathBuf>,
-    search_roots: &[PathBuf],
-    source_roots: &[PathBuf],
-    output_roots: &[PathBuf],
-    extension: &str,
-    separator: ModulePathSeparator,
-) -> Vec<PathBuf> {
-    let relative = module_relative_path(module, separator);
-    let extensions = module_extensions(extension);
+fn existing_candidates(module: &str, context: ModuleResolutionContext<'_>) -> Vec<PathBuf> {
+    let relative = module_relative_path(module, context.separator);
+    let extensions = module_extensions(context.extension);
     let mut candidates = Vec::new();
 
-    for root in search_roots {
+    for root in context.search_roots {
         for candidate in module_candidates(root, &relative, &extensions) {
             let candidate = normalize_path(candidate);
 
-            if module_candidate_exists(&candidate, indexed_paths)
+            if module_candidate_exists(&candidate, context.indexed_paths)
                 && !is_shadowed_output_candidate(
                     &candidate,
-                    indexed_paths,
-                    source_roots,
-                    output_roots,
-                    extension,
+                    context.indexed_paths,
+                    context.source_roots,
+                    context.output_roots,
+                    context.extension,
                 )
                 && !candidates.contains(&candidate)
             {

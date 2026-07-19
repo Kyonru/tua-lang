@@ -51,6 +51,7 @@ jobs:
         run: make diff-check
 
   platform-tests:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40

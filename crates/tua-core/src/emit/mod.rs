@@ -745,10 +745,8 @@ fn pop_comments(
 fn declared_function_name(line: &str) -> Option<String> {
     let rest = if let Some(rest) = line.strip_prefix("local function ") {
         rest.trim_start()
-    } else if let Some(rest) = line.strip_prefix("function ") {
-        rest.trim_start()
     } else {
-        return None;
+        line.strip_prefix("function ")?.trim_start()
     };
 
     let token = rest
@@ -775,12 +773,9 @@ fn declared_local_names(line: &str) -> Vec<String> {
 
 fn extract_identifier_name(input: &str) -> Option<String> {
     let mut iter = input.chars().peekable();
+    let first = iter.peek()?;
 
-    if let Some(first) = iter.peek() {
-        if !is_identifier_start(*first) {
-            return None;
-        }
-    } else {
+    if !is_identifier_start(*first) {
         return None;
     }
 

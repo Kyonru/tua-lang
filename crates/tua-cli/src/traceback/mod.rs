@@ -121,7 +121,7 @@ fn lookup_source_location<'a>(
         })
         .collect::<Vec<_>>();
 
-    matches.sort_by(|left, right| right.0.cmp(&left.0));
+    matches.sort_by_key(|item| std::cmp::Reverse(item.0));
 
     if matches.is_empty() {
         return None;

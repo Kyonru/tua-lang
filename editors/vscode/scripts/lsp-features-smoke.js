@@ -24,6 +24,10 @@ let completed = false;
 let stderr = "";
 const pending = new Map();
 const pendingMethods = new Map();
+const requestedTimeoutMs = Number(process.env.TUA_LSP_FEATURES_SMOKE_TIMEOUT_MS || 90000);
+const timeoutMs = Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+  ? requestedTimeoutMs
+  : 90000;
 
 const sources = fs
   .readdirSync(src)
@@ -73,11 +77,11 @@ const legacy = {
 const timeout = setTimeout(() => {
   child.kill();
   fail(
-    `timed out waiting for features LSP smoke responses; pending=${[
+    `timed out after ${timeoutMs}ms waiting for features LSP smoke responses; pending=${[
       ...pendingMethods.values(),
     ].join(",")}`,
   );
-}, 30000);
+}, timeoutMs);
 
 child.stderr.on("data", (chunk) => {
   stderr += chunk.toString("utf8");
