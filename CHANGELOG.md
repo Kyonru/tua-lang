@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- An explicit zero-setup `store({...})` helper with inferred state reads,
+  typed replacement and mutation, whole-store and keyed subscriptions,
+  idempotent unsubscribe functions, and an on-demand `tuastore.lua` runtime.
 - A zero-setup `stateMachine({...})` helper backed by lua-state-machine, with
   derived state/event unions, generated event methods, callback and value
   completion, and an on-demand bundled `tuastatemachine.lua` runtime.

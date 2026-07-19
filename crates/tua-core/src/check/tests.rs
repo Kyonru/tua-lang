@@ -212,6 +212,92 @@ local result: string = objectPool({})
 }
 
 #[test]
+fn accepts_typed_store_state_updates_and_subscriptions() {
+    check_tua_source(
+        "src/store.tua",
+        r#"
+type GameState = { score: number, paused: boolean }
+
+local game = store({ score = 0, paused = false })
+local state: GameState = game:get()
+
+game:update(function(state: GameState)
+  state.score += 1
+end)
+game:set({ score = 10, paused = true })
+
+local unsubscribe = game:subscribe(function(state: GameState, previous: GameState)
+  print(state.score, previous.score)
+end)
+local stopScore = game:watch("score", function(value: number, previous: number, state: GameState)
+  print(value, previous, state.paused)
+end)
+
+unsubscribe()
+stopScore()
+"#,
+    )
+    .expect("stores should preserve their state type across methods and listeners");
+}
+
+#[test]
+fn accepts_optional_store_watch_values_as_nilable() {
+    check_tua_source(
+        "src/store.tua",
+        r#"
+type UiState = { selected?: number }
+local initial: UiState = {}
+local ui = store(initial)
+
+ui:watch("selected", function(value: number | nil, previous: number | nil, state: UiState)
+  print(value, previous, state.selected)
+end)
+"#,
+    )
+    .expect("optional state fields should produce nilable watcher values");
+}
+
+#[test]
+fn rejects_invalid_typed_store_state_and_watch_keys() {
+    let diagnostics = check_tua_source(
+        "src/store.tua",
+        r#"
+local game = store({ score = 0, paused = false })
+game:set({ score = "high", paused = false })
+game:watch("missing", function(value) print(value) end)
+"#,
+    )
+    .expect_err("stores should reject incompatible replacement state and unknown watch keys");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic
+            .message
+            .contains("expected { paused: boolean, score: number }, found { paused: boolean, score: string }")),
+        "unexpected diagnostics: {diagnostics:?}");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("missing")),
+        "unexpected diagnostics: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn preserves_an_explicit_store_function_binding() {
+    check_tua_source(
+        "src/custom_store.tua",
+        r#"local function store(initial: any): string
+  return "custom"
+end
+
+local result: string = store({})
+"#,
+    )
+    .expect("an explicit store function should override the built-in helper");
+}
+
+#[test]
 fn accepts_typed_builtin_state_machine_events_and_states() {
     check_tua_source(
         "src/state_machine.tua",

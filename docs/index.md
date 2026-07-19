@@ -86,7 +86,7 @@ end
 
 !!! info "Runtime model"
     Ordinary typed code has no Tua runtime dependency. Opt-in helpers such as
-    vectors, sprite sheets, state machines, ECS, and object pools can emit
+    vectors, sprite sheets, stores, state machines, ECS, and object pools can emit
     their required vendored Lua modules into the build output when used.
 
 ## What Tua Gives You
@@ -101,8 +101,8 @@ end
   check `.tua`, emit `.lua`, copy ordinary Lua and assets, and preserve source
   information for traceback mapping.
 - **LOVE-aware development.** Built-in LOVE APIs, callbacks, object methods,
-  enums, asset paths, sprites, vectors, Signals, state machines, ECS, and object
-  pools receive dedicated checking and editor support.
+  enums, asset paths, sprites, vectors, Signals, state stores, state machines,
+  ECS, and object pools receive dedicated checking and editor support.
 - **Normal Lua interoperability.** Use `require(...)`, keep `.lua` and `.tua`
   files in one project, and describe Lua module APIs with supported LuaDoc
   annotations.
@@ -122,8 +122,9 @@ distributed with the rest of the project.
 - [Lua Interoperability](lua-interop.md) covers mixed `.lua` and `.tua`
   projects, module exports, and LuaDoc annotations.
 - [Examples](examples.md) explains the bundled feature tour and LOVE projects.
-- [State Machines](state-machines.md), [Entity Component Systems](ecs.md), and
-  [Object Pooling](object-pooling.md) document Tua's opt-in game helpers.
+- [State Stores](stores.md), [State Machines](state-machines.md),
+  [Entity Component Systems](ecs.md), and [Object Pooling](object-pooling.md)
+  document Tua's opt-in game helpers.
 
 ### Configure And Use The Toolchain
 

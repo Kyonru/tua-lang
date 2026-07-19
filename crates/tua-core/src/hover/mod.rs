@@ -16,7 +16,7 @@ use crate::types::{
     TypedFunctionOverload,
 };
 use crate::{
-    definition_parsed_source, ecs, object_pool, parse_tua_source, state_machine, Definition,
+    definition_parsed_source, ecs, object_pool, parse_tua_source, state_machine, store, Definition,
     DefinitionKind, Diagnostic, ParameterAnnotation, ParsedSource, SourcePosition, SourceSpan,
 };
 
@@ -128,6 +128,13 @@ impl<'a> HoverResolver<'a> {
                                 &current_part.text,
                             )
                         })
+                        .or_else(|| {
+                            store::typed_member(
+                                self.environment,
+                                &receiver_type,
+                                &current_part.text,
+                            )
+                        })
                 {
                     return Some(self.function_hover(&function, position, current_part.span));
                 }
@@ -205,6 +212,11 @@ impl<'a> HoverResolver<'a> {
                 ty,
                 current_part.span,
             ) {
+                return Some(hover);
+            }
+            if let Some(hover) =
+                store_local_hover(self.environment, &current_part.text, ty, current_part.span)
+            {
                 return Some(hover);
             }
 
@@ -327,6 +339,9 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
         if let Some(hover) = state_machine_local_hover(self.environment, name, &ty, hover_span) {
+            return Some(hover);
+        }
+        if let Some(hover) = store_local_hover(self.environment, name, &ty, hover_span) {
             return Some(hover);
         }
 
@@ -713,6 +728,15 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
         }
     }
 
+    if store::store_state_type(environment, ty).is_some() {
+        if let Some(item) = lua::type_field_items(store::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
     if let Type::Alias(name) = ty {
         if let Some(item) = lua::type_field_items(name, field)
             .into_iter()
@@ -770,6 +794,24 @@ fn state_machine_local_hover(
         contents: format!("local {name}: {}", state_machine::TYPE_NAME),
         span: Some(span),
         documentation: Some(format!("States: `{states}`. Events: `{events}`.")),
+        context: Vec::new(),
+    })
+}
+
+fn store_local_hover(
+    environment: &TypeEnvironment,
+    name: &str,
+    ty: &Type,
+    span: SourceSpan,
+) -> Option<Hover> {
+    let state_type = store::store_state_type(environment, ty)?;
+    let documentation =
+        (state_type != Type::Any).then(|| format!("Holds runtime state of type `{state_type}`."));
+
+    Some(Hover {
+        contents: format!("local {name}: {}", store::TYPE_NAME),
+        span: Some(span),
+        documentation,
         context: Vec::new(),
     })
 }

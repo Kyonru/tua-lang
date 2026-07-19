@@ -75,6 +75,22 @@ fn classifies_object_pool_as_a_builtin_function() {
 }
 
 #[test]
+fn classifies_store_as_a_builtin_function() {
+    let source = "local game = store({ score = 0 })\n";
+    let tokens =
+        semantic_tokens_tua_source("src/store.tua", source).expect("store source should tokenize");
+
+    assert_token_in_source(&tokens, source, "store", SemanticTokenKind::Function, false);
+    assert_token_modifier(
+        &tokens,
+        source,
+        "store",
+        SemanticTokenKind::Function,
+        SemanticTokenModifier::DefaultLibrary,
+    );
+}
+
+#[test]
 fn classifies_each_member_in_an_access_chain() {
     let source = r#"local object = {}
 local value = object.branch.leaf.position.x

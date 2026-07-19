@@ -26,6 +26,7 @@ open class Entity extends BaseEntity {
 }
 
 local events = signal()
+local game = store({ score = 0 })
 events:on("player.hit", function(player: Player, damage: number)
   player.hp -= damage
 end)

@@ -45,6 +45,7 @@ modules:
 - the built-in `ecs` module emits a `tuaecs` require when used;
 - `objectPool({...})` emits a `tuaobjectpool` require when used;
 - `stateMachine({...})` emits a `tuastatemachine` require when used.
+- `store({...})` emits a `tuastore` require when used.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same
@@ -157,9 +158,15 @@ loader calls provide diagnostics, completion, hover metadata, definition, and
 references without executing project code.
 
 Domain helpers lower to ordinary Lua-compatible APIs. `spriteSheet({...})`,
-`signal()`, `stateMachine({...})`, and the built-in `ecs` module are first-class
-compiler domains rather than executable third-party plugins. Experimental
-editor presentation is explicitly preview-gated.
+`signal()`, `stateMachine({...})`, `store({...})`, and the built-in `ecs` module
+are first-class compiler domains rather than executable third-party plugins.
+Experimental editor presentation is explicitly preview-gated.
+
+Static `store({...})` calls derive a structural state type. The type is reused
+by reads, replacements, mutators, whole-store subscriptions, keyed watcher
+overloads, completion, hover, signature help, checking, and module exports.
+Stores are explicit runtime instances and have no built-in LOVE filesystem or
+serialization behavior.
 
 Static state-machine configuration derives exact state and event literal
 unions, event methods, callback names, and state/event argument completion.

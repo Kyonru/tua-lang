@@ -151,7 +151,7 @@
       "patterns": [
         {
           "name": "support.function.tua",
-          "match": "\\b(?:assert|collectgarbage|dofile|error|getfenv|getmetatable|ipairs|load|loadfile|loadstring|module|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|import|select|setfenv|setmetatable|tonumber|tostring|type|unpack|xpcall|vec2|signal|objectPool|spriteSheet)\\b"
+          "match": "\\b(?:assert|collectgarbage|dofile|error|getfenv|getmetatable|ipairs|load|loadfile|loadstring|module|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|import|select|setfenv|setmetatable|tonumber|tostring|type|unpack|xpcall|vec2|signal|store|objectPool|spriteSheet)\\b"
         },
         {
           "name": "support.variable.namespace.tua",

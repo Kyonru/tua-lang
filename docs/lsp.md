@@ -79,8 +79,8 @@ Completion combines syntax context with local and project semantics. It covers:
 - `require(...)` and static `import(...)` paths, module members, and
   auto-import candidates;
 - LOVE globals, object methods, enums, callbacks, and asset paths;
-- table configuration for sprites, state machines, ECS, object pools, Signals,
-  and other Tua helpers;
+- table configuration for sprites, state machines, stores, ECS, object pools,
+  Signals, and other Tua helpers;
 - statement snippets for `if`/`then`/`end`, loops, `repeat`/`until`, `do`/`end`,
   functions, classes, and common game-helper workflows.
 
@@ -98,6 +98,10 @@ Static `stateMachine({...})` calls share one derived model across completion,
 hover, signature help, checking, and inlay hints. See
 [State Machines](state-machines.md) for the generated event and callback
 surface.
+
+Static `store({...})` calls likewise share one inferred state model across
+completion, hover, signature help, checking, and module exports. Keyed `watch`
+signatures are derived from that model. See [State Stores](stores.md).
 
 !!! info "Experimental completion stays local"
     **Tua: Toggle Experimental Completions** controls contextual sequence

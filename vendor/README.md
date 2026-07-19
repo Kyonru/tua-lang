@@ -18,5 +18,7 @@ generated project output.
 - `runtime/tuastatemachine.lua` is the lua-state-machine-compatible runtime
   used by `stateMachine({...})`. It is adapted from Kyle Conroy's MIT-licensed
   lua-state-machine implementation and retains the upstream license header.
+- `runtime/tuastore.lua` is Tua's explicit typed runtime-state store used by
+  `store({...})`. It has no LOVE or filesystem dependency.
 
 Vendored files should keep their upstream license headers intact.

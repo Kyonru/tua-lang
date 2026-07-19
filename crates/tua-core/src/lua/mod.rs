@@ -1,6 +1,6 @@
 use crate::{
     asset, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
-    state_machine, vector,
+    state_machine, store, vector,
 };
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
@@ -50,6 +50,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .chain(SIGNAL_ITEMS.iter())
         .chain(OBJECT_POOL_ITEMS.iter())
         .chain(STATE_MACHINE_ITEMS.iter())
+        .chain(STORE_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -162,6 +163,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .chain(SIGNAL_ITEMS.iter())
             .chain(OBJECT_POOL_ITEMS.iter())
             .chain(STATE_MACHINE_ITEMS.iter())
+            .chain(STORE_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -254,6 +256,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         signal::TYPE_NAME => Some(SIGNAL_BUS_ITEMS),
         object_pool::TYPE_NAME => Some(OBJECT_POOL_METHOD_ITEMS),
         state_machine::TYPE_NAME => Some(STATE_MACHINE_METHOD_ITEMS),
+        store::TYPE_NAME => Some(STORE_METHOD_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
         "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
         "World" => Some(WORLD_ITEMS),
@@ -269,9 +272,11 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(SIGNAL_ITEMS.iter())
         .chain(OBJECT_POOL_ITEMS.iter())
         .chain(STATE_MACHINE_ITEMS.iter())
+        .chain(STORE_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .chain(OBJECT_POOL_METHOD_ITEMS.iter())
         .chain(STATE_MACHINE_METHOD_ITEMS.iter())
+        .chain(STORE_METHOD_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
         .chain(IMAGE_ITEMS.iter())
@@ -795,6 +800,7 @@ const VECTOR_ITEMS: &[LuaItem] = &[vector_item()];
 const SIGNAL_ITEMS: &[LuaItem] = &[signal_item()];
 const OBJECT_POOL_ITEMS: &[LuaItem] = &[object_pool_item()];
 const STATE_MACHINE_ITEMS: &[LuaItem] = &[state_machine_item()];
+const STORE_ITEMS: &[LuaItem] = &[store_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -830,6 +836,15 @@ const fn state_machine_item() -> LuaItem {
         kind: LuaItemKind::Function,
         detail: state_machine::detail(),
         documentation: state_machine::documentation(),
+    }
+}
+
+const fn store_item() -> LuaItem {
+    LuaItem {
+        label: store::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: store::detail(),
+        documentation: store::documentation(),
     }
 }
 
@@ -989,6 +1004,39 @@ const OBJECT_POOL_METHOD_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function ObjectPool:capacity(): number",
         "Return the total number of objects owned by the pool.",
+    ),
+];
+
+const STORE_METHOD_ITEMS: &[LuaItem] = &[
+    item(
+        "get",
+        LuaItemKind::Function,
+        "function Store:get(): StoreState",
+        "Return the current state table.",
+    ),
+    item(
+        "set",
+        LuaItemKind::Function,
+        "function Store:set(next: StoreState): StoreState",
+        "Replace the state table, notify subscribers, and return the new state.",
+    ),
+    item(
+        "update",
+        LuaItemKind::Function,
+        "function Store:update(mutator: function): StoreState",
+        "Mutate the current state, notify subscribers, and return it.",
+    ),
+    item(
+        "subscribe",
+        LuaItemKind::Function,
+        "function Store:subscribe(listener: function): function",
+        "Run a listener after every set or update and return an idempotent unsubscribe function.",
+    ),
+    item(
+        "watch",
+        LuaItemKind::Function,
+        "function Store:watch(key: string, listener: function): function",
+        "Watch one top-level state field and return an idempotent unsubscribe function.",
     ),
 ];
 

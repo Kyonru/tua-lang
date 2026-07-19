@@ -17,7 +17,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, love_conf, object_pool, signal, sprite, state_machine, vector};
+use crate::{asset, ecs, love_conf, object_pool, signal, sprite, state_machine, store, vector};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -1058,6 +1058,12 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             state_machine::workflow_snippet(),
         ),
         (
+            store::CONSTRUCTOR_NAME,
+            None,
+            "Tua typed state store helper",
+            store::workflow_snippet(),
+        ),
+        (
             "ecs component",
             None,
             "Tua ECS component and world workflow",
@@ -1138,6 +1144,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
         .chain(signal::builtin_type_names().iter().copied())
         .chain(object_pool::builtin_type_names().iter().copied())
         .chain(state_machine::builtin_type_names().iter().copied())
+        .chain(store::builtin_type_names().iter().copied())
         .chain(
             ecs::builtin_type_names()
                 .iter()
@@ -1843,6 +1850,7 @@ fn complete_fields(
         let documentation = ecs::typed_member(environment, &receiver_type, &name)
             .or_else(|| object_pool::typed_member(environment, &receiver_type, &name))
             .or_else(|| state_machine::typed_member(environment, &receiver_type, &name))
+            .or_else(|| store::typed_member(environment, &receiver_type, &name))
             .and_then(|function| function.documentation);
 
         completions.insert(

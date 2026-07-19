@@ -111,6 +111,10 @@ make build-features
   statically derived state and event unions, event methods, callback names,
   state/event string suggestions, hover and signature help, and on-demand
   `tuastatemachine.lua` build output.
+- `src/store.tua` covers the explicit `store({...})` helper: inferred state
+  fields, typed reads and updates, whole-store subscriptions, keyed watcher
+  signatures, idempotent unsubscribe functions, and on-demand `tuastore.lua`
+  build output.
 - `src/assets/` contains placeholder files used by static asset validation,
   asset-path completion, and asset metadata hovers.
 - `src/main.tua` ties the feature modules together while keeping ordinary

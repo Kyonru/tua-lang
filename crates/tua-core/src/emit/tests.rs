@@ -856,6 +856,49 @@ local bullets = objectPool({ create = function() return {} end })
 }
 
 #[test]
+fn snapshot_lowers_builtin_store_constructor_to_bundled_runtime() {
+    let emitted = emit_tua_source(
+        "src/store.tua",
+        r#"
+local game = store({ score = 0, paused = false })
+game:update(function(state)
+  state.score += 1
+end)
+"#,
+    )
+    .expect("store constructor calls should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local __tua_store = require("tuastore")
+local game = __tua_store({ score = 0, paused = false })
+game:update(function(state)
+  state.score = state.score + 1
+end)
+"#
+    );
+}
+
+#[test]
+fn snapshot_preserves_an_explicit_store_binding() {
+    let emitted = emit_tua_source(
+        "src/store.tua",
+        r#"
+local store = require("project_store")
+local game = store({ score = 0 })
+"#,
+    )
+    .expect("explicit store bindings should emit unchanged");
+
+    assert_eq!(
+        emitted,
+        r#"local store = require("project_store")
+local game = store({ score = 0 })
+"#
+    );
+}
+
+#[test]
 fn snapshot_lowers_builtin_state_machine_constructor_to_bundled_runtime() {
     let emitted = emit_tua_source(
         "src/state_machine.tua",

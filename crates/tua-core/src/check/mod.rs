@@ -30,7 +30,7 @@ use crate::types::{
     build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
     FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{asset, love_callback, lua, object_pool, signal, sprite, state_machine, vector};
+use crate::{asset, love_callback, lua, object_pool, signal, sprite, state_machine, store, vector};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -1161,6 +1161,10 @@ impl<'a> Checker<'a> {
                     return vec![ty];
                 }
 
+                if let Some(ty) = self.store_call_return_type(function_call) {
+                    return vec![ty];
+                }
+
                 if let Some(ty) = self.constructor_call_return_type(function_call) {
                     return vec![ty];
                 }
@@ -1229,6 +1233,26 @@ impl<'a> Checker<'a> {
         }
 
         state_machine::machine_type_from_call(function_call)
+    }
+
+    fn store_call_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+        let parts = field_chain_before_first_call(function_call)?;
+        if parts.len() != 1 || !store::is_constructor(&parts[0]) {
+            return None;
+        }
+        if self.environment.local(&parts[0]).is_some()
+            || self.environment.function(&parts[0]).is_some()
+        {
+            return None;
+        }
+
+        let arguments = call_arguments(function_call)?;
+        let initial = match arguments.first()? {
+            CallArgument::Expression(expression) => self.infer_expression(expression)?,
+            CallArgument::Inferred(ty) => ty.clone(),
+        };
+
+        Some(store::store_type_from_initial(&initial))
     }
 
     fn record_setmetatable_call(&mut self, function_call: &FunctionCall) {
@@ -1388,10 +1412,20 @@ impl<'a> Checker<'a> {
                     &state_machine::constructor_typed_function(),
                 ));
             }
+
+            if store::is_constructor(root) {
+                return Some(Callable::from_typed_function(
+                    &store::constructor_typed_function(),
+                ));
+            }
         }
 
         if !fields.is_empty() {
             if let Some(function) = self.signal_bus_method_call_target(&parts) {
+                return Some(Callable::from_typed_function(&function));
+            }
+
+            if let Some(function) = self.store_method_call_target(&parts) {
                 return Some(Callable::from_typed_function(&function));
             }
 
@@ -1442,6 +1476,14 @@ impl<'a> Checker<'a> {
         let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
 
         signal_typed_method_for_receiver(self.environment, &receiver_type, method)
+    }
+
+    fn store_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
+        let method = parts.last()?;
+        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
+        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+
+        store::typed_member(self.environment, &receiver_type, method)
     }
 
     fn constructor_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {

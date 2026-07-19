@@ -404,6 +404,35 @@ bullets:release(
 }
 
 #[test]
+fn returns_typed_store_constructor_and_keyed_watch_signatures() {
+    let constructor =
+        signature_at("local game = store(\n", "store(").expect("store should have help");
+    let source = r#"local game = store({ score = 0, paused = false })
+game:watch(
+"#;
+    let watch = signature_at(source, "game:watch(").expect("Store:watch should have help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function store(initial: StoreState): Store"
+    );
+    assert!(
+        watch
+            .signatures
+            .iter()
+            .any(|signature| signature.label.contains("key: \"score\"")
+                && signature.label.contains("value: number")),
+        "unexpected signatures: {:?}",
+        watch.signatures
+    );
+    assert!(watch
+        .signatures
+        .iter()
+        .any(|signature| signature.label.contains("key: \"paused\"")
+            && signature.label.contains("value: boolean")));
+}
+
+#[test]
 fn returns_typed_builtin_state_machine_constructor_and_event_signatures() {
     let constructor = signature_at("local light = stateMachine(\n", "stateMachine(")
         .expect("stateMachine should have signature help");

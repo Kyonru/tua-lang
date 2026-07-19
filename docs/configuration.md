@@ -283,6 +283,14 @@ An explicit binding such as `local ecs = require("project_ecs")` overrides the
 built-in runtime for that file. See [Entity Component Systems](ecs.md) for the
 runtime model and guidance on when ECS is appropriate.
 
+## State Store Support
+
+`store({...})` is available without configuration. A source file that uses it
+emits a `require("tuastore")`, and the build copies the bundled runtime only
+when required. There is no global store setting: state ownership, persistence,
+save formats, and migrations belong to each explicit store and project. See
+[State Stores](stores.md) for the API and LOVE filesystem adapter pattern.
+
 ## Object Pool Support
 
 `objectPool({...})` is available without configuration. A source file that

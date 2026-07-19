@@ -1148,6 +1148,49 @@ bullets:release(bullet)
 }
 
 #[test]
+fn hovers_typed_store_constructor_state_and_methods() {
+    let source = r#"local game = store({ score = 0, paused = false })
+local state = game:get()
+game:update(function(state)
+  state.score += 1
+end)
+"#;
+    let constructor = hover_tua_source("src/store.tua", source, position_at(source, "store"))
+        .expect("hover should not fail")
+        .expect("store constructor should hover");
+    let game = hover_tua_source("src/store.tua", source, position_at(source, "game ="))
+        .expect("hover should not fail")
+        .expect("Store local should hover");
+    let state = hover_tua_source("src/store.tua", source, position_at(source, "state ="))
+        .expect("hover should not fail")
+        .expect("Store state should hover");
+    let update = hover_tua_source("src/store.tua", source, position_at(source, "update"))
+        .expect("hover should not fail")
+        .expect("Store update should hover");
+
+    assert_eq!(
+        constructor.contents,
+        "function store(initial: StoreState): Store"
+    );
+    assert_eq!(game.contents, "local game: Store");
+    assert_eq!(
+        game.documentation.as_deref(),
+        Some("Holds runtime state of type `{ paused: boolean, score: number }`.")
+    );
+    assert_eq!(
+        state.contents,
+        "local state: { paused: boolean, score: number }"
+    );
+    assert!(
+        update.contents.contains(
+            "function Store:update(mutator: (state: { paused: boolean, score: number }) -> nil)"
+        ),
+        "unexpected update hover: {}",
+        update.contents
+    );
+}
+
+#[test]
 fn hovers_typed_builtin_state_machine_constructor_local_and_event() {
     let source = r#"local light = stateMachine({
   initial = "green",

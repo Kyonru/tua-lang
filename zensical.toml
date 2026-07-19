@@ -23,6 +23,7 @@ nav = [
     { "Overview" = "language.md" },
     { "Toolchain Reference" = "specification.md" },
     { "Lua Interop" = "lua-interop.md" },
+    { "State Stores" = "stores.md" },
     { "State Machines" = "state-machines.md" },
     { "Entity Component Systems" = "ecs.md" },
     { "Object Pooling" = "object-pooling.md" },

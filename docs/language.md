@@ -73,6 +73,8 @@ forcing the whole project into a strict type system.
   guidance, callback snippets, diagnostics, and fixes.
 - [Signals](#signals): typed event names, payloads, navigation, and the Signal
   Graph.
+- [State stores](#state-stores): explicit shared state with inferred reads,
+  updates, and subscriptions.
 - [State machines](#state-machines): configured state/event unions, generated
   event methods, and callback suggestions.
 - [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
@@ -326,6 +328,8 @@ local light = __tua_state_machine({
     { name = "warn", from = "green", to = "yellow" },
   },
 })
+local __tua_store = require("tuastore")
+local game = __tua_store({ score = 0, paused = false })
 
 local hero = { name = "Ada", hp = 10 }
 
@@ -339,9 +343,9 @@ events:emit("player.hit", hero, 4)
 events:emit("game.paused", "menu")
 ```
 
-When generated Lua needs `brinevector`, `tuasignal`, `tuastatemachine`, or
-`tuaobjectpool`, `tua build` writes the bundled runtime file into the output
-directory unless the project already provides one.
+When generated Lua needs `brinevector`, `tuasignal`, `tuastatemachine`,
+`tuastore`, or `tuaobjectpool`, `tua build` writes the bundled runtime file
+into the output directory unless the project already provides one.
 
 ### Signals
 
@@ -361,6 +365,16 @@ registering a listener.
 `Tua: Show Signal Graph` visualizes those indexed events across files, filters
 by bus/file/listener/emitter, shows conflicting schemas, and can create a typed
 listener or no-op declaration from known payloads.
+
+### State Stores
+
+`store({...})` derives a state shape from its initial table. `get` returns that
+shape, `set` validates full replacement state, `update` validates a mutator,
+and `subscribe` receives current and previous state. `watch` derives one
+signature per top-level field so keys and listener value types stay connected.
+The helper creates explicit instances rather than an ambient global and lowers
+to the bundled `tuastore.lua` runtime. See [State Stores](stores.md) for module
+sharing, shallow change detection, and LOVE persistence adapters.
 
 ### State Machines
 

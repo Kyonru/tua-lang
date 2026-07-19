@@ -18,7 +18,9 @@ use crate::parser::{
     TableFieldType as ParsedTableFieldType, TuaType,
 };
 use crate::source_text::function_name_table_field;
-use crate::{asset, lua, object_pool, sprite, state_machine, vector, Diagnostic, DiagnosticCode};
+use crate::{
+    asset, lua, object_pool, sprite, state_machine, store, vector, Diagnostic, DiagnosticCode,
+};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
@@ -323,6 +325,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            store::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -388,6 +395,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         aliases.entry(name).or_insert(ty);
     }
     for (name, ty) in state_machine::builtin_aliases() {
+        aliases.entry(name).or_insert(ty);
+    }
+    for (name, ty) in store::builtin_aliases() {
         aliases.entry(name).or_insert(ty);
     }
     for (name, ty) in builtin_aliases {
@@ -3057,6 +3067,27 @@ fn infer_function_call_return_types(
             return vec![pool];
         }
 
+        if store::is_constructor(name)
+            && !locals.contains_key(name)
+            && !function_types.contains_key(name)
+        {
+            let store = first_parenthesized_call_argument(function_call)
+                .and_then(|initial| {
+                    infer_expression_type(
+                        parsed,
+                        initial,
+                        aliases,
+                        locals,
+                        function_types,
+                        current_function,
+                    )
+                })
+                .map(|initial| store::store_type_from_initial(&initial))
+                .unwrap_or_else(|| Type::alias(store::TYPE_NAME));
+
+            return vec![store];
+        }
+
         let function_type = function_types
             .get(name)
             .or_else(|| locals.get(name))
@@ -3073,6 +3104,9 @@ fn infer_function_call_return_types(
             .or_else(|| {
                 state_machine::is_constructor(name)
                     .then(|| Type::Function(state_machine::constructor_type()))
+            })
+            .or_else(|| {
+                store::is_constructor(name).then(|| Type::Function(store::constructor_type()))
             });
 
         return function_type

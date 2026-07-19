@@ -1,0 +1,34 @@
+-- Feature: explicit typed shared state without an ambient global.
+-- The initial table defines completion and checking for every Store method.
+type GameState = {
+  score: number,
+  paused: boolean,
+  playerName: string,
+}
+
+local game = store({
+  score = 0,
+  paused = false,
+  playerName = "Ada",
+})
+
+-- Feature: keyed watchers derive the key and callback value types.
+local stopScore = game:watch(
+  "score",
+  function(score: number, previous: number, state: GameState)
+    print("score", previous, score, state.playerName)
+  end
+)
+
+-- Feature: update keeps one state table and notifies after the mutator returns.
+game:update(function(state: GameState)
+  state.score += 10
+end)
+
+local state: GameState = game:get()
+stopScore()
+
+return {
+  game = game,
+  score = state.score,
+}

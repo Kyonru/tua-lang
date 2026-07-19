@@ -22,7 +22,7 @@ use crate::types::{
     TypeEnvironment, TypedFunction,
 };
 use crate::{
-    ecs, object_pool, signal, sprite, state_machine, vector, ParsedLanguage, ParsedSource,
+    ecs, object_pool, signal, sprite, state_machine, store, vector, ParsedLanguage, ParsedSource,
     SourcePosition, SourceSpan, TypedParameter,
 };
 
@@ -183,6 +183,21 @@ impl<'a> SemanticModel<'a> {
             return vec![pool];
         }
 
+        if parts.len() == 1
+            && store::is_constructor(&parts[0])
+            && self.environment.local(&parts[0]).is_none()
+            && self.environment.function(&parts[0]).is_none()
+        {
+            let store = first_parenthesized_call_argument(function_call)
+                .and_then(|initial| {
+                    self.type_of_expression_return_at_depth(initial, position, 0, 1)
+                })
+                .map(|initial| store::store_type_from_initial(&initial))
+                .unwrap_or_else(|| Type::alias(store::TYPE_NAME));
+
+            return vec![store];
+        }
+
         self.return_types_for_call_parts(&parts, position)
     }
 
@@ -226,6 +241,10 @@ impl<'a> SemanticModel<'a> {
                 return state_machine::constructor_type()
                     .return_types_or_any()
                     .to_vec();
+            }
+
+            if store::is_constructor(root) {
+                return store::constructor_type().return_types_or_any().to_vec();
             }
 
             if let Some(returns) = self
@@ -317,6 +336,10 @@ impl<'a> SemanticModel<'a> {
                 return Some(state_machine::constructor_typed_function());
             }
 
+            if store::is_constructor(root) {
+                return Some(store::constructor_typed_function());
+            }
+
             if let Some(function) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_function(self.environment, &ty))
@@ -364,6 +387,10 @@ impl<'a> SemanticModel<'a> {
             if let Some(function) =
                 state_machine::typed_member(self.environment, &receiver_type, method)
             {
+                return Some(function);
+            }
+
+            if let Some(function) = store::typed_member(self.environment, &receiver_type, method) {
                 return Some(function);
             }
 
@@ -2067,6 +2094,15 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
 
     if state_machine::type_is_state_machine(environment, ty) {
         if let Some(item) = lua::type_field_items(state_machine::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
+    if store::store_state_type(environment, ty).is_some() {
+        if let Some(item) = lua::type_field_items(store::TYPE_NAME, field)
             .into_iter()
             .find(|item| item.label == field)
         {

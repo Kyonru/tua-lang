@@ -275,7 +275,7 @@ Use this map when deciding where a change belongs:
 | Revisioned inputs, cached products, recovery, and public queries | `analysis` |
 | Completion, hover, navigation, symbols, refactors, and editor data | Corresponding `tua-core` feature module, exposed through `analysis` |
 | Lowering, helper selection, generated Lua, and provenance | `emit` |
-| LOVE, assets, sprites, Signals, ECS, pools, and vectors | Shared domain modules and analysis queries |
+| LOVE, assets, sprites, Signals, stores, ECS, pools, and vectors | Shared domain modules and analysis queries |
 
 Domain support follows the same architecture as language support. LOVE and Lua
 catalogs contribute typed facts; asset and gameplay helpers contribute indexed

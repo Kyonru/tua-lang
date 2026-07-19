@@ -428,6 +428,84 @@ bullets:
 }
 
 #[test]
+fn completes_builtin_store_methods_and_inferred_state_fields() {
+    let constructor_source = "local game = sto\n";
+    let constructor_completions = complete_tua_source(
+        "src/main.tua",
+        constructor_source,
+        position_after(constructor_source, "sto"),
+    )
+    .expect("store constructor completion should succeed");
+    let source = r#"
+local game = store({ score = 0, paused = false })
+game:
+"#;
+    let methods = complete_tua_source("src/main.tua", source, position_after(source, "game:"))
+        .expect("Store method completion should succeed");
+    let state_source = source.replace("game:\n", "local state = game:get()\nstate.\n");
+    let state_fields = complete_tua_source(
+        "src/main.tua",
+        &state_source,
+        position_after(&state_source, "state."),
+    )
+    .expect("Store state-field completion should succeed");
+
+    assert!(labels(&constructor_completions).contains(&"store".to_owned()));
+    let method_labels = labels(&methods);
+    for expected in ["get", "set", "update", "subscribe", "watch"] {
+        assert!(
+            method_labels.contains(&expected.to_owned()),
+            "missing {expected}"
+        );
+    }
+    let watch = methods
+        .iter()
+        .find(|completion| completion.label == "watch")
+        .expect("watch should complete");
+    assert!(watch
+        .documentation
+        .as_deref()
+        .is_some_and(|documentation| documentation.contains("top-level state field")));
+    let state_labels = labels(&state_fields);
+    assert!(state_labels.contains(&"score".to_owned()));
+    assert!(state_labels.contains(&"paused".to_owned()));
+}
+
+#[test]
+fn preserves_typed_store_state_across_required_modules() {
+    let root = temp_project_dir("required_store_completion");
+    let src = root.join("src");
+
+    fs::create_dir_all(&src).expect("test dirs should be created");
+    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
+    fs::write(
+        src.join("game_state.tua"),
+        "local game = store({ score = 0, paused = false })\nreturn game\n",
+    )
+    .expect("store module should be written");
+
+    let main_path = src.join("main.tua");
+    let source = r#"local game = require("game_state")
+local state = game:get()
+state.
+"#;
+    let fields = complete_tua_source(&main_path, source, position_after(source, "state."))
+        .expect("required Store state completion should succeed");
+    let field_labels = labels(&fields);
+
+    assert!(
+        field_labels.contains(&"score".to_owned()),
+        "{field_labels:?}"
+    );
+    assert!(
+        field_labels.contains(&"paused".to_owned()),
+        "{field_labels:?}"
+    );
+
+    fs::remove_dir_all(root).expect("test dir should be removed");
+}
+
+#[test]
 fn completes_typed_state_machine_events_callbacks_and_values() {
     let options_source = r#"local light = stateMachine({
   ini
