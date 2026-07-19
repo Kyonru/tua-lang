@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- A zero-setup Baton-backed `input({...})` helper with derived control and pair
+  names, LOVE input-source completion and validation, name-dependent return
+  signatures, active-device typing, and an on-demand bundled `baton.lua`
+  runtime.
 - An explicit zero-setup `store({...})` helper with inferred state reads,
   typed replacement and mutation, whole-store and keyed subscriptions,
   idempotent unsubscribe functions, and an on-demand `tuastore.lua` runtime.

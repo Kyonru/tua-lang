@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::ecs;
+use crate::input;
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
 use crate::sprite;
 use crate::store;
@@ -484,6 +485,9 @@ fn builtin_type(name: &str) -> Option<Type> {
         vector::TYPE_NAME => Some(vector::vec2_type()),
         crate::signal::TYPE_NAME => Some(crate::signal::signal_bus_type()),
         name if store::builtin_type_names().contains(&name) => store::builtin_aliases()
+            .into_iter()
+            .find_map(|(alias, ty)| (alias == name).then_some(ty)),
+        name if input::builtin_type_names().contains(&name) => input::builtin_aliases()
             .into_iter()
             .find_map(|(alias, ty)| (alias == name).then_some(ty)),
         name if sprite::builtin_type_names().contains(&name) => sprite::builtin_aliases()

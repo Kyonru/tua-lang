@@ -155,6 +155,7 @@ language server without rewriting `tua.toml`.
 | `TL5005` | One SignalBus event is used with conflicting payload schemas. | Signal analysis. |
 | `TL5006` | A LOVE callback name is likely misspelled or its declared signature is incompatible with LOVE. | LOVE callback analysis; severity depends on the condition. |
 | `TL5007` | A directly visible object-pool acquisition has no later release or pool clear in the same file. | Object-pool analysis; conservative warning. |
+| `TL5008` | An `input({...})` declaration has an invalid Baton source, pair, control reference, duplicate name, or deadzone. | Baton input analysis. |
 
 ## Enable Optional Diagnostics
 

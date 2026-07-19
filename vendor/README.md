@@ -20,5 +20,8 @@ generated project output.
   lua-state-machine implementation and retains the upstream license header.
 - `runtime/tuastore.lua` is Tua's explicit typed runtime-state store used by
   `store({...})`. It has no LOVE or filesystem dependency.
+- `runtime/baton.lua` is Andrew Minnich's MIT-licensed Baton v1.0.2 runtime used
+  by `input({...})`. Tua retains Baton's API and only adds static typing,
+  completion, validation, and require-driven build integration.
 
 Vendored files should keep their upstream license headers intact.

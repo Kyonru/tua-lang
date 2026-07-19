@@ -111,6 +111,10 @@ make build-features
   statically derived state and event unions, event methods, callback names,
   state/event string suggestions, hover and signature help, and on-demand
   `tuastatemachine.lua` build output.
+- `src/input.tua` covers the built-in Baton-backed `input({...})` helper:
+  LOVE key, scancode, mouse, gamepad-axis, button, and hat sources; statically
+  derived control and pair names; name-aware scalar or x/y return signatures;
+  active-device typing; and on-demand `baton.lua` build output.
 - `src/store.tua` covers the explicit `store({...})` helper: inferred state
   fields, typed reads and updates, whole-store subscriptions, keyed watcher
   signatures, idempotent unsubscribe functions, and on-demand `tuastore.lua`

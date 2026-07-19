@@ -39,6 +39,7 @@ flowchart LR
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
+| Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Check exact compiler and toolchain behavior | [Language and Toolchain Reference](specification.md) |
 
 ## From Tua To Lua

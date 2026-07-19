@@ -17,7 +17,9 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, love_conf, object_pool, signal, sprite, state_machine, store, vector};
+use crate::{
+    asset, ecs, input, love_conf, object_pool, signal, sprite, state_machine, store, vector,
+};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -1064,6 +1066,12 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             store::workflow_snippet(),
         ),
         (
+            input::CONSTRUCTOR_NAME,
+            None,
+            "Tua Baton input helper",
+            input::workflow_snippet(),
+        ),
+        (
             "ecs component",
             None,
             "Tua ECS component and world workflow",
@@ -1145,6 +1153,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
         .chain(object_pool::builtin_type_names().iter().copied())
         .chain(state_machine::builtin_type_names().iter().copied())
         .chain(store::builtin_type_names().iter().copied())
+        .chain(input::builtin_type_names().iter().copied())
         .chain(
             ecs::builtin_type_names()
                 .iter()
@@ -1538,6 +1547,27 @@ fn complete_domain_config_items(
         );
     }
 
+    if let Some(items) = input::config_completion_items(parsed, position) {
+        return Some(
+            items
+                .into_iter()
+                .filter(|item| completion_text_matches(&item.label, prefix))
+                .map(|item| Completion {
+                    label: item.label,
+                    kind: CompletionKind::Field,
+                    detail: Some(item.detail),
+                    documentation: Some(item.documentation),
+                    insert_text: Some(item.insert_text),
+                    filter_text: None,
+                    is_snippet: true,
+                    module_path: None,
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+                .collect(),
+        );
+    }
+
     let context = sprite::config_context_at(parsed, position)?;
 
     Some(
@@ -1851,6 +1881,7 @@ fn complete_fields(
             .or_else(|| object_pool::typed_member(environment, &receiver_type, &name))
             .or_else(|| state_machine::typed_member(environment, &receiver_type, &name))
             .or_else(|| store::typed_member(environment, &receiver_type, &name))
+            .or_else(|| input::typed_member(environment, &receiver_type, &name))
             .and_then(|function| function.documentation);
 
         completions.insert(
@@ -1903,6 +1934,25 @@ fn complete_string_argument_values(
 ) -> Vec<Completion> {
     let _profile = profile::span("analysis.completion.string_argument");
     let semantic = SemanticModel::new(parsed, environment);
+
+    if let Some(items) = input::string_value_completion_items(parsed, position) {
+        return items
+            .into_iter()
+            .filter(|item| completion_text_matches(&item.label, prefix))
+            .map(|item| Completion {
+                label: item.label,
+                kind: CompletionKind::Value,
+                detail: Some(item.detail),
+                documentation: Some(item.documentation),
+                insert_text: Some(item.insert_text),
+                filter_text: None,
+                is_snippet: false,
+                module_path: None,
+                source_module: None,
+                additional_text_edits: Vec::new(),
+            })
+            .collect();
+    }
 
     if let Some(items) = state_machine::string_value_completion_items(parsed, position) {
         return items
@@ -1975,6 +2025,30 @@ fn complete_string_argument_values(
                         detail: Some(item.detail),
                         documentation: Some(item.documentation),
                         insert_text: None,
+                        filter_text: None,
+                        is_snippet: false,
+                        module_path: None,
+                        source_module: None,
+                        additional_text_edits: Vec::new(),
+                    })
+                    .collect();
+            }
+
+            if let Some(items) = input::method_string_completion_items(
+                environment,
+                &receiver_type,
+                method,
+                active_parameter,
+            ) {
+                return items
+                    .into_iter()
+                    .filter(|item| completion_text_matches(&item.label, prefix))
+                    .map(|item| Completion {
+                        label: item.label,
+                        kind: CompletionKind::Value,
+                        detail: Some(item.detail),
+                        documentation: Some(item.documentation),
+                        insert_text: Some(item.insert_text),
                         filter_text: None,
                         is_snippet: false,
                         module_path: None,

@@ -1,5 +1,5 @@
 use crate::{
-    asset, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
+    asset, input, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
     state_machine, store, vector,
 };
 
@@ -51,6 +51,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .chain(OBJECT_POOL_ITEMS.iter())
         .chain(STATE_MACHINE_ITEMS.iter())
         .chain(STORE_ITEMS.iter())
+        .chain(INPUT_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -164,6 +165,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .chain(OBJECT_POOL_ITEMS.iter())
             .chain(STATE_MACHINE_ITEMS.iter())
             .chain(STORE_ITEMS.iter())
+            .chain(INPUT_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -257,6 +259,7 @@ fn items_for_type(type_name: &str) -> Option<&'static [LuaItem]> {
         object_pool::TYPE_NAME => Some(OBJECT_POOL_METHOD_ITEMS),
         state_machine::TYPE_NAME => Some(STATE_MACHINE_METHOD_ITEMS),
         store::TYPE_NAME => Some(STORE_METHOD_ITEMS),
+        input::TYPE_NAME => Some(INPUT_METHOD_ITEMS),
         "Source" => Some(SOURCE_ITEMS),
         "SpriteBatch" => Some(SPRITE_BATCH_ITEMS),
         "World" => Some(WORLD_ITEMS),
@@ -273,10 +276,12 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(OBJECT_POOL_ITEMS.iter())
         .chain(STATE_MACHINE_ITEMS.iter())
         .chain(STORE_ITEMS.iter())
+        .chain(INPUT_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .chain(OBJECT_POOL_METHOD_ITEMS.iter())
         .chain(STATE_MACHINE_METHOD_ITEMS.iter())
         .chain(STORE_METHOD_ITEMS.iter())
+        .chain(INPUT_METHOD_ITEMS.iter())
         .chain(CANVAS_ITEMS.iter())
         .chain(FONT_ITEMS.iter())
         .chain(IMAGE_ITEMS.iter())
@@ -801,6 +806,7 @@ const SIGNAL_ITEMS: &[LuaItem] = &[signal_item()];
 const OBJECT_POOL_ITEMS: &[LuaItem] = &[object_pool_item()];
 const STATE_MACHINE_ITEMS: &[LuaItem] = &[state_machine_item()];
 const STORE_ITEMS: &[LuaItem] = &[store_item()];
+const INPUT_ITEMS: &[LuaItem] = &[input_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -845,6 +851,15 @@ const fn store_item() -> LuaItem {
         kind: LuaItemKind::Function,
         detail: store::detail(),
         documentation: store::documentation(),
+    }
+}
+
+const fn input_item() -> LuaItem {
+    LuaItem {
+        label: input::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: input::detail(),
+        documentation: input::documentation(),
     }
 }
 
@@ -1037,6 +1052,51 @@ const STORE_METHOD_ITEMS: &[LuaItem] = &[
         LuaItemKind::Function,
         "function Store:watch(key: string, listener: function): function",
         "Watch one top-level state field and return an idempotent unsubscribe function.",
+    ),
+];
+
+const INPUT_METHOD_ITEMS: &[LuaItem] = &[
+    item(
+        "update",
+        LuaItemKind::Function,
+        "function Input:update(): nil",
+        "Poll all configured Baton sources and update control and pair state.",
+    ),
+    item(
+        "get",
+        LuaItemKind::Function,
+        "function Input:get(name: string): number, number | nil",
+        "Return a control value or directional pair values after applying the deadzone.",
+    ),
+    item(
+        "getRaw",
+        LuaItemKind::Function,
+        "function Input:getRaw(name: string): number, number | nil",
+        "Return a control value or directional pair values before applying the deadzone.",
+    ),
+    item(
+        "down",
+        LuaItemKind::Function,
+        "function Input:down(name: string): boolean",
+        "Return whether the selected control or pair is currently held down.",
+    ),
+    item(
+        "pressed",
+        LuaItemKind::Function,
+        "function Input:pressed(name: string): boolean",
+        "Return whether the selected control or pair was pressed this frame.",
+    ),
+    item(
+        "released",
+        LuaItemKind::Function,
+        "function Input:released(name: string): boolean",
+        "Return whether the selected control or pair was released this frame.",
+    ),
+    item(
+        "getActiveDevice",
+        LuaItemKind::Function,
+        "function Input:getActiveDevice(): \"kbm\" | \"joy\" | \"none\"",
+        "Return the most recently active Baton device category.",
     ),
 ];
 

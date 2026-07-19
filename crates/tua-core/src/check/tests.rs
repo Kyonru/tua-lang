@@ -2777,6 +2777,63 @@ end
     assert_single_mismatch(&diagnostics, "expected number, found nil");
 }
 
+#[test]
+fn checks_typed_baton_input_controls_pairs_and_devices() {
+    check_tua_source(
+        "main.tua",
+        r#"local controls = input({
+  controls = {
+    left = { "key:left", "axis:leftx-" },
+    right = { "key:right", "axis:leftx+" },
+    up = { "key:up" },
+    down = { "key:down" },
+    confirm = { "key:return", "button:a" },
+  },
+  pairs = {
+    move = { "left", "right", "up", "down" },
+  },
+})
+
+controls:update()
+local confirm: number = controls:get("confirm")
+local x, y = controls:get("move")
+local typed_x: number = x
+local typed_y: number = y
+local pressed: boolean = controls:pressed("confirm")
+local device: "kbm" | "joy" | "none" = controls:getActiveDevice()
+"#,
+    )
+    .expect("static input config should derive valid method types");
+}
+
+#[test]
+fn rejects_unknown_static_input_names_and_invalid_config() {
+    let unknown = check_tua_source(
+        "main.tua",
+        r#"local controls = input({ controls = { confirm = { "key:return" } } })
+controls:pressed("cancel")
+"#,
+    )
+    .expect_err("unknown input name should fail");
+    assert!(unknown.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("\"cancel\"")
+    }));
+
+    let invalid = check_tua_source(
+        "main.tua",
+        r#"local controls = input({
+  controls = { left = { "keyboard:left" } },
+  pairs = { move = { "left", "right", "up" } },
+})
+"#,
+    )
+    .expect_err("invalid input config should fail");
+    assert!(invalid
+        .iter()
+        .all(|diagnostic| { diagnostic.code == Some(DiagnosticCode::DOMAIN_INPUT_CONFIG) }));
+}
+
 fn assert_single_mismatch(diagnostics: &[Diagnostic], message: &str) {
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));

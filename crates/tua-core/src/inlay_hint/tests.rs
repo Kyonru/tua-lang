@@ -102,6 +102,40 @@ local current = light.current
 }
 
 #[test]
+fn hints_baton_input_and_name_dependent_values() {
+    let source = r#"local controls = input({
+  controls = {
+    left = { "key:left" },
+    right = { "key:right" },
+    up = { "key:up" },
+    down = { "key:down" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+local x, y = controls:get("move")
+local left = controls:get("left")
+local device = controls:getActiveDevice()
+"#;
+    let hints = inlay_hints_tua_source("src/input.tua", source).expect("input source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![
+            ": Input",
+            ": number",
+            ": number",
+            ": number",
+            ": \"kbm\" | \"joy\" | \"none\"",
+        ]
+    );
+}
+
+#[test]
 fn hints_anonymous_function_valued_table_fields() {
     let source = r#"
 local lookupObject = {

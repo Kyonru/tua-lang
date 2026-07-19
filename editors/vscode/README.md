@@ -97,6 +97,8 @@ From there you can:
 - LOVE API completion with overloads, documentation, and parameter details.
 - Asset-path understanding for both Tua helpers and native LOVE constructors
   that load files.
+- Baton-backed `input({...})` completion and checking for LOVE keys,
+  scancodes, mouse buttons, gamepad axes, buttons, hats, controls, and pairs.
 - `Tua: Run LOVE Project` and `Tua: Restart LOVE Project` as cancellable VS Code
   tasks. Runtime `print(...)`, stdout, and stderr are mirrored into both the
   task terminal and the `tua` output channel, and emitted Lua traceback lines

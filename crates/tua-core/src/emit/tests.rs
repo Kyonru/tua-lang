@@ -1342,3 +1342,40 @@ return { score = score, heal = heal }
     assert_eq!(exports.lowering, LoweringKind::Annotation);
     assert_eq!(exports.source_span.start.line, 11);
 }
+
+#[test]
+fn lowers_input_calls_to_bundled_baton_constructor() {
+    let emitted = emit_tua_source(
+        "src/input.tua",
+        r#"local controls = input({
+  controls = { confirm = { "key:return", "button:a" } },
+})
+return controls
+"#,
+    )
+    .expect("input constructor should emit");
+
+    assert!(emitted.starts_with("local __tua_input = require(\"baton\").new\n"));
+    assert!(emitted.contains("local controls = __tua_input({"));
+    assert!(!emitted.contains("controls = input({"));
+}
+
+#[test]
+fn preserves_explicit_input_bindings() {
+    let emitted = emit_tua_source(
+        "src/input.tua",
+        r#"local input = require("project_input")
+local controls = input({ controls = {} })
+return controls
+"#,
+    )
+    .expect("explicit input binding should emit unchanged");
+
+    assert_eq!(
+        emitted,
+        r#"local input = require("project_input")
+local controls = input({ controls = {} })
+return controls
+"#
+    );
+}

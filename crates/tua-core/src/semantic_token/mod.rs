@@ -12,7 +12,7 @@ use crate::hir::{lower_parsed_source, HirSymbolKind};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TypeAliasKind};
 use crate::source_text::{byte_for_column, line_at};
 use crate::{
-    ecs, lua, object_pool, parse_tua_source, signal, sprite, state_machine, store, vector,
+    ecs, input, lua, object_pool, parse_tua_source, signal, sprite, state_machine, store, vector,
     Diagnostic,
 };
 
@@ -1531,6 +1531,7 @@ fn is_builtin_type(name: &str) -> bool {
         || object_pool::builtin_type_names().contains(&name)
         || state_machine::builtin_type_names().contains(&name)
         || store::builtin_type_names().contains(&name)
+        || input::builtin_type_names().contains(&name)
         || sprite::builtin_type_names().contains(&name)
         || ecs::builtin_type_names().contains(&name)
 }

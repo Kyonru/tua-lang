@@ -21,6 +21,10 @@ The feature tour includes placeholder assets under `src/assets/` so static LOVE
 asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
 
+It also includes focused modules for the Baton-backed `input({...})` helper,
+state machines, stores, Signals, ECS, object pools, sprite sheets, vectors, and
+Lua interoperability.
+
 ## `examples/love-minimal`
 
 A small LOVE project for basic compile-and-run validation.

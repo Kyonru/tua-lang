@@ -23,6 +23,7 @@ local Sprites = require("sprites")
 local Signals = require("signals")
 local StateMachine = require("state_machine")
 local Store = require("store")
+local Input = require("input")
 
 return {
   types = Types,
@@ -50,4 +51,5 @@ return {
   signals = Signals,
   state_machine = StateMachine,
   store = Store,
+  input = Input,
 }

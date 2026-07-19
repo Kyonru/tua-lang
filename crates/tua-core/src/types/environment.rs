@@ -19,7 +19,8 @@ use crate::parser::{
 };
 use crate::source_text::function_name_table_field;
 use crate::{
-    asset, lua, object_pool, sprite, state_machine, store, vector, Diagnostic, DiagnosticCode,
+    asset, input, lua, object_pool, sprite, state_machine, store, vector, Diagnostic,
+    DiagnosticCode,
 };
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
@@ -330,6 +331,11 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .iter()
                 .map(|name| (*name).to_owned()),
         )
+        .chain(
+            input::builtin_type_names()
+                .iter()
+                .map(|name| (*name).to_owned()),
+        )
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -398,6 +404,9 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         aliases.entry(name).or_insert(ty);
     }
     for (name, ty) in store::builtin_aliases() {
+        aliases.entry(name).or_insert(ty);
+    }
+    for (name, ty) in input::builtin_aliases() {
         aliases.entry(name).or_insert(ty);
     }
     for (name, ty) in builtin_aliases {
@@ -2526,9 +2535,12 @@ fn infer_local_assignment_types(
 
         let preserve_literal_unions = match assignment_expression_for_local(&expressions, index) {
             Some((Expression::FunctionCall(call), _)) => {
-                state_machine::machine_type_from_call(call).is_some()
+                (state_machine::machine_type_from_call(call).is_some()
                     && !locals.contains_key(state_machine::CONSTRUCTOR_NAME)
-                    && !function_types.contains_key(state_machine::CONSTRUCTOR_NAME)
+                    && !function_types.contains_key(state_machine::CONSTRUCTOR_NAME))
+                    || (input::input_type_from_call(call).is_some()
+                        && !locals.contains_key(input::CONSTRUCTOR_NAME)
+                        && !function_types.contains_key(input::CONSTRUCTOR_NAME))
             }
             _ => false,
         };
@@ -3046,6 +3058,14 @@ fn infer_function_call_return_types(
                 .unwrap_or_else(|| Type::alias(state_machine::TYPE_NAME))];
         }
 
+        if input::is_constructor(name)
+            && !locals.contains_key(name)
+            && !function_types.contains_key(name)
+        {
+            return vec![input::input_type_from_call(function_call)
+                .unwrap_or_else(|| Type::alias(input::TYPE_NAME))];
+        }
+
         if object_pool::is_constructor(name)
             && !locals.contains_key(name)
             && !function_types.contains_key(name)
@@ -3107,6 +3127,9 @@ fn infer_function_call_return_types(
             })
             .or_else(|| {
                 store::is_constructor(name).then(|| Type::Function(store::constructor_type()))
+            })
+            .or_else(|| {
+                input::is_constructor(name).then(|| Type::Function(input::constructor_type()))
             });
 
         return function_type
@@ -3119,6 +3142,12 @@ fn infer_function_call_return_types(
             if let Some(receiver_type) =
                 infer_field_chain_type(parsed, aliases, locals, receiver_parts)
             {
+                if let Some(returns) =
+                    input::method_return_types_from_direct_type(&receiver_type, function_call)
+                {
+                    return returns;
+                }
+
                 if let Some(ty) =
                     constructor_call_return_type_from_map(aliases, &receiver_type, method)
                 {

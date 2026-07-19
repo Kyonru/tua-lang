@@ -350,7 +350,7 @@ changes. Treat the output directory as generated code; edit files under `src/`.
 - [Lua Interop](lua-interop.md) covers `.lua` modules and LuaDoc annotations.
 - [Configuration](configuration.md) documents project paths, diagnostics,
   formatting, LuaJIT guidance, and editor settings.
-- [State Stores](stores.md), [State Machines](state-machines.md),
+- [Input](input.md), [State Stores](stores.md), [State Machines](state-machines.md),
   [Entity Component Systems](ecs.md), and [Object Pooling](object-pooling.md)
   cover optional game-focused runtime domains.
 - [Examples](examples.md) lists runnable feature and LOVE projects.

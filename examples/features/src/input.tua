@@ -1,0 +1,31 @@
+-- Feature: input({...}) adds static names and LOVE source completion to Baton.
+local controls = input({
+  controls = {
+    left = { "key:left", "key:a", "axis:leftx-" },
+    right = { "key:right", "key:d", "axis:leftx+" },
+    up = { "key:up", "key:w", "axis:lefty-" },
+    down = { "key:down", "key:s", "axis:lefty+" },
+    confirm = { "key:return", "key:space", "button:a" },
+  },
+  pairs = {
+    move = { "left", "right", "up", "down" },
+  },
+  deadzone = 0.25,
+})
+
+-- Controls return one number; directional pairs return x and y.
+local confirm = controls:get("confirm")
+local moveX, moveY = controls:get("move")
+local activeDevice = controls:getActiveDevice()
+
+controls:update()
+local justConfirmed = controls:pressed("confirm")
+
+return {
+  controls = controls,
+  confirm = confirm,
+  moveX = moveX,
+  moveY = moveY,
+  activeDevice = activeDevice,
+  justConfirmed = justConfirmed,
+}

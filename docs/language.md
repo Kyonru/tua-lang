@@ -77,6 +77,8 @@ forcing the whole project into a strict type system.
   updates, and subscriptions.
 - [State machines](#state-machines): configured state/event unions, generated
   event methods, and callback suggestions.
+- [Input](#input): Baton-backed controls, directional pairs, and LOVE source
+  completion.
 - [Object pools](#object-pools): typed acquire/release lifecycle and explorer.
 - [Entity component systems](#entity-component-systems): the built-in `ecs`
   module and ECS Explorer.
@@ -397,6 +399,16 @@ tables or ECS population queries. The language server can visualize the
 lifecycle through `Tua: Show Object Pool Explorer`, and it publishes
 conservative `TL5007` warnings when a directly acquired same-file local has no
 later visible release or pool clear.
+
+### Input
+
+`input({...})` creates a Baton input player and derives exact control and pair
+names from a direct table literal. `get("confirm")` returns one number, while
+`get("move")` returns x and y when `move` is a configured pair. Source strings
+such as `"key:space"`, `"axis:leftx-"`, and `"button:a"` use the generated LOVE
+catalog for completion and validation. Builds include `baton.lua` only when the
+helper is used. See [Input](input.md) for configuration, polling, deadzones,
+joysticks, and dynamic boundaries.
 
 ### Entity Component Systems
 

@@ -103,6 +103,11 @@ Static `store({...})` calls likewise share one inferred state model across
 completion, hover, signature help, checking, and module exports. Keyed `watch`
 signatures are derived from that model. See [State Stores](stores.md).
 
+Static `input({...})` calls derive Baton control and pair names once for
+completion, hover, signature help, checking, inlay hints, and module exports.
+Source strings complete LOVE keys, scancodes, gamepad axes, buttons, and hat
+directions. See [Input](input.md).
+
 !!! info "Experimental completion stays local"
     **Tua: Toggle Experimental Completions** controls contextual sequence
     ranking and validated multi-token suggestions for the workspace. Both are

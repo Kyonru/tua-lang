@@ -1538,6 +1538,76 @@ fn build_does_not_overwrite_project_tuastore_runtime() {
 }
 
 #[test]
+fn build_writes_baton_runtime_when_input_helper_is_used() {
+    let temp = TempDir::new("build-baton-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local controls = input({
+  controls = { confirm = { "key:return", "button:a" } },
+})
+return controls
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    let runtime =
+        fs::read_to_string(temp.path().join("build/baton.lua")).expect("failed to read baton");
+
+    assert!(stdout.contains("built 2 file(s)"));
+    assert!(emitted.contains(r#"local __tua_input = require("baton").new"#));
+    assert!(emitted.contains("local controls = __tua_input({"));
+    assert!(runtime.contains("_VERSION = 'Baton v1.0.2'"));
+    assert!(runtime.contains("function Player:pressed(name)"));
+}
+
+#[test]
+fn build_does_not_overwrite_project_baton_runtime() {
+    let temp = TempDir::new("build-custom-baton-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local controls = input({ controls = {} })\nreturn controls\n",
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/baton.lua"),
+        "return { new = function(config) return { custom = config } end }\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+
+    let runtime = fs::read_to_string(temp.path().join("build/baton.lua"))
+        .expect("failed to read custom baton");
+    assert_eq!(
+        runtime,
+        "return { new = function(config) return { custom = config } end }\n"
+    );
+}
+
+#[test]
 fn build_does_not_inject_tuaecs_when_ecs_support_is_disabled() {
     let temp = TempDir::new("build-disabled-ecs-runtime");
 

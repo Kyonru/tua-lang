@@ -678,6 +678,77 @@ light:can("pa")
 }
 
 #[test]
+fn completes_baton_input_config_sources_names_and_methods() {
+    let options_source = r#"local controls = input({
+  dea
+})
+"#;
+    let options = complete_tua_source(
+        "src/input.tua",
+        options_source,
+        position_after(options_source, "  dea"),
+    )
+    .expect("input option completion should succeed");
+    assert!(labels(&options).contains(&"deadzone".to_owned()));
+
+    let source = r#"local controls = input({
+  controls = {
+    left = { "key:le" },
+    right = { "key:right" },
+    up = { "key:up" },
+    down = { "key:down" },
+    confirm = { "key:return", "button:a" },
+  },
+  pairs = {
+    move = { "le", "right", "up", "down" },
+  },
+})
+"#;
+    let source_values =
+        complete_tua_source("src/input.tua", source, position_after(source, "\"key:le"))
+            .expect("Baton source completion should succeed");
+    let pair_values = complete_tua_source(
+        "src/input.tua",
+        source,
+        position_after(source, "move = { \"le"),
+    )
+    .expect("input pair control completion should succeed");
+    let method_source = format!("{source}controls:\n");
+    let methods = complete_tua_source(
+        "src/input.tua",
+        &method_source,
+        position_after(&method_source, "controls:"),
+    )
+    .expect("Input method completion should succeed");
+    let name_source = format!("{source}controls:pressed(\"co\")\n");
+    let names = complete_tua_source(
+        "src/input.tua",
+        &name_source,
+        position_after(&name_source, "pressed(\"co"),
+    )
+    .expect("input method-name completion should succeed");
+
+    assert!(labels(&source_values).contains(&"key:left".to_owned()));
+    assert_eq!(labels(&pair_values), vec!["left".to_owned()]);
+    let method_labels = labels(&methods);
+    for expected in [
+        "update",
+        "get",
+        "getRaw",
+        "down",
+        "pressed",
+        "released",
+        "getActiveDevice",
+    ] {
+        assert!(
+            method_labels.contains(&expected.to_owned()),
+            "missing {expected}: {method_labels:?}"
+        );
+    }
+    assert_eq!(labels(&names), vec!["confirm".to_owned()]);
+}
+
+#[test]
 fn completes_signal_event_names_from_existing_signal_calls() {
     let source = r#"
 local events = signal()

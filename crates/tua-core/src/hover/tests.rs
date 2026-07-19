@@ -1239,6 +1239,43 @@ light:warn()
 }
 
 #[test]
+fn hovers_typed_baton_input_constructor_local_and_methods() {
+    let source = r#"local controls = input({
+  controls = {
+    left = { "key:left" },
+    right = { "key:right" },
+    up = { "key:up" },
+    down = { "key:down" },
+    confirm = { "key:return" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+controls:get("move")
+"#;
+    let constructor = hover_tua_source("src/input.tua", source, position_at(source, "input"))
+        .expect("hover should not fail")
+        .expect("input constructor should hover");
+    let controls = hover_tua_source("src/input.tua", source, position_at(source, "controls ="))
+        .expect("hover should not fail")
+        .expect("Input local should hover");
+    let get = hover_tua_source("src/input.tua", source, position_at(source, "get(\"move"))
+        .expect("hover should not fail")
+        .expect("Input:get should hover");
+
+    assert_eq!(
+        constructor.contents,
+        "function input(config: InputConfig): Input"
+    );
+    assert_eq!(controls.contents, "local controls: Input");
+    assert_eq!(
+        controls.documentation.as_deref(),
+        Some("Controls: `confirm, down, left, right, up`. Pairs: `move`.")
+    );
+    assert!(get.contents.contains("name: \"move\""));
+    assert!(get.contents.ends_with(": number, number"));
+}
+
+#[test]
 fn hovers_love_object_methods_from_inferred_asset_loader_returns() {
     let source = r#"
 local function loadPlayerImage()

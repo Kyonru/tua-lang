@@ -22,8 +22,8 @@ use crate::types::{
     TypeEnvironment, TypedFunction,
 };
 use crate::{
-    ecs, object_pool, signal, sprite, state_machine, store, vector, ParsedLanguage, ParsedSource,
-    SourcePosition, SourceSpan, TypedParameter,
+    ecs, input, object_pool, signal, sprite, state_machine, store, vector, ParsedLanguage,
+    ParsedSource, SourcePosition, SourceSpan, TypedParameter,
 };
 
 const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
@@ -198,6 +198,27 @@ impl<'a> SemanticModel<'a> {
             return vec![store];
         }
 
+        if parts.len() == 1
+            && input::is_constructor(&parts[0])
+            && self.environment.local(&parts[0]).is_none()
+            && self.environment.function(&parts[0]).is_none()
+        {
+            return vec![input::input_type_from_call(function_call)
+                .unwrap_or_else(|| Type::alias(input::TYPE_NAME))];
+        }
+
+        if let Some((_, receiver_parts)) = parts.split_last() {
+            if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
+                if let Some(returns) = input::method_return_types_from_call(
+                    self.environment,
+                    &receiver_type,
+                    function_call,
+                ) {
+                    return returns;
+                }
+            }
+        }
+
         self.return_types_for_call_parts(&parts, position)
     }
 
@@ -245,6 +266,10 @@ impl<'a> SemanticModel<'a> {
 
             if store::is_constructor(root) {
                 return store::constructor_type().return_types_or_any().to_vec();
+            }
+
+            if input::is_constructor(root) && self.environment.local(root).is_none() {
+                return input::constructor_type().return_types_or_any().to_vec();
             }
 
             if let Some(returns) = self
@@ -340,6 +365,10 @@ impl<'a> SemanticModel<'a> {
                 return Some(store::constructor_typed_function());
             }
 
+            if input::is_constructor(root) && self.environment.local(root).is_none() {
+                return Some(input::constructor_typed_function());
+            }
+
             if let Some(function) = self
                 .type_of_name(root, position)
                 .and_then(|ty| call_metamethod_function(self.environment, &ty))
@@ -391,6 +420,10 @@ impl<'a> SemanticModel<'a> {
             }
 
             if let Some(function) = store::typed_member(self.environment, &receiver_type, method) {
+                return Some(function);
+            }
+
+            if let Some(function) = input::typed_member(self.environment, &receiver_type, method) {
                 return Some(function);
             }
 
@@ -2103,6 +2136,15 @@ fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) ->
 
     if store::store_state_type(environment, ty).is_some() {
         if let Some(item) = lua::type_field_items(store::TYPE_NAME, field)
+            .into_iter()
+            .find(|item| item.label == field)
+        {
+            return Some(item);
+        }
+    }
+
+    if input::type_is_input(environment, ty) {
+        if let Some(item) = lua::type_field_items(input::TYPE_NAME, field)
             .into_iter()
             .find(|item| item.label == field)
         {

@@ -9,8 +9,8 @@ use crate::ast_utils::assignment_expression_for_local;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment, Type, TypeEnvironment};
 use crate::{
-    ecs, object_pool, parse_tua_source, state_machine, Diagnostic, ParsedSource, SourcePosition,
-    SourceSpan,
+    ecs, input, object_pool, parse_tua_source, state_machine, Diagnostic, ParsedSource,
+    SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -168,6 +168,8 @@ impl<'a> InlayHintCollector<'a> {
                     Type::alias(object_pool::TYPE_NAME)
                 } else if state_machine::type_is_state_machine(self.environment, &ty) {
                     Type::alias(state_machine::TYPE_NAME)
+                } else if input::type_is_input(self.environment, &ty) {
+                    Type::alias(input::TYPE_NAME)
                 } else {
                     ty
                 };

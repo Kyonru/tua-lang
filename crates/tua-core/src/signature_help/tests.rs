@@ -464,6 +464,54 @@ light:can(
 }
 
 #[test]
+fn returns_typed_baton_input_constructor_and_name_dependent_signatures() {
+    let constructor =
+        signature_at("local controls = input(\n", "input(").expect("input should have help");
+    let source = r#"local controls = input({
+  controls = {
+    left = { "key:left" },
+    right = { "key:right" },
+    up = { "key:up" },
+    down = { "key:down" },
+    confirm = { "key:return" },
+  },
+  pairs = { move = { "left", "right", "up", "down" } },
+})
+controls:get(
+"#;
+    let get = signature_at(source, "controls:get(").expect("Input:get should have help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function input(config: InputConfig): Input"
+    );
+    assert!(get.signatures.iter().any(|signature| {
+        signature.label.contains("name: \"confirm\"") && signature.label.ends_with(": number")
+    }));
+    assert!(get.signatures.iter().any(|signature| {
+        signature.label.contains("name: \"move\"") && signature.label.ends_with(": number, number")
+    }));
+}
+
+#[test]
+fn explicit_input_bindings_shadow_the_builtin_signature() {
+    let source = r#"type InputFactory = (config: any) -> string
+
+local input: InputFactory = function(config: any): string
+  return "custom"
+end
+
+input(
+"#;
+    let help = signature_at(source, "input(").expect("custom input should have help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function input(config: any): string"
+    );
+}
+
+#[test]
 fn returns_builtin_signal_constructor_and_method_signatures() {
     let constructor =
         signature_at("local events = signal(\n", "signal(").expect("signal should have help");

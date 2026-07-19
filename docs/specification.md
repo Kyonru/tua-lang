@@ -44,8 +44,9 @@ modules:
 - `spriteSheet({...})` emits an `anim8` require when used;
 - the built-in `ecs` module emits a `tuaecs` require when used;
 - `objectPool({...})` emits a `tuaobjectpool` require when used;
-- `stateMachine({...})` emits a `tuastatemachine` require when used.
-- `store({...})` emits a `tuastore` require when used.
+- `stateMachine({...})` emits a `tuastatemachine` require when used;
+- `store({...})` emits a `tuastore` require when used;
+- `input({...})` emits a `baton` require when used.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same
@@ -158,9 +159,10 @@ loader calls provide diagnostics, completion, hover metadata, definition, and
 references without executing project code.
 
 Domain helpers lower to ordinary Lua-compatible APIs. `spriteSheet({...})`,
-`signal()`, `stateMachine({...})`, `store({...})`, and the built-in `ecs` module
-are first-class compiler domains rather than executable third-party plugins.
-Experimental editor presentation is explicitly preview-gated.
+`signal()`, `stateMachine({...})`, `store({...})`, `input({...})`, and the
+built-in `ecs` module are first-class compiler domains rather than executable
+third-party plugins. Experimental editor presentation is explicitly
+preview-gated.
 
 Static `store({...})` calls derive a structural state type. The type is reused
 by reads, replacements, mutators, whole-store subscriptions, keyed watcher
@@ -173,6 +175,12 @@ unions, event methods, callback names, and state/event argument completion.
 Computed configuration remains valid through the generic gradual
 `StateMachine` surface; analysis does not execute configuration code to infer
 dynamic names.
+
+Static `input({...})` configuration derives exact Baton control and pair names.
+Control lookups return one number, pair lookups return x and y, active-device
+queries return `"kbm" | "joy" | "none"`, and LOVE-backed source strings receive
+completion and validation. Computed configuration remains valid through the
+generic gradual `Input` surface.
 
 The sprite domain describes anim8 grid cell size, left/top origin, border
 spacing, zero-based row/column ranges, per-animation grid overrides, numeric or

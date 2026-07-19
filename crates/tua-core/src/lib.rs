@@ -23,6 +23,7 @@ pub mod hover;
 pub mod ide_db;
 pub mod inlay_hint;
 mod inline_ignore;
+mod input;
 pub mod inspector;
 mod lint;
 mod love_api;
@@ -265,4 +266,8 @@ pub fn tuastatemachine_runtime_source() -> &'static str {
 
 pub fn tuastore_runtime_source() -> &'static str {
     store::runtime_source()
+}
+
+pub fn baton_runtime_source() -> &'static str {
+    input::runtime_source()
 }

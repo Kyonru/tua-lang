@@ -62,6 +62,7 @@ async function main() {
   assertScope(tokenizedLines, "  init(name: string)", "name", "variable.parameter.tua");
   assertScope(tokenizedLines, "local events = signal()", "signal", "support.function.tua");
   assertScope(tokenizedLines, "local game = store({", "store", "support.function.tua");
+  assertScope(tokenizedLines, "local controls = input({", "input", "support.function.tua");
   assertScope(tokenizedLines, 'events:on("player.hit"', "player.hit", "entity.name.event.tua");
   assertScope(tokenizedLines, 'local Player = import("game.player")', "game.player", "entity.name.namespace.module.tua");
   assertScope(tokenizedLines, 'local sprite = image "assets/player.png"', "assets/player.png", "string.quoted.double.filename.asset.tua");

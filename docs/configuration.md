@@ -302,6 +302,17 @@ There is no pool-wide project setting. Pool size and lifecycle belong at each
 call site through `initial`, `prewarm`, `reset`, and `dispose`. See
 [Object Pooling](object-pooling.md) for the full API and performance guidance.
 
+## Input Support
+
+`input({...})` is available without configuration. A source file that uses it
+emits `require("baton").new`, and the build copies the bundled MIT-licensed
+`baton.lua` only when required. A project-provided `src/baton.lua` is copied
+instead and is not overwritten.
+
+There is no global input setting. Controls, pairs, joystick selection,
+deadzones, and player ownership belong to each `input` call. See
+[Input](input.md) for the full Baton-backed API.
+
 ## Diagnostics
 
 Formatting lints are enabled by default so `tua check`, `tua lint`, and editor
