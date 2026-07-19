@@ -63,6 +63,7 @@ explorers for assets, modules, signals, ECS, and object pools.
 - [Typed input](https://kyonru.github.io/tua-lang/input/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
+- [Debugging](https://kyonru.github.io/tua-lang/debugging/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)
 - [Releases and compatibility](https://kyonru.github.io/tua-lang/releases/)
 - [CHANGELOG.md](CHANGELOG.md)

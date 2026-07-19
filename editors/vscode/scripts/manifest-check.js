@@ -63,6 +63,11 @@ if (!(manifest.contributes?.breakpoints || []).some((entry) => entry.language ==
   process.exit(1);
 }
 
+if (!manifest.activationEvents?.includes("onDebugResolve:lua-local")) {
+  console.error("Missing lua-local debug resolution activation event.");
+  process.exit(1);
+}
+
 const assetView = (manifest.contributes?.views?.explorer || []).find(
   (view) => view.id === "tua.assets",
 );

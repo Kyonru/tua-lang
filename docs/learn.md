@@ -331,7 +331,8 @@ the useful daily loop:
 - **Tua: Select Inlay Hint Mode** controls inferred type and parameter hints.
 - **Tua: Run LOVE Project** builds and runs the configured LOVE output.
 - **Tua: Debug LOVE Project** builds and launches source-mapped Lua debugging,
-  so breakpoints and stack frames return to `.tua` source.
+  so breakpoints and stack frames return to `.tua` source. See
+  [Debugging](debugging.md) for setup and launch guidance.
 - **Tua: Focus Output** opens language-server, build, and runtime logs.
 
 With the standalone CLI installed, the equivalent terminal commands are:

@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
 const { COMMANDS } = require("../constants");
+const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
 const { formatError } = require("../shared/errors");
 const { activeProjectLayout, configuredLoveCommand } = require("./run-project");
@@ -13,6 +14,7 @@ const DEBUGGER_EXTENSION_ID = "ismoh-games.second-local-lua-debugger-vscode";
 const LEGACY_DEBUGGER_EXTENSION_ID = "tomblind.local-lua-debugger-vscode";
 const DEBUGGER_EXTENSION_IDS = [DEBUGGER_EXTENSION_ID, LEGACY_DEBUGGER_EXTENSION_ID];
 const DEBUGGER_TYPE = "lua-local";
+const TUA_LAUNCH_PROPERTY = "tuaProject";
 const DEBUG_BOOTSTRAP =
   'if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then require("lldebugger").start(); function love.errorhandler(message) error(message, 2) end end\n';
 
@@ -25,6 +27,54 @@ function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
       }
     }
   });
+  const configurationProviderDisposable = vscode.debug.registerDebugConfigurationProvider(
+    DEBUGGER_TYPE,
+    {
+      async resolveDebugConfigurationWithSubstitutedVariables(folder, configuration) {
+        if (configuration?.[TUA_LAUNCH_PROPERTY] !== true) {
+          return configuration;
+        }
+
+        if (!vscode.workspace.isTrusted) {
+          vscode.window.showWarningMessage(
+            "Trust this workspace before debugging a LOVE project.",
+          );
+          return undefined;
+        }
+
+        const layout = debugProjectLayout(folder);
+        if (!layout) {
+          vscode.window.showWarningMessage(
+            "Open a Tua project workspace before debugging LOVE.",
+          );
+          return undefined;
+        }
+
+        if (!(await ensureDebuggerExtension())) {
+          return undefined;
+        }
+
+        const prepared = await buildAndPrepareLoveDebugProject({
+          appendOutputLine,
+          getServerCommand,
+          layout,
+          preparedOutputs,
+        });
+        if (!prepared) {
+          return undefined;
+        }
+
+        return createLoveDebugConfiguration({
+          layout,
+          loveCommand: configuredLoveCommand(),
+          overrides: {
+            ...configuration,
+            scriptFiles: debuggerScriptFiles(layout.outputDirectory),
+          },
+        });
+      },
+    },
+  );
   const commandDisposable = vscode.commands.registerCommand(COMMANDS.debugLoveProject, async () => {
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage("Trust this workspace before debugging a LOVE project.");
@@ -37,54 +87,20 @@ function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
       return undefined;
     }
 
-    if (!findDebuggerExtension()) {
-      const install = "Install Second Local Lua Debugger";
-      const choice = await vscode.window.showErrorMessage(
-        "Tua debugging uses the Second Local Lua Debugger extension for Lua execution, stepping, and inspection.",
-        install,
-      );
-      if (choice === install) {
-        await vscode.commands.executeCommand(
-          "workbench.extensions.installExtension",
-          DEBUGGER_EXTENSION_ID,
-        );
-      }
+    if (!(await ensureDebuggerExtension())) {
       return undefined;
     }
 
-    const tuaCommand = getServerCommand?.() || "tua";
-    appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
-    const buildCode = await runBuildCommand({
+    const preparedResult = await buildAndPrepareLoveDebugProject({
       appendOutputLine,
-      cwd: layout.configDirectory,
-      tuaCommand,
+      getServerCommand,
+      layout,
+      preparedOutputs,
     });
-    if (buildCode !== 0) {
-      appendOutputLine?.(`[tua] Debug build failed with exit code ${buildCode}.`);
-      vscode.window.showErrorMessage("Tua build failed. Open the Tua output for details.");
-      await vscode.commands.executeCommand(COMMANDS.focusOutput);
+    if (!preparedResult) {
       return undefined;
     }
-
-    let prepared;
-    try {
-      prepared = prepareLoveDebugOutput(layout.outputDirectory);
-    } catch (error) {
-      appendOutputLine?.(`[tua] Could not prepare LOVE debug output: ${formatError(error)}`);
-      vscode.window.showErrorMessage(`Could not prepare LOVE debug output: ${formatError(error)}`);
-      return undefined;
-    }
-    const pendingOutput = {
-      outputDirectory: layout.outputDirectory,
-      restore: prepared.restore,
-    };
-    preparedOutputs.add(pendingOutput);
-
-    if (!hasDebuggerSourceMap(layout.outputDirectory)) {
-      vscode.window.showWarningMessage(
-        "No Tua debugger source maps were emitted. Enable emit_maps in tua.toml to bind breakpoints in .tua files.",
-      );
-    }
+    const { pendingOutput, prepared } = preparedResult;
 
     const folder = vscode.workspace.getWorkspaceFolder(
       vscode.Uri.file(layout.configDirectory),
@@ -118,18 +134,93 @@ function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
     };
   });
 
-  return vscode.Disposable.from(commandDisposable, terminationDisposable, {
-    dispose() {
-      for (const prepared of preparedOutputs) {
-        prepared.restore();
-      }
-      preparedOutputs.clear();
+  return vscode.Disposable.from(
+    commandDisposable,
+    configurationProviderDisposable,
+    terminationDisposable,
+    {
+      dispose() {
+        for (const prepared of preparedOutputs) {
+          prepared.restore();
+        }
+        preparedOutputs.clear();
+      },
     },
+  );
+}
+
+async function ensureDebuggerExtension() {
+  if (findDebuggerExtension()) {
+    return true;
+  }
+
+  const install = "Install Second Local Lua Debugger";
+  const choice = await vscode.window.showErrorMessage(
+    "Tua debugging uses the Second Local Lua Debugger extension for Lua execution, stepping, and inspection.",
+    install,
+  );
+  if (choice === install) {
+    await vscode.commands.executeCommand(
+      "workbench.extensions.installExtension",
+      DEBUGGER_EXTENSION_ID,
+    );
+  }
+  return false;
+}
+
+async function buildAndPrepareLoveDebugProject({
+  appendOutputLine,
+  getServerCommand,
+  layout,
+  preparedOutputs,
+}) {
+  const tuaCommand = getServerCommand?.() || "tua";
+  appendOutputLine?.(`[tua] Building debug project in ${layout.configDirectory}`);
+  const buildCode = await runBuildCommand({
+    appendOutputLine,
+    cwd: layout.configDirectory,
+    tuaCommand,
   });
+  if (buildCode !== 0) {
+    appendOutputLine?.(`[tua] Debug build failed with exit code ${buildCode}.`);
+    vscode.window.showErrorMessage("Tua build failed. Open the Tua output for details.");
+    await vscode.commands.executeCommand(COMMANDS.focusOutput);
+    return undefined;
+  }
+
+  let prepared;
+  try {
+    prepared = prepareLoveDebugOutput(layout.outputDirectory);
+  } catch (error) {
+    appendOutputLine?.(`[tua] Could not prepare LOVE debug output: ${formatError(error)}`);
+    vscode.window.showErrorMessage(`Could not prepare LOVE debug output: ${formatError(error)}`);
+    return undefined;
+  }
+
+  const pendingOutput = {
+    outputDirectory: layout.outputDirectory,
+    restore: prepared.restore,
+  };
+  preparedOutputs.add(pendingOutput);
+
+  if (!hasDebuggerSourceMap(layout.outputDirectory)) {
+    vscode.window.showWarningMessage(
+      "No Tua debugger source maps were emitted. Enable emit_maps in tua.toml to bind breakpoints in .tua files.",
+    );
+  }
+
+  return { pendingOutput, prepared };
 }
 
 function findDebuggerExtension(extensions = vscode.extensions) {
   return DEBUGGER_EXTENSION_IDS.map((id) => extensions?.getExtension(id)).find(Boolean);
+}
+
+function debugProjectLayout(folder) {
+  if (folder?.uri?.scheme === "file" && folder.uri.fsPath) {
+    return projectLayoutForWorkspaceRoot(folder.uri.fsPath);
+  }
+  return activeProjectLayout();
 }
 
 function debugSessionTargetsOutput(session, outputDirectory) {
@@ -150,9 +241,9 @@ function restorePreparedOutput(preparedOutputs, prepared) {
   prepared.restore();
 }
 
-function createLoveDebugConfiguration({ layout, loveCommand }) {
+function createLoveDebugConfiguration({ layout, loveCommand, overrides = {} }) {
   const scriptGlob = debuggerScriptGlob(layout);
-  const configuration = {
+  const defaults = {
     type: DEBUGGER_TYPE,
     request: "launch",
     name: "Debug LOVE Project (Tua)",
@@ -166,8 +257,24 @@ function createLoveDebugConfiguration({ layout, loveCommand }) {
     stepUnmappedLines: false,
     stopOnEntry: false,
   };
+  const extraArgs = Array.isArray(overrides.args) ? overrides.args : [];
+  const extraScriptRoots = Array.isArray(overrides.scriptRoots)
+    ? overrides.scriptRoots.filter((root) => root !== layout.outputDirectory)
+    : [];
+  const configuration = {
+    ...defaults,
+    ...overrides,
+    type: DEBUGGER_TYPE,
+    request: "launch",
+    program: {
+      ...defaults.program,
+      ...(overrides.program || {}),
+    },
+    args: [layout.outputDirectory, ...extraArgs],
+    scriptRoots: [layout.outputDirectory, ...extraScriptRoots],
+  };
 
-  if (scriptGlob) {
+  if (scriptGlob && !Array.isArray(overrides.scriptFiles)) {
     configuration.scriptFiles = [scriptGlob];
   }
 
@@ -182,6 +289,23 @@ function debuggerScriptGlob(layout) {
 
   const directory = relative.split(path.sep).filter(Boolean).join("/");
   return directory ? `${directory}/**/*.lua` : "**/*.lua";
+}
+
+function debuggerScriptFiles(directory) {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        return debuggerScriptFiles(entryPath);
+      }
+      return entry.isFile() && entry.name.endsWith(".lua") ? [entryPath] : [];
+    })
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function prepareLoveDebugOutput(outputDirectory) {
@@ -382,8 +506,11 @@ module.exports = {
   DEBUG_BOOTSTRAP,
   DEBUGGER_EXTENSION_ID,
   DEBUGGER_EXTENSION_IDS,
+  TUA_LAUNCH_PROPERTY,
   createLoveDebugConfiguration,
+  debugProjectLayout,
   debugSessionTargetsOutput,
+  debuggerScriptFiles,
   debuggerScriptGlob,
   findDebuggerExtension,
   hasDebuggerSourceMap,

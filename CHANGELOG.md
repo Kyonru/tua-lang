@@ -11,7 +11,9 @@ language or editor behavior, and migration notes call out those changes.
 - Source-mapped LOVE debugging through **Tua: Debug LOVE Project**. Builds now
   emit standard `*.lua.map` sidecars alongside Tua traceback maps, allowing the
   Second Local Lua Debugger extension to bind `.tua` breakpoints and show
-  mapped Tua stack frames while debugging generated Lua.
+  mapped Tua stack frames while debugging generated Lua. Game workspaces can
+  start the same prepared workflow from `.vscode/launch.json` with
+  `tuaProject: true`.
 - A zero-setup Baton-backed `input({...})` helper with derived control and pair
   names, LOVE input-source completion and validation, name-dependent return
   signatures, active-device typing, and an on-demand bundled `baton.lua`

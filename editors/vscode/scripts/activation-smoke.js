@@ -453,6 +453,65 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "debug output restoration should restore standard source maps",
     );
 
+    assert.strictEqual(
+      state.debugConfigurationProviders.length,
+      1,
+      "debug LOVE should register one Lua launch configuration resolver",
+    );
+    const launchProvider = state.debugConfigurationProviders[0];
+    assert.strictEqual(launchProvider.type, "lua-local");
+    const ordinaryLuaLaunch = {
+      type: "lua-local",
+      request: "launch",
+      name: "Debug Lua",
+      program: { lua: "lua", file: "main.lua" },
+    };
+    assert.strictEqual(
+      await launchProvider.provider.resolveDebugConfigurationWithSubstitutedVariables(
+        state.vscode.workspace.workspaceFolders[0],
+        ordinaryLuaLaunch,
+      ),
+      ordinaryLuaLaunch,
+      "Tua should not modify ordinary lua-local launch configurations",
+    );
+
+    const gameLaunch = await launchProvider.provider.resolveDebugConfigurationWithSubstitutedVariables(
+      state.vscode.workspace.workspaceFolders[0],
+      {
+        type: "lua-local",
+        request: "launch",
+        name: "Debug My Tua Game",
+        tuaProject: true,
+        program: {
+          command: "/Applications/love.app/Contents/MacOS/love",
+          communication: "pipe",
+        },
+        args: ["--console"],
+        cwd: workspace,
+        workspacePath: workspace,
+      },
+    );
+    assert.strictEqual(gameLaunch.name, "Debug My Tua Game");
+    assert.strictEqual(gameLaunch.tuaProject, true);
+    assert.deepStrictEqual(gameLaunch.args, [path.join(workspace, "build"), "--console"]);
+    assert.deepStrictEqual(gameLaunch.scriptRoots, [path.join(workspace, "build")]);
+    assert.deepStrictEqual(gameLaunch.scriptFiles, [
+      path.join(workspace, "build", "conf.lua"),
+      path.join(workspace, "build", "main.lua"),
+    ]);
+    assert(
+      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8").startsWith(
+        debuggerBridge.DEBUG_BOOTSTRAP,
+      ),
+      "a game launch configuration should prepare generated LOVE output",
+    );
+    state.fireDebugTermination({ configuration: gameLaunch });
+    assert.strictEqual(
+      fs.readFileSync(path.join(sourceMapDirectory, "conf.lua"), "utf8"),
+      "function love.conf(t) end\n",
+      "ending a game launch configuration should restore generated conf.lua",
+    );
+
     const debugResult = await state.commands.get("tua.debugLoveProject")();
     assert.deepStrictEqual(
       debugResult,
@@ -1388,6 +1447,7 @@ function createMockState(workspace, options = {}) {
   ]);
   const configurationListeners = [];
   const diagnosticCollections = [];
+  const debugConfigurationProviders = [];
   const debugTerminationListeners = [];
   const documentChangeListeners = [];
   const documentSaveListeners = [];
@@ -1617,6 +1677,18 @@ function createMockState(workspace, options = {}) {
       },
     },
     debug: {
+      registerDebugConfigurationProvider(type, provider, triggerKind) {
+        const registration = { provider, triggerKind, type };
+        debugConfigurationProviders.push(registration);
+        return {
+          dispose() {
+            const index = debugConfigurationProviders.indexOf(registration);
+            if (index >= 0) {
+              debugConfigurationProviders.splice(index, 1);
+            }
+          },
+        };
+      },
       onDidTerminateDebugSession(listener) {
         debugTerminationListeners.push(listener);
         return {
@@ -2224,6 +2296,7 @@ function createMockState(workspace, options = {}) {
     configurationListeners,
     configurationUpdates,
     commands,
+    debugConfigurationProviders,
     diagnosticCollections,
     documentChangeListeners,
     documentSaveListeners,

@@ -293,19 +293,9 @@ tracked task. `print(...)`, stdout, stderr, and mapped runtime traceback
 locations appear in the task terminal and the `tua` output channel. Configure a
 non-standard LOVE executable with `tua.love.command`.
 
-**Tua: Debug LOVE Project** builds the same output and launches the optional
-[Second Local Lua Debugger](installation.md#optional-love-debugging) adapter against
-generated Lua. Standard `*.lua.map` files let breakpoints placed in `.tua` bind
-to generated lines and map stopped stack frames back to Tua. The adapter
-provides stepping, variables, watches, conditional breakpoints, and evaluation;
-Tua owns only build and source-map integration.
-
-!!! info "Generated Lua is the debug target"
-    Tua writes the debugger bootstrap only to the freshly generated
-    `build/conf.lua`, creating that output file when needed and adjusting
-    existing maps when it prepends a line. It does not modify project source.
-    Unmapped generated helper lines are skipped by default; use the generated
-    Lua navigation commands when inspecting lowering details.
+**Tua: Debug LOVE Project** provides source-mapped LOVE debugging through an
+external Lua adapter. See [Debugging](debugging.md) for setup, runtime behavior,
+and launch guidance.
 
 ## VS Code Commands
 

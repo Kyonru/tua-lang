@@ -75,17 +75,9 @@ stderr into both the task terminal and the `tua` output channel.
 Use **Tua: Restart LOVE Project** after changes. If LOVE is not found, set
 `tua.love.command` to the LOVE executable path in VS Code settings.
 
-To debug instead of only run, install
-[Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode)
-and use **Tua: Debug LOVE Project**. Breakpoints can be placed directly in
-`.tua` files; Tua builds standard source maps while the Lua debugger provides
-stepping, variables, watches, and expression evaluation.
-
-!!! info "The runtime still executes Lua"
-    Debug sessions launch the generated files under `build/`. Tua maps source
-    locations in both directions, so normal mapped stops open `.tua` while
-    **Tua: Open Generated Lua Beside Tua** remains available when you need to
-    inspect the exact runtime code.
+To debug instead of only run, use **Tua: Debug LOVE Project**. See
+[Debugging](debugging.md) for debugger installation, source maps, generated-Lua
+inspection, and launch guidance.
 
 ## 4. Use The Editor
 

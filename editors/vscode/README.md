@@ -106,7 +106,9 @@ From there you can:
 - `Tua: Debug LOVE Project` bridges generated Lua to the optional
   [Second Local Lua Debugger](https://marketplace.visualstudio.com/items?itemName=ismoh-games.second-local-lua-debugger-vscode)
   extension. Breakpoints stay in `.tua`; stepping, variables, watches,
-  conditional breakpoints, and evaluation remain standard Lua debugging.
+  conditional breakpoints, and evaluation remain standard Lua debugging. Game
+  workspaces can also opt a `lua-local` launch configuration into the same
+  preparation pipeline with `tuaProject: true`.
 - Compiler-backed sprite sheet inspection and preview through
   `spriteSheet({...})` metadata. Preview is currently gated by
   `tua.preview.enabled`.

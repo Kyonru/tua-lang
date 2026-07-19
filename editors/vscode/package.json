@@ -25,6 +25,7 @@
   "activationEvents": [
     "onCommand:tua.initProject",
     "onCommand:tua.debugLoveProject",
+    "onDebugResolve:lua-local",
     "onLanguage:tua",
     "workspaceContains:**/*.tua"
   ],

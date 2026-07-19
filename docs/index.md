@@ -36,6 +36,7 @@ flowchart LR
 | --- | --- |
 | Install Tua and choose an editor or CLI setup | [Installation](installation.md) |
 | Create and run a first project in VS Code | [Quickstart](quickstart.md) |
+| Debug generated LOVE code from `.tua` source | [Debugging](debugging.md) |
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
@@ -134,6 +135,8 @@ distributed with the rest of the project.
   building, watching, traceback mapping, and the language server command.
 - [Language Server](lsp.md) describes editor features, settings, and custom
   project views.
+- [Debugging](debugging.md) covers source-mapped LOVE sessions, generated Lua,
+  and debugger integration.
 - [Diagnostic Codes](luahelper-code-matrix.md) defines every Tua error,
   warning, and hint code.
 - [Releases](releases.md) covers downloads, checksums, compatibility, and

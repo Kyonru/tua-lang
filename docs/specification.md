@@ -223,7 +223,9 @@ LOVE debugging remains Lua debugging. The extension builds generated Lua,
 prepares a build-output-only debugger bootstrap, and launches the optional
 Second Local Lua Debugger adapter. Tua source maps bind `.tua` breakpoints and
 map stopped stack frames back to source; the external adapter owns execution,
-stepping, variables, watches, and evaluation.
+stepping, variables, watches, and evaluation. VS Code `lua-local` launch
+configurations opt into Tua's build and map preparation with
+`tuaProject: true`.
 
 No source content or completion-learning data is sent off-device by default.
 Completion providers are local-only. The model-integration setting is an inert
