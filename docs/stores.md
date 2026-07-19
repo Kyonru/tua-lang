@@ -9,26 +9,46 @@ state shape from the initial table, so reads, replacements, updates,
 subscriptions, and keyed watchers receive completion and type checking without
 a generic annotation or package install.
 
-```tua
-type GameState = {
-  score: number,
-  paused: boolean,
-  playerName: string,
-}
+=== "Tua"
 
-local game = store({
-  score = 0,
-  paused = false,
-  playerName = "Ada",
-})
+    ```tua
+    type GameState = {
+      score: number,
+      paused: boolean,
+      playerName: string,
+    }
 
-game:update(function(state: GameState)
-  state.score += 10
-end)
+    local game = store({
+      score = 0,
+      paused = false,
+      playerName = "Ada",
+    })
 
-local state: GameState = game:get()
-print(state.score)
-```
+    game:update(function(state: GameState)
+      state.score += 10
+    end)
+
+    local state: GameState = game:get()
+    print(state.score)
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local __tua_store = require("tuastore")
+    local game = __tua_store({
+      score = 0,
+      paused = false,
+      playerName = "Ada",
+    })
+
+    game:update(function(state)
+      state.score = state.score + 10
+    end)
+
+    local state = game:get()
+    print(state.score)
+    ```
 
 !!! info "Explicit instances, not a global singleton"
     `store` is a constructor. Put an instance in a normal module and share it

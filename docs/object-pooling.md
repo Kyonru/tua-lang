@@ -16,32 +16,58 @@ releases it for later reuse.
 
 ## Create A Typed Pool
 
-```tua
-type Bullet = {
-  x: number,
-  y: number,
-  active: boolean,
-}
+=== "Tua"
 
-local bullets = objectPool({
-  create = function(): Bullet
-    return { x = 0, y = 0, active = false }
-  end,
-  reset = function(bullet: Bullet)
-    bullet.x = 0
-    bullet.y = 0
-    bullet.active = false
-  end,
-  initial = 128,
-})
+    ```tua
+    type Bullet = {
+      x: number,
+      y: number,
+      active: boolean,
+    }
 
-local bullet = bullets:acquire()
-bullet.x = 120
-bullet.y = 80
-bullet.active = true
+    local bullets = objectPool({
+      create = function(): Bullet
+        return { x = 0, y = 0, active = false }
+      end,
+      reset = function(bullet: Bullet)
+        bullet.x = 0
+        bullet.y = 0
+        bullet.active = false
+      end,
+      initial = 128,
+    })
 
-bullets:release(bullet)
-```
+    local bullet = bullets:acquire()
+    bullet.x = 120
+    bullet.y = 80
+    bullet.active = true
+
+    bullets:release(bullet)
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local __tua_object_pool = require("tuaobjectpool")
+    local bullets = __tua_object_pool({
+      create = function()
+        return { x = 0, y = 0, active = false }
+      end,
+      reset = function(bullet)
+        bullet.x = 0
+        bullet.y = 0
+        bullet.active = false
+      end,
+      initial = 128,
+    })
+
+    local bullet = bullets:acquire()
+    bullet.x = 120
+    bullet.y = 80
+    bullet.active = true
+
+    bullets:release(bullet)
+    ```
 
 !!! tip "Annotate the factory return"
     A return annotation such as `Bullet` lets completion, hover, checking,

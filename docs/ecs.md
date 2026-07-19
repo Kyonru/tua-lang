@@ -21,32 +21,50 @@ three simple ideas:
 
 ## Start With One Moving Entity
 
-```tua
-local Position = ecs.component("Position", {
-  x = "number",
-  y = "number",
-})
+=== "Tua"
 
-local Velocity = ecs.component("Velocity", {
-  x = "number",
-  y = "number",
-})
+    ```tua
+    local Position = ecs.component("Position", { x = "number", y = "number" })
+    local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
 
-local world = ecs.world()
-local player = world:create()
+    local world = ecs.world()
+    local player = world:create()
 
-world:add(player, Position, { x = 120, y = 80 })
-world:add(player, Velocity, { x = 30, y = 0 })
+    world:add(player, Position, { x = 120, y = 80 })
+    world:add(player, Velocity, { x = 30, y = 0 })
 
-local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
-  position.x += velocity.x * dt
-  position.y += velocity.y * dt
-end)
+    local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+      position.x += velocity.x * dt
+      position.y += velocity.y * dt
+    end)
 
-function love.update(dt: number)
-  movement:update(dt)
-end
-```
+    function love.update(dt: number)
+      movement:update(dt)
+    end
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local ecs = require("tuaecs")
+    local Position = ecs.component("Position", { x = "number", y = "number" })
+    local Velocity = ecs.component("Velocity", { x = "number", y = "number" })
+
+    local world = ecs.world()
+    local player = world:create()
+
+    world:add(player, Position, { x = 120, y = 80 })
+    world:add(player, Velocity, { x = 30, y = 0 })
+
+    local movement = ecs.system(world, { Position, Velocity }, function(_, position, velocity, dt)
+      position.x = position.x + velocity.x * dt
+      position.y = position.y + velocity.y * dt
+    end)
+
+    function love.update(dt)
+      movement:update(dt)
+    end
+    ```
 
 The component order in `ecs.system(world, { Position, Velocity }, callback)`
 is also the callback data order. The callback receives the entity ID first and

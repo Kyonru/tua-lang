@@ -9,30 +9,60 @@ icon: lucide/gamepad-2
 runtime behavior while Tua adds completion, checking, name-aware return types,
 and zero-setup build integration.
 
-```tua
-local controls = input({
-  controls = {
-    left = { "key:left", "key:a", "axis:leftx-" },
-    right = { "key:right", "key:d", "axis:leftx+" },
-    up = { "key:up", "key:w", "axis:lefty-" },
-    down = { "key:down", "key:s", "axis:lefty+" },
-    confirm = { "key:return", "button:a" },
-  },
-  pairs = {
-    move = { "left", "right", "up", "down" },
-  },
-  deadzone = 0.25,
-})
+=== "Tua"
 
-function love.update(dt: number)
-  controls:update()
+    ```tua
+    local controls = input({
+      controls = {
+        left = { "key:left", "key:a", "axis:leftx-" },
+        right = { "key:right", "key:d", "axis:leftx+" },
+        up = { "key:up", "key:w", "axis:lefty-" },
+        down = { "key:down", "key:s", "axis:lefty+" },
+        confirm = { "key:return", "button:a" },
+      },
+      pairs = {
+        move = { "left", "right", "up", "down" },
+      },
+      deadzone = 0.25,
+    })
 
-  local x, y = controls:get("move")
-  if controls:pressed("confirm") then
-    print("confirmed", x, y)
-  end
-end
-```
+    function love.update(dt: number)
+      controls:update()
+
+      local x, y = controls:get("move")
+      if controls:pressed("confirm") then
+        print("confirmed", x, y)
+      end
+    end
+    ```
+
+=== "Generated Lua"
+
+    ```lua
+    local __tua_input = require("baton").new
+    local controls = __tua_input({
+      controls = {
+        left = { "key:left", "key:a", "axis:leftx-" },
+        right = { "key:right", "key:d", "axis:leftx+" },
+        up = { "key:up", "key:w", "axis:lefty-" },
+        down = { "key:down", "key:s", "axis:lefty+" },
+        confirm = { "key:return", "button:a" },
+      },
+      pairs = {
+        move = { "left", "right", "up", "down" },
+      },
+      deadzone = 0.25,
+    })
+
+    function love.update(dt)
+      controls:update()
+
+      local x, y = controls:get("move")
+      if controls:pressed("confirm") then
+        print("confirmed", x, y)
+      end
+    end
+    ```
 
 ## Controls And Pairs
 
