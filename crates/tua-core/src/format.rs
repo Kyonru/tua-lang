@@ -370,7 +370,7 @@ struct Formatter<'a> {
     brace_depth: usize,
     paren_continuation_indents: Vec<usize>,
     pending_continuation: bool,
-    paren_suppressed_block_depth: usize,
+    suppressed_paren_block_indents: Vec<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -389,7 +389,7 @@ impl<'a> Formatter<'a> {
             brace_depth: 0,
             paren_continuation_indents: Vec::new(),
             pending_continuation: false,
-            paren_suppressed_block_depth: 0,
+            suppressed_paren_block_indents: Vec::new(),
         }
     }
 
@@ -436,8 +436,10 @@ impl<'a> Formatter<'a> {
 
         let code = code_before_comment(trimmed);
         let dedent = line_starts_with_dedent(code);
-        let closes_suppressed_block = dedent && self.paren_suppressed_block_depth > 0;
-        let suppress_paren_for_block = self.paren_suppressed_block_depth > 0;
+        let middle_block = line_is_middle_block(code);
+        let closes_suppressed_block =
+            dedent && !middle_block && !self.suppressed_paren_block_indents.is_empty();
+        let suppress_paren_for_block = !self.suppressed_paren_block_indents.is_empty();
 
         if dedent {
             self.indent_level = self.indent_level.saturating_sub(1);
@@ -472,17 +474,22 @@ impl<'a> Formatter<'a> {
         self.pending_continuation = self.paren_depth == 0 && line_ends_with_continuation(code);
 
         if closes_suppressed_block {
-            self.paren_suppressed_block_depth = self.paren_suppressed_block_depth.saturating_sub(1);
+            let promoted_indent = self
+                .suppressed_paren_block_indents
+                .pop()
+                .expect("suppressed block should retain its promoted indent");
+            self.indent_level = self.indent_level.saturating_sub(promoted_indent);
         }
 
         if line_opens_block(code) {
             if self.paren_depth > 0 {
-                self.paren_suppressed_block_depth += 1;
+                self.indent_level += paren_indent;
+                self.suppressed_paren_block_indents.push(paren_indent);
             }
             self.indent_level += 1;
         }
 
-        if line_is_middle_block(code) {
+        if middle_block {
             self.indent_level += 1;
         }
     }

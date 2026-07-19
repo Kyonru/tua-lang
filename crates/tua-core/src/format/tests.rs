@@ -318,6 +318,19 @@ end
 }
 
 #[test]
+fn keeps_multiline_function_argument_bodies_relative_to_the_call() {
+    let source = r#"local stopScore = game:watch(
+  "score",
+  function(score: number, previous: number, state: GameState)
+    print("score", previous, score, state.playerName)
+  end
+)
+"#;
+
+    assert_eq!(format(source), source);
+}
+
+#[test]
 fn is_idempotent() {
     let source = r#"function draw()
   local values = {

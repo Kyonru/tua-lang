@@ -16,8 +16,8 @@ local game = store({
 local stopScore = game:watch(
   "score",
   function(score: number, previous: number, state: GameState)
-  print("score", previous, score, state.playerName)
-end
+    print("score", previous, score, state.playerName)
+  end
 )
 
 -- Feature: update keeps one state table and notifies after the mutator returns.
