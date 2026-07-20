@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::model::{FunctionType, TableShape, Type, TypeAlias};
+use super::model::{is_index_signature_field, FunctionType, TableShape, Type, TypeAlias};
 
 const MAX_ALIAS_DEPTH: usize = 64;
 
@@ -223,6 +223,10 @@ impl TypeContext {
 
     fn is_table_assignable(&self, source: &TableShape, target: &TableShape, depth: usize) -> bool {
         target.fields().all(|(name, target_field)| {
+            if is_index_signature_field(name) {
+                return true;
+            }
+
             let Some(source_field) = source.semantic_field(name) else {
                 return target_field.optional;
             };

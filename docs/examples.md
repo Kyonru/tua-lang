@@ -49,6 +49,24 @@ make run-love-full
 
 The run target uses a smoke mode suitable for local validation.
 
+## `examples/love-tua`
+
+A small playable bullet hell that combines Tua's ECS, object pool, store, state
+machine, and input helpers with a hand-written Lua projectile-pattern module
+and declaration-typed [feel.lua](https://github.com/Kyonru/feel.lua) feedback.
+
+```bash
+make check-love-tua
+make run-love-tua
+```
+
+The `.tua` and `.lua` sources live together at the example root, including the
+tracked Feel runtime and declarations under `lib/feel`. Tua indexes the
+declarations without emitting them, copies runtime Lua unchanged, and writes
+the runnable project under the ignored `build/` directory. Because the example
+is self-contained, it participates in the default example build and benchmark
+suites without network setup.
+
 ## Syntax Validation
 
 When LuaJIT or Lua is available:

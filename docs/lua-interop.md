@@ -205,7 +205,7 @@ The most useful annotations establish types at module and callback boundaries.
 | Tag | Current use |
 | --- | --- |
 | `---@class` | Declares a named table or object shape. |
-| `---@field` | Adds a typed field, optional field, visibility metadata, and documentation to a class. |
+| `---@field` | Adds a typed field, optional field, visibility metadata, documentation, or a dictionary-style index signature such as `[string]`. |
 | `---@alias` | Declares a reusable type alias or literal union. |
 | `---@type` | Types an attached local or value where the relationship is statically clear. |
 | `---@param` | Types and documents a function parameter. |
@@ -215,7 +215,8 @@ The most useful annotations establish types at module and callback boundaries.
 
 These annotations can contribute to checking, module export inference, hover,
 completion, signature help, semantic highlighting, and parameter
-documentation.
+documentation. Index signatures keep a class open to keyed values without
+appearing as literal field names in completion.
 
 ### External Declaration Libraries
 

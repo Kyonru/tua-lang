@@ -71,6 +71,32 @@ fn empty_table_literals_initialize_arrays_and_dictionaries() {
 }
 
 #[test]
+fn luadoc_index_signatures_are_not_required_named_fields() {
+    let parsed = parse_lua_source(
+        "lib/feel/types/feel.lua",
+        r#"---@class FeelPlayOptions
+---@field [string] any
+---@field restart? boolean
+local options = {}
+"#,
+    )
+    .expect("LuaDoc index signature should parse");
+    let environment = build_type_environment(&parsed).expect("LuaDoc index signature should lower");
+    let options = environment
+        .alias("FeelPlayOptions")
+        .expect("FeelPlayOptions should be registered");
+    let supplied = Type::table([("restart", TableField::required(Type::boolean()))]);
+
+    assert!(is_assignable(&supplied, options));
+
+    let Type::Table(options) = options else {
+        panic!("options should remain a table shape");
+    };
+    assert!(options.semantic_field("[string]").is_none());
+    assert!(!options.semantic_fields().contains_key("[string]"));
+}
+
+#[test]
 fn unions_accept_values_assignable_to_any_member() {
     let number_or_nil = Type::union([Type::number(), Type::nil()]);
 

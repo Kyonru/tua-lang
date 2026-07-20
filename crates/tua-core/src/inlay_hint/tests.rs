@@ -4,6 +4,15 @@ use std::path::PathBuf;
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[test]
+fn deeply_nested_types_are_not_rendered_as_inlay_hints() {
+    let mut ty = Type::number();
+    for _ in 0..128 {
+        ty = Type::Array(Box::new(ty));
+    }
+    assert!(!should_hint_type(&ty));
+}
+
 const SOURCE: &str = r#"
 type Player = { hp: number }
 

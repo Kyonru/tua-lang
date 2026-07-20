@@ -349,7 +349,46 @@ impl<'a> InlayHintCollector<'a> {
 }
 
 fn should_hint_type(ty: &Type) -> bool {
-    !matches!(ty, Type::Any)
+    !matches!(ty, Type::Any) && type_is_reasonably_shallow(ty, 0)
+}
+
+// External LuaCATS libraries may define recursive/very deeply nested table
+// unions (for example Feel's recursive step sequences).  Inlay labels are
+// presentation-only; avoid expanding such types indefinitely while formatting
+// a hint, which can otherwise overflow the language server stack.
+fn type_is_reasonably_shallow(ty: &Type, depth: usize) -> bool {
+    const MAX_DEPTH: usize = 64;
+    if depth >= MAX_DEPTH {
+        return false;
+    }
+    match ty {
+        Type::Union(types) | Type::Tuple(types) => types
+            .iter()
+            .all(|ty| type_is_reasonably_shallow(ty, depth + 1)),
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .all(|parameter| type_is_reasonably_shallow(&parameter.ty, depth + 1))
+                && function
+                    .vararg_type
+                    .as_deref()
+                    .is_none_or(|ty| type_is_reasonably_shallow(ty, depth + 1))
+                && function
+                    .return_types_or_any()
+                    .iter()
+                    .all(|ty| type_is_reasonably_shallow(ty, depth + 1))
+        }
+        Type::Table(table) => table
+            .fields()
+            .all(|(_, field)| type_is_reasonably_shallow(&field.ty, depth + 1)),
+        Type::Array(item) => type_is_reasonably_shallow(item, depth + 1),
+        Type::Dictionary { key, value } => {
+            type_is_reasonably_shallow(key, depth + 1)
+                && type_is_reasonably_shallow(value, depth + 1)
+        }
+        Type::Primitive(_) | Type::Any | Type::Alias(_) | Type::StringLiteral(_) => true,
+    }
 }
 
 fn call_visible_parameters<'a>(

@@ -240,13 +240,13 @@ impl ProjectTypeDatabase {
                 let key = (binding.module_path.clone(), binding.name.clone());
 
                 if resolving.contains(&key) {
-                    if self
-                        .module(&binding.module_path)
-                        .is_some_and(|module| module.class_names.contains(&binding.name))
-                    {
-                        return Type::Any;
-                    }
-                    return ty.clone();
+                    // Recursive LuaCATS aliases are valid (for example a
+                    // linked-list node referring to `Node` again).  Do not
+                    // expand the cycle indefinitely: replacing the back-edge
+                    // with `any` preserves the outer table shape and allows
+                    // shallow completion while keeping all resolution callers
+                    // stack-safe.
+                    return Type::Any;
                 }
 
                 resolving.push(key);

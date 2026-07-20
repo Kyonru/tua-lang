@@ -214,3 +214,38 @@ return {}
         Type::table([("name", TableField::required(Type::string()))])
     );
 }
+
+#[test]
+fn recursive_aliases_terminate_at_cycle() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Types = require("types")
+local node: Types.Node
+-- file: src/types.lua
+---@meta
+---@alias Node { value: number, next: Node }
+return {}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let binding = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Types.Node")
+        .expect("recursive alias should resolve");
+
+    let Type::Table(table) = binding.ty else {
+        panic!("expected recursive alias to retain outer table shape");
+    };
+    assert_eq!(
+        table.semantic_field("value").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+    let Type::Table(next) = &table.semantic_field("next").expect("next field").ty else {
+        panic!("expected recursive edge to retain one shallow table");
+    };
+    assert_eq!(
+        next.semantic_field("next").map(|field| &field.ty),
+        Some(&Type::Any)
+    );
+}

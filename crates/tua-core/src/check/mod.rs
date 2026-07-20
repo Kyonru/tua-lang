@@ -3097,17 +3097,36 @@ fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
 }
 
 fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Type {
-    if depth >= MAX_TYPE_RESOLUTION_DEPTH {
-        return ty.clone();
+    fn visit(
+        ty: &Type,
+        environment: &TypeEnvironment,
+        depth: usize,
+        seen: &mut BTreeSet<String>,
+    ) -> Type {
+        if depth >= MAX_TYPE_RESOLUTION_DEPTH {
+            return ty.clone();
+        }
+        match ty {
+            Type::Alias(name) => {
+                // Recursive LuaCATS aliases (e.g. FeelStep -> parallel.steps
+                // -> FeelStep) are a valid declaration pattern.  Do not expand
+                // a name already on the resolution path; treating the cycle as
+                // `any` keeps semantic walkers finite while preserving the
+                // outer alias for shallow completion.
+                if !seen.insert(name.clone()) {
+                    return Type::Any;
+                }
+                let result = environment
+                    .alias(name)
+                    .map(|resolved| visit(resolved, environment, depth + 1, seen))
+                    .unwrap_or_else(|| ty.clone());
+                seen.remove(name);
+                result
+            }
+            _ => ty.clone(),
+        }
     }
-
-    match ty {
-        Type::Alias(name) => environment
-            .alias(name)
-            .map(|resolved| resolve_aliases(resolved, environment, depth + 1))
-            .unwrap_or_else(|| ty.clone()),
-        _ => ty.clone(),
-    }
+    visit(ty, environment, depth, &mut BTreeSet::new())
 }
 
 fn resolve_index_type(

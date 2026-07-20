@@ -284,7 +284,7 @@ impl TableShape {
     }
 
     fn semantic_field_at_depth(&self, name: &str, depth: usize) -> Option<&TableField> {
-        if is_metamethod_field(name) {
+        if is_metamethod_field(name) || is_index_signature_field(name) {
             return None;
         }
 
@@ -316,7 +316,7 @@ impl TableShape {
         let mut fields = self
             .fields
             .iter()
-            .filter(|(name, _)| !is_metamethod_field(name))
+            .filter(|(name, _)| !is_metamethod_field(name) && !is_index_signature_field(name))
             .map(|(name, field)| (name.clone(), field.clone()))
             .collect::<BTreeMap<_, _>>();
 
@@ -361,6 +361,12 @@ impl TableShape {
     pub fn constructor_methods(&self) -> impl Iterator<Item = &str> {
         self.constructor_methods.iter().map(String::as_str)
     }
+}
+
+pub(crate) fn is_index_signature_field(name: &str) -> bool {
+    name.strip_prefix('[')
+        .and_then(|name| name.strip_suffix(']'))
+        .is_some_and(|name| !name.trim().is_empty())
 }
 
 impl Default for TableShape {
@@ -578,73 +584,99 @@ fn newindex_key_accepts(ty: &Type, key: &str) -> bool {
 
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::Primitive(primitive) => write!(formatter, "{primitive}"),
-            Type::Any => write!(formatter, "any"),
-            Type::Alias(name) => write!(formatter, "{name}"),
-            Type::StringLiteral(value) => write!(formatter, "{value:?}"),
-            Type::Union(types) => {
-                for (index, ty) in types.iter().enumerate() {
-                    if index > 0 {
-                        write!(formatter, " | ")?;
-                    }
-                    write!(formatter, "{ty}")?;
+        fmt_type(self, formatter, 0)
+    }
+}
+
+// External LuaCATS libraries may contain recursive aliases (for example a
+// sequence whose parallel steps contain another sequence).  Type values are
+// materialized as owned trees, so formatting one without a guard can recurse
+// until the language server stack overflows.  Keep presentation bounded;
+// callers still retain the full semantic type for checking/completion.
+fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
+    const MAX_DISPLAY_DEPTH: usize = 64;
+    if depth >= MAX_DISPLAY_DEPTH {
+        return write!(formatter, "…");
+    }
+    match ty {
+        Type::Primitive(primitive) => write!(formatter, "{primitive}"),
+        Type::Any => write!(formatter, "any"),
+        Type::Alias(name) => write!(formatter, "{name}"),
+        Type::StringLiteral(value) => write!(formatter, "{value:?}"),
+        Type::Union(types) => {
+            for (index, ty) in types.iter().enumerate() {
+                if index > 0 {
+                    write!(formatter, " | ")?;
                 }
-                Ok(())
+                fmt_type(ty, formatter, depth + 1)?;
             }
-            Type::Function(function) => {
-                write!(formatter, "(")?;
-                for (index, parameter) in function.parameters.iter().enumerate() {
-                    if index > 0 {
-                        write!(formatter, ", ")?;
-                    }
-                    if let Some(name) = parameter.name.as_deref() {
-                        write!(formatter, "{name}: ")?;
-                    }
-                    write!(formatter, "{}", parameter.ty)?;
+            Ok(())
+        }
+        Type::Function(function) => {
+            write!(formatter, "(")?;
+            for (index, parameter) in function.parameters.iter().enumerate() {
+                if index > 0 {
+                    write!(formatter, ", ")?;
                 }
-                if let Some(vararg_type) = function.vararg_type.as_deref() {
-                    if !function.parameters.is_empty() {
-                        write!(formatter, ", ")?;
-                    }
-                    write!(formatter, "...{vararg_type}")?;
+                if let Some(name) = parameter.name.as_deref() {
+                    write!(formatter, "{name}: ")?;
                 }
-                let returns = function.return_types_or_any();
-                if returns.len() > 1 {
-                    write!(formatter, ") -> ({})", format_type_list(returns))
-                } else {
-                    write!(formatter, ") -> {}", format_type_list(returns))
-                }
+                fmt_type(&parameter.ty, formatter, depth + 1)?;
             }
-            Type::Table(table) => {
-                write!(formatter, "{{ ")?;
-                for (index, (name, field)) in table.fields().enumerate() {
-                    if index > 0 {
-                        write!(formatter, ", ")?;
-                    }
-                    if field.optional {
-                        write!(formatter, "{name}?: {}", field.ty)?;
-                    } else {
-                        write!(formatter, "{name}: {}", field.ty)?;
-                    }
+            if let Some(vararg_type) = function.vararg_type.as_deref() {
+                if !function.parameters.is_empty() {
+                    write!(formatter, ", ")?;
                 }
-                write!(formatter, " }}")
+                write!(formatter, "...")?;
+                fmt_type(vararg_type, formatter, depth + 1)?;
             }
-            Type::Array(item) if matches!(item.as_ref(), Type::Union(_) | Type::Function(_)) => {
-                write!(formatter, "({item})[]")
+            let returns = function.return_types_or_any();
+            if returns.len() > 1 {
+                write!(formatter, ") -> ({})", format_type_list(returns))
+            } else {
+                write!(formatter, ") -> {}", format_type_list(returns))
             }
-            Type::Array(item) => write!(formatter, "{item}[]"),
-            Type::Tuple(items) => {
-                write!(formatter, "[")?;
-                for (index, item) in items.iter().enumerate() {
-                    if index > 0 {
-                        write!(formatter, ", ")?;
-                    }
-                    write!(formatter, "{item}")?;
+        }
+        Type::Table(table) => {
+            write!(formatter, "{{ ")?;
+            for (index, (name, field)) in table.fields().enumerate() {
+                if index > 0 {
+                    write!(formatter, ", ")?;
                 }
-                write!(formatter, "]")
+                write!(formatter, "{name}")?;
+                if field.optional {
+                    write!(formatter, "?")?;
+                }
+                write!(formatter, ": ")?;
+                fmt_type(&field.ty, formatter, depth + 1)?;
             }
-            Type::Dictionary { key, value } => write!(formatter, "{{ [{key}]: {value} }}"),
+            write!(formatter, " }}")
+        }
+        Type::Array(item) if matches!(item.as_ref(), Type::Union(_) | Type::Function(_)) => {
+            write!(formatter, "(")?;
+            fmt_type(item, formatter, depth + 1)?;
+            write!(formatter, ")[]")
+        }
+        Type::Array(item) => {
+            fmt_type(item, formatter, depth + 1)?;
+            write!(formatter, "[]")
+        }
+        Type::Tuple(items) => {
+            write!(formatter, "[")?;
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    write!(formatter, ", ")?;
+                }
+                fmt_type(item, formatter, depth + 1)?;
+            }
+            write!(formatter, "]")
+        }
+        Type::Dictionary { key, value } => {
+            write!(formatter, "{{ [")?;
+            fmt_type(key, formatter, depth + 1)?;
+            write!(formatter, "]: ")?;
+            fmt_type(value, formatter, depth + 1)?;
+            write!(formatter, " }}")
         }
     }
 }

@@ -212,7 +212,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full build-features build-project-model ## Compile all bundled examples.
+build-examples: build-love-minimal build-love-full build-love-tua build-features build-project-model ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -221,6 +221,14 @@ build-love-minimal: ## Compile examples/love-minimal to Lua.
 .PHONY: build-love-full
 build-love-full: ## Compile examples/love-full to Lua.
 	cd examples/love-full && $(TUA) build
+
+.PHONY: check-love-tua
+check-love-tua: ## Check the mixed Tua/Lua bullet-hell example.
+	cd examples/love-tua && $(TUA) check
+
+.PHONY: build-love-tua
+build-love-tua: ## Compile the mixed Tua/Lua bullet-hell example.
+	cd examples/love-tua && $(TUA) build
 
 .PHONY: build-features
 build-features: ## Compile examples/features to Lua.
@@ -253,6 +261,14 @@ run-love-minimal: build-love-minimal ## Build and run the minimal LOVE example.
 .PHONY: run-love-full
 run-love-full: build-love-full ## Build and run the full LOVE example in smoke mode.
 	TUA_LOVE_FULL_SMOKE=1 $(LOVE) examples/love-full/game
+
+.PHONY: run-love-tua
+run-love-tua: build-love-tua ## Build and run the bullet-hell LOVE/Tua showcase.
+	$(LOVE) examples/love-tua/build
+
+.PHONY: smoke-love-tua
+smoke-love-tua: build-love-tua ## Run the bullet-hell showcase for a short smoke pass.
+	TUA_LOVE_TUA_SMOKE=1 $(LOVE) examples/love-tua/build
 
 .PHONY: extension-deps
 extension-deps: ## Install VS Code extension npm dependencies.

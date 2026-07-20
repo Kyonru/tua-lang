@@ -2666,9 +2666,11 @@ fn completion_includes_index_fields_but_hides_metamethods() {
         ),
         ("__add", crate::TableField::required(Type::Function(add))),
     ]);
-    let table =
-        crate::TableShape::from_fields([("x", crate::TableField::required(Type::number()))])
-            .with_metatable_facts(crate::types::MetatableFacts::from_type(&meta));
+    let table = crate::TableShape::from_fields([
+        ("x", crate::TableField::required(Type::number())),
+        ("[string]", crate::TableField::required(Type::Any)),
+    ])
+    .with_metatable_facts(crate::types::MetatableFacts::from_type(&meta));
     let parsed =
         crate::parse_tua_source("src/main.tua", "").expect("empty source should parse for context");
     let environment = TypeEnvironment::from_parsed(&parsed)
@@ -2679,6 +2681,7 @@ fn completion_includes_index_fields_but_hides_metamethods() {
 
     assert!(fields.contains_key("x"), "{fields:?}");
     assert!(fields.contains_key("length"), "{fields:?}");
+    assert!(!fields.contains_key("[string]"), "{fields:?}");
     assert!(!fields.contains_key("__add"), "{fields:?}");
     assert!(!fields.contains_key("__index"), "{fields:?}");
 }

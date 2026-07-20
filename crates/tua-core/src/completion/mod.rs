@@ -2470,11 +2470,31 @@ fn collect_table_fields(
     ty: &Type,
     fields: &mut BTreeMap<String, (String, CompletionKind)>,
 ) {
+    collect_table_fields_inner(environment, ty, fields, 0);
+}
+
+// Type aliases from external LuaCATS libraries may be recursive (for example,
+// Feel's `Step` union contains a `parallel.steps` array of `Step`s).  Keep the
+// traversal bounded: resolving an alias can produce a union containing the
+// same alias, and resetting the resolution depth for each union member would
+// otherwise recurse until the language server stack overflows.
+const MAX_TABLE_FIELD_COMPLETION_DEPTH: usize = 64;
+
+fn collect_table_fields_inner(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    fields: &mut BTreeMap<String, (String, CompletionKind)>,
+    depth: usize,
+) {
+    if depth >= MAX_TABLE_FIELD_COMPLETION_DEPTH {
+        return;
+    }
+
     match resolve_aliases(environment, ty, 0) {
         Type::Table(table) => collect_shape_fields(environment, &table, fields),
         Type::Union(types) => {
             for ty in types {
-                collect_table_fields(environment, &ty, fields);
+                collect_table_fields_inner(environment, &ty, fields, depth + 1);
             }
         }
         Type::Any

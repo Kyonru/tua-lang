@@ -142,3 +142,77 @@ fn love_full_example_builds_and_optionally_runs_with_love() {
         String::from_utf8_lossy(&love_output.stderr)
     );
 }
+
+#[test]
+fn love_tua_example_keeps_tua_lua_and_vendored_feel_together() {
+    let temp = TempDir::new("love-tua");
+    let example = example_root("love-tua");
+
+    copy_dir_all(&example, temp.path()).expect("failed to copy love-tua example");
+
+    let check_output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check for love-tua");
+
+    assert!(
+        check_output.status.success(),
+        "tua check failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&check_output.stdout),
+        String::from_utf8_lossy(&check_output.stderr)
+    );
+
+    let build_output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build for love-tua");
+
+    assert!(
+        build_output.status.success(),
+        "tua build failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build_output.stdout),
+        String::from_utf8_lossy(&build_output.stderr)
+    );
+
+    assert!(temp.path().join("main.tua").is_file());
+    assert!(temp.path().join("patterns.lua").is_file());
+    assert!(temp.path().join("lib/feel/init.lua").is_file());
+    assert!(temp.path().join("lib/feel/types/feel.lua").is_file());
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert_eq!(
+        fs::read(temp.path().join("patterns.lua")).expect("failed to read source patterns.lua"),
+        fs::read(temp.path().join("build/patterns.lua"))
+            .expect("failed to read built patterns.lua")
+    );
+    assert_eq!(
+        fs::read(temp.path().join("lib/feel/init.lua"))
+            .expect("failed to read source Feel runtime"),
+        fs::read(temp.path().join("build/lib/feel/init.lua"))
+            .expect("failed to read built Feel runtime")
+    );
+    assert!(!temp.path().join("build/lib/feel/types/feel.lua").exists());
+
+    let Some(love) = love_executable() else {
+        eprintln!("skipping LOVE/Tua runtime validation; set TUA_TEST_LOVE_RUNTIME=1 to enable it");
+        return;
+    };
+
+    let child = Command::new(&love)
+        .arg(temp.path().join("build"))
+        .env("TUA_LOVE_TUA_SMOKE", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|source| panic!("failed to run {:?}: {source}", love));
+
+    let love_output = wait_for_child_output(child, Duration::from_secs(5));
+
+    assert!(
+        love_output.status.success(),
+        "LOVE/Tua runtime failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&love_output.stdout),
+        String::from_utf8_lossy(&love_output.stderr)
+    );
+}

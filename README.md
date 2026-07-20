@@ -98,3 +98,5 @@ make docs
 - `examples/features` is a buildable tour of the v1 language and LSP features.
 - `examples/love-minimal` is a small LÖVE smoke-test project.
 - `examples/love-full` is a larger LÖVE conversion example with Lua interop.
+- `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,
+  object pools, stores, state machines, typed input, and vendored Feel feedback.
