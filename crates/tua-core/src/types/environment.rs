@@ -61,6 +61,20 @@ impl TypeEnvironment {
         self.aliases.iter().map(|(name, ty)| (name.as_str(), ty))
     }
 
+    /// Resolves aliases throughout a type while keeping recursive LuaCATS
+    /// declarations finite. A repeated alias on the current expansion path is
+    /// the recursive back-edge, so only that edge becomes `any`; the outer
+    /// table, union, and function structure remains available to semantic and
+    /// editor features.
+    pub(crate) fn resolve_aliases(&self, ty: &Type) -> Type {
+        if !type_contains_alias_cycle(self, ty, 0, &mut BTreeSet::new()) {
+            return resolve_shallow_alias_chain(self, ty, 0, &mut BTreeSet::new());
+        }
+
+        let mut context = AliasResolutionContext::default();
+        context.resolve(self, ty)
+    }
+
     pub(crate) fn is_class(&self, name: &str) -> bool {
         self.class_names.contains(name)
     }
@@ -192,6 +206,173 @@ impl TypeEnvironment {
         }
 
         self
+    }
+}
+
+const MAX_ALIAS_RESOLUTION_DEPTH: usize = 64;
+
+fn resolve_shallow_alias_chain(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    depth: usize,
+    visiting: &mut BTreeSet<String>,
+) -> Type {
+    if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
+        return Type::Any;
+    }
+    let Type::Alias(name) = ty else {
+        return ty.clone();
+    };
+    let Some(alias) = environment.alias(name) else {
+        return ty.clone();
+    };
+    if !visiting.insert(name.clone()) {
+        return Type::Any;
+    }
+    let resolved = resolve_shallow_alias_chain(environment, alias, depth + 1, visiting);
+    visiting.remove(name);
+    resolved
+}
+
+fn type_contains_alias_cycle(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    depth: usize,
+    visiting: &mut BTreeSet<String>,
+) -> bool {
+    if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
+        return true;
+    }
+
+    match ty {
+        Type::Alias(name) => {
+            let Some(alias) = environment.alias(name) else {
+                return false;
+            };
+            if !visiting.insert(name.clone()) {
+                return true;
+            }
+            let recursive = type_contains_alias_cycle(environment, alias, depth + 1, visiting);
+            visiting.remove(name);
+            recursive
+        }
+        Type::Union(types) | Type::Tuple(types) => types
+            .iter()
+            .any(|ty| type_contains_alias_cycle(environment, ty, depth + 1, visiting)),
+        Type::Function(function) => {
+            function
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.name.as_deref() != Some("self"))
+                .any(|parameter| {
+                    type_contains_alias_cycle(environment, &parameter.ty, depth + 1, visiting)
+                })
+                || function.vararg_type.as_deref().is_some_and(|ty| {
+                    type_contains_alias_cycle(environment, ty, depth + 1, visiting)
+                })
+                || function
+                    .return_types_or_any()
+                    .iter()
+                    .any(|ty| type_contains_alias_cycle(environment, ty, depth + 1, visiting))
+        }
+        Type::Table(table) => table.fields().any(|(_, field)| {
+            type_contains_alias_cycle(environment, &field.ty, depth + 1, visiting)
+        }),
+        Type::Array(item) => type_contains_alias_cycle(environment, item, depth + 1, visiting),
+        Type::Dictionary { key, value } => {
+            type_contains_alias_cycle(environment, key, depth + 1, visiting)
+                || type_contains_alias_cycle(environment, value, depth + 1, visiting)
+        }
+        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
+    }
+}
+
+#[derive(Default)]
+struct AliasResolutionContext {
+    depth: usize,
+    visiting: BTreeSet<String>,
+}
+
+impl AliasResolutionContext {
+    fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
+        if self.depth >= MAX_ALIAS_RESOLUTION_DEPTH {
+            return Type::Any;
+        }
+
+        self.depth += 1;
+        let resolved = match ty {
+            Type::Alias(name) => {
+                let Some(alias) = environment.alias(name) else {
+                    self.depth -= 1;
+                    return ty.clone();
+                };
+                if !self.visiting.insert(name.clone()) {
+                    self.depth -= 1;
+                    return Type::Any;
+                }
+
+                let resolved = self.resolve(environment, alias);
+                self.visiting.remove(name);
+                resolved
+            }
+            Type::Union(types) => Type::union(types.iter().map(|ty| self.resolve(environment, ty))),
+            Type::Function(function) => {
+                let parameters = function
+                    .parameters
+                    .iter()
+                    .map(|parameter| FunctionParameter {
+                        name: parameter.name.clone(),
+                        ty: self.resolve(environment, &parameter.ty),
+                    })
+                    .collect::<Vec<_>>();
+                let vararg_type = function
+                    .vararg_type
+                    .as_deref()
+                    .map(|ty| self.resolve(environment, ty));
+                let return_types = function
+                    .return_types_or_any()
+                    .iter()
+                    .map(|ty| self.resolve(environment, ty))
+                    .collect::<Vec<_>>();
+                Type::Function(FunctionType::new_signature(
+                    parameters,
+                    function.required_parameter_count,
+                    vararg_type,
+                    return_types,
+                ))
+            }
+            Type::Table(table) => {
+                let mut resolved =
+                    super::TableShape::from_fields(table.fields().map(|(name, field)| {
+                        (
+                            name.to_owned(),
+                            TableField {
+                                ty: self.resolve(environment, &field.ty),
+                                optional: field.optional,
+                            },
+                        )
+                    }));
+                if let Some(facts) = table.metatable_facts() {
+                    resolved.set_metatable_facts(facts.clone());
+                }
+                if table.has_self_index() {
+                    resolved.mark_self_index();
+                }
+                for method in table.constructor_methods() {
+                    resolved.mark_constructor_method(method);
+                }
+                Type::Table(resolved)
+            }
+            Type::Array(item) => Type::array(self.resolve(environment, item)),
+            Type::Tuple(items) => Type::tuple(items.iter().map(|ty| self.resolve(environment, ty))),
+            Type::Dictionary { key, value } => Type::dictionary(
+                self.resolve(environment, key),
+                self.resolve(environment, value),
+            ),
+            Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => ty.clone(),
+        };
+        self.depth -= 1;
+        resolved
     }
 }
 
@@ -3739,17 +3920,30 @@ fn resolve_metatable_facts_from_map(
 }
 
 fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: usize) -> Type {
-    if depth >= 64 {
-        return ty.clone();
+    fn resolve_chain(
+        aliases: &BTreeMap<String, Type>,
+        ty: &Type,
+        depth: usize,
+        visiting: &mut BTreeSet<String>,
+    ) -> Type {
+        if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
+            return Type::Any;
+        }
+        let Type::Alias(name) = ty else {
+            return ty.clone();
+        };
+        let Some(alias) = aliases.get(name) else {
+            return ty.clone();
+        };
+        if !visiting.insert(name.clone()) {
+            return Type::Any;
+        }
+        let resolved = resolve_chain(aliases, alias, depth + 1, visiting);
+        visiting.remove(name);
+        resolved
     }
 
-    match ty {
-        Type::Alias(name) => aliases
-            .get(name)
-            .map(|resolved| resolve_aliases_from_map(aliases, resolved, depth + 1))
-            .unwrap_or_else(|| ty.clone()),
-        _ => ty.clone(),
-    }
+    resolve_chain(aliases, ty, depth, &mut BTreeSet::new())
 }
 
 fn function_type_from_body(body: &ast::FunctionBody) -> Type {

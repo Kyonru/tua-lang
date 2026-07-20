@@ -1279,20 +1279,6 @@ fn unquote_string(value: &str) -> String {
 }
 
 fn resolve_aliases(environment: &TypeEnvironment, ty: &Type, depth: usize) -> Type {
-    if depth > 16 {
-        return ty.clone();
-    }
-
-    match ty {
-        Type::Alias(name) => environment
-            .alias(name)
-            .map(|resolved| resolve_aliases(environment, resolved, depth + 1))
-            .unwrap_or_else(|| ty.clone()),
-        Type::Union(types) => Type::union(
-            types
-                .iter()
-                .map(|member| resolve_aliases(environment, member, depth + 1)),
-        ),
-        _ => ty.clone(),
-    }
+    let _ = depth;
+    environment.resolve_aliases(ty)
 }

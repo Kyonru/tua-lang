@@ -35,8 +35,6 @@ use crate::{
 };
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
-const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
-
 pub fn check_tua_source(
     path: impl AsRef<Path>,
     source: impl Into<String>,
@@ -3097,36 +3095,8 @@ fn comparison_metamethod_name(binop: &ast::BinOp) -> Option<&'static str> {
 }
 
 fn resolve_aliases(ty: &Type, environment: &TypeEnvironment, depth: usize) -> Type {
-    fn visit(
-        ty: &Type,
-        environment: &TypeEnvironment,
-        depth: usize,
-        seen: &mut BTreeSet<String>,
-    ) -> Type {
-        if depth >= MAX_TYPE_RESOLUTION_DEPTH {
-            return ty.clone();
-        }
-        match ty {
-            Type::Alias(name) => {
-                // Recursive LuaCATS aliases (e.g. FeelStep -> parallel.steps
-                // -> FeelStep) are a valid declaration pattern.  Do not expand
-                // a name already on the resolution path; treating the cycle as
-                // `any` keeps semantic walkers finite while preserving the
-                // outer alias for shallow completion.
-                if !seen.insert(name.clone()) {
-                    return Type::Any;
-                }
-                let result = environment
-                    .alias(name)
-                    .map(|resolved| visit(resolved, environment, depth + 1, seen))
-                    .unwrap_or_else(|| ty.clone());
-                seen.remove(name);
-                result
-            }
-            _ => ty.clone(),
-        }
-    }
-    visit(ty, environment, depth, &mut BTreeSet::new())
+    let _ = depth;
+    environment.resolve_aliases(ty)
 }
 
 fn resolve_index_type(

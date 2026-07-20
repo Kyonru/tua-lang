@@ -243,9 +243,10 @@ feel.define("button.press", {
 Table-constructor completion is expected-type driven rather than tied to Feel.
 LuaCATS unions with literal discriminator fields suggest the available literal
 values, narrow later fields after a discriminator such as `kind = "animate"`,
-follow recursive arrays/tables such as `parallel.steps`, and contextually type
-callback parameters. The same behavior applies to any declaration-typed Lua
-table DSL.
+and contextually type callback parameters. Recursive aliases are cycle-safe:
+Tua keeps the surrounding table or union shape but treats the recursive
+back-edge, such as a nested `parallel.steps` sequence, as `any`. The same
+behavior applies to any declaration-typed Lua table DSL.
 
 Completion remains bounded by the declarations. A field typed as plain
 `string` has no literal values to suggest, runtime registrations such as

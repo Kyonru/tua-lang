@@ -1074,8 +1074,10 @@ return feel
     assert!(animate.contains(&"duration".to_owned()), "{animate:?}");
     assert!(animate.contains(&"to".to_owned()), "{animate:?}");
     assert!(!animate.contains(&"event".to_owned()), "{animate:?}");
-    assert!(nested.contains(&"kind".to_owned()), "{nested:?}");
-    assert!(nested.contains(&"duration".to_owned()), "{nested:?}");
+    assert!(
+        nested.is_empty(),
+        "recursive alias back-edges should degrade to any: {nested:?}"
+    );
     assert!(options.contains(&"restart".to_owned()), "{options:?}");
     assert!(options.contains(&"key".to_owned()), "{options:?}");
     assert!(!options.contains(&"emit".to_owned()), "{options:?}");

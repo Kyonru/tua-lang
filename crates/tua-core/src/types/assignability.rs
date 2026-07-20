@@ -71,16 +71,22 @@ impl TypeContext {
     }
 
     pub fn is_assignable(&self, source: &Type, target: &Type) -> bool {
-        self.is_assignable_inner(source, target, 0)
+        self.is_assignable_inner(source, target, 0, &mut BTreeSet::new())
     }
 
-    fn is_assignable_inner(&self, source: &Type, target: &Type, depth: usize) -> bool {
+    fn is_assignable_inner(
+        &self,
+        source: &Type,
+        target: &Type,
+        depth: usize,
+        resolving: &mut BTreeSet<(bool, String)>,
+    ) -> bool {
         if source == target {
             return true;
         }
 
         if depth >= MAX_ALIAS_DEPTH {
-            return false;
+            return true;
         }
 
         match (source, target) {
@@ -92,10 +98,10 @@ impl TypeContext {
             }
             (Type::Union(sources), _) => sources
                 .iter()
-                .all(|source| self.is_assignable_inner(source, target, depth + 1)),
+                .all(|source| self.is_assignable_inner(source, target, depth + 1, resolving)),
             (_, Type::Union(targets)) => targets
                 .iter()
-                .any(|target| self.is_assignable_inner(source, target, depth + 1)),
+                .any(|target| self.is_assignable_inner(source, target, depth + 1, resolving)),
             (_, Type::Alias(target)) if self.is_nominal_alias_type(target) => false,
             (Type::Alias(source), Type::Alias(target))
                 if self.alias(source).is_none()
@@ -104,21 +110,37 @@ impl TypeContext {
             {
                 true
             }
-            (Type::Alias(name), _) if self.alias(name).is_some() => self
-                .alias(name)
-                .is_some_and(|resolved| self.is_assignable_inner(resolved, target, depth + 1)),
-            (_, Type::Alias(name)) if self.alias(name).is_some() => self
-                .alias(name)
-                .is_some_and(|resolved| self.is_assignable_inner(source, resolved, depth + 1)),
+            (Type::Alias(name), _) if self.alias(name).is_some() => {
+                let key = (true, name.clone());
+                if !resolving.insert(key.clone()) {
+                    return true;
+                }
+                let assignable = self.alias(name).is_some_and(|resolved| {
+                    self.is_assignable_inner(resolved, target, depth + 1, resolving)
+                });
+                resolving.remove(&key);
+                assignable
+            }
+            (_, Type::Alias(name)) if self.alias(name).is_some() => {
+                let key = (false, name.clone());
+                if !resolving.insert(key.clone()) {
+                    return true;
+                }
+                let assignable = self.alias(name).is_some_and(|resolved| {
+                    self.is_assignable_inner(source, resolved, depth + 1, resolving)
+                });
+                resolving.remove(&key);
+                assignable
+            }
             (Type::StringLiteral(_), Type::Primitive(super::PrimitiveType::String)) => true,
             (Type::Primitive(super::PrimitiveType::String), Type::StringLiteral(_)) => false,
             (Type::StringLiteral(source), Type::StringLiteral(target)) => source == target,
             (Type::Primitive(source), Type::Primitive(target)) => source == target,
             (Type::Function(source), Type::Function(target)) => {
-                self.is_function_assignable(source, target, depth + 1)
+                self.is_function_assignable(source, target, depth + 1, resolving)
             }
             (Type::Table(source), Type::Table(target)) => {
-                self.is_table_assignable(source, target, depth + 1)
+                self.is_table_assignable(source, target, depth + 1, resolving)
             }
             (Type::Table(source), Type::Array(_) | Type::Dictionary { .. })
                 if source.is_plain_empty() =>
@@ -126,14 +148,13 @@ impl TypeContext {
                 true
             }
             (Type::Array(source), Type::Array(target)) => {
-                self.is_assignable_inner(source, target, depth + 1)
+                self.is_assignable_inner(source, target, depth + 1, resolving)
             }
             (Type::Tuple(source), Type::Tuple(target)) => {
                 source.len() == target.len()
-                    && source
-                        .iter()
-                        .zip(target)
-                        .all(|(source, target)| self.is_assignable_inner(source, target, depth + 1))
+                    && source.iter().zip(target).all(|(source, target)| {
+                        self.is_assignable_inner(source, target, depth + 1, resolving)
+                    })
             }
             (
                 Type::Dictionary {
@@ -145,8 +166,8 @@ impl TypeContext {
                     value: target_value,
                 },
             ) => {
-                self.is_assignable_inner(source_key, target_key, depth + 1)
-                    && self.is_assignable_inner(source_value, target_value, depth + 1)
+                self.is_assignable_inner(source_key, target_key, depth + 1, resolving)
+                    && self.is_assignable_inner(source_value, target_value, depth + 1, resolving)
             }
             _ => false,
         }
@@ -198,6 +219,7 @@ impl TypeContext {
         source: &FunctionType,
         target: &FunctionType,
         depth: usize,
+        resolving: &mut BTreeSet<(bool, String)>,
     ) -> bool {
         source.required_parameter_count <= target.required_parameter_count
             && target.parameters.iter().enumerate().all(|(index, target)| {
@@ -206,11 +228,15 @@ impl TypeContext {
                     .get(index)
                     .map(|parameter| &parameter.ty)
                     .or(source.vararg_type.as_deref())
-                    .is_some_and(|source| self.is_assignable_inner(&target.ty, source, depth + 1))
+                    .is_some_and(|source| {
+                        self.is_assignable_inner(&target.ty, source, depth + 1, resolving)
+                    })
             })
             && match (source.vararg_type.as_deref(), target.vararg_type.as_deref()) {
                 (_, None) => true,
-                (Some(source), Some(target)) => self.is_assignable_inner(target, source, depth + 1),
+                (Some(source), Some(target)) => {
+                    self.is_assignable_inner(target, source, depth + 1, resolving)
+                }
                 (None, Some(_)) => false,
             }
             && source.return_types_or_any().len() == target.return_types_or_any().len()
@@ -218,10 +244,18 @@ impl TypeContext {
                 .return_types_or_any()
                 .iter()
                 .zip(target.return_types_or_any())
-                .all(|(source, target)| self.is_assignable_inner(source, target, depth + 1))
+                .all(|(source, target)| {
+                    self.is_assignable_inner(source, target, depth + 1, resolving)
+                })
     }
 
-    fn is_table_assignable(&self, source: &TableShape, target: &TableShape, depth: usize) -> bool {
+    fn is_table_assignable(
+        &self,
+        source: &TableShape,
+        target: &TableShape,
+        depth: usize,
+        resolving: &mut BTreeSet<(bool, String)>,
+    ) -> bool {
         target.fields().all(|(name, target_field)| {
             if is_index_signature_field(name) {
                 return true;
@@ -235,7 +269,7 @@ impl TypeContext {
                 return false;
             }
 
-            self.is_assignable_inner(&source_field.ty, &target_field.ty, depth + 1)
+            self.is_assignable_inner(&source_field.ty, &target_field.ty, depth + 1, resolving)
         })
     }
 }

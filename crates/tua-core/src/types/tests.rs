@@ -1095,6 +1095,97 @@ type Player = {
     assert!(diagnostics[0].format_cli().contains("error TL1002"));
 }
 
+#[test]
+fn recursive_luacats_aliases_preserve_outer_shape_and_truncate_the_back_edge() {
+    let parsed = parse_lua_source(
+        "types/feel.lua",
+        r#"
+---@class FeelAnimateStep
+---@field kind "animate"
+---@field duration number
+
+---@class FeelParallelStep
+---@field kind "parallel"
+---@field steps FeelSequenceInput[]
+
+---@alias FeelStep FeelAnimateStep|FeelParallelStep
+---@alias FeelSequenceInput FeelStep|FeelStep[]
+return {}
+"#,
+    )
+    .expect("recursive LuaCATS declarations should parse");
+    let environment =
+        build_type_environment(&parsed).expect("recursive declarations should type-check");
+    let resolved = environment.resolve_aliases(&Type::alias("FeelSequenceInput"));
+
+    fn contains_any(ty: &Type) -> bool {
+        match ty {
+            Type::Any => true,
+            Type::Union(types) | Type::Tuple(types) => types.iter().any(contains_any),
+            Type::Function(function) => {
+                function
+                    .parameters
+                    .iter()
+                    .any(|parameter| contains_any(&parameter.ty))
+                    || function.vararg_type.as_deref().is_some_and(contains_any)
+                    || function.return_types_or_any().iter().any(contains_any)
+            }
+            Type::Table(table) => table.fields().any(|(_, field)| contains_any(&field.ty)),
+            Type::Array(item) => contains_any(item),
+            Type::Dictionary { key, value } => contains_any(key) || contains_any(value),
+            Type::Primitive(_) | Type::Alias(_) | Type::StringLiteral(_) => false,
+        }
+    }
+
+    fn contains_table(ty: &Type) -> bool {
+        match ty {
+            Type::Table(_) => true,
+            Type::Union(types) | Type::Tuple(types) => types.iter().any(contains_table),
+            Type::Array(item) => contains_table(item),
+            Type::Function(_)
+            | Type::Dictionary { .. }
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::Alias(_)
+            | Type::StringLiteral(_) => false,
+        }
+    }
+
+    let Type::Union(sequence) = &resolved else {
+        panic!("expected the outer sequence union to remain available");
+    };
+    assert!(contains_table(&resolved));
+    assert!(sequence
+        .iter()
+        .any(|member| matches!(member, Type::Array(_))));
+    assert!(
+        contains_any(&resolved),
+        "the recursive edge should become any"
+    );
+}
+
+#[test]
+fn recursive_alias_back_edges_are_any_during_assignability() {
+    let context = TypeContext::new().with_alias(TypeAlias::new(
+        "Node",
+        Type::table([
+            ("next", TableField::required(Type::alias("Node"))),
+            ("value", TableField::required(Type::number())),
+        ]),
+    ));
+    let source = Type::table([
+        ("next", TableField::required(Type::empty_table())),
+        ("value", TableField::required(Type::number())),
+    ]);
+    let wrong = Type::table([
+        ("next", TableField::required(Type::empty_table())),
+        ("value", TableField::required(Type::string())),
+    ]);
+
+    assert!(context.is_assignable(&source, &Type::alias("Node")));
+    assert!(!context.is_assignable(&wrong, &Type::alias("Node")));
+}
+
 fn vec2_type() -> Type {
     Type::table([
         ("x", TableField::required(Type::number())),

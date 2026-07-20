@@ -154,6 +154,61 @@ return { define = define }
 
     assert_completion_labels(&output, 2, ["duration", "event", "kind"]);
 }
+
+#[test]
+fn recursive_type_library_aliases_are_safe_across_editor_queries() {
+    let temp = TempProject::new("recursive-type-library");
+    let main = r#"local feel = require("lib.feel")
+
+local sequence = feel.define("button.press", {
+  { dummy },
+})
+"#;
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+"#,
+    );
+    temp.write("src/main.tua", main);
+    temp.write(
+        "lib/feel/types/feel.lua",
+        r#"---@meta feel
+---@class FeelAnimateStep
+---@field kind "animate"
+---@field duration number
+---@class FeelParallelStep
+---@field kind "parallel"
+---@field steps FeelSequenceInput[]
+---@alias FeelStep FeelAnimateStep|FeelParallelStep
+---@alias FeelSequenceInput FeelStep|FeelStep[]
+---@param name string
+---@param steps FeelSequenceInput
+---@return FeelStep[]
+local function define(name, steps) end
+return { define = define }
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, main),
+        completion_request(2, &uri, main, "  { "),
+        inlay_hint_request(3, &uri, 0, 0, 20, 0),
+        hover_request(4, &uri, main, "sequence ="),
+    ]);
+
+    assert_completion_labels(&output, 2, ["duration", "kind", "steps"]);
+    assert!(response_with_id(&output, 3)["result"].is_array());
+    assert!(response_with_id(&output, 4)["result"].is_object());
+}
+
 #[test]
 fn workspace_symbol_searches_all_workspace_folders() {
     let game = TempProject::new("workspace-folder-game");

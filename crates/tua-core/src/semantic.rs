@@ -26,7 +26,6 @@ use crate::{
     ParsedSource, SourcePosition, SourceSpan, TypedParameter,
 };
 
-const MAX_TYPE_RESOLUTION_DEPTH: usize = 64;
 const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
 
 pub(crate) struct SemanticModel<'a> {
@@ -1689,17 +1688,8 @@ fn key_accepts_index(expected: &Type, actual: &Type) -> bool {
 }
 
 pub(crate) fn resolve_aliases(environment: &TypeEnvironment, ty: &Type, depth: usize) -> Type {
-    if depth >= MAX_TYPE_RESOLUTION_DEPTH {
-        return ty.clone();
-    }
-
-    match ty {
-        Type::Alias(name) => environment
-            .alias(name)
-            .map(|resolved| resolve_aliases(environment, resolved, depth + 1))
-            .unwrap_or_else(|| ty.clone()),
-        _ => ty.clone(),
-    }
+    let _ = depth;
+    environment.resolve_aliases(ty)
 }
 
 fn module_exports_table_type(exports: ModuleExports) -> Type {
