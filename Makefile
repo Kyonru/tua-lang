@@ -254,6 +254,11 @@ love-test: ## Build-check LOVE examples; runtime validation is opt-in.
 love-runtime-test: ## Build and run LOVE example smoke tests with an installed LOVE executable.
 	TUA_TEST_LOVE_RUNTIME=1 $(CARGO) test -p tua-cli --test love_example -- --nocapture
 
+.PHONY: love-debugger-e2e
+love-debugger-e2e: extension-deps ## Bind and hit a real source-mapped .tua breakpoint in LOVE.
+	$(CARGO) build --package tua-cli
+	TUA_BIN="$(CURDIR)/target/debug/tua" TUA_LOVE_COMMAND="$(LOVE)" $(NPM) --prefix $(VSCODE_DIR) run test:love-debugger
+
 .PHONY: run-love-minimal
 run-love-minimal: build-love-minimal ## Build and run the minimal LOVE example.
 	$(LOVE) examples/love-minimal/build

@@ -34,6 +34,7 @@
   },
   "scripts": {
     "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "test:love-debugger": "node scripts/love-debugger-e2e.js",
     "test:vscode": "node test/run.js"
   },
   "contributes": {
@@ -940,6 +941,7 @@
     ]
   },
   "devDependencies": {
+    "@vscode/debugadapter-testsupport": "1.68.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
     "vscode-oniguruma": "^2.0.1",

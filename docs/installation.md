@@ -120,11 +120,21 @@ test uses the standard macOS installation when present or downloads the latest
 stable test build.
 
 !!! info "Testing the LOVE debugger bridge"
-    Automated extension tests intentionally disable installed extensions. To
-    test the debugger bridge manually, install Second Local Lua Debugger in the
-    same VS Code profile and use **Run Extension (All Examples)** or **Run
-    Extension (Debug Server)**. Those development profiles keep debugger
-    dependencies enabled.
+    Normal extension-host tests intentionally disable installed extensions.
+    The separate end-to-end target launches real LOVE and the pinned Second
+    Local Lua Debugger adapter, binds a breakpoint in a temporary `.tua` file,
+    and verifies that the stopped stack frame maps back to that source line:
+
+    ```bash
+    make love-debugger-e2e LOVE=/path/to/love
+    ```
+
+    Install the debugger extension in the standard VS Code extensions folder,
+    or set `TUA_DEBUGGER_EXTENSION_PATH` to its unpacked extension directory.
+    Tagged macOS CI runs this real adapter/runtime test as a release check.
+    **Run Extension (All Examples)** and **Run Extension (Debug Server)** remain
+    useful for interactive debugger testing because those profiles keep
+    debugger dependencies enabled.
 
 Build a VSIX with the current platform's Tua server binary:
 

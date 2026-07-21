@@ -62,9 +62,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install Lua for runtime traceback tests
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y lua5.4
+      - name: Install LOVE debugger end-to-end dependencies
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install --cask love
+          debugger_version="$(cat editors/vscode/scripts/love-debugger-version.txt)"
+          debugger_archive="${RUNNER_TEMP}/second-local-lua-debugger.vsix"
+          debugger_directory="${RUNNER_TEMP}/second-local-lua-debugger"
+          curl --compressed -fsSL \
+            -o "${debugger_archive}" \
+            "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ismoh-games/vsextensions/second-local-lua-debugger-vscode/${debugger_version}/vspackage"
+          echo "$(cat editors/vscode/scripts/love-debugger-sha256.txt)  ${debugger_archive}" | shasum -a 256 -c -
+          mkdir -p "${debugger_directory}"
+          unzip -q "${debugger_archive}" -d "${debugger_directory}"
+          echo "TUA_DEBUGGER_EXTENSION_PATH=${debugger_directory}/extension" >> "${GITHUB_ENV}"
       - name: Test workspace
         run: cargo test --workspace
       - name: Build love-minimal
@@ -81,6 +99,9 @@ jobs:
         run: cargo run --quiet --package tua-cli -- build
       - name: Exercise editor regression smoke
         run: make editor-regression-smoke
+      - name: Hit a source-mapped Tua breakpoint in LOVE
+        if: runner.os == 'macOS'
+        run: make love-debugger-e2e LOVE=/Applications/love.app/Contents/MacOS/love
 
   extension:
     name: VS Code extension
