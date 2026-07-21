@@ -35,6 +35,7 @@ mod lua;
 pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
+mod module_path_index;
 mod narrowing;
 mod object_pool;
 pub mod parser;
@@ -164,6 +165,7 @@ pub use module_index::{
     resolve_required_module, ModuleExportField, ModuleExports, RequireBinding, RequiredModule,
 };
 pub use module_link::{module_links_tua_source, ModuleLink, ModuleSpecifierKind};
+pub use module_path_index::ProjectModuleWorkspace;
 pub use object_pool::{
     ObjectPoolGraph, ObjectPoolGraphInsight, ObjectPoolGraphOperation, ObjectPoolGraphPool,
     ObjectPoolInsightKind, ObjectPoolOperationKind,

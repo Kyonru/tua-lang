@@ -98,6 +98,98 @@ fn current_file_field_completion_answers_known_lua_receivers() {
 }
 
 #[test]
+fn module_path_completion_uses_snapshot_files_instead_of_the_live_filesystem() {
+    let project = TempProject::new("snapshot-module-completion");
+    let source_root = project.path().join("src");
+    let main_path = source_root.join("main.tua");
+    let open_candidate = source_root.join("candidate_open.tua");
+    project.write("tua.toml", "source = \"src\"\n");
+    let disk_candidate = project.write("src/candidate_disk.tua", "return {}\n");
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local required = require("candidate_<|require|>")
+local imported = import("candidate_<|import|>")
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([source_root]);
+    host.open_document(&main_path, fixture.source("src/main.tua"));
+    host.open_document(&open_candidate, "return {}\n");
+
+    assert!(disk_candidate.exists());
+    assert!(!open_candidate.exists());
+
+    let snapshot = host.snapshot();
+
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("require"))),
+        ["candidate_open"]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("import"))),
+        ["candidate_open"]
+    );
+}
+
+#[test]
+fn module_path_completion_uses_workspace_scoped_require_root_inventory() {
+    let fixture = Fixture::parse(
+        r#"-- file: game-a/src/main.tua
+local feedback = import("fee<|vendor|>")
+local requiredFeedback = require("fee<|require_vendor|>")
+local runtime = import("run<|output|>")
+local helpers = import("help<|associated|>")
+local other = import("oth<|other|>")
+"#,
+    );
+    let main_path = PathBuf::from("game-a/src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("game-a/src"), PathBuf::from("game-b/src")]);
+    host.set_module_path_workspaces([
+        ProjectModuleWorkspace::new(
+            "game-a",
+            [
+                "game-a/src".into(),
+                "game-a/build".into(),
+                "game-a/vendor".into(),
+            ],
+        ),
+        ProjectModuleWorkspace::new("game-b", ["game-b/src".into()]),
+    ]);
+    host.set_indexed_module_paths([
+        PathBuf::from("game-a/vendor/feel/init.lua"),
+        PathBuf::from("game-a/build/runtime.lua"),
+        PathBuf::from("game-a/vendor/helpers.luau"),
+        PathBuf::from("game-b/src/other.tua"),
+    ]);
+    host.open_document(&main_path, fixture.source("game-a/src/main.tua"));
+
+    let snapshot = host.snapshot();
+
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("vendor"))),
+        ["feel"]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("require_vendor"))),
+        ["feel"]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("output"))),
+        ["runtime"]
+    );
+    assert_eq!(
+        completion_labels(&snapshot.completion(&main_path, fixture.position("associated"))),
+        ["helpers"]
+    );
+    assert!(snapshot
+        .completion(&main_path, fixture.position("other"))
+        .is_empty());
+}
+
+#[test]
 fn type_explanation_reports_initializer_widening_and_field_resolution() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
@@ -707,6 +799,34 @@ fn snapshot_reuses_cached_project_artifacts_until_revision_changes() {
 
     let _third = host.snapshot();
     assert!(host.cache_stats().invalidations > stats_after_first.invalidations);
+}
+
+#[test]
+fn snapshots_reuse_module_path_index_until_its_inputs_change() {
+    let main_path = PathBuf::from("src/main.tua");
+    let player_path = PathBuf::from("src/player.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    host.set_file(&main_path, "local value = 1\n");
+
+    let first = host.snapshot();
+
+    host.set_file(&main_path, "local value = 2\n");
+    let content_update = host.snapshot();
+
+    assert!(Arc::ptr_eq(
+        &first.module_path_index,
+        &content_update.module_path_index
+    ));
+
+    host.set_file(&player_path, "return {}\n");
+    let path_update = host.snapshot();
+
+    assert!(!Arc::ptr_eq(
+        &content_update.module_path_index,
+        &path_update.module_path_index
+    ));
 }
 
 #[test]

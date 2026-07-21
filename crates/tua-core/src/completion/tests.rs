@@ -1,5 +1,7 @@
 use super::*;
+use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::source_text::position_at;
+use crate::vfs::ModulePathSeparator;
 use crate::Fixture;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -2323,71 +2325,105 @@ fn local_symbols_shadow_lua_globals_for_field_completion() {
 }
 
 #[test]
-fn completes_require_paths_from_current_directory() {
-    let root = temp_project_dir("require_completion");
-    let src = root.join("src");
-    let systems = src.join("systems");
-
-    fs::create_dir_all(&systems).expect("test dirs should be created");
-    fs::write(src.join("main.tua"), "local player = require(\"pla\")\n")
-        .expect("main source should be written");
-    fs::write(src.join("player.tua"), "return {}\n").expect("player source should be written");
-    fs::write(systems.join("physics.lua"), "return {}\n").expect("Lua module should be written");
-
+fn completes_require_paths_from_indexed_paths() {
+    let src = PathBuf::from("project/src");
     let main_path = src.join("main.tua");
-    let source = fs::read_to_string(&main_path).expect("main source should be readable");
-    let completions = complete_tua_source(
+    let indexed_paths = [
+        main_path.clone(),
+        src.join("player.tua"),
+        src.join("systems/physics.lua"),
+    ];
+    let module_paths = ModulePathIndex::build(
+        &[ProjectModuleWorkspace::new("project", [src.clone()])],
+        indexed_paths.iter().map(PathBuf::as_path),
+        &[],
+        ModulePathSeparator::Dot,
+    );
+    let source = "local player = require(\"pla\")\n";
+    let completions = complete_indexed_module_paths(
         &main_path,
-        &source,
-        position_after(&source, "require(\"pla"),
+        source,
+        position_after(source, "require(\"pla"),
+        &module_paths,
     )
-    .expect("require path completion should succeed");
+    .expect("require path completion context should be detected");
 
     assert_eq!(labels(&completions), vec!["player".to_owned()]);
 
     let source = "local physics = require(\"systems.\")\n";
-    let completions = complete_tua_source(&main_path, source, position_after(source, "systems."))
-        .expect("nested require path completion should succeed");
+    let completions = complete_indexed_module_paths(
+        &main_path,
+        source,
+        position_after(source, "systems."),
+        &module_paths,
+    )
+    .expect("nested require path completion context should be detected");
 
     assert_eq!(labels(&completions), vec!["systems.physics".to_owned()]);
-
-    fs::remove_dir_all(root).expect("test dir should be removed");
 }
 
 #[test]
-fn completes_import_paths_for_child_and_project_modules() {
-    let root = temp_project_dir("import_completion");
-    let src = root.join("src");
-    let systems = src.join("systems");
-    let shared = src.join("shared");
-
-    fs::create_dir_all(&systems).expect("systems dir should be created");
-    fs::create_dir_all(&shared).expect("shared dir should be created");
-    fs::write(root.join("tua.toml"), "source = \"src\"\n").expect("config should be written");
-    fs::write(
-        systems.join("main.tua"),
-        "local player = import(\"./pla\")\n",
-    )
-    .expect("main source should be written");
-    fs::write(systems.join("player.tua"), "return {}\n").expect("player source should be written");
-    fs::write(shared.join("math.lua"), "return {}\n").expect("Lua module should be written");
-    fs::write(shared.join("init.tua"), "return {}\n").expect("init module should be written");
-
-    let main_path = systems.join("main.tua");
-    let source = fs::read_to_string(&main_path).expect("main source should be readable");
-    let completions = complete_tua_source(
+fn completes_require_paths_from_workspace_require_roots() {
+    let src = PathBuf::from("project/src");
+    let vendor = PathBuf::from("project/vendor");
+    let main_path = src.join("game/main.tua");
+    let feel_path = vendor.join("feel/init.lua");
+    let indexed_paths = [main_path.clone(), feel_path.clone()];
+    let module_paths = ModulePathIndex::build(
+        &[ProjectModuleWorkspace::new("project", [src, vendor])],
+        indexed_paths.iter().map(PathBuf::as_path),
+        &[],
+        ModulePathSeparator::Dot,
+    );
+    let source = "local feel = require(\"fee\")\n";
+    let completions = complete_indexed_module_paths(
         &main_path,
-        &source,
-        position_after(&source, "import(\"./pla"),
+        source,
+        position_after(source, "require(\"fee"),
+        &module_paths,
     )
-    .expect("import path completion should succeed");
+    .expect("require path completion context should be detected");
+
+    assert_eq!(labels(&completions), vec!["feel".to_owned()]);
+    assert_eq!(completions[0].module_path.as_ref(), Some(&feel_path));
+}
+
+#[test]
+fn completes_import_paths_for_child_and_project_modules_from_indexed_paths() {
+    let src = PathBuf::from("project/src");
+    let systems = src.join("systems");
+    let main_path = systems.join("main.tua");
+    let indexed_paths = [
+        main_path.clone(),
+        systems.join("player.tua"),
+        src.join("shared/math.lua"),
+        src.join("shared/init.tua"),
+    ];
+    let module_paths = ModulePathIndex::build(
+        &[ProjectModuleWorkspace::new("project", [src.clone()])],
+        indexed_paths.iter().map(PathBuf::as_path),
+        &[],
+        ModulePathSeparator::Dot,
+    );
+    let source = "local player = import(\"./pla\")\n";
+    let completions = complete_indexed_module_paths(
+        &main_path,
+        source,
+        position_after(source, "import(\"./pla"),
+        &module_paths,
+    )
+    .expect("import path completion context should be detected");
 
     assert_eq!(labels(&completions), vec!["./player".to_owned()]);
 
     let source = "local module = import(\"sha\")\n";
-    let completions =
-        complete_tua_source(&main_path, source, position_after(source, "import(\"sha"))
-            .expect("project import path completion should succeed");
+    let completions = complete_indexed_module_paths(
+        &main_path,
+        source,
+        position_after(source, "import(\"sha"),
+        &module_paths,
+    )
+    .expect("project import path completion context should be detected");
 
     assert_eq!(
         labels(&completions),
@@ -2395,12 +2431,15 @@ fn completes_import_paths_for_child_and_project_modules() {
     );
 
     let source = "local shared = import(\"../shared\")\n";
-    let completions = complete_tua_source(&main_path, source, position_after(source, "../shared"))
-        .expect("parent import path completion should succeed");
+    let completions = complete_indexed_module_paths(
+        &main_path,
+        source,
+        position_after(source, "../shared"),
+        &module_paths,
+    )
+    .expect("parent import path completion context should be detected");
 
     assert!(completions.is_empty());
-
-    fs::remove_dir_all(root).expect("test dir should be removed");
 }
 
 #[test]

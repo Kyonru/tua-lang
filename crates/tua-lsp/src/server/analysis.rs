@@ -373,7 +373,11 @@ impl AnalysisHost {
 
     pub(super) fn close_document(&mut self, uri: &str) {
         if let Some(document) = self.documents.remove(uri) {
-            self.core.close_document(&document.path);
+            if document.path.is_file() {
+                self.core.close_document(&document.path);
+            } else {
+                self.core.remove_file(&document.path);
+            }
         }
     }
 
@@ -489,6 +493,7 @@ impl AnalysisHost {
 
         let now = current_epoch();
         let mut combined_adaptive_stats = CompletionAdaptiveStats::default();
+        let mut indexed_module_paths = BTreeSet::new();
 
         for workspace in model.workspaces() {
             let mut workspace_stats = load_completion_stats(workspace.root());
@@ -504,6 +509,7 @@ impl AnalysisHost {
                 };
 
                 for (path, kind) in sources {
+                    indexed_module_paths.insert(path.clone());
                     if open_paths.contains(&path) {
                         continue;
                     }
@@ -526,6 +532,26 @@ impl AnalysisHost {
                         );
                     }
                 }
+            }
+
+            for require_root in workspace.require_roots() {
+                if workspace.source_roots().contains(require_root) {
+                    continue;
+                }
+
+                let modules = {
+                    let _trace = tua_core::profile::diagnostics_span(
+                        tua_core::profile::DiagnosticsTraceCategory::DiscoverFiles,
+                    );
+
+                    if !workspace.config_found() && require_root == workspace.root() {
+                        discover_project_sources_shallow(require_root, workspace, settings)
+                    } else {
+                        discover_project_sources(require_root, workspace, settings)
+                    }
+                };
+
+                indexed_module_paths.extend(modules.into_iter().map(|(path, _)| path));
             }
 
             for library in workspace.type_libraries() {
@@ -561,6 +587,9 @@ impl AnalysisHost {
                     continue;
                 }
 
+                indexed_module_paths
+                    .extend(configless_sibling_module_paths(path, workspace, settings));
+                indexed_module_paths.insert(path.clone());
                 let file_scope = file_scope_hash(workspace.root(), path);
 
                 observed_file_scopes.insert(file_scope);
@@ -574,6 +603,7 @@ impl AnalysisHost {
 
         self.core
             .set_completion_adaptive_stats(combined_adaptive_stats);
+        self.core.set_indexed_module_paths(indexed_module_paths);
     }
 
     fn persist_completion_adaptive_source(&mut self, path: &Path, source: &str) {
@@ -647,10 +677,33 @@ impl AnalysisHost {
             return None;
         }
 
+        self.index_configless_sibling_module_paths(&path, settings);
+        self.core.add_indexed_module_path(path.clone());
         self.core
             .set_file_with_kind(path, source, core_source_kind(kind));
 
         Some(kind)
+    }
+
+    fn index_configless_sibling_module_paths(&mut self, path: &Path, settings: &WorkspaceSettings) {
+        let sibling_paths = {
+            let Some(workspace) = self
+                .project_model
+                .as_ref()
+                .and_then(|model| model.workspace_for_path(path))
+                .filter(|workspace| {
+                    !workspace.config_found() && path.starts_with(workspace.root())
+                })
+            else {
+                return;
+            };
+
+            configless_sibling_module_paths(path, workspace, settings)
+        };
+
+        for sibling_path in sibling_paths {
+            self.core.add_indexed_module_path(sibling_path);
+        }
     }
 
     fn sync_core_project_inputs(&mut self, roots: &[PathBuf], settings: &WorkspaceSettings) {
@@ -682,6 +735,12 @@ impl AnalysisHost {
 
         self.core.set_source_roots(source_roots);
         self.core.set_output_roots(output_roots);
+        self.core.set_module_path_workspaces(
+            model
+                .workspaces()
+                .iter()
+                .map(ProjectWorkspace::module_path_workspace),
+        );
         self.core.set_type_libraries(
             model
                 .workspaces()
@@ -1347,6 +1406,56 @@ fn discover_project_sources(
     discover_project_sources_into(source_dir, workspace, settings, &mut files);
     files.sort_by(|left, right| left.0.cmp(&right.0));
     files
+}
+
+fn discover_project_sources_shallow(
+    source_dir: &Path,
+    workspace: &ProjectWorkspace,
+    settings: &WorkspaceSettings,
+) -> Vec<(PathBuf, SourceKind)> {
+    let Ok(entries) = fs::read_dir(source_dir) else {
+        return Vec::new();
+    };
+    let mut files = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let file_type = entry.file_type().ok()?;
+
+            if !file_type.is_file()
+                || workspace.is_type_library_path(&path)
+                || workspace.is_ignored(&path)
+                || settings.is_ignored(&path, &[workspace.root().to_path_buf()])
+            {
+                return None;
+            }
+
+            workspace
+                .source_kind_for_path(&path)
+                .map(|kind| (path, source_kind_from_vfs(kind)))
+        })
+        .collect::<Vec<_>>();
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn configless_sibling_module_paths(
+    path: &Path,
+    workspace: &ProjectWorkspace,
+    settings: &WorkspaceSettings,
+) -> Vec<PathBuf> {
+    if workspace.config_found() || !path.starts_with(workspace.root()) {
+        return Vec::new();
+    }
+    let Some(parent) = path.parent() else {
+        return Vec::new();
+    };
+
+    discover_project_sources_shallow(parent, workspace, settings)
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect()
 }
 
 fn discover_project_sources_into(

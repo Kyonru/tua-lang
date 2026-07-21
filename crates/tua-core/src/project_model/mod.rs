@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::{load_config_from_dir, ConfigError, LoadedConfig, ProjectConfig, CONFIG_FILE};
+use crate::module_path_index::ProjectModuleWorkspace;
 use crate::vfs::{module_name_for_path, normalize_path, ModulePathSeparator, VfsSourceKind};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -306,6 +307,10 @@ impl ProjectWorkspace {
 
     pub fn require_roots(&self) -> &[PathBuf] {
         &self.require_roots
+    }
+
+    pub fn module_path_workspace(&self) -> ProjectModuleWorkspace {
+        ProjectModuleWorkspace::new(self.root.clone(), self.require_roots.iter().cloned())
     }
 
     pub fn type_libraries(&self) -> &[ProjectTypeLibrary] {

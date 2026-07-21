@@ -88,6 +88,7 @@ impl AnalysisHost {
         }
 
         self.require_path_separator = separator;
+        self.bump_module_path_revision();
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -104,6 +105,51 @@ impl AnalysisHost {
         self.bump_revision();
     }
 
+    pub fn set_module_path_workspaces(
+        &mut self,
+        workspaces: impl IntoIterator<Item = ProjectModuleWorkspace>,
+    ) {
+        let mut workspaces = workspaces.into_iter().collect::<Vec<_>>();
+
+        workspaces.sort_by(|left, right| left.root().cmp(right.root()));
+        workspaces.dedup();
+        if self.module_path_workspaces == workspaces {
+            return;
+        }
+
+        self.module_path_workspaces = workspaces;
+        self.bump_module_path_revision();
+        self.clear_completion_cache();
+        self.bump_revision();
+    }
+
+    pub fn set_indexed_module_paths(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
+        let paths = paths
+            .into_iter()
+            .map(normalize_path)
+            .collect::<BTreeSet<_>>();
+
+        if self.indexed_module_paths == paths {
+            return;
+        }
+
+        self.indexed_module_paths = paths;
+        self.bump_module_path_revision();
+        self.clear_completion_cache();
+        self.bump_revision();
+    }
+
+    pub fn add_indexed_module_path(&mut self, path: impl Into<PathBuf>) {
+        if self
+            .indexed_module_paths
+            .insert(normalize_path(path.into()))
+        {
+            self.bump_module_path_revision();
+            self.clear_completion_cache();
+            self.bump_revision();
+        }
+    }
+
     pub fn source_roots(&self) -> &[PathBuf] {
         &self.vfs.options().source_roots
     }
@@ -116,6 +162,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_source_roots(roots);
+        self.bump_module_path_revision();
         self.asset_index = None;
         self.invalidate_all_analysis();
         self.bump_revision();
@@ -129,6 +176,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_output_roots(roots);
+        self.bump_module_path_revision();
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -233,6 +281,7 @@ impl AnalysisHost {
         }
 
         self.vfs.set_ignored_paths(patterns);
+        self.bump_module_path_revision();
         self.invalidate_all_analysis();
         self.bump_revision();
     }
@@ -278,6 +327,7 @@ impl AnalysisHost {
         let path = path.into();
         let source = source.into();
         let vfs_kind = vfs_source_kind(kind);
+        let had_module_path = self.has_module_path(&path);
 
         if self.vfs.disk_file_matches(&path, &source, vfs_kind) {
             return false;
@@ -291,19 +341,26 @@ impl AnalysisHost {
         if invalidated_dependents {
             self.clear_definition_cache();
         }
-        self.vfs.set_disk_file(path, source, vfs_kind);
+        self.vfs.set_disk_file(&path, source, vfs_kind);
+        if had_module_path != self.has_module_path(&path) {
+            self.bump_module_path_revision();
+        }
         self.bump_revision();
 
         invalidated_dependents
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
+        let path = normalize_path(path.as_ref());
+        let had_module_path = self.has_module_path(&path);
+        self.indexed_module_paths.remove(&path);
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
-        self.last_good_files
-            .borrow_mut()
-            .remove(&normalize_path(path.as_ref()));
-        self.vfs.remove_file(path);
+        self.last_good_files.borrow_mut().remove(&path);
+        self.vfs.remove_file(&path);
+        if had_module_path != self.has_module_path(&path) {
+            self.bump_module_path_revision();
+        }
         self.bump_revision();
     }
 
@@ -331,6 +388,7 @@ impl AnalysisHost {
         let path = path.into();
         let source = source.into();
         let vfs_kind = vfs_source_kind(kind);
+        let had_module_path = self.has_module_path(&path);
 
         if self.vfs.open_file_matches(&path, &source, vfs_kind) {
             return;
@@ -344,7 +402,10 @@ impl AnalysisHost {
         if invalidated_dependents {
             self.clear_definition_cache();
         }
-        self.vfs.open_file(path, source, vfs_kind);
+        self.vfs.open_file(&path, source, vfs_kind);
+        if had_module_path != self.has_module_path(&path) {
+            self.bump_module_path_revision();
+        }
         self.bump_revision();
     }
 
@@ -353,9 +414,14 @@ impl AnalysisHost {
     }
 
     pub fn close_document(&mut self, path: impl AsRef<Path>) {
+        let path = normalize_path(path.as_ref());
+        let had_module_path = self.has_module_path(&path);
         self.cache.borrow_mut().invalidate_file(path.as_ref(), true);
         self.clear_query_caches();
-        self.vfs.close_file(path);
+        self.vfs.close_file(&path);
+        if had_module_path != self.has_module_path(&path) {
+            self.bump_module_path_revision();
+        }
         self.bump_revision();
     }
 
@@ -461,6 +527,7 @@ impl AnalysisHost {
                 &type_database,
             )
         };
+        let module_path_index = self.module_path_index(&vfs);
         let (call_hierarchy_symbols, call_hierarchy_calls) = {
             let _profile = profile::span("analysis.index.call_hierarchy");
             let symbols = files
@@ -492,6 +559,7 @@ impl AnalysisHost {
             asset_index: self.asset_index.clone(),
             files,
             require_path_separator: self.require_path_separator,
+            module_path_index,
             builtin_catalogs: self.builtin_catalogs.clone(),
             module_graph,
             type_database,
@@ -556,6 +624,8 @@ impl AnalysisHost {
         if self.revision != warmed.revision
             || self.config != warmed.config
             || self.require_path_separator != warmed.require_path_separator
+            || self.module_path_workspaces != warmed.module_path_workspaces
+            || self.indexed_module_paths != warmed.indexed_module_paths
             || self.asset_roots != warmed.asset_roots
             || self.builtin_catalogs != warmed.builtin_catalogs
             || self.vfs.options() != warmed.vfs.options()
@@ -895,6 +965,45 @@ impl AnalysisHost {
 
     fn bump_revision(&mut self) {
         self.revision = self.revision.saturating_add(1);
+    }
+
+    fn bump_module_path_revision(&mut self) {
+        self.module_path_revision = self.module_path_revision.saturating_add(1);
+    }
+
+    fn has_module_path(&self, path: &Path) -> bool {
+        self.indexed_module_paths.contains(path) || self.vfs.file_id(path).is_some()
+    }
+
+    fn module_path_index(&self, vfs: &VfsSnapshot) -> Arc<ModulePathIndex> {
+        let mut cache = self
+            .module_path_index_cache
+            .lock()
+            .expect("module path index cache lock poisoned");
+
+        if let Some(cached) = cache
+            .as_ref()
+            .filter(|cached| cached.revision == self.module_path_revision)
+        {
+            return Arc::clone(&cached.index);
+        }
+
+        let index = Arc::new(ModulePathIndex::build(
+            &self.module_path_workspaces,
+            self.indexed_module_paths
+                .iter()
+                .map(PathBuf::as_path)
+                .chain(vfs.files().map(|file| file.path())),
+            vfs.source_roots(),
+            self.require_path_separator,
+        ));
+
+        cache.replace(CachedModulePathIndex {
+            revision: self.module_path_revision,
+            index: Arc::clone(&index),
+        });
+
+        index
     }
 
     fn current_analysis_file(&self, path: &Path) -> Option<AnalysisFile> {

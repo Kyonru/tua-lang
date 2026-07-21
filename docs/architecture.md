@@ -98,6 +98,23 @@ cached products and advances that revision.
 per-file facts with project-wide indexes and exposes stable query APIs to the
 CLI and LSP.
 
+Module-path completion follows the same boundary. Workspace indexing and file
+events provide normalized module paths and workspace-scoped require roots to
+`AnalysisHost`; each snapshot combines that inventory with live VFS overlays
+in a `ModulePathIndex`. `require(...)` and `import(...)` completion query that
+index without walking the live filesystem, so output roots, associated Lua
+files, unsaved documents, and the rest of the query observe one consistent
+revision. Normal `require(...)` and non-relative static imports consume the same
+ordered workspace module map, while child-relative imports use paths near the
+current file. Require-root order remains project-model order so source modules
+keep precedence over duplicate generated modules. The index has its own
+revision and is reused across source-content edits until its roots, separator,
+or path inventory changes. Configured roots are indexed recursively; a
+configless workspace indexes direct siblings at its root and around opened or
+watched files instead of recursively walking an unbounded workspace folder.
+Closing a document that has no file on disk removes its VFS entry and module
+path, preventing unsaved modules from leaking into later snapshots.
+
 Declaration libraries enter the VFS as Lua analysis inputs, but remain outside
 source roots, require search roots, asset copying, and emission. During snapshot
 construction, `---@meta` identities are mapped to configured runtime

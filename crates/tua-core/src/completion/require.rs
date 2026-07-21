@@ -1,19 +1,18 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::{completion_text_matches, Completion, CompletionKind};
-use crate::project_model::ProjectModel;
-use crate::vfs::{module_name_for_path, ModulePathSeparator};
+use crate::module_path_index::ModulePathIndex;
 
-pub(super) fn complete_require_paths(path: &Path, prefix: &str) -> Vec<Completion> {
-    let Some(base_dir) = path.parent() else {
-        return Vec::new();
-    };
+pub(crate) fn complete_require_paths(
+    path: &Path,
+    prefix: &str,
+    module_paths: &ModulePathIndex,
+) -> Vec<Completion> {
     let mut completions = BTreeMap::new();
     let current_path = normalize_path(path);
 
-    collect_require_paths(base_dir, base_dir, &current_path, &mut completions);
+    collect_project_module_paths(&current_path, module_paths, "module", &mut completions);
 
     completions
         .into_values()
@@ -21,10 +20,15 @@ pub(super) fn complete_require_paths(path: &Path, prefix: &str) -> Vec<Completio
         .collect()
 }
 
-pub(super) fn complete_import_paths(path: &Path, prefix: &str) -> Vec<Completion> {
-    let Some(current_dir) = path.parent() else {
+pub(crate) fn complete_import_paths(
+    path: &Path,
+    prefix: &str,
+    module_paths: &ModulePathIndex,
+) -> Vec<Completion> {
+    let Some(parent) = path.parent() else {
         return Vec::new();
     };
+    let current_dir = normalize_path(parent);
     let current_path = normalize_path(path);
     let mut completions = BTreeMap::new();
 
@@ -33,9 +37,14 @@ pub(super) fn complete_import_paths(path: &Path, prefix: &str) -> Vec<Completion
     }
 
     if prefix.starts_with("./") {
-        collect_import_paths(current_dir, current_dir, &current_path, &mut completions);
+        collect_import_paths(&current_dir, &current_path, module_paths, &mut completions);
     } else {
-        collect_project_import_paths(path, &current_path, &mut completions);
+        collect_project_module_paths(
+            &current_path,
+            module_paths,
+            "project module",
+            &mut completions,
+        );
     }
 
     completions
@@ -44,56 +53,31 @@ pub(super) fn complete_import_paths(path: &Path, prefix: &str) -> Vec<Completion
         .collect()
 }
 
-fn collect_require_paths(
-    base_dir: &Path,
-    dir: &Path,
+fn collect_project_module_paths(
     current_path: &Path,
+    module_paths: &ModulePathIndex,
+    detail: &str,
     completions: &mut BTreeMap<String, Completion>,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Some(modules) = module_paths.project_modules_for_path(current_path) else {
         return;
     };
-    let mut entries = entries.filter_map(Result::ok).collect::<Vec<_>>();
 
-    entries.sort_by_key(|entry| entry.path());
-
-    for entry in entries {
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-
-        if file_type.is_dir() {
-            collect_require_paths(base_dir, &path, current_path, completions);
+    for (module_name, path) in modules {
+        if path == current_path {
             continue;
         }
-
-        if !file_type.is_file() || normalize_path(&path) == current_path {
-            continue;
-        }
-
-        if !matches!(
-            path.extension().and_then(|extension| extension.to_str()),
-            Some("lua" | "tua")
-        ) {
-            continue;
-        }
-
-        let Some(module_name) = module_name(base_dir, &path) else {
-            continue;
-        };
-
         completions.insert(
             module_name.clone(),
             Completion {
-                label: module_name,
+                label: module_name.clone(),
                 kind: CompletionKind::Module,
-                detail: Some("module".to_owned()),
+                detail: Some(detail.to_owned()),
                 documentation: None,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
-                module_path: Some(path),
+                module_path: Some(path.clone()),
                 source_module: None,
                 additional_text_edits: Vec::new(),
             },
@@ -103,36 +87,14 @@ fn collect_require_paths(
 
 fn collect_import_paths(
     current_dir: &Path,
-    dir: &Path,
     current_path: &Path,
+    module_paths: &ModulePathIndex,
     completions: &mut BTreeMap<String, Completion>,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    let mut entries = entries.filter_map(Result::ok).collect::<Vec<_>>();
+    for path in module_paths.paths_under(current_dir) {
+        let path = normalize_path(path);
 
-    entries.sort_by_key(|entry| entry.path());
-
-    for entry in entries {
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-
-        if file_type.is_dir() {
-            collect_import_paths(current_dir, &path, current_path, completions);
-            continue;
-        }
-
-        if !file_type.is_file() || normalize_path(&path) == current_path {
-            continue;
-        }
-
-        if !matches!(
-            path.extension().and_then(|extension| extension.to_str()),
-            Some("lua" | "tua")
-        ) {
+        if !path.starts_with(current_dir) || path == current_path {
             continue;
         }
 
@@ -156,97 +118,6 @@ fn collect_import_paths(
             },
         );
     }
-}
-
-fn collect_project_import_paths(
-    path: &Path,
-    current_path: &Path,
-    completions: &mut BTreeMap<String, Completion>,
-) {
-    let Ok(model) = ProjectModel::load_for_path(path) else {
-        return;
-    };
-    let Some(workspace) = model.workspace_for_path(path) else {
-        return;
-    };
-    let separator = workspace.require_path_separator();
-
-    for root in workspace.require_roots() {
-        collect_project_module_paths(root, root, current_path, separator, completions);
-    }
-}
-
-fn collect_project_module_paths(
-    root: &Path,
-    dir: &Path,
-    current_path: &Path,
-    separator: ModulePathSeparator,
-    completions: &mut BTreeMap<String, Completion>,
-) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    let mut entries = entries.filter_map(Result::ok).collect::<Vec<_>>();
-
-    entries.sort_by_key(|entry| entry.path());
-
-    for entry in entries {
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-
-        if file_type.is_dir() {
-            collect_project_module_paths(root, &path, current_path, separator, completions);
-            continue;
-        }
-
-        if !file_type.is_file() || normalize_path(&path) == current_path {
-            continue;
-        }
-
-        if !matches!(
-            path.extension().and_then(|extension| extension.to_str()),
-            Some("lua" | "tua")
-        ) {
-            continue;
-        }
-
-        let Some(module_name) = module_name_for_path(root, &path, separator) else {
-            continue;
-        };
-
-        completions.insert(
-            module_name.clone(),
-            Completion {
-                label: module_name,
-                kind: CompletionKind::Module,
-                detail: Some("project module".to_owned()),
-                documentation: None,
-                insert_text: None,
-                filter_text: None,
-                is_snippet: false,
-                module_path: Some(path),
-                source_module: None,
-                additional_text_edits: Vec::new(),
-            },
-        );
-    }
-}
-
-fn module_name(base_dir: &Path, path: &Path) -> Option<String> {
-    let relative = path.strip_prefix(base_dir).ok()?;
-    let without_extension = relative.with_extension("");
-    let mut parts = without_extension
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy().to_string())
-        .collect::<Vec<_>>();
-
-    if parts.last().is_some_and(|part| part == "init") {
-        parts.pop();
-    }
-
-    (!parts.is_empty()).then(|| parts.join("."))
 }
 
 fn import_specifier(current_dir: &Path, path: &Path) -> Option<String> {

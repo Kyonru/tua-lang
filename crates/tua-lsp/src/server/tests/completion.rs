@@ -236,11 +236,12 @@ fn completion_returns_module_label_details() {
     let source = r#"local Module = require("pla")"#;
     let uri = temp.uri_for("src/main.tua");
 
+    temp.write("tua.toml", "source = \"src\"\n");
     temp.write("src/main.tua", source);
     temp.write("src/player.tua", "return {}\n");
 
     let output = run_messages(vec![
-        initialize_with_completion_label_details(1),
+        initialize_with_root_and_completion_label_details(1, temp.uri()),
         did_open(&uri, source),
         completion_request(2, &uri, source, "pla"),
     ]);
@@ -250,6 +251,146 @@ fn completion_returns_module_label_details() {
     assert_eq!(completion["labelDetails"]["description"], "module");
     assert!(completion.get("detail").is_none());
 }
+
+#[test]
+fn completion_indexes_module_paths_from_the_configured_output_root() {
+    let temp = TempProject::new("output-module-completion");
+    let source = r#"local ImportedRuntime = import("run")
+local RequiredRuntime = require("run")"#;
+    let uri = temp.uri_for("src/main.tua");
+
+    temp.write("tua.toml", "source = \"src\"\nout = \"build\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("build/runtime.lua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "import(\"run"),
+        completion_request(3, &uri, source, "require(\"run"),
+    ]);
+
+    assert_completion_labels(&output, 2, ["runtime"]);
+    assert_completion_labels(&output, 3, ["runtime"]);
+}
+
+#[test]
+fn watched_output_modules_update_snapshot_backed_completion_inventory() {
+    let temp = TempProject::new("watched-output-module-completion");
+    let source = r#"local Watched = import("wat")"#;
+    let uri = temp.uri_for("src/main.tua");
+    let module_uri = temp.uri_for("build/watched.lua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\nout = \"build\"\n");
+    temp.write("src/main.tua", source);
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "wat"));
+
+    assert_completion_labels(server.output(), 2, []);
+
+    temp.write("build/watched.lua", "return {}\n");
+    server.send(watched_files_changed([(&module_uri, 1)]));
+    server.send(completion_request(3, &uri, source, "wat"));
+
+    assert_completion_labels(server.output(), 3, ["watched"]);
+
+    temp.remove("build/watched.lua");
+    server.send(watched_files_changed([(&module_uri, 3)]));
+    server.send(completion_request(4, &uri, source, "wat"));
+
+    assert_completion_labels(server.output(), 4, []);
+}
+
+#[test]
+fn project_import_completion_is_scoped_to_the_active_workspace() {
+    let game = TempProject::new("module-completion-game");
+    let tools = TempProject::new("module-completion-tools");
+    let source = r#"local Player = import("")"#;
+    let uri = game.uri_for("src/main.tua");
+
+    game.write("tua.toml", "source = \"src\"\n");
+    game.write("src/main.tua", source);
+    game.write("src/player.tua", "return {}\n");
+    tools.write("tua.toml", "source = \"src\"\n");
+    tools.write("src/enemy.tua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_workspace_folders(1, [game.uri(), tools.uri()]),
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "import(\""),
+    ]);
+
+    assert_completion_labels(&output, 2, ["player"]);
+}
+
+#[test]
+fn completion_indexes_sibling_modules_without_a_project_config() {
+    let temp = TempProject::new("configless-module-completion");
+    let source = r#"local Player = require("")"#;
+    let uri = temp.uri_for("main.tua");
+
+    temp.write("main.tua", source);
+    temp.write("player.lua", "return {}\n");
+    temp.write("vendor/deep.lua", "return {}\n");
+
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        completion_request(2, &uri, source, "require(\""),
+    ]);
+
+    assert_completion_labels(&output, 2, ["player"]);
+}
+
+#[test]
+fn configless_completion_indexes_siblings_of_a_nested_open_document() {
+    let temp = TempProject::new("configless-nested-module-completion");
+    let source = r#"local Player = require("game.pla")"#;
+    let uri = temp.uri_for("game/main.tua");
+    let mut server = TestServer::new();
+
+    temp.write("game/main.tua", source);
+    temp.write("game/player.lua", "return {}\n");
+    temp.write("other/deep.lua", "return {}\n");
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    server.send(completion_request(2, &uri, source, "game.pla"));
+
+    assert_completion_labels(server.output(), 2, ["game.player"]);
+
+    server.send(did_change_configuration(json!({})));
+    server.send(completion_request(3, &uri, source, "game.pla"));
+
+    assert_completion_labels(server.output(), 3, ["game.player"]);
+}
+
+#[test]
+fn closing_an_unsaved_document_removes_its_module_completion() {
+    let temp = TempProject::new("unsaved-module-close-completion");
+    let main_source = r#"local Ghost = require("gho")"#;
+    let main_uri = temp.uri_for("src/main.tua");
+    let ghost_uri = temp.uri_for("src/ghost.tua");
+    let mut server = TestServer::new();
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main_source);
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main_source));
+    server.send(did_open(&ghost_uri, "return {}\n"));
+    server.send(completion_request(2, &main_uri, main_source, "gho"));
+
+    assert_completion_labels(server.output(), 2, ["ghost"]);
+
+    server.send(did_close(&ghost_uri));
+    server.send(completion_request(3, &main_uri, main_source, "gho"));
+
+    assert_completion_labels(server.output(), 3, []);
+}
+
 #[test]
 fn identifier_completion_uses_open_document_fast_path() {
     let temp = TempProject::new("identifier-completion-fast-path");

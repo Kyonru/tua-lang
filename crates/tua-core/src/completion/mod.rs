@@ -10,6 +10,7 @@ use self::symbol::lua_symbols_before_position;
 use crate::love_callback;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
+use crate::module_path_index::ModulePathIndex;
 use crate::profile;
 use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
 use crate::semantic::{resolve_aliases, SemanticModel};
@@ -64,6 +65,23 @@ pub enum CompletionKind {
     Module,
     Variable,
     Value,
+}
+
+pub(crate) fn complete_indexed_module_paths(
+    path: &Path,
+    source: &str,
+    position: SourcePosition,
+    module_paths: &ModulePathIndex,
+) -> Option<Vec<Completion>> {
+    match completion_context(source, position)? {
+        CompletionContext::RequirePath { prefix } => {
+            Some(complete_require_paths(path, prefix.as_str(), module_paths))
+        }
+        CompletionContext::ImportPath { prefix } => {
+            Some(complete_import_paths(path, prefix.as_str(), module_paths))
+        }
+        _ => None,
+    }
 }
 
 impl CompletionKind {
@@ -886,12 +904,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
 
             complete_string_argument_values(parsed, source, environment, string_context)
         }
-        CompletionContext::RequirePath { prefix } => {
-            complete_require_paths(&parsed.path, prefix.as_str())
-        }
-        CompletionContext::ImportPath { prefix } => {
-            complete_import_paths(&parsed.path, prefix.as_str())
-        }
+        CompletionContext::RequirePath { .. } | CompletionContext::ImportPath { .. } => Vec::new(),
         CompletionContext::Identifier { prefix, position } => {
             complete_domain_config_items(parsed, source, prefix.as_str(), position).unwrap_or_else(
                 || complete_identifier_items(parsed, environment, prefix.as_str(), position),
@@ -902,7 +915,11 @@ fn complete_parsed_source_with_context_and_ranking_options(
     rank_completions_for_context(completions, prefix.as_deref(), ranking_context.as_ref())
 }
 
-fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) -> Vec<Completion> {
+fn complete_lossy_source(
+    _path: &Path,
+    source: &str,
+    context: CompletionContext,
+) -> Vec<Completion> {
     let prefix = context.filter_prefix().map(str::to_owned);
     let completions = match context {
         CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
@@ -919,8 +936,7 @@ fn complete_lossy_source(path: &Path, source: &str, context: CompletionContext) 
             ..
         } => complete_lua_fields(source, &receiver_parts, prefix.as_str(), position),
         CompletionContext::StringArgument { .. } => Vec::new(),
-        CompletionContext::RequirePath { prefix } => complete_require_paths(path, prefix.as_str()),
-        CompletionContext::ImportPath { prefix } => complete_import_paths(path, prefix.as_str()),
+        CompletionContext::RequirePath { .. } | CompletionContext::ImportPath { .. } => Vec::new(),
         CompletionContext::Identifier { prefix, position } => {
             complete_lossy_identifier_items(source, prefix.as_str(), position)
         }

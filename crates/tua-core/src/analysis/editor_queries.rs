@@ -177,6 +177,13 @@ impl AnalysisSnapshot {
         position: SourcePosition,
     ) -> Vec<Completion> {
         let source = source_override.unwrap_or(&file.source);
+
+        if let Some(completions) =
+            complete_indexed_module_paths(path, source, position, &self.module_path_index)
+        {
+            return completions;
+        }
+
         let file_scope_hash = CompletionAdaptiveStats::file_scope_hash(path);
         let completions = match &file.parsed {
             Ok(parsed) => {

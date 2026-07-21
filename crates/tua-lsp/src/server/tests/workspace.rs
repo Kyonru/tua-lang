@@ -1198,7 +1198,7 @@ unused_locals = true
 #[test]
 fn did_change_configuration_file_associations_index_lua_interop_sources() {
     let temp = TempProject::new("configuration-file-associations");
-    let main = "local value = cla\n";
+    let main = "local value = cla\nlocal Legacy = import(\"leg\")\n";
     let legacy = r#"local function clamp(value)
   return value
 end
@@ -1239,6 +1239,10 @@ return {
 
     assert_eq!(completion["insertText"], "Legacy.clamp");
     assert_eq!(completion["data"]["sourceModule"], "legacy");
+
+    server.send(completion_request(4, &main_uri, main, "import(\"leg"));
+
+    assert_completion_labels(server.output(), 4, ["legacy"]);
 }
 #[test]
 fn did_change_configuration_ignored_paths_skip_indexing_and_diagnostics() {

@@ -87,6 +87,10 @@ Completion combines syntax context with local and project semantics. It covers:
 - statement snippets for `if`/`then`/`end`, loops, `repeat`/`until`, `do`/`end`,
   functions, classes, and common game-helper workflows.
 
+Normal `require(...)` and non-relative static-import path completion use the
+same ordered workspace require roots as module resolution. Child-relative
+imports continue to complete from the current file's directory.
+
 Function and method items can insert argument placeholders. Known literal
 choices become snippet choices, and LOVE object methods prefer colon-call
 syntax. Completion resolve adds documentation, signatures, source context, and

@@ -20,9 +20,9 @@ use crate::completion::{
     complete_current_file_field_access_with_environment_and_ranking_inputs,
     complete_current_file_lua_field_access,
     complete_field_access_in_source_with_environment_and_ranking_inputs,
-    complete_source_with_parsed_environment_and_ranking_inputs, filter_and_rank_completions,
-    multitoken::complete_multi_token_source, CompletionAdaptiveStats, CompletionMultiTokenConfig,
-    CompletionRankingInputs, CompletionSequenceRankingConfig,
+    complete_indexed_module_paths, complete_source_with_parsed_environment_and_ranking_inputs,
+    filter_and_rank_completions, multitoken::complete_multi_token_source, CompletionAdaptiveStats,
+    CompletionMultiTokenConfig, CompletionRankingInputs, CompletionSequenceRankingConfig,
 };
 use crate::folding_range::folding_ranges_source;
 use crate::hir::{HirExportValue, HirModule, HirRequireBinding, HirSymbol, HirSymbolKind};
@@ -37,6 +37,7 @@ use crate::module_index::infer_module_exports_with_optional_environment;
 use crate::module_link::{
     module_specifier_at_position, module_specifier_literals, ModuleSpecifierKind,
 };
+use crate::module_path_index::{ModulePathIndex, ProjectModuleWorkspace};
 use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
@@ -153,6 +154,10 @@ pub struct AnalysisHost {
     completion_cache_stats: Arc<Mutex<CompletionCacheStats>>,
     definition_cache: Arc<Mutex<BTreeMap<DefinitionRequestKey, Option<Definition>>>>,
     type_libraries: Vec<ProjectTypeLibrary>,
+    module_path_workspaces: Vec<ProjectModuleWorkspace>,
+    indexed_module_paths: BTreeSet<PathBuf>,
+    module_path_revision: u64,
+    module_path_index_cache: Arc<Mutex<Option<CachedModulePathIndex>>>,
     snapshot_cache: Arc<Mutex<Option<CachedAnalysisSnapshot>>>,
     revision: u64,
 }
@@ -166,6 +171,7 @@ pub struct AnalysisSnapshot {
     asset_index: Option<asset::AssetIndex>,
     files: BTreeMap<PathBuf, AnalysisFile>,
     require_path_separator: ModulePathSeparator,
+    module_path_index: Arc<ModulePathIndex>,
     builtin_catalogs: BuiltinCatalogs,
     module_graph: ModuleGraph,
     type_database: ProjectTypeDatabase,
@@ -393,6 +399,12 @@ struct SourceFingerprint {
 struct CachedAnalysisSnapshot {
     revision: u64,
     snapshot: AnalysisSnapshot,
+}
+
+#[derive(Clone, Debug)]
+struct CachedModulePathIndex {
+    revision: u64,
+    index: Arc<ModulePathIndex>,
 }
 
 impl DependencySurface {
