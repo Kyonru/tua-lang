@@ -208,6 +208,29 @@ references, rename, call hierarchy, module graphs, assets, type explanations,
 and domain inspectors. Prefer extending that surface over exposing internal
 parser or cache types to another crate.
 
+### Query Contexts And Semantic Domains
+
+Recursive semantic work carries an explicit query context. Type inference,
+checking, and completion should construct that context once and pass it through
+the entire operation instead of repeatedly threading parsed source, type
+environments, local bindings, configuration, and ranking inputs through long
+procedural argument lists. Besides keeping entry points small, one context
+ensures every nested walk observes the same semantic inputs.
+
+Built-in language domains are registered through the internal
+`BuiltinDomainRegistry`. The registry owns their stable ordering and shared
+hooks for type names, aliases, constructors, typed members, inferred method
+returns, and diagnostics. Completion-only presentation hooks live behind the
+`CompletionDomainRegistry`, which converts domain results into protocol-neutral
+completion items. Adding a built-in domain should extend these registries and
+the domain's own module instead of adding another parallel chain to the type
+environment, checker, and completion dispatcher.
+
+These are closed compile-time integration points, not a runtime plugin API.
+Third-party Lua libraries continue to enter through declaration-only type
+libraries and normal module resolution; semantic queries never load executable
+plugins or fetch code from the network.
+
 ## Editor Request Flow
 
 ```mermaid
@@ -252,6 +275,10 @@ LSP handlers should have a narrow shape:
 2. Select a current-file query or take one snapshot.
 3. Call a typed `tua-core` query.
 4. Convert the core result into an LSP response.
+
+The server classifies request and notification method strings once through its
+typed protocol registry before dispatch. Handlers match those request kinds;
+they do not maintain independent string-based routing or domain semantics.
 
 If a handler starts parsing text, resolving a module, or constructing a type,
 the behavior belongs lower in the stack.

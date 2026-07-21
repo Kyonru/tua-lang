@@ -8,7 +8,7 @@ pub use environment::{
     build_type_environment, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
 };
 pub(crate) use environment::{
-    build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
+    build_type_environment_with_diagnostics, build_type_environment_with_domain_registry,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{

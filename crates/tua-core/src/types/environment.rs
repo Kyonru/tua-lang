@@ -17,11 +17,9 @@ use crate::parser::{
     LuaDocAnnotationKind, LuaDocParam, LuaDocReturnType, ParsedLanguage, ParsedSource, SourceSpan,
     TableFieldType as ParsedTableFieldType, TuaType,
 };
+use crate::semantic_domains::{BuiltinDomain, BuiltinDomainRegistry};
 use crate::source_text::function_name_table_field;
-use crate::{
-    asset, input, lua, object_pool, sprite, state_machine, store, vector, Diagnostic,
-    DiagnosticCode,
-};
+use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
@@ -461,14 +459,14 @@ pub fn build_type_environment(parsed: &ParsedSource) -> Result<TypeEnvironment, 
 pub(crate) fn build_type_environment_with_diagnostics(
     parsed: &ParsedSource,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
-    build_type_environment_with_builtin_aliases(parsed, [])
+    build_type_environment_with_domain_registry(parsed, BuiltinDomainRegistry::standard())
 }
 
-pub(crate) fn build_type_environment_with_builtin_aliases(
+pub(crate) fn build_type_environment_with_domain_registry(
     parsed: &ParsedSource,
-    builtin_aliases: impl IntoIterator<Item = (String, Type)>,
+    domains: BuiltinDomainRegistry,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
-    let builtin_aliases = builtin_aliases.into_iter().collect::<Vec<_>>();
+    let builtin_aliases = domains.builtin_aliases();
     let mut diagnostics = Vec::new();
     let mut alias_names = collect_alias_names(parsed, &mut diagnostics);
     collect_class_names(parsed, &mut alias_names);
@@ -482,41 +480,7 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                 .map(|name| (*name).to_owned()),
         )
         .chain(lua::love_type_names().iter().map(|name| (*name).to_owned()))
-        .chain(
-            vector::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            sprite::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            crate::signal::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            object_pool::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            state_machine::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            store::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
-        .chain(
-            input::builtin_type_names()
-                .iter()
-                .map(|name| (*name).to_owned()),
-        )
+        .chain(domains.builtin_type_names().into_iter().map(str::to_owned))
         .chain(builtin_aliases.iter().map(|(name, _)| name.clone()))
         .collect::<BTreeSet<_>>();
     let mut aliases = BTreeMap::new();
@@ -569,27 +533,6 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
         }
     }
 
-    aliases
-        .entry(vector::TYPE_NAME.to_owned())
-        .or_insert_with(vector::vec2_type);
-    for (name, ty) in sprite::builtin_aliases() {
-        aliases.entry(name).or_insert(ty);
-    }
-    aliases
-        .entry(crate::signal::TYPE_NAME.to_owned())
-        .or_insert_with(crate::signal::signal_bus_type);
-    for (name, ty) in object_pool::builtin_aliases() {
-        aliases.entry(name).or_insert(ty);
-    }
-    for (name, ty) in state_machine::builtin_aliases() {
-        aliases.entry(name).or_insert(ty);
-    }
-    for (name, ty) in store::builtin_aliases() {
-        aliases.entry(name).or_insert(ty);
-    }
-    for (name, ty) in input::builtin_aliases() {
-        aliases.entry(name).or_insert(ty);
-    }
     for (name, ty) in builtin_aliases {
         aliases.entry(name).or_insert(ty);
     }
@@ -661,7 +604,7 @@ pub(crate) fn build_type_environment_with_builtin_aliases(
                         .map(|parent| (class.name.clone(), parent.clone()))
                 })
                 .collect(),
-            locals,
+            locals: locals.into_iter().chain(domains.builtin_locals()).collect(),
             local_docs,
             functions,
         },
@@ -2095,6 +2038,70 @@ fn push_doc_conflict(diagnostics: &mut Vec<Diagnostic>, diagnostic: Diagnostic) 
     diagnostics.push(diagnostic);
 }
 
+#[derive(Clone, Copy)]
+struct FunctionReturnQuery<'a> {
+    parsed: &'a ParsedSource,
+    aliases: &'a BTreeMap<String, Type>,
+    function_types: &'a BTreeMap<String, Type>,
+    parameters: &'a BTreeMap<String, Vec<TypedParameter>>,
+}
+
+#[derive(Clone, Copy)]
+struct InferenceQueryContext<'a> {
+    parsed: &'a ParsedSource,
+    aliases: &'a BTreeMap<String, Type>,
+    function_types: &'a BTreeMap<String, Type>,
+    current_function: &'a str,
+    domains: BuiltinDomainRegistry,
+}
+
+impl<'a> InferenceQueryContext<'a> {
+    fn new(
+        parsed: &'a ParsedSource,
+        aliases: &'a BTreeMap<String, Type>,
+        function_types: &'a BTreeMap<String, Type>,
+        current_function: &'a str,
+    ) -> Self {
+        Self {
+            parsed,
+            aliases,
+            function_types,
+            current_function,
+            domains: BuiltinDomainRegistry::standard(),
+        }
+    }
+
+    fn expression<'locals>(
+        self,
+        locals: &'locals BTreeMap<String, Type>,
+    ) -> ExpressionInferenceQuery<'a, 'locals> {
+        ExpressionInferenceQuery {
+            context: self,
+            locals,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ExpressionInferenceQuery<'a, 'locals> {
+    context: InferenceQueryContext<'a>,
+    locals: &'locals BTreeMap<String, Type>,
+}
+
+impl ExpressionInferenceQuery<'_, '_> {
+    fn type_of(self, expression: &Expression) -> Option<Type> {
+        infer_expression_return_type(self, expression, 0)
+    }
+
+    fn return_type(self, expression: &Expression, index: usize) -> Option<Type> {
+        infer_expression_return_type(self, expression, index)
+    }
+
+    fn return_types(self, expression: &Expression) -> Vec<Type> {
+        infer_expression_return_types(self, expression)
+    }
+}
+
 fn infer_function_return_types(
     parsed: &ParsedSource,
     aliases: &BTreeMap<String, Type>,
@@ -2108,15 +2115,13 @@ fn infer_function_return_types(
         let previous_returns = returns.clone();
         let function_types = function_types_by_name(functions, &returns);
 
-        collect_function_return_types(
-            parsed.ast.nodes(),
+        let query = FunctionReturnQuery {
             parsed,
             aliases,
-            locals,
-            &function_types,
-            &parameters,
-            &mut returns,
-        );
+            function_types: &function_types,
+            parameters: &parameters,
+        };
+        collect_function_return_types(parsed.ast.nodes(), query, locals, &mut returns);
 
         if returns == previous_returns {
             break;
@@ -2175,180 +2180,102 @@ fn function_types_by_name(
 
 fn collect_function_return_types(
     block: &ast::Block,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
+    query: FunctionReturnQuery<'_>,
     locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    parameters: &BTreeMap<String, Vec<TypedParameter>>,
     returns: &mut BTreeMap<String, Vec<Type>>,
 ) {
     let mut scoped_locals = locals.clone();
+    let root_inference =
+        InferenceQueryContext::new(query.parsed, query.aliases, query.function_types, "");
 
     for stmt in block.stmts() {
         match stmt {
             ast::Stmt::Assignment(assignment) => {
-                infer_assignment_types(
-                    assignment,
-                    parsed,
-                    aliases,
-                    function_types,
-                    "",
-                    &mut scoped_locals,
-                );
+                infer_assignment_types(assignment, root_inference, &mut scoped_locals);
             }
             ast::Stmt::LocalAssignment(local) => {
-                infer_local_assignment_types(
-                    local,
-                    parsed,
-                    aliases,
-                    function_types,
-                    "",
-                    &mut scoped_locals,
-                );
+                infer_local_assignment_types(local, root_inference, &mut scoped_locals);
             }
             ast::Stmt::LocalFunction(function) => {
                 let name = token_text(function.name());
                 let function_locals =
-                    locals_with_function_parameters(&scoped_locals, parameters, &name);
-
-                if let Some(return_types) = infer_block_return_types(
-                    function.body().block(),
-                    parsed,
-                    aliases,
-                    &function_locals,
-                    function_types,
+                    locals_with_function_parameters(&scoped_locals, query.parameters, &name);
+                let inference = InferenceQueryContext::new(
+                    query.parsed,
+                    query.aliases,
+                    query.function_types,
                     &name,
-                ) {
+                );
+
+                if let Some(return_types) =
+                    infer_block_return_types(function.body().block(), inference, &function_locals)
+                {
                     returns.insert(name, return_types);
                 }
                 collect_function_return_types(
                     function.body().block(),
-                    parsed,
-                    aliases,
+                    query,
                     &function_locals,
-                    function_types,
-                    parameters,
                     returns,
                 );
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                infer_function_declaration_type(function, function_types, &mut scoped_locals);
+                infer_function_declaration_type(function, query.function_types, &mut scoped_locals);
 
                 let name = function.name().to_string();
                 let function_locals =
-                    locals_with_function_parameters(&scoped_locals, parameters, &name);
-
-                if let Some(return_types) = infer_block_return_types(
-                    function.body().block(),
-                    parsed,
-                    aliases,
-                    &function_locals,
-                    function_types,
+                    locals_with_function_parameters(&scoped_locals, query.parameters, &name);
+                let inference = InferenceQueryContext::new(
+                    query.parsed,
+                    query.aliases,
+                    query.function_types,
                     &name,
-                ) {
+                );
+
+                if let Some(return_types) =
+                    infer_block_return_types(function.body().block(), inference, &function_locals)
+                {
                     returns.insert(name, return_types);
                 }
                 collect_function_return_types(
                     function.body().block(),
-                    parsed,
-                    aliases,
+                    query,
                     &function_locals,
-                    function_types,
-                    parameters,
                     returns,
                 );
             }
             ast::Stmt::Do(block) => {
-                collect_function_return_types(
-                    block.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(block.block(), query, &scoped_locals, returns);
             }
             ast::Stmt::GenericFor(for_stmt) => {
-                collect_function_return_types(
-                    for_stmt.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(for_stmt.block(), query, &scoped_locals, returns);
             }
             ast::Stmt::If(if_stmt) => {
-                collect_function_return_types(
-                    if_stmt.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(if_stmt.block(), query, &scoped_locals, returns);
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
                         collect_function_return_types(
                             else_if.block(),
-                            parsed,
-                            aliases,
+                            query,
                             &scoped_locals,
-                            function_types,
-                            parameters,
                             returns,
                         );
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
-                    collect_function_return_types(
-                        else_block,
-                        parsed,
-                        aliases,
-                        &scoped_locals,
-                        function_types,
-                        parameters,
-                        returns,
-                    );
+                    collect_function_return_types(else_block, query, &scoped_locals, returns);
                 }
             }
             ast::Stmt::NumericFor(for_stmt) => {
-                collect_function_return_types(
-                    for_stmt.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(for_stmt.block(), query, &scoped_locals, returns);
             }
             ast::Stmt::Repeat(repeat) => {
-                collect_function_return_types(
-                    repeat.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(repeat.block(), query, &scoped_locals, returns);
             }
             ast::Stmt::While(while_stmt) => {
-                collect_function_return_types(
-                    while_stmt.block(),
-                    parsed,
-                    aliases,
-                    &scoped_locals,
-                    function_types,
-                    parameters,
-                    returns,
-                );
+                collect_function_return_types(while_stmt.block(), query, &scoped_locals, returns);
             }
             _ => {}
         }
@@ -2373,23 +2300,12 @@ fn locals_with_function_parameters(
 
 fn infer_block_return_types(
     block: &ast::Block,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
+    context: InferenceQueryContext<'_>,
     locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Option<Vec<Type>> {
     let mut returns = Vec::new();
 
-    collect_return_types_in_block(
-        block,
-        parsed,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-        &mut returns,
-    );
+    collect_return_types_in_block(block, context, locals, &mut returns);
 
     if returns.is_empty() {
         return None;
@@ -2404,11 +2320,8 @@ fn infer_block_return_types(
 
 fn collect_return_types_in_block(
     block: &ast::Block,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
+    context: InferenceQueryContext<'_>,
     locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
     returns: &mut Vec<Vec<Type>>,
 ) {
     let mut scoped_locals = locals.clone();
@@ -2416,141 +2329,73 @@ fn collect_return_types_in_block(
     for stmt in block.stmts() {
         match stmt {
             ast::Stmt::Assignment(assignment) => {
-                infer_assignment_types(
-                    assignment,
-                    parsed,
-                    aliases,
-                    function_types,
-                    current_function,
-                    &mut scoped_locals,
-                );
+                infer_assignment_types(assignment, context, &mut scoped_locals);
             }
             ast::Stmt::LocalAssignment(local) => {
-                infer_local_assignment_types(
-                    local,
-                    parsed,
-                    aliases,
-                    function_types,
-                    current_function,
-                    &mut scoped_locals,
-                );
+                infer_local_assignment_types(local, context, &mut scoped_locals);
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                infer_function_declaration_type(function, function_types, &mut scoped_locals);
-            }
-            ast::Stmt::FunctionCall(function_call) => {
-                record_setmetatable_call(
-                    function_call,
-                    parsed,
-                    aliases,
-                    function_types,
-                    current_function,
+                infer_function_declaration_type(
+                    function,
+                    context.function_types,
                     &mut scoped_locals,
                 );
             }
-            ast::Stmt::Do(block) => collect_return_types_in_block(
-                block.block(),
-                parsed,
-                aliases,
-                &scoped_locals,
-                function_types,
-                current_function,
-                returns,
-            ),
-            ast::Stmt::GenericFor(for_stmt) => collect_return_types_in_block(
-                for_stmt.block(),
-                parsed,
-                aliases,
-                &scoped_locals,
-                function_types,
-                current_function,
-                returns,
-            ),
+            ast::Stmt::FunctionCall(function_call) => {
+                record_setmetatable_call(function_call, context, &mut scoped_locals);
+            }
+            ast::Stmt::Do(block) => {
+                collect_return_types_in_block(block.block(), context, &scoped_locals, returns)
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                collect_return_types_in_block(for_stmt.block(), context, &scoped_locals, returns)
+            }
             ast::Stmt::If(if_stmt) => {
-                let branch_locals =
-                    locals_with_condition_narrowing(if_stmt.condition(), aliases, &scoped_locals);
-                collect_return_types_in_block(
-                    if_stmt.block(),
-                    parsed,
-                    aliases,
-                    &branch_locals,
-                    function_types,
-                    current_function,
-                    returns,
+                let branch_locals = locals_with_condition_narrowing(
+                    if_stmt.condition(),
+                    context.aliases,
+                    &scoped_locals,
                 );
+                collect_return_types_in_block(if_stmt.block(), context, &branch_locals, returns);
 
                 if let Some(else_ifs) = if_stmt.else_if() {
                     for else_if in else_ifs {
                         let branch_locals = locals_with_condition_narrowing(
                             else_if.condition(),
-                            aliases,
+                            context.aliases,
                             &scoped_locals,
                         );
                         collect_return_types_in_block(
                             else_if.block(),
-                            parsed,
-                            aliases,
+                            context,
                             &branch_locals,
-                            function_types,
-                            current_function,
                             returns,
                         );
                     }
                 }
 
                 if let Some(else_block) = if_stmt.else_block() {
-                    collect_return_types_in_block(
-                        else_block,
-                        parsed,
-                        aliases,
-                        &scoped_locals,
-                        function_types,
-                        current_function,
-                        returns,
-                    );
+                    collect_return_types_in_block(else_block, context, &scoped_locals, returns);
                 }
             }
-            ast::Stmt::NumericFor(for_stmt) => collect_return_types_in_block(
-                for_stmt.block(),
-                parsed,
-                aliases,
-                &scoped_locals,
-                function_types,
-                current_function,
-                returns,
-            ),
-            ast::Stmt::Repeat(repeat) => collect_return_types_in_block(
-                repeat.block(),
-                parsed,
-                aliases,
-                &scoped_locals,
-                function_types,
-                current_function,
-                returns,
-            ),
-            ast::Stmt::While(while_stmt) => collect_return_types_in_block(
-                while_stmt.block(),
-                parsed,
-                aliases,
-                &scoped_locals,
-                function_types,
-                current_function,
-                returns,
-            ),
+            ast::Stmt::NumericFor(for_stmt) => {
+                collect_return_types_in_block(for_stmt.block(), context, &scoped_locals, returns)
+            }
+            ast::Stmt::Repeat(repeat) => {
+                collect_return_types_in_block(repeat.block(), context, &scoped_locals, returns)
+            }
+            ast::Stmt::While(while_stmt) => {
+                collect_return_types_in_block(while_stmt.block(), context, &scoped_locals, returns)
+            }
             ast::Stmt::LocalFunction(_) => {}
             _ => {}
         }
     }
 
     if let Some(LastStmt::Return(return_stmt)) = block.last_stmt() {
-        if let Some(return_types) = infer_return_statement_types(
-            return_stmt,
-            parsed,
-            aliases,
-            &scoped_locals,
-            function_types,
-            current_function,
-        ) {
+        if let Some(return_types) =
+            infer_return_statement_types(return_stmt, context.expression(&scoped_locals))
+        {
             returns.push(return_types);
         }
     }
@@ -2588,11 +2433,7 @@ fn if_guarantees_return(if_stmt: &ast::If) -> bool {
 
 fn infer_return_statement_types(
     return_stmt: &ast::Return,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
+    query: ExpressionInferenceQuery<'_, '_>,
 ) -> Option<Vec<Type>> {
     let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
 
@@ -2605,37 +2446,14 @@ fn infer_return_statement_types(
 
     for (index, expression) in expressions.iter().enumerate() {
         if index < fixed_expression_count {
-            return_types.push(infer_expression_return_type(
-                parsed,
-                expression,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-                0,
-            )?);
+            return_types.push(query.return_type(expression, 0)?);
             continue;
         }
 
-        let expression_returns = infer_expression_return_types(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        );
+        let expression_returns = query.return_types(expression);
 
         if expression_returns.is_empty() {
-            return_types.push(infer_expression_return_type(
-                parsed,
-                expression,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-                0,
-            )?);
+            return_types.push(query.return_type(expression, 0)?);
         } else {
             return_types.extend(expression_returns);
         }
@@ -2686,10 +2504,7 @@ fn push_unique_type(types: &mut Vec<Type>, ty: Type) {
 
 fn infer_local_assignment_types(
     local: &ast::LocalAssignment,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
+    context: InferenceQueryContext<'_>,
     locals: &mut BTreeMap<String, Type>,
 ) {
     let expressions = local.expressions().iter().collect::<Vec<_>>();
@@ -2697,35 +2512,35 @@ fn infer_local_assignment_types(
     for (index, name) in local.names().iter().enumerate() {
         let ty = match assignment_expression_for_local(&expressions, index) {
             Some((expression, return_index)) => {
-                let Some(ty) = infer_expression_return_type(
-                    parsed,
-                    expression,
-                    aliases,
-                    locals,
-                    function_types,
-                    current_function,
-                    return_index,
-                ) else {
+                let Some(ty) = context
+                    .expression(locals)
+                    .return_type(expression, return_index)
+                else {
                     continue;
                 };
                 ty
             }
-            None if parsed.raw.language == ParsedLanguage::Tua => Type::nil(),
+            None if context.parsed.raw.language == ParsedLanguage::Tua => Type::nil(),
             None => continue,
         };
 
         let preserve_literal_unions = match assignment_expression_for_local(&expressions, index) {
-            Some((Expression::FunctionCall(call), _)) => {
-                (state_machine::machine_type_from_call(call).is_some()
-                    && !locals.contains_key(state_machine::CONSTRUCTOR_NAME)
-                    && !function_types.contains_key(state_machine::CONSTRUCTOR_NAME))
-                    || (input::input_type_from_call(call).is_some()
-                        && !locals.contains_key(input::CONSTRUCTOR_NAME)
-                        && !function_types.contains_key(input::CONSTRUCTOR_NAME))
-            }
+            Some((Expression::FunctionCall(call), _)) => field_chain_before_first_call(call)
+                .and_then(|parts| {
+                    let [name] = parts.as_slice() else {
+                        return None;
+                    };
+                    let domain = context.domains.constructor_domain(name)?;
+
+                    (domain.preserves_literal_unions()
+                        && !locals.contains_key(name)
+                        && !context.function_types.contains_key(name))
+                    .then_some(())
+                })
+                .is_some(),
             _ => false,
         };
-        let ty = if parsed.raw.language == ParsedLanguage::Tua && !preserve_literal_unions {
+        let ty = if context.parsed.raw.language == ParsedLanguage::Tua && !preserve_literal_unions {
             widen_inferred_type(&ty)
         } else {
             ty
@@ -2736,41 +2551,23 @@ fn infer_local_assignment_types(
 
 fn infer_assignment_types(
     assignment: &ast::Assignment,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
+    context: InferenceQueryContext<'_>,
     locals: &mut BTreeMap<String, Type>,
 ) {
     for (variable, expression) in assignment.variables().iter().zip(assignment.expressions()) {
-        if infer_table_field_assignment_type(
-            variable,
-            expression,
-            parsed,
-            aliases,
-            function_types,
-            current_function,
-            locals,
-        ) {
+        if infer_table_field_assignment_type(variable, expression, context, locals) {
             continue;
         }
 
         let Some(name) = directly_assigned_name(variable) else {
             continue;
         };
-        let Some(ty) = infer_expression_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        ) else {
+        let Some(ty) = context.expression(locals).type_of(expression) else {
             locals.remove(&name);
             continue;
         };
 
-        if parsed.raw.language == ParsedLanguage::Tua {
+        if context.parsed.raw.language == ParsedLanguage::Tua {
             locals
                 .entry(name)
                 .or_insert_with(|| widen_inferred_type(&ty));
@@ -2800,10 +2597,7 @@ fn infer_function_declaration_type(
 fn infer_table_field_assignment_type(
     variable: &Var,
     expression: &Expression,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
+    context: InferenceQueryContext<'_>,
     locals: &mut BTreeMap<String, Type>,
 ) -> bool {
     let Some(parts) = plain_field_chain_from_var(variable) else {
@@ -2813,14 +2607,7 @@ fn infer_table_field_assignment_type(
         return false;
     };
     let is_self_index = field == "__index" && expression_is_name(expression, root);
-    let Some(ty) = infer_expression_type(
-        parsed,
-        expression,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-    ) else {
+    let Some(ty) = context.expression(locals).type_of(expression) else {
         return true;
     };
 
@@ -2854,10 +2641,7 @@ fn insert_table_field_type(
 
 fn record_setmetatable_call(
     function_call: &FunctionCall,
-    parsed: &ParsedSource,
-    aliases: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
+    context: InferenceQueryContext<'_>,
     locals: &mut BTreeMap<String, Type>,
 ) {
     let Some((target, meta)) = setmetatable_arguments(function_call) else {
@@ -2870,14 +2654,7 @@ fn record_setmetatable_call(
     let Some(base) = locals.get(&name).cloned() else {
         return;
     };
-    let Some(meta) = infer_expression_type(
-        parsed,
-        meta,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-    ) else {
+    let Some(meta) = context.expression(locals).type_of(meta) else {
         return;
     };
 
@@ -2898,77 +2675,28 @@ fn locals_with_condition_narrowing(
     scoped
 }
 
-fn infer_expression_type(
-    parsed: &ParsedSource,
-    expression: &Expression,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
-) -> Option<Type> {
-    infer_expression_return_type(
-        parsed,
-        expression,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-        0,
-    )
-}
-
 fn infer_expression_return_type(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     expression: &Expression,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
     return_index: usize,
 ) -> Option<Type> {
     match expression {
-        Expression::FunctionCall(function_call) => infer_function_call_return_types(
-            parsed,
-            function_call,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        )
-        .get(return_index)
-        .cloned(),
+        Expression::FunctionCall(function_call) => {
+            infer_function_call_return_types(query, function_call)
+                .get(return_index)
+                .cloned()
+        }
         _ if return_index > 0 => None,
         Expression::BinaryOperator { lhs, binop, rhs } => {
-            let left = infer_expression_type(
-                parsed,
-                lhs,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-            )?;
-            let right = infer_expression_type(
-                parsed,
-                rhs,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-            )?;
+            let left = query.type_of(lhs)?;
+            let right = query.type_of(rhs)?;
 
-            infer_binary_operator_type(aliases, binop, &left, &right)
+            infer_binary_operator_type(query.context.aliases, binop, &left, &right)
         }
         Expression::UnaryOperator { unop, expression } => {
-            let operand = infer_expression_type(
-                parsed,
-                expression,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-            )?;
+            let operand = query.type_of(expression)?;
 
-            infer_unary_operator_type(aliases, unop, &operand)
+            infer_unary_operator_type(query.context.aliases, unop, &operand)
         }
         Expression::Number(_) => Some(Type::number()),
         Expression::String(_) => Some(Type::string()),
@@ -2984,15 +2712,7 @@ fn infer_expression_return_type(
             for field in table.fields() {
                 match field {
                     Field::ExpressionKey { key, value, .. } => {
-                        let ty = infer_expression_type(
-                            parsed,
-                            value,
-                            aliases,
-                            locals,
-                            function_types,
-                            current_function,
-                        )
-                        .unwrap_or(Type::Any);
+                        let ty = query.type_of(value).unwrap_or(Type::Any);
 
                         if let Some(key) = string_literal_expression(key) {
                             fields.push((key, TableField::required(ty)));
@@ -3002,15 +2722,7 @@ fn infer_expression_return_type(
                     }
                     Field::NameKey { key, value, .. } => {
                         let key_text = token_text(key);
-                        let ty = infer_expression_type(
-                            parsed,
-                            value,
-                            aliases,
-                            locals,
-                            function_types,
-                            current_function,
-                        )
-                        .unwrap_or(Type::Any);
+                        let ty = query.type_of(value).unwrap_or(Type::Any);
 
                         if key_text == "__index" {
                             fields.extend(index_fields_from_expression(value));
@@ -3019,17 +2731,7 @@ fn infer_expression_return_type(
                         fields.push((key_text, TableField::required(ty)));
                     }
                     Field::NoKey(value) => {
-                        array_items.push(
-                            infer_expression_type(
-                                parsed,
-                                value,
-                                aliases,
-                                locals,
-                                function_types,
-                                current_function,
-                            )
-                            .unwrap_or(Type::Any),
-                        );
+                        array_items.push(query.type_of(value).unwrap_or(Type::Any));
                     }
                     _ => {}
                 }
@@ -3037,156 +2739,89 @@ fn infer_expression_return_type(
 
             Some(table_or_array_type(fields, array_items))
         }
-        Expression::Parentheses { expression, .. } => infer_expression_return_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-            return_index,
-        ),
-        Expression::TypeAssertion { expression, .. } => infer_expression_return_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-            return_index,
-        ),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => {
+            query.return_type(expression, return_index)
+        }
         Expression::Function(function) => Some(function_type_from_body(function.body())),
-        Expression::Var(var) => infer_var_type(
-            parsed,
-            var,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        ),
+        Expression::Var(var) => infer_var_type(query, var),
         _ => None,
     }
 }
 
 fn infer_expression_return_types(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     expression: &Expression,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Vec<Type> {
     match expression {
-        Expression::FunctionCall(function_call) => infer_function_call_return_types(
-            parsed,
-            function_call,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        ),
+        Expression::FunctionCall(function_call) => {
+            infer_function_call_return_types(query, function_call)
+        }
         Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => infer_expression_return_types(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        ),
-        _ => infer_expression_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        )
-        .into_iter()
-        .collect(),
+        | Expression::TypeAssertion { expression, .. } => query.return_types(expression),
+        _ => query.type_of(expression).into_iter().collect(),
     }
 }
 
-fn infer_var_type(
-    parsed: &ParsedSource,
-    var: &Var,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
-) -> Option<Type> {
+fn infer_var_type(query: ExpressionInferenceQuery<'_, '_>, var: &Var) -> Option<Type> {
     match var {
         Var::Name(name) => {
             let name = token_text(name);
 
-            locals
+            query
+                .locals
                 .get(&name)
-                .or_else(|| function_types.get(&name))
-                .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
+                .or_else(|| query.context.function_types.get(&name))
+                .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))
         }
         Var::Expression(expression) => {
             if let Some(parts) = plain_field_chain_from_var_expression(expression) {
-                if let Some(ty) = infer_field_chain_type(parsed, aliases, locals, &parts) {
+                if let Some(ty) = infer_field_chain_type(
+                    query.context.parsed,
+                    query.context.aliases,
+                    query.locals,
+                    &parts,
+                ) {
                     return Some(ty);
                 }
             }
 
-            infer_var_expression_type(
-                parsed,
-                expression,
-                aliases,
-                locals,
-                function_types,
-                current_function,
-            )
+            infer_var_expression_type(query, expression)
         }
         _ => None,
     }
 }
 
 fn infer_var_expression_type(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     expression: &ast::VarExpression,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Option<Type> {
     let mut current = match expression.prefix() {
         Prefix::Name(name) => {
             let name = token_text(name);
 
-            locals
+            query
+                .locals
                 .get(&name)
-                .or_else(|| function_types.get(&name))
-                .map(|ty| resolve_aliases_from_map(aliases, ty, 0))?
+                .or_else(|| query.context.function_types.get(&name))
+                .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))?
         }
-        Prefix::Expression(expression) => infer_expression_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        )?,
+        Prefix::Expression(expression) => query.type_of(expression)?,
         _ => return None,
     };
 
     for suffix in expression.suffixes() {
         match suffix {
             Suffix::Index(Index::Dot { name, .. }) => {
-                current = resolve_table_field_type_from_map(aliases, &current, &token_text(name))?;
+                current = resolve_table_field_type_from_map(
+                    query.context.aliases,
+                    &current,
+                    &token_text(name),
+                )?;
             }
             Suffix::Index(Index::Brackets { expression, .. }) => {
-                let key = index_key_type(
-                    parsed,
-                    expression,
-                    aliases,
-                    locals,
-                    function_types,
-                    current_function,
-                )?;
-                current = resolve_index_type_from_map(aliases, &current, &key)?;
+                let key = index_key_type(query, expression)?;
+                current = resolve_index_type_from_map(query.context.aliases, &current, &key)?;
             }
             _ => return None,
         }
@@ -3196,21 +2831,10 @@ fn infer_var_expression_type(
 }
 
 fn infer_function_call_return_types(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     function_call: &FunctionCall,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Vec<Type> {
-    if let Some(ty) = setmetatable_return_type(
-        parsed,
-        function_call,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-    ) {
+    if let Some(ty) = setmetatable_return_type(query, function_call) {
         return vec![ty];
     }
 
@@ -3222,7 +2846,11 @@ fn infer_function_call_return_types(
         return Vec::new();
     };
 
-    if parts.len() == 1 && parts.first().is_some_and(|name| name == current_function) {
+    if parts.len() == 1
+        && parts
+            .first()
+            .is_some_and(|name| name == query.context.current_function)
+    {
         return Vec::new();
     }
 
@@ -3231,111 +2859,65 @@ fn infer_function_call_return_types(
             return Vec::new();
         };
 
-        if state_machine::is_constructor(name)
-            && !locals.contains_key(name)
-            && !function_types.contains_key(name)
-        {
-            return vec![state_machine::machine_type_from_call(function_call)
-                .unwrap_or_else(|| Type::alias(state_machine::TYPE_NAME))];
-        }
-
-        if input::is_constructor(name)
-            && !locals.contains_key(name)
-            && !function_types.contains_key(name)
-        {
-            return vec![input::input_type_from_call(function_call)
-                .unwrap_or_else(|| Type::alias(input::TYPE_NAME))];
-        }
-
-        if object_pool::is_constructor(name)
-            && !locals.contains_key(name)
-            && !function_types.contains_key(name)
-        {
-            let pool = first_parenthesized_call_argument(function_call)
-                .and_then(|options| {
-                    infer_expression_type(
-                        parsed,
-                        options,
-                        aliases,
-                        locals,
-                        function_types,
-                        current_function,
-                    )
+        if !query.locals.contains_key(name) && !query.context.function_types.contains_key(name) {
+            if let Some(ty) = query
+                .context
+                .domains
+                .constructor_domain(name)
+                .and_then(|domain| {
+                    infer_builtin_constructor_return_type(query, domain, function_call)
                 })
-                .map(|options| object_pool::pool_type_from_options(&options))
-                .unwrap_or_else(|| Type::alias(object_pool::TYPE_NAME));
-
-            return vec![pool];
+            {
+                return vec![ty];
+            }
         }
 
-        if store::is_constructor(name)
-            && !locals.contains_key(name)
-            && !function_types.contains_key(name)
-        {
-            let store = first_parenthesized_call_argument(function_call)
-                .and_then(|initial| {
-                    infer_expression_type(
-                        parsed,
-                        initial,
-                        aliases,
-                        locals,
-                        function_types,
-                        current_function,
-                    )
-                })
-                .map(|initial| store::store_type_from_initial(&initial))
-                .unwrap_or_else(|| Type::alias(store::TYPE_NAME));
-
-            return vec![store];
-        }
-
-        let function_type = function_types
+        let function_type = query
+            .context
+            .function_types
             .get(name)
-            .or_else(|| locals.get(name))
-            .map(|ty| resolve_aliases_from_map(aliases, ty, 0))
+            .or_else(|| query.locals.get(name))
+            .map(|ty| resolve_aliases_from_map(query.context.aliases, ty, 0))
             .or_else(|| asset::loader_kind(name).map(|kind| Type::Function(kind.function_type())))
             .or_else(|| {
-                vector::is_constructor(name).then(|| Type::Function(vector::constructor_type()))
-            })
-            .or_else(|| sprite::is_helper(name).then(|| Type::Function(sprite::constructor_type())))
-            .or_else(|| {
-                crate::signal::is_constructor(name)
-                    .then(|| Type::Function(crate::signal::constructor_type()))
-            })
-            .or_else(|| {
-                state_machine::is_constructor(name)
-                    .then(|| Type::Function(state_machine::constructor_type()))
-            })
-            .or_else(|| {
-                store::is_constructor(name).then(|| Type::Function(store::constructor_type()))
-            })
-            .or_else(|| {
-                input::is_constructor(name).then(|| Type::Function(input::constructor_type()))
+                query
+                    .context
+                    .domains
+                    .constructor(name)
+                    .map(|constructor| Type::Function(constructor.function_type()))
             });
 
         return function_type
-            .map(|ty| function_return_types(aliases, &ty))
+            .map(|ty| function_return_types(query.context.aliases, &ty))
             .unwrap_or_default();
     }
 
     if let Some(method) = parts.last() {
         if let Some(receiver_parts) = parts.get(..parts.len().saturating_sub(1)) {
-            if let Some(receiver_type) =
-                infer_field_chain_type(parsed, aliases, locals, receiver_parts)
-            {
-                if let Some(returns) =
-                    input::method_return_types_from_direct_type(&receiver_type, function_call)
+            if let Some(receiver_type) = infer_field_chain_type(
+                query.context.parsed,
+                query.context.aliases,
+                query.locals,
+                receiver_parts,
+            ) {
+                if let Some(returns) = query
+                    .context
+                    .domains
+                    .method_return_types_from_direct_type(&receiver_type, function_call)
                 {
                     return returns;
                 }
 
-                if let Some(ty) =
-                    constructor_call_return_type_from_map(aliases, &receiver_type, method)
-                {
+                if let Some(ty) = constructor_call_return_type_from_map(
+                    query.context.aliases,
+                    &receiver_type,
+                    method,
+                ) {
                     return vec![ty];
                 }
 
-                let returns = love_object_method_return_types(aliases, &receiver_type, method);
+                let returns =
+                    love_object_method_return_types(query.context.aliases, &receiver_type, method);
 
                 if !returns.is_empty() {
                     return returns;
@@ -3344,9 +2926,25 @@ fn infer_function_call_return_types(
         }
     }
 
-    infer_field_chain_type(parsed, aliases, locals, &parts)
-        .map(|ty| function_return_types(aliases, &ty))
-        .unwrap_or_default()
+    infer_field_chain_type(
+        query.context.parsed,
+        query.context.aliases,
+        query.locals,
+        &parts,
+    )
+    .map(|ty| function_return_types(query.context.aliases, &ty))
+    .unwrap_or_default()
+}
+
+fn infer_builtin_constructor_return_type(
+    query: ExpressionInferenceQuery<'_, '_>,
+    domain: BuiltinDomain,
+    function_call: &FunctionCall,
+) -> Option<Type> {
+    let argument = first_parenthesized_call_argument(function_call)
+        .and_then(|argument| query.type_of(argument));
+
+    domain.inferred_constructor_return_type(function_call, argument.as_ref())
 }
 
 fn first_parenthesized_call_argument(function_call: &FunctionCall) -> Option<&Expression> {
@@ -3372,33 +2970,15 @@ fn constructor_call_return_type_from_map(
 }
 
 fn setmetatable_return_type(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     function_call: &FunctionCall,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Option<Type> {
     let (target, meta) = setmetatable_arguments(function_call)?;
-    if let Some(class_type) = class_setmetatable_instance_type(parsed, meta) {
+    if let Some(class_type) = class_setmetatable_instance_type(query.context.parsed, meta) {
         return Some(class_type);
     }
-    let base = infer_expression_type(
-        parsed,
-        target,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-    )?;
-    let meta = infer_expression_type(
-        parsed,
-        meta,
-        aliases,
-        locals,
-        function_types,
-        current_function,
-    )?;
+    let base = query.type_of(target)?;
+    let meta = query.type_of(meta)?;
 
     Some(merge_static_metatable(base, meta))
 }
@@ -3823,24 +3403,13 @@ fn resolve_index_type_from_map(
 }
 
 fn index_key_type(
-    parsed: &ParsedSource,
+    query: ExpressionInferenceQuery<'_, '_>,
     expression: &Expression,
-    aliases: &BTreeMap<String, Type>,
-    locals: &BTreeMap<String, Type>,
-    function_types: &BTreeMap<String, Type>,
-    current_function: &str,
 ) -> Option<Type> {
     match expression {
         Expression::Number(_) => Some(Type::number()),
         Expression::String(value) => Some(Type::string_literal(unquote_string(&value.to_string()))),
-        _ => infer_expression_type(
-            parsed,
-            expression,
-            aliases,
-            locals,
-            function_types,
-            current_function,
-        ),
+        _ => query.type_of(expression),
     }
 }
 

@@ -726,11 +726,10 @@ mod tests {
     use super::*;
 
     fn index(parsed: &ParsedSource) -> EcsFileIndex {
-        let (environment, _) = crate::types::build_type_environment_with_builtin_aliases(
+        let (environment, _) = crate::types::build_type_environment_with_domain_registry(
             parsed,
-            super::super::builtin_aliases(),
+            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
         );
-        let environment = environment.with_local_types(super::super::builtin_locals());
 
         ecs_file_index(parsed, &environment)
     }

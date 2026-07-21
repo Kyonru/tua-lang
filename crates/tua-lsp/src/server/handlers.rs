@@ -23,6 +23,7 @@ use super::protocol::{
     lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
     workspace_diagnostic_refresh_request, SourceRange,
 };
+use super::request_registry::{NotificationKind, RequestKind};
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
 use super::{
     capabilities, LogVerbosity, LspServer, PendingDiagnostics, RequestLatencySample,
@@ -182,8 +183,12 @@ impl LspServer {
             return response(id, result);
         }
 
-        match method {
-            "initialize" => {
+        let Some(request) = RequestKind::from_method(method) else {
+            return error_response(id, -32601, format!("method not found: {method}"));
+        };
+
+        match request {
+            RequestKind::Initialize => {
                 self.trace_config = trace_config_from_initialize(&message);
                 self.workspace_folders = workspace_folders_from_initialize(&message);
                 self.analysis
@@ -208,97 +213,101 @@ impl LspServer {
                     ),
                 )
             }
-            "shutdown" => {
+            RequestKind::Shutdown => {
                 self.shutdown_requested = true;
 
                 response(id, Value::Null)
             }
-            "textDocument/hover" => {
+            RequestKind::Hover => {
                 response(id, self.hover_response(&message).unwrap_or(Value::Null))
             }
-            "textDocument/completion" => response(id, self.completion_response(&message)),
-            "completionItem/resolve" => response(id, self.completion_resolve_response(message)),
-            "textDocument/signatureHelp" => response(
+            RequestKind::Completion => response(id, self.completion_response(&message)),
+            RequestKind::CompletionResolve => {
+                response(id, self.completion_resolve_response(message))
+            }
+            RequestKind::SignatureHelp => response(
                 id,
                 self.signature_help_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "textDocument/definition" => response(
+            RequestKind::Definition => response(
                 id,
                 self.definition_response(&message).unwrap_or(Value::Null),
             ),
-            "textDocument/typeDefinition" => response(
+            RequestKind::TypeDefinition => response(
                 id,
                 self.type_definition_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "textDocument/implementation" => response(id, self.implementation_response(&message)),
-            "textDocument/diagnostic" => response(id, self.document_diagnostic_response(&message)),
-            "tua/builtinDocument" => response(
+            RequestKind::Implementation => response(id, self.implementation_response(&message)),
+            RequestKind::Diagnostic => response(id, self.document_diagnostic_response(&message)),
+            RequestKind::BuiltinDocument => response(
                 id,
                 self.builtin_document_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "tua/cacheStats" => response(id, self.cache_stats_response()),
-            "tua/health" => response(id, self.health_response()),
-            "tua/resetCompletionStats" => response(id, self.reset_completion_stats_response()),
-            "tua/inspect" => response(id, self.inspector_response(&message)),
-            "tua/explainType" => response(id, self.type_explanation_response(&message)),
-            "tua/assetInventory" => response(id, self.asset_inventory_response()),
-            "tua/moduleGraph" => response(id, self.module_dependency_graph_response()),
-            "tua/ecsGraph" => response(id, self.ecs_graph_response()),
-            "tua/objectPoolGraph" => response(id, self.object_pool_graph_response()),
-            "tua/signalGraph" => response(id, self.signal_graph_response()),
-            "textDocument/prepareCallHierarchy" => {
+            RequestKind::CacheStats => response(id, self.cache_stats_response()),
+            RequestKind::Health => response(id, self.health_response()),
+            RequestKind::ResetCompletionStats => {
+                response(id, self.reset_completion_stats_response())
+            }
+            RequestKind::Inspect => response(id, self.inspector_response(&message)),
+            RequestKind::ExplainType => response(id, self.type_explanation_response(&message)),
+            RequestKind::AssetInventory => response(id, self.asset_inventory_response()),
+            RequestKind::ModuleGraph => response(id, self.module_dependency_graph_response()),
+            RequestKind::EcsGraph => response(id, self.ecs_graph_response()),
+            RequestKind::ObjectPoolGraph => response(id, self.object_pool_graph_response()),
+            RequestKind::SignalGraph => response(id, self.signal_graph_response()),
+            RequestKind::PrepareCallHierarchy => {
                 response(id, self.prepare_call_hierarchy_response(&message))
             }
-            "callHierarchy/incomingCalls" => {
+            RequestKind::IncomingCalls => {
                 response(id, self.call_hierarchy_incoming_response(&message))
             }
-            "callHierarchy/outgoingCalls" => {
+            RequestKind::OutgoingCalls => {
                 response(id, self.call_hierarchy_outgoing_response(&message))
             }
-            "textDocument/documentLink" => response(id, self.document_link_response(&message)),
-            "textDocument/documentHighlight" => {
+            RequestKind::DocumentLink => response(id, self.document_link_response(&message)),
+            RequestKind::DocumentHighlight => {
                 response(id, self.document_highlight_response(&message))
             }
-            "textDocument/documentSymbol" => response(id, self.document_symbol_response(&message)),
-            "textDocument/selectionRange" => response(id, self.selection_range_response(&message)),
-            "textDocument/foldingRange" => response(id, self.folding_range_response(&message)),
-            "textDocument/codeAction" => response(id, self.code_action_response(&message)),
-            "textDocument/codeLens" => response(id, self.code_lens_response(&message)),
-            "codeLens/resolve" => response(id, self.code_lens_resolve_response(message)),
-            "textDocument/formatting" => response(
+            RequestKind::DocumentSymbol => response(id, self.document_symbol_response(&message)),
+            RequestKind::SelectionRange => response(id, self.selection_range_response(&message)),
+            RequestKind::FoldingRange => response(id, self.folding_range_response(&message)),
+            RequestKind::CodeAction => response(id, self.code_action_response(&message)),
+            RequestKind::CodeLens => response(id, self.code_lens_response(&message)),
+            RequestKind::CodeLensResolve => response(id, self.code_lens_resolve_response(message)),
+            RequestKind::Formatting => response(
                 id,
                 self.formatting_response(&message).unwrap_or(Value::Null),
             ),
-            "textDocument/rangeFormatting" => response(
+            RequestKind::RangeFormatting => response(
                 id,
                 self.range_formatting_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "textDocument/onTypeFormatting" => response(
+            RequestKind::OnTypeFormatting => response(
                 id,
                 self.on_type_formatting_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "textDocument/references" => response(id, self.references_response(&message)),
-            "textDocument/prepareRename" => response(
+            RequestKind::References => response(id, self.references_response(&message)),
+            RequestKind::PrepareRename => response(
                 id,
                 self.prepare_rename_response(&message)
                     .unwrap_or(Value::Null),
             ),
-            "textDocument/rename" => {
+            RequestKind::Rename => {
                 response(id, self.rename_response(&message).unwrap_or(Value::Null))
             }
-            "textDocument/inlayHint" => response(id, self.inlay_hint_response(&message)),
-            "textDocument/semanticTokens/full" => {
+            RequestKind::InlayHint => response(id, self.inlay_hint_response(&message)),
+            RequestKind::SemanticTokensFull => {
                 response(id, self.semantic_tokens_full_response(&message))
             }
-            "textDocument/semanticTokens/full/delta" => {
+            RequestKind::SemanticTokensDelta => {
                 response(id, self.semantic_tokens_delta_response(&message))
             }
-            "textDocument/semanticTokens/range" => {
+            RequestKind::SemanticTokensRange => {
                 let range = message
                     .get("params")
                     .and_then(|params| params.get("range"))
@@ -306,35 +315,33 @@ impl LspServer {
 
                 response(id, self.semantic_tokens_range_response(&message, range))
             }
-            "workspace/symbol" => response(id, self.workspace_symbol_response(&message)),
-            "workspace/willRenameFiles" => response(id, self.will_rename_files_response(&message)),
-            _ => error_response(id, -32601, format!("method not found: {method}")),
+            RequestKind::WorkspaceSymbol => response(id, self.workspace_symbol_response(&message)),
+            RequestKind::WillRenameFiles => response(id, self.will_rename_files_response(&message)),
         }
     }
 
     fn handle_notification(&mut self, message: &Value, method: &str) -> Option<Vec<Value>> {
-        match method {
-            "initialized" => self.initialized_notifications(),
-            "exit" => {
+        match NotificationKind::from_method(method)? {
+            NotificationKind::Initialized => self.initialized_notifications(),
+            NotificationKind::Exit => {
                 self.should_exit = true;
 
                 None
             }
-            "textDocument/didOpen" => self.did_open_notification(message),
-            "textDocument/didChange" => self.did_change_notification(message),
-            "textDocument/didSave" => self.did_save_notification(message),
-            "textDocument/didClose" => self.did_close_notification(message),
-            "workspace/didChangeWatchedFiles" => {
+            NotificationKind::DidOpen => self.did_open_notification(message),
+            NotificationKind::DidChange => self.did_change_notification(message),
+            NotificationKind::DidSave => self.did_save_notification(message),
+            NotificationKind::DidClose => self.did_close_notification(message),
+            NotificationKind::DidChangeWatchedFiles => {
                 self.did_change_watched_files_notification(message)
             }
-            "workspace/didChangeWorkspaceFolders" => {
+            NotificationKind::DidChangeWorkspaceFolders => {
                 self.did_change_workspace_folders_notification(message)
             }
-            "workspace/didChangeConfiguration" => {
+            NotificationKind::DidChangeConfiguration => {
                 self.did_change_configuration_notification(message)
             }
-            "tua/setTrace" => self.set_trace_notification(message),
-            _ => None,
+            NotificationKind::SetTrace => self.set_trace_notification(message),
         }
     }
 

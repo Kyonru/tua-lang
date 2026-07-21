@@ -26,14 +26,17 @@ use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePositi
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
 use crate::semantic::SemanticModel;
+use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
-    build_type_environment, build_type_environment_with_builtin_aliases, widen_inferred_type,
-    FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    build_type_environment_with_domain_registry, widen_inferred_type, FunctionType, MetatableFacts,
+    TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
-use crate::{
-    asset, input, love_callback, lua, object_pool, signal, sprite, state_machine, store, vector,
-};
+use crate::{asset, love_callback, lua, signal, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
+
+mod query;
+
+use query::{CheckQuery, CheckQueryOptions};
 
 pub fn check_tua_source(
     path: impl AsRef<Path>,
@@ -117,15 +120,18 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     ecs_config: &EcsConfig,
     format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
-    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
+    CheckQuery::new(
         parsed,
-        asset_roots,
-        diagnostics_config,
-        jit_config,
-        ecs_config,
-        None,
-        format_options,
+        CheckQueryOptions::new(
+            asset_roots,
+            diagnostics_config,
+            jit_config,
+            ecs_config,
+            None,
+            format_options,
+        ),
     )
+    .run()
 }
 
 pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index(
@@ -137,32 +143,18 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     asset_index: Option<&asset::AssetIndex>,
     format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
-    let environment = {
-        let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::TypeEnvironment);
-
-        if ecs_config.enabled {
-            let (environment, diagnostics) =
-                build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
-
-            if diagnostics.is_empty() {
-                environment.with_local_types(crate::ecs::builtin_locals())
-            } else {
-                return Err(diagnostics);
-            }
-        } else {
-            build_type_environment(parsed)?
-        }
-    };
-
-    check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
+    CheckQuery::new(
         parsed,
-        &environment,
-        asset_roots,
-        diagnostics_config,
-        jit_config,
-        asset_index,
-        format_options,
+        CheckQueryOptions::new(
+            asset_roots,
+            diagnostics_config,
+            jit_config,
+            ecs_config,
+            asset_index,
+            format_options,
+        ),
     )
+    .run()
 }
 
 pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index(
@@ -174,52 +166,18 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     asset_index: Option<&asset::AssetIndex>,
     format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
-    let mut checker = Checker::new(parsed, environment, asset_roots, asset_index);
-
-    {
-        let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Checker);
-
-        checker.check_block(parsed.ast.nodes(), None);
-
-        if diagnostics_config.doc_annotations {
-            checker
-                .diagnostics
-                .extend(parsed.lua_doc_diagnostics.iter().cloned());
-        }
-
-        checker
-            .diagnostics
-            .extend(signal::event_schema_diagnostics(parsed, environment));
-
-        if environment.local(input::CONSTRUCTOR_NAME).is_none()
-            && environment.function(input::CONSTRUCTOR_NAME).is_none()
-        {
-            checker
-                .diagnostics
-                .extend(input::config_diagnostics(parsed));
-        }
-    }
-
-    checker.diagnostics.extend(lint_parsed_source(
+    CheckQuery::new(
         parsed,
-        diagnostics_config,
-        jit_config,
-        environment,
-        format_options,
-    ));
-
-    checker.diagnostics = apply_inline_ignores(
-        &parsed.path,
-        &parsed.source,
-        checker.diagnostics,
-        diagnostics_config,
-    );
-
-    if checker.diagnostics.is_empty() {
-        Ok(())
-    } else {
-        Err(checker.diagnostics)
-    }
+        CheckQueryOptions::new(
+            asset_roots,
+            diagnostics_config,
+            jit_config,
+            &EcsConfig::default(),
+            asset_index,
+            format_options,
+        ),
+    )
+    .run_with_environment(environment)
 }
 
 struct Checker<'a> {
@@ -1161,19 +1119,7 @@ impl<'a> Checker<'a> {
                     self.check_typed_function_call_arguments(function_call, &function);
                 self.check_signal_emit_payload_call(function_call);
 
-                if let Some(ty) = self.state_machine_call_return_type(function_call) {
-                    return vec![ty];
-                }
-
-                if let Some(ty) = self.object_pool_call_return_type(function_call) {
-                    return vec![ty];
-                }
-
-                if let Some(ty) = self.store_call_return_type(function_call) {
-                    return vec![ty];
-                }
-
-                if let Some(ty) = self.input_call_return_type(function_call) {
+                if let Some(ty) = self.builtin_constructor_call_return_type(function_call) {
                     return vec![ty];
                 }
 
@@ -1213,72 +1159,32 @@ impl<'a> Checker<'a> {
             .then_some(Type::alias(name))
     }
 
-    fn object_pool_call_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
+    fn builtin_constructor_call_return_type(
+        &mut self,
+        function_call: &FunctionCall,
+    ) -> Option<Type> {
         let parts = field_chain_before_first_call(function_call)?;
-        if parts.len() != 1 || !object_pool::is_constructor(&parts[0]) {
+        let [name] = parts.as_slice() else {
             return None;
-        }
+        };
         if self.environment.local(&parts[0]).is_some()
             || self.environment.function(&parts[0]).is_some()
         {
             return None;
         }
-
-        let arguments = call_arguments(function_call)?;
-        let options = match arguments.first()? {
-            CallArgument::Expression(expression) => self.infer_expression(expression)?,
-            CallArgument::Inferred(ty) => ty.clone(),
+        let domain = BuiltinDomainRegistry::standard().constructor_domain(name)?;
+        let argument = if matches!(domain, BuiltinDomain::ObjectPool | BuiltinDomain::Store) {
+            call_arguments(function_call)
+                .and_then(|arguments| arguments.into_iter().next())
+                .and_then(|argument| match argument {
+                    CallArgument::Expression(expression) => self.infer_expression(expression),
+                    CallArgument::Inferred(ty) => Some(ty),
+                })
+        } else {
+            None
         };
 
-        Some(object_pool::pool_type_from_options(&options))
-    }
-
-    fn state_machine_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
-        let parts = field_chain_before_first_call(function_call)?;
-        if parts.len() != 1 || !state_machine::is_constructor(&parts[0]) {
-            return None;
-        }
-        if self.environment.local(&parts[0]).is_some()
-            || self.environment.function(&parts[0]).is_some()
-        {
-            return None;
-        }
-
-        state_machine::machine_type_from_call(function_call)
-    }
-
-    fn store_call_return_type(&mut self, function_call: &FunctionCall) -> Option<Type> {
-        let parts = field_chain_before_first_call(function_call)?;
-        if parts.len() != 1 || !store::is_constructor(&parts[0]) {
-            return None;
-        }
-        if self.environment.local(&parts[0]).is_some()
-            || self.environment.function(&parts[0]).is_some()
-        {
-            return None;
-        }
-
-        let arguments = call_arguments(function_call)?;
-        let initial = match arguments.first()? {
-            CallArgument::Expression(expression) => self.infer_expression(expression)?,
-            CallArgument::Inferred(ty) => ty.clone(),
-        };
-
-        Some(store::store_type_from_initial(&initial))
-    }
-
-    fn input_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
-        let parts = field_chain_before_first_call(function_call)?;
-        if parts.len() != 1 || !input::is_constructor(&parts[0]) {
-            return None;
-        }
-        if self.environment.local(&parts[0]).is_some()
-            || self.environment.function(&parts[0]).is_some()
-        {
-            return None;
-        }
-
-        input::input_type_from_call(function_call)
+        domain.inferred_constructor_return_type(function_call, argument.as_ref())
     }
 
     fn record_setmetatable_call(&mut self, function_call: &FunctionCall) {
@@ -1415,53 +1321,16 @@ impl<'a> Checker<'a> {
                 return Some(Callable::Function(kind.function_type()));
             }
 
-            if vector::is_constructor(root) {
-                return Some(Callable::Function(vector::constructor_type()));
-            }
-
-            if sprite::is_helper(root) {
-                return Some(Callable::Function(sprite::constructor_type()));
-            }
-
-            if signal::is_constructor(root) {
-                return Some(Callable::Function(signal::constructor_type()));
-            }
-
-            if object_pool::is_constructor(root) {
-                return Some(Callable::from_typed_function(
-                    &object_pool::constructor_typed_function(),
-                ));
-            }
-
-            if state_machine::is_constructor(root) {
-                return Some(Callable::from_typed_function(
-                    &state_machine::constructor_typed_function(),
-                ));
-            }
-
-            if store::is_constructor(root) {
-                return Some(Callable::from_typed_function(
-                    &store::constructor_typed_function(),
-                ));
-            }
-
-            if input::is_constructor(root) {
-                return Some(Callable::from_typed_function(
-                    &input::constructor_typed_function(),
-                ));
+            if let Some(constructor) = BuiltinDomainRegistry::standard().constructor(root) {
+                return Some(match constructor {
+                    BuiltinConstructor::Function(function) => Callable::Function(function),
+                    BuiltinConstructor::Typed(function) => Callable::from_typed_function(&function),
+                });
             }
         }
 
         if !fields.is_empty() {
-            if let Some(function) = self.signal_bus_method_call_target(&parts) {
-                return Some(Callable::from_typed_function(&function));
-            }
-
-            if let Some(function) = self.store_method_call_target(&parts) {
-                return Some(Callable::from_typed_function(&function));
-            }
-
-            if let Some(function) = self.input_method_call_target(&parts) {
+            if let Some(function) = self.builtin_domain_method_call_target(&parts) {
                 return Some(Callable::from_typed_function(&function));
             }
 
@@ -1506,28 +1375,12 @@ impl<'a> Checker<'a> {
         external_function_type_from_lua_item(item)
     }
 
-    fn signal_bus_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
+    fn builtin_domain_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
         let method = parts.last()?;
         let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
         let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
 
-        signal_typed_method_for_receiver(self.environment, &receiver_type, method)
-    }
-
-    fn store_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
-        let method = parts.last()?;
-        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
-        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
-
-        store::typed_member(self.environment, &receiver_type, method)
-    }
-
-    fn input_method_call_target(&self, parts: &[String]) -> Option<TypedFunction> {
-        let method = parts.last()?;
-        let receiver_parts = parts.get(..parts.len().checked_sub(1)?)?;
-        let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
-
-        input::typed_member(self.environment, &receiver_type, method)
+        BuiltinDomainRegistry::standard().typed_member(self.environment, &receiver_type, method)
     }
 
     fn constructor_call_return_type(&self, function_call: &FunctionCall) -> Option<Type> {
@@ -2613,18 +2466,6 @@ fn lua_type_field_item(
         | Type::Array(_)
         | Type::Tuple(_)
         | Type::Dictionary { .. } => None,
-    }
-}
-
-fn signal_typed_method_for_receiver(
-    environment: &TypeEnvironment,
-    receiver_type: &Type,
-    method: &str,
-) -> Option<TypedFunction> {
-    if signal::type_is_signal_bus(environment, receiver_type) {
-        signal::typed_method(method)
-    } else {
-        None
     }
 }
 

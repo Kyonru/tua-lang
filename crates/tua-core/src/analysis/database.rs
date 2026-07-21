@@ -1,4 +1,5 @@
 use super::*;
+use crate::types::build_type_environment_with_domain_registry;
 
 impl AnalysisQueryCache {
     pub(super) fn cached_file(
@@ -581,13 +582,12 @@ pub(super) fn build_analysis_type_environment_with_diagnostics(
     config: &ProjectConfig,
 ) -> (TypeEnvironment, Vec<Diagnostic>) {
     if config.ecs.enabled {
-        let (environment, diagnostics) =
-            build_type_environment_with_builtin_aliases(parsed, crate::ecs::builtin_aliases());
+        let (environment, diagnostics) = build_type_environment_with_domain_registry(
+            parsed,
+            crate::semantic_domains::BuiltinDomainRegistry::with_ecs(true),
+        );
 
-        (
-            environment.with_local_types(crate::ecs::builtin_locals()),
-            diagnostics,
-        )
+        (environment, diagnostics)
     } else {
         build_type_environment_with_diagnostics(parsed)
     }

@@ -48,6 +48,7 @@ mod runtime_type;
 pub mod scope;
 pub mod selection_range;
 mod semantic;
+mod semantic_domains;
 pub mod semantic_index;
 pub mod semantic_token;
 mod signal;

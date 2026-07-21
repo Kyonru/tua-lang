@@ -6,6 +6,7 @@ mod config;
 mod configuration;
 mod handlers;
 mod protocol;
+mod request_registry;
 mod scheduler;
 mod transport;
 mod uri;

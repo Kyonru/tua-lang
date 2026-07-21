@@ -53,8 +53,8 @@ use crate::source_text::{
 };
 use crate::text_match::text_matches;
 use crate::types::{
-    build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
-    format_named_function_pretty, format_type_with_prefix, widen_inferred_type,
+    build_type_environment_with_diagnostics, format_named_function_pretty, format_type_with_prefix,
+    widen_inferred_type,
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{

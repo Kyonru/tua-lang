@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use self::context::{completion_context, CompletionContext, FieldAccessSeparator};
+use self::domains::CompletionDomainRegistry;
+use self::query::CompletionQuery;
 use self::require::{complete_import_paths, complete_require_paths};
 use self::sequence::{
     score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
@@ -14,13 +16,12 @@ use crate::module_path_index::ModulePathIndex;
 use crate::profile;
 use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind};
 use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{
-    asset, ecs, input, love_conf, object_pool, signal, sprite, state_machine, store, vector,
-};
+use crate::{asset, ecs, input, love_conf, object_pool, signal, state_machine, store};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -28,7 +29,9 @@ use crate::{
 
 pub mod adaptive;
 pub(crate) mod context;
+mod domains;
 pub mod multitoken;
+mod query;
 mod require;
 pub mod sequence;
 mod symbol;
@@ -848,71 +851,7 @@ fn complete_parsed_source_with_context_and_ranking_options(
     environment: &TypeEnvironment,
     ranking: CompletionRankingInputs<'_>,
 ) -> Vec<Completion> {
-    let prefix = context.filter_prefix().map(str::to_owned);
-    let ranking_context =
-        CompletionRankingContext::from_context(&parsed.path, source, &context, ranking);
-    let completions = match context {
-        CompletionContext::AnnotationTag { prefix } => complete_annotation_tags(prefix.as_str()),
-        CompletionContext::DocumentationSnippet { position } => {
-            complete_documentation_snippet(parsed, position)
-        }
-        CompletionContext::TypeAnnotation { prefix } => {
-            complete_type_names(environment, prefix.as_str())
-        }
-        CompletionContext::FieldAccess {
-            receiver_parts,
-            prefix,
-            position,
-            separator,
-            separator_span,
-        } => {
-            let module_fields =
-                complete_required_module_fields(parsed, &receiver_parts, prefix.as_str());
-
-            if !module_fields.is_empty() {
-                module_fields
-            } else {
-                let field_context = FieldCompletionContext {
-                    receiver_parts: &receiver_parts,
-                    prefix: prefix.as_str(),
-                    position,
-                    separator,
-                    separator_span,
-                };
-                let fields = complete_fields(parsed, source, environment, field_context);
-
-                if !fields.is_empty() || environment.local(&receiver_parts[0]).is_some() {
-                    fields
-                } else {
-                    complete_lua_fields(source, &receiver_parts, prefix.as_str(), position)
-                }
-            }
-        }
-        CompletionContext::StringArgument {
-            callee_parts,
-            active_parameter,
-            prefix,
-            position,
-        } => {
-            let string_context = StringArgumentCompletionContext {
-                callee_parts: &callee_parts,
-                active_parameter,
-                prefix: prefix.as_str(),
-                position,
-                project_data: ranking.project_data,
-            };
-
-            complete_string_argument_values(parsed, source, environment, string_context)
-        }
-        CompletionContext::RequirePath { .. } | CompletionContext::ImportPath { .. } => Vec::new(),
-        CompletionContext::Identifier { prefix, position } => {
-            complete_domain_config_items(parsed, source, prefix.as_str(), position).unwrap_or_else(
-                || complete_identifier_items(parsed, environment, prefix.as_str(), position),
-            )
-        }
-    };
-
-    rank_completions_for_context(completions, prefix.as_deref(), ranking_context.as_ref())
+    CompletionQuery::new(parsed, source, environment, ranking).complete(context)
 }
 
 fn complete_lossy_source(
@@ -1165,18 +1104,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
         .into_iter()
         .chain(asset::builtin_type_names().iter().copied())
         .chain(lua::love_type_names().iter().copied())
-        .chain(vector::builtin_type_names().iter().copied())
-        .chain(signal::builtin_type_names().iter().copied())
-        .chain(object_pool::builtin_type_names().iter().copied())
-        .chain(state_machine::builtin_type_names().iter().copied())
-        .chain(store::builtin_type_names().iter().copied())
-        .chain(input::builtin_type_names().iter().copied())
-        .chain(
-            ecs::builtin_type_names()
-                .iter()
-                .copied()
-                .filter(|_| include_ecs),
-        )
+        .chain(BuiltinDomainRegistry::with_ecs(include_ecs).builtin_type_names())
         .filter(|primitive| completion_text_matches(primitive, prefix))
         .map(|primitive| Completion {
             label: primitive.to_owned(),
@@ -1533,80 +1461,6 @@ fn format_tua_array_item(ty: &TuaType) -> String {
     }
 }
 
-fn complete_domain_config_items(
-    parsed: &ParsedSource,
-    source: &str,
-    prefix: &str,
-    position: SourcePosition,
-) -> Option<Vec<Completion>> {
-    if !table_key_completion_position(source, prefix, position) {
-        return None;
-    }
-
-    if let Some(items) = state_machine::config_completion_items(parsed, position) {
-        return Some(
-            items
-                .into_iter()
-                .filter(|item| completion_text_matches(&item.label, prefix))
-                .map(|item| Completion {
-                    label: item.label,
-                    kind: CompletionKind::Field,
-                    detail: Some(item.detail),
-                    documentation: Some(item.documentation),
-                    insert_text: Some(item.insert_text),
-                    filter_text: None,
-                    is_snippet: true,
-                    module_path: None,
-                    source_module: None,
-                    additional_text_edits: Vec::new(),
-                })
-                .collect(),
-        );
-    }
-
-    if let Some(items) = input::config_completion_items(parsed, position) {
-        return Some(
-            items
-                .into_iter()
-                .filter(|item| completion_text_matches(&item.label, prefix))
-                .map(|item| Completion {
-                    label: item.label,
-                    kind: CompletionKind::Field,
-                    detail: Some(item.detail),
-                    documentation: Some(item.documentation),
-                    insert_text: Some(item.insert_text),
-                    filter_text: None,
-                    is_snippet: true,
-                    module_path: None,
-                    source_module: None,
-                    additional_text_edits: Vec::new(),
-                })
-                .collect(),
-        );
-    }
-
-    let context = sprite::config_context_at(parsed, position)?;
-
-    Some(
-        sprite::config_completion_items(context)
-            .iter()
-            .filter(|item| completion_text_matches(item.label, prefix))
-            .map(|item| Completion {
-                label: item.label.to_owned(),
-                kind: CompletionKind::Field,
-                detail: Some(item.detail.to_owned()),
-                documentation: Some(item.documentation.to_owned()),
-                insert_text: Some(item.insert_text.to_owned()),
-                filter_text: None,
-                is_snippet: true,
-                module_path: None,
-                source_module: None,
-                additional_text_edits: Vec::new(),
-            })
-            .collect(),
-    )
-}
-
 fn table_key_completion_position(source: &str, prefix: &str, position: SourcePosition) -> bool {
     let Some(line) = line_at(source, position.line) else {
         return false;
@@ -1903,12 +1757,9 @@ fn complete_fields(
         .into_iter()
         .filter(|(name, _)| completion_text_matches(name, prefix))
     {
-        let documentation = ecs::typed_member(environment, &receiver_type, &name)
-            .or_else(|| object_pool::typed_member(environment, &receiver_type, &name))
-            .or_else(|| state_machine::typed_member(environment, &receiver_type, &name))
-            .or_else(|| store::typed_member(environment, &receiver_type, &name))
-            .or_else(|| input::typed_member(environment, &receiver_type, &name))
-            .and_then(|function| function.documentation);
+        let documentation =
+            CompletionDomainRegistry::typed_member(environment, &receiver_type, &name)
+                .and_then(|function| function.documentation);
 
         completions.insert(
             name.clone(),
@@ -1964,65 +1815,10 @@ fn complete_string_argument_values(
     } = context;
     let semantic = SemanticModel::new(parsed, environment);
 
-    if let Some(items) = input::string_value_completion_items(parsed, position) {
-        return items
-            .into_iter()
-            .filter(|item| completion_text_matches(&item.label, prefix))
-            .map(|item| Completion {
-                label: item.label,
-                kind: CompletionKind::Value,
-                detail: Some(item.detail),
-                documentation: Some(item.documentation),
-                insert_text: Some(item.insert_text),
-                filter_text: None,
-                is_snippet: false,
-                module_path: None,
-                source_module: None,
-                additional_text_edits: Vec::new(),
-            })
-            .collect();
-    }
-
-    if let Some(items) = state_machine::string_value_completion_items(parsed, position) {
-        return items
-            .into_iter()
-            .filter(|item| completion_text_matches(&item.label, prefix))
-            .map(|item| Completion {
-                label: item.label,
-                kind: CompletionKind::Value,
-                detail: Some(item.detail),
-                documentation: Some(item.documentation),
-                insert_text: None,
-                filter_text: None,
-                is_snippet: false,
-                module_path: None,
-                source_module: None,
-                additional_text_edits: Vec::new(),
-            })
-            .collect();
-    }
-
-    if sprite::config_context_at(parsed, position) == Some(sprite::SpriteConfigContext::Animation)
-        && sprite_on_loop_value_position(source, position)
+    if let Some(items) =
+        CompletionDomainRegistry::direct_string_items(parsed, source, prefix, position)
     {
-        return sprite::on_loop_method_values()
-            .iter()
-            .filter(|value| completion_text_matches(value, prefix))
-            .map(|value| Completion {
-                label: (*value).to_owned(),
-                kind: CompletionKind::Value,
-                detail: Some("anim8 onLoop method".to_owned()),
-                documentation: Some(
-                    "Animation method invoked by anim8 whenever the animation loops.".to_owned(),
-                ),
-                insert_text: None,
-                filter_text: None,
-                is_snippet: false,
-                module_path: None,
-                source_module: None,
-                additional_text_edits: Vec::new(),
-            })
-            .collect();
+        return items;
     }
 
     if let Some(completions) = complete_signal_event_names(
@@ -2039,52 +1835,14 @@ fn complete_string_argument_values(
 
     if let Some((method, receiver_parts)) = callee_parts.split_last() {
         if let Some(receiver_type) = semantic.type_of_field_chain(receiver_parts, position) {
-            if let Some(items) = state_machine::method_string_completion_items(
+            if let Some(items) = CompletionDomainRegistry::method_string_items(
                 environment,
                 &receiver_type,
                 method,
                 active_parameter,
+                prefix,
             ) {
-                return items
-                    .into_iter()
-                    .filter(|item| completion_text_matches(&item.label, prefix))
-                    .map(|item| Completion {
-                        label: item.label,
-                        kind: CompletionKind::Value,
-                        detail: Some(item.detail),
-                        documentation: Some(item.documentation),
-                        insert_text: None,
-                        filter_text: None,
-                        is_snippet: false,
-                        module_path: None,
-                        source_module: None,
-                        additional_text_edits: Vec::new(),
-                    })
-                    .collect();
-            }
-
-            if let Some(items) = input::method_string_completion_items(
-                environment,
-                &receiver_type,
-                method,
-                active_parameter,
-            ) {
-                return items
-                    .into_iter()
-                    .filter(|item| completion_text_matches(&item.label, prefix))
-                    .map(|item| Completion {
-                        label: item.label,
-                        kind: CompletionKind::Value,
-                        detail: Some(item.detail),
-                        documentation: Some(item.documentation),
-                        insert_text: Some(item.insert_text),
-                        filter_text: None,
-                        is_snippet: false,
-                        module_path: None,
-                        source_module: None,
-                        additional_text_edits: Vec::new(),
-                    })
-                    .collect();
+                return items;
             }
         }
     }
