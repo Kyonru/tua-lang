@@ -140,6 +140,7 @@ Most `TL4xxx` diagnostics are opt-in. Formatting diagnostics are the exception:
 | `TL4033` | A table gains late fields or changes known field types in a LuaJIT-unfriendly way. | `jit.enabled` and `jit.table_shape_drift` |
 | `TL4034` | A hot loop writes through a dynamic table key. | `jit.enabled` and `jit.hot_loop_hints` |
 | `TL4035` | A line exceeds `format.line_width`. | `formatting_lints` |
+| `TL4036` | More than one consecutive empty line separates code. | `formatting_lints` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

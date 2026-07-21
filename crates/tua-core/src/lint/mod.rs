@@ -1973,6 +1973,7 @@ struct FormattingAnalyzer<'a> {
     format_options: &'a FormatOptions,
     diagnostics: Vec<Diagnostic>,
     state: SourceMaskState,
+    previous_empty_line: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1990,6 +1991,7 @@ impl<'a> FormattingAnalyzer<'a> {
             format_options,
             diagnostics: Vec::new(),
             state: SourceMaskState::Code,
+            previous_empty_line: false,
         }
     }
 
@@ -2011,8 +2013,13 @@ impl<'a> FormattingAnalyzer<'a> {
 
     fn analyze_line(&mut self, line_number: usize, raw_line: &str) {
         let line = raw_line.trim_end_matches(['\n', '\r']);
+        let preserves_empty_line = matches!(
+            self.state,
+            SourceMaskState::LongString { .. } | SourceMaskState::BlockComment { .. }
+        );
         let mask = self.code_mask_for_line(line);
 
+        self.check_empty_line(line_number, line, preserves_empty_line);
         self.check_line_width(line_number, line);
         self.check_trailing_whitespace(line_number, line);
         self.check_indentation(line_number, line, &mask);
@@ -2021,6 +2028,21 @@ impl<'a> FormattingAnalyzer<'a> {
         self.check_separator_spacing(line_number, line.as_bytes(), &mask);
         self.check_bracket_spacing(line_number, line.as_bytes(), &mask);
         self.check_assignment_spacing(line_number, line.as_bytes(), &mask);
+    }
+
+    fn check_empty_line(&mut self, line_number: usize, line: &str, preserves_empty_line: bool) {
+        let is_empty = line.trim().is_empty();
+
+        if is_empty && !preserves_empty_line && self.previous_empty_line {
+            self.push(
+                DiagnosticCode::LINT_FORMAT_EMPTY_LINES,
+                line_number,
+                1,
+                "remove consecutive empty line",
+            );
+        }
+
+        self.previous_empty_line = is_empty && !preserves_empty_line;
     }
 
     fn code_mask_for_line(&mut self, line: &str) -> Vec<bool> {

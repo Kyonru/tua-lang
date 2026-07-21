@@ -1938,7 +1938,11 @@ fn fmt_formats_project_files_in_place() {
 
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
-    fs::write(temp.path().join("src/main.tua"), "local value=1\n").expect("failed to write source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "\nlocal value=1\n\n\nlocal other=2\n\n",
+    )
+    .expect("failed to write source");
 
     let output = tua()
         .arg("fmt")
@@ -1953,7 +1957,7 @@ fn fmt_formats_project_files_in_place() {
         fs::read_to_string(temp.path().join("src/main.tua")).expect("failed to read source");
 
     assert!(stdout.contains("formatted 1 file(s)"));
-    assert_eq!(formatted, "local value = 1\n");
+    assert_eq!(formatted, "local value = 1\n\nlocal other = 2\n");
 }
 
 #[test]
@@ -2015,6 +2019,32 @@ duplicate_keys = true
     assert!(stderr.contains("main.tua:1"));
     assert!(stderr.contains("warning TL4001"));
     assert!(stderr.contains("duplicate table key `hp`"));
+}
+
+#[test]
+fn lint_reports_consecutive_empty_lines() {
+    let temp = TempDir::new("lint-empty-lines");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local first = 1\n\n\nlocal second = 2\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("lint")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tua:3:1 warning TL4036"));
+    assert!(stderr.contains("remove consecutive empty line"));
 }
 
 #[test]

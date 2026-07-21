@@ -91,6 +91,7 @@ impl DiagnosticCode {
     pub const LINT_JIT_TABLE_SHAPE_DRIFT: Self = Self(4033);
     pub const LINT_JIT_HOT_LOOP_DYNAMIC_KEY: Self = Self(4034);
     pub const LINT_FORMAT_LINE_WIDTH: Self = Self(4035);
+    pub const LINT_FORMAT_EMPTY_LINES: Self = Self(4036);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -183,6 +184,7 @@ impl DiagnosticCode {
                 | Self::LINT_JIT_TABLE_SHAPE_DRIFT
                 | Self::LINT_JIT_HOT_LOOP_DYNAMIC_KEY
                 | Self::LINT_FORMAT_LINE_WIDTH
+                | Self::LINT_FORMAT_EMPTY_LINES
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

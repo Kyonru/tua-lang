@@ -435,6 +435,24 @@ end
 }
 
 #[test]
+fn formatting_lints_report_consecutive_empty_lines() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        "local first = 1\n\n\nlocal second = 2\n",
+        &DiagnosticsConfig {
+            formatting_lints: true,
+            ..DiagnosticsConfig::default()
+        },
+    )
+    .expect_err("consecutive empty lines should report a formatting diagnostic");
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_EMPTY_LINES),
+        1
+    );
+}
+
+#[test]
 fn formatting_lints_ignore_strings_and_comments() {
     check_tua_source_with_diagnostics_config(
         "src/main.tua",
@@ -442,6 +460,12 @@ fn formatting_lints_ignore_strings_and_comments() {
 local text = "a,b"
 local block = [[
   this , keeps spacing
+
+
+]]
+--[[
+
+
 ]]
 -- if value  then  print( value )
 "#,

@@ -331,6 +331,40 @@ fn keeps_multiline_function_argument_bodies_relative_to_the_call() {
 }
 
 #[test]
+fn removes_unnecessary_empty_lines() {
+    let source = "\n\nlocal first=1\n\n\n\nlocal second=2\n\n\n";
+
+    assert_eq!(
+        format(source),
+        r#"local first = 1
+
+local second = 2
+"#
+    );
+}
+
+#[test]
+fn preserves_empty_lines_inside_long_strings_and_block_comments() {
+    let source = concat!(
+        "local text = [[\n",
+        "first\n",
+        "  \n",
+        "\n",
+        "third\n",
+        "]]\n",
+        "\n",
+        "--[[\n",
+        "first\n",
+        "\n",
+        "\n",
+        "third\n",
+        "]]\n",
+    );
+
+    assert_eq!(format(source), source);
+}
+
+#[test]
 fn is_idempotent() {
     let source = r#"function draw()
   local values = {

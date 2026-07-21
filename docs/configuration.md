@@ -225,7 +225,9 @@ LuaCATS output includes:
 
 The built-in formatter is Rust-native and is used by `tua fmt` plus LSP
 `textDocument/formatting`, `textDocument/rangeFormatting`, and
-`textDocument/onTypeFormatting`.
+`textDocument/onTypeFormatting`. It removes leading and trailing empty lines
+and collapses consecutive empty lines between code sections to one. Empty
+lines inside multiline strings and block comments are preserved.
 
 ```toml
 [format]
@@ -478,9 +480,10 @@ disabled.
 : Reports opinionated Lua/Tua formatting consistency issues. This is enabled by
 default and follows `[format]`: trailing whitespace, tabs or odd-space
 indentation, unindented continuation operators, lines longer than
-`line_width`, obvious spacing around `then`/`do`, comma spacing,
-parenthesis/bracket padding, and assignment-style token spacing. Use `tua fmt`
-or editor formatting when you want the formatter to rewrite files.
+`line_width`, consecutive empty lines, obvious spacing around `then`/`do`,
+comma spacing, parenthesis/bracket padding, and assignment-style token spacing.
+Use `tua fmt` or editor formatting when you want the formatter to rewrite
+files.
 
 `inline_ignores`
 : Enables diagnostic suppression comments. This is disabled by default so

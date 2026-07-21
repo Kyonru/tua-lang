@@ -371,6 +371,9 @@ struct Formatter<'a> {
     paren_continuation_indents: Vec<usize>,
     pending_continuation: bool,
     suppressed_paren_block_indents: Vec<usize>,
+    multiline_state: MultilineState,
+    has_content: bool,
+    pending_blank_line: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -378,6 +381,12 @@ enum MaskState {
     Code,
     ShortString { quote: u8, escaped: bool },
     LongString { close: Vec<u8> },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum MultilineState {
+    Code,
+    LongBracket { close: Vec<u8> },
 }
 
 impl<'a> Formatter<'a> {
@@ -390,6 +399,9 @@ impl<'a> Formatter<'a> {
             paren_continuation_indents: Vec::new(),
             pending_continuation: false,
             suppressed_paren_block_indents: Vec::new(),
+            multiline_state: MultilineState::Code,
+            has_content: false,
+            pending_blank_line: false,
         }
     }
 
@@ -398,13 +410,13 @@ impl<'a> Formatter<'a> {
 
         for raw_line in source.split_inclusive('\n') {
             let line = raw_line.trim_end_matches(['\n', '\r']);
-            self.format_line(line, &mut output);
+            self.format_source_line(line, &mut output);
         }
 
         if !source.ends_with('\n') {
             if let Some(last) = source.lines().last() {
                 if source.is_empty() || !source.split_inclusive('\n').any(|line| line == last) {
-                    self.format_line(last, &mut output);
+                    self.format_source_line(last, &mut output);
                 }
             }
         }
@@ -424,6 +436,83 @@ impl<'a> Formatter<'a> {
         }
 
         output
+    }
+
+    fn format_source_line(&mut self, line: &str, output: &mut String) {
+        let is_blank = line.trim().is_empty();
+        let preserves_blank = matches!(self.multiline_state, MultilineState::LongBracket { .. });
+
+        if is_blank {
+            if preserves_blank {
+                output.push_str(line);
+                output.push('\n');
+            } else if self.has_content {
+                self.pending_blank_line = true;
+            }
+        } else {
+            if self.pending_blank_line {
+                output.push('\n');
+                self.pending_blank_line = false;
+            }
+            self.format_line(line, output);
+            self.has_content = true;
+        }
+
+        self.update_multiline_state(line);
+    }
+
+    fn update_multiline_state(&mut self, line: &str) {
+        let bytes = line.as_bytes();
+        let mut index = 0;
+
+        while index < bytes.len() {
+            match &mut self.multiline_state {
+                MultilineState::Code => {
+                    if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
+                        if let Some((close, consumed)) = long_bracket_open(&bytes[index + 2..]) {
+                            self.multiline_state = MultilineState::LongBracket { close };
+                            index += 2 + consumed;
+                            continue;
+                        }
+                        break;
+                    }
+
+                    if bytes[index] == b'\'' || bytes[index] == b'"' {
+                        let quote = bytes[index];
+                        index += 1;
+                        let mut escaped = false;
+
+                        while index < bytes.len() {
+                            if escaped {
+                                escaped = false;
+                            } else if bytes[index] == b'\\' {
+                                escaped = true;
+                            } else if bytes[index] == quote {
+                                index += 1;
+                                break;
+                            }
+                            index += 1;
+                        }
+                        continue;
+                    }
+
+                    if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
+                        self.multiline_state = MultilineState::LongBracket { close };
+                        index += consumed;
+                    } else {
+                        index += 1;
+                    }
+                }
+                MultilineState::LongBracket { close } => {
+                    if bytes[index..].starts_with(close) {
+                        index += close.len();
+                        self.multiline_state = MultilineState::Code;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+        }
     }
 
     fn format_line(&mut self, line: &str, output: &mut String) {
