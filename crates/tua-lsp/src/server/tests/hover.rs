@@ -38,6 +38,32 @@ player.hp = player.hp - 1
     assert_hover_contains(&output, 5, "(field) hp: number");
     assert_hover_contains(&output, 6, "parameter target: Player");
 }
+
+#[test]
+fn hover_preserves_pretty_printed_multiline_types_in_markdown() {
+    let uri = "file:///tmp/pretty-hover.tua";
+    let source = r#"type Feedback = {
+  animation: string,
+  callback: (event: string, previous: number, state: boolean) -> boolean,
+  duration: number,
+  event: string,
+  payload: { channel: string, cue: string, volume: number },
+  restart: boolean,
+  target: string,
+}
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "Feedback"),
+    ]);
+    let contents = hover_contents(&output, 2);
+
+    assert!(contents.starts_with("```tua\ntype Feedback = {\n"));
+    assert!(contents.contains("\n  callback: "));
+    assert!(contents.contains("\n  payload: "));
+    assert!(contents.contains("\n}\n```"));
+}
+
 #[test]
 fn hover_returns_inferred_function_return_type() {
     let uri = "file:///tmp/inferred-return-hover.tua";
@@ -328,6 +354,6 @@ return {
     assert_hover_contains(
         server.output(),
         5,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
+        "local enemyFromLuaDocModule: {\n  hp: number,\n  name: string,\n  type: \"friendly\" | \"mad\"\n}",
     );
 }

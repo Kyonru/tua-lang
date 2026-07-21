@@ -30,6 +30,28 @@ fn hovers_known_type_alias() {
 }
 
 #[test]
+fn hover_pretty_prints_long_type_aliases() {
+    let source = r#"type Feedback = {
+  animation: string,
+  callback: (event: string, previous: number, state: boolean) -> boolean,
+  duration: number,
+  event: string,
+  payload: { channel: string, cue: string, volume: number },
+  restart: boolean,
+  target: string,
+}
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "Feedback"))
+        .expect("source should parse")
+        .expect("alias should hover");
+
+    assert!(hover.contents.starts_with("type Feedback = {\n"));
+    assert!(hover.contents.contains("\n  callback: "));
+    assert!(hover.contents.contains("\n  payload: "));
+    assert!(hover.contents.ends_with("\n}"));
+}
+
+#[test]
 fn hovers_known_local() {
     let hover = hover_at("player:").expect("local should hover");
 
@@ -1181,12 +1203,9 @@ end)
         state.contents,
         "local state: { paused: boolean, score: number }"
     );
-    assert!(
-        update.contents.contains(
-            "function Store:update(mutator: (state: { paused: boolean, score: number }) -> nil)"
-        ),
-        "unexpected update hover: {}",
-        update.contents
+    assert_eq!(
+        update.contents,
+        "function Store:update(\n  mutator: (state: { paused: boolean, score: number }) -> nil\n): { paused: boolean, score: number }"
     );
 }
 

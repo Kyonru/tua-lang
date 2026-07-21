@@ -54,7 +54,7 @@ use crate::source_text::{
 use crate::text_match::text_matches;
 use crate::types::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
-    widen_inferred_type,
+    format_named_function_pretty, format_type_with_prefix, widen_inferred_type,
 };
 use crate::usage_index::{FileUsageIndex, ProjectUsageIndex};
 use crate::vfs::{
@@ -2059,12 +2059,15 @@ fn module_file_definition(path: &Path, span: SourceSpan) -> Definition {
 }
 
 fn format_module_export_hover(name: &str, ty: &Type) -> String {
-    let ty = ty.to_string();
-
-    if let Some(signature) = ty.strip_prefix("function") {
-        format!("function {name}{signature}")
-    } else {
-        format!("(field) {name}: {ty}")
+    match ty {
+        Type::Function(function) => format_named_function_pretty(
+            name,
+            &function.parameters,
+            function.vararg_type.is_some(),
+            function.vararg_type.as_deref(),
+            function.return_types_or_any(),
+        ),
+        _ => format_type_with_prefix(format!("(field) {name}: "), ty),
     }
 }
 

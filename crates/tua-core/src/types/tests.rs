@@ -23,6 +23,81 @@ fn arrays_parenthesize_union_and_function_item_types() {
 }
 
 #[test]
+fn pretty_type_formatting_keeps_short_shapes_inline() {
+    let ty = Type::table([
+        ("x", TableField::required(Type::number())),
+        ("y", TableField::required(Type::string())),
+    ]);
+
+    assert_eq!(
+        format_type_with_prefix("local value: ", &ty),
+        "local value: { x: number, y: string }"
+    );
+}
+
+#[test]
+fn pretty_type_formatting_breaks_long_shapes_and_unions() {
+    let shape = Type::table([
+        ("alpha", TableField::required(Type::number())),
+        ("beta", TableField::required(Type::string())),
+        ("delta", TableField::required(Type::boolean())),
+        ("epsilon", TableField::required(Type::number())),
+        ("gamma", TableField::required(Type::string())),
+    ]);
+    let union = Type::union([
+        Type::alias("AnimationSequence"),
+        Type::alias("EmissionSequence"),
+        Type::alias("ParallelSequence"),
+        Type::alias("RepeatedSequence"),
+    ]);
+
+    assert_eq!(
+        format_type_with_prefix("local feedback: ", &shape),
+        "local feedback: {\n  alpha: number,\n  beta: string,\n  delta: boolean,\n  epsilon: number,\n  gamma: string\n}"
+    );
+    assert_eq!(
+        format_type_with_prefix("type Step = ", &union),
+        "type Step = AnimationSequence\n  | EmissionSequence\n  | ParallelSequence\n  | RepeatedSequence"
+    );
+}
+
+#[test]
+fn pretty_type_formatting_keeps_recursive_depth_bounded() {
+    let mut ty = Type::number();
+
+    for _ in 0..100 {
+        ty = Type::array(ty);
+    }
+
+    assert!(format::format_type_pretty(&ty, 0).contains('…'));
+}
+
+#[test]
+fn pretty_function_formatting_breaks_at_signature_boundaries() {
+    let state = Type::table([
+        ("paused", TableField::required(Type::boolean())),
+        ("score", TableField::required(Type::number())),
+    ]);
+    let mutator = Type::Function(FunctionType::new_signature(
+        [FunctionParameter::named("state", state.clone())],
+        1,
+        None,
+        [Type::nil()],
+    ));
+
+    assert_eq!(
+        format_named_function_pretty(
+            "Store:update",
+            &[FunctionParameter::named("mutator", mutator)],
+            false,
+            None,
+            &[state],
+        ),
+        "function Store:update(\n  mutator: (state: { paused: boolean, score: number }) -> nil\n): { paused: boolean, score: number }"
+    );
+}
+
+#[test]
 fn class_value_types_do_not_capture_methods_from_prefixed_class_names() {
     let parsed = parse_tua_source(
         "src/classes.tua",

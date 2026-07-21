@@ -104,9 +104,11 @@ fetching packages from the editor. See
 [Declaration-Only Type Libraries](configuration.md#declaration-only-type-libraries).
 
 Hover reports inferred or declared types, documentation, module context, asset
-metadata, and LOVE documentation. Signature help appears after `(` and `,`,
-re-evaluates at `)`, and supports overloads, optional parameters, typed varargs,
-multiple returns, callback aliases, and parameter documentation.
+metadata, and LOVE documentation. Short types stay inline, while complex tables,
+unions, callbacks, tuples, and dictionaries use width-aware multiline formatting.
+Signature help appears after `(` and `,`, re-evaluates at `)`, and supports
+overloads, optional parameters, typed varargs, multiple returns, callback aliases,
+and parameter documentation.
 
 Static `stateMachine({...})` calls share one derived model across completion,
 hover, signature help, checking, and inlay hints. See

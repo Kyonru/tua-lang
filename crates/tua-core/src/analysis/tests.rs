@@ -2908,7 +2908,7 @@ return {
     assert!(
         hover
             .contents
-            .contains("(field) Audio.play: (source: string) -> boolean"),
+            .contains("function Audio.play(source: string): boolean"),
         "unexpected hover contents: {}",
         hover.contents
     );
@@ -3037,7 +3037,7 @@ return {
 
     assert_eq!(
         hover.contents,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }"
+        "local enemyFromLuaDocModule: {\n  hp: number,\n  name: string,\n  type: \"friendly\" | \"mad\"\n}"
     );
     assert!(literal_labels.contains(&"hp".to_owned()));
     assert!(literal_labels.contains(&"name".to_owned()));

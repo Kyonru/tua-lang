@@ -58,7 +58,7 @@ impl AnalysisSnapshot {
             self.type_database
                 .resolve_type_name(&self.module_graph, &parsed.path, &name)?;
         let mut hover = Hover {
-            contents: format!("type {name} = {}", binding.ty),
+            contents: format_type_with_prefix(format!("type {name} = "), &binding.ty),
             span: Some(current_part.span),
             documentation: None,
             context: Vec::new(),
@@ -94,7 +94,7 @@ impl AnalysisSnapshot {
         }
 
         Some(Hover {
-            contents: format!("local {}: {ty}", current_part.text),
+            contents: format_type_with_prefix(format!("local {}: ", current_part.text), &ty),
             span: Some(current_part.span),
             documentation: None,
             context: Vec::new(),
@@ -131,7 +131,7 @@ impl AnalysisSnapshot {
         }
 
         Some(Hover {
-            contents: format!("local {}: {ty}", current_part.text),
+            contents: format_type_with_prefix(format!("local {}: ", current_part.text), &ty),
             span: Some(current_part.span),
             documentation: None,
             context: Vec::new(),
@@ -928,7 +928,7 @@ impl AnalysisSnapshot {
         let (ty, _) = self.contextual_callback_parameter_type(parsed, &part.text, position)?;
 
         Some(Hover {
-            contents: format!("local {}: {ty}", part.text),
+            contents: format_type_with_prefix(format!("local {}: ", part.text), &ty),
             span: Some(part.span),
             documentation: None,
             context: vec!["context: expected callback type".to_owned()],

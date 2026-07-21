@@ -1256,7 +1256,7 @@ return {
     assert_hover_contains(
         server.output(),
         4,
-        "local enemyFromLuaDocModule: { hp: number, name: string, type: \"friendly\" | \"mad\" }",
+        "local enemyFromLuaDocModule: {\n  hp: number,\n  name: string,\n  type: \"friendly\" | \"mad\"\n}",
     );
 }
 #[test]

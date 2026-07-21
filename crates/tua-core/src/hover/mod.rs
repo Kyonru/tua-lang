@@ -12,7 +12,8 @@ use crate::narrowing::narrowed_type_at_position;
 use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
-    build_type_environment, type_from_tua_type, FunctionType, Type, TypeEnvironment, TypedFunction,
+    build_type_environment, format_named_function_pretty, format_type_with_prefix,
+    type_from_tua_type, FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction,
     TypedFunctionOverload,
 };
 use crate::{
@@ -156,7 +157,7 @@ impl<'a> HoverResolver<'a> {
 
             if let Some(ty) = self.semantic.type_of_field_chain(&field_parts, position) {
                 return Some(hover(
-                    format!("(field) {}: {ty}", current_part.text),
+                    format_type_with_prefix(format!("(field) {}: ", current_part.text), &ty),
                     Some(current_part.span),
                 ));
             }
@@ -187,7 +188,7 @@ impl<'a> HoverResolver<'a> {
         }
 
         if let Some(ty) = self.environment.alias(&current_part.text) {
-            let contents = format!("type {} = {ty}", current_part.text);
+            let contents = format_type_with_prefix(format!("type {} = ", current_part.text), ty);
 
             if let Some(documentation) = self.environment.alias_documentation(&current_part.text) {
                 let mut hover = hover(contents, Some(current_part.span));
@@ -233,7 +234,7 @@ impl<'a> HoverResolver<'a> {
                 return Some(hover);
             }
 
-            let contents = format!("local {}: {ty}", current_part.text);
+            let contents = format_type_with_prefix(format!("local {}: ", current_part.text), ty);
 
             if let Some(documentation) = self.environment.local_documentation(&current_part.text) {
                 let mut hover = hover(contents, Some(current_part.span));
@@ -265,7 +266,10 @@ impl<'a> HoverResolver<'a> {
     fn expression_hover(&self, position: SourcePosition) -> Option<Hover> {
         let (ty, span) = self.semantic.type_of_expression_at_position(position)?;
 
-        Some(hover(format!("expression: {ty}"), Some(span)))
+        Some(hover(
+            format_type_with_prefix("expression: ", &ty),
+            Some(span),
+        ))
     }
 
     fn definition_kind_at(&self, position: SourcePosition) -> Option<DefinitionKind> {
@@ -298,7 +302,7 @@ impl<'a> HoverResolver<'a> {
         .unwrap_or(base);
 
         Some(Hover {
-            contents: format!("parameter {name}: {ty}"),
+            contents: format_type_with_prefix(format!("parameter {name}: "), &ty),
             span: Some(hover_span),
             documentation: None,
             context: Vec::new(),
@@ -361,7 +365,7 @@ impl<'a> HoverResolver<'a> {
             return Some(hover);
         }
 
-        let contents = format!("local {name}: {ty}");
+        let contents = format_type_with_prefix(format!("local {name}: "), &ty);
 
         Some(Hover {
             contents,
@@ -504,30 +508,22 @@ fn format_function_signature(function: &TypedFunction) -> String {
                 .first()
                 .is_some_and(|parameter| parameter.name == "self"),
     );
-    let mut parameters = function
-        .parameters
-        .iter()
-        .skip(parameter_start)
-        .map(|parameter| format!("{}: {}", parameter.name, parameter.ty))
-        .collect::<Vec<_>>();
-
-    if function.has_varargs {
-        parameters.push(
-            function
-                .vararg_type
-                .as_ref()
-                .map(|ty| format!("...: {ty}"))
-                .unwrap_or_else(|| "...".to_owned()),
-        );
-    }
 
     let mut signatures = Vec::new();
 
     if should_show_primary_typed_signature(function) {
-        signatures.push(format!(
-            "function {name}({}): {}",
-            parameters.join(", "),
-            format_type_list(&function.return_types_or_any())
+        let parameters = function
+            .parameters
+            .iter()
+            .skip(parameter_start)
+            .map(|parameter| FunctionParameter::named(&parameter.name, parameter.ty.clone()))
+            .collect::<Vec<_>>();
+        signatures.push(format_named_function_pretty(
+            name,
+            &parameters,
+            function.has_varargs,
+            function.vararg_type.as_ref(),
+            &function.return_types_or_any(),
         ));
     }
 
@@ -551,32 +547,24 @@ fn should_show_primary_typed_signature(function: &TypedFunction) -> bool {
 }
 
 fn format_function_overload_signature(name: &str, overload: &TypedFunctionOverload) -> String {
-    let mut parameters = overload
+    let parameters = overload
         .parameters
         .iter()
         .map(|parameter| {
             if parameter.name.is_empty() {
-                parameter.ty.to_string()
+                FunctionParameter::anonymous(parameter.ty.clone())
             } else {
-                format!("{}: {}", parameter.name, parameter.ty)
+                FunctionParameter::named(&parameter.name, parameter.ty.clone())
             }
         })
         .collect::<Vec<_>>();
 
-    if overload.has_varargs {
-        parameters.push(
-            overload
-                .vararg_type
-                .as_ref()
-                .map(|ty| format!("...: {ty}"))
-                .unwrap_or_else(|| "...".to_owned()),
-        );
-    }
-
-    format!(
-        "function {name}({}): {}",
-        parameters.join(", "),
-        format_type_list(&overload.return_types_or_any())
+    format_named_function_pretty(
+        name,
+        &parameters,
+        overload.has_varargs,
+        overload.vararg_type.as_ref(),
+        &overload.return_types_or_any(),
     )
 }
 
@@ -699,33 +687,18 @@ fn format_export_hover(parts: &[String], ty: &Type) -> String {
 
     match ty {
         Type::Function(function) => format_export_function(&qualified_name, function),
-        _ => format!("(field) {qualified_name}: {ty}"),
+        _ => format_type_with_prefix(format!("(field) {qualified_name}: "), ty),
     }
 }
 
 fn format_export_function(name: &str, function: &FunctionType) -> String {
-    let mut parameters = function
-        .parameters
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    if let Some(vararg_type) = function.vararg_type.as_deref() {
-        parameters.push(format!("...: {vararg_type}"));
-    }
-
-    format!(
-        "function {name}({}): {}",
-        parameters.join(", "),
-        format_type_list(function.return_types_or_any())
+    format_named_function_pretty(
+        name,
+        &function.parameters,
+        function.vararg_type.is_some(),
+        function.vararg_type.as_deref(),
+        function.return_types_or_any(),
     )
-}
-
-fn format_type_list(types: &[Type]) -> String {
-    types
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 fn lua_type_field_item(environment: &TypeEnvironment, ty: &Type, field: &str) -> Option<LuaItem> {

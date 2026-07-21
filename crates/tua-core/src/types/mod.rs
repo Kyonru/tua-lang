@@ -1,5 +1,6 @@
 mod assignability;
 mod environment;
+mod format;
 mod model;
 
 pub use assignability::{is_assignable, TypeContext};
@@ -9,6 +10,7 @@ pub use environment::{
 pub(crate) use environment::{
     build_type_environment_with_builtin_aliases, build_type_environment_with_diagnostics,
 };
+pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{
     FunctionParameter, FunctionType, IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType,
     TableField, TableShape, Type, TypeAlias,
