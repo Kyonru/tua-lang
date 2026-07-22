@@ -156,7 +156,7 @@ enforced separately with `tua fmt --check`.
 | `TL4050` | An integer literal loses precision as a Lua number. | `rules` |
 | `TL4051` | Comparison precedence is ambiguous or behaves unlike a chained comparison. | `rules` |
 | `TL4052` | A global can be local to its common enclosing function, or every read follows a definite function-local write. | `rules` |
-| `TL4053` | A function returns values on one path and implicitly returns none on another. | `rules` |
+| `TL4053` | A function returns values on one path and has a reachable fallthrough path, including through a breakable loop. | `rules` |
 | `TL4054` | A direct global `require` or static `import` binding is unused. | `rules` |
 | `TL4055` | A direct local or user-global function declaration is never used. | `unused_locals` |
 

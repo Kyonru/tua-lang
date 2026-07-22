@@ -519,6 +519,181 @@ print("never")
 }
 
 #[test]
+fn implicit_return_reports_named_and_anonymous_fallthrough_locations() {
+    let diagnostics = check_standard_rules_source(
+        r#"local function find(items, expected)
+  for key, value in pairs(items) do
+    if key == expected then
+      return value
+    end
+  end
+end
+
+local anonymous = function(flag)
+  if flag then
+    return nil
+  end
+end
+
+return find, anonymous
+"#,
+    );
+    let implicit_returns = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_IMPLICIT_RETURN))
+        .collect::<Vec<_>>();
+
+    assert_eq!(implicit_returns.len(), 2, "{diagnostics:#?}");
+    assert_eq!(
+        implicit_returns[0].message,
+        "function `find` can implicitly return no values even though there is an explicit return at line 4; add an explicit return to silence"
+    );
+    assert_eq!(
+        (implicit_returns[0].line, implicit_returns[0].column),
+        (6, 6)
+    );
+    assert_eq!(
+        implicit_returns[1].message,
+        "function can implicitly return no values even though there is an explicit return at line 11; add an explicit return to silence"
+    );
+    assert_eq!(
+        (implicit_returns[1].line, implicit_returns[1].column),
+        (12, 6)
+    );
+}
+
+#[test]
+fn implicit_return_understands_guaranteed_and_infinite_loops() {
+    let diagnostics = check_standard_rules_source(
+        r#"local function repeatReturns(ready)
+  repeat
+    return 1
+  until ready()
+end
+
+local function whileForever(ready)
+  while true do
+    if ready() then
+      return 2
+    end
+  end
+end
+
+local function repeatForever(ready)
+  repeat
+    if ready() then
+      return 3
+    end
+  until false
+end
+
+local function whileBreaks(ready, stop)
+  while true do
+    if ready() then
+      return 4
+    end
+    if stop() then
+      break
+    end
+  end
+end
+
+local function repeatBreaks(ready, stop)
+  repeat
+    if ready() then
+      return 5
+    end
+    if stop() then
+      break
+    end
+  until false
+end
+
+local function nestedGuaranteedLoop(flag, ready)
+  if flag then
+    repeat
+      return 6
+    until ready()
+  else
+    do
+      while true do
+        if ready() then
+          return 7
+        end
+      end
+    end
+  end
+end
+
+local function nestedLoopBreak(ready)
+  while true do
+    repeat
+      break
+    until false
+    if ready() then
+      return 8
+    end
+  end
+end
+
+return repeatReturns, whileForever, repeatForever, whileBreaks, repeatBreaks, nestedGuaranteedLoop, nestedLoopBreak
+"#,
+    );
+    let implicit_returns = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_IMPLICIT_RETURN))
+        .collect::<Vec<_>>();
+
+    assert_eq!(implicit_returns.len(), 2, "{diagnostics:#?}");
+    assert_eq!(
+        implicit_returns[0].message,
+        "function `whileBreaks` can implicitly return no values even though there is an explicit return at line 26; add an explicit return to silence"
+    );
+    assert_eq!(implicit_returns[0].line, 31);
+    assert_eq!(
+        implicit_returns[1].message,
+        "function `repeatBreaks` can implicitly return no values even though there is an explicit return at line 37; add an explicit return to silence"
+    );
+    assert_eq!(implicit_returns[1].line, 42);
+}
+
+#[test]
+fn implicit_return_accepts_explicit_empty_and_terminating_builtin_paths() {
+    let diagnostics = check_standard_rules_source(
+        r#"local function bare(flag)
+  if flag then
+    return 1
+  else
+    return
+  end
+end
+
+local function stopped(flag)
+  if flag then
+    return 2
+  end
+  error("stopped")
+end
+
+local function asserted(flag)
+  if flag then
+    return 3
+  end
+  assert(false, "stopped")
+end
+
+return bare, stopped, asserted
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_IMPLICIT_RETURN),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn unreachable_code_recognizes_resolved_error_and_assert_calls() {
     let diagnostics = check_standard_rules_source(
         r#"

@@ -35,6 +35,7 @@ pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
         diagnostics: comment_directive_diagnostics(parsed),
         multiline_statements: Vec::new(),
         multiline_table_depth: 0,
+        function_names: Vec::new(),
         terminating_builtin_references,
     };
     visitor.visit_ast(&parsed.ast);
@@ -46,6 +47,7 @@ struct LintRuleVisitor<'a> {
     diagnostics: Vec<Diagnostic>,
     multiline_statements: Vec<MultiLineStatement>,
     multiline_table_depth: usize,
+    function_names: Vec<Option<String>>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
 }
 
@@ -102,6 +104,31 @@ impl Visitor for LintRuleVisitor<'_> {
         }
     }
 
+    fn visit_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
+        self.function_names
+            .push(Some(function_name(function.name())));
+    }
+
+    fn visit_function_declaration_end(&mut self, _function: &ast::FunctionDeclaration) {
+        self.function_names.pop();
+    }
+
+    fn visit_local_function(&mut self, function: &ast::LocalFunction) {
+        self.function_names.push(Some(token_text(function.name())));
+    }
+
+    fn visit_local_function_end(&mut self, _function: &ast::LocalFunction) {
+        self.function_names.pop();
+    }
+
+    fn visit_anonymous_function(&mut self, _function: &ast::AnonymousFunction) {
+        self.function_names.push(None);
+    }
+
+    fn visit_anonymous_function_end(&mut self, _function: &ast::AnonymousFunction) {
+        self.function_names.pop();
+    }
+
     fn visit_numeric_for(&mut self, numeric_for: &ast::NumericFor) {
         if numeric_for.step().is_some() {
             return;
@@ -145,15 +172,23 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
-        if block_has_valued_return(body.block())
-            && block_termination(body.block(), &self.terminating_builtin_references).is_none()
-        {
-            self.push(
-                node_end_position(body),
-                DiagnosticCode::LINT_IMPLICIT_RETURN,
-                "function can implicitly return no values after returning values on another path",
-            );
-        }
+        let Some(value_return) = first_valued_return(body.block()) else {
+            return;
+        };
+        let Some(fallthrough) = block_fallthrough_position(
+            body.block(),
+            node_end_position(body),
+            &self.terminating_builtin_references,
+        ) else {
+            return;
+        };
+        let name = self.function_names.last().and_then(Option::as_deref);
+
+        self.push(
+            fallthrough,
+            DiagnosticCode::LINT_IMPLICIT_RETURN,
+            implicit_return_message(name, node_position(value_return).line),
+        );
     }
 
     fn visit_function_call(&mut self, call: &FunctionCall) {
@@ -727,6 +762,15 @@ fn is_false_literal(expression: &Expression) -> bool {
     }
 }
 
+fn is_true_literal(expression: &Expression) -> bool {
+    match expression {
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => is_true_literal(expression),
+        Expression::Symbol(token) => token_text(token) == "true",
+        _ => false,
+    }
+}
+
 fn unreachable_message(reasons: TerminationReasons) -> String {
     format!(
         "unreachable code (previous statement always {})",
@@ -734,32 +778,160 @@ fn unreachable_message(reasons: TerminationReasons) -> String {
     )
 }
 
-fn block_has_valued_return(block: &ast::Block) -> bool {
-    if let Some(LastStmt::Return(return_statement)) = block.last_stmt() {
-        if return_statement.returns().iter().next().is_some() {
-            return true;
+fn block_fallthrough_position(
+    block: &ast::Block,
+    empty_position: SourcePosition,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> Option<SourcePosition> {
+    block_can_fall_through(block, terminating_builtin_references).then(|| {
+        block
+            .stmts()
+            .last()
+            .map(node_end_position)
+            .unwrap_or(empty_position)
+    })
+}
+
+fn block_can_fall_through(
+    block: &ast::Block,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> bool {
+    for statement in block.stmts() {
+        if !statement_can_fall_through(statement, terminating_builtin_references) {
+            return false;
         }
     }
 
-    block.stmts().any(|statement| match statement {
-        Stmt::Do(block) => block_has_valued_return(block.block()),
-        Stmt::If(if_statement) => {
-            block_has_valued_return(if_statement.block())
-                || if_statement.else_if().is_some_and(|branches| {
-                    branches
-                        .iter()
-                        .any(|branch| block_has_valued_return(branch.block()))
-                })
-                || if_statement
-                    .else_block()
-                    .is_some_and(block_has_valued_return)
+    !matches!(
+        block.last_stmt(),
+        Some(LastStmt::Return(_) | LastStmt::Break(_))
+    )
+}
+
+fn statement_can_fall_through(
+    statement: &Stmt,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> bool {
+    match statement {
+        Stmt::Do(statement) => {
+            block_can_fall_through(statement.block(), terminating_builtin_references)
         }
-        Stmt::GenericFor(statement) => block_has_valued_return(statement.block()),
-        Stmt::NumericFor(statement) => block_has_valued_return(statement.block()),
-        Stmt::Repeat(statement) => block_has_valued_return(statement.block()),
-        Stmt::While(statement) => block_has_valued_return(statement.block()),
+        Stmt::If(statement) => {
+            if block_can_fall_through(statement.block(), terminating_builtin_references)
+                || statement.else_if().is_some_and(|branches| {
+                    branches.iter().any(|branch| {
+                        block_can_fall_through(branch.block(), terminating_builtin_references)
+                    })
+                })
+            {
+                return true;
+            }
+
+            match statement.else_block() {
+                Some(block) => block_can_fall_through(block, terminating_builtin_references),
+                None => true,
+            }
+        }
+        Stmt::While(statement) => {
+            !is_true_literal(statement.condition())
+                || block_has_reachable_break(statement.block(), terminating_builtin_references)
+        }
+        Stmt::Repeat(statement) => {
+            let body_falls_through =
+                block_can_fall_through(statement.block(), terminating_builtin_references);
+            let body_can_break =
+                block_has_reachable_break(statement.block(), terminating_builtin_references);
+
+            if !body_falls_through {
+                body_can_break
+            } else {
+                !is_false_literal(statement.until()) || body_can_break
+            }
+        }
+        _ => statement_termination(statement, terminating_builtin_references).is_none(),
+    }
+}
+
+fn block_has_reachable_break(
+    block: &ast::Block,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> bool {
+    for statement in block.stmts() {
+        if statement_has_reachable_break(statement, terminating_builtin_references) {
+            return true;
+        }
+        if !statement_can_fall_through(statement, terminating_builtin_references) {
+            return false;
+        }
+    }
+
+    matches!(block.last_stmt(), Some(LastStmt::Break(_)))
+}
+
+fn statement_has_reachable_break(
+    statement: &Stmt,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> bool {
+    match statement {
+        Stmt::Do(statement) => {
+            block_has_reachable_break(statement.block(), terminating_builtin_references)
+        }
+        Stmt::If(if_statement) => {
+            block_has_reachable_break(if_statement.block(), terminating_builtin_references)
+                || if_statement.else_if().is_some_and(|branches| {
+                    branches.iter().any(|branch| {
+                        block_has_reachable_break(branch.block(), terminating_builtin_references)
+                    })
+                })
+                || if_statement.else_block().is_some_and(|block| {
+                    block_has_reachable_break(block, terminating_builtin_references)
+                })
+        }
         _ => false,
-    })
+    }
+}
+
+fn first_valued_return(block: &ast::Block) -> Option<&ast::Return> {
+    for statement in block.stmts() {
+        let result = match statement {
+            Stmt::Do(statement) => first_valued_return(statement.block()),
+            Stmt::If(statement) => first_valued_return(statement.block())
+                .or_else(|| {
+                    statement.else_if().and_then(|branches| {
+                        branches
+                            .iter()
+                            .find_map(|branch| first_valued_return(branch.block()))
+                    })
+                })
+                .or_else(|| statement.else_block().and_then(first_valued_return)),
+            Stmt::GenericFor(statement) => first_valued_return(statement.block()),
+            Stmt::NumericFor(statement) => first_valued_return(statement.block()),
+            Stmt::Repeat(statement) => first_valued_return(statement.block()),
+            Stmt::While(statement) => first_valued_return(statement.block()),
+            _ => None,
+        };
+
+        if result.is_some() {
+            return result;
+        }
+    }
+
+    match block.last_stmt() {
+        Some(LastStmt::Return(statement)) if statement.returns().iter().next().is_some() => {
+            Some(statement)
+        }
+        _ => None,
+    }
+}
+
+fn implicit_return_message(function_name: Option<&str>, return_line: usize) -> String {
+    let subject = function_name
+        .map(|name| format!("function `{name}`"))
+        .unwrap_or_else(|| "function".to_owned());
+
+    format!(
+        "{subject} can implicitly return no values even though there is an explicit return at line {return_line}; add an explicit return to silence"
+    )
 }
 
 fn function_name(name: &ast::FunctionName) -> String {

@@ -270,6 +270,8 @@ user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
 Unbalanced-assignment guidance compares explicit expression counts and remains
 permissive for direct-call, vararg, and intentional-`nil` tails.
+Implicit-return guidance recognizes guaranteed `repeat` bodies and unbreakable
+literal infinite loops, while reachable `break` paths preserve fallthrough.
 Unknown-runtime-type guidance follows resolved builtin identity: LuaJIT
 `type(...)` names and statically known LOVE object `type`/`typeOf` names are
 validated against their target catalogs, while named runtime checks remain the

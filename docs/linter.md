@@ -109,6 +109,15 @@ result. A trailing `nil` also records that missing values are intentional.
 Unambiguous shortages recommend adding `nil`; excess values warn that some
 results are unused.
 
+`ImplicitReturn` reports a function that explicitly returns one or more values
+on one path but can still reach its end without a return. Bare `return` and
+`return nil` both make a path explicit, and resolved `error(...)` or
+`assert(false)` calls terminate it. A `repeat` body that always terminates and
+an unbreakable `while true` or `repeat ... until false` loop cannot fall
+through; a reachable `break` restores the possible fallthrough. The diagnostic
+names declared functions, cites the first valued-return line, and points to the
+last statement on the fallthrough path.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions
