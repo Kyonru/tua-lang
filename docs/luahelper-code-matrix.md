@@ -119,8 +119,8 @@ enforced separately with `tua fmt --check`.
 | `TL4009` | A lint-known call has the wrong argument count. | `wrong_argument_count` |
 | `TL4010` | A static module specifier is invalid or resolves through an unsupported form. | `bad_requires` |
 | `TL4011` | A boolean expression is provably constant or impossible. | `impossible_boolean_expressions` |
-| `TL4012` | An `if` or `elseif` chain repeats the same condition. | `duplicate_if_conditions` |
-| `TL4013` | A suspicious binary expression repeats the same operand. | `duplicate_binary_operands` |
+| `TL4012` | An `if` or `elseif` chain structurally repeats a condition. | `rules`; can also use `duplicate_if_conditions` |
+| `TL4013` | A flattened `and`/`or` chain or optional suspicious binary check structurally repeats an operand. | `rules`; broader operators can also use `duplicate_binary_operands` |
 | `TL4014` | Code compares a floating-point literal for exact equality. | `float_equality` |
 | `TL4015` | Code assigns to a name recognized as constant. | `const_assignments` |
 | `TL4016` | A known function argument does not match its parameter type. | `parameter_type_mismatches` |

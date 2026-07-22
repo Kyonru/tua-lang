@@ -82,6 +82,7 @@ pub(crate) fn lint_parsed_source(
             semantic: SemanticModel::new(parsed, environment),
             type_context: environment.to_type_context(),
             resolved_luajit_type_references,
+            nested_duplicate_condition_chains: BTreeSet::new(),
             diagnostics: Vec::new(),
         };
 
@@ -170,6 +171,7 @@ struct LintVisitor<'a> {
     semantic: SemanticModel<'a>,
     type_context: TypeContext,
     resolved_luajit_type_references: BTreeSet<(usize, usize)>,
+    nested_duplicate_condition_chains: BTreeSet<(usize, usize)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -353,25 +355,27 @@ impl Visitor for LintVisitor<'_> {
             return;
         }
 
-        let mut seen = BTreeMap::new();
-        let first = expression_key(if_stmt.condition());
-        seen.insert(first, node_position(if_stmt.condition()));
+        let mut conditions = vec![if_stmt.condition()];
 
         if let Some(else_ifs) = if_stmt.else_if() {
             for else_if in else_ifs {
-                let key = expression_key(else_if.condition());
-
-                if let Some(first_position) = seen.get(&key).copied() {
-                    self.diagnostics.push(duplicate_if_condition_diagnostic(
-                        &self.parsed.path,
-                        node_position(else_if.condition()),
-                        first_position,
-                    ));
-                } else {
-                    seen.insert(key, node_position(else_if.condition()));
-                }
+                conditions.push(else_if.condition());
             }
         }
+
+        self.diagnostics
+            .extend(
+                duplicate_conditions(&conditions)
+                    .into_iter()
+                    .map(|(position, origin)| {
+                        duplicate_condition_diagnostic(
+                            &self.parsed.path,
+                            position,
+                            origin,
+                            DiagnosticCode::LINT_DUPLICATE_IF_CONDITION,
+                        )
+                    }),
+            );
     }
 
     fn visit_expression(&mut self, expression: &Expression) {
@@ -469,10 +473,13 @@ impl LintVisitor<'_> {
             self.check_impossible_boolean_expression(lhs, binop, rhs);
         }
 
-        if ((self.config.duplicate_binary_operands
-            && is_suspicious_duplicate_operand_operator(binop))
-            || (self.config.rules && is_boolean_operator(binop)))
-            && expression_key(lhs) == expression_key(rhs)
+        if (self.config.rules || self.config.duplicate_binary_operands)
+            && is_boolean_operator(binop)
+        {
+            self.check_duplicate_boolean_chain(expression, binop);
+        } else if self.config.duplicate_binary_operands
+            && is_suspicious_duplicate_operand_operator(binop)
+            && expressions_similar(lhs, rhs)
         {
             let operator = binop_label(binop);
 
@@ -496,6 +503,46 @@ impl LintVisitor<'_> {
         if self.config.binary_operator_type_mismatches {
             self.check_binary_operator_type(expression, lhs, binop, rhs);
         }
+    }
+
+    fn check_duplicate_boolean_chain(&mut self, expression: &Expression, operator: &ast::BinOp) {
+        let position = node_position(expression);
+        if self
+            .nested_duplicate_condition_chains
+            .contains(&(position.line, position.column))
+        {
+            return;
+        }
+
+        if let Some(ternary_and) = and_or_ternary_operand(expression) {
+            let position = node_position(ternary_and);
+            self.nested_duplicate_condition_chains
+                .insert((position.line, position.column));
+            return;
+        }
+
+        let mut conditions = Vec::new();
+        collect_boolean_conditions(
+            expression,
+            operator,
+            true,
+            &mut conditions,
+            &mut self.nested_duplicate_condition_chains,
+        );
+
+        self.diagnostics
+            .extend(
+                duplicate_conditions(&conditions)
+                    .into_iter()
+                    .map(|(position, origin)| {
+                        duplicate_condition_diagnostic(
+                            &self.parsed.path,
+                            position,
+                            origin,
+                            DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND,
+                        )
+                    }),
+            );
     }
 
     fn check_runtime_type_name_comparison(
@@ -3118,22 +3165,29 @@ fn impossible_boolean_diagnostic(
     .with_code(DiagnosticCode::LINT_IMPOSSIBLE_BOOLEAN)
 }
 
-fn duplicate_if_condition_diagnostic(
+fn duplicate_condition_diagnostic(
     path: &Path,
     position: SourcePosition,
-    first_position: SourcePosition,
+    origin: SourcePosition,
+    code: DiagnosticCode,
 ) -> Diagnostic {
+    let message = if position.line == origin.line {
+        format!(
+            "condition has already been checked on column {}",
+            origin.column
+        )
+    } else {
+        format!("condition has already been checked on line {}", origin.line)
+    };
+
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!(
-            "duplicate if condition; first seen at {}:{}",
-            first_position.line, first_position.column
-        ),
+        message,
     )
-    .with_code(DiagnosticCode::LINT_DUPLICATE_IF_CONDITION)
+    .with_code(code)
 }
 
 fn duplicate_binary_operand_diagnostic(
@@ -3352,12 +3406,325 @@ fn jit_hot_loop_dynamic_key_diagnostic(path: &Path, position: SourcePosition) ->
     .with_code(DiagnosticCode::LINT_JIT_HOT_LOOP_DYNAMIC_KEY)
 }
 
-fn expression_key(expression: &Expression) -> String {
-    expression
-        .to_string()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+fn collect_boolean_conditions<'a>(
+    expression: &'a Expression,
+    operator: &ast::BinOp,
+    root: bool,
+    conditions: &mut Vec<&'a Expression>,
+    nested_chains: &mut BTreeSet<(usize, usize)>,
+) {
+    let expression = runtime_expression(expression);
+    let Expression::BinaryOperator { lhs, binop, rhs } = expression else {
+        conditions.push(expression);
+        return;
+    };
+
+    if !same_operator(binop, operator) {
+        conditions.push(expression);
+        return;
+    }
+
+    if !root {
+        let position = node_position(expression);
+        nested_chains.insert((position.line, position.column));
+    }
+
+    if is_or_operator(operator) {
+        if let Some(ternary_and) = exact_two_term_and(lhs) {
+            let position = node_position(ternary_and);
+            nested_chains.insert((position.line, position.column));
+        }
+    }
+
+    collect_boolean_conditions(lhs, operator, false, conditions, nested_chains);
+    collect_boolean_conditions(rhs, operator, false, conditions, nested_chains);
+}
+
+fn duplicate_conditions(conditions: &[&Expression]) -> Vec<(SourcePosition, SourcePosition)> {
+    const MAX_DISTANCE: usize = 5;
+    let mut duplicates = Vec::new();
+
+    for (index, condition) in conditions.iter().enumerate() {
+        let start = index.saturating_sub(MAX_DISTANCE);
+        let Some(origin) = conditions[start..index]
+            .iter()
+            .find(|origin| expressions_similar(origin, condition))
+        else {
+            continue;
+        };
+
+        duplicates.push((node_position(*condition), node_position(*origin)));
+    }
+
+    duplicates
+}
+
+fn expressions_similar(left: &Expression, right: &Expression) -> bool {
+    let left = runtime_expression(left);
+    let right = runtime_expression(right);
+
+    match (left, right) {
+        (
+            Expression::BinaryOperator {
+                lhs: left_lhs,
+                binop: left_operator,
+                rhs: left_rhs,
+            },
+            Expression::BinaryOperator {
+                lhs: right_lhs,
+                binop: right_operator,
+                rhs: right_rhs,
+            },
+        ) => {
+            same_operator(left_operator, right_operator)
+                && expressions_similar(left_lhs, right_lhs)
+                && expressions_similar(left_rhs, right_rhs)
+        }
+        (
+            Expression::UnaryOperator {
+                unop: left_operator,
+                expression: left_expression,
+            },
+            Expression::UnaryOperator {
+                unop: right_operator,
+                expression: right_expression,
+            },
+        ) => {
+            std::mem::discriminant(left_operator) == std::mem::discriminant(right_operator)
+                && expressions_similar(left_expression, right_expression)
+        }
+        (Expression::Function(_), Expression::Function(_)) => false,
+        (Expression::FunctionCall(left), Expression::FunctionCall(right)) => {
+            function_calls_similar(left, right)
+        }
+        (Expression::TableConstructor(left), Expression::TableConstructor(right)) => {
+            table_constructors_similar(left, right)
+        }
+        (Expression::Number(left), Expression::Number(right)) => number_tokens_similar(left, right),
+        (Expression::String(left), Expression::String(right)) => string_tokens_similar(left, right),
+        (Expression::Symbol(left), Expression::Symbol(right)) => {
+            token_text(left) == token_text(right)
+        }
+        (Expression::Var(left), Expression::Var(right)) => vars_similar(left, right),
+        _ => false,
+    }
+}
+
+fn runtime_expression(expression: &Expression) -> &Expression {
+    match expression {
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => runtime_expression(expression),
+        _ => expression,
+    }
+}
+
+fn same_operator(left: &ast::BinOp, right: &ast::BinOp) -> bool {
+    std::mem::discriminant(left) == std::mem::discriminant(right)
+}
+
+fn is_or_operator(operator: &ast::BinOp) -> bool {
+    matches!(operator, ast::BinOp::Or(_))
+}
+
+fn and_or_ternary_operand(expression: &Expression) -> Option<&Expression> {
+    let Expression::BinaryOperator {
+        lhs,
+        binop: ast::BinOp::Or(_),
+        ..
+    } = runtime_expression(expression)
+    else {
+        return None;
+    };
+
+    exact_two_term_and(lhs)
+}
+
+fn exact_two_term_and(expression: &Expression) -> Option<&Expression> {
+    let expression = runtime_expression(expression);
+    let Expression::BinaryOperator {
+        lhs,
+        binop: ast::BinOp::And(_),
+        rhs,
+    } = expression
+    else {
+        return None;
+    };
+
+    (!is_and_expression(lhs) && !is_and_expression(rhs)).then_some(expression)
+}
+
+fn is_and_expression(expression: &Expression) -> bool {
+    matches!(
+        runtime_expression(expression),
+        Expression::BinaryOperator {
+            binop: ast::BinOp::And(_),
+            ..
+        }
+    )
+}
+
+fn number_tokens_similar(left: &TokenReference, right: &TokenReference) -> bool {
+    match (
+        number_literal_text(left).and_then(|text| parse_lua_number(&text)),
+        number_literal_text(right).and_then(|text| parse_lua_number(&text)),
+    ) {
+        (Some(left), Some(right)) => left == right,
+        _ => number_literal_text(left) == number_literal_text(right),
+    }
+}
+
+fn string_tokens_similar(left: &TokenReference, right: &TokenReference) -> bool {
+    match (
+        string_literal_runtime_bytes(left),
+        string_literal_runtime_bytes(right),
+    ) {
+        (Some(left), Some(right)) => left == right,
+        _ => token_text(left) == token_text(right),
+    }
+}
+
+fn vars_similar(left: &Var, right: &Var) -> bool {
+    match (left, right) {
+        (Var::Name(left), Var::Name(right)) => token_text(left) == token_text(right),
+        (Var::Expression(left), Var::Expression(right)) => {
+            prefixes_similar(left.prefix(), right.prefix())
+                && iterators_similar(left.suffixes(), right.suffixes(), suffixes_similar)
+        }
+        _ => false,
+    }
+}
+
+fn prefixes_similar(left: &Prefix, right: &Prefix) -> bool {
+    match (left, right) {
+        (Prefix::Name(left), Prefix::Name(right)) => token_text(left) == token_text(right),
+        (Prefix::Expression(left), Prefix::Expression(right)) => expressions_similar(left, right),
+        _ => false,
+    }
+}
+
+fn suffixes_similar(left: &Suffix, right: &Suffix) -> bool {
+    match (left, right) {
+        (Suffix::Call(left), Suffix::Call(right)) => calls_similar(left, right),
+        (Suffix::Index(left), Suffix::Index(right)) => indices_similar(left, right),
+        _ => false,
+    }
+}
+
+fn indices_similar(left: &Index, right: &Index) -> bool {
+    match (left, right) {
+        (
+            Index::Brackets {
+                expression: left, ..
+            },
+            Index::Brackets {
+                expression: right, ..
+            },
+        ) => expressions_similar(left, right),
+        (Index::Dot { name: left, .. }, Index::Dot { name: right, .. }) => {
+            token_text(left) == token_text(right)
+        }
+        _ => false,
+    }
+}
+
+fn function_calls_similar(left: &FunctionCall, right: &FunctionCall) -> bool {
+    prefixes_similar(left.prefix(), right.prefix())
+        && iterators_similar(left.suffixes(), right.suffixes(), suffixes_similar)
+}
+
+fn calls_similar(left: &Call, right: &Call) -> bool {
+    match (left, right) {
+        (Call::AnonymousCall(left), Call::AnonymousCall(right)) => {
+            function_args_similar(left, right)
+        }
+        (Call::MethodCall(left), Call::MethodCall(right)) => {
+            token_text(left.name()) == token_text(right.name())
+                && function_args_similar(left.args(), right.args())
+        }
+        _ => false,
+    }
+}
+
+fn function_args_similar(left: &FunctionArgs, right: &FunctionArgs) -> bool {
+    match (left, right) {
+        (
+            FunctionArgs::Parentheses {
+                arguments: left, ..
+            },
+            FunctionArgs::Parentheses {
+                arguments: right, ..
+            },
+        ) => iterators_similar(left.iter(), right.iter(), expressions_similar),
+        (FunctionArgs::String(left), FunctionArgs::String(right)) => {
+            string_tokens_similar(left, right)
+        }
+        (FunctionArgs::TableConstructor(left), FunctionArgs::TableConstructor(right)) => {
+            table_constructors_similar(left, right)
+        }
+        _ => false,
+    }
+}
+
+fn table_constructors_similar(left: &TableConstructor, right: &TableConstructor) -> bool {
+    iterators_similar(left.fields().iter(), right.fields().iter(), fields_similar)
+}
+
+fn fields_similar(left: &Field, right: &Field) -> bool {
+    match (left, right) {
+        (
+            Field::ExpressionKey {
+                key: left_key,
+                value: left_value,
+                ..
+            },
+            Field::ExpressionKey {
+                key: right_key,
+                value: right_value,
+                ..
+            },
+        ) => {
+            expressions_similar(left_key, right_key) && expressions_similar(left_value, right_value)
+        }
+        (
+            Field::NameKey {
+                key: left_key,
+                value: left_value,
+                ..
+            },
+            Field::NameKey {
+                key: right_key,
+                value: right_value,
+                ..
+            },
+        ) => {
+            token_text(left_key) == token_text(right_key)
+                && expressions_similar(left_value, right_value)
+        }
+        (Field::NoKey(left), Field::NoKey(right)) => expressions_similar(left, right),
+        _ => false,
+    }
+}
+
+fn iterators_similar<Left, Right, LeftItem, RightItem>(
+    mut left: Left,
+    mut right: Right,
+    mut similar: impl FnMut(LeftItem, RightItem) -> bool,
+) -> bool
+where
+    Left: Iterator<Item = LeftItem>,
+    Right: Iterator<Item = RightItem>,
+{
+    loop {
+        match (left.next(), right.next()) {
+            (Some(left), Some(right)) => {
+                if !similar(left, right) {
+                    return false;
+                }
+            }
+            (None, None) => return true,
+            _ => return false,
+        }
+    }
 }
 
 fn boolean_literal(expression: &Expression) -> Option<bool> {

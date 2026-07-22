@@ -153,6 +153,15 @@ declarations in one lexical block. Separate branch and nested blocks remain
 independent, while dot and colon declarations of the same method share one
 qualified name. Every later duplicate identifies the original definition.
 
+`DuplicateCondition` compares runtime expression structure rather than source
+text. It flattens grouped `and` and `or` chains, treats equivalent numeric and
+escaped-string literals consistently, and preserves meaningful whitespace
+inside strings. The repeated condition is highlighted and identifies the
+original line or column. The common Lua `value and value or fallback` ternary
+idiom remains quiet. `TL4012` covers `if`/`elseif` chains, while `TL4013`
+covers boolean chains and the optional broader `duplicate_binary_operands`
+checks.
+
 `TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
 strings and signed numeric spellings cannot hide a duplicate. It also reports
 explicit numeric keys that overlap list entries and repeated named fields in

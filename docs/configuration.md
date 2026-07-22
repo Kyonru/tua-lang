@@ -449,10 +449,11 @@ traversal and malformed import specifiers.
 : Reports boolean/equality expressions that Tua can prove are impossible.
 
 `duplicate_if_conditions`
-: Reports repeated conditions in one `if`/`elseif` chain.
+: Reports structurally repeated conditions in one `if`/`elseif` chain.
 
 `duplicate_binary_operands`
-: Reports suspicious repeated operands such as `value == value`.
+: Reports structurally repeated operands in boolean chains and suspicious
+  expressions such as `value == value`.
 
 `float_equality`
 : Reports direct equality checks between known numeric values.

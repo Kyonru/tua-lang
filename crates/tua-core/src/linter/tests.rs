@@ -2312,9 +2312,10 @@ end
         diagnostics[0].code,
         Some(DiagnosticCode::LINT_DUPLICATE_IF_CONDITION)
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("duplicate if condition; first seen at"));
+    assert_eq!(
+        diagnostics[0].message,
+        "condition has already been checked on line 4"
+    );
 }
 
 #[test]
@@ -2339,6 +2340,134 @@ end
         count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND),
         2
     );
+}
+
+#[test]
+fn duplicate_condition_flattens_boolean_chains_and_reports_origins() {
+    let diagnostics = check_standard_rules_source(
+        r#"local a = true
+local b = false
+local self = { _adorns = {} }
+local normID1 = 1
+local chain = a and b and a
+local grouped = (a or b) or (a)
+assert(self._adorns[normID1] and self._adorns[normID1])
+
+if a then
+elseif b then
+elseif (a) then
+end
+
+print(chain, grouped)
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.code,
+                Some(
+                    DiagnosticCode::LINT_DUPLICATE_IF_CONDITION
+                        | DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND
+                )
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 4, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| (
+                diagnostic.code,
+                diagnostic.line,
+                diagnostic.column,
+                diagnostic.message.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                Some(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND),
+                5,
+                27,
+                "condition has already been checked on column 15",
+            ),
+            (
+                Some(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND),
+                6,
+                30,
+                "condition has already been checked on column 18",
+            ),
+            (
+                Some(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND),
+                7,
+                34,
+                "condition has already been checked on column 8",
+            ),
+            (
+                Some(DiagnosticCode::LINT_DUPLICATE_IF_CONDITION),
+                11,
+                8,
+                "condition has already been checked on line 9",
+            ),
+        ]
+    );
+}
+
+#[test]
+fn duplicate_condition_compares_runtime_literals_without_collapsing_strings() {
+    let diagnostics = check_standard_rules_source(
+        r#"local value = 1
+local text = "a b"
+local numeric = value == 1 and value == 1.0
+local distinct = text == "a  b" and text == "a b"
+local escaped = text == "\97" and text == "a"
+print(numeric, distinct, escaped)
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].line, 3);
+    assert_eq!(
+        diagnostics[0].message,
+        "condition has already been checked on column 17"
+    );
+    assert_eq!(diagnostics[1].line, 5);
+    assert_eq!(
+        diagnostics[1].message,
+        "condition has already been checked on column 17"
+    );
+}
+
+#[test]
+fn duplicate_condition_suppresses_and_or_ternary_idioms() {
+    let diagnostics = check_standard_rules_source(
+        r#"local a = true
+local b = false
+local c = true
+local ternary = a and a or b
+local groupedTernary = (a and a) or b
+local longerChain = (a and b and a) or c
+local nestedAlternative = a and a or (a and a)
+print(ternary, groupedTernary, longerChain, nestedAlternative)
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_BINARY_OPERAND))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].line, 6);
+    assert_eq!(
+        diagnostics[0].message,
+        "condition has already been checked on column 22"
+    );
+    assert_eq!(diagnostics[1].line, 7);
 }
 
 #[test]

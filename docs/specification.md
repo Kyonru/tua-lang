@@ -284,6 +284,9 @@ and parameter lists, accounts for implicit method `self`, and exempts the exact
 placeholder `_`.
 Duplicate-function guidance compares local, global, and qualified declarations
 within each lexical block and cites the original definition for every repeat.
+Duplicate-condition guidance structurally compares runtime expressions across
+flattened `and`/`or` and `if`/`elseif` chains, cites the earlier condition, and
+keeps the common Lua `value and value or fallback` idiom permissive.
 Uninitialized-local guidance tracks each binding's initializer separately,
 allows a final direct call or varargs to supply additional values, and treats a
 compound assignment as a read of the previous value rather than initialization.

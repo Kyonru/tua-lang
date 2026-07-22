@@ -22,7 +22,7 @@ elseif total > 0 then
 end
 
 -- DuplicateCondition (TL4013)
-local repeatedBoolean = total and total
+local repeatedBoolean = total and right and total
 
 -- ImplicitReturn (TL4053)
 local function choose(value)

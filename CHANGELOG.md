@@ -71,6 +71,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `DuplicateCondition` now structurally compares expressions, flattens grouped
+  boolean chains, preserves runtime literal identity, suppresses the common Lua
+  and-or ternary idiom, and points diagnostics at the repeated condition with
+  its origin.
 - `TableOperations` now resolves Lua builtins, detects expanding final
   `table.insert` calls, and uses shared table types for conservative `#` and
   `ipairs` guidance, including `__len` and `__ipairs` support.
