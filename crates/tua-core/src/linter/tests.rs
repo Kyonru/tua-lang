@@ -608,6 +608,82 @@ print("never")
 }
 
 #[test]
+fn duplicate_function_keeps_the_original_definition_for_every_repeat() {
+    let diagnostics = check_standard_rules_source(
+        r#"function globalName() end
+function globalName() end
+function globalName() end
+
+local function localName() end
+local function localName() end
+"#,
+    );
+    let mut diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_FUNCTION))
+        .collect::<Vec<_>>();
+    diagnostics.sort_by_key(|diagnostic| (diagnostic.line, diagnostic.column));
+
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (2, 10));
+    assert_eq!(
+        diagnostics[0].message,
+        "function `globalName` is defined more than once in this block; first definition is at 1:10"
+    );
+    assert_eq!((diagnostics[1].line, diagnostics[1].column), (3, 10));
+    assert_eq!(
+        diagnostics[1].message,
+        "function `globalName` is defined more than once in this block; first definition is at 1:10"
+    );
+    assert_eq!((diagnostics[2].line, diagnostics[2].column), (6, 16));
+    assert_eq!(
+        diagnostics[2].message,
+        "function `localName` is defined more than once in this block; first definition is at 5:16"
+    );
+}
+
+#[test]
+fn duplicate_function_respects_branch_blocks_and_qualified_method_names() {
+    let diagnostics = check_standard_rules_source(
+        r#"if condition then
+  function branch() end
+  function branch() end
+else
+  function branch() end
+end
+
+local object = {}
+function object.method() end
+function object:method() end
+
+do
+  local function nested() end
+end
+do
+  local function nested() end
+end
+"#,
+    );
+    let mut diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_FUNCTION))
+        .collect::<Vec<_>>();
+    diagnostics.sort_by_key(|diagnostic| (diagnostic.line, diagnostic.column));
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (3, 12));
+    assert_eq!(
+        diagnostics[0].message,
+        "function `branch` is defined more than once in this block; first definition is at 2:12"
+    );
+    assert_eq!((diagnostics[1].line, diagnostics[1].column), (10, 10));
+    assert_eq!(
+        diagnostics[1].message,
+        "function `object.method` is defined more than once in this block; first definition is at 9:10"
+    );
+}
+
+#[test]
 fn duplicate_local_reports_locals_parameters_and_implicit_self_with_origins() {
     let diagnostics = check_standard_rules_source(
         r#"function foo(a, b, a)

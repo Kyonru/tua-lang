@@ -275,6 +275,8 @@ later field would otherwise silently replace the earlier contract.
 Duplicate-local guidance uses `TL4043` for repeated names in local declarations
 and parameter lists, accounts for implicit method `self`, and exempts the exact
 placeholder `_`.
+Duplicate-function guidance compares local, global, and qualified declarations
+within each lexical block and cites the original definition for every repeat.
 Uninitialized-local guidance tracks each binding's initializer separately,
 allows a final direct call or varargs to supply additional values, and treats a
 compound assignment as a read of the previous value rather than initialization.

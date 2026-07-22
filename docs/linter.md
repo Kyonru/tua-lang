@@ -147,6 +147,11 @@ the exact placeholder name `_` remains valid. The `duplicate_parameters`
 setting can enable the parameter check without enabling the complete standard
 rule set.
 
+`DuplicateFunction` reports repeated local, global, and qualified function
+declarations in one lexical block. Separate branch and nested blocks remain
+independent, while dot and colon declarations of the same method share one
+qualified name. Every later duplicate identifies the original definition.
+
 `TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
 strings and signed numeric spellings cannot hide a duplicate. It also reports
 explicit numeric keys that overlap list entries and repeated named fields in

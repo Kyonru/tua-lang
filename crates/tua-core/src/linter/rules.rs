@@ -411,7 +411,7 @@ impl LintRuleVisitor<'_> {
                 _ => continue,
             };
 
-            if let Some(first) = names.insert(name.clone(), position) {
+            if let Some(first) = names.get(&name).copied() {
                 self.push(
                     position,
                     DiagnosticCode::LINT_DUPLICATE_FUNCTION,
@@ -420,6 +420,8 @@ impl LintRuleVisitor<'_> {
                         first.line, first.column
                     ),
                 );
+            } else {
+                names.insert(name, position);
             }
         }
     }
