@@ -10,6 +10,7 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
     plain_field_chain_from_var_expression,
 };
+use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{
@@ -36,6 +37,7 @@ pub struct TypeEnvironment {
     locals: BTreeMap<String, Type>,
     local_docs: BTreeMap<String, String>,
     functions: Vec<TypedFunction>,
+    deprecated_accesses: BTreeMap<Vec<String>, Deprecation>,
 }
 
 impl TypeEnvironment {
@@ -161,6 +163,16 @@ impl TypeEnvironment {
             .find(|function| function.name.as_deref() == Some(name))
     }
 
+    pub(crate) fn deprecation_for_access(&self, path: &[String]) -> Option<&Deprecation> {
+        self.deprecated_accesses.get(path)
+    }
+
+    pub(crate) fn deprecated_accesses(&self) -> impl Iterator<Item = (&[String], &Deprecation)> {
+        self.deprecated_accesses
+            .iter()
+            .map(|(path, deprecation)| (path.as_slice(), deprecation))
+    }
+
     pub fn to_type_context(&self) -> TypeContext {
         let mut context = self
             .aliases
@@ -203,6 +215,14 @@ impl TypeEnvironment {
             self.aliases.entry(name).or_insert(ty);
         }
 
+        self
+    }
+
+    pub(crate) fn with_deprecated_accesses(
+        mut self,
+        accesses: impl IntoIterator<Item = (Vec<String>, Deprecation)>,
+    ) -> Self {
+        self.deprecated_accesses.extend(accesses);
         self
     }
 }
@@ -607,6 +627,7 @@ pub(crate) fn build_type_environment_with_domain_registry(
             locals: locals.into_iter().chain(domains.builtin_locals()).collect(),
             local_docs,
             functions,
+            deprecated_accesses: BTreeMap::new(),
         },
         diagnostics,
     )
@@ -1737,6 +1758,7 @@ fn resolve_lua_doc_return_type(
 fn lua_doc_documentation(docs: &[&LuaDocAnnotation]) -> Option<String> {
     let documentation = docs
         .iter()
+        .filter(|annotation| !matches!(annotation.kind, LuaDocAnnotationKind::Deprecated(_)))
         .filter_map(|annotation| annotation.documentation.as_deref())
         .collect::<Vec<_>>();
 

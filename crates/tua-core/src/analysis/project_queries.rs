@@ -1,4 +1,5 @@
 use super::*;
+use crate::Deprecation;
 
 impl AnalysisSnapshot {
     pub(super) fn project_module_candidates(
@@ -284,6 +285,7 @@ impl AnalysisSnapshot {
                         extension
                     )
                 }),
+                deprecation: None,
                 insert_text: Some(candidate.path),
                 filter_text: None,
                 is_snippet: false,
@@ -350,6 +352,7 @@ impl AnalysisSnapshot {
         let _profile = profile::span("analysis.semantic.environment");
         let environment = base_environment
             .with_local_types(self.project_module_binding_types(parsed))
+            .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_local_types(project_inference.local_types.clone())
             .with_local_types(self.project_local_annotation_types(parsed));
 
@@ -385,6 +388,32 @@ impl AnalysisSnapshot {
                 Some((binding.alias, ty))
             })
             .collect()
+    }
+
+    fn project_module_binding_deprecations(
+        &self,
+        parsed: &ParsedSource,
+    ) -> Vec<(Vec<String>, Deprecation)> {
+        let mut deprecations = Vec::new();
+
+        for binding in require_bindings_for_parsed_source(parsed) {
+            let Some(module_path) = self.indexed_required_module_path(parsed, &binding.alias)
+            else {
+                continue;
+            };
+            let Some(exports) = self.module_exports(module_path) else {
+                continue;
+            };
+
+            deprecations.extend(exports.fields.iter().filter_map(|(name, field)| {
+                field
+                    .deprecation
+                    .clone()
+                    .map(|deprecation| (vec![binding.alias.clone(), name.clone()], deprecation))
+            }));
+        }
+
+        deprecations
     }
 
     pub(super) fn project_local_annotation_types(
@@ -876,6 +905,7 @@ impl AnalysisSnapshot {
                     kind: CompletionKind::Value,
                     detail: Some(format!("literal: \"{value}\"")),
                     documentation: None,
+                    deprecation: None,
                     insert_text: None,
                     filter_text: None,
                     is_snippet: false,
@@ -903,6 +933,7 @@ impl AnalysisSnapshot {
                 kind: CompletionKind::Field,
                 detail: Some(format!("field: {ty}")),
                 documentation: None,
+                deprecation: None,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -979,6 +1010,7 @@ impl AnalysisSnapshot {
                 kind: completion_kind_for_type(&ty),
                 detail: Some(format!("field: {ty}")),
                 documentation: None,
+                deprecation: None,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -1303,6 +1335,7 @@ impl AnalysisSnapshot {
                     kind: completion_kind_for_type(&entry.field.ty),
                     detail: Some(format!("field: {}", entry.field.ty)),
                     documentation: entry.field.documentation.clone(),
+                    deprecation: entry.field.deprecation.clone(),
                     insert_text: None,
                     filter_text: None,
                     is_snippet: false,
@@ -1356,6 +1389,7 @@ impl AnalysisSnapshot {
                 detail: Some(format!("field: {ty}")),
                 label: name,
                 documentation: entry.field.documentation.clone(),
+                deprecation: None,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,

@@ -7,6 +7,11 @@ local unusedLocal = 1
 local function unusedFunction() end
 function unusedGlobalFunction() end
 
+-- DeprecatedApi (TL4056)
+---@deprecated use currentFunction
+local function legacyFunction() end
+legacyFunction()
+
 -- UnknownGlobal (TL4004)
 print(MissingGlobal)
 

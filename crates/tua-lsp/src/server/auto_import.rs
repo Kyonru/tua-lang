@@ -39,6 +39,7 @@ pub(super) fn auto_import_completion(candidate: AutoImportCandidate<'_>) -> Comp
             candidate.module, candidate.field.ty
         )),
         documentation: candidate.field.documentation.clone(),
+        deprecation: candidate.field.deprecation.clone(),
         insert_text: Some(format!("{}.{}", candidate.alias, candidate.name)),
         filter_text: None,
         is_snippet: false,

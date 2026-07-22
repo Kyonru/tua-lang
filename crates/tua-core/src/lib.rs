@@ -9,6 +9,7 @@ pub mod code_lens;
 pub mod completion;
 pub mod config;
 pub mod definition;
+mod deprecation;
 pub mod diagnostic;
 pub mod document_highlight;
 pub mod document_symbol;
@@ -108,6 +109,7 @@ pub use definition::{
     definition_parsed_source, definition_parsed_source_with_hir, definition_tua_source, Definition,
     DefinitionKind,
 };
+pub use deprecation::Deprecation;
 pub use diagnostic::{
     format_diagnostics_for_cli, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
 };

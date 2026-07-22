@@ -297,6 +297,24 @@ damage({ hp = 10 })
 }
 
 #[test]
+fn hover_labels_deprecated_function_guidance() {
+    let source = r#"--- Old entrypoint.
+---@deprecated use newApi
+local function oldApi() end
+
+oldApi()
+"#;
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "oldApi()"))
+        .expect("hover should succeed")
+        .expect("deprecated function should hover");
+
+    assert_eq!(
+        hover.documentation.as_deref(),
+        Some("**Deprecated.** use newApi\nOld entrypoint.")
+    );
+}
+
+#[test]
 fn hovers_lua_doc_overload_signatures() {
     let source = r#"---@overload fun(path: string): Image
 ---@overload fun(path: string, mode: "stream"): Source

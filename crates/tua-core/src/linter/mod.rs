@@ -14,6 +14,7 @@ use crate::ast_utils::{
     field_chain_before_first_call, plain_field_chain_from_expression, plain_field_chain_from_var,
 };
 use crate::config::{DiagnosticsConfig, JitConfig};
+use crate::deprecation::{deprecated_api_uses, Deprecation};
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
@@ -86,6 +87,27 @@ pub(crate) fn lint_parsed_source(
 
         visitor.visit_ast(&parsed.ast);
         diagnostics.extend(visitor.diagnostics);
+    }
+
+    if config.rules {
+        diagnostics.extend(
+            deprecated_api_uses(
+                parsed,
+                environment,
+                scope
+                    .as_ref()
+                    .expect("standard rules should build a scope map"),
+            )
+            .into_iter()
+            .map(|usage| {
+                deprecated_api_diagnostic(
+                    &parsed.path,
+                    usage.span.start,
+                    &usage.name,
+                    &usage.deprecation,
+                )
+            }),
+        );
     }
 
     if symbol_lints_enabled(config) {
@@ -3199,6 +3221,27 @@ fn unbalanced_assignment_message(variables: usize, values: usize) -> String {
             "assigning {values} {value_word} to {variables} {variable_word} leaves some values unused"
         )
     }
+}
+
+fn deprecated_api_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    deprecation: &Deprecation,
+) -> Diagnostic {
+    let message = match deprecation.guidance.as_deref() {
+        Some(guidance) => format!("API `{name}` is deprecated; {guidance}"),
+        None => format!("API `{name}` is deprecated"),
+    };
+
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        message,
+    )
+    .with_code(DiagnosticCode::LINT_DEPRECATED_API)
 }
 
 fn unused_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {

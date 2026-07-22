@@ -9,6 +9,7 @@ use self::sequence::{
     score_completion_sequence, CompletionSequenceCandidate, CompletionSequenceContextSnapshot,
 };
 use self::symbol::lua_symbols_before_position;
+use crate::deprecation::deprecated_declarations;
 use crate::love_callback;
 use crate::lua::{self, LuaItem, LuaItemKind};
 use crate::module_index::{exported_field_for_fields, required_module_exports_for_receiver};
@@ -50,6 +51,7 @@ pub struct Completion {
     pub kind: CompletionKind,
     pub detail: Option<String>,
     pub documentation: Option<String>,
+    pub deprecation: Option<crate::Deprecation>,
     pub insert_text: Option<String>,
     pub filter_text: Option<String>,
     pub is_snippet: bool,
@@ -1045,6 +1047,7 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
         kind: CompletionKind::Snippet,
         detail: Some(detail.to_owned()),
         documentation: None,
+        deprecation: None,
         insert_text: Some(insert_text.to_owned()),
         filter_text: filter_text.map(str::to_owned),
         is_snippet: true,
@@ -1075,6 +1078,7 @@ fn complete_annotation_tags(prefix: &str) -> Vec<Completion> {
         kind: CompletionKind::Keyword,
         detail: Some(detail.to_owned()),
         documentation: None,
+        deprecation: None,
         insert_text: None,
         filter_text: None,
         is_snippet: false,
@@ -1111,6 +1115,7 @@ fn complete_builtin_types(prefix: &str, include_ecs: bool) -> Vec<Completion> {
             kind: CompletionKind::TypeAlias,
             detail: Some("built-in type".to_owned()),
             documentation: None,
+            deprecation: None,
             insert_text: None,
             filter_text: None,
             is_snippet: false,
@@ -1130,6 +1135,7 @@ fn complete_type_aliases(environment: &TypeEnvironment, prefix: &str) -> Vec<Com
             kind: CompletionKind::TypeAlias,
             detail: Some("type alias".to_owned()),
             documentation: environment.alias_documentation(name).map(str::to_owned),
+            deprecation: None,
             insert_text: None,
             filter_text: None,
             is_snippet: false,
@@ -1158,6 +1164,7 @@ fn complete_documentation_snippet(
         documentation: Some(
             "Generate LuaHelper-style parameter and return annotations.".to_owned(),
         ),
+        deprecation: None,
         insert_text: Some(snippet),
         filter_text: None,
         is_snippet: true,
@@ -1179,6 +1186,7 @@ fn complete_lossy_documentation_snippet(source: &str, position: SourcePosition) 
         documentation: Some(
             "Generate LuaHelper-style parameter and return annotations.".to_owned(),
         ),
+        deprecation: None,
         insert_text: Some(snippet),
         filter_text: None,
         is_snippet: true,
@@ -1538,6 +1546,20 @@ fn insert_scope_identifier_items(
     position: SourcePosition,
 ) {
     let scope = scope_map_parsed_source(parsed);
+    let deprecations = deprecated_declarations(parsed)
+        .into_iter()
+        .map(|declaration| {
+            (
+                (
+                    declaration.name_span.start.line,
+                    declaration.name_span.start.column,
+                    declaration.name_span.end.line,
+                    declaration.name_span.end.column,
+                ),
+                declaration.deprecation,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut declarations = scope
         .declarations()
         .iter()
@@ -1564,7 +1586,17 @@ fn insert_scope_identifier_items(
             push_unique_completion(
                 completions,
                 labels,
-                completion_from_scope_declaration(declaration),
+                completion_from_scope_declaration(
+                    declaration,
+                    deprecations
+                        .get(&(
+                            declaration.name_span.start.line,
+                            declaration.name_span.start.column,
+                            declaration.name_span.end.line,
+                            declaration.name_span.end.column,
+                        ))
+                        .cloned(),
+                ),
             );
         }
     }
@@ -1584,7 +1616,10 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
     (position.line, position.column)
 }
 
-fn completion_from_scope_declaration(declaration: &ScopeDeclaration) -> Completion {
+fn completion_from_scope_declaration(
+    declaration: &ScopeDeclaration,
+    deprecation: Option<crate::Deprecation>,
+) -> Completion {
     let (kind, detail) = match &declaration.kind {
         ScopeDeclarationKind::Parameter => (CompletionKind::Variable, "parameter"),
         ScopeDeclarationKind::Function => (CompletionKind::Function, "local function"),
@@ -1598,6 +1633,7 @@ fn completion_from_scope_declaration(declaration: &ScopeDeclaration) -> Completi
         kind,
         detail: Some(detail.to_owned()),
         documentation: None,
+        deprecation,
         insert_text: None,
         filter_text: None,
         is_snippet: false,
@@ -1614,6 +1650,8 @@ fn insert_visible_global_function_items(
     prefix: &str,
     position: SourcePosition,
 ) {
+    let deprecations = deprecated_declarations(parsed);
+
     for function in &parsed.function_annotations {
         let Some(name) = &function.name else {
             continue;
@@ -1636,6 +1674,14 @@ fn insert_visible_global_function_items(
                 kind: CompletionKind::Function,
                 detail: Some("function".to_owned()),
                 documentation: None,
+                deprecation: deprecations
+                    .iter()
+                    .find(|declaration| {
+                        declaration.path.len() == 1
+                            && declaration.path[0] == *name
+                            && function.name_span == Some(declaration.name_span)
+                    })
+                    .map(|declaration| declaration.deprecation.clone()),
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -1662,6 +1708,7 @@ fn insert_keyword_and_builtin_identifier_items(
                 kind: CompletionKind::Module,
                 detail: Some("built-in ECS module".to_owned()),
                 documentation: Some(ecs::module_documentation().to_owned()),
+                deprecation: None,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -1757,6 +1804,11 @@ fn complete_fields(
         .into_iter()
         .filter(|(name, _)| completion_text_matches(name, prefix))
     {
+        let deprecation_path = receiver_parts
+            .iter()
+            .cloned()
+            .chain(std::iter::once(name.clone()))
+            .collect::<Vec<_>>();
         let documentation =
             CompletionDomainRegistry::typed_member(environment, &receiver_type, &name)
                 .and_then(|function| function.documentation);
@@ -1768,6 +1820,9 @@ fn complete_fields(
                 kind,
                 detail: Some(detail),
                 documentation,
+                deprecation: environment
+                    .deprecation_for_access(&deprecation_path)
+                    .cloned(),
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -2057,6 +2112,7 @@ fn signal_event_completions(
             documentation: Some(
                 "Known SignalBus event name from existing signal calls.".to_owned(),
             ),
+            deprecation: None,
             insert_text: None,
             filter_text: filter_text.map(str::to_owned),
             is_snippet: false,
@@ -2174,6 +2230,7 @@ fn literal_value_item(type_name: &str, prefix: &str) -> Option<Completion> {
         kind: CompletionKind::Value,
         detail: Some(type_name.to_owned()),
         documentation: None,
+        deprecation: None,
         insert_text: None,
         filter_text: None,
         is_snippet: false,
@@ -2342,6 +2399,7 @@ fn complete_required_module_fields(
                 detail: Some(format!("field: {}", field.ty)),
                 label: name,
                 documentation: field.documentation,
+                deprecation: field.deprecation,
                 insert_text: None,
                 filter_text: None,
                 is_snippet: false,
@@ -2368,6 +2426,7 @@ fn complete_required_module_fields(
             detail: Some(format!("field: {ty}")),
             label: name,
             documentation: export.documentation.clone(),
+            deprecation: None,
             insert_text: None,
             filter_text: None,
             is_snippet: false,
@@ -2416,6 +2475,7 @@ fn completion_from_lua_item(item: LuaItem) -> Completion {
         kind: completion_kind_from_lua_item(item.kind),
         detail: Some(item.detail.to_owned()),
         documentation: Some(lua::documentation_with_love_wiki_link(item)),
+        deprecation: None,
         insert_text: None,
         filter_text: None,
         is_snippet: false,

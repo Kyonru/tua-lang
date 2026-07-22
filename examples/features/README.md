@@ -61,7 +61,8 @@ make build-features
   aliases, annotated locals, function signatures, and stable module exports.
 - `src/luals_provider.lua` and `src/luals_annotations.tua` demonstrate the
   expanded LuaLS/LuaCATS annotation subset: literal unions, optional shorthand,
-  arrays, tuples, dictionaries, function types, and shallow metadata tags.
+  arrays, tuples, dictionaries, function types, shallow metadata tags, and
+  resolved deprecation metadata.
 - `src/inline_ignores.tua` demonstrates opt-in line-targeted diagnostic
   suppression comments such as `tua-ignore-next-line` and `tua-ignore-line`.
 - `src/luahelper_lints.tua` demonstrates opt-in LuaHelper parity diagnostics

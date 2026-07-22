@@ -3024,6 +3024,60 @@ return first, second
 }
 
 #[test]
+fn deprecated_api_reports_resolved_functions_and_members_with_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+---@deprecated use newApi
+local function oldApi() end
+oldApi()
+
+local function runShadow()
+  local oldApi = function() end
+  oldApi()
+end
+runShadow()
+
+local api = {}
+---@deprecated use api.new
+function api.old() end
+api.old()
+local saved = api.old
+print(saved)
+
+---@deprecated use api.newMethod
+function api:oldMethod() end
+api:oldMethod()
+
+---@deprecated
+local function retired() end
+retired()
+
+---@deprecated use newGlobal
+function oldGlobal() end
+oldGlobal()
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DEPRECATED_API))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "API `oldApi` is deprecated; use newApi",
+            "API `api.old` is deprecated; use api.new",
+            "API `api.old` is deprecated; use api.new",
+            "API `api.oldMethod` is deprecated; use api.newMethod",
+            "API `retired` is deprecated",
+            "API `oldGlobal` is deprecated; use newGlobal",
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn reports_unused_assignments_when_local_is_never_read() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",

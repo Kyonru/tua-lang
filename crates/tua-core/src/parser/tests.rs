@@ -1074,6 +1074,10 @@ fn parses_additional_luals_annotation_tags() {
         parsed.lua_doc_annotations[6].kind,
         LuaDocAnnotationKind::Deprecated(_)
     ));
+    assert_eq!(
+        parsed.lua_doc_annotations[6].documentation.as_deref(),
+        Some("use newPlayer")
+    );
     assert!(matches!(
         parsed.lua_doc_annotations[7].kind,
         LuaDocAnnotationKind::NoDiscard(_)

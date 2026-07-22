@@ -1426,6 +1426,32 @@ local value = Choice
 }
 
 #[test]
+fn parsed_identifier_completion_marks_deprecated_locals() {
+    let source = r#"---@deprecated use newChoice
+local function oldChoice() end
+local value = oldC
+"#;
+    let completions = complete_tua_source(
+        "src/main.tua",
+        source,
+        position_after(source, "local value = oldC"),
+    )
+    .expect("identifier completion should succeed");
+    let old_choice = completions
+        .iter()
+        .find(|completion| completion.label == "oldChoice")
+        .expect("deprecated local should complete");
+
+    assert_eq!(
+        old_choice
+            .deprecation
+            .as_ref()
+            .and_then(|deprecation| deprecation.guidance.as_deref()),
+        Some("use newChoice")
+    );
+}
+
+#[test]
 fn parsed_identifier_completion_is_reproducible() {
     let source = r#"local classFar = 1
 local classNear = 2

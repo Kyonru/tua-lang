@@ -709,7 +709,15 @@ impl AnalysisSnapshot {
         };
 
         match &file.parsed {
-            Ok(parsed) => semantic_tokens_parsed_source(parsed).unwrap_or_default(),
+            Ok(parsed) => {
+                let facts = self.semantic_facts_for_parsed(parsed);
+
+                crate::semantic_token::semantic_tokens_parsed_source_with_environment(
+                    parsed,
+                    &facts.environment,
+                )
+                .unwrap_or_default()
+            }
             Err(_) => degraded_semantic_tokens(path, file),
         }
     }

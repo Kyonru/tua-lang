@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DiagnosticCode, Fixture};
+use crate::{DiagnosticCode, Fixture, SemanticTokenModifier};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -2907,6 +2907,91 @@ return {
     assert_eq!(
         hover.documentation,
         Some("audio source\nsuccess flag".to_owned())
+    );
+}
+
+#[test]
+fn snapshot_diagnostics_follow_deprecated_lua_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Api = require("api")
+do
+  local Api = { oldApi = function() end }
+  Api.oldApi()
+end
+Api.<|usage|>oldApi()
+-- file: src/api.lua
+---@deprecated use newApi
+local function oldApi() end
+
+return {
+  oldApi = oldApi,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("lua")
+        {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    let deprecated = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DEPRECATED_API))
+        .collect::<Vec<_>>();
+
+    assert_eq!(deprecated.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        deprecated[0].message,
+        "API `Api.oldApi` is deprecated; use newApi"
+    );
+    assert_eq!(deprecated[0].line, fixture.position("usage").line);
+
+    let usage = fixture.position("usage");
+    let completion = snapshot
+        .completion("src/main.tua", usage)
+        .into_iter()
+        .find(|completion| completion.label == "oldApi")
+        .expect("deprecated export should complete");
+    assert_eq!(
+        completion
+            .deprecation
+            .as_ref()
+            .and_then(|deprecation| deprecation.guidance.as_deref()),
+        Some("use newApi")
+    );
+    let token = snapshot
+        .semantic_tokens("src/main.tua")
+        .into_iter()
+        .find(|token| token.span.start == usage)
+        .expect("deprecated member should have a semantic token");
+    assert!(
+        token.modifiers.contains(&SemanticTokenModifier::Deprecated),
+        "{token:#?}"
+    );
+    let hover = snapshot
+        .hover("src/main.tua", usage)
+        .expect("deprecated export should hover");
+    assert!(
+        hover
+            .documentation
+            .as_deref()
+            .is_some_and(|documentation| documentation.contains("**Deprecated.** use newApi")),
+        "{hover:#?}"
     );
 }
 

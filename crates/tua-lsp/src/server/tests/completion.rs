@@ -1133,7 +1133,8 @@ local value = audio.play
     temp.write("src/main.tua", source);
     temp.write(
         "src/audio.lua",
-        r#"---@param source string audio source
+        r#"---@deprecated use newPlay
+---@param source string audio source
 ---@return boolean success flag
 local function play(source)
   return true
@@ -1164,6 +1165,7 @@ return {
 
     assert!(play.get("detail").is_none());
     assert!(play.get("documentation").is_none());
+    assert_eq!(play["tags"], json!([1]));
 
     server.send(completion_resolve_request(3, play));
 
@@ -1178,6 +1180,7 @@ return {
         .expect("documentation should be a string")
         .contains("audio source\nsuccess flag"));
     assert_eq!(response["result"]["data"]["symbolKind"], "function");
+    assert_eq!(response["result"]["tags"], json!([1]));
     assert_eq!(
         response["result"]["data"]["typeLabel"],
         "field: (source: string) -> boolean"

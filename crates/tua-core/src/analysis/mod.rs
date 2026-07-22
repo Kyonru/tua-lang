@@ -2077,6 +2077,10 @@ fn module_export_documentation(
 ) -> Option<String> {
     let mut parts = Vec::new();
 
+    if let Some(deprecation) = &export.deprecation {
+        push_unique_documentation(&mut parts, &deprecation.markdown());
+    }
+
     if let Some(documentation) = source_documentation.as_deref() {
         push_unique_documentation(&mut parts, documentation);
     }

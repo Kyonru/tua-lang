@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use full_moon::ast::{
@@ -8,9 +8,12 @@ use full_moon::ast::{
 use full_moon::node::Node;
 use full_moon::tokenizer::{Lexer, LexerResult, Symbol, Token, TokenReference, TokenType};
 
+use crate::deprecation::deprecated_declarations;
 use crate::hir::{lower_parsed_source, HirSymbolKind};
 use crate::parser::{ParsedSource, SourcePosition, SourceSpan, TypeAliasKind};
+use crate::scope::{scope_map_parsed_source, ScopeResolution, ScopeSymbolId};
 use crate::source_text::{byte_for_column, line_at};
+use crate::types::TypeEnvironment;
 use crate::{
     ecs, input, lua, object_pool, parse_tua_source, signal, sprite, state_machine, store, vector,
     Diagnostic,
@@ -69,6 +72,20 @@ pub fn semantic_tokens_tua_source(
 pub fn semantic_tokens_parsed_source(
     parsed: &ParsedSource,
 ) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
+    semantic_tokens_parsed_source_with_optional_environment(parsed, None)
+}
+
+pub(crate) fn semantic_tokens_parsed_source_with_environment(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
+    semantic_tokens_parsed_source_with_optional_environment(parsed, Some(environment))
+}
+
+fn semantic_tokens_parsed_source_with_optional_environment(
+    parsed: &ParsedSource,
+    environment: Option<&TypeEnvironment>,
+) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
     let source_tokens = lossy_tokens(&parsed.source);
     let declarations = DeclarationIndex::new(parsed, &source_tokens);
     let mut tokens = source_tokens
@@ -78,6 +95,28 @@ pub fn semantic_tokens_parsed_source(
             semantic_token_for_identifier(parsed, &declarations, &source_tokens, index, token)
         })
         .collect::<Vec<_>>();
+
+    for token in &mut tokens {
+        if declarations
+            .deprecated_spans
+            .contains(&span_key(token.span))
+            && !token.modifiers.contains(&SemanticTokenModifier::Deprecated)
+        {
+            token.modifiers.push(SemanticTokenModifier::Deprecated);
+        }
+    }
+
+    if let Some(environment) = environment {
+        let scope = scope_map_parsed_source(parsed);
+
+        for usage in crate::deprecation::deprecated_api_uses(parsed, environment, &scope) {
+            if let Some(token) = tokens.iter_mut().find(|token| token.span == usage.span) {
+                if !token.modifiers.contains(&SemanticTokenModifier::Deprecated) {
+                    token.modifiers.push(SemanticTokenModifier::Deprecated);
+                }
+            }
+        }
+    }
 
     tokens.extend(lua_doc_semantic_tokens(parsed));
     tokens.extend(annotation_tag_semantic_tokens(&parsed.source));
@@ -571,6 +610,7 @@ fn token_index(tokens: &[Token], needle: &Token) -> Option<usize> {
 #[derive(Default)]
 struct DeclarationIndex {
     by_span: BTreeMap<SpanKey, Classification>,
+    deprecated_spans: BTreeSet<SpanKey>,
     values: BTreeMap<String, Vec<ValueDeclaration>>,
     types: BTreeMap<String, SemanticTokenKind>,
 }
@@ -705,14 +745,6 @@ impl DeclarationIndex {
                 default_library: false,
             },
         );
-    }
-
-    fn mark_deprecated_on_line(&mut self, line: usize) {
-        for (span, classification) in &mut self.by_span {
-            if span.0 == line && classification.declaration {
-                classification.deprecated = true;
-            }
-        }
     }
 
     fn nearest_value_kind(
@@ -1109,24 +1141,54 @@ fn collect_assignment_target(var: &Var, index: &mut DeclarationIndex) {
 }
 
 fn mark_deprecated_declarations(parsed: &ParsedSource, index: &mut DeclarationIndex) {
-    let mut pending = false;
+    let declarations = deprecated_declarations(parsed);
+    let scope = scope_map_parsed_source(parsed);
+    let mut deprecated_symbols = BTreeMap::<ScopeSymbolId, ()>::new();
+    let mut deprecated_globals = BTreeMap::<String, ()>::new();
 
-    for (offset, line) in parsed.source.lines().enumerate() {
-        let line_number = offset + 1;
-        let trimmed = line.trim_start();
+    for declaration in &declarations {
+        for (span, classification) in &mut index.by_span {
+            let candidate = SourceSpan {
+                start: SourcePosition {
+                    line: span.0,
+                    column: span.1,
+                },
+                end: SourcePosition {
+                    line: span.2,
+                    column: span.3,
+                },
+            };
 
-        if trimmed.starts_with("---@deprecated") {
-            pending = true;
+            if classification.declaration && span_contains(declaration.name_span, candidate) {
+                classification.deprecated = true;
+            }
+        }
+
+        if declaration.path.len() != 1
+            || !matches!(
+                declaration.kind,
+                HirSymbolKind::Local | HirSymbolKind::Function
+            )
+        {
             continue;
         }
 
-        if trimmed.starts_with("---") || trimmed.is_empty() {
-            continue;
+        if let Some(symbol) = scope.declaration_at_span(declaration.name_span) {
+            deprecated_symbols.insert(symbol.id, ());
+        } else if let Some(name) = declaration.path.first() {
+            deprecated_globals.insert(name.clone(), ());
         }
+    }
 
-        if pending {
-            index.mark_deprecated_on_line(line_number);
-            pending = false;
+    for reference in scope.references() {
+        let deprecated = match &reference.resolution {
+            ScopeResolution::Symbol(id) => deprecated_symbols.contains_key(id),
+            ScopeResolution::Global(global) => deprecated_globals.contains_key(&global.name),
+            ScopeResolution::Unresolved => false,
+        };
+
+        if deprecated {
+            index.deprecated_spans.insert(span_key(reference.span));
         }
     }
 }

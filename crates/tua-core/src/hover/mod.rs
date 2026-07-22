@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use crate::deprecation::deprecated_declarations;
 use crate::love_callback;
 use crate::lua::{self, LuaItem};
 use crate::module_index::{
@@ -235,10 +236,17 @@ impl<'a> HoverResolver<'a> {
             }
 
             let contents = format_type_with_prefix(format!("local {}: ", current_part.text), ty);
+            let deprecation = self
+                .deprecation_at_position(position)
+                .map(|item| item.markdown());
+            let documentation = merge_documentation([
+                deprecation.as_deref(),
+                self.environment.local_documentation(&current_part.text),
+            ]);
 
-            if let Some(documentation) = self.environment.local_documentation(&current_part.text) {
+            if documentation.is_some() {
                 let mut hover = hover(contents, Some(current_part.span));
-                hover.documentation = Some(documentation.to_owned());
+                hover.documentation = documentation;
                 hover.context = self.declaration_context(position, DefinitionKind::Local);
 
                 return Some(hover);
@@ -429,8 +437,13 @@ impl<'a> HoverResolver<'a> {
         let source_documentation = definition
             .as_ref()
             .and_then(|definition| documentation_for_definition(self.parsed, definition));
+        let deprecation = export
+            .deprecation
+            .as_ref()
+            .map(crate::Deprecation::markdown);
 
         hover.documentation = merge_documentation([
+            deprecation.as_deref(),
             source_documentation.as_deref(),
             export.documentation.as_deref(),
         ]);
@@ -451,9 +464,14 @@ impl<'a> HoverResolver<'a> {
         let source_documentation = definition
             .as_ref()
             .and_then(|definition| documentation_for_definition(self.parsed, definition));
+        let deprecation = definition
+            .as_ref()
+            .and_then(|definition| self.deprecation_for_definition(definition))
+            .map(|deprecation| deprecation.markdown());
         let mut hover = hover(format_function_signature(function), Some(span));
 
         hover.documentation = merge_documentation([
+            deprecation.as_deref(),
             source_documentation.as_deref(),
             function.documentation.as_deref(),
         ]);
@@ -463,6 +481,21 @@ impl<'a> HoverResolver<'a> {
         }
 
         hover
+    }
+
+    fn deprecation_at_position(&self, position: SourcePosition) -> Option<crate::Deprecation> {
+        let definition = definition_parsed_source(self.parsed, position)
+            .ok()
+            .flatten()?;
+
+        self.deprecation_for_definition(&definition)
+    }
+
+    fn deprecation_for_definition(&self, definition: &Definition) -> Option<crate::Deprecation> {
+        deprecated_declarations(self.parsed)
+            .into_iter()
+            .find(|declaration| declaration.name_span == definition.span)
+            .map(|declaration| declaration.deprecation)
     }
 
     fn declaration_context(

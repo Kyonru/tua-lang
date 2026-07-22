@@ -7,6 +7,10 @@ local playerImage = LuaLS.loadImage("assets/player.png", "static")
 -- Try typing the second argument as "st" or "str" in the editor.
 local streamedImage = LuaLS.loadImage("assets/player.png", "stream")
 
+-- Feature: uncommenting this resolved deprecated export reports TL4056 and
+-- offers `use loadImage instead` in hover and completion metadata.
+-- local legacyImage = LuaLS.legacyLoadImage("assets/player.png", "static")
+
 -- Feature: invalid literal values are rejected by the checker.
 -- LuaLS.loadImage("assets/player.png", "dynamic")
 

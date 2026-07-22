@@ -313,6 +313,42 @@ return {
 }
 
 #[test]
+fn module_exports_preserve_deprecation_metadata() {
+    let source = r#"
+---@deprecated use play
+local function oldPlay() end
+
+return {
+  oldPlay = oldPlay,
+  ---@deprecated use play
+  oldInline = function() end,
+}
+"#;
+
+    for parsed in [
+        parse_lua_source("src/audio.lua", source).expect("Lua source should parse"),
+        parse_tua_source("src/audio.tua", source).expect("Tua source should parse"),
+    ] {
+        let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+        assert_eq!(
+            exports.fields["oldPlay"]
+                .deprecation
+                .as_ref()
+                .and_then(|deprecation| deprecation.guidance.as_deref()),
+            Some("use play")
+        );
+        assert_eq!(
+            exports.fields["oldInline"]
+                .deprecation
+                .as_ref()
+                .and_then(|deprecation| deprecation.guidance.as_deref()),
+            Some("use play")
+        );
+    }
+}
+
+#[test]
 fn unknown_requires_and_dynamic_exports_are_quiet() {
     let parsed = parse_lua_source(
         "src/dynamic.lua",

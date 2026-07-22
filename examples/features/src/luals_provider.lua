@@ -16,7 +16,6 @@
 ---@module "features.luals_annotations"
 ---@enum AssetKind
 ---@diagnostic disable-next-line: undefined-global
----@deprecated use loadImage instead
 ---@nodiscard
 
 ---@param path string image path
@@ -26,6 +25,13 @@ local function loadImage(path, mode)
   return love.graphics.newImage(path)
 end
 
+-- Feature: deprecated API metadata reaches Tua consumers through module exports.
+---@deprecated use loadImage instead
+local function legacyLoadImage(path, mode)
+  return loadImage(path, mode)
+end
+
 return {
   loadImage = loadImage,
+  legacyLoadImage = legacyLoadImage,
 }

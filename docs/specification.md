@@ -149,6 +149,9 @@ continues to require a real project module.
 LuaDoc/LuaCATS annotations support practical aliases, classes, fields,
 functions, overloads, typed varargs, and module exports. Unsupported annotations
 degrade conservatively, and semantic analysis does not execute project code.
+Explicit `---@deprecated` metadata follows resolved local functions, fields, and
+module exports into diagnostics and editor presentation; Tua does not guess
+deprecation from API documentation prose.
 Recursive aliases preserve their outer declared shape while the repeated alias
 on the active expansion path degrades to `any`, keeping external declaration
 libraries finite and editor-safe.

@@ -432,6 +432,7 @@ impl ProjectTypeDatabase {
         Some(ModuleExportField {
             ty: current,
             documentation: None,
+            deprecation: None,
             parameter_names: Vec::new(),
             parameter_documentation: Vec::new(),
         })

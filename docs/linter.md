@@ -37,6 +37,7 @@ share an existing Tua code because they are the same analysis.
 | `MultiLineStatement` | `TL4037` |
 | `LocalUnused` | `TL4005` |
 | `FunctionUnused` | `TL4055` |
+| `DeprecatedApi` | `TL4056` |
 | `ImportUnused` | `TL4054` |
 | `BuiltinGlobalWrite` | `TL4038` |
 | `PlaceholderRead` | `TL4039` |
@@ -186,12 +187,26 @@ as uses, while `_`-prefixed bindings remain intentionally unused. Import source
 actions only rewrite compiler-resolved static bindings; dynamic `require`
 calls and shadowed functions are preserved.
 
-`DeprecatedGlobal` depends on a host-provided deprecated-global catalog, and
-`DeprecatedApi` depends on deprecation metadata for the resolved external API.
-Tua does not invent either catalog, so those two rules are not emitted yet.
-Likewise, dialect-specific table APIs are ignored on Tua's LuaJIT target. Tua
-does report unsupported `--!` directives so foreign configuration comments
-never silently appear to affect Tua.
+`DeprecatedApi` reports resolved uses of functions and fields explicitly marked
+with `---@deprecated`. Optional text after the tag becomes replacement guidance:
+
+```lua
+---@deprecated use newApi
+local function oldApi() end
+
+oldApi() -- TL4056: API `oldApi` is deprecated; use newApi
+```
+
+The metadata follows exports from required `.lua` and `.tua` modules, while
+lexical shadowing prevents unrelated bindings with the same spelling from
+warning. Hover presents the guidance, completion marks deprecated candidates,
+and semantic tokens mark resolved declarations and uses. Tua does not infer
+LOVE deprecations from prose in the generated API catalog.
+
+`DeprecatedGlobal` still depends on a host-provided deprecated-global catalog,
+which Tua does not invent. Likewise, dialect-specific table APIs are ignored on
+Tua's LuaJIT target. Tua does report unsupported `--!` directives so foreign
+configuration comments never silently appear to affect Tua.
 
 The repository's `examples/linter` fixture contains an intentionally broken
 case for every rule Tua can currently emit in the standard set. Running

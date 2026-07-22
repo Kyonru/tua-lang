@@ -10,6 +10,7 @@ use full_moon::ast::{
 use full_moon::node::Node;
 
 use crate::ast_utils::plain_field_chain_from_var;
+use crate::deprecation::{deprecated_declarations, Deprecation};
 use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
@@ -42,6 +43,7 @@ pub struct ModuleExports {
 pub struct ModuleExportField {
     pub ty: Type,
     pub documentation: Option<String>,
+    pub deprecation: Option<Deprecation>,
     pub parameter_names: Vec<String>,
     pub parameter_documentation: Vec<Option<String>>,
 }
@@ -131,6 +133,7 @@ pub fn exported_field_for_fields(
     export_field_type(&field.ty, rest).map(|ty| ModuleExportField {
         ty,
         documentation: None,
+        deprecation: None,
         parameter_names: Vec::new(),
         parameter_documentation: Vec::new(),
     })
@@ -364,6 +367,7 @@ struct ExportInferer<'a> {
     code_field_docs: BTreeMap<String, Vec<&'a LuaDocAnnotation>>,
     locals: BTreeMap<String, Type>,
     function_docs: BTreeMap<String, String>,
+    deprecations: BTreeMap<String, Deprecation>,
     function_parameter_names: BTreeMap<String, Vec<String>>,
     function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
     table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
@@ -372,12 +376,24 @@ struct ExportInferer<'a> {
 
 impl<'a> ExportInferer<'a> {
     fn new(parsed: &'a ParsedSource, environment: Option<&'a TypeEnvironment>) -> Self {
+        let deprecations = deprecated_declarations(parsed)
+            .into_iter()
+            .filter(|declaration| {
+                matches!(
+                    declaration.kind,
+                    crate::hir::HirSymbolKind::Local | crate::hir::HirSymbolKind::Function
+                )
+            })
+            .map(|declaration| (declaration.path.join("."), declaration.deprecation))
+            .collect();
+
         Self {
             parsed,
             environment,
             code_field_docs: lua_doc_code_field_annotations(parsed),
             locals: BTreeMap::new(),
             function_docs: BTreeMap::new(),
+            deprecations,
             function_parameter_names: BTreeMap::new(),
             function_parameter_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
@@ -403,6 +419,7 @@ impl<'a> ExportInferer<'a> {
                             ModuleExportField {
                                 ty,
                                 documentation: function.documentation.clone(),
+                                deprecation: self.deprecations.get(name).cloned(),
                                 parameter_names: parameter_names(function),
                                 parameter_documentation: parameter_documentation(function),
                             },
@@ -460,6 +477,10 @@ impl<'a> ExportInferer<'a> {
                         .or_insert_with(|| ModuleExportField {
                             ty: function_type_from_body(function.body()),
                             documentation: None,
+                            deprecation: self
+                                .deprecations
+                                .get(&function.name().to_string().replace(':', "."))
+                                .cloned(),
                             parameter_names: parameter_names_from_body(function.body()),
                             parameter_documentation: Vec::new(),
                         });
@@ -500,6 +521,7 @@ impl<'a> ExportInferer<'a> {
             ModuleExportField {
                 ty,
                 documentation: None,
+                deprecation: self.deprecations.get(&parts.join(".")).cloned(),
                 parameter_names: Vec::new(),
                 parameter_documentation: Vec::new(),
             },
@@ -595,12 +617,20 @@ impl<'a> ExportInferer<'a> {
                 let ty = lua_doc_export
                     .map(|export| export.ty)
                     .unwrap_or_else(|| self.infer_expression(value));
+                let deprecation = self.field_deprecation(field).or_else(|| {
+                    let Expression::Var(Var::Name(name)) = value else {
+                        return None;
+                    };
+
+                    self.deprecations.get(&token_text(name)).cloned()
+                });
 
                 Some((
                     name,
                     ModuleExportField {
                         ty,
                         documentation,
+                        deprecation,
                         parameter_names,
                         parameter_documentation,
                     },
@@ -770,6 +800,7 @@ impl<'a> ExportInferer<'a> {
         Some(ModuleExportField {
             ty: Type::function_returns(parameters, return_types),
             documentation: self.field_documentation(field),
+            deprecation: self.field_deprecation(field),
             parameter_names: parameter_names_from_body(body),
             parameter_documentation,
         })
@@ -782,10 +813,20 @@ impl<'a> ExportInferer<'a> {
         let docs = self.lua_doc_annotations_for_field(&token_text(key), field);
         let documentation = docs
             .iter()
+            .filter(|annotation| !matches!(annotation.kind, LuaDocAnnotationKind::Deprecated(_)))
             .filter_map(|annotation| annotation.documentation.as_deref())
             .collect::<Vec<_>>();
 
         (!documentation.is_empty()).then(|| documentation.join("\n"))
+    }
+
+    fn field_deprecation(&self, field: &Field) -> Option<Deprecation> {
+        let Field::NameKey { key, .. } = field else {
+            return None;
+        };
+        let docs = self.lua_doc_annotations_for_field(&token_text(key), field);
+
+        Deprecation::from_annotations(&docs)
     }
 
     fn lua_doc_annotations_for_field(
@@ -823,6 +864,7 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
                     ModuleExportField {
                         ty: field.ty.clone(),
                         documentation: None,
+                        deprecation: None,
                         parameter_names: Vec::new(),
                         parameter_documentation: Vec::new(),
                     },

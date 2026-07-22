@@ -212,6 +212,7 @@ fn validated_completion(
         kind: CompletionKind::Snippet,
         detail: Some("multi-token suggestion".to_owned()),
         documentation: Some(documentation),
+        deprecation: None,
         insert_text: Some(insert_text),
         filter_text: None,
         is_snippet: false,

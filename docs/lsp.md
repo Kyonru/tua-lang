@@ -166,6 +166,10 @@ parameters, variables, properties, namespaces, events, labels, and annotations,
 including declaration, readonly, deprecated, modification, and default-library
 modifiers.
 
+Resolved `---@deprecated` declarations and uses receive the deprecated modifier.
+Required-module completion items use the standard LSP deprecated tag, and hover
+shows any replacement guidance carried by the annotation.
+
 Full-document, range, and delta token requests use the same classification.
 Lossy semantic highlighting keeps useful categories during temporary syntax
 errors. The active theme controls colors; use **Developer: Inspect Editor Tokens

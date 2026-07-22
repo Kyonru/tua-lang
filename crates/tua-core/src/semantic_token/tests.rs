@@ -302,6 +302,55 @@ return {
 }
 
 #[test]
+fn deprecated_tokens_follow_resolved_declarations_and_references() {
+    let source = r#"---@deprecated use newApi
+local function oldApi() end
+oldApi()
+
+---@deprecated use replacement
+local first = 1; local current = 2
+print(first, current)
+"#;
+    let tokens = semantic_tokens_tua_source("src/main.tua", source).expect("source should parse");
+
+    assert_token_modifier_at_line(
+        &tokens,
+        source,
+        "oldApi",
+        2,
+        SemanticTokenKind::Function,
+        SemanticTokenModifier::Deprecated,
+    );
+    assert_token_modifier_at_line(
+        &tokens,
+        source,
+        "oldApi",
+        3,
+        SemanticTokenKind::Function,
+        SemanticTokenModifier::Deprecated,
+    );
+    assert_token_modifier_at_line(
+        &tokens,
+        source,
+        "first",
+        6,
+        SemanticTokenKind::Variable,
+        SemanticTokenModifier::Deprecated,
+    );
+
+    let current_tokens = tokens
+        .iter()
+        .filter(|token| token_text_from_source(source, token) == "current")
+        .collect::<Vec<_>>();
+    assert!(
+        current_tokens
+            .iter()
+            .all(|token| !token.modifiers.contains(&SemanticTokenModifier::Deprecated)),
+        "{current_tokens:#?}"
+    );
+}
+
+#[test]
 fn classifies_tua_classes_enums_domains_events_labels_and_modifications() {
     let source = r#"enum PlayerState
   "idle"

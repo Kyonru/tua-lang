@@ -18,5 +18,6 @@ There is deliberately no `tua.toml`: the default `src` layout is sufficient,
 and omitting a project file keeps this intentionally failing fixture out of the
 buildable example and benchmark suites.
 
-`DeprecatedGlobal` and `DeprecatedApi` are omitted because they require a host
-runtime catalog that Tua does not currently provide.
+`DeprecatedGlobal` is omitted because it requires a host runtime catalog that
+Tua does not currently provide. `DeprecatedApi` is demonstrated through
+explicit `---@deprecated` project metadata.

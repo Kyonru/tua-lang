@@ -8,6 +8,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Resolved `---@deprecated` API guidance through standard lint `TL4056`,
+  module exports, hover, completion tags, and deprecated semantic tokens.
 - Standard lint rules for `tua lint` and the default-on
   `diagnostics.rules` editor/check setting, including symbol, declaration,
   control-flow, format-string, table-operation, and expression guidance.

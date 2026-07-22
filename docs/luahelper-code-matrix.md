@@ -159,6 +159,7 @@ enforced separately with `tua fmt --check`.
 | `TL4053` | A function returns values on one path and has a reachable fallthrough path, including through a breakable loop. | `rules` |
 | `TL4054` | A direct global `require` or static `import` binding is unused. | `rules` |
 | `TL4055` | A direct local or user-global function declaration is never used. | `unused_locals` |
+| `TL4056` | A resolved function or field explicitly marked `---@deprecated` is used. | `rules` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

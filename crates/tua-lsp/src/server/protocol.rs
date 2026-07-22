@@ -626,6 +626,7 @@ pub(super) fn lsp_completion_from_core(
     let insert_text = completion.insert_text;
     let filter_text = completion.filter_text;
     let is_snippet = completion.is_snippet;
+    let deprecated = completion.deprecation.is_some();
     let detail = completion.detail;
     let core_kind = completion.kind.as_str();
     let module_path = completion
@@ -654,6 +655,10 @@ pub(super) fn lsp_completion_from_core(
 
     if is_snippet {
         item["insertTextFormat"] = json!(2);
+    }
+
+    if deprecated {
+        item["tags"] = json!([1]);
     }
 
     if label_details_support {
@@ -736,6 +741,10 @@ pub(super) fn lsp_resolved_completion_item(
 
     if completion.is_snippet {
         item["insertTextFormat"] = json!(2);
+    }
+
+    if completion.deprecation.is_some() {
+        item["tags"] = json!([1]);
     }
 
     if !completion.additional_text_edits.is_empty() {

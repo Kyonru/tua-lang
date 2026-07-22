@@ -306,8 +306,11 @@ end
 
 Tua also recognizes `---@generic`, `---@version`, `---@enum`, `---@meta`,
 `---@module`, `---@diagnostic`, `---@cast`, `---@as`, `---@deprecated`, and
-`---@nodiscard`. Some of these tags are preserved with source spans and
-documentation but do not currently change type checking.
+`---@nodiscard`. `---@deprecated` is resolved across local declarations and
+module exports: uses report `TL4056`, hover shows optional replacement guidance,
+and completion plus semantic tokens identify deprecated APIs. Other metadata-only
+tags are preserved with source spans and documentation but do not currently
+change type checking.
 
 !!! note "Recognition does not imply full LuaLS semantics"
     Tua implements the practical annotation subset needed for typed Lua
