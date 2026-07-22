@@ -1,8 +1,11 @@
 -- This file intentionally breaks symbol-related standard lint rules.
 
--- LocalUnused / FunctionUnused (TL4005)
+-- LocalUnused (TL4005)
 local unusedLocal = 1
+
+-- FunctionUnused (TL4055), for both local and direct global declarations
 local function unusedFunction() end
+function unusedGlobalFunction() end
 
 -- UnknownGlobal (TL4004)
 print(MissingGlobal)

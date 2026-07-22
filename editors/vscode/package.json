@@ -181,7 +181,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report unused local variables."
+          "description": "Report unused local variables and direct function declarations."
         },
         "tua.diagnostics.unusedParameters": {
           "type": [

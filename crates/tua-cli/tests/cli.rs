@@ -2049,6 +2049,60 @@ self_assignments = true
 }
 
 #[test]
+fn lint_reports_unused_functions_with_their_own_code() {
+    let temp = TempDir::new("lint-unused-function");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "function unusedGlobal()\nend\nlocal function unusedLocal()\nend\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("lint")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert_eq!(stderr.matches("warning TL4055").count(), 2, "{stderr}");
+    assert!(stderr.contains("function `unusedGlobal` is never used"));
+    assert!(stderr.contains("function `unusedLocal` is never used"));
+}
+
+#[test]
+fn lint_reports_dynamic_require_bindings_as_unused_imports() {
+    let temp = TempDir::new("lint-unused-dynamic-require");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local moduleName = \"runtime\"\nlocal Dynamic = require(moduleName)\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("lint")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert_eq!(stderr.matches("warning TL4054").count(), 1, "{stderr}");
+    assert!(stderr.contains("import `Dynamic` is never used; prefix with `_` to silence"));
+    assert!(!stderr.contains("unused local `moduleName`"));
+}
+
+#[test]
 fn lint_ignores_formatting_differences() {
     let temp = TempDir::new("lint-empty-lines");
 

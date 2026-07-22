@@ -208,7 +208,10 @@ VS Code can override them with `tua.format.indentWidth`,
 Quick fixes and source actions include:
 
 - fixing safe diagnostics in the current file;
-- organizing, sorting, and removing unused static imports;
+- removing unused local values and function declarations when their complete
+  source range is compiler-proven;
+- organizing, sorting, and removing compiler-resolved unused static imports
+  while preserving dynamic and shadowed calls;
 - changing known LOVE object calls from `.` to `:`;
 - generating missing core LOVE callbacks;
 - adding inferred local annotations;

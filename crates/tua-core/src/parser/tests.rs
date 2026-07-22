@@ -609,6 +609,28 @@ end
 }
 
 #[test]
+fn records_free_references_in_default_parameter_expressions() {
+    let parsed = parse_tua_source(
+        "src/pick.tua",
+        r#"
+local fallback = 10
+local function pick(value = transform(fallback))
+  return value
+end
+"#,
+    )
+    .expect("default parameter references should parse");
+
+    let references = parsed
+        .parameter_default_references
+        .iter()
+        .map(|reference| reference.name.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(references, vec!["transform", "fallback"]);
+}
+
+#[test]
 fn parses_optional_parameters_on_named_functions() {
     let parsed = parse_tua_source(
         "src/shake.tua",

@@ -182,6 +182,11 @@ fn diagnostic_quick_fix_actions(
                     actions.push(action);
                 }
             }
+            Some(DiagnosticCode::LINT_UNUSED_FUNCTION) => {
+                if let Some(action) = remove_unused_function_action(parsed, diagnostic) {
+                    actions.push(action);
+                }
+            }
             Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY) => {
                 if let Some(action) = rename_duplicate_table_key_action(parsed, diagnostic) {
                     actions.push(action);
@@ -210,20 +215,7 @@ fn diagnostic_quick_fix_actions(
 }
 
 fn organize_imports_action(parsed: &ParsedSource) -> Option<Assist> {
-    let mut source = parsed.source.clone();
-    let mut changed = false;
-
-    if let Some(next) = remove_unused_imports_source(&source) {
-        source = next;
-        changed = true;
-    }
-
-    if let Some(next) = sort_imports_source(&source) {
-        source = next;
-        changed = true;
-    }
-
-    changed.then_some(source).and_then(|source| {
+    rewrite_import_blocks(parsed, true, true).and_then(|source| {
         source_document_action(
             parsed,
             "Organize imports",
@@ -234,7 +226,7 @@ fn organize_imports_action(parsed: &ParsedSource) -> Option<Assist> {
 }
 
 fn sort_imports_action(parsed: &ParsedSource) -> Option<Assist> {
-    sort_imports_source(&parsed.source).and_then(|source| {
+    rewrite_import_blocks(parsed, false, true).and_then(|source| {
         source_document_action(
             parsed,
             "Sort imports",
@@ -245,7 +237,7 @@ fn sort_imports_action(parsed: &ParsedSource) -> Option<Assist> {
 }
 
 fn remove_unused_imports_action(parsed: &ParsedSource) -> Option<Assist> {
-    remove_unused_imports_source(&parsed.source).and_then(|source| {
+    rewrite_import_blocks(parsed, true, false).and_then(|source| {
         source_document_action(
             parsed,
             "Remove unused imports",
@@ -453,6 +445,14 @@ fn remove_unused_local_action(parsed: &ParsedSource, diagnostic: &Diagnostic) ->
             continue;
         }
 
+        if !local
+            .expressions()
+            .iter()
+            .all(expression_is_safe_to_discard)
+        {
+            continue;
+        }
+
         let edit = remove_single_line_stmt_edit(parsed, stmt)?;
 
         return Some(Assist {
@@ -460,6 +460,92 @@ fn remove_unused_local_action(parsed: &ParsedSource, diagnostic: &Diagnostic) ->
             kind: AssistKind::QuickFix,
             edit: edit_for(parsed.path.clone(), edit),
         });
+    }
+
+    None
+}
+
+fn remove_unused_function_action(parsed: &ParsedSource, diagnostic: &Diagnostic) -> Option<Assist> {
+    let span =
+        function_declaration_span_at_position(parsed.ast.nodes(), diagnostic_position(diagnostic))?;
+    let edit = remove_statement_span_edit(parsed, span);
+
+    Some(Assist {
+        title: "Remove unused function".to_owned(),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(parsed.path.clone(), edit),
+    })
+}
+
+fn function_declaration_span_at_position(
+    block: &ast::Block,
+    position: SourcePosition,
+) -> Option<SourceSpan> {
+    for stmt in block.stmts() {
+        match stmt {
+            ast::Stmt::LocalFunction(function) => {
+                if node_span(function.name()).is_some_and(|span| span_contains(span, position)) {
+                    return node_span(function);
+                }
+            }
+            ast::Stmt::FunctionDeclaration(function) => {
+                let names = function.name().names();
+                let direct_global = names.len() == 1 && function.name().method_name().is_none();
+
+                if direct_global
+                    && names
+                        .iter()
+                        .next()
+                        .and_then(node_span)
+                        .is_some_and(|span| span_contains(span, position))
+                {
+                    return node_span(function);
+                }
+            }
+            _ => {}
+        }
+
+        let nested = match stmt {
+            ast::Stmt::Do(block) => function_declaration_span_at_position(block.block(), position),
+            ast::Stmt::FunctionDeclaration(function) => {
+                function_declaration_span_at_position(function.body().block(), position)
+            }
+            ast::Stmt::GenericFor(for_stmt) => {
+                function_declaration_span_at_position(for_stmt.block(), position)
+            }
+            ast::Stmt::If(if_stmt) => {
+                function_declaration_span_at_position(if_stmt.block(), position)
+                    .or_else(|| {
+                        if_stmt.else_if().and_then(|else_ifs| {
+                            else_ifs.iter().find_map(|else_if| {
+                                function_declaration_span_at_position(else_if.block(), position)
+                            })
+                        })
+                    })
+                    .or_else(|| {
+                        if_stmt.else_block().and_then(|block| {
+                            function_declaration_span_at_position(block, position)
+                        })
+                    })
+            }
+            ast::Stmt::LocalFunction(function) => {
+                function_declaration_span_at_position(function.body().block(), position)
+            }
+            ast::Stmt::NumericFor(for_stmt) => {
+                function_declaration_span_at_position(for_stmt.block(), position)
+            }
+            ast::Stmt::Repeat(repeat) => {
+                function_declaration_span_at_position(repeat.block(), position)
+            }
+            ast::Stmt::While(while_stmt) => {
+                function_declaration_span_at_position(while_stmt.block(), position)
+            }
+            _ => None,
+        };
+
+        if nested.is_some() {
+            return nested;
+        }
     }
 
     None
@@ -1198,6 +1284,15 @@ fn is_stable_inline_expression(expression: &Expression) -> bool {
     }
 }
 
+fn expression_is_safe_to_discard(expression: &Expression) -> bool {
+    match expression {
+        Expression::Number(_) | Expression::String(_) | Expression::Symbol(_) => true,
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => expression_is_safe_to_discard(expression),
+        _ => false,
+    }
+}
+
 fn assignment_target_span_exists(parsed: &ParsedSource, span: SourceSpan) -> bool {
     let mut visitor = AssignmentTargetVisitor {
         span,
@@ -1722,25 +1817,57 @@ fn remove_single_line_stmt_edit(parsed: &ParsedSource, stmt: &ast::Stmt) -> Opti
     })
 }
 
+fn remove_statement_span_edit(parsed: &ParsedSource, span: SourceSpan) -> TextEdit {
+    let starts_line = line_at(&parsed.source, span.start.line).is_some_and(|line| {
+        let byte = crate::source_text::byte_for_column(line, span.start.column);
+        line[..byte.min(line.len())].trim().is_empty()
+    });
+    let ends_line = line_at(&parsed.source, span.end.line).is_some_and(|line| {
+        let byte = crate::source_text::byte_for_column(line, span.end.column);
+        line[byte.min(line.len())..].trim().is_empty()
+    });
+    let span = if starts_line && ends_line {
+        line_range_removal_span(&parsed.source, span.start.line, span.end.line)
+    } else {
+        span
+    };
+
+    TextEdit {
+        path: parsed.path.clone(),
+        span,
+        new_text: String::new(),
+    }
+}
+
 fn line_removal_span(source: &str, line: usize) -> SourceSpan {
-    if line < source.lines().count() || source.ends_with('\n') {
+    line_range_removal_span(source, line, line)
+}
+
+fn line_range_removal_span(source: &str, start_line: usize, end_line: usize) -> SourceSpan {
+    if end_line < source.lines().count() || source.ends_with('\n') {
         return SourceSpan {
-            start: SourcePosition { line, column: 1 },
+            start: SourcePosition {
+                line: start_line,
+                column: 1,
+            },
             end: SourcePosition {
-                line: line + 1,
+                line: end_line + 1,
                 column: 1,
             },
         };
     }
 
-    let end_column = line_at(source, line)
+    let end_column = line_at(source, end_line)
         .map(|line| line.len() + 1)
         .unwrap_or(1);
 
     SourceSpan {
-        start: SourcePosition { line, column: 1 },
+        start: SourcePosition {
+            line: start_line,
+            column: 1,
+        },
         end: SourcePosition {
-            line,
+            line: end_line,
             column: end_column,
         },
     }
@@ -1854,6 +1981,7 @@ struct ImportBinding {
     kind: ModuleSpecifierKind,
     text: String,
     has_trailing_comment: bool,
+    used: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1862,35 +1990,9 @@ struct LineSegment {
     newline: String,
 }
 
-fn remove_unused_imports_source(source: &str) -> Option<String> {
-    let removable = import_bindings(source)
-        .into_iter()
-        .filter(|binding| !binding.has_trailing_comment)
-        .filter(|binding| !binding.alias.starts_with('_'))
-        .filter(|binding| !identifier_used_outside_line(source, &binding.alias, binding.line))
-        .map(|binding| binding.line)
-        .collect::<BTreeSet<_>>();
-
-    if removable.is_empty() {
-        return None;
-    }
-
-    let mut segments = line_segments(source);
-
-    segments = segments
-        .into_iter()
-        .enumerate()
-        .filter(|(index, _)| !removable.contains(&(index + 1)))
-        .map(|(_, segment)| segment)
-        .collect();
-
-    Some(join_line_segments(&segments))
-}
-
-fn sort_imports_source(source: &str) -> Option<String> {
-    let bindings = import_bindings(source);
-
-    if bindings.len() < 2 {
+fn rewrite_import_blocks(parsed: &ParsedSource, remove_unused: bool, sort: bool) -> Option<String> {
+    let bindings = import_bindings(parsed);
+    if bindings.is_empty() {
         return None;
     }
 
@@ -1898,14 +2000,15 @@ fn sort_imports_source(source: &str) -> Option<String> {
         .into_iter()
         .map(|binding| (binding.line, binding))
         .collect::<BTreeMap<_, _>>();
-    let mut segments = line_segments(source);
-    let mut changed = false;
+    let segments = line_segments(&parsed.source);
+    let mut rewritten = Vec::with_capacity(segments.len());
     let mut index = 0usize;
 
     while index < segments.len() {
         let line = index + 1;
 
         if !bindings_by_line.contains_key(&line) {
+            rewritten.push(segments[index].clone());
             index += 1;
             continue;
         }
@@ -1918,39 +2021,43 @@ fn sort_imports_source(source: &str) -> Option<String> {
 
         let end = index;
 
-        if end - start < 2 {
-            continue;
-        }
-
         let mut block = (start + 1..=end)
             .filter_map(|line| bindings_by_line.get(&line).cloned())
             .collect::<Vec<_>>();
-        let original = block.iter().map(|binding| binding.line).collect::<Vec<_>>();
 
-        block.sort_by(|left, right| {
-            import_sort_key(left)
-                .cmp(&import_sort_key(right))
-                .then_with(|| left.text.cmp(&right.text))
-        });
+        if remove_unused {
+            block.retain(|binding| !import_binding_is_removable(binding));
+        }
 
-        let sorted = block.iter().map(|binding| binding.line).collect::<Vec<_>>();
-
-        if original == sorted {
-            continue;
+        if sort {
+            block.sort_by(|left, right| {
+                import_sort_key(left)
+                    .cmp(&import_sort_key(right))
+                    .then_with(|| left.text.cmp(&right.text))
+            });
         }
 
         for (offset, binding) in block.into_iter().enumerate() {
-            segments[start + offset].text = binding.text;
+            let mut segment = segments[start + offset].clone();
+            segment.text = binding.text;
+            rewritten.push(segment);
         }
-
-        changed = true;
     }
 
-    changed.then(|| join_line_segments(&segments))
+    let source = join_line_segments(&rewritten);
+    (source != parsed.source).then_some(source)
 }
 
-fn import_bindings(source: &str) -> Vec<ImportBinding> {
-    let literals = module_specifier_literals(source);
+fn import_binding_is_removable(binding: &ImportBinding) -> bool {
+    !binding.used && !binding.has_trailing_comment && !binding.alias.starts_with('_')
+}
+
+fn import_bindings(parsed: &ParsedSource) -> Vec<ImportBinding> {
+    let semantic_usages = crate::linter::import_usages(parsed)
+        .into_iter()
+        .map(|usage| ((usage.position.line, usage.name), usage.used))
+        .collect::<BTreeMap<_, _>>();
+    let literals = module_specifier_literals(&parsed.source);
     let mut literals_per_line = BTreeMap::<usize, usize>::new();
 
     for literal in &literals {
@@ -1962,7 +2069,11 @@ fn import_bindings(source: &str) -> Vec<ImportBinding> {
     literals
         .into_iter()
         .filter(|literal| literals_per_line.get(&literal.span.start.line) == Some(&1))
-        .filter_map(|literal| import_binding_for_literal(source, &literal))
+        .filter_map(|literal| import_binding_for_literal(&parsed.source, &literal))
+        .filter_map(|mut binding| {
+            binding.used = *semantic_usages.get(&(binding.line, binding.alias.clone()))?;
+            Some(binding)
+        })
         .collect()
 }
 
@@ -1991,6 +2102,7 @@ fn import_binding_for_literal(
         kind: literal.kind,
         text: line.to_owned(),
         has_trailing_comment: rest.starts_with("--"),
+        used: false,
     })
 }
 
@@ -2105,15 +2217,6 @@ fn import_sort_key(binding: &ImportBinding) -> (&str, &str, &'static str) {
         binding.alias.as_str(),
         binding.kind.label(),
     )
-}
-
-fn identifier_used_outside_line(source: &str, identifier: &str, excluded_line: usize) -> bool {
-    source.split('\n').enumerate().any(|(index, line)| {
-        let line_number = index + 1;
-
-        line_number != excluded_line
-            && line_contains_identifier(line.strip_suffix('\r').unwrap_or(line), identifier)
-    })
 }
 
 fn line_contains_identifier(line: &str, identifier: &str) -> bool {

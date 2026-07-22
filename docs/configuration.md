@@ -422,7 +422,8 @@ resolve from the current project layout.
 globals, Lua builtins, LOVE globals, or known module exports.
 
 `unused_locals`
-: Reports local bindings that are never read.
+: Reports local bindings and direct user-global function declarations that are
+never read.
 
 `unused_parameters`
 : Reports function parameters that are never read.

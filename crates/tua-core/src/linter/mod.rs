@@ -18,6 +18,7 @@ use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
     ecs, lua, sprite, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
+    SourceSpan, TuaType,
 };
 
 mod rules;
@@ -62,7 +63,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if symbol_lints_enabled(config) {
-        diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze());
+        diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze().diagnostics);
     }
 
     if config.rules {
@@ -74,6 +75,15 @@ pub(crate) fn lint_parsed_source(
     }
 
     diagnostics
+}
+
+pub(crate) fn import_usages(parsed: &ParsedSource) -> Vec<ImportUsage> {
+    let config = DiagnosticsConfig {
+        rules: false,
+        ..DiagnosticsConfig::default()
+    };
+
+    SymbolAnalyzer::new(parsed, &config).analyze().imports
 }
 
 fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
@@ -507,6 +517,8 @@ struct GlobalUsage {
     common_function_stack: Vec<usize>,
     read_before_write: bool,
     defined_in_module_scope: bool,
+    function_definition: Option<SourcePosition>,
+    used: bool,
 }
 
 impl GlobalUsage {
@@ -551,9 +563,28 @@ struct Declaration {
     assignment_positions: Vec<SourcePosition>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ImportUsage {
+    pub name: String,
+    pub position: SourcePosition,
+    pub used: bool,
+}
+
+struct SymbolAnalysis {
+    diagnostics: Vec<Diagnostic>,
+    imports: Vec<ImportUsage>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ImportCallKind {
+    Require,
+    StaticImport,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DeclarationKind {
     Local,
+    Loop,
     LocalFunction,
     Import,
     Parameter,
@@ -582,13 +613,25 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
-    fn analyze(mut self) -> Vec<Diagnostic> {
+    fn analyze(mut self) -> SymbolAnalysis {
         self.analyze_block(self.parsed.ast.nodes());
         self.resolve_unresolved_global_reads();
         self.report_local_shadows();
 
-        if self.config.rules {
-            for (name, usage) in &self.user_globals {
+        for (name, usage) in &self.user_globals {
+            if (self.config.rules || self.config.unused_locals)
+                && usage.function_definition.is_some()
+                && !usage.used
+                && !should_ignore_unused(name)
+            {
+                self.diagnostics.push(unused_function_diagnostic(
+                    &self.parsed.path,
+                    usage.function_definition.unwrap_or(usage.definition),
+                    name,
+                ));
+            }
+
+            if self.config.rules {
                 if !usage.common_function_stack.is_empty() {
                     self.diagnostics.push(global_used_as_local_diagnostic(
                         &self.parsed.path,
@@ -606,7 +649,21 @@ impl<'a> SymbolAnalyzer<'a> {
             }
         }
 
-        self.diagnostics
+        let imports = self
+            .declarations
+            .iter()
+            .filter(|declaration| declaration.kind == DeclarationKind::Import)
+            .map(|declaration| ImportUsage {
+                name: declaration.name.clone(),
+                position: declaration.position,
+                used: declaration.used,
+            })
+            .collect();
+
+        SymbolAnalysis {
+            diagnostics: self.diagnostics,
+            imports,
+        }
     }
 
     fn report_local_shadows(&mut self) {
@@ -699,6 +756,16 @@ impl<'a> SymbolAnalyzer<'a> {
             ast::Stmt::LocalAssignment(local) => self.analyze_local_assignment(local),
             ast::Stmt::LocalFunction(function) => self.analyze_local_function(function),
             ast::Stmt::FunctionDeclaration(function) => self.analyze_function_declaration(function),
+            ast::Stmt::TypeDeclaration(declaration) => {
+                let ty = crate::parser::tua_type_from_type_info(declaration.type_definition());
+                self.mark_imports_used_in_type(&ty);
+            }
+            ast::Stmt::ExportedTypeDeclaration(declaration) => {
+                let ty = crate::parser::tua_type_from_type_info(
+                    declaration.type_declaration().type_definition(),
+                );
+                self.mark_imports_used_in_type(&ty);
+            }
             ast::Stmt::Do(block) => self.analyze_child_block(block.block()),
             ast::Stmt::If(if_stmt) => {
                 self.enter_conditional_execution();
@@ -730,7 +797,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     self.declare(
                         token_text(name),
                         token_position(name),
-                        DeclarationKind::Local,
+                        DeclarationKind::Loop,
                         declaration_group,
                     );
                 }
@@ -762,7 +829,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 self.declare(
                     token_text(for_stmt.index_variable()),
                     token_position(for_stmt.index_variable()),
-                    DeclarationKind::Local,
+                    DeclarationKind::Loop,
                     declaration_group,
                 );
 
@@ -865,15 +932,26 @@ impl<'a> SymbolAnalyzer<'a> {
     fn analyze_local_assignment(&mut self, local: &ast::LocalAssignment) {
         let names = local.names().into_iter().collect::<Vec<_>>();
         let expressions = local.expressions().into_iter().collect::<Vec<_>>();
-        let is_import =
-            names.len() == 1 && expressions.len() == 1 && is_static_import_call(expressions[0]);
+        let import_kind = (names.len() == 1 && expressions.len() == 1)
+            .then(|| self.import_call_kind(expressions[0]))
+            .flatten();
 
         for expression in &expressions {
-            if is_import {
-                continue;
-            }
+            match import_kind {
+                Some(ImportCallKind::StaticImport) => {
+                    let Expression::FunctionCall(call) = expression else {
+                        continue;
+                    };
 
-            self.analyze_expression(expression);
+                    self.analyze_suffixes(call.suffixes());
+                }
+                Some(ImportCallKind::Require) | None => self.analyze_expression(expression),
+            }
+        }
+
+        for specifier in local.type_specifiers().flatten() {
+            let ty = crate::parser::tua_type_from_type_info(specifier.type_info());
+            self.mark_imports_used_in_type(&ty);
         }
 
         let declaration_group = self.next_declaration_group();
@@ -881,7 +959,7 @@ impl<'a> SymbolAnalyzer<'a> {
             self.declare_with_initialization(
                 token_text(name),
                 token_position(name),
-                if is_import {
+                if import_kind.is_some() {
                     DeclarationKind::Import
                 } else {
                     DeclarationKind::Local
@@ -889,6 +967,28 @@ impl<'a> SymbolAnalyzer<'a> {
                 expression_initializes_local(&expressions, index),
                 declaration_group,
             );
+        }
+    }
+
+    fn import_call_kind(&self, expression: &Expression) -> Option<ImportCallKind> {
+        let Expression::FunctionCall(call) = expression else {
+            return None;
+        };
+        let Prefix::Name(name) = call.prefix() else {
+            return None;
+        };
+        let name = token_text(name);
+        let mut suffixes = call.suffixes();
+        let suffix = suffixes.next()?;
+
+        if suffixes.next().is_some() || !matches!(suffix, Suffix::Call(Call::AnonymousCall(_))) {
+            return None;
+        }
+
+        match name.as_str() {
+            "require" if self.resolve_local(&name).is_none() => Some(ImportCallKind::Require),
+            "import" if has_static_import_argument(suffix) => Some(ImportCallKind::StaticImport),
+            _ => None,
         }
     }
 
@@ -919,6 +1019,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     ));
                 }
                 self.record_global_assignment(&root_name, token_position(root));
+                self.record_global_function_definition(&root_name, token_position(root));
                 self.defined_globals.insert(root_name.clone());
                 self.known_globals.insert(root_name);
             } else {
@@ -936,6 +1037,16 @@ impl<'a> SymbolAnalyzer<'a> {
         body: &ast::FunctionBody,
         implicit_self: Option<SourcePosition>,
     ) {
+        for specifier in body.type_specifiers().flatten() {
+            let ty = crate::parser::tua_type_from_type_info(specifier.type_info());
+            self.mark_imports_used_in_type(&ty);
+        }
+
+        if let Some(specifier) = body.return_type() {
+            let ty = crate::parser::tua_type_from_type_info(specifier.type_info());
+            self.mark_imports_used_in_type(&ty);
+        }
+
         let function_id = self.next_function_id;
         self.next_function_id += 1;
         self.function_stack.push(FunctionContext {
@@ -961,6 +1072,20 @@ impl<'a> SymbolAnalyzer<'a> {
             }
         }
 
+        if let Some(body_span) = node_span(body) {
+            let default_references = self
+                .parsed
+                .parameter_default_references
+                .iter()
+                .filter(|reference| reference.function_span == body_span)
+                .map(|reference| (reference.name.clone(), reference.position))
+                .collect::<Vec<_>>();
+
+            for (name, position) in default_references {
+                self.read_name(&name, position);
+            }
+        }
+
         for stmt in body.block().stmts() {
             self.analyze_stmt(stmt);
         }
@@ -981,8 +1106,15 @@ impl<'a> SymbolAnalyzer<'a> {
                 self.analyze_expression(lhs);
                 self.analyze_expression(rhs);
             }
-            Expression::Parentheses { expression, .. }
-            | Expression::TypeAssertion { expression, .. } => self.analyze_expression(expression),
+            Expression::Parentheses { expression, .. } => self.analyze_expression(expression),
+            Expression::TypeAssertion {
+                expression,
+                type_assertion,
+            } => {
+                self.analyze_expression(expression);
+                let ty = crate::parser::tua_type_from_type_info(type_assertion.cast_to());
+                self.mark_imports_used_in_type(&ty);
+            }
             Expression::UnaryOperator { expression, .. } => self.analyze_expression(expression),
             Expression::Function(function) => self.analyze_function_body(function.body(), None),
             Expression::FunctionCall(function_call) => self.analyze_function_call(function_call),
@@ -1082,6 +1214,50 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
+    fn mark_imports_used_in_type(&mut self, ty: &TuaType) {
+        match ty {
+            TuaType::Named(name) => {
+                let Some((prefix, _)) = name.split_once('.') else {
+                    return;
+                };
+                let Some(declaration_id) = self.resolve_local(prefix) else {
+                    return;
+                };
+
+                if self.declarations[declaration_id].kind == DeclarationKind::Import {
+                    self.declarations[declaration_id].used = true;
+                }
+            }
+            TuaType::Union(types) | TuaType::Tuple(types) => {
+                for ty in types {
+                    self.mark_imports_used_in_type(ty);
+                }
+            }
+            TuaType::Table(fields) => {
+                for field in fields {
+                    self.mark_imports_used_in_type(&field.ty);
+                }
+            }
+            TuaType::Array(element) => self.mark_imports_used_in_type(element),
+            TuaType::Dictionary { key, value } => {
+                self.mark_imports_used_in_type(key);
+                self.mark_imports_used_in_type(value);
+            }
+            TuaType::Function {
+                parameters,
+                returns,
+            } => {
+                for parameter in parameters {
+                    self.mark_imports_used_in_type(&parameter.ty);
+                }
+                for ty in returns {
+                    self.mark_imports_used_in_type(ty);
+                }
+            }
+            TuaType::StringLiteral(_) => {}
+        }
+    }
+
     fn enter_scope(&mut self, future_locals: BTreeMap<String, SourcePosition>) {
         self.scopes.push(Scope {
             bindings: BTreeMap::new(),
@@ -1126,7 +1302,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 DeclarationKind::LocalFunction
                     if self.config.unused_locals || self.config.rules =>
                 {
-                    self.diagnostics.push(unused_local_diagnostic(
+                    self.diagnostics.push(unused_function_diagnostic(
                         &self.parsed.path,
                         declaration.position,
                         &declaration.name,
@@ -1321,6 +1497,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 if let Some(usage) = self.user_globals.get_mut(&read.name) {
                     usage.record_reference(&read.function_stack, read.read_before_write);
+                    usage.used = true;
                 }
             }
         }
@@ -1358,6 +1535,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
         if let Some(usage) = self.user_globals.get_mut(name) {
             usage.record_reference(&function_stack, read_before_write);
+            usage.used = true;
         }
     }
 
@@ -1386,6 +1564,8 @@ impl<'a> SymbolAnalyzer<'a> {
                     common_function_stack: function_stack,
                     read_before_write: false,
                     defined_in_module_scope,
+                    function_definition: None,
+                    used: false,
                 },
             );
         }
@@ -1394,6 +1574,12 @@ impl<'a> SymbolAnalyzer<'a> {
             if function.conditional_depth == 0 {
                 function.dominated_globals.insert(name.to_owned());
             }
+        }
+    }
+
+    fn record_global_function_definition(&mut self, name: &str, position: SourcePosition) {
+        if let Some(usage) = self.user_globals.get_mut(name) {
+            usage.function_definition = Some(position);
         }
     }
 
@@ -1797,23 +1983,12 @@ impl<'a> JitAnalyzer<'a> {
     }
 }
 
-fn is_static_import_call(expression: &Expression) -> bool {
-    let Expression::FunctionCall(call) = expression else {
-        return false;
-    };
-    let Prefix::Name(name) = call.prefix() else {
-        return false;
-    };
-
-    if !matches!(token_text(name).as_str(), "import" | "require") {
-        return false;
-    }
-
-    match call.suffixes().next() {
-        Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
-            arguments, ..
-        }))) => matches!(arguments.iter().next(), Some(Expression::String(_))),
-        Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_)))) => true,
+fn has_static_import_argument(suffix: &Suffix) -> bool {
+    match suffix {
+        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
+            matches!(arguments.iter().next(), Some(Expression::String(_)))
+        }
+        Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_))) => true,
         _ => false,
     }
 }
@@ -2114,9 +2289,20 @@ fn unused_local_diagnostic(path: &Path, position: SourcePosition, name: &str) ->
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("unused local `{name}`"),
+        format!("unused local `{name}`; prefix with `_` to silence"),
     )
     .with_code(DiagnosticCode::LINT_UNUSED_LOCAL)
+}
+
+fn unused_function_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("function `{name}` is never used; prefix with `_` to silence"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_FUNCTION)
 }
 
 fn unused_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
@@ -2125,7 +2311,7 @@ fn unused_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("unused import `{name}`"),
+        format!("import `{name}` is never used; prefix with `_` to silence"),
     )
     .with_code(DiagnosticCode::LINT_UNUSED_IMPORT)
 }
@@ -2631,6 +2817,11 @@ fn node_position(node: &impl Node) -> SourcePosition {
     node.range()
         .map(|(start, _)| SourcePosition::from_full_moon(start))
         .unwrap_or(SourcePosition { line: 1, column: 1 })
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
 }
 
 fn token_position(token: &TokenReference) -> SourcePosition {

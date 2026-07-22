@@ -130,6 +130,7 @@ pub fn extract_tua_source_model(
         local_annotations: syntax.local_annotations,
         function_annotations: syntax.function_annotations,
         compound_assignments: syntax.compound_assignments,
+        parameter_default_references: syntax.parameter_default_references,
         sprite_declarations,
         class_declarations,
     })
@@ -202,6 +203,7 @@ struct TuaSyntax {
     local_annotations: Vec<LocalAnnotation>,
     function_annotations: Vec<FunctionAnnotation>,
     compound_assignments: Vec<CompoundAssignment>,
+    parameter_default_references: Vec<model::ParameterDefaultReference>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -250,6 +252,7 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
                 function.body(),
                 &mut syntax.diagnostics,
             );
+            collect_parameter_default_references(source, &annotation, syntax);
             syntax.function_annotations.push(annotation);
             collect_block_tua_syntax(path, source, function.body().block(), syntax);
         }
@@ -262,6 +265,7 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
                 function.body(),
                 &mut syntax.diagnostics,
             );
+            collect_parameter_default_references(source, &annotation, syntax);
             syntax.function_annotations.push(annotation);
             collect_block_tua_syntax(path, source, function.body().block(), syntax);
         }
@@ -662,6 +666,88 @@ fn parameter_defaults_from_body(source: &str, body: &ast::FunctionBody) -> Vec<P
         .into_iter()
         .filter_map(|part| parameter_default_from_part(source, part))
         .collect()
+}
+
+fn collect_parameter_default_references(
+    source: &str,
+    function: &FunctionAnnotation,
+    syntax: &mut TuaSyntax,
+) {
+    let Some(function_span) = function.span else {
+        return;
+    };
+
+    for default in &function.default_parameters {
+        let Some(default_span) = default.span else {
+            continue;
+        };
+        let Some(expression_end) = byte_for_source_position(source, default_span.end) else {
+            continue;
+        };
+        let Some(expression_start) = expression_end.checked_sub(default.expression.len()) else {
+            continue;
+        };
+
+        syntax.parameter_default_references.extend(
+            parameter_default_references(source, &default.expression, expression_start)
+                .into_iter()
+                .map(|(name, position)| model::ParameterDefaultReference {
+                    function_span,
+                    name,
+                    position,
+                }),
+        );
+    }
+}
+
+fn parameter_default_references(
+    source: &str,
+    expression: &str,
+    expression_start: usize,
+) -> Vec<(String, SourcePosition)> {
+    const RETURN_PREFIX: &str = "return ";
+
+    let wrapper = format!("{RETURN_PREFIX}{expression}");
+    let normalized = normalize_tua_source(wrapper);
+    let Ok(raw) = parse_raw_source(
+        PathBuf::from("<parameter-default>"),
+        normalized.original,
+        normalized.parser_source,
+        normalized.parser_provenance,
+        LuaVersion::luau(),
+        ParsedLanguage::Tua,
+    ) else {
+        return Vec::new();
+    };
+    let parsed = ParsedSource::from_raw_and_typed(raw, TypedSourceModel::default());
+    let scope_map = crate::scope::scope_map_parsed_source(&parsed);
+    let mut seen = BTreeSet::new();
+    let mut references = Vec::new();
+
+    for reference in scope_map.references() {
+        if matches!(
+            reference.resolution,
+            crate::scope::ScopeResolution::Symbol(_)
+        ) {
+            continue;
+        }
+
+        let Some(wrapper_byte) = byte_for_source_position(&parsed.source, reference.span.start)
+        else {
+            continue;
+        };
+        let Some(relative_byte) = wrapper_byte.checked_sub(RETURN_PREFIX.len()) else {
+            continue;
+        };
+        let position = source_position_for_byte(source, expression_start + relative_byte);
+        let key = (reference.name.clone(), position.line, position.column);
+
+        if seen.insert(key) {
+            references.push((reference.name.clone(), position));
+        }
+    }
+
+    references
 }
 
 fn required_parameter_count_for_optional_parameters(

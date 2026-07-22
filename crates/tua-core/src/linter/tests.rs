@@ -83,6 +83,89 @@ end
 }
 
 #[test]
+fn reports_dynamic_require_bindings_as_unused_imports_and_reads_arguments() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local moduleName = "dynamic"
+local Dynamic = require(moduleName)
+local marker = "marker"
+local Extra = require("extra", marker)
+"#,
+    );
+    let mut messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_IMPORT))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    messages.sort_unstable();
+
+    assert_eq!(
+        messages,
+        vec![
+            "import `Dynamic` is never used; prefix with `_` to silence",
+            "import `Extra` is never used; prefix with `_` to silence",
+        ]
+    );
+    assert!(!diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
+            && (diagnostic.message.contains("`moduleName`")
+                || diagnostic.message.contains("`marker`"))
+    }));
+}
+
+#[test]
+fn shadowed_require_calls_are_ordinary_local_initializers() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function require(name)
+  return { name = name }
+end
+
+local Package = require("pkg")
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNUSED_IMPORT),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert!(!diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_FUNCTION)
+            && diagnostic.message.contains("`require`")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
+            && diagnostic.message.contains("`Package`")
+    }));
+}
+
+#[test]
+fn import_uses_include_types_nested_closures_and_underscore_bindings() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local Types = require("types")
+local Nested = require("nested")
+local _Intentional = require("intentional")
+
+local value: Types.Player = nil
+local function readNested()
+  return Nested
+end
+
+print(value, readNested())
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNUSED_IMPORT),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn local_shadow_reports_same_function_redeclarations_and_parameters() {
     let diagnostics = check_standard_rules_source(
         r#"
@@ -1219,6 +1302,7 @@ test(1, 2, 3)
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)
             && diagnostic.message.contains("unused local `unused`")
+            && diagnostic.message.contains("prefix with `_` to silence")
     }));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_PARAMETER)
@@ -1226,6 +1310,136 @@ test(1, 2, 3)
                 .message
                 .contains("unused parameter `unused_param`")
     }));
+}
+
+#[test]
+fn reports_unused_local_global_and_nested_functions() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+function unusedGlobal()
+end
+
+local function unusedLocal()
+end
+
+local function outer()
+  local function nestedUnused()
+  end
+  return 1
+end
+
+function usedGlobal()
+end
+
+local function usedLocal()
+end
+
+local function _unusedLocal()
+end
+
+function _unusedGlobal()
+end
+
+print(outer(), usedGlobal(), usedLocal())
+"#,
+        &DiagnosticsConfig {
+            rules: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("unused functions should report diagnostics");
+    let mut messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_FUNCTION))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    messages.sort_unstable();
+
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+    assert_eq!(
+        messages,
+        vec![
+            "function `nestedUnused` is never used; prefix with `_` to silence",
+            "function `unusedGlobal` is never used; prefix with `_` to silence",
+            "function `unusedLocal` is never used; prefix with `_` to silence",
+        ]
+    );
+}
+
+#[test]
+fn counts_default_parameter_and_nested_closure_reads_as_local_uses() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local fallback = 10
+local captured = 20
+
+local function pick(value = fallback)
+  return function()
+    return value + captured
+  end
+end
+
+print(pick()())
+"#,
+        &DiagnosticsConfig {
+            unused_locals: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect("default expressions and nested closures should count as reads");
+}
+
+#[test]
+fn excludes_loop_bindings_from_unused_local_diagnostics() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local items = { 1, 2, 3 }
+for key, value in pairs(items) do
+  print(value)
+end
+
+for index = 1, 3 do
+  print("tick")
+end
+
+local explicit = 1
+"#,
+        &DiagnosticsConfig {
+            unused_locals: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("the explicit unused local should still be reported");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_UNUSED_LOCAL));
+    assert!(diagnostics[0].message.contains("unused local `explicit`"));
+}
+
+#[test]
+fn reports_write_only_locals_as_unused() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local write_only = 1
+write_only = 2
+"#,
+        &DiagnosticsConfig {
+            unused_locals: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("a write-only local should be unused");
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::LINT_UNUSED_LOCAL));
+    assert!(diagnostics[0]
+        .message
+        .contains("prefix with `_` to silence"));
 }
 
 #[test]

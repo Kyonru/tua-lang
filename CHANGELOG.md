@@ -69,6 +69,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `ImportUnused` now recognizes dynamic calls to the global `require`, excludes
+  lexically shadowed calls, counts qualified type references, includes `_`
+  guidance, and backs import source actions with the same resolved usage facts.
+- `FunctionUnused` now reports direct local and user-global function
+  declarations as `TL4055`, with safe editor removal for complete declarations.
 - Standard lint rules are enabled by default for `tua check` and editor
   diagnostics. Set `diagnostics.rules = false` to opt out; `tua lint` continues
   to enable the standard set for its own run.

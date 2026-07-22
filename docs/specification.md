@@ -264,6 +264,16 @@ globals.
 Local-shadow guidance is limited to used bindings in the same function and
 user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
+Unused-local analysis includes reads from default-parameter expressions and
+nested closures, excludes loop bindings and `_`-prefixed names, and only offers
+declaration removal when the initializer is safe to discard.
+Unused-function analysis covers direct local and unqualified user-global
+declarations, uses its own stable diagnostic code, and offers complete
+declaration removal for compiler-proven source ranges.
+Unused-import analysis distinguishes the global `require` from lexically
+shadowed functions, accepts computed module names, and counts qualified type
+references as uses. Import source actions operate only on compiler-resolved
+static bindings and preserve dynamic or shadowed calls.
 
 The compiler and language server use the same semantic diagnostics for an
 identical project snapshot. The editor presents those diagnostics without a

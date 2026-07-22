@@ -177,7 +177,7 @@
       "path": "diagnostics.unused_locals",
       "type": "boolean",
       "default": false,
-      "description": "Report unused local variables.",
+      "description": "Report unused local variables and direct function declarations.",
       "editor": "tua.diagnostics.unusedLocals"
     },
     {

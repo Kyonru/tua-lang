@@ -55,6 +55,7 @@ pub struct ParsedSource {
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
+    pub(crate) parameter_default_references: Vec<ParameterDefaultReference>,
     pub(crate) sprite_declarations: Vec<SpriteDeclaration>,
     pub(crate) class_declarations: Vec<ClassDeclaration>,
 }
@@ -72,6 +73,7 @@ impl ParsedSource {
             local_annotations: typed.local_annotations.clone(),
             function_annotations: typed.function_annotations.clone(),
             compound_assignments: typed.compound_assignments.clone(),
+            parameter_default_references: typed.parameter_default_references.clone(),
             sprite_declarations: typed.sprite_declarations.clone(),
             class_declarations: typed.class_declarations.clone(),
             raw,
@@ -114,6 +116,7 @@ pub struct TypedSourceModel {
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
+    pub(crate) parameter_default_references: Vec<ParameterDefaultReference>,
     pub(crate) sprite_declarations: Vec<SpriteDeclaration>,
     pub(crate) class_declarations: Vec<ClassDeclaration>,
 }
@@ -189,6 +192,13 @@ pub struct ParameterDefault {
     pub expression: String,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ParameterDefaultReference {
+    pub function_span: SourceSpan,
+    pub name: String,
+    pub position: SourcePosition,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

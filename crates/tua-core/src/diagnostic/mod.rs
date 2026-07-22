@@ -106,6 +106,7 @@ impl DiagnosticCode {
     pub const LINT_GLOBAL_USED_AS_LOCAL: Self = Self(4052);
     pub const LINT_IMPLICIT_RETURN: Self = Self(4053);
     pub const LINT_UNUSED_IMPORT: Self = Self(4054);
+    pub const LINT_UNUSED_FUNCTION: Self = Self(4055);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -213,6 +214,7 @@ impl DiagnosticCode {
                 | Self::LINT_GLOBAL_USED_AS_LOCAL
                 | Self::LINT_IMPLICIT_RETURN
                 | Self::LINT_UNUSED_IMPORT
+                | Self::LINT_UNUSED_FUNCTION
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

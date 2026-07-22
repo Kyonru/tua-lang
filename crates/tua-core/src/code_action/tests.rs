@@ -393,6 +393,151 @@ fn removes_unused_local_and_self_assignment() {
 }
 
 #[test]
+fn preserves_side_effecting_unused_local_initializers() {
+    let parsed = parse_tua_source("src/main.tua", "local unused = registerCallback()\n")
+        .expect("source should parse");
+    let diagnostics = diagnostics(
+        &parsed,
+        DiagnosticsConfig {
+            rules: false,
+            unused_locals: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+    let quick_fixes = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range(1, 7),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let fix_all = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)));
+    assert!(quick_fixes
+        .iter()
+        .all(|action| action.title != "Remove unused local"));
+    assert!(fix_all.is_empty());
+}
+
+#[test]
+fn removes_unused_local_global_and_nested_functions() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"local function unusedLocal()
+end
+function unusedGlobal()
+end
+local function outer()
+  local function nestedUnused()
+  end
+  return 1
+end
+print(outer())
+"#,
+    )
+    .expect("source should parse");
+    let diagnostics = diagnostics(
+        &parsed,
+        DiagnosticsConfig {
+            rules: false,
+            unused_locals: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| { diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_FUNCTION) })
+            .count(),
+        3
+    );
+
+    for (line, end_line) in [(1, 3), (3, 5), (6, 8)] {
+        let actions = code_actions_parsed_source(
+            &parsed,
+            &diagnostics,
+            range_line(line),
+            std::path::Path::new("src"),
+            "tua",
+        );
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Remove unused function")
+            .unwrap_or_else(|| panic!("line {line} should have a function removal: {actions:#?}"));
+        let edit = &action.edit.changes[&parsed.path][0];
+
+        assert_eq!(edit.new_text, "");
+        assert_eq!(
+            edit.span,
+            SourceSpan {
+                start: SourcePosition { line, column: 1 },
+                end: SourcePosition {
+                    line: end_line,
+                    column: 1,
+                },
+            }
+        );
+    }
+
+    let fix_all = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+
+    assert_eq!(fix_all.len(), 1);
+    assert_eq!(fix_all[0].edit.changes[&parsed.path].len(), 3);
+}
+
+#[test]
+fn unused_function_removal_preserves_adjacent_statements() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local function unused() end print(\"keep\")\n",
+    )
+    .expect("source should parse");
+    let diagnostics = diagnostics(
+        &parsed,
+        DiagnosticsConfig {
+            rules: false,
+            unused_locals: true,
+            ..DiagnosticsConfig::default()
+        },
+    );
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+    );
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Remove unused function")
+        .expect("unused function removal should be present");
+    let edit = &action.edit.changes[&parsed.path][0];
+
+    assert_eq!(
+        source_text_for_span(&parsed.source, edit.span),
+        Some("local function unused() end")
+    );
+}
+
+#[test]
 fn renames_duplicate_table_key() {
     let parsed = parse_tua_source(
         "src/main.tua",
@@ -559,6 +704,52 @@ local Z = require("z")
 print(A, Z)
 "#
     );
+}
+
+#[test]
+fn import_source_actions_use_resolved_bindings_and_semantic_usages() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"local Types = require("types")
+local Unused = require("unused")
+local _Intentional = require("intentional")
+local function require(name)
+  return { name = name }
+end
+local Custom = require("custom")
+local value: Types.Player = nil
+print(value, "Unused") -- Unused is text, not a binding use
+"#,
+    )
+    .expect("source should parse");
+    let remove = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceRemoveUnusedImports],
+    );
+    let organize = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &[],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceOrganizeImports],
+    );
+    let removed = action_document_text(&remove[0], "src/main.tua");
+    let organized = action_document_text(&organize[0], "src/main.tua");
+
+    assert!(!removed.contains("local Unused ="));
+    assert!(removed.contains("local Types = require(\"types\")"));
+    assert!(removed.contains("local _Intentional = require(\"intentional\")"));
+    assert!(removed.contains("local Custom = require(\"custom\")"));
+
+    assert!(!organized.contains("local Unused ="));
+    assert!(organized.contains("local Types = require(\"types\")"));
+    assert!(organized.contains("local _Intentional = require(\"intentional\")"));
+    assert!(organized.contains("local Custom = require(\"custom\")"));
 }
 
 #[test]

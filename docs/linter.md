@@ -35,7 +35,8 @@ share an existing Tua code because they are the same analysis.
 | `LocalShadow` | `TL4035` |
 | `SameLineStatement` | `TL4036` |
 | `MultiLineStatement` | `TL4037` |
-| `LocalUnused`, `FunctionUnused` | `TL4005` |
+| `LocalUnused` | `TL4005` |
+| `FunctionUnused` | `TL4055` |
 | `ImportUnused` | `TL4054` |
 | `BuiltinGlobalWrite` | `TL4038` |
 | `PlaceholderRead` | `TL4039` |
@@ -74,6 +75,25 @@ block. It also reports locals that hide a user global referenced anywhere in
 the file. Shadowing across function boundaries, unused locals, duplicate
 declarations, Lua/LOVE builtins, and configured runtime globals do not produce
 this warning.
+
+`LocalUnused` treats reads in default-parameter expressions and nested closures
+as uses, but does not report unused numeric or generic `for` bindings. Prefix an
+intentionally unused local with `_` to silence the warning. The editor only
+offers to remove an unused declaration when its initializer is safe to discard;
+calls and other potentially effectful expressions are preserved.
+
+`FunctionUnused` reports direct local and unqualified user-global function
+declarations that are never read. Nested declarations participate in their
+lexical scope, while `_`-prefixed names remain intentionally unused. The editor
+can remove the complete unused declaration, including a multiline body.
+
+`ImportUnused` reports unused bindings initialized by a direct call to the
+global `require`, including computed module names, or by Tua's static
+`import(...)` form. Calls to a lexically shadowed `require` remain ordinary
+local initializers. Qualified type references and nested value references count
+as uses, while `_`-prefixed bindings remain intentionally unused. Import source
+actions only rewrite compiler-resolved static bindings; dynamic `require`
+calls and shadowed functions are preserved.
 
 `DeprecatedGlobal` depends on a host-provided deprecated-global catalog, and
 `DeprecatedApi` depends on deprecation metadata for the resolved external API.

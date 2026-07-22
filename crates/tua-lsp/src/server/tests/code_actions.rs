@@ -264,6 +264,49 @@ unused_locals = true
         })
     );
 }
+
+#[test]
+fn code_action_removes_unused_function() {
+    let temp = TempProject::new("code-action-unused-function");
+    let source = "local function unused()\nend\nlocal function used()\nend\nused()\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+rules = false
+unused_locals = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL4055")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1);
+    server.send(code_action_request(2, &uri, 0, 0, 1, 3, diagnostics));
+
+    let action = code_action_result(server.output(), 2, 0);
+
+    assert_eq!(action["title"], "Remove unused function");
+    assert_eq!(action["edit"]["changes"][&uri][0]["newText"], "");
+    assert_eq!(
+        action["edit"]["changes"][&uri][0]["range"],
+        json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 2, "character": 0 }
+        })
+    );
+}
+
 #[test]
 fn code_action_renames_duplicate_table_key() {
     let temp = TempProject::new("code-action-duplicate-key");
@@ -409,6 +452,32 @@ local Z = require("z")
 print(A, Z)
 "#
     );
+}
+
+#[test]
+fn import_source_actions_preserve_shadowed_require_calls() {
+    let uri = "file:///tmp/code-action-shadowed-require.tua";
+    let source = r#"local function require(name)
+  return { name = name }
+end
+local Custom = require("custom")
+local Unused = import("unused")
+"#;
+    let expected = r#"local function require(name)
+  return { name = name }
+end
+local Custom = require("custom")
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        code_action_request_with_only(2, uri, &["source.removeUnusedImports"], Vec::new()),
+        code_action_request_with_only(3, uri, &["source.organizeImports"], Vec::new()),
+    ]);
+    let remove = code_action_result(&output, 2, 0);
+    let organize = code_action_result(&output, 3, 0);
+
+    assert_eq!(remove["edit"]["changes"][uri][0]["newText"], expected);
+    assert_eq!(organize["edit"]["changes"][uri][0]["newText"], expected);
 }
 
 #[test]

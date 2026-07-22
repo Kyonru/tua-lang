@@ -112,7 +112,7 @@ enforced separately with `tua fmt --check`.
 | `TL4002` | A static `require` or `import` target cannot be resolved. | `missing_requires` |
 | `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
 | `TL4004` | A variable read has no known declaration or allowed global. | `undefined_variables` |
-| `TL4005` | A local is declared but never used. | `unused_locals` |
+| `TL4005` | A non-function local is declared but never used. | `unused_locals` |
 | `TL4006` | A function parameter is never used. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |
 | `TL4008` | A function declares the same parameter more than once. | `duplicate_parameters` |
@@ -157,7 +157,8 @@ enforced separately with `tua fmt --check`.
 | `TL4051` | Comparison precedence is ambiguous or behaves unlike a chained comparison. | `rules` |
 | `TL4052` | A global can be local to its common enclosing function, or every read follows a definite function-local write. | `rules` |
 | `TL4053` | A function returns values on one path and implicitly returns none on another. | `rules` |
-| `TL4054` | A static `require` or `import` binding is unused. | `rules` |
+| `TL4054` | A direct global `require` or static `import` binding is unused. | `rules` |
+| `TL4055` | A direct local or user-global function declaration is never used. | `unused_locals` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running
