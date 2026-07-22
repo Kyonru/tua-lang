@@ -208,6 +208,8 @@ VS Code can override them with `tua.format.indentWidth`,
 Quick fixes and source actions include:
 
 - fixing safe diagnostics in the current file;
+- manually renaming a duplicate table key when the intended replacement is
+  known; this intent-dependent edit is excluded from safe fix-all;
 - removing unused local values and function declarations when their complete
   source range is compiler-proven;
 - organizing, sorting, and removing compiler-resolved unused static imports

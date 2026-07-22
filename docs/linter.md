@@ -147,6 +147,13 @@ the exact placeholder name `_` remains valid. The `duplicate_parameters`
 setting can enable the parameter check without enabling the complete standard
 rule set.
 
+`TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
+strings and signed numeric spellings cannot hide a duplicate. It also reports
+explicit numeric keys that overlap list entries and repeated named fields in
+Tua table type shapes. Diagnostics identify the earlier field or the conflicting
+list entry. The dedicated `duplicate_keys` setting enables this complete check
+even when the standard rule set is disabled.
+
 `LocalUnused` treats reads in default-parameter expressions and nested closures
 as uses, but does not report unused numeric or generic `for` bindings. Prefix an
 intentionally unused local with `_` to silence the warning. The editor only

@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use full_moon::ast::luau::{TypeFieldKey, TypeInfo};
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Parameter, Prefix,
     Suffix, TableConstructor, Var,
 };
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::tokenizer::{StringLiteralQuoteType, TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{
@@ -263,30 +264,62 @@ impl Visitor for LintVisitor<'_> {
             return;
         }
 
-        let mut seen = BTreeMap::<String, String>::new();
+        let mut seen = BTreeMap::<LiteralTableKey, DuplicateTableKeyOrigin>::new();
+        let list_fields = table
+            .fields()
+            .iter()
+            .filter(|field| matches!(field, Field::NoKey(_)))
+            .count();
 
-        if self.config.rules {
-            let list_fields = table
-                .fields()
-                .iter()
-                .filter(|field| matches!(field, Field::NoKey(_)))
-                .count();
-
-            for index in 1..=list_fields {
-                seen.insert(table_numeric_key(index as f64), index.to_string());
-            }
+        for index in 1..=list_fields {
+            seen.insert(
+                LiteralTableKey::number(index as f64),
+                DuplicateTableKeyOrigin::ListEntry(index),
+            );
         }
 
         for field in table.fields() {
-            let Some((key, label, position)) = table_field_key(field) else {
+            let Some(field_key) = table_field_key(field) else {
                 continue;
             };
 
-            if seen.insert(key, label.clone()).is_some() {
+            if let Some(origin) = seen.insert(
+                field_key.identity,
+                DuplicateTableKeyOrigin::Explicit(field_key.position),
+            ) {
                 self.diagnostics.push(duplicate_key_diagnostic(
                     &self.parsed.path,
+                    field_key.position,
+                    &field_key.label,
+                    origin,
+                ));
+            }
+        }
+    }
+
+    fn visit_type_info(&mut self, type_info: &TypeInfo) {
+        if !self.config.rules && !self.config.duplicate_keys {
+            return;
+        }
+
+        let TypeInfo::Table { fields, .. } = type_info else {
+            return;
+        };
+        let mut seen = BTreeMap::<String, SourcePosition>::new();
+
+        for field in fields {
+            let TypeFieldKey::Name(key) = field.key() else {
+                continue;
+            };
+            let name = token_text(key).trim_end_matches('?').to_owned();
+            let position = token_position(key);
+
+            if let Some(origin) = seen.insert(name.clone(), position) {
+                self.diagnostics.push(duplicate_type_field_diagnostic(
+                    &self.parsed.path,
                     position,
-                    &label,
+                    &name,
+                    origin,
                 ));
             }
         }
@@ -2151,41 +2184,127 @@ fn is_placeholder(name: &str) -> bool {
     name == "_"
 }
 
-fn table_field_key(field: &Field) -> Option<(String, String, SourcePosition)> {
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum LiteralTableKey {
+    String(Vec<u8>),
+    Number(u64),
+    Boolean(bool),
+}
+
+impl LiteralTableKey {
+    fn number(value: f64) -> Self {
+        let normalized = if value == 0.0 { 0.0 } else { value };
+
+        Self::Number(normalized.to_bits())
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedTableFieldKey {
+    identity: LiteralTableKey,
+    label: String,
+    position: SourcePosition,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum DuplicateTableKeyOrigin {
+    ListEntry(usize),
+    Explicit(SourcePosition),
+}
+
+fn table_field_key(field: &Field) -> Option<ResolvedTableFieldKey> {
     match field {
         Field::NameKey { key, .. } => {
             let label = token_text(key);
 
-            Some((format!("string:{label}"), label, token_position(key)))
+            Some(ResolvedTableFieldKey {
+                identity: LiteralTableKey::String(label.as_bytes().to_vec()),
+                label,
+                position: token_position(key),
+            })
         }
         Field::ExpressionKey { key, .. } => literal_table_key(key),
         _ => None,
     }
 }
 
-fn literal_table_key(expression: &Expression) -> Option<(String, String, SourcePosition)> {
+fn literal_table_key(expression: &Expression) -> Option<ResolvedTableFieldKey> {
     match expression {
         Expression::String(token) => {
             let label = string_literal_value(token)?;
 
-            Some((format!("string:{label}"), label, token_position(token)))
+            Some(ResolvedTableFieldKey {
+                identity: LiteralTableKey::String(string_literal_runtime_bytes(token)?),
+                label,
+                position: token_position(token),
+            })
         }
         Expression::Number(token) => {
             let label = number_literal_text(token)?;
             let value = parse_lua_number(&label)?;
 
-            Some((table_numeric_key(value), label, token_position(token)))
+            Some(ResolvedTableFieldKey {
+                identity: LiteralTableKey::number(value),
+                label,
+                position: token_position(token),
+            })
         }
         Expression::Symbol(token) => {
             let label = token_text(token);
 
-            matches!(label.as_str(), "true" | "false")
-                .then(|| (format!("boolean:{label}"), label, token_position(token)))
+            match label.as_str() {
+                "true" => Some(ResolvedTableFieldKey {
+                    identity: LiteralTableKey::Boolean(true),
+                    label,
+                    position: token_position(token),
+                }),
+                "false" => Some(ResolvedTableFieldKey {
+                    identity: LiteralTableKey::Boolean(false),
+                    label,
+                    position: token_position(token),
+                }),
+                _ => None,
+            }
+        }
+        Expression::UnaryOperator {
+            unop: ast::UnOp::Minus(_),
+            expression: inner,
+        } => {
+            let value = numeric_table_key_value(inner)?;
+
+            Some(ResolvedTableFieldKey {
+                identity: LiteralTableKey::number(-value),
+                label: expression.to_string().trim().to_owned(),
+                position: node_position(expression),
+            })
         }
         Expression::Parentheses { expression, .. }
         | Expression::TypeAssertion { expression, .. } => literal_table_key(expression),
         _ => None,
     }
+}
+
+fn numeric_table_key_value(expression: &Expression) -> Option<f64> {
+    match expression {
+        Expression::Number(token) => parse_lua_number(&number_literal_text(token)?),
+        Expression::UnaryOperator {
+            unop: ast::UnOp::Minus(_),
+            expression,
+        } => numeric_table_key_value(expression).map(|value| -value),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => numeric_table_key_value(expression),
+        _ => None,
+    }
+}
+
+pub(crate) fn table_has_literal_string_key(table: &TableConstructor, candidate: &str) -> bool {
+    let candidate = LiteralTableKey::String(candidate.as_bytes().to_vec());
+
+    table.fields().iter().any(|field| {
+        table_field_key(field)
+            .map(|field| field.identity == candidate)
+            .unwrap_or(false)
+    })
 }
 
 fn require_module_literal(function_call: &FunctionCall) -> Option<(String, SourcePosition)> {
@@ -2342,6 +2461,130 @@ fn string_literal_value(token: &TokenReference) -> Option<String> {
     }
 }
 
+fn string_literal_runtime_bytes(token: &TokenReference) -> Option<Vec<u8>> {
+    let TokenType::StringLiteral {
+        literal,
+        quote_type,
+        ..
+    } = token.token().token_type()
+    else {
+        return None;
+    };
+
+    match quote_type {
+        StringLiteralQuoteType::Brackets => Some(long_string_runtime_bytes(literal.as_bytes())),
+        StringLiteralQuoteType::Double | StringLiteralQuoteType::Single => {
+            decode_short_string_runtime_bytes(literal.as_bytes())
+        }
+        _ => None,
+    }
+}
+
+fn long_string_runtime_bytes(literal: &[u8]) -> Vec<u8> {
+    let literal = if literal.starts_with(b"\r\n") {
+        &literal[2..]
+    } else if literal.starts_with(b"\n") || literal.starts_with(b"\r") {
+        &literal[1..]
+    } else {
+        literal
+    };
+    let mut output = Vec::with_capacity(literal.len());
+    let mut index = 0;
+
+    while index < literal.len() {
+        match literal[index] {
+            b'\r' => {
+                if literal.get(index + 1) == Some(&b'\n') {
+                    index += 1;
+                }
+                output.push(b'\n');
+            }
+            byte => output.push(byte),
+        }
+
+        index += 1;
+    }
+
+    output
+}
+
+fn decode_short_string_runtime_bytes(literal: &[u8]) -> Option<Vec<u8>> {
+    let mut output = Vec::with_capacity(literal.len());
+    let mut index = 0;
+
+    while index < literal.len() {
+        if literal[index] != b'\\' {
+            output.push(literal[index]);
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        let escaped = *literal.get(index)?;
+
+        if escaped.is_ascii_digit() {
+            let start = index;
+            let end = (index + 3).min(literal.len());
+
+            while index < end && literal[index].is_ascii_digit() {
+                index += 1;
+            }
+
+            let value = std::str::from_utf8(&literal[start..index])
+                .ok()?
+                .parse::<u16>()
+                .ok()?;
+            output.push(u8::try_from(value).ok()?);
+            continue;
+        }
+
+        match escaped {
+            b'a' => output.push(0x07),
+            b'b' => output.push(0x08),
+            b'f' => output.push(0x0c),
+            b'n' => output.push(b'\n'),
+            b'r' => output.push(b'\r'),
+            b't' => output.push(b'\t'),
+            b'v' => output.push(0x0b),
+            b'\\' => output.push(b'\\'),
+            b'"' => output.push(b'"'),
+            b'\'' => output.push(b'\''),
+            b'\n' => output.push(b'\n'),
+            b'\r' => {
+                if literal.get(index + 1) == Some(&b'\n') {
+                    index += 1;
+                }
+                output.push(b'\n');
+            }
+            b'x' => {
+                let high = *literal.get(index + 1)?;
+                let low = *literal.get(index + 2)?;
+                output.push(hex_digit(high)? * 16 + hex_digit(low)?);
+                index += 2;
+            }
+            b'z' => {
+                while literal.get(index + 1).is_some_and(u8::is_ascii_whitespace) {
+                    index += 1;
+                }
+            }
+            _ => return None,
+        }
+
+        index += 1;
+    }
+
+    Some(output)
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 fn function_call_expression(expression: &Expression) -> Option<&FunctionCall> {
     match expression {
         Expression::FunctionCall(call) => Some(call),
@@ -2437,20 +2680,62 @@ fn parse_lua_number(text: &str) -> Option<f64> {
     }
 }
 
-fn table_numeric_key(value: f64) -> String {
-    let normalized = if value == 0.0 { 0.0 } else { value };
-    format!("number:{:016x}", normalized.to_bits())
-}
-
-fn duplicate_key_diagnostic(path: &Path, position: SourcePosition, key: &str) -> Diagnostic {
+fn duplicate_key_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    key: &str,
+    origin: DuplicateTableKeyOrigin,
+) -> Diagnostic {
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("duplicate table key `{key}`"),
+        duplicate_table_member_message("table key", key, position, origin),
     )
     .with_code(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY)
+}
+
+fn duplicate_type_field_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    field: &str,
+    origin: SourcePosition,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        duplicate_table_member_message(
+            "table type field",
+            field,
+            position,
+            DuplicateTableKeyOrigin::Explicit(origin),
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY)
+}
+
+fn duplicate_table_member_message(
+    subject: &str,
+    name: &str,
+    position: SourcePosition,
+    origin: DuplicateTableKeyOrigin,
+) -> String {
+    match origin {
+        DuplicateTableKeyOrigin::ListEntry(index) => {
+            format!("{subject} `{name}` duplicates list entry {index}")
+        }
+        DuplicateTableKeyOrigin::Explicit(origin) if origin.line == position.line => format!(
+            "{subject} `{name}` is a duplicate; previously defined at column {}",
+            origin.column
+        ),
+        DuplicateTableKeyOrigin::Explicit(origin) => format!(
+            "{subject} `{name}` is a duplicate; previously defined at line {}",
+            origin.line
+        ),
+    }
 }
 
 fn missing_require_diagnostic(path: &Path, position: SourcePosition, module: &str) -> Diagnostic {

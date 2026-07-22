@@ -541,7 +541,9 @@ fn unused_function_removal_preserves_adjacent_statements() {
 fn renames_duplicate_table_key() {
     let parsed = parse_tua_source(
         "src/main.tua",
-        "local config = { hp = 10, hp = 20 }\nreturn config\n",
+        r#"local config = { hp = 10, ["\104p2"] = 30, hp = 20 }
+return config
+"#,
     )
     .expect("source should parse");
     let diagnostics = diagnostics(
@@ -560,10 +562,24 @@ fn renames_duplicate_table_key() {
     );
 
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].title, "Rename duplicate key to `hp2`");
+    assert_eq!(actions[0].title, "Rename duplicate key to `hp3`");
     assert_eq!(
         actions[0].edit.changes[&std::path::PathBuf::from("src/main.tua")][0].new_text,
-        "hp2"
+        "hp3"
+    );
+
+    let fix_all = code_actions_parsed_source_with_kinds(
+        &parsed,
+        &diagnostics,
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[AssistKind::SourceFixAll],
+    );
+
+    assert!(
+        fix_all.is_empty(),
+        "an intent-dependent duplicate-key rename must not be a safe bulk fix"
     );
 }
 

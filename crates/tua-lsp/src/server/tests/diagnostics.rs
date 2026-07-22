@@ -344,7 +344,7 @@ undefined_variables = true
             && diagnostic["message"]
                 .as_str()
                 .expect("diagnostic message should be a string")
-                .contains("duplicate table key `hp`")
+                == "table key `hp` is a duplicate; previously defined at column 18"
     }));
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic["severity"] == 2

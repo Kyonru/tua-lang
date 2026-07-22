@@ -398,7 +398,9 @@ annotation_mode = "luacats"
 ```
 
 `duplicate_keys`
-: Reports repeated literal keys in table constructors.
+: Reports runtime-equivalent literal keys in table constructors, explicit
+  indices that collide with list entries, and repeated named fields in table
+  type shapes.
 
 `rules`
 : Controls the standard lint rules for `tua check` and language server

@@ -1521,10 +1521,116 @@ local values = {
 return values
 "#,
     );
+    let table_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .collect::<Vec<_>>();
+
+    assert_eq!(table_diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(table_diagnostics[0].line, 4);
+    assert_eq!(table_diagnostics[0].column, 4);
+    assert_eq!(
+        table_diagnostics[0].message,
+        "table key `1.0` duplicates list entry 1"
+    );
+    assert_eq!(table_diagnostics[1].line, 6);
+    assert_eq!(table_diagnostics[1].column, 4);
+    assert_eq!(
+        table_diagnostics[1].message,
+        "table key `2.0` is a duplicate; previously defined at line 5"
+    );
+}
+
+#[test]
+fn table_literal_rule_uses_runtime_string_and_signed_number_keys() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local values = {
+  a = "name",
+  ["\97"] = "decimal escape",
+  [-1] = "integer",
+  [-1.0] = "float",
+}
+return values
+"#,
+    );
+    let table_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .collect::<Vec<_>>();
+
+    assert_eq!(table_diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(table_diagnostics[0].line, 4);
+    assert_eq!(table_diagnostics[0].column, 4);
+    assert_eq!(
+        table_diagnostics[0].message,
+        r"table key `\97` is a duplicate; previously defined at line 3"
+    );
+    assert_eq!(table_diagnostics[1].line, 6);
+    assert_eq!(table_diagnostics[1].column, 4);
+    assert_eq!(
+        table_diagnostics[1].message,
+        "table key `-1.0` is a duplicate; previously defined at line 5"
+    );
+}
+
+#[test]
+fn table_literal_rule_reports_duplicate_table_type_fields() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Shape = {
+  first: number,
+  first: string,
+}
+"#,
+    );
+    let table_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .collect::<Vec<_>>();
+
+    assert_eq!(table_diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(table_diagnostics[0].line, 4);
+    assert_eq!(table_diagnostics[0].column, 3);
+    assert_eq!(
+        table_diagnostics[0].message,
+        "table type field `first` is a duplicate; previously defined at line 3"
+    );
+}
+
+#[test]
+fn duplicate_keys_option_includes_list_entries_and_table_type_fields() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local values = {
+  "implicit",
+  [1] = "explicit",
+}
+type Shape = {
+  value: number,
+  value: string,
+}
+return values
+"#,
+        &DiagnosticsConfig {
+            duplicate_keys: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("the dedicated duplicate-key option should report every table collision");
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
 
     assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_TABLE_KEY),
-        2,
+        messages,
+        vec![
+            "table key `1` duplicates list entry 1",
+            "table type field `value` is a duplicate; previously defined at line 7",
+        ],
         "{diagnostics:#?}"
     );
 }

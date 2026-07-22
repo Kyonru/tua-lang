@@ -323,9 +323,14 @@ fn fix_all_action(
 ) -> Option<Assist> {
     let mut edits = Vec::new();
     let full_range = full_document_range(&parsed.source);
+    let safe_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code != Some(DiagnosticCode::LINT_DUPLICATE_TABLE_KEY))
+        .cloned()
+        .collect::<Vec<_>>();
 
     for action in
-        diagnostic_quick_fix_actions(parsed, diagnostics, full_range, source_dir, extension)
+        diagnostic_quick_fix_actions(parsed, &safe_diagnostics, full_range, source_dir, extension)
     {
         if !action.edit.create_files.is_empty() {
             continue;
@@ -1756,22 +1761,10 @@ fn name_key_at(table: &TableConstructor, position: SourcePosition) -> Option<(So
 }
 
 fn unique_key_name(base: &str, table: &TableConstructor) -> String {
-    let used = table
-        .fields()
-        .iter()
-        .filter_map(|field| {
-            let Field::NameKey { key, .. } = field else {
-                return None;
-            };
-
-            Some(token_text(key))
-        })
-        .collect::<BTreeSet<_>>();
-
     for index in 2.. {
         let candidate = format!("{base}{index}");
 
-        if !used.contains(&candidate) {
+        if !crate::linter::table_has_literal_string_key(table, &candidate) {
             return candidate;
         }
     }

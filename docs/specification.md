@@ -268,6 +268,10 @@ globals.
 Local-shadow guidance is limited to used bindings in the same function and
 user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
+Table-literal guidance compares literal keys by LuaJIT runtime identity,
+including escaped strings, signed numbers, and implicit list indices. The same
+diagnostic reports repeated named fields in Tua table type shapes when the
+later field would otherwise silently replace the earlier contract.
 Duplicate-local guidance uses `TL4043` for repeated names in local declarations
 and parameter lists, accounts for implicit method `self`, and exempts the exact
 placeholder `_`.

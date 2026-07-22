@@ -108,7 +108,7 @@ enforced separately with `tua fmt --check`.
 
 | Code | Meaning | Configuration |
 | --- | --- | --- |
-| `TL4001` | A literal table declares the same key more than once. | `duplicate_keys` |
+| `TL4001` | A table constructor repeats a runtime-equivalent literal key, or a table type repeats a named field. | `duplicate_keys` |
 | `TL4002` | A static `require` or `import` target cannot be resolved. | `missing_requires` |
 | `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
 | `TL4004` | A variable read has no known declaration or allowed global. | `undefined_variables` |
@@ -228,7 +228,7 @@ Some diagnostics expose conservative editor fixes:
 
 | Code | Available fix |
 | --- | --- |
-| `TL4001` | Rename a duplicate table key. |
+| `TL4001` | Manually rename a duplicate table key; excluded from safe fix-all because the intended key is ambiguous. |
 | `TL4002` | Create a missing project module. |
 | `TL4003` | Remove a self-assignment. |
 | `TL4005` | Remove an unused local. |
