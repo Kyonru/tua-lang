@@ -482,12 +482,15 @@ struct SymbolAnalyzer<'a> {
     diagnostics: Vec<Diagnostic>,
     scopes: Vec<Scope>,
     declarations: Vec<Declaration>,
+    configured_globals: BTreeSet<String>,
     known_globals: BTreeSet<String>,
     defined_globals: BTreeSet<String>,
+    shadowable_globals: BTreeMap<String, SourcePosition>,
     unresolved_global_reads: Vec<UnresolvedGlobalRead>,
     user_globals: BTreeMap<String, GlobalUsage>,
     function_stack: Vec<FunctionContext>,
     next_function_id: usize,
+    next_declaration_group: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -538,6 +541,9 @@ struct Declaration {
     name: String,
     position: SourcePosition,
     kind: DeclarationKind,
+    function_id: Option<usize>,
+    declaration_group: usize,
+    shadowed_local: Option<usize>,
     used: bool,
     called: bool,
     initialized: bool,
@@ -551,6 +557,7 @@ enum DeclarationKind {
     LocalFunction,
     Import,
     Parameter,
+    ImplicitSelf,
 }
 
 impl<'a> SymbolAnalyzer<'a> {
@@ -563,18 +570,22 @@ impl<'a> SymbolAnalyzer<'a> {
             diagnostics: Vec::new(),
             scopes: Vec::new(),
             declarations: Vec::new(),
+            configured_globals: configured_globals.clone(),
             known_globals: configured_globals.clone(),
             defined_globals: configured_globals,
+            shadowable_globals: BTreeMap::new(),
             unresolved_global_reads: Vec::new(),
             user_globals: BTreeMap::new(),
             function_stack: Vec::new(),
             next_function_id: 0,
+            next_declaration_group: 0,
         }
     }
 
     fn analyze(mut self) -> Vec<Diagnostic> {
         self.analyze_block(self.parsed.ast.nodes());
         self.resolve_unresolved_global_reads();
+        self.report_local_shadows();
 
         if self.config.rules {
             for (name, usage) in &self.user_globals {
@@ -596,6 +607,53 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         self.diagnostics
+    }
+
+    fn report_local_shadows(&mut self) {
+        if !self.config.rules {
+            return;
+        }
+
+        let mut diagnostics = Vec::new();
+
+        for declaration in &self.declarations {
+            if !declaration.used {
+                continue;
+            }
+
+            if let Some(shadowed_id) = declaration.shadowed_local {
+                let Some(shadowed) = self.declarations.get(shadowed_id) else {
+                    continue;
+                };
+
+                if declaration.declaration_group == shadowed.declaration_group
+                    || (declaration.kind == DeclarationKind::LocalFunction
+                        && shadowed.kind == DeclarationKind::LocalFunction)
+                    || declaration.function_id != shadowed.function_id
+                {
+                    continue;
+                }
+
+                diagnostics.push(local_shadow_diagnostic(
+                    &self.parsed.path,
+                    declaration.position,
+                    &declaration.name,
+                    shadowed.position,
+                ));
+                continue;
+            }
+
+            if let Some(global_position) = self.shadowable_globals.get(&declaration.name) {
+                diagnostics.push(local_shadows_global_diagnostic(
+                    &self.parsed.path,
+                    declaration.position,
+                    &declaration.name,
+                    *global_position,
+                ));
+            }
+        }
+
+        self.diagnostics.extend(diagnostics);
     }
 
     fn analyze_block(&mut self, block: &ast::Block) {
@@ -666,12 +724,14 @@ impl<'a> SymbolAnalyzer<'a> {
                 }
 
                 self.enter_scope(BTreeMap::new());
+                let declaration_group = self.next_declaration_group();
 
                 for name in for_stmt.names() {
                     self.declare(
                         token_text(name),
                         token_position(name),
                         DeclarationKind::Local,
+                        declaration_group,
                     );
                 }
 
@@ -698,10 +758,12 @@ impl<'a> SymbolAnalyzer<'a> {
                 }
 
                 self.enter_scope(BTreeMap::new());
+                let declaration_group = self.next_declaration_group();
                 self.declare(
                     token_text(for_stmt.index_variable()),
                     token_position(for_stmt.index_variable()),
                     DeclarationKind::Local,
+                    declaration_group,
                 );
 
                 for stmt in for_stmt.block().stmts() {
@@ -814,6 +876,7 @@ impl<'a> SymbolAnalyzer<'a> {
             self.analyze_expression(expression);
         }
 
+        let declaration_group = self.next_declaration_group();
         for (index, name) in names.into_iter().enumerate() {
             self.declare_with_initialization(
                 token_text(name),
@@ -824,15 +887,18 @@ impl<'a> SymbolAnalyzer<'a> {
                     DeclarationKind::Local
                 },
                 expression_initializes_local(&expressions, index),
+                declaration_group,
             );
         }
     }
 
     fn analyze_local_function(&mut self, function: &ast::LocalFunction) {
+        let declaration_group = self.next_declaration_group();
         self.declare(
             token_text(function.name()),
             token_position(function.name()),
             DeclarationKind::LocalFunction,
+            declaration_group,
         );
         self.analyze_function_body(function.body(), None);
     }
@@ -878,9 +944,10 @@ impl<'a> SymbolAnalyzer<'a> {
             conditional_depth: 0,
         });
         self.enter_scope(future_locals_for_block(body.block()));
+        let declaration_group = self.next_declaration_group();
 
         if let Some(position) = implicit_self {
-            self.declare_implicit_self(position);
+            self.declare_implicit_self(position, declaration_group);
         }
 
         for parameter in body.parameters() {
@@ -889,6 +956,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     token_text(name),
                     token_position(name),
                     DeclarationKind::Parameter,
+                    declaration_group,
                 );
             }
         }
@@ -1121,8 +1189,14 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
-    fn declare(&mut self, name: String, position: SourcePosition, kind: DeclarationKind) {
-        self.declare_with_initialization(name, position, kind, true);
+    fn declare(
+        &mut self,
+        name: String,
+        position: SourcePosition,
+        kind: DeclarationKind,
+        declaration_group: usize,
+    ) {
+        self.declare_with_initialization(name, position, kind, true, declaration_group);
     }
 
     fn declare_with_initialization(
@@ -1131,19 +1205,10 @@ impl<'a> SymbolAnalyzer<'a> {
         position: SourcePosition,
         kind: DeclarationKind,
         initialized: bool,
+        declaration_group: usize,
     ) {
-        if self.config.rules
-            && !should_ignore_unused(&name)
-            && self
-                .scopes
-                .iter()
-                .rev()
-                .skip(1)
-                .any(|scope| scope.bindings.contains_key(&name))
-        {
-            self.diagnostics
-                .push(local_shadow_diagnostic(&self.parsed.path, position, &name));
-        }
+        let shadowed_local = self.resolve_local(&name);
+        let function_id = self.current_function_id();
 
         if let Some(scope) = self.scopes.last_mut() {
             scope.future_locals.remove(&name);
@@ -1153,6 +1218,9 @@ impl<'a> SymbolAnalyzer<'a> {
                 name: name.clone(),
                 position,
                 kind,
+                function_id,
+                declaration_group,
+                shadowed_local,
                 used: false,
                 called: false,
                 initialized,
@@ -1164,7 +1232,10 @@ impl<'a> SymbolAnalyzer<'a> {
         }
     }
 
-    fn declare_implicit_self(&mut self, position: SourcePosition) {
+    fn declare_implicit_self(&mut self, position: SourcePosition, declaration_group: usize) {
+        let shadowed_local = self.resolve_local("self");
+        let function_id = self.current_function_id();
+
         if let Some(scope) = self.scopes.last_mut() {
             scope.future_locals.remove("self");
 
@@ -1172,8 +1243,11 @@ impl<'a> SymbolAnalyzer<'a> {
             self.declarations.push(Declaration {
                 name: "self".to_owned(),
                 position,
-                kind: DeclarationKind::Parameter,
-                used: true,
+                kind: DeclarationKind::ImplicitSelf,
+                function_id,
+                declaration_group,
+                shadowed_local,
+                used: false,
                 called: false,
                 initialized: true,
                 first_read: None,
@@ -1182,6 +1256,12 @@ impl<'a> SymbolAnalyzer<'a> {
             scope.bindings.insert("self".to_owned(), id);
             scope.declarations.push(id);
         }
+    }
+
+    fn next_declaration_group(&mut self) -> usize {
+        let declaration_group = self.next_declaration_group;
+        self.next_declaration_group += 1;
+        declaration_group
     }
 
     fn read_name(&mut self, name: &str, position: SourcePosition) {
@@ -1196,6 +1276,8 @@ impl<'a> SymbolAnalyzer<'a> {
             self.declarations[id].first_read.get_or_insert(position);
             return;
         }
+
+        self.record_shadowable_global(name, position);
 
         if self.is_known_global(name) {
             self.record_global_read(name);
@@ -1280,6 +1362,8 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn record_global_assignment(&mut self, name: &str, position: SourcePosition) {
+        self.record_shadowable_global(name, position);
+
         if !self.user_globals.contains_key(name)
             && (self.known_globals.contains(name)
                 || lua::hover_item(&[name.to_owned()]).is_some()
@@ -1318,6 +1402,24 @@ impl<'a> SymbolAnalyzer<'a> {
             .iter()
             .map(|function| function.id)
             .collect()
+    }
+
+    fn current_function_id(&self) -> Option<usize> {
+        self.function_stack.last().map(|function| function.id)
+    }
+
+    fn record_shadowable_global(&mut self, name: &str, position: SourcePosition) {
+        if !self.config.rules
+            || self.configured_globals.contains(name)
+            || Self::is_builtin_global(name)
+            || name == "love"
+        {
+            return;
+        }
+
+        self.shadowable_globals
+            .entry(name.to_owned())
+            .or_insert(position);
     }
 
     fn is_global_read_before_write(&self, name: &str) -> bool {
@@ -2028,13 +2130,40 @@ fn unused_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -
     .with_code(DiagnosticCode::LINT_UNUSED_IMPORT)
 }
 
-fn local_shadow_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+fn local_shadow_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    shadowed_position: SourcePosition,
+) -> Diagnostic {
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("local `{name}` shadows an outer local"),
+        format!(
+            "local `{name}` shadows a declaration at {}:{}",
+            shadowed_position.line, shadowed_position.column
+        ),
+    )
+    .with_code(DiagnosticCode::LINT_LOCAL_SHADOW)
+}
+
+fn local_shadows_global_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    global_position: SourcePosition,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!(
+            "local `{name}` shadows a global used at {}:{}",
+            global_position.line, global_position.column
+        ),
     )
     .with_code(DiagnosticCode::LINT_LOCAL_SHADOW)
 }

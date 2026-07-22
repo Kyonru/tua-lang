@@ -261,6 +261,9 @@ and cross-file globals remain explicit project configuration.
 Global-local guidance follows common lexical ancestry across nested functions
 and remains conservative around module-scope and conditionally initialized
 globals.
+Local-shadow guidance is limited to used bindings in the same function and
+user globals referenced in the file; runtime-provided globals and nested
+function boundaries remain permissive.
 
 The compiler and language server use the same semantic diagnostics for an
 identical project snapshot. The editor presents those diagnostics without a

@@ -68,6 +68,13 @@ local in that parent. It also reports globals whose reads in separate functions
 all follow an unconditional assignment. Module-scope definitions and reads that
 may occur before a conditional assignment remain valid global patterns.
 
+`LocalShadow` reports a used local that hides an earlier declaration in the
+same function, including a parameter or a sequential declaration in the same
+block. It also reports locals that hide a user global referenced anywhere in
+the file. Shadowing across function boundaries, unused locals, duplicate
+declarations, Lua/LOVE builtins, and configured runtime globals do not produce
+this warning.
+
 `DeprecatedGlobal` depends on a host-provided deprecated-global catalog, and
 `DeprecatedApi` depends on deprecation metadata for the resolved external API.
 Tua does not invent either catalog, so those two rules are not emitted yet.

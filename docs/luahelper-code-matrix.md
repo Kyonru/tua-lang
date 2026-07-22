@@ -138,7 +138,7 @@ enforced separately with `tua fmt --check`.
 | `TL4032` | A local changes between LuaJIT-unfriendly value types. | `jit.enabled` and `jit.variable_type_drift` |
 | `TL4033` | A table gains late fields or changes known field types in a LuaJIT-unfriendly way. | `jit.enabled` and `jit.table_shape_drift` |
 | `TL4034` | A hot loop writes through a dynamic table key. | `jit.enabled` and `jit.hot_loop_hints` |
-| `TL4035` | A local shadows an outer local. | `rules` |
+| `TL4035` | A used local shadows a declaration in the same function or a user global referenced in the file. | `rules` |
 | `TL4036` | Adjacent statements share a line without an explicit separator. | `rules` |
 | `TL4037` | A continuation line is not indented relative to its statement. | `rules` |
 | `TL4038` | An assignment overwrites a builtin global. | `rules` |

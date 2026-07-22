@@ -45,6 +45,7 @@ fn standard_rules_report_symbol_rules() {
 local Outer = 1
 do
   local Outer = 2
+  print(Outer)
 end
 
 local uninitialized
@@ -79,6 +80,155 @@ end
             "expected {code} in {diagnostics:#?}"
         );
     }
+}
+
+#[test]
+fn local_shadow_reports_same_function_redeclarations_and_parameters() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local value = 1
+print(value)
+local value = 2
+print(value)
+
+local function increment(amount)
+  local amount = amount + 1
+  return amount
+end
+
+print(increment(1))
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        2,
+        "{diagnostics:#?}"
+    );
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::LINT_LOCAL_SHADOW)
+            && diagnostic.message.contains("declaration at 2:7")
+    }));
+}
+
+#[test]
+fn local_shadow_reports_nested_loop_indices() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function iterate()
+  for i = 1, 10 do
+    for i = 1, 10 do
+      print(i)
+    end
+  end
+end
+
+iterate()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn local_shadow_ignores_inter_function_shadowing() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local value = 1
+
+local function inner()
+  local value = 2
+  return value
+end
+
+print(value, inner())
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn local_shadow_reports_user_globals_regardless_of_source_order() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+do
+  local Project = {}
+  print(Project)
+end
+
+Project = {}
+"#,
+    );
+
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_LOCAL_SHADOW))
+        .expect("a used local should shadow a user global referenced later in the file");
+
+    assert!(
+        diagnostic.message.contains("global used at 7:1"),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn local_shadow_ignores_unused_duplicate_builtin_and_configured_bindings() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local outer = 1
+do
+  local outer = 2
+end
+print(outer)
+
+local duplicate, duplicate = 1, 2
+print(duplicate)
+
+local function repeated() end
+local function repeated() end
+repeated()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_SHADOW),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_LOCAL),
+        1,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_FUNCTION),
+        1,
+        "{diagnostics:#?}"
+    );
+
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local math = math
+local ConfiguredGlobal = ConfiguredGlobal
+print(math, ConfiguredGlobal)
+"#,
+        &DiagnosticsConfig {
+            rules: true,
+            globals: vec!["ConfiguredGlobal".to_owned()],
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect("builtin and configured globals should remain safe local names");
 }
 
 #[test]
