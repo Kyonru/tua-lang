@@ -85,6 +85,17 @@ when they already contain unreachable statements. Direct calls to the resolved
 Lua builtins `error(...)` and `assert(false)` count as errors; lexically shadowed,
 configured, or assigned globals with those names remain ordinary calls.
 
+`UnknownType` validates string names compared with the resolved LuaJIT builtin
+`type(...)`. Its accepted results are `nil`, `boolean`, `userdata`, `number`,
+`string`, `table`, `function`, `thread`, and LuaJIT's `cdata`; Luau-only names
+such as `vector` and `buffer` are not part of Tua's target. Tua does not invent a
+global `typeof`, and lexically shadowed, configured, or assigned `type` functions
+remain ordinary calls. For a statically known LOVE object, the same rule checks
+`object:type()` comparisons and literal `object:typeOf(...)` arguments against
+Tua's generated LOVE 11.x type catalog. Use Tua's `value is Type` syntax for
+named metatable, class, and alias checks; unsupported `is` targets are reported
+separately as `TL1007`.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions

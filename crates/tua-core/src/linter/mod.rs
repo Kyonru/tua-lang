@@ -9,11 +9,14 @@ use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 
-use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
+use crate::ast_utils::{
+    field_chain_before_first_call, plain_field_chain_from_expression, plain_field_chain_from_var,
+};
 use crate::config::{DiagnosticsConfig, JitConfig};
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
+use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
@@ -43,6 +46,27 @@ pub(crate) fn lint_parsed_source(
     }
 
     let mut diagnostics = Vec::new();
+    let scope = config
+        .rules
+        .then(|| scope_map_parsed_source_with_globals(parsed, config.globals.iter().cloned()));
+    let resolved_luajit_type_references = scope
+        .as_ref()
+        .map(|scope| {
+            scope
+                .references()
+                .iter()
+                .filter_map(|reference| {
+                    (reference.name == "type"
+                        && matches!(
+                            &reference.resolution,
+                            ScopeResolution::Global(global)
+                                if global.kind == ScopeGlobalKind::LuaBuiltin
+                        ))
+                    .then_some((reference.span.start.line, reference.span.start.column))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     if config.rules
         || config.duplicate_keys
@@ -55,6 +79,7 @@ pub(crate) fn lint_parsed_source(
             config,
             semantic: SemanticModel::new(parsed, environment),
             type_context: environment.to_type_context(),
+            resolved_luajit_type_references,
             diagnostics: Vec::new(),
         };
 
@@ -67,7 +92,12 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.rules {
-        diagnostics.extend(rules::lint(parsed, &config.globals));
+        diagnostics.extend(rules::lint(
+            parsed,
+            scope
+                .as_ref()
+                .expect("standard rules should build a scope map"),
+        ));
     }
 
     if jit_config.enabled {
@@ -115,6 +145,7 @@ struct LintVisitor<'a> {
     config: &'a DiagnosticsConfig,
     semantic: SemanticModel<'a>,
     type_context: TypeContext,
+    resolved_luajit_type_references: BTreeSet<(usize, usize)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -188,6 +219,10 @@ impl Visitor for LintVisitor<'_> {
     }
 
     fn visit_function_call(&mut self, function_call: &FunctionCall) {
+        if self.config.rules {
+            self.check_love_type_name_argument(function_call);
+        }
+
         if !self.config.missing_requires && !self.config.bad_requires {
             return;
         }
@@ -377,6 +412,11 @@ impl LintVisitor<'_> {
         binop: &ast::BinOp,
         rhs: &Expression,
     ) {
+        if self.config.rules && is_equality_operator(binop) {
+            self.check_runtime_type_name_comparison(lhs, rhs);
+            self.check_runtime_type_name_comparison(rhs, lhs);
+        }
+
         if self.config.impossible_boolean_expressions {
             self.check_impossible_boolean_expression(lhs, binop, rhs);
         }
@@ -408,6 +448,97 @@ impl LintVisitor<'_> {
         if self.config.binary_operator_type_mismatches {
             self.check_binary_operator_type(expression, lhs, binop, rhs);
         }
+    }
+
+    fn check_runtime_type_name_comparison(
+        &mut self,
+        call_expression: &Expression,
+        type_expression: &Expression,
+    ) {
+        let Some(call) = function_call_expression(call_expression) else {
+            return;
+        };
+        let Some((value, position)) = string_expression_value(type_expression) else {
+            return;
+        };
+
+        if self.is_resolved_luajit_type_call(call) {
+            if !runtime_type::is_luajit_type_name(&value) {
+                self.diagnostics.push(unknown_luajit_type_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &value,
+                ));
+            }
+            return;
+        }
+
+        if self.is_love_object_method_call(call, "type")
+            && !lua::love_type_names().contains(&value.as_str())
+        {
+            self.diagnostics.push(unknown_love_type_diagnostic(
+                &self.parsed.path,
+                position,
+                &value,
+            ));
+        }
+    }
+
+    fn check_love_type_name_argument(&mut self, call: &FunctionCall) {
+        if !self.is_love_object_method_call(call, "typeOf") {
+            return;
+        }
+        let Some((value, position)) = first_call_string_argument(call) else {
+            return;
+        };
+        if lua::love_type_names().contains(&value.as_str()) {
+            return;
+        }
+
+        self.diagnostics.push(unknown_love_type_diagnostic(
+            &self.parsed.path,
+            position,
+            &value,
+        ));
+    }
+
+    fn is_resolved_luajit_type_call(&self, call: &FunctionCall) -> bool {
+        let Some(parts) = single_call_field_chain(call) else {
+            return false;
+        };
+        let [name] = parts.as_slice() else {
+            return false;
+        };
+        if name != "type" {
+            return false;
+        }
+        let Prefix::Name(name) = call.prefix() else {
+            return false;
+        };
+        let position = token_position(name);
+
+        self.resolved_luajit_type_references
+            .contains(&(position.line, position.column))
+    }
+
+    fn is_love_object_method_call(&self, call: &FunctionCall, expected_method: &str) -> bool {
+        let Some(parts) = single_call_field_chain(call) else {
+            return false;
+        };
+        let Some((method, receiver_parts)) = parts.split_last() else {
+            return false;
+        };
+        if method != expected_method || receiver_parts.is_empty() {
+            return false;
+        }
+        let Some(receiver_type) = self
+            .semantic
+            .type_of_field_chain(receiver_parts, node_position(call))
+        else {
+            return false;
+        };
+
+        type_is_love_object(&receiver_type, &self.type_context, 0)
     }
 
     fn check_binary_operator_type(
@@ -2215,6 +2346,81 @@ fn string_literal_value(token: &TokenReference) -> Option<String> {
     }
 }
 
+fn function_call_expression(expression: &Expression) -> Option<&FunctionCall> {
+    match expression {
+        Expression::FunctionCall(call) => Some(call),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => function_call_expression(expression),
+        _ => None,
+    }
+}
+
+fn string_expression_value(expression: &Expression) -> Option<(String, SourcePosition)> {
+    match expression {
+        Expression::String(token) => Some((string_literal_value(token)?, token_position(token))),
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => string_expression_value(expression),
+        _ => None,
+    }
+}
+
+fn single_call_field_chain(function_call: &FunctionCall) -> Option<Vec<String>> {
+    let mut call_count = 0;
+    let mut ends_with_call = false;
+
+    for suffix in function_call.suffixes() {
+        ends_with_call = matches!(suffix, Suffix::Call(_));
+        call_count += usize::from(ends_with_call);
+    }
+
+    if call_count != 1 || !ends_with_call {
+        return None;
+    }
+
+    field_chain_before_first_call(function_call)
+}
+
+fn first_call_string_argument(function_call: &FunctionCall) -> Option<(String, SourcePosition)> {
+    let call = function_call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(call) => Some(call),
+        _ => None,
+    })?;
+    let arguments = match call {
+        Call::AnonymousCall(arguments) => arguments,
+        Call::MethodCall(method) => method.args(),
+        _ => return None,
+    };
+
+    match arguments {
+        FunctionArgs::Parentheses { arguments, .. } => {
+            string_expression_value(arguments.iter().next()?)
+        }
+        FunctionArgs::String(token) => Some((string_literal_value(token)?, token_position(token))),
+        FunctionArgs::TableConstructor(_) => None,
+        _ => None,
+    }
+}
+
+fn type_is_love_object(ty: &Type, context: &TypeContext, depth: usize) -> bool {
+    if depth >= 64 {
+        return false;
+    }
+
+    match ty {
+        Type::Alias(name) => context.alias(name).map_or_else(
+            || lua::love_type_names().contains(&name.as_str()),
+            |ty| type_is_love_object(ty, context, depth + 1),
+        ),
+        Type::Union(types) => {
+            !types.is_empty()
+                && types
+                    .iter()
+                    .all(|ty| type_is_love_object(ty, context, depth + 1))
+        }
+        _ => false,
+    }
+}
+
 fn number_literal_text(token: &TokenReference) -> Option<String> {
     match token.token().token_type() {
         TokenType::Number { text } => Some(text.to_string()),
@@ -2372,6 +2578,58 @@ fn builtin_global_write_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE)
+}
+
+fn unknown_luajit_type_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    let message = runtime_type::LUAJIT_TYPE_NAMES
+        .iter()
+        .find(|candidate| candidate.eq_ignore_ascii_case(name))
+        .map_or_else(
+            || {
+                format!(
+                    "unknown LuaJIT runtime type name `{name}`; expected a value returned by the built-in `type(...)`"
+                )
+            },
+            |candidate| {
+                format!(
+                    "unknown LuaJIT runtime type name `{name}`; did you mean `{candidate}`?"
+                )
+            },
+        );
+
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        message,
+    )
+    .with_code(DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE)
+}
+
+fn unknown_love_type_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    let message = lua::love_type_names()
+        .iter()
+        .find(|candidate| candidate.eq_ignore_ascii_case(name))
+        .map_or_else(
+            || {
+                format!(
+                    "unknown LOVE object type name `{name}`; expected a LOVE 11.x object type name"
+                )
+            },
+            |candidate| {
+                format!("unknown LOVE object type name `{name}`; did you mean `{candidate}`?")
+            },
+        );
+
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        message,
+    )
+    .with_code(DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE)
 }
 
 fn placeholder_read_diagnostic(path: &Path, position: SourcePosition) -> Diagnostic {

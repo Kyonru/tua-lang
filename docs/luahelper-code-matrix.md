@@ -144,7 +144,7 @@ enforced separately with `tua fmt --check`.
 | `TL4038` | A direct write overwrites a protected LuaJIT, LOVE, or Tua builtin global. | `rules` |
 | `TL4039` | Placeholder `_` is read as a value. | `rules` |
 | `TL4040` | The first statement in a region is unreachable after paths that always return, break, or call a resolved terminating builtin. | `rules` |
-| `TL4041` | A `type`/`typeof` comparison uses an unknown runtime type name. | `rules` |
+| `TL4041` | A resolved LuaJIT `type(...)` comparison or known LOVE object `type`/`typeOf` call uses an unknown target-specific type name. | `rules` |
 | `TL4042` | A numeric `for` range likely needs a different bound or explicit step. | `rules` |
 | `TL4043` | One local declaration repeats a name. | `rules` |
 | `TL4044` | A static format string, pattern, or date format is invalid. | `rules` |

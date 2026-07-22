@@ -13,11 +13,10 @@ use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast_utils::field_chain_before_first_call;
-use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
+use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
 
-pub(super) fn lint(parsed: &ParsedSource, configured_globals: &[String]) -> Vec<Diagnostic> {
-    let scope = scope_map_parsed_source_with_globals(parsed, configured_globals.iter().cloned());
+pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
     let terminating_builtin_references = scope
         .references()
         .iter()
@@ -165,11 +164,6 @@ impl Visitor for LintRuleVisitor<'_> {
 
         match expression {
             Expression::BinaryOperator { lhs, binop, rhs } => {
-                if matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_)) {
-                    self.check_runtime_type_comparison(lhs, rhs);
-                    self.check_runtime_type_comparison(rhs, lhs);
-                }
-
                 if matches!(binop, ast::BinOp::Or(_))
                     && matches!(
                         unparenthesized_expression(lhs),
@@ -357,36 +351,6 @@ impl LintRuleVisitor<'_> {
                     ),
                 );
             }
-        }
-    }
-
-    fn check_runtime_type_comparison(
-        &mut self,
-        call_expression: &Expression,
-        type_expression: &Expression,
-    ) {
-        let Expression::FunctionCall(call) = unparenthesized_expression(call_expression) else {
-            return;
-        };
-        let Some(parts) = field_chain_before_first_call(call) else {
-            return;
-        };
-        if !matches!(parts.as_slice(), [name] if matches!(name.as_str(), "type" | "typeof")) {
-            return;
-        }
-        let Some(value) = string_literal(type_expression) else {
-            return;
-        };
-        const RUNTIME_TYPES: &[&str] = &[
-            "nil", "boolean", "userdata", "number", "string", "table", "function", "thread",
-            "buffer", "vector", "cdata",
-        ];
-        if !RUNTIME_TYPES.contains(&value.as_str()) {
-            self.push(
-                node_position(type_expression),
-                DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE,
-                format!("unknown runtime type name `{value}`"),
-            );
         }
     }
 

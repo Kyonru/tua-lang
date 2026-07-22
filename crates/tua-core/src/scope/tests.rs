@@ -98,6 +98,32 @@ fn globals_and_unresolved_names_use_the_same_lookup_path() {
 }
 
 #[test]
+fn builtin_references_become_assigned_after_a_global_write() {
+    let source = r#"
+local before = type(value)
+type = customType
+local after = type(value)
+return before, after
+"#;
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+    let map = scope_map_parsed_source(&parsed);
+    let type_kinds = map
+        .references()
+        .iter()
+        .filter(|reference| reference.name == "type")
+        .filter_map(|reference| match &reference.resolution {
+            ScopeResolution::Global(global) => Some(global.kind),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_kinds,
+        vec![ScopeGlobalKind::LuaBuiltin, ScopeGlobalKind::Assigned]
+    );
+}
+
+#[test]
 fn colon_method_self_resolves_to_implicit_parameter() {
     let source = r#"
 local Account = {}

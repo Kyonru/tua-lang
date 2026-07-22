@@ -3,6 +3,13 @@ use full_moon::ast::{Call, Expression, FunctionArgs, FunctionCall, Prefix, Suffi
 use crate::PrimitiveType;
 
 pub(crate) const IS_CHECK_HELPER: &str = "__tua_is";
+pub(crate) const LUAJIT_TYPE_NAMES: &[&str] = &[
+    "nil", "boolean", "userdata", "number", "string", "table", "function", "thread", "cdata",
+];
+
+pub(crate) fn is_luajit_type_name(name: &str) -> bool {
+    LUAJIT_TYPE_NAMES.contains(&name)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RuntimeTypeCheckCall {

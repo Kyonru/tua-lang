@@ -806,6 +806,192 @@ return type(value) == "cdata"
 }
 
 #[test]
+fn unknown_type_validates_luajit_type_names_with_target_specific_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function inspect(value)
+  local upper = type(value) == "String"
+  local luauOnly = "vector" ~= type(value)
+  return upper, luauOnly
+end
+
+return inspect
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "unknown LuaJIT runtime type name `String`; did you mean `string`?",
+            "unknown LuaJIT runtime type name `vector`; expected a value returned by the built-in `type(...)`",
+        ]
+    );
+}
+
+#[test]
+fn unknown_type_accepts_every_luajit_type_result() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function inspect(value)
+  return type(value) == "nil"
+    or type(value) == "boolean"
+    or type(value) == "userdata"
+    or type(value) == "number"
+    or type(value) == "string"
+    or type(value) == "table"
+    or type(value) == "function"
+    or type(value) == "thread"
+    or type(value) == "cdata"
+end
+
+return inspect
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unknown_type_requires_the_resolved_luajit_type_builtin() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function inspect(value)
+  local function type(_value)
+    return "String"
+  end
+
+  local shadowed = type(value) == "String"
+  local function typeof(_value)
+    return "String"
+  end
+  local custom = typeof(value) == "String"
+  return shadowed, custom
+end
+
+type = function(_value)
+  return "String"
+end
+local reassigned = type(1) == "String"
+
+return inspect, reassigned
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE),
+        0,
+        "{diagnostics:#?}"
+    );
+
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+return type(1) == "String"
+"#,
+        &DiagnosticsConfig {
+            rules: true,
+            globals: vec!["type".to_owned()],
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect("a configured `type` function should not be treated as the LuaJIT builtin");
+}
+
+#[test]
+fn unknown_type_validates_known_love_object_type_apis() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function inspect(canvas: Canvas, dynamic: any)
+  local typo = canvas:type() == "Canavs"
+  local concrete = canvas:type() == "Canvas"
+  local parent = canvas:typeOf("Drawable")
+  local misspelled = canvas:typeOf("Drawble")
+  local shorthand = canvas:typeOf "image"
+  local unknownReceiver = dynamic:typeOf("Missing")
+  return typo, concrete, parent, misspelled, shorthand, unknownReceiver
+end
+
+return inspect
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "unknown LOVE object type name `Canavs`; expected a LOVE 11.x object type name",
+            "unknown LOVE object type name `Drawble`; expected a LOVE 11.x object type name",
+            "unknown LOVE object type name `image`; did you mean `Image`?",
+        ]
+    );
+}
+
+#[test]
+fn unknown_type_does_not_confuse_user_aliases_with_love_objects() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Canvas = string
+
+local function inspect(value: Canvas)
+  return value:typeOf("Missing")
+end
+
+return inspect
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unknown_type_leaves_named_runtime_checks_to_the_is_checker() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+type Record = {
+  value: string,
+}
+
+local function inspect(value: any)
+  if value is Record then
+    return true
+  end
+  return false
+end
+
+return inspect
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::TYPE_UNSUPPORTED_RUNTIME_CHECK),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn standard_rules_table_literal_rule_normalizes_numeric_and_implicit_keys() {
     let diagnostics = check_standard_rules_source(
         r#"

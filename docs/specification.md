@@ -268,6 +268,10 @@ globals.
 Local-shadow guidance is limited to used bindings in the same function and
 user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
+Unknown-runtime-type guidance follows resolved builtin identity: LuaJIT
+`type(...)` names and statically known LOVE object `type`/`typeOf` names are
+validated against their target catalogs, while named runtime checks remain the
+responsibility of Tua's `is` checker.
 Unused-local analysis includes reads from default-parameter expressions and
 nested closures, excludes loop bindings and `_`-prefixed names, and only offers
 declaration removal when the initializer is safe to discard.

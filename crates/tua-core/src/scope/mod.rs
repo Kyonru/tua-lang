@@ -741,9 +741,15 @@ impl<'a> ScopeBuilder<'a> {
     }
 
     fn push_global(&mut self, name: String, kind: ScopeGlobalKind) {
+        if let Some(global) = self.globals.get_mut(&name) {
+            if kind == ScopeGlobalKind::Assigned {
+                global.kind = ScopeGlobalKind::Assigned;
+            }
+            return;
+        }
+
         self.globals
-            .entry(name.clone())
-            .or_insert(ScopeGlobal { name, kind });
+            .insert(name.clone(), ScopeGlobal { name, kind });
     }
 }
 
