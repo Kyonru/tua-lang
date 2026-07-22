@@ -631,7 +631,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 ));
             }
 
-            if self.config.rules {
+            if self.config.rules && !is_placeholder(name) {
                 if !usage.common_function_stack.is_empty() {
                     self.diagnostics.push(global_used_as_local_diagnostic(
                         &self.parsed.path,
@@ -1444,7 +1444,7 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn read_name(&mut self, name: &str, position: SourcePosition) {
-        if self.config.rules && name == "_" {
+        if self.config.rules && is_placeholder(name) {
             self.diagnostics
                 .push(placeholder_read_diagnostic(&self.parsed.path, position));
             return;
@@ -2021,7 +2021,11 @@ fn future_locals_for_block(block: &ast::Block) -> BTreeMap<String, SourcePositio
 }
 
 fn should_ignore_unused(name: &str) -> bool {
-    name == "_" || name.starts_with('_')
+    name.starts_with('_')
+}
+
+fn is_placeholder(name: &str) -> bool {
+    name == "_"
 }
 
 fn table_field_key(field: &Field) -> Option<(String, String, SourcePosition)> {
@@ -2376,7 +2380,7 @@ fn placeholder_read_diagnostic(path: &Path, position: SourcePosition) -> Diagnos
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        "placeholder `_` is read as a value",
+        "placeholder value `_` is read here; consider using a named variable",
     )
     .with_code(DiagnosticCode::LINT_PLACEHOLDER_READ)
 }

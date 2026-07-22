@@ -113,6 +113,97 @@ jit = {}
 }
 
 #[test]
+fn placeholder_read_reports_local_and_global_reads_with_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+do
+  local _ = 5
+  print(_)
+  _ = 6
+end
+
+_ = 5
+print(_)
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_PLACEHOLDER_READ))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "placeholder value `_` is read here; consider using a named variable",
+            "placeholder value `_` is read here; consider using a named variable",
+        ]
+    );
+}
+
+#[test]
+fn placeholder_read_covers_parameters_loops_fields_closures_and_compound_assignments() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function consume(_)
+  local read = function()
+    return _
+  end
+  _ += 1
+  _.field = read()
+  return _
+end
+
+for _ = 1, 1 do
+  print(_)
+end
+
+for _, value in ipairs({ 1 }) do
+  print(_, value)
+end
+
+consume({ field = 1 })
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_PLACEHOLDER_READ),
+        6,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn placeholder_writes_do_not_report_placeholder_or_global_local_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function discardLocal()
+  local _ = print("discarded")
+  _ = print("discarded again")
+end
+
+local function discardGlobal()
+  _ = print("discarded globally")
+end
+
+discardLocal()
+discardGlobal()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_PLACEHOLDER_READ),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn standard_rules_report_symbol_rules() {
     let diagnostics = check_standard_rules_source(
         r#"

@@ -71,6 +71,13 @@ writes such as `math.custom = value` do not replace the builtin root and are not
 reported. The protected set follows Tua's LuaJIT/LOVE target rather than
 completion-only entries from other Lua versions.
 
+`PlaceholderRead` treats the exact name `_` as a write-only placeholder for
+locals, parameters, loop bindings, and globals. Plain assignments can discard a
+value without producing unused or global-local guidance. Reading `_`, including
+through a compound assignment or as the base of a field access, reports the
+warning and recommends a named variable. Longer `_`-prefixed names retain their
+normal value semantics while remaining exempt from unused-binding guidance.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions

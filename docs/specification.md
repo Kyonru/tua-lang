@@ -260,6 +260,8 @@ global function declarations anywhere in the current Tua file; runtime-provided
 and cross-file globals remain explicit project configuration.
 Builtin-global-write guidance resolves lexical bindings and protects direct
 writes to the Lua 5.1/LuaJIT, LOVE, and Tua helper globals modeled by the target.
+The exact `_` binding is a write-only placeholder: writes are accepted without
+global-local guidance, while reads recommend choosing a named variable.
 Global-local guidance follows common lexical ancestry across nested functions
 and remains conservative around module-scope and conditionally initialized
 globals.
