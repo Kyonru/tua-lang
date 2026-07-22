@@ -766,6 +766,125 @@ end
 }
 
 #[test]
+fn for_range_reports_downward_and_array_ranges_with_exact_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local items = {}
+
+for index = #items, 1 do
+  print(index)
+end
+
+for index = #items, 0 do
+  print(index)
+end
+
+for index = 8, 1 do
+  print(index)
+end
+
+return items
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FOR_RANGE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "range counts from a length down to 1 but has no negative step",
+            "range counts from a length down to 0; use a negative step and consider changing 0 to 1 because arrays start at 1",
+            "range counts downward but has no negative step",
+        ]
+    );
+}
+
+#[test]
+fn for_range_computes_the_implicit_step_endpoint_from_both_bounds() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+for index = 1.3, 7.5 do
+  print(index)
+end
+
+for index = 1.5, 8 do
+  print(index)
+end
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FOR_RANGE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "range ends at 7.3 instead of 7.5; specify an explicit step",
+            "range ends at 7.5 instead of 8; specify an explicit step",
+        ]
+    );
+}
+
+#[test]
+fn for_range_keeps_aligned_dynamic_and_explicit_step_ranges_quiet() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function iterate(start)
+  for index = 1.5, 8.5 do
+    print(index)
+  end
+
+  for index = start, 8.5 do
+    print(index)
+  end
+
+  for index = 8, 1, -1 do
+    print(index)
+  end
+
+  for index = 1.3, 7.5, 1 do
+    print(index)
+  end
+end
+
+return iterate
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FOR_RANGE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn for_range_parses_hexadecimal_integer_bounds_with_luajit_semantics() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+for index = 0x8, 0x1 do
+  print(index)
+end
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FOR_RANGE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec!["range counts downward but has no negative step"]
+    );
+}
+
+#[test]
 fn standard_rules_comment_directive_rule_ignores_long_strings_and_comments() {
     let diagnostics = check_standard_rules_source(
         r#"

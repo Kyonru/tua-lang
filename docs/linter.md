@@ -96,6 +96,12 @@ Tua's generated LOVE 11.x type catalog. Use Tua's `value is Type` syntax for
 named metatable, class, and alias checks; unsupported `is` targets are reported
 separately as `TL1007`.
 
+`ForRange` checks numeric `for` loops that use Lua's implicit `1` step. It
+reports constant bounds that count downward or cannot land exactly on the limit,
+including decimal and hexadecimal-integer LuaJIT literals, and recognizes the
+common `#items, 1` and `#items, 0` array mistakes. Dynamic bounds remain
+permissive, and writing any explicit step silences this opinionated guidance.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions

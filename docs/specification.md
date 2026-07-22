@@ -272,6 +272,9 @@ Unknown-runtime-type guidance follows resolved builtin identity: LuaJIT
 `type(...)` names and statically known LOVE object `type`/`typeOf` names are
 validated against their target catalogs, while named runtime checks remain the
 responsibility of Tua's `is` checker.
+Numeric-for guidance evaluates constant LuaJIT bounds with the implicit `1`
+step, keeps dynamic bounds permissive, and defers to any explicitly written
+step.
 Unused-local analysis includes reads from default-parameter expressions and
 nested closures, excludes loop bindings and `_`-prefixed names, and only offers
 declaration removal when the initializer is safe to discard.

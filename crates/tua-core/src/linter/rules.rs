@@ -111,16 +111,26 @@ impl Visitor for LintRuleVisitor<'_> {
         let end = numeric_literal(numeric_for.end());
         let reason = match (start, end) {
             (Some(start), Some(end)) if start > end => {
-                Some("range counts downward but has no negative step")
+                Some("range counts downward but has no negative step".to_owned())
             }
             (None, Some(1.0)) if is_length_expression(numeric_for.start()) => {
-                Some("range counts from a length down to 1 but has no negative step")
+                Some("range counts from a length down to 1 but has no negative step".to_owned())
             }
-            (_, Some(end)) if end.fract() != 0.0 => {
-                Some("range has a fractional limit but no explicit step")
+            (None, Some(0.0)) if is_length_expression(numeric_for.start()) => Some(
+                "range counts from a length down to 0; use a negative step and consider changing 0 to 1 because arrays start at 1"
+                    .to_owned(),
+            ),
+            (Some(start), Some(end)) => {
+                let loop_end = start + (end - start).floor();
+
+                (loop_end != end).then(|| {
+                    format!(
+                        "range ends at {loop_end} instead of {end}; specify an explicit step"
+                    )
+                })
             }
             (Some(0.0), None) if is_length_expression(numeric_for.end()) => {
-                Some("range from 0 to a length is usually off by one")
+                Some("range from 0 to a length is usually off by one".to_owned())
             }
             _ => None,
         };
@@ -815,7 +825,7 @@ fn is_length_expression(expression: &Expression) -> bool {
 
 fn numeric_literal(expression: &Expression) -> Option<f64> {
     match expression {
-        Expression::Number(token) => number_text(token)?.replace('_', "").parse().ok(),
+        Expression::Number(token) => super::parse_lua_number(&number_text(token)?),
         Expression::UnaryOperator {
             unop: ast::UnOp::Minus(_),
             expression,
