@@ -17,6 +17,8 @@ end
 
 -- FormatString (TL4044)
 local formatted = string.format("%Q", value)
+local captured = string.match("12", "(%d)%2")
+local methodFormatted = ("%d %"):format(1, 2)
 
 -- TableOperations (TL4047)
 table.insert(items, #items + 1, value)
@@ -35,6 +37,8 @@ local negated = not value == 2
 return {
   unknownType = unknownType,
   formatted = formatted,
+  captured = captured,
+  methodFormatted = methodFormatted,
   misleading = misleading,
   imprecise = imprecise,
   chained = chained,

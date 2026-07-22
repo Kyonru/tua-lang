@@ -282,6 +282,11 @@ responsibility of Tua's `is` checker.
 Numeric-for guidance evaluates constant LuaJIT bounds with the implicit `1`
 step, keeps dynamic bounds permissive, and defers to any explicitly written
 step.
+Format-string guidance resolves the builtin `string` library before validating
+literal LuaJIT/Lua 5.1 printf formats, patterns, captures, and `gsub`
+replacements. It also recognizes literal `("..."):format(...)` calls, skips
+plain `string.find` searches, and leaves host-specific LuaJIT
+`os.date`/`strftime` conversions permissive.
 Unused-local analysis includes reads from default-parameter expressions and
 nested closures, excludes loop bindings and `_`-prefixed names, and only offers
 declaration removal when the initializer is safe to discard.

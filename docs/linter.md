@@ -102,6 +102,15 @@ including decimal and hexadecimal-integer LuaJIT literals, and recognizes the
 common `#items, 1` and `#items, 0` array mistakes. Dynamic bounds remain
 permissive, and writing any explicit step silences this opinionated guidance.
 
+`FormatString` validates literal LuaJIT/Lua 5.1 `string.format` formats, Lua
+patterns, capture references, and literal `string.gsub` replacements on calls
+to the resolved builtin `string` library. Literal receivers also support the
+standard `("..."):format(...)` form. `string.find(..., true)` is a plain search,
+and an unknown `plain` flag stays permissive. Pattern methods such as
+`value:match(...)` are not checked because the receiver is not resolved as the
+builtin library. `os.date` formats remain host-defined by LuaJIT's C `strftime`
+integration and are therefore not labelled invalid by this portable rule.
+
 `UnbalancedAssignment` compares explicit targets and values without guessing a
 function's return count. A shortage ending in a direct call or varargs remains
 valid Lua multi-return code, including intentional selection of a call's first

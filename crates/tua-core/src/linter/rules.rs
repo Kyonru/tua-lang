@@ -31,6 +31,17 @@ pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
             .then_some((reference.span.start.line, reference.span.start.column))
         })
         .collect();
+    let lua_builtin_references = scope
+        .references()
+        .iter()
+        .filter_map(|reference| {
+            matches!(
+                &reference.resolution,
+                ScopeResolution::Global(global) if global.kind == ScopeGlobalKind::LuaBuiltin
+            )
+            .then_some((reference.span.start.line, reference.span.start.column))
+        })
+        .collect();
     let mut visitor = LintRuleVisitor {
         parsed,
         diagnostics: comment_directive_diagnostics(parsed),
@@ -38,6 +49,7 @@ pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
         multiline_table_depth: 0,
         function_names: Vec::new(),
         terminating_builtin_references,
+        lua_builtin_references,
     };
     visitor.visit_ast(&parsed.ast);
     visitor.diagnostics
@@ -50,6 +62,7 @@ struct LintRuleVisitor<'a> {
     multiline_table_depth: usize,
     function_names: Vec<Option<String>>,
     terminating_builtin_references: BTreeSet<(usize, usize)>,
+    lua_builtin_references: BTreeSet<(usize, usize)>,
 }
 
 struct MultiLineStatement {
@@ -200,6 +213,8 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_function_call(&mut self, call: &FunctionCall) {
+        self.check_literal_format_method(call);
+
         let Some(parts) = field_chain_before_first_call(call) else {
             return;
         };
@@ -208,7 +223,9 @@ impl Visitor for LintRuleVisitor<'_> {
             return;
         };
 
-        self.check_format_call(&name, &arguments);
+        if matches!(call.prefix(), Prefix::Name(root) if self.is_lua_builtin_reference(root)) {
+            self.check_format_call(&name, &arguments);
+        }
         self.check_table_operation(&name, &arguments);
     }
 
@@ -407,42 +424,92 @@ impl LintRuleVisitor<'_> {
         }
     }
 
+    fn check_literal_format_method(&mut self, call: &FunctionCall) {
+        let Prefix::Expression(receiver) = call.prefix() else {
+            return;
+        };
+        let Some(Suffix::Call(Call::MethodCall(method))) = call.suffixes().next() else {
+            return;
+        };
+        if token_text(method.name()) == "format" {
+            self.check_printf_expression(receiver);
+        }
+    }
+
+    fn is_lua_builtin_reference(&self, token: &TokenReference) -> bool {
+        let position = token_position(token);
+        self.lua_builtin_references
+            .contains(&(position.line, position.column))
+    }
+
     fn check_format_call(&mut self, name: &str, arguments: &[&Expression]) {
-        let format_index = if name == "string.format" {
-            Some(0)
-        } else if matches!(
-            name,
-            "string.find" | "string.match" | "string.gmatch" | "string.gsub"
-        ) {
-            Some(1)
-        } else if name == "os.date" {
-            Some(0)
-        } else {
-            None
-        };
-        let Some(format_index) = format_index else {
-            return;
-        };
-        let Some(expression) = arguments.get(format_index).copied() else {
-            return;
-        };
+        match name {
+            "string.format" => {
+                if let Some(format) = arguments.first() {
+                    self.check_printf_expression(format);
+                }
+            }
+            "string.find" if should_validate_find_pattern(arguments) => {
+                if let Some(pattern) = arguments.get(1) {
+                    self.check_pattern_expression(pattern);
+                }
+            }
+            "string.match" | "string.gmatch" => {
+                if let Some(pattern) = arguments.get(1) {
+                    self.check_pattern_expression(pattern);
+                }
+            }
+            "string.gsub" => {
+                let captures = arguments
+                    .get(1)
+                    .and_then(|pattern| self.check_pattern_expression(pattern));
+
+                if let Some(replacement) = arguments.get(2) {
+                    self.check_replacement_expression(replacement, captures);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn check_printf_expression(&mut self, expression: &Expression) {
         let Some(format) = string_literal(expression) else {
             return;
         };
-
-        let error = if name == "string.format" {
-            validate_printf_format(&format)
-        } else if name == "os.date" {
-            validate_date_format(&format)
-        } else {
-            validate_lua_pattern(&format)
-        };
-
-        if let Some(error) = error {
+        if let Some(error) = validate_printf_format(&format) {
             self.push(
                 node_position(expression),
                 DiagnosticCode::LINT_FORMAT_STRING,
-                error,
+                format!("invalid format string: {error}"),
+            );
+        }
+    }
+
+    fn check_pattern_expression(&mut self, expression: &Expression) -> Option<usize> {
+        let pattern = string_literal(expression)?;
+
+        match validate_lua_pattern(&pattern) {
+            Ok(captures) => Some(captures),
+            Err(error) => {
+                self.push(
+                    node_position(expression),
+                    DiagnosticCode::LINT_FORMAT_STRING,
+                    format!("invalid match pattern: {error}"),
+                );
+                None
+            }
+        }
+    }
+
+    fn check_replacement_expression(&mut self, expression: &Expression, captures: Option<usize>) {
+        let Some(replacement) = string_literal(expression) else {
+            return;
+        };
+        if let Some(error) = validate_lua_replacement(&replacement, captures) {
+            self.push(
+                node_position(expression),
+                DiagnosticCode::LINT_FORMAT_STRING,
+                format!("invalid match replacement: {error}"),
             );
         }
     }
@@ -611,6 +678,16 @@ fn first_call_arguments(call: &FunctionCall) -> Option<Vec<&Expression>> {
         _ => return None,
     };
     Some(args)
+}
+
+fn should_validate_find_pattern(arguments: &[&Expression]) -> bool {
+    match arguments
+        .get(3)
+        .and_then(|expression| boolean_literal(expression))
+    {
+        Some(plain) => !plain,
+        None => arguments.len() < 4,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -964,6 +1041,18 @@ fn is_false_or_nil(expression: &Expression) -> bool {
     )
 }
 
+fn boolean_literal(expression: &Expression) -> Option<bool> {
+    match unparenthesized_expression(expression) {
+        Expression::Symbol(token) => match token_text(token).as_str() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        },
+        Expression::Parentheses { expression, .. } => boolean_literal(expression),
+        _ => None,
+    }
+}
+
 fn is_comparison_operator(operator: &ast::BinOp) -> bool {
     matches!(
         operator,
@@ -1076,64 +1165,210 @@ fn validate_printf_format(format: &str) -> Option<String> {
         {
             characters.next();
         }
-        while characters.peek().is_some_and(char::is_ascii_digit) {
+
+        let mut width_digits = 0usize;
+        while characters.peek().is_some_and(char::is_ascii_digit) && width_digits < 2 {
             characters.next();
+            width_digits += 1;
         }
+
         if characters.next_if_eq(&'.').is_some() {
-            while characters.peek().is_some_and(char::is_ascii_digit) {
+            let mut precision_digits = 0usize;
+            while characters.peek().is_some_and(char::is_ascii_digit) && precision_digits < 2 {
                 characters.next();
+                precision_digits += 1;
             }
+        }
+        if characters.peek().is_some_and(char::is_ascii_digit) {
+            return Some("format width or precision exceeds two digits".to_owned());
         }
 
         let Some(specifier) = characters.next() else {
-            return Some("unterminated `%` in format string".to_owned());
+            return Some("unfinished format specifier".to_owned());
         };
-        if !"cdiouxXeEfgGqs".contains(specifier) {
+        if !"aAcdiouxXeEfgGqsp".contains(specifier) {
             return Some(format!("invalid format specifier `%{specifier}`"));
         }
     }
     None
 }
 
-fn validate_date_format(format: &str) -> Option<String> {
-    let mut characters = format.chars().peekable();
-    while let Some(character) = characters.next() {
-        if character != '%' {
-            continue;
-        }
-        let Some(specifier) = characters.next() else {
-            return Some("unterminated `%` in date format".to_owned());
-        };
-        if !"%aAbBcCdHIjmMpSUwWxXyYzZ".contains(specifier) {
-            return Some(format!("invalid date format specifier `%{specifier}`"));
-        }
-    }
-    None
-}
+fn validate_lua_pattern(pattern: &str) -> Result<usize, String> {
+    const MAGIC: &[u8] = b"^$()%.[]*+-?)";
+    const CLASSES: &[u8] = b"acdglpsuwxz";
 
-fn validate_lua_pattern(pattern: &str) -> Option<String> {
-    let mut escaped = false;
-    let mut bracket_depth = 0usize;
-    for character in pattern.chars() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match character {
-            '%' => escaped = true,
-            '[' => bracket_depth += 1,
-            ']' if bracket_depth == 0 => return Some("unmatched `]` in Lua pattern".to_owned()),
-            ']' => bracket_depth -= 1,
+    let bytes = pattern.as_bytes();
+    let mut open_captures = Vec::new();
+    let mut total_captures = 0usize;
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' => {
+                index += 1;
+                let Some(&escaped) = bytes.get(index) else {
+                    return Err("unfinished character class".to_owned());
+                };
+
+                if escaped.is_ascii_digit() {
+                    if escaped == b'0' {
+                        return Err("capture references must be between `%1` and `%9`".to_owned());
+                    }
+
+                    let capture = usize::from(escaped - b'0');
+                    if capture > total_captures {
+                        return Err(format!("capture reference `%{capture}` does not exist"));
+                    }
+                    if open_captures.contains(&capture) {
+                        return Err(format!(
+                            "capture reference `%{capture}` must refer to a closed capture"
+                        ));
+                    }
+                } else if escaped.is_ascii_alphabetic() {
+                    match escaped {
+                        b'b' => {
+                            if index + 2 >= bytes.len() {
+                                return Err(
+                                    "balanced match `%b` requires two delimiter characters"
+                                        .to_owned(),
+                                );
+                            }
+                            index += 2;
+                        }
+                        b'f' => {
+                            if bytes.get(index + 1) != Some(&b'[') {
+                                return Err(
+                                    "frontier pattern `%f` must be followed by a character class"
+                                        .to_owned(),
+                                );
+                            }
+                        }
+                        class if !CLASSES.contains(&class.to_ascii_lowercase()) => {
+                            return Err(format!(
+                                "unknown character class `%{}`",
+                                char::from(escaped)
+                            ));
+                        }
+                        _ => {}
+                    }
+                } else if !MAGIC.contains(&escaped) {
+                    return Err(format!(
+                        "`%{}` does not escape a Lua pattern magic character",
+                        char::from(escaped)
+                    ));
+                }
+            }
+            b'[' => {
+                let mut end = index + 1;
+
+                if bytes.get(end) == Some(&b'^') {
+                    end += 1;
+                }
+                if bytes.get(end) == Some(&b']') {
+                    end += 1;
+                }
+
+                while end < bytes.len() && bytes[end] != b']' {
+                    if bytes[end] == b'%' && end + 1 < bytes.len() {
+                        end += 1;
+                    }
+                    end += 1;
+                }
+
+                if end == bytes.len() {
+                    return Err("character class is missing a closing `]`".to_owned());
+                }
+
+                validate_lua_pattern_set(&bytes[index + 1..end], MAGIC, CLASSES)?;
+                index = end;
+            }
+            b'(' => {
+                total_captures += 1;
+                open_captures.push(total_captures);
+            }
+            b')' => {
+                open_captures
+                    .pop()
+                    .ok_or_else(|| "unexpected `)` without a matching `(`".to_owned())?;
+            }
             _ => {}
         }
+
+        index += 1;
     }
-    if escaped {
-        Some("unterminated `%` escape in Lua pattern".to_owned())
-    } else if bracket_depth != 0 {
-        Some("unterminated character class in Lua pattern".to_owned())
+
+    if !open_captures.is_empty() {
+        Err("capture is missing a closing `)`".to_owned())
     } else {
-        None
+        Ok(total_captures)
     }
+}
+
+fn validate_lua_pattern_set(set: &[u8], magic: &[u8], classes: &[u8]) -> Result<(), String> {
+    let mut index = 0usize;
+
+    while index < set.len() {
+        if set[index] == b'%' {
+            index += 1;
+            let Some(&escaped) = set.get(index) else {
+                return Err("unfinished character class".to_owned());
+            };
+
+            if escaped.is_ascii_digit() {
+                return Err("character classes cannot contain capture references".to_owned());
+            }
+            if escaped.is_ascii_alphabetic() {
+                if !classes.contains(&escaped.to_ascii_lowercase()) {
+                    return Err(format!(
+                        "unknown character class `%{}`",
+                        char::from(escaped)
+                    ));
+                }
+            } else if !magic.contains(&escaped) {
+                return Err(format!(
+                    "`%{}` does not escape a Lua pattern magic character",
+                    char::from(escaped)
+                ));
+            }
+
+            if set.get(index + 1) == Some(&b'-') {
+                return Err("character ranges cannot include character classes".to_owned());
+            }
+        } else if set[index] == b'-' && set.get(index + 1) == Some(&b'%') {
+            return Err("character ranges cannot include character classes".to_owned());
+        }
+
+        index += 1;
+    }
+
+    Ok(())
+}
+
+fn validate_lua_replacement(replacement: &str, captures: Option<usize>) -> Option<String> {
+    let bytes = replacement.as_bytes();
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        let Some(&escaped) = bytes.get(index) else {
+            return Some("unfinished `%` replacement".to_owned());
+        };
+        if escaped.is_ascii_digit() && escaped != b'0' {
+            let capture = usize::from(escaped - b'0');
+            if captures.is_some_and(|count| capture > count) {
+                return Some(format!("capture reference `%{capture}` does not exist"));
+            }
+        }
+
+        index += 1;
+    }
+
+    None
 }
 
 fn integer_loses_precision(token: &TokenReference) -> bool {

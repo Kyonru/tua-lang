@@ -1018,6 +1018,152 @@ end
 }
 
 #[test]
+fn format_string_reports_luajit_and_lua51_errors_exactly() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local subject = "12"
+local _ = string.format("%")
+local _ = string.format("%100d", 1)
+local _ = string.match(subject, "(%d)%2")
+local _ = string.match(subject, "((a)%1)")
+local _ = string.match(subject, "%q")
+local _ = string.match(subject, "%bx")
+local _ = string.match(subject, "%foo")
+local _ = string.match(subject, "(%d")
+local _ = string.match(subject, "[%1]")
+"#,
+    );
+    let format_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_STRING))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        format_diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "invalid format string: unfinished format specifier",
+            "invalid format string: format width or precision exceeds two digits",
+            "invalid match pattern: capture reference `%2` does not exist",
+            "invalid match pattern: capture reference `%1` must refer to a closed capture",
+            "invalid match pattern: unknown character class `%q`",
+            "invalid match pattern: balanced match `%b` requires two delimiter characters",
+            "invalid match pattern: frontier pattern `%f` must be followed by a character class",
+            "invalid match pattern: capture is missing a closing `)`",
+            "invalid match pattern: character classes cannot contain capture references",
+        ]
+    );
+    assert_eq!(
+        format_diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.line)
+            .collect::<Vec<_>>(),
+        (3..=11).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn format_string_accepts_valid_luajit_and_lua51_formats_and_patterns() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local subject = "A12"
+local _ = string.format("hello %+10d %.02f %% %a %p", 4, 5, 6, subject)
+local _ = string.format("%------d", 1)
+local _ = string.match(subject, "[A-Z]+(%d)%1")
+local _ = string.match(subject, "%b()")
+local _ = string.match(subject, "%f[%a]")
+local _ = string.gsub(subject, "(%d)", "%0%1%%")
+local _ = string.gsub(subject, "(%d)", "%x")
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_STRING),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn format_string_supports_literal_format_methods_and_resolved_builtins() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local _ = string.format("%")
+local _ = ("%d %"):format(1, 2)
+
+do
+  local string = {
+    format = function(_format) return "custom" end,
+    match = function(_subject, _pattern) return "custom" end,
+  }
+  local _ = string.format("%")
+  local _ = string.match("value", "[")
+end
+"#,
+    );
+    let format_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_STRING))
+        .collect::<Vec<_>>();
+
+    assert_eq!(format_diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(format_diagnostics[0].line, 2);
+    assert_eq!(format_diagnostics[1].line, 3);
+    assert!(format_diagnostics.iter().all(
+        |diagnostic| diagnostic.message == "invalid format string: unfinished format specifier"
+    ));
+}
+
+#[test]
+fn format_string_honors_plain_find_and_validates_gsub_replacements() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local subject = "12"
+local dynamicPlain = choosePlainMode()
+local _ = string.find(subject, "[", 1, true)
+local _ = string.find(subject, "[", 1, false)
+local _ = string.find(subject, "[", 1, dynamicPlain)
+local _ = string.gsub(subject, "(%d)", "%2")
+local _ = string.gsub(subject, "(%d)", "%1")
+local _ = string.gsub(subject, "(%d)", "%")
+local _ = subject:match("[")
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_STRING))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "invalid match pattern: character class is missing a closing `]`",
+            "invalid match replacement: capture reference `%2` does not exist",
+            "invalid match replacement: unfinished `%` replacement",
+        ]
+    );
+}
+
+#[test]
+fn format_string_leaves_os_date_formats_to_host_strftime() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local _ = os.date("%e %F %R %T")
+local _ = os.date("%Q")
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_STRING),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn for_range_reports_downward_and_array_ranges_with_exact_guidance() {
     let diagnostics = check_standard_rules_source(
         r#"
