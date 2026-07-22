@@ -275,6 +275,10 @@ Table-literal guidance compares literal keys by LuaJIT runtime identity,
 including escaped strings, signed numbers, and implicit list indices. The same
 diagnostic reports repeated named fields in Tua table type shapes when the
 later field would otherwise silently replace the earlier contract.
+Table-operation guidance resolves LuaJIT builtins before checking suspicious
+indices and final-call expansion. Known record and string-keyed dictionary
+types reject `#`/`ipairs` unless the matching metatable operation is present;
+`any`, uncertain unions, and empty tables remain permissive.
 Duplicate-local guidance uses `TL4043` for repeated names in local declarations
 and parameter lists, accounts for implicit method `self`, and exempts the exact
 placeholder `_`.

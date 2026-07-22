@@ -522,11 +522,12 @@ local score: number = 0
 local title: string = "Arena"
 local current: Player | nil = nil
 local payload: any = nil
+local names: { [string]: Player } = {}
 "#,
     )
     .expect("local annotations should parse");
 
-    assert_eq!(parsed.local_annotations.len(), 4);
+    assert_eq!(parsed.local_annotations.len(), 5);
     assert_eq!(parsed.local_annotations[0].name, "score");
     assert_eq!(
         parsed.local_annotations[0].ty,
@@ -549,6 +550,13 @@ local payload: any = nil
     assert_eq!(
         parsed.local_annotations[3].ty,
         TuaType::Named("any".to_owned())
+    );
+    assert_eq!(
+        parsed.local_annotations[4].ty,
+        TuaType::Dictionary {
+            key: Box::new(TuaType::Named("string".to_owned())),
+            value: Box::new(TuaType::Named("Player".to_owned())),
+        }
     );
 }
 

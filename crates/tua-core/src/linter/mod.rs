@@ -120,6 +120,7 @@ pub(crate) fn lint_parsed_source(
             scope
                 .as_ref()
                 .expect("standard rules should build a scope map"),
+            environment,
         ));
     }
 

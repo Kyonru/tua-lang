@@ -1149,12 +1149,25 @@ pub(crate) fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
                 .collect(),
             returns: function_return_types_from_type_info(return_type),
         },
-        TypeInfo::Table { fields, .. } => TuaType::Table(
-            fields
-                .iter()
-                .filter_map(table_field_type_from_type_field)
-                .collect(),
-        ),
+        TypeInfo::Table { fields, .. } => {
+            let fields = fields.iter().collect::<Vec<_>>();
+
+            if let [field] = fields.as_slice() {
+                if let TypeFieldKey::IndexSignature { inner, .. } = field.key() {
+                    return TuaType::Dictionary {
+                        key: Box::new(tua_type_from_type_info(inner)),
+                        value: Box::new(tua_type_from_type_info(field.value())),
+                    };
+                }
+            }
+
+            TuaType::Table(
+                fields
+                    .into_iter()
+                    .filter_map(table_field_type_from_type_field)
+                    .collect(),
+            )
+        }
         other => TuaType::Named(other.to_string()),
     }
 }

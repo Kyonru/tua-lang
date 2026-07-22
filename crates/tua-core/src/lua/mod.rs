@@ -2165,7 +2165,7 @@ const STRING_ITEMS: &[LuaItem] = &[
     item(
         "find",
         LuaItemKind::Function,
-        "function string.find(s: string, pattern: string, init?, plain?)",
+        "function string.find(s: string, pattern: string, init?, plain?): number | nil, number | nil",
         "Finds a pattern in a string.",
     ),
     item(

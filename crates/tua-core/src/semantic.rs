@@ -2378,6 +2378,18 @@ fn return_types_from_function_detail(detail: &str) -> Vec<Type> {
 }
 
 fn type_from_label(label: &str) -> Type {
+    let label = label.trim();
+
+    if label.contains('|') {
+        let members = label.split('|').map(type_from_label).collect::<Vec<_>>();
+
+        return match members.len() {
+            0 => Type::Any,
+            1 => members.into_iter().next().unwrap_or(Type::Any),
+            _ => Type::union(members),
+        };
+    }
+
     match label {
         "any" => Type::Any,
         "boolean" => Type::boolean(),

@@ -160,6 +160,17 @@ Tua table type shapes. Diagnostics identify the earlier field or the conflicting
 list entry. The dedicated `duplicate_keys` setting enables this complete check
 even when the standard rule set is disabled.
 
+`TableOperations` checks calls to the resolved LuaJIT `table` and `ipairs`
+builtins. It reports zero-based or redundant `table.insert`/`table.remove`
+indices and a direct final `table.insert` call that can expand to multiple Lua
+values; parentheses around the call explicitly keep its first result. With
+known types, `#` and `ipairs` also report record tables without an array part
+and dictionaries with string keys. Arrays, numeric dictionaries, empty tables,
+`any`, and uncertain unions stay permissive. A known `__len` or `__ipairs`
+metamethod enables its matching operation, and lexically shadowed builtins are
+never inspected. LuaJIT/Lua 5.1 does not provide Luau's `table.create` or
+`table.move`, so Tua does not invent guidance for them.
+
 `UninitializedLocal` tracks each binding in a multi-local declaration
 independently. Missing initializer slots remain uninitialized unless the final
 expression is a direct function call or varargs, which can supply additional

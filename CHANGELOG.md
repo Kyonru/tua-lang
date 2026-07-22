@@ -71,6 +71,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `TableOperations` now resolves Lua builtins, detects expanding final
+  `table.insert` calls, and uses shared table types for conservative `#` and
+  `ipairs` guidance, including `__len` and `__ipairs` support.
+- Native standalone dictionary annotations such as `{ [string]: Value }` now
+  lower to dictionary types instead of losing their index signature.
 - `DuplicateLocal` now reports repeated local and parameter names uniformly as
   `TL4043`, recognizes implicit method `self`, identifies the original
   declaration, and accepts repeated `_` placeholders.

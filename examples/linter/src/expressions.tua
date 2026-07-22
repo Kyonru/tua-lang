@@ -21,8 +21,16 @@ local captured = string.match("12", "(%d)%2")
 local methodFormatted = ("%d %"):format(1, 2)
 
 -- TableOperations (TL4047)
+local function insertionPair()
+  return 1, value
+end
+
+local record = { value = value }
 table.insert(items, #items + 1, value)
+table.insert(items, insertionPair())
 table.remove(items, 0)
+print(#record)
+ipairs(record)
 
 -- MisleadingAndOr (TL4048)
 local misleading = value and false or true

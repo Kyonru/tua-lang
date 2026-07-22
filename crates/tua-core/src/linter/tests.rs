@@ -1183,6 +1183,153 @@ end
 }
 
 #[test]
+fn table_operations_report_indices_and_multireturns_exactly() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local items = { 1, 2 }
+local other = { 1 }
+
+local function pair()
+  return 1, 42
+end
+
+table.insert(items, #items, 42)
+table.insert(items, (#items), 42)
+table.insert(items, #(items), 42)
+table.insert(items, #items + 1, 42)
+table.insert(items, #other + 1, 42)
+table.insert(items, 0, 42)
+table.remove(items, 0)
+table.remove(items, #items - 1)
+table.insert(items, pair())
+table.insert(items, (pair()))
+table.insert(items, string.find("hello", "h"))
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_TABLE_OPERATION))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "table.insert will insert before the last element, which is likely a bug; omit the index to append or wrap it in parentheses to silence",
+            "table.insert will insert before the last element, which is likely a bug; omit the index to append or wrap it in parentheses to silence",
+            "table.insert will append the value; omit the index for efficiency",
+            "table.insert uses index 0 but arrays are 1-based; did you mean 1 instead?",
+            "table.remove uses index 0 but arrays are 1-based; did you mean 1 instead?",
+            "table.remove will remove the value before the last element, which is likely a bug; omit the index to remove the last or wrap it in parentheses to silence",
+            "table.insert may change behavior when the final call returns more than one value; wrap the second argument in parentheses to keep only its first result",
+            "table.insert may change behavior when the final call returns more than one value; wrap the second argument in parentheses to keep only its first result",
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn table_operations_require_resolved_lua_builtins() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local items = { 1 }
+local record = { name = "Ada" }
+
+table.insert(items, 0, 42)
+ipairs(record)
+
+do
+  local table = {
+    insert = function() end,
+    remove = function() end,
+  }
+  table.insert(items, 0, 42)
+  table.remove(items, 0)
+end
+
+local function customIterator(ipairs)
+  ipairs(record)
+end
+customIterator(function() end)
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_TABLE_OPERATION))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "table.insert uses index 0 but arrays are 1-based; did you mean 1 instead?",
+            "using 'ipairs' on a table without an array part is likely a bug",
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn table_operations_use_shared_table_types_conservatively() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local record = { data = { 1, 2, 3 } }
+local stringDictionary: { [string]: number } = {}
+local numberDictionary: { [number]: number } = {}
+local empty = {}
+local array = { 1, 2 }
+type Named = { name: string }
+local uncertain: { [number]: number } | Named = {}
+local dynamic: any = record
+
+print(#record)
+ipairs(record)
+print(#stringDictionary)
+ipairs(stringDictionary)
+
+print(#numberDictionary)
+ipairs(numberDictionary)
+print(#empty)
+ipairs(empty)
+print(#array)
+ipairs(array)
+print(#uncertain)
+ipairs(uncertain)
+print(#dynamic)
+ipairs(dynamic)
+
+local withLength = { name = "Ada" }
+setmetatable(withLength, {
+  __len = function(): number return 1 end,
+})
+print(#withLength)
+
+local withIpairs = { name = "Ada" }
+setmetatable(withIpairs, {
+  __ipairs = function() end,
+})
+ipairs(withIpairs)
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_TABLE_OPERATION))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "using '#' on a table without an array part is likely a bug",
+            "using 'ipairs' on a table without an array part is likely a bug",
+            "using '#' on a table with string keys is likely a bug",
+            "using 'ipairs' on a table with string keys is likely a bug",
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn format_string_reports_luajit_and_lua51_errors_exactly() {
     let diagnostics = check_standard_rules_source(
         r#"

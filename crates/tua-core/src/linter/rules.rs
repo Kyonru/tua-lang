@@ -15,9 +15,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::{duplicate_local_diagnostic, DuplicateLocalKind, DuplicateLocalOrigin};
 use crate::ast_utils::field_chain_before_first_call;
 use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};
+use crate::semantic::SemanticModel;
+use crate::types::{PrimitiveType, Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
 
-pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
+pub(super) fn lint<'a>(
+    parsed: &'a ParsedSource,
+    scope: &ScopeMap,
+    environment: &'a TypeEnvironment,
+) -> Vec<Diagnostic> {
     let terminating_builtin_references = scope
         .references()
         .iter()
@@ -44,6 +50,8 @@ pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
         .collect();
     let mut visitor = LintRuleVisitor {
         parsed,
+        environment,
+        semantic: SemanticModel::new(parsed, environment),
         diagnostics: comment_directive_diagnostics(parsed),
         multiline_statements: Vec::new(),
         multiline_table_depth: 0,
@@ -57,6 +65,8 @@ pub(super) fn lint(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
 
 struct LintRuleVisitor<'a> {
     parsed: &'a ParsedSource,
+    environment: &'a TypeEnvironment,
+    semantic: SemanticModel<'a>,
     diagnostics: Vec<Diagnostic>,
     multiline_statements: Vec<MultiLineStatement>,
     multiline_table_depth: usize,
@@ -70,6 +80,35 @@ struct MultiLineStatement {
     last_line: usize,
     flagged: bool,
     ignore_expressions: bool,
+}
+
+#[derive(Clone, Copy)]
+enum TableIndexerUse {
+    Length,
+    Ipairs,
+}
+
+impl TableIndexerUse {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Length => "#",
+            Self::Ipairs => "ipairs",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum TableIndexerIssue {
+    NoArrayPart,
+    StringKeys,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DictionaryKeyKind {
+    Number,
+    String,
+    Other,
+    Unknown,
 }
 
 impl Visitor for LintRuleVisitor<'_> {
@@ -225,12 +264,23 @@ impl Visitor for LintRuleVisitor<'_> {
 
         if matches!(call.prefix(), Prefix::Name(root) if self.is_lua_builtin_reference(root)) {
             self.check_format_call(&name, &arguments);
+            if name == "ipairs" && arguments.len() == 1 {
+                self.check_table_indexer(call, arguments[0], TableIndexerUse::Ipairs);
+            }
+            self.check_table_operation(&name, &arguments);
         }
-        self.check_table_operation(&name, &arguments);
     }
 
     fn visit_expression(&mut self, expression: &Expression) {
         self.check_multiline_expression(expression);
+
+        if let Expression::UnaryOperator {
+            unop: ast::UnOp::Hash(_),
+            expression: operand,
+        } = expression
+        {
+            self.check_table_indexer(expression, operand, TableIndexerUse::Length);
+        }
 
         match expression {
             Expression::BinaryOperator { lhs, binop, rhs } => {
@@ -517,24 +567,47 @@ impl LintRuleVisitor<'_> {
     }
 
     fn check_table_operation(&mut self, name: &str, arguments: &[&Expression]) {
+        if name == "table.insert" && arguments.len() == 2 {
+            if let Expression::FunctionCall(tail) = unparenthesized_expression(arguments[1]) {
+                if self
+                    .semantic
+                    .return_types_of_call(tail, node_position(tail))
+                    .len()
+                    > 1
+                {
+                    self.push(
+                        node_position(tail),
+                        DiagnosticCode::LINT_TABLE_OPERATION,
+                        "table.insert may change behavior when the final call returns more than one value; wrap the second argument in parentheses to keep only its first result",
+                    );
+                }
+            }
+        }
+
         let (index, message) = match name {
             "table.insert" if arguments.len() >= 3 => match numeric_literal(arguments[1]) {
-                Some(0.0) => (Some(arguments[1]), "table.insert uses invalid index 0"),
+                Some(0.0) => (
+                    Some(arguments[1]),
+                    "table.insert uses index 0 but arrays are 1-based; did you mean 1 instead?",
+                ),
                 _ if is_length_of(arguments[1], arguments[0]) => (
                     Some(arguments[1]),
-                    "table.insert at #t inserts before the last element; omit the index to append",
+                    "table.insert will insert before the last element, which is likely a bug; omit the index to append or wrap it in parentheses to silence",
                 ),
                 _ if is_length_plus_one_of(arguments[1], arguments[0]) => (
                     Some(arguments[1]),
-                    "table.insert at #t + 1 is redundant; omit the index to append",
+                    "table.insert will append the value; omit the index for efficiency",
                 ),
                 _ => (None, ""),
             },
             "table.remove" if arguments.len() >= 2 => match numeric_literal(arguments[1]) {
-                Some(0.0) => (Some(arguments[1]), "table.remove uses invalid index 0"),
+                Some(0.0) => (
+                    Some(arguments[1]),
+                    "table.remove uses index 0 but arrays are 1-based; did you mean 1 instead?",
+                ),
                 _ if is_length_minus_one_of(arguments[1], arguments[0]) => (
                     Some(arguments[1]),
-                    "table.remove at #t - 1 removes the penultimate element; omit the index to remove the last",
+                    "table.remove will remove the value before the last element, which is likely a bug; omit the index to remove the last or wrap it in parentheses to silence",
                 ),
                 _ => (None, ""),
             },
@@ -548,6 +621,38 @@ impl LintRuleVisitor<'_> {
                 message,
             );
         }
+    }
+
+    fn check_table_indexer(
+        &mut self,
+        node: &impl Node,
+        expression: &Expression,
+        usage: TableIndexerUse,
+    ) {
+        let Some(ty) =
+            self.semantic
+                .type_of_expression_return(expression, node_position(expression), 0)
+        else {
+            return;
+        };
+        let Some(issue) = table_indexer_issue(self.environment, &ty, usage) else {
+            return;
+        };
+        let operation = usage.label();
+        let message = match issue {
+            TableIndexerIssue::NoArrayPart => {
+                format!("using '{operation}' on a table without an array part is likely a bug")
+            }
+            TableIndexerIssue::StringKeys => {
+                format!("using '{operation}' on a table with string keys is likely a bug")
+            }
+        };
+
+        self.push(
+            node_position(node),
+            DiagnosticCode::LINT_TABLE_OPERATION,
+            message,
+        );
     }
 
     fn push(&mut self, position: SourcePosition, code: DiagnosticCode, message: impl Into<String>) {
@@ -1094,6 +1199,64 @@ fn is_length_expression(expression: &Expression) -> bool {
     )
 }
 
+fn table_indexer_issue(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    usage: TableIndexerUse,
+) -> Option<TableIndexerIssue> {
+    match environment.resolve_aliases(ty) {
+        Type::Any | Type::Union(_) => None,
+        Type::Array(_) | Type::Tuple(_) => None,
+        Type::Dictionary { key, .. } => match dictionary_key_kind(environment, &key) {
+            DictionaryKeyKind::Number | DictionaryKeyKind::Unknown => None,
+            DictionaryKeyKind::String => Some(TableIndexerIssue::StringKeys),
+            DictionaryKeyKind::Other => Some(TableIndexerIssue::NoArrayPart),
+        },
+        Type::Table(table) => {
+            let has_custom_operation = table.metatable_facts().is_some_and(|facts| match usage {
+                TableIndexerUse::Length => facts.len.is_some(),
+                TableIndexerUse::Ipairs => facts.ipairs.is_some(),
+            });
+
+            if has_custom_operation || table.fields().next().is_none() {
+                None
+            } else {
+                Some(TableIndexerIssue::NoArrayPart)
+            }
+        }
+        Type::Primitive(_) | Type::StringLiteral(_) | Type::Function(_) => None,
+        Type::Alias(_) => None,
+    }
+}
+
+fn dictionary_key_kind(environment: &TypeEnvironment, ty: &Type) -> DictionaryKeyKind {
+    match environment.resolve_aliases(ty) {
+        Type::Primitive(PrimitiveType::Number) => DictionaryKeyKind::Number,
+        Type::Primitive(PrimitiveType::String) | Type::StringLiteral(_) => {
+            DictionaryKeyKind::String
+        }
+        Type::Any | Type::Alias(_) => DictionaryKeyKind::Unknown,
+        Type::Union(types) => {
+            let mut kinds = types.iter().map(|ty| dictionary_key_kind(environment, ty));
+            let Some(first) = kinds.next() else {
+                return DictionaryKeyKind::Unknown;
+            };
+
+            if first == DictionaryKeyKind::Unknown || kinds.any(|kind| kind != first) {
+                DictionaryKeyKind::Unknown
+            } else {
+                first
+            }
+        }
+        Type::Primitive(_)
+        | Type::Function(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => DictionaryKeyKind::Other,
+    }
+}
+
 fn numeric_literal(expression: &Expression) -> Option<f64> {
     match expression {
         Expression::Number(token) => super::parse_lua_number(&number_text(token)?),
@@ -1111,7 +1274,8 @@ fn is_length_of(expression: &Expression, table: &Expression) -> bool {
     matches!(
         unparenthesized_expression(expression),
         Expression::UnaryOperator { unop: ast::UnOp::Hash(_), expression }
-            if expression_key(expression) == expression_key(table)
+            if expression_key(ungrouped_expression(expression))
+                == expression_key(ungrouped_expression(table))
     )
 }
 
@@ -1137,6 +1301,14 @@ fn expression_key(expression: &Expression) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn ungrouped_expression(expression: &Expression) -> &Expression {
+    match expression {
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => ungrouped_expression(expression),
+        _ => expression,
+    }
 }
 
 fn string_literal(expression: &Expression) -> Option<String> {
