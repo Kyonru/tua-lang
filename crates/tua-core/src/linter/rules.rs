@@ -12,6 +12,7 @@ use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::{duplicate_local_diagnostic, DuplicateLocalKind, DuplicateLocalOrigin};
 use crate::ast_utils::field_chain_before_first_call;
 use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
@@ -90,16 +91,23 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
-        let mut names = BTreeSet::new();
+        let mut names = BTreeMap::new();
 
         for name in local.names() {
             let text = token_text(name);
-            if !names.insert(text.clone()) {
-                self.push(
-                    token_position(name),
-                    DiagnosticCode::LINT_DUPLICATE_LOCAL,
-                    format!("duplicate local `{text}` in the same declaration"),
-                );
+            if text == "_" {
+                continue;
+            }
+            let position = token_position(name);
+
+            if let Some(original) = names.insert(text.clone(), position) {
+                self.diagnostics.push(duplicate_local_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &text,
+                    DuplicateLocalKind::Variable,
+                    DuplicateLocalOrigin::Explicit(original),
+                ));
             }
         }
     }

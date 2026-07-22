@@ -150,6 +150,18 @@ struct LintVisitor<'a> {
 }
 
 impl Visitor for LintVisitor<'_> {
+    fn visit_function_declaration(&mut self, function: &ast::FunctionDeclaration) {
+        self.check_duplicate_parameters(function.body(), function.name().method_name().is_some());
+    }
+
+    fn visit_local_function(&mut self, function: &ast::LocalFunction) {
+        self.check_duplicate_parameters(function.body(), false);
+    }
+
+    fn visit_anonymous_function(&mut self, function: &ast::AnonymousFunction) {
+        self.check_duplicate_parameters(function.body(), false);
+    }
+
     fn visit_assignment(&mut self, assignment: &full_moon::ast::Assignment) {
         if self.config.rules || self.config.assignment_arity {
             self.check_assignment_arity(assignment);
@@ -280,29 +292,6 @@ impl Visitor for LintVisitor<'_> {
         }
     }
 
-    fn visit_function_body(&mut self, body: &ast::FunctionBody) {
-        if !self.config.rules && !self.config.duplicate_parameters {
-            return;
-        }
-
-        let mut seen = BTreeSet::new();
-
-        for parameter in body.parameters() {
-            let Parameter::Name(name) = parameter else {
-                continue;
-            };
-            let name_text = token_text(name);
-
-            if !seen.insert(name_text.clone()) {
-                self.diagnostics.push(duplicate_parameter_diagnostic(
-                    &self.parsed.path,
-                    token_position(name),
-                    &name_text,
-                ));
-            }
-        }
-    }
-
     fn visit_if(&mut self, if_stmt: &ast::If) {
         if !self.config.rules && !self.config.duplicate_if_conditions {
             return;
@@ -351,6 +340,40 @@ impl Visitor for LintVisitor<'_> {
 }
 
 impl LintVisitor<'_> {
+    fn check_duplicate_parameters(&mut self, body: &ast::FunctionBody, implicit_self: bool) {
+        if !self.config.rules && !self.config.duplicate_parameters {
+            return;
+        }
+
+        let mut seen = BTreeMap::new();
+        if implicit_self {
+            seen.insert("self".to_owned(), DuplicateLocalOrigin::ImplicitSelf);
+        }
+
+        for parameter in body.parameters() {
+            let Parameter::Name(name) = parameter else {
+                continue;
+            };
+            let name_text = token_text(name);
+            if name_text == "_" {
+                continue;
+            }
+            let position = token_position(name);
+
+            if let Some(original) =
+                seen.insert(name_text.clone(), DuplicateLocalOrigin::Explicit(position))
+            {
+                self.diagnostics.push(duplicate_local_diagnostic(
+                    &self.parsed.path,
+                    position,
+                    &name_text,
+                    DuplicateLocalKind::FunctionParameter,
+                    original,
+                ));
+            }
+        }
+    }
+
     fn check_assignment_arity(&mut self, assignment: &ast::Assignment) {
         let target_count = assignment.variables().into_iter().count();
 
@@ -2687,15 +2710,55 @@ fn use_before_definition_diagnostic(
     .with_code(DiagnosticCode::LINT_USE_BEFORE_DEFINITION)
 }
 
-fn duplicate_parameter_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+#[derive(Clone, Copy)]
+enum DuplicateLocalKind {
+    Variable,
+    FunctionParameter,
+}
+
+#[derive(Clone, Copy)]
+enum DuplicateLocalOrigin {
+    Explicit(SourcePosition),
+    ImplicitSelf,
+}
+
+fn duplicate_local_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+    kind: DuplicateLocalKind,
+    origin: DuplicateLocalOrigin,
+) -> Diagnostic {
+    let subject = match kind {
+        DuplicateLocalKind::Variable => "variable",
+        DuplicateLocalKind::FunctionParameter => "function parameter",
+    };
+    let message = match origin {
+        DuplicateLocalOrigin::ImplicitSelf => {
+            format!("{subject} `{name}` already defined implicitly")
+        }
+        DuplicateLocalOrigin::Explicit(original) if original.line == position.line => {
+            format!(
+                "{subject} `{name}` already defined on column {}",
+                original.column
+            )
+        }
+        DuplicateLocalOrigin::Explicit(original) => {
+            format!(
+                "{subject} `{name}` already defined on line {}",
+                original.line
+            )
+        }
+    };
+
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("duplicate function parameter `{name}`"),
+        message,
     )
-    .with_code(DiagnosticCode::LINT_DUPLICATE_PARAMETER)
+    .with_code(DiagnosticCode::LINT_DUPLICATE_LOCAL)
 }
 
 fn bad_require_diagnostic(path: &Path, position: SourcePosition, module: &str) -> Diagnostic {

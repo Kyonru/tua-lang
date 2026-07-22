@@ -198,7 +198,7 @@
       "path": "diagnostics.duplicate_parameters",
       "type": "boolean",
       "default": false,
-      "description": "Report duplicate function parameter names.",
+      "description": "Report duplicate function parameter names as TL4043.",
       "editor": "tua.diagnostics.duplicateParameters"
     },
     {

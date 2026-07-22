@@ -63,6 +63,7 @@ impl DiagnosticCode {
     pub const LINT_UNUSED_LOCAL: Self = Self(4005);
     pub const LINT_UNUSED_PARAMETER: Self = Self(4006);
     pub const LINT_USE_BEFORE_DEFINITION: Self = Self(4007);
+    // Retained for source compatibility; duplicate parameters now emit LINT_DUPLICATE_LOCAL.
     pub const LINT_DUPLICATE_PARAMETER: Self = Self(4008);
     pub const LINT_WRONG_ARGUMENT_COUNT: Self = Self(4009);
     pub const LINT_BAD_REQUIRE: Self = Self(4010);

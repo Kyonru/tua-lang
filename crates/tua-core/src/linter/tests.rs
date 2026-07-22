@@ -519,6 +519,83 @@ print("never")
 }
 
 #[test]
+fn duplicate_local_reports_locals_parameters_and_implicit_self_with_origins() {
+    let diagnostics = check_standard_rules_source(
+        r#"function foo(a, b, a)
+  return a, b
+end
+
+local object = {}
+function object:method(self)
+  return self
+end
+
+local x, y, x = 1, 2, 3
+
+local function multiline(
+  first,
+  second,
+  first
+)
+  return first, second
+end
+
+local callback = function(item, item)
+  return item
+end
+
+return foo, object, x, y, multiline, callback
+"#,
+    );
+    let mut duplicates = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_DUPLICATE_LOCAL))
+        .collect::<Vec<_>>();
+    duplicates.sort_by_key(|diagnostic| (diagnostic.line, diagnostic.column));
+
+    assert_eq!(duplicates.len(), 5, "{diagnostics:#?}");
+    assert_eq!(
+        duplicates
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "function parameter `a` already defined on column 14",
+            "function parameter `self` already defined implicitly",
+            "variable `x` already defined on column 7",
+            "function parameter `first` already defined on line 13",
+            "function parameter `item` already defined on column 27",
+        ]
+    );
+    assert_eq!(
+        duplicates
+            .iter()
+            .map(|diagnostic| (diagnostic.line, diagnostic.column))
+            .collect::<Vec<_>>(),
+        vec![(1, 20), (6, 24), (10, 13), (15, 3), (20, 33)]
+    );
+}
+
+#[test]
+fn duplicate_local_accepts_repeated_exact_placeholders() {
+    let diagnostics = check_standard_rules_source(
+        r#"local _, _, _ = 1, 2, 3
+
+local function discard(_, _, _)
+end
+
+return discard
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_LOCAL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn implicit_return_reports_named_and_anonymous_fallthrough_locations() {
     let diagnostics = check_standard_rules_source(
         r#"local function find(items, expected)
@@ -1502,11 +1579,10 @@ local Missing = require("definitely_missing_lint_module")
 }
 
 #[test]
-fn reports_duplicate_function_parameters_when_enabled() {
+fn duplicate_parameter_toggle_emits_duplicate_local_diagnostic() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
-        r#"
-local function move(player, player)
+        r#"local function move(player, player)
   return player
 end
 "#,
@@ -1520,11 +1596,13 @@ end
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(
         diagnostics[0].code,
-        Some(DiagnosticCode::LINT_DUPLICATE_PARAMETER)
+        Some(DiagnosticCode::LINT_DUPLICATE_LOCAL)
     );
-    assert!(diagnostics[0]
-        .message
-        .contains("duplicate function parameter `player`"));
+    assert_eq!(
+        diagnostics[0].message,
+        "function parameter `player` already defined on column 21"
+    );
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (1, 29));
 }
 
 #[test]

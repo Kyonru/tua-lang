@@ -69,6 +69,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `DuplicateLocal` now reports repeated local and parameter names uniformly as
+  `TL4043`, recognizes implicit method `self`, identifies the original
+  declaration, and accepts repeated `_` placeholders.
 - `ImportUnused` now recognizes dynamic calls to the global `require`, excludes
   lexically shadowed calls, counts qualified type references, includes `_`
   guidance, and backs import source actions with the same resolved usage facts.
@@ -94,6 +97,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Migration
 
+- Replace `TL4008` suppressions or filters with `TL4043`; the
+  `duplicate_parameters` setting remains available and now emits `TL4043`.
 - Projects that need the previous lint-free `tua check` and editor behavior can
   set `[diagnostics].rules = false`.
 - Remove `diagnostics.formatting_lints` and the

@@ -433,7 +433,8 @@ never read.
 ordering.
 
 `duplicate_parameters`
-: Reports repeated parameter names in a function declaration.
+: Reports repeated parameter names as `TL4043` without enabling every standard
+rule.
 
 `wrong_argument_count`
 : Reports calls to known functions with the wrong number of arguments.

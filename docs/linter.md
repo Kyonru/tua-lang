@@ -131,6 +131,13 @@ the file. Shadowing across function boundaries, unused locals, duplicate
 declarations, Lua/LOVE builtins, and configured runtime globals do not produce
 this warning.
 
+`DuplicateLocal` reports repeated names in one local declaration or function
+parameter list as `TL4043`. It identifies the original declaration by line or
+column and recognizes the implicit `self` parameter of colon methods. Repeating
+the exact placeholder name `_` remains valid. The `duplicate_parameters`
+setting can enable the parameter check without enabling the complete standard
+rule set.
+
 `LocalUnused` treats reads in default-parameter expressions and nested closures
 as uses, but does not report unused numeric or generic `for` bindings. Prefix an
 intentionally unused local with `_` to silence the warning. The editor only

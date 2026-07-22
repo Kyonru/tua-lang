@@ -205,7 +205,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report duplicate function parameter names."
+          "description": "Report duplicate function parameter names as TL4043."
         },
         "tua.diagnostics.wrongArgumentCount": {
           "type": [

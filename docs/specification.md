@@ -268,6 +268,9 @@ globals.
 Local-shadow guidance is limited to used bindings in the same function and
 user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
+Duplicate-local guidance uses `TL4043` for repeated names in local declarations
+and parameter lists, accounts for implicit method `self`, and exempts the exact
+placeholder `_`.
 Unbalanced-assignment guidance compares explicit expression counts and remains
 permissive for direct-call, vararg, and intentional-`nil` tails.
 Implicit-return guidance recognizes guaranteed `repeat` bodies and unbreakable

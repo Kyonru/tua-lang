@@ -377,7 +377,7 @@ fn check_enables_standard_lints_by_default() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
     assert!(stderr.contains("warning TL4043"));
-    assert!(stderr.contains("duplicate local `first`"));
+    assert!(stderr.contains("variable `first` already defined on column 7"));
 }
 
 #[test]

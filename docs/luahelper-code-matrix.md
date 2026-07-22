@@ -115,7 +115,7 @@ enforced separately with `tua fmt --check`.
 | `TL4005` | A non-function local is declared but never used. | `unused_locals` |
 | `TL4006` | A function parameter is never used. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |
-| `TL4008` | A function declares the same parameter more than once. | `duplicate_parameters` |
+| `TL4008` | Legacy duplicate-parameter code retained for source compatibility; new diagnostics use `TL4043`. | No longer emitted. |
 | `TL4009` | A lint-known call has the wrong argument count. | `wrong_argument_count` |
 | `TL4010` | A static module specifier is invalid or resolves through an unsupported form. | `bad_requires` |
 | `TL4011` | A boolean expression is provably constant or impossible. | `impossible_boolean_expressions` |
@@ -146,7 +146,7 @@ enforced separately with `tua fmt --check`.
 | `TL4040` | The first statement in a region is unreachable after paths that always return, break, or call a resolved terminating builtin. | `rules` |
 | `TL4041` | A resolved LuaJIT `type(...)` comparison or known LOVE object `type`/`typeOf` call uses an unknown target-specific type name. | `rules` |
 | `TL4042` | A numeric `for` range likely needs a different bound or explicit step. | `rules` |
-| `TL4043` | One local declaration repeats a name. | `rules` |
+| `TL4043` | One local declaration or function parameter list repeats a non-placeholder name, including an explicit method `self`. | `rules`; parameters can also use `duplicate_parameters` |
 | `TL4044` | A static format string, pattern, or date format is invalid. | `rules` |
 | `TL4045` | A local is read but never initialized. | `rules` |
 | `TL4046` | A function name is defined more than once in one block. | `rules` |
