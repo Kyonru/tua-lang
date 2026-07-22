@@ -255,6 +255,9 @@ lint/project, and domain families. Suppression comments can target exact codes
 or documented groups but cannot alter inference, lowering, or runtime behavior.
 The standard lint rules are enabled by default for checking and editor
 diagnostics; projects can disable that set without disabling type checking.
+The unknown-global lint recognizes explicit global assignments and simple
+global function declarations anywhere in the current Tua file; runtime-provided
+and cross-file globals remain explicit project configuration.
 
 The compiler and language server use the same semantic diagnostics for an
 identical project snapshot. The editor presents those diagnostics without a

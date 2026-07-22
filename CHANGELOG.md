@@ -72,6 +72,9 @@ language or editor behavior, and migration notes call out those changes.
 - Standard lint rules are enabled by default for `tua check` and editor
   diagnostics. Set `diagnostics.rules = false` to opt out; `tua lint` continues
   to enable the standard set for its own run.
+- `UnknownGlobal` now recognizes explicit global assignments and simple global
+  function declarations anywhere in the current Tua file, regardless of source
+  order.
 - Formatting and linting are now independent toolchain modules: `tua fmt` and
   `fmt --check` own canonical layout, while `tua lint` reports syntax/lint
   categories and `tua check` owns the complete semantic diagnostic pipeline.

@@ -483,9 +483,18 @@ struct SymbolAnalyzer<'a> {
     scopes: Vec<Scope>,
     declarations: Vec<Declaration>,
     known_globals: BTreeSet<String>,
+    defined_globals: BTreeSet<String>,
+    unresolved_global_reads: Vec<UnresolvedGlobalRead>,
     user_globals: BTreeMap<String, GlobalUsage>,
     function_stack: Vec<usize>,
     next_function_id: usize,
+}
+
+#[derive(Clone, Debug)]
+struct UnresolvedGlobalRead {
+    name: String,
+    function_id: Option<usize>,
+    diagnostic_index: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -523,13 +532,17 @@ enum DeclarationKind {
 
 impl<'a> SymbolAnalyzer<'a> {
     fn new(parsed: &'a ParsedSource, config: &'a DiagnosticsConfig) -> Self {
+        let configured_globals = config.globals.iter().cloned().collect::<BTreeSet<_>>();
+
         Self {
             parsed,
             config,
             diagnostics: Vec::new(),
             scopes: Vec::new(),
             declarations: Vec::new(),
-            known_globals: config.globals.iter().cloned().collect(),
+            known_globals: configured_globals.clone(),
+            defined_globals: configured_globals,
+            unresolved_global_reads: Vec::new(),
             user_globals: BTreeMap::new(),
             function_stack: Vec::new(),
             next_function_id: 0,
@@ -538,6 +551,7 @@ impl<'a> SymbolAnalyzer<'a> {
 
     fn analyze(mut self) -> Vec<Diagnostic> {
         self.analyze_block(self.parsed.ast.nodes());
+        self.resolve_unresolved_global_reads();
 
         if self.config.rules {
             for (name, usage) in &self.user_globals {
@@ -691,11 +705,11 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         for variable in assignment.variables() {
-            self.analyze_assignment_target(variable);
+            self.analyze_assignment_target(variable, true);
         }
     }
 
-    fn analyze_assignment_target(&mut self, variable: &Var) {
+    fn analyze_assignment_target(&mut self, variable: &Var, defines_global: bool) {
         match variable {
             Var::Name(name) => {
                 let name_text = token_text(name);
@@ -711,6 +725,9 @@ impl<'a> SymbolAnalyzer<'a> {
                         ));
                     }
                     self.record_global_use(&name_text, token_position(name));
+                    if defines_global {
+                        self.defined_globals.insert(name_text.clone());
+                    }
                     self.known_globals.insert(name_text);
                 } else if let Some(id) = self.resolve_local(&name_text) {
                     self.declarations[id]
@@ -727,13 +744,13 @@ impl<'a> SymbolAnalyzer<'a> {
         match variable {
             Var::Name(name) => {
                 self.read_name(&token_text(name), token_position(name));
-                self.analyze_assignment_target(variable);
+                self.analyze_assignment_target(variable, false);
             }
             Var::Expression(expression) => {
                 self.analyze_var_expression(expression);
-                self.analyze_assignment_target(variable);
+                self.analyze_assignment_target(variable, false);
             }
-            _ => self.analyze_assignment_target(variable),
+            _ => self.analyze_assignment_target(variable, false),
         }
     }
 
@@ -790,6 +807,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     ));
                 }
                 self.record_global_use(&root_name, token_position(root));
+                self.defined_globals.insert(root_name.clone());
                 self.known_globals.insert(root_name);
             } else {
                 self.read_name(&root_name, token_position(root));
@@ -1151,12 +1169,40 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         if self.config.undefined_variables || self.config.rules {
+            let diagnostic_index = self.diagnostics.len();
             self.diagnostics.push(undefined_variable_diagnostic(
                 &self.parsed.path,
                 position,
                 name,
             ));
+            self.unresolved_global_reads.push(UnresolvedGlobalRead {
+                name: name.to_owned(),
+                function_id: self.function_stack.last().copied(),
+                diagnostic_index,
+            });
         }
+    }
+
+    fn resolve_unresolved_global_reads(&mut self) {
+        let mut resolved_diagnostics = BTreeSet::new();
+
+        for read in std::mem::take(&mut self.unresolved_global_reads) {
+            if self.is_defined_global(&read.name) {
+                resolved_diagnostics.insert(read.diagnostic_index);
+
+                if let Some(usage) = self.user_globals.get_mut(&read.name) {
+                    usage.function_ids.insert(read.function_id);
+                }
+            }
+        }
+
+        self.diagnostics = std::mem::take(&mut self.diagnostics)
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, diagnostic)| {
+                (!resolved_diagnostics.contains(&index)).then_some(diagnostic)
+            })
+            .collect();
     }
 
     fn mark_direct_local_function_call(&mut self, function_call: &FunctionCall) {
@@ -1217,8 +1263,15 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn is_known_global(&self, name: &str) -> bool {
-        self.known_globals.contains(name)
-            || name == ecs::MODULE_NAME
+        self.known_globals.contains(name) || Self::is_builtin_global(name)
+    }
+
+    fn is_defined_global(&self, name: &str) -> bool {
+        self.defined_globals.contains(name) || Self::is_builtin_global(name)
+    }
+
+    fn is_builtin_global(name: &str) -> bool {
+        name == ecs::MODULE_NAME
             || sprite::is_helper(name)
             || lua::hover_item(&[name.to_owned()]).is_some()
     }

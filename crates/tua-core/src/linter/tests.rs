@@ -637,6 +637,106 @@ ConfiguredGlobal()
 }
 
 #[test]
+fn accepts_globals_defined_later_in_the_same_file() {
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function readLater()
+  return LaterValue + LaterFunction()
+end
+
+SelfInitialized = SelfInitialized or {}
+LaterValue = 40
+
+function LaterFunction()
+  return 2
+end
+
+return readLater(), SelfInitialized
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect("global definitions should apply across the current file");
+}
+
+#[test]
+fn later_local_declarations_do_not_define_globals() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+local function readLater()
+  return LaterLocal
+end
+
+local LaterLocal = 1
+return readLater(), LaterLocal
+"#,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("a later local is not in an earlier function's lexical scope");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
+    );
+}
+
+#[test]
+fn forward_global_reads_count_for_global_used_as_local() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function readShared()
+  return Shared
+end
+
+local function writeShared()
+  Shared = 1
+end
+
+readShared()
+writeShared()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNDEFINED_VARIABLE),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn compound_assignment_does_not_define_an_unknown_global() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        "MissingScore += 1\n",
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("compound assignment should read its target before writing it");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
+    );
+}
+
+#[test]
 fn accepts_builtin_ecs_module_for_undefined_variable_lint() {
     check_tua_source_with_diagnostics_config(
         "src/main.tua",

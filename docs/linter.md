@@ -56,6 +56,12 @@ share an existing Tua code because they are the same analysis.
 | `IntegerParsing` | `TL4050` |
 | `ComparisonPrecedence` | `TL4051` |
 
+`UnknownGlobal` considers plain global assignments and simple global function
+declarations anywhere in the current Tua file to be definitions, regardless of
+source order. Qualified writes still require a known root, and compound
+assignment reads its target before writing it. Runtime-provided or cross-file
+globals should be listed in [`diagnostics.globals`](configuration.md#diagnostics).
+
 `DeprecatedGlobal` depends on a host-provided deprecated-global catalog, and
 `DeprecatedApi` depends on deprecation metadata for the resolved external API.
 Tua does not invent either catalog, so those two rules are not emitted yet.
