@@ -62,6 +62,12 @@ source order. Qualified writes still require a known root, and compound
 assignment reads its target before writing it. Runtime-provided or cross-file
 globals should be listed in [`diagnostics.globals`](configuration.md#diagnostics).
 
+`GlobalUsedAsLocal` follows the common enclosing function across nested
+closures, so a value shared only by children of one function can still become a
+local in that parent. It also reports globals whose reads in separate functions
+all follow an unconditional assignment. Module-scope definitions and reads that
+may occur before a conditional assignment remain valid global patterns.
+
 `DeprecatedGlobal` depends on a host-provided deprecated-global catalog, and
 `DeprecatedApi` depends on deprecation metadata for the resolved external API.
 Tua does not invent either catalog, so those two rules are not emitted yet.

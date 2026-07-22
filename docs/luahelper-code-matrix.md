@@ -155,7 +155,7 @@ enforced separately with `tua fmt --check`.
 | `TL4049` | A `--!` comment directive is unsupported by Tua. | `rules` |
 | `TL4050` | An integer literal loses precision as a Lua number. | `rules` |
 | `TL4051` | Comparison precedence is ambiguous or behaves unlike a chained comparison. | `rules` |
-| `TL4052` | A global is only used from one function and can be local. | `rules` |
+| `TL4052` | A global can be local to its common enclosing function, or every read follows a definite function-local write. | `rules` |
 | `TL4053` | A function returns values on one path and implicitly returns none on another. | `rules` |
 | `TL4054` | A static `require` or `import` binding is unused. | `rules` |
 

@@ -258,6 +258,9 @@ diagnostics; projects can disable that set without disabling type checking.
 The unknown-global lint recognizes explicit global assignments and simple
 global function declarations anywhere in the current Tua file; runtime-provided
 and cross-file globals remain explicit project configuration.
+Global-local guidance follows common lexical ancestry across nested functions
+and remains conservative around module-scope and conditionally initialized
+globals.
 
 The compiler and language server use the same semantic diagnostics for an
 identical project snapshot. The editor presents those diagnostics without a

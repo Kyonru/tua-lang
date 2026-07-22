@@ -486,21 +486,44 @@ struct SymbolAnalyzer<'a> {
     defined_globals: BTreeSet<String>,
     unresolved_global_reads: Vec<UnresolvedGlobalRead>,
     user_globals: BTreeMap<String, GlobalUsage>,
-    function_stack: Vec<usize>,
+    function_stack: Vec<FunctionContext>,
     next_function_id: usize,
 }
 
 #[derive(Clone, Debug)]
 struct UnresolvedGlobalRead {
     name: String,
-    function_id: Option<usize>,
+    function_stack: Vec<usize>,
+    read_before_write: bool,
     diagnostic_index: usize,
 }
 
 #[derive(Clone, Debug)]
 struct GlobalUsage {
     definition: SourcePosition,
-    function_ids: BTreeSet<Option<usize>>,
+    common_function_stack: Vec<usize>,
+    read_before_write: bool,
+    defined_in_module_scope: bool,
+}
+
+impl GlobalUsage {
+    fn record_reference(&mut self, function_stack: &[usize], read_before_write: bool) {
+        let common_length = self
+            .common_function_stack
+            .iter()
+            .zip(function_stack)
+            .take_while(|(left, right)| left == right)
+            .count();
+        self.common_function_stack.truncate(common_length);
+        self.read_before_write |= read_before_write;
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FunctionContext {
+    id: usize,
+    dominated_globals: BTreeSet<String>,
+    conditional_depth: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -555,18 +578,19 @@ impl<'a> SymbolAnalyzer<'a> {
 
         if self.config.rules {
             for (name, usage) in &self.user_globals {
-                if usage.function_ids.len() == 1
-                    && usage
-                        .function_ids
-                        .iter()
-                        .next()
-                        .is_some_and(Option::is_some)
-                {
+                if !usage.common_function_stack.is_empty() {
                     self.diagnostics.push(global_used_as_local_diagnostic(
                         &self.parsed.path,
                         usage.definition,
                         name,
                     ));
+                } else if !usage.read_before_write && !usage.defined_in_module_scope {
+                    self.diagnostics
+                        .push(global_never_read_before_write_diagnostic(
+                            &self.parsed.path,
+                            usage.definition,
+                            name,
+                        ));
                 }
             }
         }
@@ -594,6 +618,18 @@ impl<'a> SymbolAnalyzer<'a> {
         self.analyze_block(block);
     }
 
+    fn enter_conditional_execution(&mut self) {
+        if let Some(function) = self.function_stack.last_mut() {
+            function.conditional_depth += 1;
+        }
+    }
+
+    fn exit_conditional_execution(&mut self) {
+        if let Some(function) = self.function_stack.last_mut() {
+            function.conditional_depth = function.conditional_depth.saturating_sub(1);
+        }
+    }
+
     fn analyze_stmt(&mut self, stmt: &ast::Stmt) {
         match stmt {
             ast::Stmt::Assignment(assignment) => self.analyze_assignment(assignment),
@@ -607,6 +643,7 @@ impl<'a> SymbolAnalyzer<'a> {
             ast::Stmt::FunctionDeclaration(function) => self.analyze_function_declaration(function),
             ast::Stmt::Do(block) => self.analyze_child_block(block.block()),
             ast::Stmt::If(if_stmt) => {
+                self.enter_conditional_execution();
                 self.analyze_expression(if_stmt.condition());
                 self.analyze_child_block(if_stmt.block());
 
@@ -620,8 +657,10 @@ impl<'a> SymbolAnalyzer<'a> {
                 if let Some(else_block) = if_stmt.else_block() {
                     self.analyze_child_block(else_block);
                 }
+                self.exit_conditional_execution();
             }
             ast::Stmt::GenericFor(for_stmt) => {
+                self.enter_conditional_execution();
                 for expression in for_stmt.expressions() {
                     self.analyze_expression(expression);
                 }
@@ -647,8 +686,10 @@ impl<'a> SymbolAnalyzer<'a> {
                 }
 
                 self.exit_scope();
+                self.exit_conditional_execution();
             }
             ast::Stmt::NumericFor(for_stmt) => {
+                self.enter_conditional_execution();
                 self.analyze_expression(for_stmt.start());
                 self.analyze_expression(for_stmt.end());
 
@@ -674,8 +715,10 @@ impl<'a> SymbolAnalyzer<'a> {
                 }
 
                 self.exit_scope();
+                self.exit_conditional_execution();
             }
             ast::Stmt::Repeat(repeat) => {
+                self.enter_conditional_execution();
                 self.enter_scope(future_locals_for_block(repeat.block()));
 
                 for stmt in repeat.block().stmts() {
@@ -690,10 +733,13 @@ impl<'a> SymbolAnalyzer<'a> {
 
                 self.analyze_expression(repeat.until());
                 self.exit_scope();
+                self.exit_conditional_execution();
             }
             ast::Stmt::While(while_stmt) => {
+                self.enter_conditional_execution();
                 self.analyze_expression(while_stmt.condition());
                 self.analyze_child_block(while_stmt.block());
+                self.exit_conditional_execution();
             }
             _ => {}
         }
@@ -724,7 +770,7 @@ impl<'a> SymbolAnalyzer<'a> {
                             &name_text,
                         ));
                     }
-                    self.record_global_use(&name_text, token_position(name));
+                    self.record_global_assignment(&name_text, token_position(name));
                     if defines_global {
                         self.defined_globals.insert(name_text.clone());
                     }
@@ -806,7 +852,7 @@ impl<'a> SymbolAnalyzer<'a> {
                         &root_name,
                     ));
                 }
-                self.record_global_use(&root_name, token_position(root));
+                self.record_global_assignment(&root_name, token_position(root));
                 self.defined_globals.insert(root_name.clone());
                 self.known_globals.insert(root_name);
             } else {
@@ -826,7 +872,11 @@ impl<'a> SymbolAnalyzer<'a> {
     ) {
         let function_id = self.next_function_id;
         self.next_function_id += 1;
-        self.function_stack.push(function_id);
+        self.function_stack.push(FunctionContext {
+            id: function_id,
+            dominated_globals: BTreeSet::new(),
+            conditional_depth: 0,
+        });
         self.enter_scope(future_locals_for_block(body.block()));
 
         if let Some(position) = implicit_self {
@@ -1148,11 +1198,7 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         if self.is_known_global(name) {
-            if let Some(usage) = self.user_globals.get_mut(name) {
-                usage
-                    .function_ids
-                    .insert(self.function_stack.last().copied());
-            }
+            self.record_global_read(name);
             return;
         }
 
@@ -1177,7 +1223,8 @@ impl<'a> SymbolAnalyzer<'a> {
             ));
             self.unresolved_global_reads.push(UnresolvedGlobalRead {
                 name: name.to_owned(),
-                function_id: self.function_stack.last().copied(),
+                function_stack: self.current_function_stack(),
+                read_before_write: self.is_global_read_before_write(name),
                 diagnostic_index,
             });
         }
@@ -1191,7 +1238,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 resolved_diagnostics.insert(read.diagnostic_index);
 
                 if let Some(usage) = self.user_globals.get_mut(&read.name) {
-                    usage.function_ids.insert(read.function_id);
+                    usage.record_reference(&read.function_stack, read.read_before_write);
                 }
             }
         }
@@ -1223,30 +1270,60 @@ impl<'a> SymbolAnalyzer<'a> {
         self.declarations[id].called = true;
     }
 
-    fn record_global_use(&mut self, name: &str, position: SourcePosition) {
-        let function_id = self.function_stack.last().copied();
+    fn record_global_read(&mut self, name: &str) {
+        let function_stack = self.current_function_stack();
+        let read_before_write = self.is_global_read_before_write(name);
 
         if let Some(usage) = self.user_globals.get_mut(name) {
-            usage.function_ids.insert(function_id);
-            return;
+            usage.record_reference(&function_stack, read_before_write);
         }
+    }
 
-        if self.known_globals.contains(name)
-            || lua::hover_item(&[name.to_owned()]).is_some()
-            || name == "love"
+    fn record_global_assignment(&mut self, name: &str, position: SourcePosition) {
+        if !self.user_globals.contains_key(name)
+            && (self.known_globals.contains(name)
+                || lua::hover_item(&[name.to_owned()]).is_some()
+                || name == "love")
         {
             return;
         }
 
-        self.user_globals
-            .entry(name.to_owned())
-            .and_modify(|usage| {
-                usage.function_ids.insert(function_id);
-            })
-            .or_insert_with(|| GlobalUsage {
-                definition: position,
-                function_ids: BTreeSet::from([function_id]),
-            });
+        let function_stack = self.current_function_stack();
+        let defined_in_module_scope = function_stack.is_empty();
+
+        if let Some(usage) = self.user_globals.get_mut(name) {
+            usage.record_reference(&function_stack, false);
+            usage.defined_in_module_scope |= defined_in_module_scope;
+        } else {
+            self.user_globals.insert(
+                name.to_owned(),
+                GlobalUsage {
+                    definition: position,
+                    common_function_stack: function_stack,
+                    read_before_write: false,
+                    defined_in_module_scope,
+                },
+            );
+        }
+
+        if let Some(function) = self.function_stack.last_mut() {
+            if function.conditional_depth == 0 {
+                function.dominated_globals.insert(name.to_owned());
+            }
+        }
+    }
+
+    fn current_function_stack(&self) -> Vec<usize> {
+        self.function_stack
+            .iter()
+            .map(|function| function.id)
+            .collect()
+    }
+
+    fn is_global_read_before_write(&self, name: &str) -> bool {
+        self.function_stack
+            .last()
+            .is_none_or(|function| !function.dominated_globals.contains(name))
     }
 
     fn resolve_local(&self, name: &str) -> Option<usize> {
@@ -2009,7 +2086,22 @@ fn global_used_as_local_diagnostic(
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("global `{name}` is only used from one function; make it local"),
+        format!("global `{name}` is only used from one enclosing function; make it local"),
+    )
+    .with_code(DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL)
+}
+
+fn global_never_read_before_write_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("global `{name}` is never read before being written; make it local"),
     )
     .with_code(DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL)
 }

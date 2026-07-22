@@ -718,6 +718,118 @@ writeShared()
 }
 
 #[test]
+fn global_used_as_local_tracks_the_common_enclosing_function() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function outer()
+  local function writeShared()
+    Shared = 1
+  end
+
+  local function readShared()
+    return Shared
+  end
+
+  writeShared()
+  return readShared()
+end
+
+outer()
+"#,
+    );
+
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL))
+        .expect("a global shared only by nested closures can be local to their parent");
+
+    assert!(
+        diagnostic.message.contains("one enclosing function"),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn global_used_as_local_reports_independent_dominated_writes() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function writeFirst()
+  Scratch = 1
+  return Scratch
+end
+
+local function writeSecond()
+  Scratch = 2
+  return Scratch
+end
+
+writeFirst()
+writeSecond()
+"#,
+    );
+
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL))
+        .expect("a global only read after independent writes can become local");
+
+    assert!(
+        diagnostic
+            .message
+            .contains("never read before being written"),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn global_used_as_local_respects_conditional_writes() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function maybeWrite(flag)
+  if flag then
+    Shared = 1
+  end
+  return Shared
+end
+
+local function writeShared()
+  Shared = 2
+end
+
+maybeWrite(true)
+writeShared()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn global_used_as_local_ignores_module_scope_definitions() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+Shared = 1
+
+local function readShared()
+  return Shared
+end
+
+readShared()
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn compound_assignment_does_not_define_an_unknown_global() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
