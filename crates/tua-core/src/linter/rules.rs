@@ -17,6 +17,8 @@ pub(super) fn lint(parsed: &ParsedSource) -> Vec<Diagnostic> {
     let mut visitor = LintRuleVisitor {
         parsed,
         diagnostics: comment_directive_diagnostics(parsed),
+        multiline_statements: Vec::new(),
+        multiline_table_depth: 0,
     };
     visitor.visit_ast(&parsed.ast);
     visitor.diagnostics
@@ -25,6 +27,15 @@ pub(super) fn lint(parsed: &ParsedSource) -> Vec<Diagnostic> {
 struct LintRuleVisitor<'a> {
     parsed: &'a ParsedSource,
     diagnostics: Vec<Diagnostic>,
+    multiline_statements: Vec<MultiLineStatement>,
+    multiline_table_depth: usize,
+}
+
+struct MultiLineStatement {
+    start: SourcePosition,
+    last_line: usize,
+    flagged: bool,
+    ignore_expressions: bool,
 }
 
 impl Visitor for LintRuleVisitor<'_> {
@@ -32,6 +43,30 @@ impl Visitor for LintRuleVisitor<'_> {
         self.check_statement_layout(block);
         self.check_unreachable_code(block);
         self.check_duplicate_functions(block);
+    }
+
+    fn visit_stmt(&mut self, statement: &Stmt) {
+        self.begin_multiline_statement(statement, matches!(statement, Stmt::Repeat(_)));
+    }
+
+    fn visit_stmt_end(&mut self, _statement: &Stmt) {
+        self.multiline_statements.pop();
+    }
+
+    fn visit_last_stmt(&mut self, statement: &LastStmt) {
+        self.begin_multiline_statement(statement, false);
+    }
+
+    fn visit_last_stmt_end(&mut self, _statement: &LastStmt) {
+        self.multiline_statements.pop();
+    }
+
+    fn visit_table_constructor(&mut self, _table: &ast::TableConstructor) {
+        self.multiline_table_depth += 1;
+    }
+
+    fn visit_table_constructor_end(&mut self, _table: &ast::TableConstructor) {
+        self.multiline_table_depth = self.multiline_table_depth.saturating_sub(1);
     }
 
     fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
@@ -105,6 +140,8 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_expression(&mut self, expression: &Expression) {
+        self.check_multiline_expression(expression);
+
         match expression {
             Expression::BinaryOperator { lhs, binop, rhs } => {
                 if matches!(binop, ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_)) {
@@ -195,51 +232,52 @@ impl LintRuleVisitor<'_> {
                 }
             }
         }
-
-        for statement in block.stmts() {
-            self.check_multiline_statement(statement);
-        }
     }
 
-    fn check_multiline_statement(&mut self, statement: &Stmt) {
-        let Some((start, end)) = statement.range() else {
-            return;
-        };
-        if start.line() >= end.line() {
+    fn begin_multiline_statement(&mut self, statement: &impl Node, ignore_expressions: bool) {
+        let start = statement
+            .range()
+            .map(|(start, _)| SourcePosition::from_full_moon(start))
+            .unwrap_or(SourcePosition { line: 1, column: 1 });
+        self.multiline_statements.push(MultiLineStatement {
+            start,
+            last_line: start.line,
+            flagged: false,
+            ignore_expressions,
+        });
+    }
+
+    fn check_multiline_expression(&mut self, expression: &Expression) {
+        if self.multiline_table_depth > 0 || matches!(expression, Expression::TableConstructor(_)) {
             return;
         }
 
-        let lines = self.parsed.source.lines().collect::<Vec<_>>();
-        let start_indent = line_indent(
-            lines
-                .get(start.line().saturating_sub(1))
-                .copied()
-                .unwrap_or(""),
-        );
+        let Some((start, _)) = expression.range() else {
+            return;
+        };
+        let position = SourcePosition::from_full_moon(start);
+        let should_warn = self
+            .multiline_statements
+            .last_mut()
+            .is_some_and(|statement| {
+                if statement.flagged
+                    || statement.ignore_expressions
+                    || position.line <= statement.last_line
+                {
+                    return false;
+                }
 
-        for line_number in (start.line() + 1)..=end.line() {
-            let line = lines
-                .get(line_number.saturating_sub(1))
-                .copied()
-                .unwrap_or("");
-            let trimmed = line.trim();
-            if trimmed.is_empty()
-                || trimmed.starts_with("--")
-                || starts_with_closing_syntax(trimmed)
-                || line_indent(line) > start_indent
-            {
-                continue;
-            }
+                statement.last_line = position.line;
+                statement.flagged = position.column <= statement.start.column;
+                statement.flagged
+            });
 
+        if should_warn {
             self.push(
-                SourcePosition {
-                    line: line_number,
-                    column: line_indent(line) + 1,
-                },
+                position,
                 DiagnosticCode::LINT_MULTI_LINE_STATEMENT,
                 "continuation line is not indented relative to the statement",
             );
-            break;
         }
     }
 
@@ -595,18 +633,6 @@ fn function_name(name: &ast::FunctionName) -> String {
         parts.push(token_text(method));
     }
     parts.join(".")
-}
-
-fn starts_with_closing_syntax(line: &str) -> bool {
-    [")", "]", "}", "end", "else", "elseif", "until"]
-        .iter()
-        .any(|prefix| line.starts_with(prefix))
-}
-
-fn line_indent(line: &str) -> usize {
-    line.chars()
-        .take_while(|character| character.is_whitespace())
-        .count()
 }
 
 fn unparenthesized_expression(expression: &Expression) -> &Expression {

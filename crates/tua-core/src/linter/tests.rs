@@ -397,6 +397,125 @@ second
 }
 
 #[test]
+fn same_line_statement_counts_unseparated_pairs_in_nested_blocks() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+if true then local first = 1 local second = 2 print(first, second) end
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_SAME_LINE_STATEMENT),
+        2,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn same_line_statement_accepts_semicolon_separators() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+if true then local first = 1; local second = 2; print(first, second) end
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_SAME_LINE_STATEMENT),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn multi_line_statement_checks_nested_calls_and_accepts_indentation() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+print(math.max(1,
+math.min(2, 3)))
+
+print(math.max(1,
+  math.min(2, 3)))
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MULTI_LINE_STATEMENT),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn multi_line_statement_checks_return_expressions() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+return math.max(1,
+math.min(2, 3))
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MULTI_LINE_STATEMENT),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn multi_line_statement_stays_within_nested_statement_and_table_boundaries() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+if true then
+print("block indentation belongs to the formatter")
+end
+
+local values = {
+answer = 42,
+}
+
+repeat
+print("repeat condition indentation stays exempt")
+until true
+
+if true then
+  print(math.max(1,
+math.min(2, 3)))
+end
+
+return values
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MULTI_LINE_STATEMENT),
+        1,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn multi_line_statement_uses_statement_columns_and_identifier_nodes() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local first = 1; print(math.max(1,
+  2))
+
+local value = first +
+endless
+local other = first +
+elsewhere
+return value, other
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MULTI_LINE_STATEMENT),
+        3,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn reports_enabled_lints() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
