@@ -4,15 +4,11 @@
 -- arity, local declaration arity, no-use assignments, binary operator type
 -- mismatches, and local functions that are referenced but never directly called.
 
-local function twoValues()
-  return 1, 2
-end
-
 -- Feature: assignment_arity.
--- With assignment_arity enabled, this warns because the known function returns
--- two values but the assignment has one target.
+-- With assignment_arity enabled, this warns because two explicit values are
+-- assigned to one target. A final call remains permissive for Lua multi-return.
 local assignmentTarget = 0
-assignmentTarget = twoValues()
+assignmentTarget = 1, 2
 
 -- Feature: local_declaration_arity.
 -- With local_declaration_arity enabled, this warns because there are two locals
@@ -40,7 +36,6 @@ end
 local callbackValue = referencedCallback
 
 return {
-  twoValues = twoValues,
   assignmentTarget = assignmentTarget,
   localArityA = localArityA,
   localArityB = localArityB,

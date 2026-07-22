@@ -268,6 +268,8 @@ globals.
 Local-shadow guidance is limited to used bindings in the same function and
 user globals referenced in the file; runtime-provided globals and nested
 function boundaries remain permissive.
+Unbalanced-assignment guidance compares explicit expression counts and remains
+permissive for direct-call, vararg, and intentional-`nil` tails.
 Unknown-runtime-type guidance follows resolved builtin identity: LuaJIT
 `type(...)` names and statically known LOVE object `type`/`typeOf` names are
 validated against their target catalogs, while named runtime checks remain the

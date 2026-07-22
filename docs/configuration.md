@@ -464,13 +464,14 @@ traversal and malformed import specifiers.
 : Reports known function return type mismatches through the lint pipeline.
 
 `assignment_arity`
-: Reports multiple assignments where Tua can prove the number of values does not
-match the number of targets. Unknown multi-return calls and varargs remain
-permissive.
+: Reports assignments whose explicit value count does not match the target
+count. A shortage ending in a direct call or varargs remains permissive because
+the final expression may produce multiple values. Ending a shortage with
+explicit `nil` also silences the warning and records that the missing values are
+intentional.
 
 `local_declaration_arity`
-: Reports local declarations where Tua can prove the initializer count does not
-match the number of declared locals.
+: Applies the same explicit-value-count check to local declarations.
 
 `unused_assignments`
 : Reports assignments to locals that are never otherwise read. This complements

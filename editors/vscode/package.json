@@ -285,7 +285,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report proven assignment value-count mismatches."
+          "description": "Report explicit assignment target/value-count mismatches while preserving Lua multi-return tails."
         },
         "tua.diagnostics.localDeclarationArity": {
           "type": [
@@ -293,7 +293,7 @@
             "null"
           ],
           "default": null,
-          "description": "Report proven local initializer-count mismatches."
+          "description": "Report explicit local/initializer-count mismatches while preserving Lua multi-return tails."
         },
         "tua.diagnostics.unusedAssignments": {
           "type": [

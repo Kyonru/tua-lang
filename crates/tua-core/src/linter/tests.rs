@@ -2242,19 +2242,14 @@ _G.DynamicGlobal()
 }
 
 #[test]
-fn reports_assignment_and_local_declaration_arity_when_enabled() {
+fn reports_unbalanced_assignments_with_exact_guidance() {
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
-local function pair()
-  return 1, 2
-end
-
-local a, b = 1
-local c = 1, 2
-
-a, b = pair()
-c = pair()
+local a, b, c = 1, 2
+local d = 1, 2
+a, b = 1
+d = 1, 2, 3
 "#,
         &DiagnosticsConfig {
             assignment_arity: true,
@@ -2264,27 +2259,64 @@ c = pair()
     )
     .expect_err("arity lints should report diagnostics");
 
+    let local_messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    let assignment_messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_ASSIGNMENT_ARITY))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
     assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY),
-        2
+        local_messages,
+        vec![
+            concat!(
+                "assigning 2 values to 3 variables initializes extra variables with nil; ",
+                "add `nil` to the value list to silence"
+            ),
+            "assigning 2 values to 1 variable leaves some values unused",
+        ]
     );
     assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_ASSIGNMENT_ARITY),
-        1
+        assignment_messages,
+        vec![
+            concat!(
+                "assigning 1 value to 2 variables initializes extra variables with nil; ",
+                "add `nil` to the value list to silence"
+            ),
+            "assigning 3 values to 1 variable leaves some values unused",
+        ]
     );
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.message.contains("2 target(s), 1 value(s)")
-            || diagnostic.message.contains("2 local(s), 1 value(s)")
-    }));
 }
 
 #[test]
-fn arity_lints_skip_dynamic_multivalue_sources() {
+fn unbalanced_assignment_accepts_multivalue_tails_and_explicit_nil() {
     check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
-local a, b = dynamic()
-a, b = dynamic()
+local function pair()
+  return 1, 2
+end
+
+local function collect(...)
+  local first = pair()
+  local a, b, c = pair()
+  local d, e, f = dynamic()
+  local g, h, i = ...
+  local ok, result, extra = pcall(pair), nil
+
+  first = pair()
+  a, b, c = pair()
+  d, e, f = dynamic()
+  g, h, i = ...
+  ok, result, extra = pcall(pair), nil
+
+  return first, a, b, c, d, e, f, g, h, i, ok, result, extra
+end
+
+return collect
 "#,
         &DiagnosticsConfig {
             assignment_arity: true,
@@ -2292,7 +2324,33 @@ a, b = dynamic()
             ..diagnostics_without_standard_rules()
         },
     )
-    .expect("unknown function return arity should remain permissive");
+    .expect("calls, varargs, and explicit nil tails should remain permissive");
+}
+
+#[test]
+fn recursive_alias_does_not_crash_unbalanced_assignment_lint() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"
+type Loop = Loop
+local value: Loop = dynamic()
+local first, second = value()
+return first, second
+"#,
+        &DiagnosticsConfig {
+            assignment_arity: true,
+            local_declaration_arity: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .err()
+    .unwrap_or_default();
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY),
+        0,
+        "{diagnostics:#?}"
+    );
 }
 
 #[test]

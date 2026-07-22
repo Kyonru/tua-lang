@@ -6,12 +6,8 @@ local repeated, repeated = 1, 2
 -- UnbalancedAssignment (TL4028)
 local first, second = 1
 
-local function pair()
-  return 1, 2
-end
-
 -- UnbalancedAssignment (TL4027)
-first = pair()
+first = 1, 2
 
 -- SameLineStatement (TL4036)
 local left = 1 local right = 2

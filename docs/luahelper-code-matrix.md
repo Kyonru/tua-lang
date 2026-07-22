@@ -130,8 +130,8 @@ enforced separately with `tua fmt --check`.
 | `TL4020` | The static module graph contains a require/import cycle. | `bad_requires` |
 | `TL4025` | An inline-ignore directive, scope, group, or code is invalid. | `inline_ignores` |
 | `TL4026` | An inline-ignore directive did not suppress any matching diagnostic. | `inline_ignores` |
-| `TL4027` | Assignment target count differs from the statically known value count. | `assignment_arity` |
-| `TL4028` | Local declaration count differs from the statically known initializer count. | `local_declaration_arity` |
+| `TL4027` | Assignment target count differs from the explicit value count, excluding multi-value and intentional-`nil` tails. | `assignment_arity` |
+| `TL4028` | Local count differs from the explicit initializer count, excluding multi-value and intentional-`nil` tails. | `local_declaration_arity` |
 | `TL4029` | A value assigned to a local is never read. | `unused_assignments` |
 | `TL4030` | A binary operator receives statically incompatible operand types. | `binary_operator_type_mismatches` |
 | `TL4031` | A local function is referenced but never directly called. | `uncalled_local_functions` |

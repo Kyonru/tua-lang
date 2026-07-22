@@ -268,14 +268,14 @@
       "path": "diagnostics.assignment_arity",
       "type": "boolean",
       "default": false,
-      "description": "Report proven assignment value-count mismatches.",
+      "description": "Report explicit assignment target/value-count mismatches while preserving Lua multi-return tails.",
       "editor": "tua.diagnostics.assignmentArity"
     },
     {
       "path": "diagnostics.local_declaration_arity",
       "type": "boolean",
       "default": false,
-      "description": "Report proven local initializer-count mismatches.",
+      "description": "Report explicit local/initializer-count mismatches while preserving Lua multi-return tails.",
       "editor": "tua.diagnostics.localDeclarationArity"
     },
     {

@@ -102,6 +102,13 @@ including decimal and hexadecimal-integer LuaJIT literals, and recognizes the
 common `#items, 1` and `#items, 0` array mistakes. Dynamic bounds remain
 permissive, and writing any explicit step silences this opinionated guidance.
 
+`UnbalancedAssignment` compares explicit targets and values without guessing a
+function's return count. A shortage ending in a direct call or varargs remains
+valid Lua multi-return code, including intentional selection of a call's first
+result. A trailing `nil` also records that missing values are intentional.
+Unambiguous shortages recommend adding `nil`; excess values warn that some
+results are unused.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions

@@ -1057,12 +1057,8 @@ fn did_change_configuration_can_disable_default_rules() {
 fn did_change_configuration_can_enable_luahelper_parity_lints() {
     let temp = TempProject::new("configuration-luahelper-parity-lints");
     let source = r#"
-local function pair()
-  return 1, 2
-end
-
 local a, b = 1
-a = pair()
+a = 1, 2
 
 local assigned = 1
 assigned = 2

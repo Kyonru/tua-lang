@@ -204,7 +204,8 @@ impl Visitor for LintVisitor<'_> {
             return;
         }
 
-        let Some(value_count) = self.expression_list_value_count(local.expressions()) else {
+        let Some(value_count) = unbalanced_assignment_value_count(local_count, local.expressions())
+        else {
             return;
         };
 
@@ -357,7 +358,9 @@ impl LintVisitor<'_> {
             return;
         }
 
-        let Some(value_count) = self.expression_list_value_count(assignment.expressions()) else {
+        let Some(value_count) =
+            unbalanced_assignment_value_count(target_count, assignment.expressions())
+        else {
             return;
         };
 
@@ -369,40 +372,6 @@ impl LintVisitor<'_> {
                 value_count,
             ));
         }
-    }
-
-    fn expression_list_value_count<'a>(
-        &self,
-        expressions: impl IntoIterator<Item = &'a Expression>,
-    ) -> Option<usize> {
-        let expressions = expressions.into_iter().collect::<Vec<_>>();
-
-        if expressions.is_empty() {
-            return Some(0);
-        }
-
-        let fixed_prefix = expressions.len().saturating_sub(1);
-        let last = expressions.last()?;
-
-        if expression_is_varargs(last) {
-            return None;
-        }
-
-        if let Expression::FunctionCall(function_call) = last {
-            let returns = self.function_call_return_count(function_call)?;
-
-            return Some(fixed_prefix + returns);
-        }
-
-        Some(fixed_prefix + 1)
-    }
-
-    fn function_call_return_count(&self, function_call: &FunctionCall) -> Option<usize> {
-        let name = simple_function_call_name(function_call)?;
-
-        self.semantic
-            .type_of_name(&name, node_position(function_call))
-            .and_then(|ty| callable_return_count(&ty, &self.type_context))
     }
 
     fn check_binary_expression(
@@ -2316,27 +2285,31 @@ fn resolve_alias_for_jit(ty: &Type, context: &TypeContext) -> Type {
     }
 }
 
-fn simple_function_call_name(function_call: &FunctionCall) -> Option<String> {
-    let Prefix::Name(name) = function_call.prefix() else {
+fn unbalanced_assignment_value_count<'a>(
+    target_count: usize,
+    expressions: impl IntoIterator<Item = &'a Expression>,
+) -> Option<usize> {
+    let expressions = expressions.into_iter().collect::<Vec<_>>();
+    let value_count = expressions.len();
+
+    if value_count == 0 || target_count == value_count {
         return None;
-    };
-
-    matches!(function_call.suffixes().next(), Some(Suffix::Call(_))).then(|| token_text(name))
-}
-
-fn callable_return_count(ty: &Type, context: &TypeContext) -> Option<usize> {
-    match ty {
-        Type::Function(function) => Some(function.return_types_or_any().len()),
-        Type::Alias(name) => context
-            .alias(name)
-            .and_then(|ty| callable_return_count(ty, context)),
-        Type::Any => None,
-        _ => None,
     }
-}
 
-fn expression_is_varargs(expression: &Expression) -> bool {
-    matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "...")
+    if target_count > value_count {
+        let last = expressions.last()?;
+        let permits_missing_targets = match last {
+            Expression::FunctionCall(_) => true,
+            Expression::Symbol(symbol) => matches!(token_text(symbol).as_str(), "..." | "nil"),
+            _ => false,
+        };
+
+        if permits_missing_targets {
+            return None;
+        }
+    }
+
+    Some(value_count)
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
@@ -2817,7 +2790,7 @@ fn assignment_arity_diagnostic(
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("assignment count mismatch: {targets} target(s), {values} value(s)"),
+        unbalanced_assignment_message(targets, values),
     )
     .with_code(DiagnosticCode::LINT_ASSIGNMENT_ARITY)
 }
@@ -2833,9 +2806,28 @@ fn local_declaration_arity_diagnostic(
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("local declaration count mismatch: {locals} local(s), {values} value(s)"),
+        unbalanced_assignment_message(locals, values),
     )
     .with_code(DiagnosticCode::LINT_LOCAL_DECLARATION_ARITY)
+}
+
+fn unbalanced_assignment_message(variables: usize, values: usize) -> String {
+    let variable_word = if variables == 1 {
+        "variable"
+    } else {
+        "variables"
+    };
+    let value_word = if values == 1 { "value" } else { "values" };
+
+    if values < variables {
+        format!(
+            "assigning {values} {value_word} to {variables} {variable_word} initializes extra variables with nil; add `nil` to the value list to silence"
+        )
+    } else {
+        format!(
+            "assigning {values} {value_word} to {variables} {variable_word} leaves some values unused"
+        )
+    }
 }
 
 fn unused_assignment_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
