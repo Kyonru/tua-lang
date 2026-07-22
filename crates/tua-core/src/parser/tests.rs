@@ -1,5 +1,5 @@
 use super::*;
-use crate::{check_tua_source, check_tua_source_with_diagnostics_config};
+use crate::check_tua_source_with_diagnostics_config;
 use std::path::PathBuf;
 
 #[test]
@@ -1100,13 +1100,21 @@ fn malformed_lua_doc_annotations_are_diagnostic_only_when_enabled() {
 fn lua_doc_annotation_diagnostics_are_reported_only_when_configured() {
     let source = "---@param value\nlocal value = 1\n";
 
-    check_tua_source("src/doc_quiet.tua", source)
-        .expect("malformed Lua doc annotations should be quiet by default");
+    check_tua_source_with_diagnostics_config(
+        "src/doc_quiet.tua",
+        source,
+        &crate::DiagnosticsConfig {
+            rules: false,
+            ..crate::DiagnosticsConfig::default()
+        },
+    )
+    .expect("malformed Lua doc annotations should be quiet by default");
 
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/doc_noisy.tua",
         source,
         &crate::DiagnosticsConfig {
+            rules: false,
             doc_annotations: true,
             ..crate::DiagnosticsConfig::default()
         },

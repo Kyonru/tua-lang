@@ -27,9 +27,9 @@ cargo run -p tua-cli -- check
 ```
 
 Loads project config, parses sources, runs type checking and configured project
-diagnostics, and prints them. Set `diagnostics.rules = true` when the
-standard lint rules should also appear in `check` and editor diagnostics.
-The command exits non-zero when any diagnostic is reported.
+diagnostics, and prints them. Standard lint rules are enabled by default; set
+`diagnostics.rules = false` for a type/project-only check. The command exits
+non-zero when any diagnostic is reported.
 
 ## `fmt`
 

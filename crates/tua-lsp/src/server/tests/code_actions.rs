@@ -267,7 +267,7 @@ unused_locals = true
 #[test]
 fn code_action_renames_duplicate_table_key() {
     let temp = TempProject::new("code-action-duplicate-key");
-    let source = "local config = { hp = 10, hp = 20 }\n";
+    let source = "local config = { hp = 10, hp = 20 }\nreturn config\n";
 
     temp.write(
         "tua.toml",

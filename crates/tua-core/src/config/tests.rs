@@ -280,7 +280,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.doc_annotations);
     assert!(!config.diagnostics.undefined_variables);
     assert!(!config.diagnostics.unused_locals);
-    assert!(!config.diagnostics.rules);
+    assert!(config.diagnostics.rules);
     assert!(!config.diagnostics.unused_parameters);
     assert!(!config.diagnostics.use_before_definition);
     assert!(!config.diagnostics.duplicate_parameters);

@@ -241,6 +241,7 @@ fn did_open_publishes_love_asset_path_diagnostics() {
     let temp = TempProject::new("missing-asset-diagnostics");
     let source = r#"
 local player = image "assets/missing.png"
+return player
 "#;
 
     temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
@@ -266,6 +267,7 @@ local player = image "assets/missing.png"
 fn did_open_publishes_asset_path_casing_diagnostics() {
     let temp = TempProject::new("asset-case-diagnostics");
     let source = r#"local player = image "assets/player.png"
+return player
 "#;
 
     temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
@@ -295,7 +297,9 @@ fn did_open_publishes_impossible_comparison_warnings() {
   if a == 1 then
     return 1
   end
+  return nil
 end
+recursive("value")
 "#;
     let output = run_messages(vec![did_open(uri, source)]);
     let diagnostics = last_published_diagnostics(&output, uri);
@@ -326,7 +330,10 @@ undefined_variables = true
     let uri = temp.uri_for("src/main.tua");
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
-        did_open(&uri, "local config = { hp = 10, hp = 20 }\nmissing()\n"),
+        did_open(
+            &uri,
+            "local config = { hp = 10, hp = 20 }\nmissing()\nreturn config\n",
+        ),
     ]);
     let diagnostics = last_published_diagnostics(&output, &uri);
 
@@ -360,7 +367,7 @@ fn did_change_republishes_empty_diagnostics_for_clean_document() {
                     "uri": uri,
                     "languageId": "tua",
                     "version": 1,
-                    "text": "local hp: number = \"full\"\n"
+                    "text": "local hp: number = \"full\"\nprint(hp)\n"
                 }
             }
         }),
@@ -374,7 +381,7 @@ fn did_change_republishes_empty_diagnostics_for_clean_document() {
                 },
                 "contentChanges": [
                     {
-                        "text": "local hp: number = 10\n"
+                        "text": "local hp: number = 10\nprint(hp)\n"
                     }
                 ]
             }
@@ -427,16 +434,16 @@ fn pull_diagnostics_use_fast_current_file_results_during_edit_window() {
     let temp = TempProject::new("pull-fast-edit-diagnostics");
 
     temp.write("tua.toml", "source = \"src\"\n");
-    temp.write("src/main.tua", "local ready = true\n");
+    temp.write("src/main.tua", "local ready = true\nprint(ready)\n");
 
     let uri = temp.uri_for("src/main.tua");
     let mut server = TestServer::new();
 
     server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
-    server.send(did_open(&uri, "local ready = true\n"));
+    server.send(did_open(&uri, "local ready = true\nprint(ready)\n"));
     server.send(did_change(
         &uri,
-        "local sprite = image \"missing.png\"\n",
+        "local sprite = image \"missing.png\"\nreturn sprite\n",
         2,
     ));
     server.send(text_document_diagnostic_request(2, &uri));
@@ -469,7 +476,7 @@ fn pull_diagnostics_use_fast_current_file_results_during_edit_window() {
 #[test]
 fn did_change_applies_incremental_edits_and_republishes_diagnostics() {
     let uri = "file:///tmp/incremental-change.tua";
-    let source = "local hp: number = 10\n";
+    let source = "local hp: number = 10\nprint(hp)\n";
     let output = run_messages(vec![
         did_open(uri, source),
         json!({
@@ -513,13 +520,13 @@ fn did_change_publishes_fast_diagnostics_before_slow_diagnostics() {
     let temp = TempProject::new("fast-slow-diagnostics");
 
     temp.write("tua.toml", "source = \"src\"\n");
-    temp.write("src/main.tua", "local ready = true\n");
+    temp.write("src/main.tua", "local ready = true\nprint(ready)\n");
 
     let uri = temp.uri_for("src/main.tua");
-    let edited = "local sprite = image \"missing.png\"\n";
+    let edited = "local sprite = image \"missing.png\"\nreturn sprite\n";
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
-        did_open(&uri, "local ready = true\n"),
+        did_open(&uri, "local ready = true\nprint(ready)\n"),
         did_change(&uri, edited, 2),
     ]);
     let publications = diagnostics_publications(&output, &uri);
@@ -542,16 +549,16 @@ fn did_change_debounces_slow_diagnostics_until_idle_window() {
     let temp = TempProject::new("debounced-slow-diagnostics");
 
     temp.write("tua.toml", "source = \"src\"\n");
-    temp.write("src/main.tua", "local ready = true\n");
+    temp.write("src/main.tua", "local ready = true\nprint(ready)\n");
 
     let uri = temp.uri_for("src/main.tua");
     let mut server = TestServer::new();
 
     server.send(initialize_with_root(1, temp.uri()));
-    server.send(did_open(&uri, "local ready = true\n"));
+    server.send(did_open(&uri, "local ready = true\nprint(ready)\n"));
     server.send_without_drain(did_change(
         &uri,
-        "local sprite = image \"missing.png\"\n",
+        "local sprite = image \"missing.png\"\nreturn sprite\n",
         2,
     ));
 
@@ -584,14 +591,18 @@ fn did_change_cancels_stale_slow_diagnostics_for_newer_versions() {
     let temp = TempProject::new("cancel-stale-slow-diagnostics");
 
     temp.write("tua.toml", "source = \"src\"\n");
-    temp.write("src/main.tua", "local ready = true\n");
+    temp.write("src/main.tua", "local ready = true\nprint(ready)\n");
 
     let uri = temp.uri_for("src/main.tua");
     let output = run_messages(vec![
         initialize_with_root(1, temp.uri()),
-        did_open(&uri, "local ready = true\n"),
-        did_change(&uri, "local sprite = image \"missing.png\"\n", 2),
-        did_change(&uri, "local ready = true\n", 3),
+        did_open(&uri, "local ready = true\nprint(ready)\n"),
+        did_change(
+            &uri,
+            "local sprite = image \"missing.png\"\nreturn sprite\n",
+            2,
+        ),
+        did_change(&uri, "local ready = true\nprint(ready)\n", 3),
     ]);
     let publications = diagnostics_publications(&output, &uri);
     let published_codes = publications
@@ -615,7 +626,7 @@ fn did_change_cancels_stale_slow_diagnostics_for_newer_versions() {
 fn did_save_accepts_text_and_republishes_diagnostics() {
     let uri = "file:///tmp/save.tua";
     let output = run_messages(vec![
-        did_open(uri, "local hp: number = 10\n"),
+        did_open(uri, "local hp: number = 10\nprint(hp)\n"),
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didSave",
@@ -623,7 +634,7 @@ fn did_save_accepts_text_and_republishes_diagnostics() {
                 "textDocument": {
                     "uri": uri
                 },
-                "text": "local hp: number = \"full\"\n"
+                "text": "local hp: number = \"full\"\nprint(hp)\n"
             }
         }),
     ]);

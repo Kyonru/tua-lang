@@ -5,5 +5,6 @@ extension = "tua"
 emit_maps = true
 
 [diagnostics]
+rules = false
 inline_ignores = true
 undefined_variables = true

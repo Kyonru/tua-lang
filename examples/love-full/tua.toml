@@ -47,7 +47,6 @@ local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = true
-formatting_lints = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0

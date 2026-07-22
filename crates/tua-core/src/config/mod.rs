@@ -48,7 +48,7 @@ enabled = true
 backend = \"tua\"
 
 [diagnostics]
-rules = false
+rules = true
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
@@ -275,7 +275,7 @@ pub struct DiagnosticsConfig {
 impl Default for DiagnosticsConfig {
     fn default() -> Self {
         Self {
-            rules: false,
+            rules: true,
             duplicate_keys: false,
             missing_requires: false,
             self_assignments: false,

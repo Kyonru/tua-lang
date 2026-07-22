@@ -355,6 +355,32 @@ local hp: number = "full"
 }
 
 #[test]
+fn check_enables_standard_lints_by_default() {
+    let temp = TempDir::new("check-default-lints");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local first, first = 1, 2\nreturn first\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua check");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("warning TL4043"));
+    assert!(stderr.contains("duplicate local `first`"));
+}
+
+#[test]
 fn check_applies_enabled_inline_ignores() {
     let temp = TempDir::new("check-inline-ignores");
 
@@ -377,6 +403,7 @@ inline_ignores = true
         r#"
 -- tua-ignore-next-line TL1003
 local hp: number = "full"
+print(hp)
 "#,
     )
     .expect("failed to write source");

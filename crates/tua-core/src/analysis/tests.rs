@@ -61,15 +61,15 @@ fn snapshot_prefers_open_document_over_file_contents() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
 
-    host.set_file(&path, "local value: number = 1\n");
-    host.open_document(&path, "local value: number = \"open\"\n");
+    host.set_file(&path, "local value: number = 1\nprint(value)\n");
+    host.open_document(&path, "local value: number = \"open\"\nprint(value)\n");
 
     let snapshot = host.snapshot();
 
     assert!(snapshot.is_open_document(&path));
     assert_eq!(
         snapshot.source(&path),
-        Some("local value: number = \"open\"\n")
+        Some("local value: number = \"open\"\nprint(value)\n")
     );
     assert_eq!(snapshot.diagnostics(&path).len(), 1);
 }
@@ -1262,7 +1262,7 @@ fn pipeline_diagnostics_use_configured_asset_roots() {
     let temp = TempProject::new("asset-roots");
     let path = temp.write(
         "src/main.tua",
-        "local player = image \"assets/player.png\"\n",
+        "local player = image \"assets/player.png\"\nreturn player\n",
     );
 
     temp.write("assets/player.png", "");

@@ -45,8 +45,8 @@ project snapshot. See [Diagnostic Codes](luahelper-code-matrix.md) for
 code definitions and [Configuration](configuration.md#diagnostics) for project
 settings.
 
-Set `diagnostics.rules = true` (or the
-`tua.diagnostics.rules` override) to publish the standard rules.
+Standard lint rules are published by default. Set `diagnostics.rules = false`
+(or use the `tua.diagnostics.rules` override) to disable them.
 Formatting differences are not diagnostics; editor formatting and
 `tua fmt --check` use the separate formatter.
 

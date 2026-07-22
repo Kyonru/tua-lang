@@ -298,6 +298,7 @@ fn did_open_accepts_love_assets_from_configured_output_root() {
     let temp = TempProject::new("configured-output-asset");
     let source = r#"
 local player = image "assets/player.png"
+return player
 "#;
 
     temp.write("tua.toml", "source = \"src\"\nout = \"game\"\n");
@@ -318,6 +319,7 @@ fn watched_asset_changes_refresh_asset_index_and_republish_open_diagnostics() {
     let temp = TempProject::new("watched-asset-index");
     let source = r#"
 local player = image "assets/player.png"
+return player
 "#;
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -350,6 +352,7 @@ fn did_change_uses_warmed_asset_index_until_watched_asset_refresh() {
     let temp = TempProject::new("asset-index-no-request-scan");
     let source = r#"
 local player = image "assets/player.png"
+return player
 "#;
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -368,7 +371,7 @@ local player = image "assets/player.png"
     );
 
     temp.remove("assets/player.png");
-    let edited = format!("{source}local touched = true\n");
+    let edited = format!("{source}-- touched\n");
 
     server.send(did_change(&uri, &edited, 2));
     assert!(
@@ -405,7 +408,7 @@ missing_requires = true
     );
     temp.write(
         "examples/features/src/imports.tua",
-        "local Functions = import(\"./functions\")\n",
+        "local Functions = import(\"./functions\")\nreturn Functions\n",
     );
     temp.write("examples/features/src/functions.tua", "return {}\n");
 
@@ -434,7 +437,7 @@ missing_requires = true
     );
     temp.write(
         "examples/features/src/imports.tua",
-        "local Functions = import(\"./functions\")\n",
+        "local Functions = import(\"./functions\")\nreturn Functions\n",
     );
     temp.write("examples/features/src/functions.tua", "return {}\n");
 
@@ -451,7 +454,7 @@ missing_requires = true
 #[test]
 fn watched_child_import_create_clears_missing_import_diagnostic() {
     let temp = TempProject::new("watched-child-import-create");
-    let main = "local Functions = import(\"./functions\")\n";
+    let main = "local Functions = import(\"./functions\")\nreturn Functions\n";
 
     temp.write(
         "tua.toml",
@@ -493,6 +496,7 @@ fn pull_diagnostics_refresh_after_configuration_change() {
         r#"source = "src"
 
 [diagnostics]
+rules = false
 unused_locals = false
 "#,
     );
@@ -527,6 +531,7 @@ fn pull_diagnostics_refresh_after_watched_dependency_change() {
     let main = r#"local Player = require("player")
 
 local made = Player.makePlayer("Ada")
+return made
 "#;
     let player = r#"local function makePlayer(name)
   return { name = name }
@@ -643,6 +648,7 @@ fn watched_required_module_create_updates_intelligence_and_diagnostics() {
 
 local made = Player.makePlayer("Ada")
 local hp = Player.defaultHp
+return { made = made, hp = hp }
 "#;
     let player = r#"type Player = { name: string, hp: number }
 
@@ -894,6 +900,7 @@ fn watched_required_module_delete_clears_exports_and_reports_missing_require() {
     let main = r#"local Player = require("player")
 
 local made = Player.makePlayer("Ada")
+return made
 "#;
     let player = r#"local function makePlayer(name)
   return { name = name }
@@ -950,6 +957,7 @@ missing_requires = true
 fn watched_config_change_republishes_open_diagnostics_with_new_settings() {
     let temp = TempProject::new("watched-config-change");
     let main = r#"local Missing = require("missing")
+return Missing
 "#;
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -990,6 +998,7 @@ fn did_change_configuration_republishes_diagnostic_overrides() {
         r#"source = "src"
 
 [diagnostics]
+rules = false
 unused_locals = false
 "#,
     );
@@ -1019,7 +1028,7 @@ unused_locals = false
 }
 
 #[test]
-fn did_change_configuration_can_enable_rules() {
+fn did_change_configuration_can_disable_default_rules() {
     let temp = TempProject::new("configuration-lint-rules");
     let source = "local first, first = 1, 2\nreturn first\n";
 
@@ -1030,18 +1039,18 @@ fn did_change_configuration_can_enable_rules() {
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+    assert!(last_published_diagnostics(server.output(), &uri)
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL4043"));
 
     server.send(did_change_configuration(json!({
         "diagnostics": {
-            "rules": true
+            "rules": false
         }
     })));
 
     let diagnostics = last_published_diagnostics(server.output(), &uri);
-    assert!(diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic["code"] == "TL4043"));
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
 #[test]
@@ -1066,7 +1075,10 @@ end
 print(callback)
 "#;
 
-    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write(
+        "tua.toml",
+        "source = \"src\"\n\n[diagnostics]\nrules = false\n",
+    );
 
     let uri = temp.uri_for("src/main.tua");
     let mut server = TestServer::new();
@@ -1161,6 +1173,7 @@ fn did_change_configuration_can_enable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003
 local value: number = "legacy"
+print(value)
 "#;
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -1192,6 +1205,7 @@ fn did_change_configuration_null_diagnostics_defer_to_project_config() {
         r#"source = "src"
 
 [diagnostics]
+rules = false
 unused_locals = true
 "#,
     );

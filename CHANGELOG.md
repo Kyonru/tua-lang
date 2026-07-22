@@ -8,7 +8,7 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
-- Standard lint rules for `tua lint` and the opt-in
+- Standard lint rules for `tua lint` and the default-on
   `diagnostics.rules` editor/check setting, including symbol, declaration,
   control-flow, format-string, table-operation, and expression guidance.
 - Source-mapped LOVE debugging through **Tua: Debug LOVE Project**. Builds now
@@ -69,6 +69,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Standard lint rules are enabled by default for `tua check` and editor
+  diagnostics. Set `diagnostics.rules = false` to opt out; `tua lint` continues
+  to enable the standard set for its own run.
 - Formatting and linting are now independent toolchain modules: `tua fmt` and
   `fmt --check` own canonical layout, while `tua lint` reports syntax/lint
   categories and `tua check` owns the complete semantic diagnostic pipeline.
@@ -83,6 +86,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Migration
 
+- Projects that need the previous lint-free `tua check` and editor behavior can
+  set `[diagnostics].rules = false`.
 - Remove `diagnostics.formatting_lints` and the
   `tua.diagnostics.formattingLints` editor override. Use `tua fmt --check` for
   formatting enforcement and `diagnostics.rules` for the standard lint rules.

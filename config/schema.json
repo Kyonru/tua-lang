@@ -133,7 +133,7 @@
     {
       "path": "diagnostics.rules",
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Enable Tua's standard code-quality lint rules.",
       "editor": "tua.diagnostics.rules",
       "editorDescription": "Enable Tua's standard code-quality lint rules. Null inherits [diagnostics].rules from tua.toml."

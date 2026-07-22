@@ -55,7 +55,7 @@ enabled = true
 backend = "tua"
 
 [diagnostics]
-rules = false
+rules = true
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
@@ -112,7 +112,7 @@ the behavior and tradeoffs of each option.
 | `jit.hot_loop_hints` | boolean | `true` | - |
 | `ecs.enabled` | boolean | `true` | `tua.ecs.enabled` |
 | `ecs.backend` | string | `"tua"` | - |
-| `diagnostics.rules` | boolean | `false` | `tua.diagnostics.rules` |
+| `diagnostics.rules` | boolean | `true` | `tua.diagnostics.rules` |
 | `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
 | `diagnostics.missing_requires` | boolean | `false` | `tua.diagnostics.missingRequires` |
 | `diagnostics.self_assignments` | boolean | `false` | `tua.diagnostics.selfAssignments` |
@@ -356,10 +356,11 @@ deadzones, and player ownership belong to each `input` call. See
 
 Formatting and linting are independent: `[format]` controls `tua fmt`, while
 `[diagnostics]` controls code-quality guidance. `tua lint` always enables the
-standard rules for that command. Set `rules = true` to publish the
-same rules through `tua check` and editor diagnostics; `tua lint --strict`
-adds every Tua-specific optional lint. See [Formatter](formatter.md),
-[Linter](linter.md), and [Diagnostic Codes](luahelper-code-matrix.md).
+standard rules for that command. Those rules are enabled by default for
+`tua check` and editor diagnostics; set `rules = false` to opt out there.
+`tua lint --strict` adds every Tua-specific optional lint. See
+[Formatter](formatter.md), [Linter](linter.md), and
+[Diagnostic Codes](luahelper-code-matrix.md).
 
 ```toml
 [diagnostics]
@@ -400,10 +401,10 @@ annotation_mode = "luacats"
 : Reports repeated literal keys in table constructors.
 
 `rules`
-: Enables the standard lint rules for `tua check` and language server
-diagnostics. `tua lint` enables these rules for its own run regardless
-of the configured value. See [Linter](linter.md) for the rule map and target
-specific exclusions.
+: Controls the standard lint rules for `tua check` and language server
+diagnostics. They are enabled by default. `tua lint` enables these rules for
+its own run regardless of the configured value. See [Linter](linter.md) for
+the rule map and target-specific exclusions.
 
 `missing_requires`
 : Reports `require("module")` and static `import(...)` bindings that Tua cannot

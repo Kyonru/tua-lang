@@ -253,6 +253,8 @@ policy gate and does not enable a network-backed provider.
 Diagnostics use stable `TLxxxx` codes grouped by syntax, type, asset/build,
 lint/project, and domain families. Suppression comments can target exact codes
 or documented groups but cannot alter inference, lowering, or runtime behavior.
+The standard lint rules are enabled by default for checking and editor
+diagnostics; projects can disable that set without disabling type checking.
 
 The compiler and language server use the same semantic diagnostics for an
 identical project snapshot. The editor presents those diagnostics without a

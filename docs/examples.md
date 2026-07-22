@@ -17,6 +17,10 @@ make lsp-features-smoke
 
 Use this when changing language-server behavior.
 
+The feature tour opts out of the default standard lint set because several
+files demonstrate intentionally incomplete or suspicious patterns. Use the
+dedicated `examples/linter` fixture to exercise those rules.
+
 The feature tour includes placeholder assets under `src/assets/` so static LOVE
 asset validation, asset-path completion, and asset metadata hovers can run
 without depending on real art or audio files.
@@ -36,7 +40,8 @@ cd examples/linter
 ../../target/debug/tua lint
 ```
 
-The lint command exits with status `1` by design. The fixture has no
+The lint command exits with status `1` by design. With standard rules enabled
+by default, `tua check` reports the same fixture warnings. The fixture has no
 `tua.toml`, so it does not participate in buildable-example or benchmark runs.
 
 ## `examples/love-minimal`

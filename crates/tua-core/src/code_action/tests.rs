@@ -394,8 +394,11 @@ fn removes_unused_local_and_self_assignment() {
 
 #[test]
 fn renames_duplicate_table_key() {
-    let parsed = parse_tua_source("src/main.tua", "local config = { hp = 10, hp = 20 }\n")
-        .expect("source should parse");
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "local config = { hp = 10, hp = 20 }\nreturn config\n",
+    )
+    .expect("source should parse");
     let diagnostics = diagnostics(
         &parsed,
         DiagnosticsConfig {

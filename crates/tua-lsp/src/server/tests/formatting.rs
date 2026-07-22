@@ -175,7 +175,7 @@ fn on_type_formatting_ignores_unstable_triggers_and_parse_errors() {
 #[test]
 fn formatting_differences_do_not_publish_lint_diagnostics() {
     let temp = TempProject::new("formatting-is-not-linting");
-    let source = "local value=1   \n";
+    let source = "return 1   \n";
 
     temp.write("tua.toml", "source = \"src\"\n");
 

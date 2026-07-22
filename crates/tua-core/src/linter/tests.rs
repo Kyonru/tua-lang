@@ -5,8 +5,8 @@ use crate::{
 };
 
 #[test]
-fn configured_non_style_lints_are_disabled_by_default() {
-    check_tua_source(
+fn standard_lints_are_enabled_by_default() {
+    let diagnostics = check_tua_source(
         "src/main.tua",
         r#"
 local config = { hp = 10, hp = 20 }
@@ -16,12 +16,25 @@ local Missing = require("definitely_missing_lint_module")
 local spaced = { 1, 2, 3 }
 "#,
     )
-    .expect("non-style lint-only issues should be disabled by default");
+    .expect_err("standard lint rules should be enabled by default");
+
+    for code in [
+        DiagnosticCode::LINT_DUPLICATE_TABLE_KEY,
+        DiagnosticCode::LINT_UNUSED_LOCAL,
+        DiagnosticCode::LINT_UNUSED_IMPORT,
+    ] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(code)),
+            "expected {code} in {diagnostics:#?}"
+        );
+    }
 }
 
 #[test]
 fn formatting_is_not_a_lint() {
-    check_tua_source("src/main.tua", "local value=1   \n")
+    check_tua_source("src/main.tua", "return 1   \n")
         .expect("formatting differences belong to the formatter");
 }
 
@@ -255,7 +268,7 @@ local Missing = require("definitely_missing_lint_module")
             missing_requires: true,
             self_assignments: true,
             doc_annotations: false,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("enabled lints should report diagnostics");
@@ -296,7 +309,7 @@ end
 "#,
         &DiagnosticsConfig {
             duplicate_parameters: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("duplicate parameters should report diagnostics");
@@ -324,7 +337,7 @@ fn reports_bad_require_files_with_dedicated_toggle() {
 "#,
         &DiagnosticsConfig {
             bad_requires: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("bad require lint should report diagnostics");
@@ -350,7 +363,7 @@ fn bad_require_lint_does_not_duplicate_missing_require_lint() {
         &DiagnosticsConfig {
             missing_requires: true,
             bad_requires: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("bad require lint should report diagnostics");
@@ -373,7 +386,7 @@ fn static_import_binding_is_not_an_undefined_variable() {
 
 return Player
 "#,
-        &DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     );
 
     assert_eq!(diagnostics, Ok(()));
@@ -392,7 +405,7 @@ fn unresolved_static_import_binding_is_not_an_undefined_variable_when_unchecked(
 
 return Player
 "#,
-        &DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     );
 
     assert_eq!(diagnostics, Ok(()));
@@ -416,7 +429,7 @@ end
 "#,
         &DiagnosticsConfig {
             impossible_boolean_expressions: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("impossible boolean lint should report diagnostics");
@@ -444,7 +457,7 @@ end
 "#,
         &DiagnosticsConfig {
             duplicate_if_conditions: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("duplicate if condition lint should report diagnostics");
@@ -472,7 +485,7 @@ end
 "#,
         &DiagnosticsConfig {
             duplicate_binary_operands: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("duplicate binary operand lint should report diagnostics");
@@ -498,7 +511,7 @@ end
 "#,
         &DiagnosticsConfig {
             float_equality: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("float equality lint should report diagnostics");
@@ -519,7 +532,7 @@ MAX_HP = 20
 "#,
         &DiagnosticsConfig {
             const_assignments: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("const assignment lint should report diagnostics");
@@ -550,7 +563,7 @@ damage("bad")
             wrong_argument_count: true,
             parameter_type_mismatches: true,
             return_type_mismatches: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("checker-backed function diagnostics should report");
@@ -590,7 +603,7 @@ fn missing_require_lint_accepts_resolved_project_modules() {
 "#,
         &DiagnosticsConfig {
             missing_requires: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("resolved project requires should not warn");
@@ -608,7 +621,7 @@ ConfiguredGlobal()
         &DiagnosticsConfig {
             undefined_variables: true,
             globals: vec!["ConfiguredGlobal".to_owned()],
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("undefined variable lint should report diagnostics");
@@ -633,7 +646,7 @@ return { Position = Position, world = world }
 "#,
         &DiagnosticsConfig {
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("built-in ecs module should not be reported as undefined");
@@ -652,7 +665,7 @@ return pool
 "#,
         &DiagnosticsConfig {
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("built-in objectPool should not be reported as undefined");
@@ -667,7 +680,7 @@ local b = atun("")
 "#,
         &DiagnosticsConfig {
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("undefined function call should report a diagnostic");
@@ -690,7 +703,7 @@ end
 "#,
         &DiagnosticsConfig {
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("LuaJIT bit library should be a known builtin global");
@@ -716,7 +729,7 @@ test(1, 2, 3)
         &DiagnosticsConfig {
             unused_locals: true,
             unused_parameters: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("unused symbol lints should report diagnostics");
@@ -753,7 +766,7 @@ damage(player, 2)
         &DiagnosticsConfig {
             unused_parameters: true,
             unused_locals: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("compound assignment operands should count as reads");
@@ -773,7 +786,7 @@ end
         &DiagnosticsConfig {
             undefined_variables: true,
             unused_parameters: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("colon method bodies should have an implicit self parameter");
@@ -796,7 +809,7 @@ print(value)
         &DiagnosticsConfig {
             unused_locals: true,
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("shadowed locals should each count their own uses");
@@ -814,7 +827,7 @@ print(score)
         &DiagnosticsConfig {
             use_before_definition: true,
             undefined_variables: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("use-before-definition should report diagnostics");
@@ -851,7 +864,7 @@ _G.DynamicGlobal()
         &DiagnosticsConfig {
             undefined_variables: true,
             globals: vec!["ConfiguredGlobal".to_owned()],
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("known globals and dynamic module fields should not warn");
@@ -875,7 +888,7 @@ c = pair()
         &DiagnosticsConfig {
             assignment_arity: true,
             local_declaration_arity: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("arity lints should report diagnostics");
@@ -905,7 +918,7 @@ a, b = dynamic()
         &DiagnosticsConfig {
             assignment_arity: true,
             local_declaration_arity: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("unknown function return arity should remain permissive");
@@ -925,7 +938,7 @@ print(used)
 "#,
         &DiagnosticsConfig {
             unused_assignments: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("unused assignment lint should report diagnostics");
@@ -951,7 +964,7 @@ local unknown = dynamic + 1
 "#,
         &DiagnosticsConfig {
             binary_operator_type_mismatches: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("binary operator type lint should report diagnostics");
@@ -980,7 +993,7 @@ local sorted = name <= "Mina"
 "#,
         &DiagnosticsConfig {
             binary_operator_type_mismatches: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect("valid number and string ordering operators should not warn");
@@ -1002,7 +1015,7 @@ called()
 "#,
         &DiagnosticsConfig {
             uncalled_local_functions: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
     )
     .expect_err("uncalled local function lint should report diagnostics");
@@ -1142,7 +1155,7 @@ fn check_jit_source(source: &str, jit_config: JitConfig) -> Vec<crate::Diagnosti
     check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
         &parsed,
         &[std::path::PathBuf::from("src")],
-        &DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
         &jit_config,
         &EcsConfig::default(),
     )
@@ -1158,13 +1171,21 @@ fn check_standard_rules_source(source: &str) -> Vec<crate::Diagnostic> {
         &[std::path::PathBuf::from("src")],
         &DiagnosticsConfig {
             rules: true,
-            ..DiagnosticsConfig::default()
+            ..diagnostics_without_standard_rules()
         },
         &JitConfig::default(),
         &EcsConfig::default(),
     )
     .err()
     .unwrap_or_default()
+}
+
+fn diagnostics_without_standard_rules() -> DiagnosticsConfig {
+    // Dedicated-toggle tests isolate one optional rule from the standard set.
+    DiagnosticsConfig {
+        rules: false,
+        ..DiagnosticsConfig::default()
+    }
 }
 
 struct TempProject {

@@ -1,9 +1,36 @@
 use super::*;
 use crate::DiagnosticCode;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+// Checker fixtures isolate type and domain behavior; linter tests cover the
+// default standard-rule profile separately.
+fn check_tua_source(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+) -> Result<(), Vec<Diagnostic>> {
+    super::check_tua_source_with_diagnostics_config(
+        path,
+        source,
+        &diagnostics_without_standard_rules(),
+    )
+}
+
+fn check_parsed_source(parsed: &ParsedSource) -> Result<(), Vec<Diagnostic>> {
+    super::check_parsed_source_with_diagnostics_config(
+        parsed,
+        &diagnostics_without_standard_rules(),
+    )
+}
+
+fn diagnostics_without_standard_rules() -> DiagnosticsConfig {
+    DiagnosticsConfig {
+        rules: false,
+        ..DiagnosticsConfig::default()
+    }
+}
 
 #[test]
 fn accepts_matching_annotated_local_initializers() {
@@ -69,7 +96,7 @@ local batch: SpriteBatch = spriteBatch(player, 128)
 local sparks: ParticleSystem = particles(player, 64)
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect("LOVE asset loaders should produce their nominal asset types");
 }
@@ -502,7 +529,7 @@ fn rejects_love_asset_loader_initializer_mismatch() {
 local player: Source = image "assets/player.png"
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("asset loader type mismatch should be reported");
 
@@ -674,7 +701,7 @@ fn accepts_inline_native_love_shader_source_strings() {
         r#"
 local shader = love.graphics.newShader("vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) { return color; }")
 "#,
-        &DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect("inline shader source strings should not be treated as asset paths");
 }
@@ -693,7 +720,7 @@ local player = image "assets/player.png"
         temp.path.join("src/assets.tua"),
         source,
         &[temp.path.join("game")],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect("configured asset roots should be searched");
 }
@@ -1075,7 +1102,7 @@ local literal: number = 1 + 3
 local label: string = "width: " .. z
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect("Love method multi-return should satisfy inferred function return checks");
 }
@@ -1160,7 +1187,7 @@ player:setFilter("nearest")
 player:setFilter("nearest", "linear", 4)
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect("Love enum-like parameters should accept string values");
 }
@@ -1175,7 +1202,7 @@ local player = image "assets/player.png"
 player:setFilter("blurry")
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("invalid Love enum-like method parameter should be reported");
 
@@ -1508,7 +1535,7 @@ local player = image "assets/player.png"
 player.setFilter("nearest")
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("dot method call should be reported");
 
@@ -1532,7 +1559,7 @@ fn warns_for_dot_calls_to_every_generated_love_object_method() {
             "src/assets.tua",
             source,
             &[],
-            &crate::DiagnosticsConfig::default(),
+            &diagnostics_without_standard_rules(),
         )
         .unwrap_err();
 
@@ -1557,7 +1584,7 @@ fn inline_ignores_are_disabled_by_default() {
 -- tua-ignore-next-line TL1003
 local hp: number = "full"
 "#,
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("disabled inline ignore should not suppress diagnostics");
 
@@ -1569,7 +1596,7 @@ local hp: number = "full"
 fn inline_ignores_suppress_matching_type_diagnostics() {
     let mut config = crate::DiagnosticsConfig {
         inline_ignores: true,
-        ..crate::DiagnosticsConfig::default()
+        ..diagnostics_without_standard_rules()
     };
 
     check_tua_source_with_diagnostics_config(
@@ -1601,7 +1628,7 @@ local hp: number = "full"
 fn inline_ignores_report_unused_and_invalid_comments() {
     let config = crate::DiagnosticsConfig {
         inline_ignores: true,
-        ..crate::DiagnosticsConfig::default()
+        ..diagnostics_without_standard_rules()
     };
     let diagnostics = check_tua_source_with_diagnostics_config(
         "src/main.tua",
@@ -2175,7 +2202,7 @@ local player = image "assets/player.png"
 player:setFilter()
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("Love method argument count mismatch should be reported");
 
@@ -2199,7 +2226,7 @@ local player = image "assets/player.png"
 player:setFilter(123)
 "#,
         &[],
-        &crate::DiagnosticsConfig::default(),
+        &diagnostics_without_standard_rules(),
     )
     .expect_err("Love method argument type mismatch should be reported");
 
@@ -2450,7 +2477,7 @@ end
     let diagnostics_config = DiagnosticsConfig {
         inline_ignores: true,
         undefined_variables: true,
-        ..DiagnosticsConfig::default()
+        ..diagnostics_without_standard_rules()
     };
 
     check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(

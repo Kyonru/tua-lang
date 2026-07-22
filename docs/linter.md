@@ -14,13 +14,13 @@ tua lint
 tua lint --strict
 ```
 
-`--strict` adds every Tua-specific optional lint to the standard rules.
-To publish those rules in the editor or through `tua check`, enable them in the
-project:
+`--strict` adds every Tua-specific optional lint to the standard rules. The
+standard rules are also enabled by default in `tua check` and the editor. A
+project can opt out of that default without changing `tua lint`:
 
 ```toml title="tua.toml"
 [diagnostics]
-rules = true
+rules = false
 ```
 
 ## Rules

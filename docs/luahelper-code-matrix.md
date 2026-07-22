@@ -100,9 +100,11 @@ operations. More specialized optional lint codes such as `TL4016` and
 
 ## Lint And Guidance Codes
 
-Most `TL4xxx` diagnostics are opt-in through project/editor settings. The
-`tua lint` command enables `diagnostics.rules` for its own run; formatting
-has no diagnostic codes and is enforced separately with `tua fmt --check`.
+The standard `TL4xxx` lint set is enabled by default through
+`diagnostics.rules`; Tua-specific guidance outside that set remains opt-in
+through project/editor settings. The `tua lint` command always enables the
+standard set for its own run. Formatting has no diagnostic codes and is
+enforced separately with `tua fmt --check`.
 
 | Code | Meaning | Configuration |
 | --- | --- | --- |
