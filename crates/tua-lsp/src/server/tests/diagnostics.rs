@@ -78,6 +78,35 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_uninitialized_local_arity_and_compound_diagnostics() {
+    let uri = "file:///tmp/uninitialized-local.tua";
+    let source =
+        "local first, missing = 1\nprint(missing)\nlocal total\ntotal += 1\nprint(total)\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL4045")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 1);
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 6);
+    assert_eq!(
+        diagnostics[0]["message"],
+        "local `missing` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
+    );
+    assert_eq!(diagnostics[1]["range"]["start"]["line"], 3);
+    assert_eq!(diagnostics[1]["range"]["start"]["character"], 0);
+    assert_eq!(
+        diagnostics[1]["message"],
+        "local `total` defined at line 3 is never initialized or assigned; initialize with `nil` to silence"
+    );
+}
+
+#[test]
 fn did_open_publishes_inferred_local_reassignment_diagnostics() {
     let uri = "file:///tmp/reassignment.tua";
     let output = run_messages(vec![did_open(

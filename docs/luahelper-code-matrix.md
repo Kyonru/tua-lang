@@ -148,7 +148,7 @@ enforced separately with `tua fmt --check`.
 | `TL4042` | A numeric `for` range likely needs a different bound or explicit step. | `rules` |
 | `TL4043` | One local declaration or function parameter list repeats a non-placeholder name, including an explicit method `self`. | `rules`; parameters can also use `duplicate_parameters` |
 | `TL4044` | A literal LuaJIT/Lua 5.1 printf format, Lua pattern, capture, or `gsub` replacement is invalid. | `rules` |
-| `TL4045` | A local is read but never initialized. | `rules` |
+| `TL4045` | A local is read without its own initializer or any plain assignment; a final direct call or varargs can initialize remaining bindings. | `rules` |
 | `TL4046` | A function name is defined more than once in one block. | `rules` |
 | `TL4047` | A `table.insert` or `table.remove` index is invalid, redundant, or suspicious. | `rules` |
 | `TL4048` | `a and false/nil or b` cannot preserve the false/nil result. | `rules` |

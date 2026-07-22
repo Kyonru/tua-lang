@@ -715,6 +715,7 @@ struct Declaration {
     used: bool,
     called: bool,
     initialized: bool,
+    assigned: bool,
     first_read: Option<SourcePosition>,
     assignment_positions: Vec<SourcePosition>,
 }
@@ -1036,11 +1037,16 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         for variable in assignment.variables() {
-            self.analyze_assignment_target(variable, true);
+            self.analyze_assignment_target(variable, true, true);
         }
     }
 
-    fn analyze_assignment_target(&mut self, variable: &Var, defines_global: bool) {
+    fn analyze_assignment_target(
+        &mut self,
+        variable: &Var,
+        defines_global: bool,
+        initializes_local: bool,
+    ) {
         match variable {
             Var::Name(name) => {
                 let name_text = token_text(name);
@@ -1062,6 +1068,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     self.declarations[id]
                         .assignment_positions
                         .push(token_position(name));
+                    self.declarations[id].assigned |= initializes_local;
                 }
             }
             Var::Expression(expression) => self.analyze_var_expression_base(expression),
@@ -1073,13 +1080,13 @@ impl<'a> SymbolAnalyzer<'a> {
         match variable {
             Var::Name(name) => {
                 self.read_name(&token_text(name), token_position(name));
-                self.analyze_assignment_target(variable, false);
+                self.analyze_assignment_target(variable, false, false);
             }
             Var::Expression(expression) => {
                 self.analyze_var_expression(expression);
-                self.analyze_assignment_target(variable, false);
+                self.analyze_assignment_target(variable, false, false);
             }
-            _ => self.analyze_assignment_target(variable, false),
+            _ => self.analyze_assignment_target(variable, false, false),
         }
     }
 
@@ -1168,6 +1175,7 @@ impl<'a> SymbolAnalyzer<'a> {
                     self.declarations[id]
                         .assignment_positions
                         .push(token_position(root));
+                    self.declarations[id].assigned = true;
                 } else {
                     if self.config.rules && Self::is_builtin_global(&root_name) {
                         self.diagnostics.push(builtin_global_write_diagnostic(
@@ -1436,12 +1444,13 @@ impl<'a> SymbolAnalyzer<'a> {
             if self.config.rules
                 && declaration.kind == DeclarationKind::Local
                 && !declaration.initialized
-                && declaration.assignment_positions.is_empty()
+                && !declaration.assigned
                 && declaration.first_read.is_some()
             {
                 self.diagnostics.push(uninitialized_local_diagnostic(
                     &self.parsed.path,
                     declaration.first_read.unwrap_or(declaration.position),
+                    declaration.position,
                     &declaration.name,
                 ));
             }
@@ -1559,6 +1568,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 used: false,
                 called: false,
                 initialized,
+                assigned: false,
                 first_read: None,
                 assignment_positions: Vec::new(),
             });
@@ -1585,6 +1595,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 used: false,
                 called: false,
                 initialized: true,
+                assigned: false,
                 first_read: None,
                 assignment_positions: Vec::new(),
             });
@@ -2148,8 +2159,12 @@ fn has_static_import_argument(suffix: &Suffix) -> bool {
     }
 }
 
-fn expression_initializes_local(expressions: &[&Expression], _index: usize) -> bool {
-    !expressions.is_empty()
+fn expression_initializes_local(expressions: &[&Expression], index: usize) -> bool {
+    index < expressions.len()
+        || expressions.last().is_some_and(|expression| {
+            matches!(expression, Expression::FunctionCall(_))
+                || matches!(expression, Expression::Symbol(symbol) if token_text(symbol) == "...")
+        })
 }
 
 fn future_locals_for_block(block: &ast::Block) -> BTreeMap<String, SourcePosition> {
@@ -2924,13 +2939,21 @@ fn placeholder_read_diagnostic(path: &Path, position: SourcePosition) -> Diagnos
     .with_code(DiagnosticCode::LINT_PLACEHOLDER_READ)
 }
 
-fn uninitialized_local_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+fn uninitialized_local_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    declaration: SourcePosition,
+    name: &str,
+) -> Diagnostic {
     Diagnostic::new(
         path,
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("local `{name}` is read but never initialized"),
+        format!(
+            "local `{name}` defined at line {} is never initialized or assigned; initialize with `nil` to silence",
+            declaration.line
+        ),
     )
     .with_code(DiagnosticCode::LINT_UNINITIALIZED_LOCAL)
 }

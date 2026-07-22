@@ -275,6 +275,9 @@ later field would otherwise silently replace the earlier contract.
 Duplicate-local guidance uses `TL4043` for repeated names in local declarations
 and parameter lists, accounts for implicit method `self`, and exempts the exact
 placeholder `_`.
+Uninitialized-local guidance tracks each binding's initializer separately,
+allows a final direct call or varargs to supply additional values, and treats a
+compound assignment as a read of the previous value rather than initialization.
 Unbalanced-assignment guidance compares explicit expression counts and remains
 permissive for direct-call, vararg, and intentional-`nil` tails.
 Implicit-return guidance recognizes guaranteed `repeat` bodies and unbreakable

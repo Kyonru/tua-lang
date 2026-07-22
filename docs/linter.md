@@ -154,6 +154,14 @@ Tua table type shapes. Diagnostics identify the earlier field or the conflicting
 list entry. The dedicated `duplicate_keys` setting enables this complete check
 even when the standard rule set is disabled.
 
+`UninitializedLocal` tracks each binding in a multi-local declaration
+independently. Missing initializer slots remain uninitialized unless the final
+expression is a direct function call or varargs, which can supply additional
+Lua values. A plain assignment or function declaration initializes a local;
+compound assignment does not, because it reads the previous value first. The
+diagnostic points to the first read, identifies the declaration line, and can
+be silenced by explicitly initializing the binding with `nil`.
+
 `LocalUnused` treats reads in default-parameter expressions and nested closures
 as uses, but does not report unused numeric or generic `for` bindings. Prefix an
 intentionally unused local with `_` to silence the warning. The editor only

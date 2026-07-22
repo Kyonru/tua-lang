@@ -248,6 +248,95 @@ end
 }
 
 #[test]
+fn uninitialized_local_tracks_initializer_arity_and_compound_reads() {
+    let diagnostics = check_standard_rules_source(
+        "local first, missing = 1\nprint(missing)\nlocal total\ntotal += 1\nprint(total)\n",
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNINITIALIZED_LOCAL))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (2, 7));
+    assert_eq!(
+        diagnostics[0].message,
+        "local `missing` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
+    );
+    assert_eq!((diagnostics[1].line, diagnostics[1].column), (4, 1));
+    assert_eq!(
+        diagnostics[1].message,
+        "local `total` defined at line 3 is never initialized or assigned; initialize with `nil` to silence"
+    );
+}
+
+#[test]
+fn uninitialized_local_allows_final_calls_and_varargs_only_to_fill_missing_values() {
+    let diagnostics = check_standard_rules_source(
+        r#"local function pair()
+  return 1, 2
+end
+
+local first, second = pair()
+print(first, second)
+
+local function consume(...)
+  local head, tail = ...
+  print(head, tail)
+
+  local wrapped, missing = (pair())
+  print(wrapped, missing)
+end
+
+consume(1, 2)
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNINITIALIZED_LOCAL))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (13, 18));
+    assert_eq!(
+        diagnostics[0].message,
+        "local `missing` defined at line 12 is never initialized or assigned; initialize with `nil` to silence"
+    );
+}
+
+#[test]
+fn uninitialized_local_respects_shadowing_and_plain_assignments_anywhere() {
+    let diagnostics = check_standard_rules_source(
+        r#"local outer
+do
+  local outer = 1
+  print(outer)
+end
+print(outer)
+
+local later
+print(later)
+later = nil
+
+local callback
+function callback() end
+callback()
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNINITIALIZED_LOCAL))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!((diagnostics[0].line, diagnostics[0].column), (6, 7));
+    assert_eq!(
+        diagnostics[0].message,
+        "local `outer` defined at line 1 is never initialized or assigned; initialize with `nil` to silence"
+    );
+}
+
+#[test]
 fn reports_dynamic_require_bindings_as_unused_imports_and_reads_arguments() {
     let diagnostics = check_standard_rules_source(
         r#"
