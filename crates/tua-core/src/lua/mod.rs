@@ -58,6 +58,20 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .collect()
 }
 
+pub(crate) fn is_protected_global(name: &str) -> bool {
+    LUAJIT_LOVE_GLOBALS.contains(&name)
+        || ASSET_LOADERS
+            .iter()
+            .chain(VECTOR_ITEMS.iter())
+            .chain(SIGNAL_ITEMS.iter())
+            .chain(OBJECT_POOL_ITEMS.iter())
+            .chain(STATE_MACHINE_ITEMS.iter())
+            .chain(STORE_ITEMS.iter())
+            .chain(INPUT_ITEMS.iter())
+            .chain(SPRITE_ITEMS.iter())
+            .any(|item| item.label == name)
+}
+
 pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaItem> {
     if receiver_is_love(receiver_parts) {
         let love_items = love_api::field_items(receiver_parts, prefix);
@@ -619,6 +633,12 @@ const TOP_LEVEL: &[LuaItem] = &[
         "Returns an iterator over array-like table entries from index 1 up to the first absent index.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-ipairs",
     ),
     item(
+        "jit",
+        LuaItemKind::Module,
+        "LuaJIT compiler control module",
+        "LuaJIT compiler status and control functions.",
+    ),
+    item(
         "load",
         LuaItemKind::Function,
         "function load(chunk, chunkname?: string, mode?, env?): function?",
@@ -786,6 +806,50 @@ const TOP_LEVEL: &[LuaItem] = &[
         "function xpcall(f: function, msgh: function, ...): any",
         "Calls a function in protected mode with a message handler.\n\nManual: https://www.lua.org/manual/5.4/manual.html#pdf-xpcall",
     ),
+];
+
+const LUAJIT_LOVE_GLOBALS: &[&str] = &[
+    "_G",
+    "_VERSION",
+    "arg",
+    "assert",
+    "bit",
+    "collectgarbage",
+    "coroutine",
+    "debug",
+    "dofile",
+    "error",
+    "getfenv",
+    "getmetatable",
+    "io",
+    "ipairs",
+    "jit",
+    "load",
+    "loadfile",
+    "loadstring",
+    "love",
+    "math",
+    "module",
+    "next",
+    "os",
+    "package",
+    "pairs",
+    "pcall",
+    "print",
+    "rawequal",
+    "rawget",
+    "rawset",
+    "require",
+    "select",
+    "setfenv",
+    "setmetatable",
+    "string",
+    "table",
+    "tonumber",
+    "tostring",
+    "type",
+    "unpack",
+    "xpcall",
 ];
 
 const ASSET_LOADERS: &[LuaItem] = &[

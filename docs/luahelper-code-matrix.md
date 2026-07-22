@@ -141,7 +141,7 @@ enforced separately with `tua fmt --check`.
 | `TL4035` | A used local shadows a declaration in the same function or a user global referenced in the file. | `rules` |
 | `TL4036` | Adjacent statements share a line without an explicit separator. | `rules` |
 | `TL4037` | A continuation line is not indented relative to its statement. | `rules` |
-| `TL4038` | An assignment overwrites a builtin global. | `rules` |
+| `TL4038` | A direct write overwrites a protected LuaJIT, LOVE, or Tua builtin global. | `rules` |
 | `TL4039` | Placeholder `_` is read as a value. | `rules` |
 | `TL4040` | A statement is unreachable. | `rules` |
 | `TL4041` | A `type`/`typeof` comparison uses an unknown runtime type name. | `rules` |

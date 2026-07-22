@@ -258,6 +258,8 @@ diagnostics; projects can disable that set without disabling type checking.
 The unknown-global lint recognizes explicit global assignments and simple
 global function declarations anywhere in the current Tua file; runtime-provided
 and cross-file globals remain explicit project configuration.
+Builtin-global-write guidance resolves lexical bindings and protects direct
+writes to the Lua 5.1/LuaJIT, LOVE, and Tua helper globals modeled by the target.
 Global-local guidance follows common lexical ancestry across nested functions
 and remains conservative around module-scope and conditionally initialized
 globals.

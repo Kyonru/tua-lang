@@ -17,7 +17,7 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
-    ecs, lua, sprite, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
+    ecs, lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
     SourceSpan, TuaType,
 };
 
@@ -890,9 +890,7 @@ impl<'a> SymbolAnalyzer<'a> {
                 let name_text = token_text(name);
 
                 if self.resolve_local(&name_text).is_none() {
-                    if self.config.rules
-                        && lua::hover_item(std::slice::from_ref(&name_text)).is_some()
-                    {
+                    if self.config.rules && Self::is_builtin_global(&name_text) {
                         self.diagnostics.push(builtin_global_write_diagnostic(
                             &self.parsed.path,
                             token_position(name),
@@ -1010,18 +1008,23 @@ impl<'a> SymbolAnalyzer<'a> {
             let root_name = token_text(root);
 
             if names.len() == 1 && function.name().method_name().is_none() {
-                if self.config.rules && lua::hover_item(std::slice::from_ref(&root_name)).is_some()
-                {
-                    self.diagnostics.push(builtin_global_write_diagnostic(
-                        &self.parsed.path,
-                        token_position(root),
-                        &root_name,
-                    ));
+                if let Some(id) = self.resolve_local(&root_name) {
+                    self.declarations[id]
+                        .assignment_positions
+                        .push(token_position(root));
+                } else {
+                    if self.config.rules && Self::is_builtin_global(&root_name) {
+                        self.diagnostics.push(builtin_global_write_diagnostic(
+                            &self.parsed.path,
+                            token_position(root),
+                            &root_name,
+                        ));
+                    }
+                    self.record_global_assignment(&root_name, token_position(root));
+                    self.record_global_function_definition(&root_name, token_position(root));
+                    self.defined_globals.insert(root_name.clone());
+                    self.known_globals.insert(root_name);
                 }
-                self.record_global_assignment(&root_name, token_position(root));
-                self.record_global_function_definition(&root_name, token_position(root));
-                self.defined_globals.insert(root_name.clone());
-                self.known_globals.insert(root_name);
             } else {
                 self.read_name(&root_name, token_position(root));
             }
@@ -1543,9 +1546,7 @@ impl<'a> SymbolAnalyzer<'a> {
         self.record_shadowable_global(name, position);
 
         if !self.user_globals.contains_key(name)
-            && (self.known_globals.contains(name)
-                || lua::hover_item(&[name.to_owned()]).is_some()
-                || name == "love")
+            && (self.known_globals.contains(name) || Self::is_builtin_global(name))
         {
             return;
         }
@@ -1636,9 +1637,7 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn is_builtin_global(name: &str) -> bool {
-        name == ecs::MODULE_NAME
-            || sprite::is_helper(name)
-            || lua::hover_item(&[name.to_owned()]).is_some()
+        name == ecs::MODULE_NAME || lua::is_protected_global(name)
     }
 }
 
@@ -2364,7 +2363,9 @@ fn builtin_global_write_diagnostic(
         position.line,
         position.column,
         DiagnosticSeverity::Warning,
-        format!("assignment overwrites builtin global `{name}`"),
+        format!(
+            "built-in global `{name}` is overwritten here; consider using a local or changing the name"
+        ),
     )
     .with_code(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE)
 }

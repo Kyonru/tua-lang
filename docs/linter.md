@@ -63,6 +63,14 @@ source order. Qualified writes still require a known root, and compound
 assignment reads its target before writing it. Runtime-provided or cross-file
 globals should be listed in [`diagnostics.globals`](configuration.md#diagnostics).
 
+`BuiltinGlobalWrite` reports direct assignments, compound assignments, and
+simple global function declarations that overwrite protected Lua 5.1/LuaJIT,
+LOVE, or Tua helper globals. It resolves lexical bindings first, so assigning a
+predeclared local or parameter with builtin-like spelling remains valid. Field
+writes such as `math.custom = value` do not replace the builtin root and are not
+reported. The protected set follows Tua's LuaJIT/LOVE target rather than
+completion-only entries from other Lua versions.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions

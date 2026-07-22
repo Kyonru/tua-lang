@@ -39,6 +39,80 @@ fn formatting_is_not_a_lint() {
 }
 
 #[test]
+fn builtin_global_write_reports_direct_target_writes_with_guidance() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+math = {}
+function print() end
+table += 1
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "built-in global `math` is overwritten here; consider using a local or changing the name",
+            "built-in global `print` is overwritten here; consider using a local or changing the name",
+            "built-in global `table` is overwritten here; consider using a local or changing the name",
+        ]
+    );
+}
+
+#[test]
+fn builtin_global_write_resolves_local_function_bindings_and_ignores_fields() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local math
+function math() end
+math()
+
+local function replace(print)
+  function print() end
+  print()
+end
+replace(function() end)
+
+table.custom = 3
+function string.custom() end
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn builtin_global_write_uses_the_luajit_love_target_catalog() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+_ENV = {}
+warn = function() end
+jit = {}
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "built-in global `jit` is overwritten here; consider using a local or changing the name"
+        ]
+    );
+}
+
+#[test]
 fn standard_rules_report_symbol_rules() {
     let diagnostics = check_standard_rules_source(
         r#"
