@@ -1433,7 +1433,6 @@ impl AnalysisSnapshot {
                         &diagnostics_config,
                         &self.config.jit,
                         self.asset_index.as_ref(),
-                        &self.config.format.options(),
                     )
                     .err()
                     .unwrap_or_default();

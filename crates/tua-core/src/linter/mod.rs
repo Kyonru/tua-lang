@@ -11,7 +11,6 @@ use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
 use crate::config::{DiagnosticsConfig, JitConfig};
-use crate::format::FormatOptions;
 use crate::module_index::resolve_required_module;
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
@@ -21,19 +20,20 @@ use crate::{
     ecs, lua, sprite, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
 };
 
+mod rules;
+
 pub(crate) fn lint_parsed_source(
     parsed: &ParsedSource,
     config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     environment: &TypeEnvironment,
-    format_options: &FormatOptions,
 ) -> Vec<Diagnostic> {
     let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Lints);
 
-    if !config.duplicate_keys
+    if !config.rules
+        && !config.duplicate_keys
         && !config.missing_requires
         && !config.self_assignments
-        && !config.formatting_lints
         && !symbol_lints_enabled(config)
         && !correctness_lints_enabled(config)
         && !jit_config.enabled
@@ -43,7 +43,8 @@ pub(crate) fn lint_parsed_source(
 
     let mut diagnostics = Vec::new();
 
-    if config.duplicate_keys
+    if config.rules
+        || config.duplicate_keys
         || config.missing_requires
         || config.self_assignments
         || correctness_lints_enabled(config)
@@ -60,12 +61,12 @@ pub(crate) fn lint_parsed_source(
         diagnostics.extend(visitor.diagnostics);
     }
 
-    if config.formatting_lints {
-        diagnostics.extend(formatting_lints(parsed, format_options));
-    }
-
     if symbol_lints_enabled(config) {
         diagnostics.extend(SymbolAnalyzer::new(parsed, config).analyze());
+    }
+
+    if config.rules {
+        diagnostics.extend(rules::lint(parsed));
     }
 
     if jit_config.enabled {
@@ -76,7 +77,8 @@ pub(crate) fn lint_parsed_source(
 }
 
 fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
-    config.undefined_variables
+    config.rules
+        || config.undefined_variables
         || config.unused_locals
         || config.unused_parameters
         || config.use_before_definition
@@ -85,7 +87,8 @@ fn symbol_lints_enabled(config: &DiagnosticsConfig) -> bool {
 }
 
 fn correctness_lints_enabled(config: &DiagnosticsConfig) -> bool {
-    config.duplicate_parameters
+    config.rules
+        || config.duplicate_parameters
         || config.bad_requires
         || config.impossible_boolean_expressions
         || config.duplicate_if_conditions
@@ -107,7 +110,7 @@ struct LintVisitor<'a> {
 
 impl Visitor for LintVisitor<'_> {
     fn visit_assignment(&mut self, assignment: &full_moon::ast::Assignment) {
-        if self.config.assignment_arity {
+        if self.config.rules || self.config.assignment_arity {
             self.check_assignment_arity(assignment);
         }
 
@@ -150,7 +153,7 @@ impl Visitor for LintVisitor<'_> {
     }
 
     fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
-        if !self.config.local_declaration_arity {
+        if !self.config.rules && !self.config.local_declaration_arity {
             return;
         }
 
@@ -198,11 +201,23 @@ impl Visitor for LintVisitor<'_> {
     }
 
     fn visit_table_constructor(&mut self, table: &TableConstructor) {
-        if !self.config.duplicate_keys {
+        if !self.config.rules && !self.config.duplicate_keys {
             return;
         }
 
         let mut seen = BTreeMap::<String, String>::new();
+
+        if self.config.rules {
+            let list_fields = table
+                .fields()
+                .iter()
+                .filter(|field| matches!(field, Field::NoKey(_)))
+                .count();
+
+            for index in 1..=list_fields {
+                seen.insert(table_numeric_key(index as f64), index.to_string());
+            }
+        }
 
         for field in table.fields() {
             let Some((key, label, position)) = table_field_key(field) else {
@@ -220,7 +235,7 @@ impl Visitor for LintVisitor<'_> {
     }
 
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
-        if !self.config.duplicate_parameters {
+        if !self.config.rules && !self.config.duplicate_parameters {
             return;
         }
 
@@ -243,7 +258,7 @@ impl Visitor for LintVisitor<'_> {
     }
 
     fn visit_if(&mut self, if_stmt: &ast::If) {
-        if !self.config.duplicate_if_conditions {
+        if !self.config.rules && !self.config.duplicate_if_conditions {
             return;
         }
 
@@ -356,8 +371,9 @@ impl LintVisitor<'_> {
             self.check_impossible_boolean_expression(lhs, binop, rhs);
         }
 
-        if self.config.duplicate_binary_operands
-            && is_suspicious_duplicate_operand_operator(binop)
+        if ((self.config.duplicate_binary_operands
+            && is_suspicious_duplicate_operand_operator(binop))
+            || (self.config.rules && is_boolean_operator(binop)))
             && expression_key(lhs) == expression_key(rhs)
         {
             let operator = binop_label(binop);
@@ -467,6 +483,15 @@ struct SymbolAnalyzer<'a> {
     scopes: Vec<Scope>,
     declarations: Vec<Declaration>,
     known_globals: BTreeSet<String>,
+    user_globals: BTreeMap<String, GlobalUsage>,
+    function_stack: Vec<usize>,
+    next_function_id: usize,
+}
+
+#[derive(Clone, Debug)]
+struct GlobalUsage {
+    definition: SourcePosition,
+    function_ids: BTreeSet<Option<usize>>,
 }
 
 #[derive(Clone, Debug)]
@@ -483,6 +508,8 @@ struct Declaration {
     kind: DeclarationKind,
     used: bool,
     called: bool,
+    initialized: bool,
+    first_read: Option<SourcePosition>,
     assignment_positions: Vec<SourcePosition>,
 }
 
@@ -490,6 +517,7 @@ struct Declaration {
 enum DeclarationKind {
     Local,
     LocalFunction,
+    Import,
     Parameter,
 }
 
@@ -502,11 +530,32 @@ impl<'a> SymbolAnalyzer<'a> {
             scopes: Vec::new(),
             declarations: Vec::new(),
             known_globals: config.globals.iter().cloned().collect(),
+            user_globals: BTreeMap::new(),
+            function_stack: Vec::new(),
+            next_function_id: 0,
         }
     }
 
     fn analyze(mut self) -> Vec<Diagnostic> {
         self.analyze_block(self.parsed.ast.nodes());
+
+        if self.config.rules {
+            for (name, usage) in &self.user_globals {
+                if usage.function_ids.len() == 1
+                    && usage
+                        .function_ids
+                        .iter()
+                        .next()
+                        .is_some_and(Option::is_some)
+                {
+                    self.diagnostics.push(global_used_as_local_diagnostic(
+                        &self.parsed.path,
+                        usage.definition,
+                        name,
+                    ));
+                }
+            }
+        }
 
         self.diagnostics
     }
@@ -652,6 +701,16 @@ impl<'a> SymbolAnalyzer<'a> {
                 let name_text = token_text(name);
 
                 if self.resolve_local(&name_text).is_none() {
+                    if self.config.rules
+                        && lua::hover_item(std::slice::from_ref(&name_text)).is_some()
+                    {
+                        self.diagnostics.push(builtin_global_write_diagnostic(
+                            &self.parsed.path,
+                            token_position(name),
+                            &name_text,
+                        ));
+                    }
+                    self.record_global_use(&name_text, token_position(name));
                     self.known_globals.insert(name_text);
                 } else if let Some(id) = self.resolve_local(&name_text) {
                     self.declarations[id]
@@ -681,20 +740,27 @@ impl<'a> SymbolAnalyzer<'a> {
     fn analyze_local_assignment(&mut self, local: &ast::LocalAssignment) {
         let names = local.names().into_iter().collect::<Vec<_>>();
         let expressions = local.expressions().into_iter().collect::<Vec<_>>();
+        let is_import =
+            names.len() == 1 && expressions.len() == 1 && is_static_import_call(expressions[0]);
 
         for expression in &expressions {
-            if names.len() == 1 && expressions.len() == 1 && is_static_import_call(expression) {
+            if is_import {
                 continue;
             }
 
             self.analyze_expression(expression);
         }
 
-        for name in names {
-            self.declare(
+        for (index, name) in names.into_iter().enumerate() {
+            self.declare_with_initialization(
                 token_text(name),
                 token_position(name),
-                DeclarationKind::Local,
+                if is_import {
+                    DeclarationKind::Import
+                } else {
+                    DeclarationKind::Local
+                },
+                expression_initializes_local(&expressions, index),
             );
         }
     }
@@ -715,6 +781,15 @@ impl<'a> SymbolAnalyzer<'a> {
             let root_name = token_text(root);
 
             if names.len() == 1 && function.name().method_name().is_none() {
+                if self.config.rules && lua::hover_item(std::slice::from_ref(&root_name)).is_some()
+                {
+                    self.diagnostics.push(builtin_global_write_diagnostic(
+                        &self.parsed.path,
+                        token_position(root),
+                        &root_name,
+                    ));
+                }
+                self.record_global_use(&root_name, token_position(root));
                 self.known_globals.insert(root_name);
             } else {
                 self.read_name(&root_name, token_position(root));
@@ -731,6 +806,9 @@ impl<'a> SymbolAnalyzer<'a> {
         body: &ast::FunctionBody,
         implicit_self: Option<SourcePosition>,
     ) {
+        let function_id = self.next_function_id;
+        self.next_function_id += 1;
+        self.function_stack.push(function_id);
         self.enter_scope(future_locals_for_block(body.block()));
 
         if let Some(position) = implicit_self {
@@ -758,6 +836,7 @@ impl<'a> SymbolAnalyzer<'a> {
         }
 
         self.exit_scope();
+        self.function_stack.pop();
     }
 
     fn analyze_expression(&mut self, expression: &Expression) {
@@ -883,20 +962,42 @@ impl<'a> SymbolAnalyzer<'a> {
         for declaration_id in &scope.declarations {
             let declaration = &self.declarations[*declaration_id];
 
+            if self.config.rules
+                && declaration.kind == DeclarationKind::Local
+                && !declaration.initialized
+                && declaration.assignment_positions.is_empty()
+                && declaration.first_read.is_some()
+            {
+                self.diagnostics.push(uninitialized_local_diagnostic(
+                    &self.parsed.path,
+                    declaration.first_read.unwrap_or(declaration.position),
+                    &declaration.name,
+                ));
+            }
+
             if declaration.used || should_ignore_unused(&declaration.name) {
                 continue;
             }
 
             match declaration.kind {
-                DeclarationKind::Local if self.config.unused_locals => {
+                DeclarationKind::Local if self.config.unused_locals || self.config.rules => {
                     self.diagnostics.push(unused_local_diagnostic(
                         &self.parsed.path,
                         declaration.position,
                         &declaration.name,
                     ));
                 }
-                DeclarationKind::LocalFunction if self.config.unused_locals => {
+                DeclarationKind::LocalFunction
+                    if self.config.unused_locals || self.config.rules =>
+                {
                     self.diagnostics.push(unused_local_diagnostic(
+                        &self.parsed.path,
+                        declaration.position,
+                        &declaration.name,
+                    ));
+                }
+                DeclarationKind::Import if self.config.rules => {
+                    self.diagnostics.push(unused_import_diagnostic(
                         &self.parsed.path,
                         declaration.position,
                         &declaration.name,
@@ -953,6 +1054,29 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn declare(&mut self, name: String, position: SourcePosition, kind: DeclarationKind) {
+        self.declare_with_initialization(name, position, kind, true);
+    }
+
+    fn declare_with_initialization(
+        &mut self,
+        name: String,
+        position: SourcePosition,
+        kind: DeclarationKind,
+        initialized: bool,
+    ) {
+        if self.config.rules
+            && !should_ignore_unused(&name)
+            && self
+                .scopes
+                .iter()
+                .rev()
+                .skip(1)
+                .any(|scope| scope.bindings.contains_key(&name))
+        {
+            self.diagnostics
+                .push(local_shadow_diagnostic(&self.parsed.path, position, &name));
+        }
+
         if let Some(scope) = self.scopes.last_mut() {
             scope.future_locals.remove(&name);
 
@@ -963,6 +1087,8 @@ impl<'a> SymbolAnalyzer<'a> {
                 kind,
                 used: false,
                 called: false,
+                initialized,
+                first_read: None,
                 assignment_positions: Vec::new(),
             });
             scope.bindings.insert(name, id);
@@ -981,6 +1107,8 @@ impl<'a> SymbolAnalyzer<'a> {
                 kind: DeclarationKind::Parameter,
                 used: true,
                 called: false,
+                initialized: true,
+                first_read: None,
                 assignment_positions: Vec::new(),
             });
             scope.bindings.insert("self".to_owned(), id);
@@ -989,12 +1117,24 @@ impl<'a> SymbolAnalyzer<'a> {
     }
 
     fn read_name(&mut self, name: &str, position: SourcePosition) {
+        if self.config.rules && name == "_" {
+            self.diagnostics
+                .push(placeholder_read_diagnostic(&self.parsed.path, position));
+            return;
+        }
+
         if let Some(id) = self.resolve_local(name) {
             self.declarations[id].used = true;
+            self.declarations[id].first_read.get_or_insert(position);
             return;
         }
 
         if self.is_known_global(name) {
+            if let Some(usage) = self.user_globals.get_mut(name) {
+                usage
+                    .function_ids
+                    .insert(self.function_stack.last().copied());
+            }
             return;
         }
 
@@ -1010,7 +1150,7 @@ impl<'a> SymbolAnalyzer<'a> {
             }
         }
 
-        if self.config.undefined_variables {
+        if self.config.undefined_variables || self.config.rules {
             self.diagnostics.push(undefined_variable_diagnostic(
                 &self.parsed.path,
                 position,
@@ -1035,6 +1175,32 @@ impl<'a> SymbolAnalyzer<'a> {
         };
 
         self.declarations[id].called = true;
+    }
+
+    fn record_global_use(&mut self, name: &str, position: SourcePosition) {
+        let function_id = self.function_stack.last().copied();
+
+        if let Some(usage) = self.user_globals.get_mut(name) {
+            usage.function_ids.insert(function_id);
+            return;
+        }
+
+        if self.known_globals.contains(name)
+            || lua::hover_item(&[name.to_owned()]).is_some()
+            || name == "love"
+        {
+            return;
+        }
+
+        self.user_globals
+            .entry(name.to_owned())
+            .and_modify(|usage| {
+                usage.function_ids.insert(function_id);
+            })
+            .or_insert_with(|| GlobalUsage {
+                definition: position,
+                function_ids: BTreeSet::from([function_id]),
+            });
     }
 
     fn resolve_local(&self, name: &str) -> Option<usize> {
@@ -1407,19 +1573,21 @@ fn is_static_import_call(expression: &Expression) -> bool {
         return false;
     };
 
-    if token_text(name) != "import" {
+    if !matches!(token_text(name).as_str(), "import" | "require") {
         return false;
     }
 
-    let Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. }))) =
-        call.suffixes().next()
-    else {
-        return false;
-    };
-    let Some(Expression::String(_module)) = arguments.iter().next() else {
-        return false;
-    };
-    true
+    match call.suffixes().next() {
+        Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
+            arguments, ..
+        }))) => matches!(arguments.iter().next(), Some(Expression::String(_))),
+        Some(Suffix::Call(Call::AnonymousCall(FunctionArgs::String(_)))) => true,
+        _ => false,
+    }
+}
+
+fn expression_initializes_local(expressions: &[&Expression], _index: usize) -> bool {
+    !expressions.is_empty()
 }
 
 fn future_locals_for_block(block: &ast::Block) -> BTreeMap<String, SourcePosition> {
@@ -1471,8 +1639,9 @@ fn literal_table_key(expression: &Expression) -> Option<(String, String, SourceP
         }
         Expression::Number(token) => {
             let label = number_literal_text(token)?;
+            let value = parse_lua_number(&label)?;
 
-            Some((format!("number:{label}"), label, token_position(token)))
+            Some((table_numeric_key(value), label, token_position(token)))
         }
         Expression::Symbol(token) => {
             let label = token_text(token);
@@ -1643,6 +1812,24 @@ fn number_literal_text(token: &TokenReference) -> Option<String> {
     }
 }
 
+fn parse_lua_number(text: &str) -> Option<f64> {
+    let normalized = text.replace('_', "");
+
+    if let Some(hex) = normalized
+        .strip_prefix("0x")
+        .or_else(|| normalized.strip_prefix("0X"))
+    {
+        u64::from_str_radix(hex, 16).ok().map(|value| value as f64)
+    } else {
+        normalized.parse().ok()
+    }
+}
+
+fn table_numeric_key(value: f64) -> String {
+    let normalized = if value == 0.0 { 0.0 } else { value };
+    format!("number:{:016x}", normalized.to_bits())
+}
+
 fn duplicate_key_diagnostic(path: &Path, position: SourcePosition, key: &str) -> Diagnostic {
     Diagnostic::new(
         path,
@@ -1698,6 +1885,80 @@ fn unused_local_diagnostic(path: &Path, position: SourcePosition, name: &str) ->
         format!("unused local `{name}`"),
     )
     .with_code(DiagnosticCode::LINT_UNUSED_LOCAL)
+}
+
+fn unused_import_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("unused import `{name}`"),
+    )
+    .with_code(DiagnosticCode::LINT_UNUSED_IMPORT)
+}
+
+fn local_shadow_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("local `{name}` shadows an outer local"),
+    )
+    .with_code(DiagnosticCode::LINT_LOCAL_SHADOW)
+}
+
+fn builtin_global_write_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("assignment overwrites builtin global `{name}`"),
+    )
+    .with_code(DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE)
+}
+
+fn placeholder_read_diagnostic(path: &Path, position: SourcePosition) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        "placeholder `_` is read as a value",
+    )
+    .with_code(DiagnosticCode::LINT_PLACEHOLDER_READ)
+}
+
+fn uninitialized_local_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("local `{name}` is read but never initialized"),
+    )
+    .with_code(DiagnosticCode::LINT_UNINITIALIZED_LOCAL)
+}
+
+fn global_used_as_local_diagnostic(
+    path: &Path,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    Diagnostic::new(
+        path,
+        position.line,
+        position.column,
+        DiagnosticSeverity::Warning,
+        format!("global `{name}` is only used from one function; make it local"),
+    )
+    .with_code(DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL)
 }
 
 fn unused_parameter_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
@@ -1961,534 +2222,6 @@ fn jit_hot_loop_dynamic_key_diagnostic(path: &Path, position: SourcePosition) ->
     .with_code(DiagnosticCode::LINT_JIT_HOT_LOOP_DYNAMIC_KEY)
 }
 
-fn formatting_lints(parsed: &ParsedSource, format_options: &FormatOptions) -> Vec<Diagnostic> {
-    let mut analyzer = FormattingAnalyzer::new(parsed, format_options);
-
-    analyzer.analyze();
-    analyzer.diagnostics
-}
-
-struct FormattingAnalyzer<'a> {
-    parsed: &'a ParsedSource,
-    format_options: &'a FormatOptions,
-    diagnostics: Vec<Diagnostic>,
-    state: SourceMaskState,
-    previous_empty_line: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum SourceMaskState {
-    Code,
-    ShortString { quote: u8, escaped: bool },
-    LongString { close: Vec<u8> },
-    BlockComment { close: Vec<u8> },
-}
-
-impl<'a> FormattingAnalyzer<'a> {
-    fn new(parsed: &'a ParsedSource, format_options: &'a FormatOptions) -> Self {
-        Self {
-            parsed,
-            format_options,
-            diagnostics: Vec::new(),
-            state: SourceMaskState::Code,
-            previous_empty_line: false,
-        }
-    }
-
-    fn analyze(&mut self) {
-        let lines = self.parsed.source.split_inclusive('\n').collect::<Vec<_>>();
-
-        for (index, raw_line) in lines.iter().enumerate() {
-            self.analyze_line(index + 1, raw_line);
-        }
-
-        if !self.parsed.source.ends_with('\n') {
-            if let Some(last) = self.parsed.source.lines().last() {
-                if self.parsed.source.is_empty() || lines.is_empty() {
-                    self.analyze_line(1, last);
-                }
-            }
-        }
-    }
-
-    fn analyze_line(&mut self, line_number: usize, raw_line: &str) {
-        let line = raw_line.trim_end_matches(['\n', '\r']);
-        let preserves_empty_line = matches!(
-            self.state,
-            SourceMaskState::LongString { .. } | SourceMaskState::BlockComment { .. }
-        );
-        let mask = self.code_mask_for_line(line);
-
-        self.check_empty_line(line_number, line, preserves_empty_line);
-        self.check_line_width(line_number, line);
-        self.check_trailing_whitespace(line_number, line);
-        self.check_indentation(line_number, line, &mask);
-        self.check_continuation_indentation(line_number, line, &mask);
-        self.check_keyword_spacing(line_number, line.as_bytes(), &mask);
-        self.check_separator_spacing(line_number, line.as_bytes(), &mask);
-        self.check_bracket_spacing(line_number, line.as_bytes(), &mask);
-        self.check_assignment_spacing(line_number, line.as_bytes(), &mask);
-    }
-
-    fn check_empty_line(&mut self, line_number: usize, line: &str, preserves_empty_line: bool) {
-        let is_empty = line.trim().is_empty();
-
-        if is_empty && !preserves_empty_line && self.previous_empty_line {
-            self.push(
-                DiagnosticCode::LINT_FORMAT_EMPTY_LINES,
-                line_number,
-                1,
-                "remove consecutive empty line",
-            );
-        }
-
-        self.previous_empty_line = is_empty && !preserves_empty_line;
-    }
-
-    fn code_mask_for_line(&mut self, line: &str) -> Vec<bool> {
-        let bytes = line.as_bytes();
-        let mut mask = vec![false; bytes.len()];
-        let mut index = 0;
-
-        while index < bytes.len() {
-            match &mut self.state {
-                SourceMaskState::Code => {
-                    if bytes[index] == b'-' && bytes.get(index + 1) == Some(&b'-') {
-                        if let Some((close, consumed)) = long_bracket_open(&bytes[index + 2..]) {
-                            self.state = SourceMaskState::BlockComment { close };
-                            index += 2 + consumed;
-                        } else {
-                            break;
-                        }
-                    } else if bytes[index] == b'\'' || bytes[index] == b'"' {
-                        mask[index] = true;
-                        self.state = SourceMaskState::ShortString {
-                            quote: bytes[index],
-                            escaped: false,
-                        };
-                        index += 1;
-                    } else if let Some((close, consumed)) = long_bracket_open(&bytes[index..]) {
-                        mask[index] = true;
-                        self.state = SourceMaskState::LongString { close };
-                        index += consumed;
-                    } else {
-                        mask[index] = true;
-                        index += 1;
-                    }
-                }
-                SourceMaskState::ShortString { quote, escaped } => {
-                    if *escaped {
-                        *escaped = false;
-                    } else if bytes[index] == b'\\' {
-                        *escaped = true;
-                    } else if bytes[index] == *quote {
-                        mask[index] = true;
-                        self.state = SourceMaskState::Code;
-                    }
-
-                    index += 1;
-                }
-                SourceMaskState::LongString { close } | SourceMaskState::BlockComment { close } => {
-                    if bytes[index..].starts_with(close) {
-                        index += close.len();
-                        self.state = SourceMaskState::Code;
-                    } else {
-                        index += 1;
-                    }
-                }
-            }
-        }
-
-        if matches!(self.state, SourceMaskState::ShortString { .. }) {
-            self.state = SourceMaskState::Code;
-        }
-
-        mask
-    }
-
-    fn check_line_width(&mut self, line_number: usize, line: &str) {
-        let line_width = self.format_options.line_width;
-
-        if line_width == 0 || line.chars().count() <= line_width {
-            return;
-        }
-
-        self.push(
-            DiagnosticCode::LINT_FORMAT_LINE_WIDTH,
-            line_number,
-            line_width + 1,
-            format!("line should be at most {line_width} columns"),
-        );
-    }
-
-    fn check_trailing_whitespace(&mut self, line_number: usize, line: &str) {
-        let trimmed = line.trim_end_matches([' ', '\t']);
-
-        if trimmed.len() == line.len() {
-            return;
-        }
-
-        self.push(
-            DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE,
-            line_number,
-            trimmed.len() + 1,
-            "remove trailing whitespace",
-        );
-    }
-
-    fn check_indentation(&mut self, line_number: usize, line: &str, mask: &[bool]) {
-        let bytes = line.as_bytes();
-        let Some(first_code) = mask
-            .iter()
-            .enumerate()
-            .position(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
-        else {
-            return;
-        };
-
-        if line[..first_code].trim().is_empty() && bytes[..first_code].contains(&b'\t') {
-            let column = bytes[..first_code]
-                .iter()
-                .position(|byte| *byte == b'\t')
-                .unwrap_or(0)
-                + 1;
-
-            self.push(
-                DiagnosticCode::LINT_FORMAT_INDENTATION,
-                line_number,
-                column,
-                "indentation should use spaces, not tabs",
-            );
-            return;
-        }
-
-        let spaces = bytes[..first_code]
-            .iter()
-            .take_while(|byte| **byte == b' ')
-            .count();
-
-        if spaces > 0 && spaces % 2 != 0 {
-            self.push(
-                DiagnosticCode::LINT_FORMAT_INDENTATION,
-                line_number,
-                1,
-                "indentation should use multiples of two spaces",
-            );
-        }
-    }
-
-    fn check_continuation_indentation(&mut self, line_number: usize, line: &str, mask: &[bool]) {
-        let bytes = line.as_bytes();
-        let Some(first_code) = mask
-            .iter()
-            .enumerate()
-            .position(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
-        else {
-            return;
-        };
-
-        if !bytes[first_code..].starts_with(b"..") {
-            return;
-        }
-
-        let spaces = bytes[..first_code]
-            .iter()
-            .take_while(|byte| **byte == b' ')
-            .count();
-
-        if spaces < self.format_options.indent_width {
-            self.push(
-                DiagnosticCode::LINT_FORMAT_INDENTATION,
-                line_number,
-                first_code + 1,
-                "continuation operators should be indented",
-            );
-        }
-    }
-
-    fn check_keyword_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
-        for (keyword, label) in [(b"then".as_slice(), "`then`"), (b"do".as_slice(), "`do`")] {
-            let mut index = 0;
-
-            while index + keyword.len() <= bytes.len() {
-                if !is_code_range(mask, index, keyword.len())
-                    || !bytes[index..].starts_with(keyword)
-                    || !is_word_boundary(bytes, index, keyword.len())
-                {
-                    index += 1;
-                    continue;
-                }
-
-                if let Some(previous) = previous_code_index(bytes, mask, index) {
-                    let spaces = count_spaces_before(bytes, previous, index);
-
-                    if spaces != 1 {
-                        self.push(
-                            DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING,
-                            line_number,
-                            index + 1,
-                            format!("use one space before {label}"),
-                        );
-                    }
-                }
-
-                if let Some(next) = next_code_index(bytes, mask, index + keyword.len()) {
-                    let spaces = count_spaces_after(bytes, index + keyword.len(), next);
-
-                    if spaces > 1 {
-                        self.push(
-                            DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING,
-                            line_number,
-                            index + keyword.len() + 1,
-                            format!("use at most one space after {label}"),
-                        );
-                    }
-                }
-
-                index += keyword.len();
-            }
-        }
-    }
-
-    fn check_separator_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
-        for index in code_byte_positions(bytes, mask, b',') {
-            if previous_code_index(bytes, mask, index).is_some_and(|previous| {
-                bytes[previous + 1..index]
-                    .iter()
-                    .any(|byte| matches!(byte, b' ' | b'\t'))
-            }) {
-                self.push(
-                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                    line_number,
-                    index + 1,
-                    "remove whitespace before `,`",
-                );
-            }
-
-            let Some(next) = next_code_index(bytes, mask, index + 1) else {
-                continue;
-            };
-
-            if matches!(bytes[next], b')' | b']' | b'}') {
-                continue;
-            }
-
-            let spaces = count_spaces_after(bytes, index + 1, next);
-
-            if spaces != 1 {
-                self.push(
-                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                    line_number,
-                    index + 1,
-                    "use one space after `,`",
-                );
-            }
-        }
-    }
-
-    fn check_bracket_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
-        for index in 0..bytes.len() {
-            if !mask.get(index).copied().unwrap_or(false) {
-                continue;
-            }
-
-            match bytes[index] {
-                b'(' | b'[' => {
-                    if next_code_index(bytes, mask, index + 1)
-                        .is_some_and(|next| bytes[next].is_ascii_graphic() && next > index + 1)
-                    {
-                        self.push(
-                            DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                            line_number,
-                            index + 2,
-                            format!("remove whitespace after `{}`", bytes[index] as char),
-                        );
-                    }
-                }
-                b')' | b']'
-                    if previous_code_index(bytes, mask, index)
-                        .is_some_and(|previous| previous + 1 < index) =>
-                {
-                    self.push(
-                        DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                        line_number,
-                        index + 1,
-                        format!("remove whitespace before `{}`", bytes[index] as char),
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn check_assignment_spacing(&mut self, line_number: usize, bytes: &[u8], mask: &[bool]) {
-        let mut index = 0;
-
-        while index < bytes.len() {
-            let Some(operator_len) = assignment_operator_len(bytes, mask, index) else {
-                index += 1;
-                continue;
-            };
-
-            let Some(previous) = previous_code_index(bytes, mask, index) else {
-                index += operator_len;
-                continue;
-            };
-            let Some(next) = next_code_index(bytes, mask, index + operator_len) else {
-                index += operator_len;
-                continue;
-            };
-            let before = count_spaces_before(bytes, previous, index);
-            let after = count_spaces_after(bytes, index + operator_len, next);
-
-            if before != 1 || after != 1 {
-                let operator =
-                    std::str::from_utf8(&bytes[index..index + operator_len]).unwrap_or("=");
-
-                self.push(
-                    DiagnosticCode::LINT_FORMAT_TOKEN_SPACING,
-                    line_number,
-                    index + 1,
-                    format!("use one space around `{operator}`"),
-                );
-            }
-
-            index += operator_len;
-        }
-    }
-
-    fn push(
-        &mut self,
-        code: DiagnosticCode,
-        line: usize,
-        column: usize,
-        message: impl Into<String>,
-    ) {
-        self.diagnostics.push(
-            Diagnostic::new(
-                &self.parsed.path,
-                line,
-                column,
-                DiagnosticSeverity::Warning,
-                message,
-            )
-            .with_code(code),
-        );
-    }
-}
-
-fn long_bracket_open(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {
-    if bytes.first() != Some(&b'[') {
-        return None;
-    }
-
-    let mut index = 1;
-
-    while bytes.get(index) == Some(&b'=') {
-        index += 1;
-    }
-
-    if bytes.get(index) != Some(&b'[') {
-        return None;
-    }
-
-    let equals = index - 1;
-    let mut close = Vec::with_capacity(equals + 2);
-
-    close.push(b']');
-    close.extend(std::iter::repeat_n(b'=', equals));
-    close.push(b']');
-
-    Some((close, index + 1))
-}
-
-fn is_code_range(mask: &[bool], start: usize, len: usize) -> bool {
-    mask.get(start..start + len)
-        .is_some_and(|range| range.iter().all(|is_code| *is_code))
-}
-
-fn is_word_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
-    let before = start
-        .checked_sub(1)
-        .and_then(|index| bytes.get(index))
-        .copied();
-    let after = bytes.get(start + len).copied();
-
-    !before.is_some_and(is_identifier_byte) && !after.is_some_and(is_identifier_byte)
-}
-
-fn is_identifier_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
-fn previous_code_index(bytes: &[u8], mask: &[bool], before: usize) -> Option<usize> {
-    mask.get(..before)?
-        .iter()
-        .enumerate()
-        .rposition(|(index, is_code)| *is_code && !bytes[index].is_ascii_whitespace())
-}
-
-fn next_code_index(bytes: &[u8], mask: &[bool], after: usize) -> Option<usize> {
-    mask.get(after..)?
-        .iter()
-        .enumerate()
-        .position(|(offset, is_code)| *is_code && !bytes[after + offset].is_ascii_whitespace())
-        .map(|offset| after + offset)
-}
-
-fn count_spaces_before(bytes: &[u8], previous: usize, current: usize) -> usize {
-    bytes[previous + 1..current]
-        .iter()
-        .filter(|byte| matches!(byte, b' ' | b'\t'))
-        .count()
-}
-
-fn count_spaces_after(bytes: &[u8], start: usize, next: usize) -> usize {
-    bytes[start..next]
-        .iter()
-        .filter(|byte| matches!(byte, b' ' | b'\t'))
-        .count()
-}
-
-fn code_byte_positions<'a>(
-    bytes: &'a [u8],
-    mask: &'a [bool],
-    byte: u8,
-) -> impl Iterator<Item = usize> + 'a {
-    bytes
-        .iter()
-        .enumerate()
-        .filter(move |(index, current)| **current == byte && mask.get(*index) == Some(&true))
-        .map(|(index, _)| index)
-}
-
-fn assignment_operator_len(bytes: &[u8], mask: &[bool], index: usize) -> Option<usize> {
-    if mask.get(index) != Some(&true) {
-        return None;
-    }
-
-    if matches!(bytes.get(index), Some(b'+' | b'-' | b'*' | b'/' | b'%'))
-        && bytes.get(index + 1) == Some(&b'=')
-        && mask.get(index + 1) == Some(&true)
-    {
-        return Some(2);
-    }
-
-    if bytes.get(index) != Some(&b'=') {
-        return None;
-    }
-
-    if matches!(
-        bytes.get(index.checked_sub(1)?),
-        Some(b'=' | b'<' | b'>' | b'~')
-    ) || bytes.get(index + 1) == Some(&b'=')
-    {
-        return None;
-    }
-
-    Some(1)
-}
-
 fn expression_key(expression: &Expression) -> String {
     expression
         .to_string()
@@ -2591,6 +2324,10 @@ fn is_suspicious_duplicate_operand_operator(binop: &ast::BinOp) -> bool {
             | ast::BinOp::Slash(_)
             | ast::BinOp::Percent(_)
     )
+}
+
+fn is_boolean_operator(binop: &ast::BinOp) -> bool {
+    matches!(binop, ast::BinOp::And(_) | ast::BinOp::Or(_))
 }
 
 fn binop_label(binop: &ast::BinOp) -> String {

@@ -1,0 +1,42 @@
+-- This file intentionally breaks expression and library-call rules.
+
+local value = 1
+local items = {
+  "implicit",
+  -- TableLiteral (TL4001)
+  [1.0] = "duplicate",
+}
+
+-- UnknownType (TL4041)
+local unknownType = type(value) == "numbre"
+
+-- ForRange (TL4042)
+for index = 3, 1 do
+  print(index)
+end
+
+-- FormatString (TL4044)
+local formatted = string.format("%Q", value)
+
+-- TableOperations (TL4047)
+table.insert(items, #items + 1, value)
+table.remove(items, 0)
+
+-- MisleadingAndOr (TL4048)
+local misleading = value and false or true
+
+-- IntegerParsing (TL4050)
+local imprecise = 9007199254740993
+
+-- ComparisonPrecedence (TL4051)
+local chained = 1 < value < 3
+local negated = not value == 2
+
+return {
+  unknownType = unknownType,
+  formatted = formatted,
+  misleading = misleading,
+  imprecise = imprecise,
+  chained = chained,
+  negated = negated,
+}

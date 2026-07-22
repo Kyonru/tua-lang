@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer};
 
-use crate::format::{FormatOptions, QuoteStyle};
+use crate::formatter::{FormatOptions, QuoteStyle};
 use crate::{Diagnostic, DiagnosticCode};
 
 mod parser;
@@ -48,6 +48,7 @@ enabled = true
 backend = \"tua\"
 
 [diagnostics]
+rules = false
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
@@ -71,7 +72,6 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-formatting_lints = true
 inline_ignores = false
 inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\"]
 inline_ignore_max_per_file = 0
@@ -242,6 +242,7 @@ impl Default for EcsConfig {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct DiagnosticsConfig {
+    pub rules: bool,
     pub duplicate_keys: bool,
     pub missing_requires: bool,
     pub self_assignments: bool,
@@ -265,7 +266,6 @@ pub struct DiagnosticsConfig {
     pub unused_assignments: bool,
     pub binary_operator_type_mismatches: bool,
     pub uncalled_local_functions: bool,
-    pub formatting_lints: bool,
     pub inline_ignores: bool,
     pub inline_ignore_scopes: Vec<String>,
     pub inline_ignore_max_per_file: usize,
@@ -275,6 +275,7 @@ pub struct DiagnosticsConfig {
 impl Default for DiagnosticsConfig {
     fn default() -> Self {
         Self {
+            rules: false,
             duplicate_keys: false,
             missing_requires: false,
             self_assignments: false,
@@ -298,7 +299,6 @@ impl Default for DiagnosticsConfig {
             unused_assignments: false,
             binary_operator_type_mismatches: false,
             uncalled_local_functions: false,
-            formatting_lints: true,
             inline_ignores: false,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),
@@ -312,6 +312,7 @@ impl Default for DiagnosticsConfig {
 
 impl DiagnosticsConfig {
     pub fn enable_all_lints(&mut self) {
+        self.rules = true;
         self.duplicate_keys = true;
         self.missing_requires = true;
         self.self_assignments = true;
@@ -335,7 +336,6 @@ impl DiagnosticsConfig {
         self.unused_assignments = true;
         self.binary_operator_type_mismatches = true;
         self.uncalled_local_functions = true;
-        self.formatting_lints = true;
     }
 }
 

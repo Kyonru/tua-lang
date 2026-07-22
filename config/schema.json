@@ -131,6 +131,14 @@
       "description": "Select the ECS runtime profile; tua uses the bundled zero-setup runtime."
     },
     {
+      "path": "diagnostics.rules",
+      "type": "boolean",
+      "default": false,
+      "description": "Enable Tua's standard code-quality lint rules.",
+      "editor": "tua.diagnostics.rules",
+      "editorDescription": "Enable Tua's standard code-quality lint rules. Null inherits [diagnostics].rules from tua.toml."
+    },
+    {
       "path": "diagnostics.duplicate_keys",
       "type": "boolean",
       "default": false,
@@ -290,14 +298,6 @@
       "default": false,
       "description": "Report local functions that are referenced but never called.",
       "editor": "tua.diagnostics.uncalledLocalFunctions"
-    },
-    {
-      "path": "diagnostics.formatting_lints",
-      "type": "boolean",
-      "default": true,
-      "description": "Report opinionated Lua/Tua formatting consistency issues.",
-      "editor": "tua.diagnostics.formattingLints",
-      "editorDescription": "Report opinionated Lua/Tua formatting consistency issues such as trailing whitespace, indentation, line width, keyword spacing, and token spacing. Null inherits [diagnostics].formatting_lints from tua.toml."
     },
     {
       "path": "diagnostics.inline_ignores",

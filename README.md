@@ -96,6 +96,8 @@ make docs
 ## Examples
 
 - `examples/features` is a buildable tour of the v1 language and LSP features.
+- `examples/linter` intentionally breaks every currently emitted standard lint
+  rule and is expected to fail `tua lint`.
 - `examples/love-minimal` is a small LÖVE smoke-test project.
 - `examples/love-full` is a larger LÖVE conversion example with Lua interop.
 - `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,

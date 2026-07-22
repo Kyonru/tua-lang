@@ -3,15 +3,29 @@ use std::path::Path;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, load_type_libraries, read_source_file, SourceKind};
+use tua_core::DiagnosticCategory;
 use tua_core::{profile, AnalysisHost, AnalysisSourceKind, LoadedConfig, ProjectWorkspace};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ProjectDiagnosticMode {
+    Check,
+    Lint,
+}
+
 pub(crate) fn run_check(cwd: impl AsRef<Path>, loaded: LoadedConfig) -> Result<String, CliError> {
-    run_project_diagnostics(cwd, loaded, "checked", "project check failed")
+    run_project_diagnostics(
+        cwd,
+        loaded,
+        ProjectDiagnosticMode::Check,
+        "checked",
+        "project check failed",
+    )
 }
 
 pub(crate) fn run_project_diagnostics(
     cwd: impl AsRef<Path>,
     loaded: LoadedConfig,
+    mode: ProjectDiagnosticMode,
     success_verb: &str,
     error_message: &str,
 ) -> Result<String, CliError> {
@@ -65,6 +79,17 @@ pub(crate) fn run_project_diagnostics(
         }
 
         diagnostics.extend(snapshot.pipeline_diagnostics(&source_file.path));
+    }
+
+    if mode == ProjectDiagnosticMode::Lint {
+        diagnostics.retain(|diagnostic| {
+            diagnostic.code.is_none_or(|code| {
+                matches!(
+                    code.category(),
+                    DiagnosticCategory::Syntax | DiagnosticCategory::Lint
+                )
+            })
+        });
     }
 
     profile::report_diagnostics_trace(format!(

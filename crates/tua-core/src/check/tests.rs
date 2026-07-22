@@ -674,10 +674,7 @@ fn accepts_inline_native_love_shader_source_strings() {
         r#"
 local shader = love.graphics.newShader("vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) { return color; }")
 "#,
-        &DiagnosticsConfig {
-            formatting_lints: false,
-            ..DiagnosticsConfig::default()
-        },
+        &DiagnosticsConfig::default(),
     )
     .expect("inline shader source strings should not be treated as asset paths");
 }
@@ -2462,7 +2459,6 @@ end
         &diagnostics_config,
         &JitConfig::default(),
         &ecs_config,
-        &FormatOptions::default(),
     )
     .expect("ECS-enabled diagnostics should preserve runtime metatable narrowing");
 }

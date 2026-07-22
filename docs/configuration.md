@@ -55,6 +55,7 @@ enabled = true
 backend = "tua"
 
 [diagnostics]
+rules = false
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
@@ -78,7 +79,6 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-formatting_lints = true
 inline_ignores = false
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0
@@ -112,6 +112,7 @@ the behavior and tradeoffs of each option.
 | `jit.hot_loop_hints` | boolean | `true` | - |
 | `ecs.enabled` | boolean | `true` | `tua.ecs.enabled` |
 | `ecs.backend` | string | `"tua"` | - |
+| `diagnostics.rules` | boolean | `false` | `tua.diagnostics.rules` |
 | `diagnostics.duplicate_keys` | boolean | `false` | `tua.diagnostics.duplicateKeys` |
 | `diagnostics.missing_requires` | boolean | `false` | `tua.diagnostics.missingRequires` |
 | `diagnostics.self_assignments` | boolean | `false` | `tua.diagnostics.selfAssignments` |
@@ -135,7 +136,6 @@ the behavior and tradeoffs of each option.
 | `diagnostics.unused_assignments` | boolean | `false` | `tua.diagnostics.unusedAssignments` |
 | `diagnostics.binary_operator_type_mismatches` | boolean | `false` | `tua.diagnostics.binaryOperatorTypeMismatches` |
 | `diagnostics.uncalled_local_functions` | boolean | `false` | `tua.diagnostics.uncalledLocalFunctions` |
-| `diagnostics.formatting_lints` | boolean | `true` | `tua.diagnostics.formattingLints` |
 | `diagnostics.inline_ignores` | boolean | `false` | `tua.diagnostics.inlineIgnores` |
 | `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
@@ -354,14 +354,16 @@ deadzones, and player ownership belong to each `input` call. See
 
 ## Diagnostics
 
-Formatting lints are enabled by default so `tua check`, `tua lint`, and editor
-diagnostics enforce the same baseline style as `tua fmt`. Other optional lints
-remain disabled until enabled here, by editor settings, or through
-`tua lint --strict`. See [Diagnostic Codes](luahelper-code-matrix.md) for the
-meaning and control of every `TLxxxx` code.
+Formatting and linting are independent: `[format]` controls `tua fmt`, while
+`[diagnostics]` controls code-quality guidance. `tua lint` always enables the
+standard rules for that command. Set `rules = true` to publish the
+same rules through `tua check` and editor diagnostics; `tua lint --strict`
+adds every Tua-specific optional lint. See [Formatter](formatter.md),
+[Linter](linter.md), and [Diagnostic Codes](luahelper-code-matrix.md).
 
 ```toml
 [diagnostics]
+rules = true
 duplicate_keys = true
 missing_requires = true
 self_assignments = true
@@ -385,7 +387,6 @@ local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = true
-formatting_lints = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0
@@ -397,6 +398,12 @@ annotation_mode = "luacats"
 
 `duplicate_keys`
 : Reports repeated literal keys in table constructors.
+
+`rules`
+: Enables the standard lint rules for `tua check` and language server
+diagnostics. `tua lint` enables these rules for its own run regardless
+of the configured value. See [Linter](linter.md) for the rule map and target
+specific exclusions.
 
 `missing_requires`
 : Reports `require("module")` and static `import(...)` bindings that Tua cannot
@@ -475,15 +482,6 @@ as `1 + "hp"`. Dynamic or `any` operands remain permissive.
 : Reports local functions that are referenced as values but never directly
 called. Indirect callback patterns can stay quiet by leaving this opt-in lint
 disabled.
-
-`formatting_lints`
-: Reports opinionated Lua/Tua formatting consistency issues. This is enabled by
-default and follows `[format]`: trailing whitespace, tabs or odd-space
-indentation, unindented continuation operators, lines longer than
-`line_width`, consecutive empty lines, obvious spacing around `then`/`do`,
-comma spacing, parenthesis/bracket padding, and assignment-style token spacing.
-Use `tua fmt` or editor formatting when you want the formatter to rewrite
-files.
 
 `inline_ignores`
 : Enables diagnostic suppression comments. This is disabled by default so

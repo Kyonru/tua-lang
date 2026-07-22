@@ -173,8 +173,8 @@ fn on_type_formatting_ignores_unstable_triggers_and_parse_errors() {
     assert_eq!(response_with_id(server.output(), 3)["result"], Value::Null);
 }
 #[test]
-fn did_change_configuration_can_disable_default_formatting_lints() {
-    let temp = TempProject::new("configuration-formatting-lints");
+fn formatting_differences_do_not_publish_lint_diagnostics() {
+    let temp = TempProject::new("formatting-is-not-linting");
     let source = "local value=1   \n";
 
     temp.write("tua.toml", "source = \"src\"\n");
@@ -184,24 +184,6 @@ fn did_change_configuration_can_disable_default_formatting_lints() {
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    let diagnostics = last_published_diagnostics(server.output(), &uri);
-
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic["code"] == "TL4021"
-            && diagnostic["message"]
-                .as_str()
-                .is_some_and(|message| message.contains("trailing whitespace"))
-    }));
-    assert!(diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic["code"] == "TL4024"));
-
-    server.send(did_change_configuration(json!({
-        "diagnostics": {
-            "formattingLints": false
-        }
-    })));
-
     let diagnostics = last_published_diagnostics(server.output(), &uri);
 
     assert!(

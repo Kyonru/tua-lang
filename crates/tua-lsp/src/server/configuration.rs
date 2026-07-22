@@ -22,6 +22,7 @@ pub(super) struct WorkspaceSettings {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct DiagnosticOverrides {
+    pub(super) rules: Option<bool>,
     pub(super) duplicate_keys: Option<bool>,
     pub(super) missing_requires: Option<bool>,
     pub(super) self_assignments: Option<bool>,
@@ -45,7 +46,6 @@ pub(super) struct DiagnosticOverrides {
     pub(super) unused_assignments: Option<bool>,
     pub(super) binary_operator_type_mismatches: Option<bool>,
     pub(super) uncalled_local_functions: Option<bool>,
-    pub(super) formatting_lints: Option<bool>,
     pub(super) inline_ignores: Option<bool>,
     pub(super) inline_ignore_scopes: Option<Vec<String>>,
     pub(super) inline_ignore_max_per_file: Option<usize>,
@@ -211,6 +211,7 @@ impl DiagnosticOverrides {
         };
 
         Self {
+            rules: bool_setting(settings, "rules", "rules"),
             duplicate_keys: bool_setting(settings, "duplicate_keys", "duplicateKeys"),
             missing_requires: bool_setting(settings, "missing_requires", "missingRequires"),
             self_assignments: bool_setting(settings, "self_assignments", "selfAssignments"),
@@ -282,7 +283,6 @@ impl DiagnosticOverrides {
                 "uncalled_local_functions",
                 "uncalledLocalFunctions",
             ),
-            formatting_lints: bool_setting(settings, "formatting_lints", "formattingLints"),
             inline_ignores: bool_setting(settings, "inline_ignores", "inlineIgnores"),
             inline_ignore_scopes: string_array_value(
                 settings
@@ -299,6 +299,7 @@ impl DiagnosticOverrides {
     }
 
     fn apply(&self, diagnostics: &mut DiagnosticsConfig) {
+        apply_bool(self.rules, &mut diagnostics.rules);
         apply_bool(self.duplicate_keys, &mut diagnostics.duplicate_keys);
         apply_bool(self.missing_requires, &mut diagnostics.missing_requires);
         apply_bool(self.self_assignments, &mut diagnostics.self_assignments);
@@ -358,7 +359,6 @@ impl DiagnosticOverrides {
             self.uncalled_local_functions,
             &mut diagnostics.uncalled_local_functions,
         );
-        apply_bool(self.formatting_lints, &mut diagnostics.formatting_lints);
         apply_bool(self.inline_ignores, &mut diagnostics.inline_ignores);
 
         if let Some(scopes) = &self.inline_ignore_scopes {

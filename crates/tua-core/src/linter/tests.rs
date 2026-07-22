@@ -20,14 +20,217 @@ local spaced = { 1, 2, 3 }
 }
 
 #[test]
-fn formatting_lints_are_enabled_by_default() {
-    let diagnostics = check_tua_source("src/main.tua", "local value=1\n")
-        .expect_err("formatting lints should be enabled by default");
+fn formatting_is_not_a_lint() {
+    check_tua_source("src/main.tua", "local value=1   \n")
+        .expect("formatting differences belong to the formatter");
+}
+
+#[test]
+fn standard_rules_report_symbol_rules() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local Outer = 1
+do
+  local Outer = 2
+end
+
+local uninitialized
+print(uninitialized)
+
+local Feel = require("feel")
+local _ = 1
+print(_)
+print = function() end
+print(Missing)
+
+local function createGlobal()
+  ProjectOnly = 1
+  return ProjectOnly
+end
+"#,
+    );
+
+    for code in [
+        DiagnosticCode::LINT_LOCAL_SHADOW,
+        DiagnosticCode::LINT_UNINITIALIZED_LOCAL,
+        DiagnosticCode::LINT_UNUSED_IMPORT,
+        DiagnosticCode::LINT_PLACEHOLDER_READ,
+        DiagnosticCode::LINT_BUILTIN_GLOBAL_WRITE,
+        DiagnosticCode::LINT_UNDEFINED_VARIABLE,
+        DiagnosticCode::LINT_GLOBAL_USED_AS_LOCAL,
+    ] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(code)),
+            "expected {code} in {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn standard_rules_report_control_flow_and_declaration_rules() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local a, a = 1, 2
+
+local function choose(value)
+  if value then
+    return 1
+  end
+end
+
+local function duplicate() end
+local function duplicate() end
+
+if true then
+  return
+else
+  return
+end
+print("never")
+"#,
+    );
+
+    for code in [
+        DiagnosticCode::LINT_DUPLICATE_LOCAL,
+        DiagnosticCode::LINT_IMPLICIT_RETURN,
+        DiagnosticCode::LINT_DUPLICATE_FUNCTION,
+        DiagnosticCode::LINT_UNREACHABLE_CODE,
+    ] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(code)),
+            "expected {code} in {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn standard_rules_report_expression_and_library_rules() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local kind = type(value) == "numbre"
+local result = ready and false or fallback
+local comparison = 1 < value < 3
+local negated = not value == fallback
+local huge = 9007199254740993
+local formatted = string.format("%Q", value)
+table.insert(items, #items + 1, value)
+table.remove(items, 0)
+
+for index = 3, 1 do
+  print(index)
+end
+
+for index = #items, 1 do
+  print(index)
+end
+"#,
+    );
+
+    for code in [
+        DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE,
+        DiagnosticCode::LINT_MISLEADING_AND_OR,
+        DiagnosticCode::LINT_COMPARISON_PRECEDENCE,
+        DiagnosticCode::LINT_INTEGER_PRECISION,
+        DiagnosticCode::LINT_FORMAT_STRING,
+        DiagnosticCode::LINT_TABLE_OPERATION,
+        DiagnosticCode::LINT_FOR_RANGE,
+    ] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(code)),
+            "expected {code} in {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn standard_rules_comment_directive_rule_ignores_long_strings_and_comments() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local text = [[
+--!inside-string
+]]
+
+--[[
+--!inside-comment
+]]
+
+--!outside
+return text
+"#,
+    );
 
     assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_TOKEN_SPACING),
-        1
+        count_code(&diagnostics, DiagnosticCode::LINT_COMMENT_DIRECTIVE),
+        1,
+        "{diagnostics:#?}"
     );
+}
+
+#[test]
+fn standard_rules_unknown_type_rule_accepts_luajit_cdata() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local value = dynamic()
+return type(value) == "cdata"
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNKNOWN_RUNTIME_TYPE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn standard_rules_table_literal_rule_normalizes_numeric_and_implicit_keys() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local values = {
+  "implicit",
+  [1.0] = "explicit",
+  [2] = "first",
+  [2.0] = "second",
+}
+return values
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_DUPLICATE_TABLE_KEY),
+        2,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn standard_rules_report_statement_layout_and_comment_directives() {
+    let diagnostics = check_standard_rules_source(
+        r#"--!mystery
+local first = 1 local second = 2
+local total = first +
+second
+"#,
+    );
+
+    for code in [
+        DiagnosticCode::LINT_COMMENT_DIRECTIVE,
+        DiagnosticCode::LINT_SAME_LINE_STATEMENT,
+        DiagnosticCode::LINT_MULTI_LINE_STATEMENT,
+    ] {
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == Some(code)),
+            "expected {code} in {diagnostics:#?}"
+        );
+    }
 }
 
 #[test]
@@ -370,111 +573,6 @@ damage("bad")
         count_code(&diagnostics, DiagnosticCode::LINT_RETURN_TYPE_MISMATCH),
         0
     );
-}
-
-#[test]
-fn reports_formatting_lints_when_enabled() {
-    let diagnostics = check_tua_source_with_diagnostics_config(
-        "src/main.tua",
-        "local hp=10   \n\tlocal values = {1,2,3}\nlocal text =\n\"alpha\"\n.. \"beta\"\nlocal longText = \"this line is deliberately long enough to cross the default one hundred column width limit\"\nif hp > 0  then  print( hp ) end\n",
-        &DiagnosticsConfig {
-            formatting_lints: true,
-            ..DiagnosticsConfig::default()
-        },
-    )
-    .expect_err("formatting lints should report diagnostics");
-
-    assert_eq!(
-        count_code(
-            &diagnostics,
-            DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
-        ),
-        1
-    );
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_INDENTATION),
-        2
-    );
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING),
-        2
-    );
-    assert!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_TOKEN_SPACING) >= 5,
-        "{diagnostics:?}"
-    );
-    assert!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_LINE_WIDTH) >= 1,
-        "{diagnostics:?}"
-    );
-    assert!(diagnostics
-        .iter()
-        .all(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning));
-}
-
-#[test]
-fn formatting_lints_accept_baseline_style() {
-    check_tua_source_with_diagnostics_config(
-        "src/main.tua",
-        r#"
-local values = { 1, 2, 3 }
-local text =
-  "alpha"
-  .. "beta"
-
-if values[1] > 0 then
-  print(values[1])
-end
-"#,
-        &DiagnosticsConfig {
-            formatting_lints: true,
-            ..DiagnosticsConfig::default()
-        },
-    )
-    .expect("baseline style should not report formatting diagnostics");
-}
-
-#[test]
-fn formatting_lints_report_consecutive_empty_lines() {
-    let diagnostics = check_tua_source_with_diagnostics_config(
-        "src/main.tua",
-        "local first = 1\n\n\nlocal second = 2\n",
-        &DiagnosticsConfig {
-            formatting_lints: true,
-            ..DiagnosticsConfig::default()
-        },
-    )
-    .expect_err("consecutive empty lines should report a formatting diagnostic");
-
-    assert_eq!(
-        count_code(&diagnostics, DiagnosticCode::LINT_FORMAT_EMPTY_LINES),
-        1
-    );
-}
-
-#[test]
-fn formatting_lints_ignore_strings_and_comments() {
-    check_tua_source_with_diagnostics_config(
-        "src/main.tua",
-        r#"
-local text = "a,b"
-local block = [[
-  this , keeps spacing
-
-
-]]
---[[
-
-
-]]
--- if value  then  print( value )
-"#,
-        &DiagnosticsConfig {
-            formatting_lints: true,
-            ..DiagnosticsConfig::default()
-        },
-    )
-    .expect("strings and comments should not report formatting diagnostics");
 }
 
 #[test]
@@ -1047,7 +1145,23 @@ fn check_jit_source(source: &str, jit_config: JitConfig) -> Vec<crate::Diagnosti
         &DiagnosticsConfig::default(),
         &jit_config,
         &EcsConfig::default(),
-        &crate::FormatOptions::default(),
+    )
+    .err()
+    .unwrap_or_default()
+}
+
+fn check_standard_rules_source(source: &str) -> Vec<crate::Diagnostic> {
+    let parsed = parse_tua_source("src/main.tua", source).expect("source should parse");
+
+    check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+        &parsed,
+        &[std::path::PathBuf::from("src")],
+        &DiagnosticsConfig {
+            rules: true,
+            ..DiagnosticsConfig::default()
+        },
+        &JitConfig::default(),
+        &EcsConfig::default(),
     )
     .err()
     .unwrap_or_default()

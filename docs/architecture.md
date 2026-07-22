@@ -327,7 +327,9 @@ Use this map when deciding where a change belongs:
 | Surface syntax, normalization, comments, and spans | `parser`, parser source models |
 | Declarations, expressions, scopes, and semantic identity | `hir`, `scope`, `semantic_index` |
 | Type representation, inference, assignability, and project exports | `types`, `type_database` |
-| User-facing errors, warnings, inline ignores, and lints | `check`, `diagnostic`, `inline_ignore`, `lint` |
+| User-facing errors, warnings, and inline ignores | `check`, `diagnostic`, `inline_ignore` |
+| Canonical source layout | `formatter` |
+| Code-quality and standard lint rules | `linter` |
 | Roots, files, module paths, imports, and project identity | `project_model`, `vfs`, `module_graph`, `module_index`, `module_link` |
 | Revisioned inputs, cached products, recovery, and public queries | `analysis` |
 | Completion, hover, navigation, symbols, refactors, and editor data | Corresponding `tua-core` feature module, exposed through `analysis` |

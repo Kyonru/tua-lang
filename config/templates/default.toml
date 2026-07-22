@@ -26,6 +26,7 @@ enabled = true
 backend = "tua"
 
 [diagnostics]
+rules = false
 duplicate_keys = false
 missing_requires = false
 self_assignments = false
@@ -49,7 +50,6 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-formatting_lints = true
 inline_ignores = false
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
 inline_ignore_max_per_file = 0

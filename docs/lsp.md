@@ -40,10 +40,15 @@ terminal command.
 ### Diagnostics And Incomplete Code
 
 The server publishes parser, type, project, lint, asset, LOVE, and domain
-diagnostics with stable `TLxxxx` codes. They match the results from the CLI for
-the same project snapshot. See [Diagnostic Codes](luahelper-code-matrix.md) for
+diagnostics with stable `TLxxxx` codes. They match `tua check` for the same
+project snapshot. See [Diagnostic Codes](luahelper-code-matrix.md) for
 code definitions and [Configuration](configuration.md#diagnostics) for project
 settings.
+
+Set `diagnostics.rules = true` (or the
+`tua.diagnostics.rules` override) to publish the standard rules.
+Formatting differences are not diagnostics; editor formatting and
+`tua fmt --check` use the separate formatter.
 
 During typing, Tua reports fast current-file diagnostics first and follows with
 project-aware results after a short debounce. Requests are tied to document

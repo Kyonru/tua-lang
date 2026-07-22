@@ -112,6 +112,7 @@ enabled = true
 backend = "tiny-ecs"
 
 [diagnostics]
+rules = true
 duplicate_keys = true
 missing_requires = true
 self_assignments = true
@@ -135,7 +136,6 @@ local_declaration_arity = true
 unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = true
-formatting_lints = true
 inline_ignores = true
 inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 4
@@ -174,6 +174,7 @@ globals = ["Game", "World"]
                 backend: "tiny-ecs".to_owned(),
             },
             diagnostics: DiagnosticsConfig {
+                rules: true,
                 duplicate_keys: true,
                 missing_requires: true,
                 self_assignments: true,
@@ -197,7 +198,6 @@ globals = ["Game", "World"]
                 unused_assignments: true,
                 binary_operator_type_mismatches: true,
                 uncalled_local_functions: true,
-                formatting_lints: true,
                 inline_ignores: true,
                 inline_ignore_scopes: vec![
                     "tua-ignore-line".to_owned(),
@@ -280,6 +280,7 @@ duplicate_keys = true
     assert!(!config.diagnostics.doc_annotations);
     assert!(!config.diagnostics.undefined_variables);
     assert!(!config.diagnostics.unused_locals);
+    assert!(!config.diagnostics.rules);
     assert!(!config.diagnostics.unused_parameters);
     assert!(!config.diagnostics.use_before_definition);
     assert!(!config.diagnostics.duplicate_parameters);
@@ -297,7 +298,6 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_assignments);
     assert!(!config.diagnostics.binary_operator_type_mismatches);
     assert!(!config.diagnostics.uncalled_local_functions);
-    assert!(config.diagnostics.formatting_lints);
     assert!(!config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,

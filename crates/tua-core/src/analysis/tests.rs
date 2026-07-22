@@ -1575,12 +1575,8 @@ local next = image "assets/p<|complete|>"
 }
 
 #[test]
-fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
-    let mut config = ProjectConfig::default();
-
-    config.diagnostics.formatting_lints = true;
-
-    let mut host = AnalysisHost::with_config(config);
+fn pipeline_diagnostics_leave_formatting_to_the_formatter() {
+    let mut host = AnalysisHost::with_config(ProjectConfig::default());
 
     host.set_file_with_kind(
         "src/legacy.lua",
@@ -1588,14 +1584,10 @@ fn pipeline_diagnostics_run_formatting_lints_for_lua_sources() {
         AnalysisSourceKind::Lua,
     );
 
-    let diagnostics = host.snapshot().pipeline_diagnostics("src/legacy.lua");
-
-    assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE)
-    }));
-    assert!(diagnostics
-        .iter()
-        .any(|diagnostic| { diagnostic.code == Some(DiagnosticCode::LINT_FORMAT_TOKEN_SPACING) }));
+    assert!(host
+        .snapshot()
+        .pipeline_diagnostics("src/legacy.lua")
+        .is_empty());
 }
 
 #[test]

@@ -13,9 +13,8 @@ use crate::ast_utils::{
 };
 use crate::classes;
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
-use crate::format::FormatOptions;
 use crate::inline_ignore::apply_inline_ignores;
-use crate::lint::lint_parsed_source;
+use crate::linter::lint_parsed_source;
 use crate::love_conf;
 use crate::module_index::{
     require_bindings_for_parsed_source, required_module_export_type_for_fields,
@@ -108,7 +107,6 @@ pub fn check_parsed_source_with_asset_roots_and_diagnostics_config(
         diagnostics_config,
         &JitConfig::default(),
         &EcsConfig::default(),
-        &FormatOptions::default(),
     )
 }
 
@@ -118,7 +116,6 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
-    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     CheckQuery::new(
         parsed,
@@ -128,7 +125,6 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
             jit_config,
             ecs_config,
             None,
-            format_options,
         ),
     )
     .run()
@@ -141,7 +137,6 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
     jit_config: &JitConfig,
     ecs_config: &EcsConfig,
     asset_index: Option<&asset::AssetIndex>,
-    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     CheckQuery::new(
         parsed,
@@ -151,7 +146,6 @@ pub(crate) fn check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_confi
             jit_config,
             ecs_config,
             asset_index,
-            format_options,
         ),
     )
     .run()
@@ -164,7 +158,6 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
     diagnostics_config: &DiagnosticsConfig,
     jit_config: &JitConfig,
     asset_index: Option<&asset::AssetIndex>,
-    format_options: &FormatOptions,
 ) -> Result<(), Vec<Diagnostic>> {
     CheckQuery::new(
         parsed,
@@ -174,7 +167,6 @@ pub(crate) fn check_parsed_source_with_environment_asset_roots_diagnostics_jit_c
             jit_config,
             &EcsConfig::default(),
             asset_index,
-            format_options,
         ),
     )
     .run_with_environment(environment)

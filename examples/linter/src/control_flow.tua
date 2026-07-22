@@ -1,0 +1,60 @@
+-- This file intentionally breaks declaration, layout, and control-flow rules.
+
+-- DuplicateLocal (TL4043)
+local repeated, repeated = 1, 2
+
+-- UnbalancedAssignment (TL4028)
+local first, second = 1
+
+local function pair()
+  return 1, 2
+end
+
+-- UnbalancedAssignment (TL4027)
+first = pair()
+
+-- SameLineStatement (TL4036)
+local left = 1 local right = 2
+
+-- MultiLineStatement (TL4037)
+local total = left +
+right
+
+-- DuplicateCondition (TL4012)
+if total > 0 then
+elseif total > 0 then
+end
+
+-- DuplicateCondition (TL4013)
+local repeatedBoolean = total and total
+
+-- ImplicitReturn (TL4053)
+local function choose(value)
+  if value then
+    return 1
+  end
+end
+
+-- DuplicateFunction (TL4046)
+local function duplicate() end
+local function duplicate() end
+
+-- UnreachableCode (TL4040)
+local function stopped(value)
+  if value then
+    return
+  else
+    return
+  end
+  print("unreachable")
+end
+
+return {
+  repeated = repeated,
+  second = second,
+  right = right,
+  repeatedBoolean = repeatedBoolean,
+  choose = choose,
+  duplicate = duplicate,
+  stopped = stopped,
+}

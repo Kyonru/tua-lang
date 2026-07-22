@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer};
 use toml_edit::{Document, InlineTable, Table, Value};
 
 use super::{ConfigParseError, ProjectConfig};
-use crate::format::QuoteStyle;
+use crate::formatter::QuoteStyle;
 
 const CONFIG_SCHEMA_JSON: &str = include_str!("../../../../config/schema.json");
 

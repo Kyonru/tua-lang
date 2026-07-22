@@ -27,8 +27,8 @@ src/player.tua:12:15 error TL1003: type mismatch: expected number, found string
 - The message explains the values, names, paths, or constraints involved.
 
 Errors block normal build emission. Warnings and hints do not block emission,
-but `check` and `lint` can still report a failing command when enabled
-diagnostics are present.
+but `check` still fails when enabled diagnostics are present. `lint` considers
+syntax and `TL4xxx` lint diagnostics only.
 
 !!! note "A code can have more than one severity"
     The code identifies a condition, not a fixed severity. For example,
@@ -100,8 +100,9 @@ operations. More specialized optional lint codes such as `TL4016` and
 
 ## Lint And Guidance Codes
 
-Most `TL4xxx` diagnostics are opt-in. Formatting diagnostics are the exception:
-`diagnostics.formatting_lints` defaults to `true`.
+Most `TL4xxx` diagnostics are opt-in through project/editor settings. The
+`tua lint` command enables `diagnostics.rules` for its own run; formatting
+has no diagnostic codes and is enforced separately with `tua fmt --check`.
 
 | Code | Meaning | Configuration |
 | --- | --- | --- |
@@ -125,10 +126,6 @@ Most `TL4xxx` diagnostics are opt-in. Formatting diagnostics are the exception:
 | `TL4018` | A known LOVE object method uses `.` instead of `:`, so `self` would not be passed. | Always enabled; warning with quick fix. |
 | `TL4019` | More than one project file can satisfy the same module specifier. | `bad_requires` |
 | `TL4020` | The static module graph contains a require/import cycle. | `bad_requires` |
-| `TL4021` | A line contains trailing whitespace. | `formatting_lints` |
-| `TL4022` | Indentation does not match the configured formatting style. | `formatting_lints` |
-| `TL4023` | Spacing around `then`, `do`, or related keywords is inconsistent. | `formatting_lints` |
-| `TL4024` | Token, comma, bracket, or assignment spacing is inconsistent. | `formatting_lints` |
 | `TL4025` | An inline-ignore directive, scope, group, or code is invalid. | `inline_ignores` |
 | `TL4026` | An inline-ignore directive did not suppress any matching diagnostic. | `inline_ignores` |
 | `TL4027` | Assignment target count differs from the statically known value count. | `assignment_arity` |
@@ -139,8 +136,26 @@ Most `TL4xxx` diagnostics are opt-in. Formatting diagnostics are the exception:
 | `TL4032` | A local changes between LuaJIT-unfriendly value types. | `jit.enabled` and `jit.variable_type_drift` |
 | `TL4033` | A table gains late fields or changes known field types in a LuaJIT-unfriendly way. | `jit.enabled` and `jit.table_shape_drift` |
 | `TL4034` | A hot loop writes through a dynamic table key. | `jit.enabled` and `jit.hot_loop_hints` |
-| `TL4035` | A line exceeds `format.line_width`. | `formatting_lints` |
-| `TL4036` | More than one consecutive empty line separates code. | `formatting_lints` |
+| `TL4035` | A local shadows an outer local. | `rules` |
+| `TL4036` | Adjacent statements share a line without an explicit separator. | `rules` |
+| `TL4037` | A continuation line is not indented relative to its statement. | `rules` |
+| `TL4038` | An assignment overwrites a builtin global. | `rules` |
+| `TL4039` | Placeholder `_` is read as a value. | `rules` |
+| `TL4040` | A statement is unreachable. | `rules` |
+| `TL4041` | A `type`/`typeof` comparison uses an unknown runtime type name. | `rules` |
+| `TL4042` | A numeric `for` range likely needs a different bound or explicit step. | `rules` |
+| `TL4043` | One local declaration repeats a name. | `rules` |
+| `TL4044` | A static format string, pattern, or date format is invalid. | `rules` |
+| `TL4045` | A local is read but never initialized. | `rules` |
+| `TL4046` | A function name is defined more than once in one block. | `rules` |
+| `TL4047` | A `table.insert` or `table.remove` index is invalid, redundant, or suspicious. | `rules` |
+| `TL4048` | `a and false/nil or b` cannot preserve the false/nil result. | `rules` |
+| `TL4049` | A `--!` comment directive is unsupported by Tua. | `rules` |
+| `TL4050` | An integer literal loses precision as a Lua number. | `rules` |
+| `TL4051` | Comparison precedence is ambiguous or behaves unlike a chained comparison. | `rules` |
+| `TL4052` | A global is only used from one function and can be local. | `rules` |
+| `TL4053` | A function returns values on one path and implicitly returns none on another. | `rules` |
+| `TL4054` | A static `require` or `import` binding is unused. | `rules` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running
@@ -215,7 +230,6 @@ Some diagnostics expose conservative editor fixes:
 | `TL4003` | Remove a self-assignment. |
 | `TL4005` | Remove an unused local. |
 | `TL4018` | Replace a LOVE dot-method call with colon syntax. |
-| `TL4021` | Remove trailing whitespace. |
 | `TL5006` | Rename a close LOVE callback typo. |
 
 Not every diagnostic has a safe mechanical fix. Tua omits an action when the

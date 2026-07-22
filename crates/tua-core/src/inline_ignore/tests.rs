@@ -49,7 +49,7 @@ fn next_line_exact_code_suppresses_matching_diagnostic() {
 fn line_scope_supports_multiple_codes_and_reports_unknown_codes() {
     let output = apply_inline_ignores(
         Path::new("src/main.tua"),
-        "local value = 1 -- tua-ignore-line TL4018 TL4042\n",
+        "local value = 1 -- tua-ignore-line TL4018 TL4998\n",
         vec![diagnostic(1, DiagnosticCode::LINT_DOT_METHOD_CALL)],
         &config(),
     );
@@ -59,7 +59,7 @@ fn line_scope_supports_multiple_codes_and_reports_unknown_codes() {
         output[0].code,
         Some(DiagnosticCode::LINT_INLINE_IGNORE_INVALID)
     );
-    assert!(output[0].message.contains("TL4042"));
+    assert!(output[0].message.contains("TL4998"));
 }
 
 #[test]

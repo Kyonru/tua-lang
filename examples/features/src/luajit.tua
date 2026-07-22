@@ -14,6 +14,8 @@ player.name = "late field when JIT guidance is enabled"
 -- Feature: TL4034 points out dynamic table writes inside loops in JIT mode.
 for i = 1, 3 do
   player[i] = i
+  local i = 10
+  print(i)
 end
 
 -- Feature: any remains the deliberate escape hatch for dynamic Lua values.

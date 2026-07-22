@@ -1,0 +1,37 @@
+-- This file intentionally breaks symbol-related standard lint rules.
+
+-- LocalUnused / FunctionUnused (TL4005)
+local unusedLocal = 1
+local function unusedFunction() end
+
+-- UnknownGlobal (TL4004)
+print(MissingGlobal)
+
+-- LocalShadow (TL4035)
+local outer = 1
+do
+  local outer = 2
+  print(outer)
+end
+print(outer)
+
+-- ImportUnused (TL4054)
+local UnusedModule = require("missing_for_linter_example")
+
+-- PlaceholderRead (TL4039)
+local _ = "placeholder"
+print(_)
+
+-- UninitializedLocal (TL4045)
+local uninitialized
+print(uninitialized)
+
+-- GlobalUsedAsLocal (TL4052)
+local function createProjectOnlyGlobal()
+  ProjectOnlyGlobal = 1
+  return ProjectOnlyGlobal
+end
+createProjectOnlyGlobal()
+
+-- BuiltinGlobalWrite (TL4038)
+print = function() end

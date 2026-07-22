@@ -4,8 +4,8 @@ use crate::args::{CommandName, CommandOptions};
 use crate::build::run_build;
 use crate::check::run_check;
 use crate::error::CliError;
-use crate::fmt::run_fmt;
-use crate::lint::run_lint;
+use crate::formatter::run_fmt;
+use crate::linter::run_lint;
 use crate::traceback::run_traceback;
 use crate::watch::run_watch;
 

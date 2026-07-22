@@ -1,0 +1,4 @@
+-- CommentDirective (TL4049)
+--!unsupported
+
+return true

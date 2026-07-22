@@ -25,6 +25,20 @@ It also includes focused modules for the Baton-backed `input({...})` helper,
 state machines, stores, Signals, ECS, object pools, sprite sheets, vectors, and
 Lua interoperability.
 
+## `examples/linter`
+
+An intentionally failing diagnostic fixture with one named example for every
+currently emitted standard lint rule.
+
+```bash
+cargo build -p tua-cli
+cd examples/linter
+../../target/debug/tua lint
+```
+
+The lint command exits with status `1` by design. The fixture has no
+`tua.toml`, so it does not participate in buildable-example or benchmark runs.
+
 ## `examples/love-minimal`
 
 A small LOVE project for basic compile-and-run validation.

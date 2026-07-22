@@ -31,6 +31,8 @@ nav = [
   ] },
   { "Tooling" = [
     { "CLI" = "cli.md" },
+    { "Formatter" = "formatter.md" },
+    { "Linter" = "linter.md" },
     { "Language Server" = "lsp.md" },
     { "Debugging" = "debugging.md" },
     { "Diagnostic Codes" = "luahelper-code-matrix.md" },

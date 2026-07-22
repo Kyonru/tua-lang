@@ -1017,6 +1017,33 @@ unused_locals = false
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0]["code"], "TL4005");
 }
+
+#[test]
+fn did_change_configuration_can_enable_rules() {
+    let temp = TempProject::new("configuration-lint-rules");
+    let source = "local first, first = 1, 2\nreturn first\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
+
+    server.send(did_change_configuration(json!({
+        "diagnostics": {
+            "rules": true
+        }
+    })));
+
+    let diagnostics = last_published_diagnostics(server.output(), &uri);
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "TL4043"));
+}
+
 #[test]
 fn did_change_configuration_can_enable_luahelper_parity_lints() {
     let temp = TempProject::new("configuration-luahelper-parity-lints");

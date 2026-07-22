@@ -17,7 +17,7 @@ pub mod emit;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod fixture;
 pub mod folding_range;
-pub mod format;
+pub mod formatter;
 pub mod hir;
 pub mod hover;
 pub mod ide_db;
@@ -25,7 +25,7 @@ pub mod inlay_hint;
 mod inline_ignore;
 mod input;
 pub mod inspector;
-mod lint;
+mod linter;
 mod love_api;
 mod love_api_extra;
 mod love_api_signatures;
@@ -134,7 +134,7 @@ pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, Fixtu
 pub use folding_range::{
     folding_ranges_parsed_source, folding_ranges_tua_source, FoldingRange, FoldingRangeKind,
 };
-pub use format::{
+pub use formatter::{
     format_parsed_source, format_tua_source, format_tua_source_on_type, format_tua_source_range,
     FormatOptions, QuoteStyle,
 };

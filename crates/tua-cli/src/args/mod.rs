@@ -13,7 +13,7 @@ Commands:
   init      Create a default tua.toml and src/ directory
   check     Parse and type-check the project
   fmt       Format project source files
-  lint      Run configured diagnostics as lints
+  lint      Run standard and configured lint rules
   build     Check and emit Lua output
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change

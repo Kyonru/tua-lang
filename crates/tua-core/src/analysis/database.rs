@@ -337,7 +337,6 @@ fn build_analysis_file(
                             &diagnostics_config,
                             &context.config.jit,
                             context.asset_index,
-                            &context.config.format.options(),
                         )
                         .err()
                         .unwrap_or_default(),
@@ -358,7 +357,6 @@ fn build_analysis_file(
                             &context.config.jit,
                             &context.config.ecs,
                             context.asset_index,
-                            &context.config.format.options(),
                         )
                         .err()
                         .unwrap_or_default(),
@@ -566,7 +564,6 @@ pub(super) fn fast_diagnostics_for_source(
             &fast_config,
             &crate::config::JitConfig::default(),
             None,
-            &config.format.options(),
         )
         .err()
         .unwrap_or_default(),
@@ -598,7 +595,6 @@ pub(super) fn fast_diagnostics_config(
 ) -> crate::config::DiagnosticsConfig {
     crate::config::DiagnosticsConfig {
         undefined_variables: config.undefined_variables,
-        formatting_lints: config.formatting_lints,
         globals: config.globals.clone(),
         ..crate::config::DiagnosticsConfig::default()
     }
@@ -626,11 +622,6 @@ pub(super) fn is_fast_lane_diagnostic_code(code: crate::DiagnosticCode) -> bool 
             | crate::DiagnosticCode::DOMAIN_SIGNAL_SCHEMA
             | crate::DiagnosticCode::DOMAIN_LOVE_CALLBACK
             | crate::DiagnosticCode::LINT_UNDEFINED_VARIABLE
-            | crate::DiagnosticCode::LINT_FORMAT_TRAILING_WHITESPACE
-            | crate::DiagnosticCode::LINT_FORMAT_INDENTATION
-            | crate::DiagnosticCode::LINT_FORMAT_KEYWORD_SPACING
-            | crate::DiagnosticCode::LINT_FORMAT_TOKEN_SPACING
-            | crate::DiagnosticCode::LINT_FORMAT_LINE_WIDTH
     )
 }
 

@@ -211,8 +211,9 @@ The `tua` executable provides:
 
 - `init` for project scaffolding;
 - `check` for project diagnostics;
-- `fmt` and `fmt --check` for formatting;
-- `lint` and `lint --strict` for lint profiles;
+- `fmt` and `fmt --check` for canonical formatting, independently of diagnostics;
+- `lint` for the standard lint rules and `lint --strict` for those rules
+  plus every Tua-specific optional lint;
 - `build` and `build --emit-on-error` for Lua emission;
 - `watch` for incremental builds;
 - `traceback` for source-map remapping;
@@ -272,4 +273,4 @@ Tua does not provide:
 - perfect proof of dynamic keys, metatables, or shape-changing tables;
 - an executable third-party plugin registry;
 - network-required core completion;
-- full LuaHelper or Luau compatibility.
+- full compatibility with other Lua language servers or typed Lua dialects.

@@ -76,10 +76,6 @@ impl DiagnosticCode {
     pub const LINT_DOT_METHOD_CALL: Self = Self(4018);
     pub const LINT_DUPLICATE_REQUIRE_CANDIDATE: Self = Self(4019);
     pub const LINT_REQUIRE_CYCLE: Self = Self(4020);
-    pub const LINT_FORMAT_TRAILING_WHITESPACE: Self = Self(4021);
-    pub const LINT_FORMAT_INDENTATION: Self = Self(4022);
-    pub const LINT_FORMAT_KEYWORD_SPACING: Self = Self(4023);
-    pub const LINT_FORMAT_TOKEN_SPACING: Self = Self(4024);
     pub const LINT_INLINE_IGNORE_INVALID: Self = Self(4025);
     pub const LINT_INLINE_IGNORE_UNUSED: Self = Self(4026);
     pub const LINT_ASSIGNMENT_ARITY: Self = Self(4027);
@@ -90,8 +86,26 @@ impl DiagnosticCode {
     pub const LINT_JIT_TYPE_DRIFT: Self = Self(4032);
     pub const LINT_JIT_TABLE_SHAPE_DRIFT: Self = Self(4033);
     pub const LINT_JIT_HOT_LOOP_DYNAMIC_KEY: Self = Self(4034);
-    pub const LINT_FORMAT_LINE_WIDTH: Self = Self(4035);
-    pub const LINT_FORMAT_EMPTY_LINES: Self = Self(4036);
+    pub const LINT_LOCAL_SHADOW: Self = Self(4035);
+    pub const LINT_SAME_LINE_STATEMENT: Self = Self(4036);
+    pub const LINT_MULTI_LINE_STATEMENT: Self = Self(4037);
+    pub const LINT_BUILTIN_GLOBAL_WRITE: Self = Self(4038);
+    pub const LINT_PLACEHOLDER_READ: Self = Self(4039);
+    pub const LINT_UNREACHABLE_CODE: Self = Self(4040);
+    pub const LINT_UNKNOWN_RUNTIME_TYPE: Self = Self(4041);
+    pub const LINT_FOR_RANGE: Self = Self(4042);
+    pub const LINT_DUPLICATE_LOCAL: Self = Self(4043);
+    pub const LINT_FORMAT_STRING: Self = Self(4044);
+    pub const LINT_UNINITIALIZED_LOCAL: Self = Self(4045);
+    pub const LINT_DUPLICATE_FUNCTION: Self = Self(4046);
+    pub const LINT_TABLE_OPERATION: Self = Self(4047);
+    pub const LINT_MISLEADING_AND_OR: Self = Self(4048);
+    pub const LINT_COMMENT_DIRECTIVE: Self = Self(4049);
+    pub const LINT_INTEGER_PRECISION: Self = Self(4050);
+    pub const LINT_COMPARISON_PRECEDENCE: Self = Self(4051);
+    pub const LINT_GLOBAL_USED_AS_LOCAL: Self = Self(4052);
+    pub const LINT_IMPLICIT_RETURN: Self = Self(4053);
+    pub const LINT_UNUSED_IMPORT: Self = Self(4054);
     pub const DOMAIN_ECS_COMPONENT_VALUE: Self = Self(5002);
     pub const DOMAIN_ECS_QUERY: Self = Self(5003);
     pub const DOMAIN_SPRITE: Self = Self(5004);
@@ -169,10 +183,6 @@ impl DiagnosticCode {
                 | Self::LINT_DOT_METHOD_CALL
                 | Self::LINT_DUPLICATE_REQUIRE_CANDIDATE
                 | Self::LINT_REQUIRE_CYCLE
-                | Self::LINT_FORMAT_TRAILING_WHITESPACE
-                | Self::LINT_FORMAT_INDENTATION
-                | Self::LINT_FORMAT_KEYWORD_SPACING
-                | Self::LINT_FORMAT_TOKEN_SPACING
                 | Self::LINT_INLINE_IGNORE_INVALID
                 | Self::LINT_INLINE_IGNORE_UNUSED
                 | Self::LINT_ASSIGNMENT_ARITY
@@ -183,8 +193,26 @@ impl DiagnosticCode {
                 | Self::LINT_JIT_TYPE_DRIFT
                 | Self::LINT_JIT_TABLE_SHAPE_DRIFT
                 | Self::LINT_JIT_HOT_LOOP_DYNAMIC_KEY
-                | Self::LINT_FORMAT_LINE_WIDTH
-                | Self::LINT_FORMAT_EMPTY_LINES
+                | Self::LINT_LOCAL_SHADOW
+                | Self::LINT_SAME_LINE_STATEMENT
+                | Self::LINT_MULTI_LINE_STATEMENT
+                | Self::LINT_BUILTIN_GLOBAL_WRITE
+                | Self::LINT_PLACEHOLDER_READ
+                | Self::LINT_UNREACHABLE_CODE
+                | Self::LINT_UNKNOWN_RUNTIME_TYPE
+                | Self::LINT_FOR_RANGE
+                | Self::LINT_DUPLICATE_LOCAL
+                | Self::LINT_FORMAT_STRING
+                | Self::LINT_UNINITIALIZED_LOCAL
+                | Self::LINT_DUPLICATE_FUNCTION
+                | Self::LINT_TABLE_OPERATION
+                | Self::LINT_MISLEADING_AND_OR
+                | Self::LINT_COMMENT_DIRECTIVE
+                | Self::LINT_INTEGER_PRECISION
+                | Self::LINT_COMPARISON_PRECEDENCE
+                | Self::LINT_GLOBAL_USED_AS_LOCAL
+                | Self::LINT_IMPLICIT_RETURN
+                | Self::LINT_UNUSED_IMPORT
                 | Self::DOMAIN_ECS_COMPONENT_VALUE
                 | Self::DOMAIN_ECS_QUERY
                 | Self::DOMAIN_SPRITE

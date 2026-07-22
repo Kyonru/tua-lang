@@ -127,6 +127,14 @@
           "default": null,
           "description": "Whether the formatter writes a final newline. Null inherits [format].final_newline from tua.toml."
         },
+        "tua.diagnostics.rules": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "Enable Tua's standard code-quality lint rules. Null inherits [diagnostics].rules from tua.toml."
+        },
         "tua.diagnostics.duplicateKeys": {
           "type": [
             "boolean",
@@ -310,14 +318,6 @@
           ],
           "default": null,
           "description": "Report local functions that are referenced but never called."
-        },
-        "tua.diagnostics.formattingLints": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null,
-          "description": "Report opinionated Lua/Tua formatting consistency issues such as trailing whitespace, indentation, line width, keyword spacing, and token spacing. Null inherits [diagnostics].formatting_lints from tua.toml."
         },
         "tua.diagnostics.inlineIgnores": {
           "type": [

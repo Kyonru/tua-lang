@@ -13,7 +13,6 @@ pub(super) struct CheckQueryOptions<'a> {
     jit_config: &'a JitConfig,
     domains: BuiltinDomainRegistry,
     asset_index: Option<&'a asset::AssetIndex>,
-    format_options: &'a FormatOptions,
 }
 
 impl<'a> CheckQueryOptions<'a> {
@@ -23,7 +22,6 @@ impl<'a> CheckQueryOptions<'a> {
         jit_config: &'a JitConfig,
         ecs_config: &'a EcsConfig,
         asset_index: Option<&'a asset::AssetIndex>,
-        format_options: &'a FormatOptions,
     ) -> Self {
         Self {
             asset_roots,
@@ -31,7 +29,6 @@ impl<'a> CheckQueryOptions<'a> {
             jit_config,
             domains: BuiltinDomainRegistry::with_ecs(ecs_config.enabled),
             asset_index,
-            format_options,
         }
     }
 }
@@ -89,7 +86,6 @@ impl<'a> CheckQuery<'a> {
             self.options.diagnostics_config,
             self.options.jit_config,
             environment,
-            self.options.format_options,
         ));
 
         checker.diagnostics = apply_inline_ignores(

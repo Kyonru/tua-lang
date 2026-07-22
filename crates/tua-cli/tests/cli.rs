@@ -1995,14 +1995,14 @@ fn lint_respects_project_config() {
         r#"source = "src"
 
 [diagnostics]
-duplicate_keys = true
+self_assignments = true
 "#,
     )
     .expect("failed to write config");
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
     fs::write(
         temp.path().join("src/main.tua"),
-        "local config = { hp = 10, hp = 20 }\n",
+        "local hp = 10\nhp = hp\nreturn hp\n",
     )
     .expect("failed to write source");
 
@@ -2016,20 +2016,20 @@ duplicate_keys = true
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
-    assert!(stderr.contains("main.tua:1"));
-    assert!(stderr.contains("warning TL4001"));
-    assert!(stderr.contains("duplicate table key `hp`"));
+    assert!(stderr.contains("main.tua:2"));
+    assert!(stderr.contains("warning TL4003"));
+    assert!(stderr.contains("self-assignment of `hp`"));
 }
 
 #[test]
-fn lint_reports_consecutive_empty_lines() {
+fn lint_ignores_formatting_differences() {
     let temp = TempDir::new("lint-empty-lines");
 
     fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
     fs::write(
         temp.path().join("src/main.tua"),
-        "local first = 1\n\n\nlocal second = 2\n",
+        "local first = 1\n\n\nlocal second = 2\nreturn first + second\n",
     )
     .expect("failed to write source");
 
@@ -2039,12 +2039,31 @@ fn lint_reports_consecutive_empty_lines() {
         .output()
         .expect("failed to run tua lint");
 
-    assert!(!output.status.success());
+    assert!(output.status.success());
 
-    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
+    assert!(stdout.contains("linted 1 file(s)"));
+}
 
-    assert!(stderr.contains("main.tua:3:1 warning TL4036"));
-    assert!(stderr.contains("remove consecutive empty line"));
+#[test]
+fn lint_does_not_report_type_errors() {
+    let temp = TempDir::new("lint-no-typecheck");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local value: number = \"wrong\"\nreturn value\n",
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("lint")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua lint");
+
+    assert!(output.status.success());
 }
 
 #[test]
@@ -2055,7 +2074,7 @@ fn lint_strict_enables_all_lints() {
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
     fs::write(
         temp.path().join("src/main.tua"),
-        "local config = { hp = 10, hp = 20 }\n",
+        "local hp = 10\nhp = hp\nreturn hp\n",
     )
     .expect("failed to write source");
 
@@ -2069,8 +2088,8 @@ fn lint_strict_enables_all_lints() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
 
-    assert!(stderr.contains("warning TL4001"));
-    assert!(stderr.contains("duplicate table key `hp`"));
+    assert!(stderr.contains("warning TL4003"));
+    assert!(stderr.contains("self-assignment of `hp`"));
 }
 
 #[test]
