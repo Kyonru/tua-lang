@@ -143,7 +143,7 @@ enforced separately with `tua fmt --check`.
 | `TL4037` | A continuation line is not indented relative to its statement. | `rules` |
 | `TL4038` | A direct write overwrites a protected LuaJIT, LOVE, or Tua builtin global. | `rules` |
 | `TL4039` | Placeholder `_` is read as a value. | `rules` |
-| `TL4040` | A statement is unreachable. | `rules` |
+| `TL4040` | The first statement in a region is unreachable after paths that always return, break, or call a resolved terminating builtin. | `rules` |
 | `TL4041` | A `type`/`typeof` comparison uses an unknown runtime type name. | `rules` |
 | `TL4042` | A numeric `for` range likely needs a different bound or explicit step. | `rules` |
 | `TL4043` | One local declaration repeats a name. | `rules` |

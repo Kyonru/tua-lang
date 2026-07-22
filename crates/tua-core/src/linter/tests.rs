@@ -519,6 +519,212 @@ print("never")
 }
 
 #[test]
+fn unreachable_code_recognizes_resolved_error_and_assert_calls() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function cbrt(value)
+  if value >= 0 then
+    return value ^ (1 / 3)
+  else
+    error("cbrt expects a non-negative argument")
+  end
+  return 0
+end
+
+local function stop(flag)
+  if flag then
+    error("stopped")
+  else
+    assert(false, "stopped")
+  end
+  return 0
+end
+
+return cbrt, stop
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNREACHABLE_CODE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "unreachable code (previous statement always returns or errors)",
+            "unreachable code (previous statement always errors)",
+        ]
+    );
+}
+
+#[test]
+fn unreachable_code_does_not_treat_shadowed_terminators_as_builtins() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function error(message)
+  print(message)
+end
+
+local function assert(value)
+  return value
+end
+
+local function run(flag)
+  if flag then
+    error("keep going")
+  else
+    assert(false)
+  end
+  return 0
+end
+
+return run
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNREACHABLE_CODE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn unreachable_code_does_not_treat_replaced_terminators_as_builtins() {
+    let assigned = check_standard_rules_source(
+        r#"
+error = print
+assert = print
+
+local function run()
+  error("keep going")
+  assert(false)
+  return 0
+end
+
+return run
+"#,
+    );
+    assert_eq!(
+        count_code(&assigned, DiagnosticCode::LINT_UNREACHABLE_CODE),
+        0,
+        "{assigned:#?}"
+    );
+
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        r#"
+local function run()
+  error("keep going")
+  assert(false)
+  return 0
+end
+
+return run
+"#,
+    )
+    .expect("source should parse");
+    let configured = check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config(
+        &parsed,
+        &[std::path::PathBuf::from("src")],
+        &DiagnosticsConfig {
+            rules: true,
+            globals: vec!["error".to_owned(), "assert".to_owned()],
+            ..diagnostics_without_standard_rules()
+        },
+        &JitConfig::default(),
+        &EcsConfig::default(),
+    )
+    .err()
+    .unwrap_or_default();
+    assert_eq!(
+        count_code(&configured, DiagnosticCode::LINT_UNREACHABLE_CODE),
+        0,
+        "{configured:#?}"
+    );
+}
+
+#[test]
+fn unreachable_code_propagates_past_an_already_unreachable_tail() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function stop(flag)
+  if flag then
+    do return 1 end
+    print("dead")
+  else
+    return 2
+  end
+  print("also dead")
+end
+
+return stop
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNREACHABLE_CODE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec![
+            "unreachable code (previous statement always returns)",
+            "unreachable code (previous statement always returns)",
+        ]
+    );
+}
+
+#[test]
+fn unreachable_code_groups_each_region_and_identifies_breaks() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function scan(flag)
+  while flag do
+    do break end
+    print("dead one")
+    print("dead two")
+  end
+end
+
+return scan
+"#,
+    );
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNREACHABLE_CODE))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        messages,
+        vec!["unreachable code (previous statement always breaks)"]
+    );
+}
+
+#[test]
+fn unreachable_code_allows_a_trailing_return_after_a_direct_error() {
+    let diagnostics = check_standard_rules_source(
+        r#"
+local function stop()
+  error("stopped")
+  return 0
+end
+
+return stop
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_UNREACHABLE_CODE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn standard_rules_report_expression_and_library_rules() {
     let diagnostics = check_standard_rules_source(
         r#"

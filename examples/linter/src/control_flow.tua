@@ -44,7 +44,7 @@ local function stopped(value)
   if value then
     return
   else
-    return
+    error("stopped")
   end
   print("unreachable")
 end

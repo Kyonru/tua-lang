@@ -4,21 +4,39 @@
 //! scope implementation. Rules that require a host runtime catalog are not
 //! guessed here.
 
-use full_moon::ast::{self, Call, Expression, FunctionArgs, FunctionCall, LastStmt, Stmt, Suffix};
+use full_moon::ast::{
+    self, Call, Expression, FunctionArgs, FunctionCall, LastStmt, Prefix, Stmt, Suffix,
+};
 use full_moon::node::Node;
 use full_moon::tokenizer::{TokenReference, TokenType};
 use full_moon::visitors::Visitor;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast_utils::field_chain_before_first_call;
+use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition};
 
-pub(super) fn lint(parsed: &ParsedSource) -> Vec<Diagnostic> {
+pub(super) fn lint(parsed: &ParsedSource, configured_globals: &[String]) -> Vec<Diagnostic> {
+    let scope = scope_map_parsed_source_with_globals(parsed, configured_globals.iter().cloned());
+    let terminating_builtin_references = scope
+        .references()
+        .iter()
+        .filter_map(|reference| {
+            (matches!(reference.name.as_str(), "error" | "assert")
+                && matches!(
+                    &reference.resolution,
+                    ScopeResolution::Global(global)
+                        if global.kind == ScopeGlobalKind::LuaBuiltin
+                ))
+            .then_some((reference.span.start.line, reference.span.start.column))
+        })
+        .collect();
     let mut visitor = LintRuleVisitor {
         parsed,
         diagnostics: comment_directive_diagnostics(parsed),
         multiline_statements: Vec::new(),
         multiline_table_depth: 0,
+        terminating_builtin_references,
     };
     visitor.visit_ast(&parsed.ast);
     visitor.diagnostics
@@ -29,6 +47,7 @@ struct LintRuleVisitor<'a> {
     diagnostics: Vec<Diagnostic>,
     multiline_statements: Vec<MultiLineStatement>,
     multiline_table_depth: usize,
+    terminating_builtin_references: BTreeSet<(usize, usize)>,
 }
 
 struct MultiLineStatement {
@@ -117,7 +136,9 @@ impl Visitor for LintRuleVisitor<'_> {
     }
 
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
-        if block_has_valued_return(body.block()) && !block_must_return(body.block()) {
+        if block_has_valued_return(body.block())
+            && block_termination(body.block(), &self.terminating_builtin_references).is_none()
+        {
             self.push(
                 node_end_position(body),
                 DiagnosticCode::LINT_IMPLICIT_RETURN,
@@ -282,30 +303,33 @@ impl LintRuleVisitor<'_> {
     }
 
     fn check_unreachable_code(&mut self, block: &ast::Block) {
-        let mut terminated = false;
+        let mut termination: Option<Termination> = None;
 
         for statement in block.stmts() {
-            if terminated {
+            if let Some(termination) = termination {
                 self.push(
                     node_position(statement),
                     DiagnosticCode::LINT_UNREACHABLE_CODE,
-                    "unreachable statement",
+                    unreachable_message(termination.reasons),
                 );
-                continue;
+                return;
             }
 
-            terminated = statement_must_terminate(statement);
+            termination = statement_termination(statement, &self.terminating_builtin_references);
         }
 
-        if terminated {
-            if let Some(last) = block.last_stmt() {
-                self.push(
-                    node_position(last),
-                    DiagnosticCode::LINT_UNREACHABLE_CODE,
-                    "unreachable statement",
-                );
-            }
+        let (Some(termination), Some(last)) = (termination, block.last_stmt()) else {
+            return;
+        };
+        if termination.silences_trailing_return && matches!(last, LastStmt::Return(_)) {
+            return;
         }
+
+        self.push(
+            node_position(last),
+            DiagnosticCode::LINT_UNREACHABLE_CODE,
+            unreachable_message(termination.reasons),
+        );
     }
 
     fn check_duplicate_functions(&mut self, block: &ast::Block) {
@@ -572,31 +596,168 @@ fn first_call_arguments(call: &FunctionCall) -> Option<Vec<&Expression>> {
     Some(args)
 }
 
-fn statement_must_terminate(statement: &Stmt) -> bool {
-    match statement {
-        Stmt::Do(block) => block_must_return(block.block()),
-        Stmt::If(if_statement) => {
-            block_must_return(if_statement.block())
-                && if_statement.else_if().is_none_or(|branches| {
-                    branches
-                        .iter()
-                        .all(|branch| block_must_return(branch.block()))
-                })
-                && if_statement.else_block().is_some_and(block_must_return)
+#[derive(Clone, Copy)]
+struct Termination {
+    reasons: TerminationReasons,
+    silences_trailing_return: bool,
+}
+
+#[derive(Clone, Copy)]
+struct TerminationReasons {
+    returns: bool,
+    breaks: bool,
+    errors: bool,
+}
+
+impl TerminationReasons {
+    const RETURNS: Self = Self {
+        returns: true,
+        breaks: false,
+        errors: false,
+    };
+    const BREAKS: Self = Self {
+        returns: false,
+        breaks: true,
+        errors: false,
+    };
+    const ERRORS: Self = Self {
+        returns: false,
+        breaks: false,
+        errors: true,
+    };
+
+    fn merge(self, other: Self) -> Self {
+        Self {
+            returns: self.returns || other.returns,
+            breaks: self.breaks || other.breaks,
+            errors: self.errors || other.errors,
         }
+    }
+
+    fn description(self) -> &'static str {
+        match (self.returns, self.breaks, self.errors) {
+            (true, false, false) => "returns",
+            (false, true, false) => "breaks",
+            (false, false, true) => "errors",
+            (true, true, false) => "returns or breaks",
+            (true, false, true) => "returns or errors",
+            (false, true, true) => "breaks or errors",
+            (true, true, true) => "returns, breaks, or errors",
+            (false, false, false) => "terminates",
+        }
+    }
+}
+
+fn statement_termination(
+    statement: &Stmt,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> Option<Termination> {
+    match statement {
+        Stmt::Do(block) => {
+            block_termination(block.block(), terminating_builtin_references).map(|termination| {
+                Termination {
+                    reasons: termination.reasons,
+                    silences_trailing_return: false,
+                }
+            })
+        }
+        Stmt::If(if_statement) => {
+            let mut reasons =
+                block_termination(if_statement.block(), terminating_builtin_references)?.reasons;
+
+            if let Some(branches) = if_statement.else_if() {
+                for branch in branches {
+                    reasons = reasons.merge(
+                        block_termination(branch.block(), terminating_builtin_references)?.reasons,
+                    );
+                }
+            }
+
+            reasons = reasons.merge(
+                block_termination(if_statement.else_block()?, terminating_builtin_references)?
+                    .reasons,
+            );
+
+            Some(Termination {
+                reasons,
+                silences_trailing_return: false,
+            })
+        }
+        Stmt::FunctionCall(call) => terminating_builtin_call(call, terminating_builtin_references),
+        _ => None,
+    }
+}
+
+fn block_termination(
+    block: &ast::Block,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> Option<Termination> {
+    for statement in block.stmts() {
+        if let Some(termination) = statement_termination(statement, terminating_builtin_references)
+        {
+            return Some(termination);
+        }
+    }
+
+    match block.last_stmt() {
+        Some(LastStmt::Return(_)) => Some(Termination {
+            reasons: TerminationReasons::RETURNS,
+            silences_trailing_return: false,
+        }),
+        Some(LastStmt::Break(_)) => Some(Termination {
+            reasons: TerminationReasons::BREAKS,
+            silences_trailing_return: false,
+        }),
+        _ => None,
+    }
+}
+
+fn terminating_builtin_call(
+    call: &FunctionCall,
+    terminating_builtin_references: &BTreeSet<(usize, usize)>,
+) -> Option<Termination> {
+    let Prefix::Name(name) = call.prefix() else {
+        return None;
+    };
+    let position = token_position(name);
+    if !terminating_builtin_references.contains(&(position.line, position.column)) {
+        return None;
+    }
+
+    let Some(Suffix::Call(Call::AnonymousCall(arguments))) = call.suffixes().next() else {
+        return None;
+    };
+    let terminates = match token_text(name).as_str() {
+        "error" => true,
+        "assert" => match arguments {
+            FunctionArgs::Parentheses { arguments, .. } => {
+                arguments.iter().next().is_some_and(is_false_literal)
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+
+    terminates.then_some(Termination {
+        reasons: TerminationReasons::ERRORS,
+        silences_trailing_return: true,
+    })
+}
+
+fn is_false_literal(expression: &Expression) -> bool {
+    match expression {
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => is_false_literal(expression),
+        Expression::Symbol(token) => token_text(token) == "false",
         _ => false,
     }
 }
 
-fn block_must_return(block: &ast::Block) -> bool {
-    if matches!(
-        block.last_stmt(),
-        Some(LastStmt::Return(_) | LastStmt::Break(_))
-    ) {
-        return true;
-    }
-
-    block.stmts().last().is_some_and(statement_must_terminate)
+fn unreachable_message(reasons: TerminationReasons) -> String {
+    format!(
+        "unreachable code (previous statement always {})",
+        reasons.description()
+    )
 }
 
 fn block_has_valued_return(block: &ast::Block) -> bool {

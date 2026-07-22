@@ -67,7 +67,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.rules {
-        diagnostics.extend(rules::lint(parsed));
+        diagnostics.extend(rules::lint(parsed, &config.globals));
     }
 
     if jit_config.enabled {

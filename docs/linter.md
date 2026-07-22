@@ -78,6 +78,13 @@ through a compound assignment or as the base of a field access, reports the
 warning and recommends a named variable. Longer `_`-prefixed names retain their
 normal value semantics while remaining exempt from unused-binding guidance.
 
+`UnreachableCode` reports the first statement in each unreachable region and
+identifies whether the preceding path always returns, breaks, errors, or merges
+those outcomes. Control-flow termination propagates through nested blocks even
+when they already contain unreachable statements. Direct calls to the resolved
+Lua builtins `error(...)` and `assert(false)` count as errors; lexically shadowed,
+configured, or assigned globals with those names remain ordinary calls.
+
 `GlobalUsedAsLocal` follows the common enclosing function across nested
 closures, so a value shared only by children of one function can still become a
 local in that parent. It also reports globals whose reads in separate functions
