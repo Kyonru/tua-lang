@@ -1,6 +1,95 @@
 use super::*;
 
 #[test]
+fn code_action_adds_exact_code_suppressions() {
+    let uri = "file:///tmp/code-action-suppress-diagnostic.tua";
+    let source = "local value = flag and false or true\n";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    let diagnostic = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .find(|diagnostic| diagnostic["code"] == "TL4048")
+        .expect("misleading and-or diagnostic should be published");
+
+    server.send(code_action_request(
+        2,
+        uri,
+        0,
+        0,
+        0,
+        source.trim_end().len(),
+        vec![diagnostic],
+    ));
+
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+    let line = actions
+        .iter()
+        .find(|action| action["title"] == "Suppress TL4048 for this line")
+        .expect("line suppression should be present");
+    let file = actions
+        .iter()
+        .find(|action| action["title"] == "Suppress TL4048 for this file")
+        .expect("file suppression should be present");
+
+    assert_eq!(line["kind"], "quickfix");
+    assert_eq!(
+        line["edit"]["changes"][uri][0]["newText"],
+        " -- tua-ignore-line TL4048"
+    );
+    assert_eq!(file["kind"], "quickfix");
+    assert_eq!(
+        file["edit"]["changes"][uri][0]["newText"],
+        "-- tua-ignore-file TL4048\n"
+    );
+}
+
+#[test]
+fn code_action_does_not_offer_suppressions_when_inline_ignores_are_disabled() {
+    let temp = TempProject::new("code-action-suppression-disabled");
+    let source = "local value = flag and false or true\n";
+
+    temp.write(
+        "tua.toml",
+        r#"source = "src"
+
+[diagnostics]
+inline_ignores = false
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&uri, source));
+    let diagnostic = last_published_diagnostics(server.output(), &uri)
+        .into_iter()
+        .find(|diagnostic| diagnostic["code"] == "TL4048")
+        .expect("misleading and-or diagnostic should be published");
+
+    server.send(code_action_request(
+        2,
+        &uri,
+        0,
+        0,
+        0,
+        source.trim_end().len(),
+        vec![diagnostic],
+    ));
+
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+
+    assert!(actions.iter().all(|action| action["title"]
+        .as_str()
+        .is_none_or(|title| !title.starts_with("Suppress TL"))));
+}
+
+#[test]
 fn code_action_creates_missing_require_target() {
     let temp = TempProject::new("code-action-missing-require");
     let source = "local Player = require(\"player\")\n";
@@ -199,7 +288,12 @@ local raw = love.graphics.newImage("assets/player.png")
     server.send(code_action_request(2, uri, 1, 0, 1, 32, diagnostics));
     server.send(code_action_request(3, uri, 2, 0, 2, 60, Vec::new()));
 
-    let colon_action = code_action_result(server.output(), 2, 0);
+    let colon_action = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array")
+        .iter()
+        .find(|action| action["title"] == "Use colon method call")
+        .expect("colon-call action should be present");
 
     assert_eq!(colon_action["title"], "Use colon method call");
     assert_eq!(colon_action["edit"]["changes"][uri][0]["newText"], ":");
@@ -377,7 +471,7 @@ self_assignments = true
     );
 }
 #[test]
-fn code_action_is_absent_for_unsafe_edits() {
+fn code_action_only_offers_suppression_for_unsafe_edits() {
     let temp = TempProject::new("code-action-unsafe");
     let source = r#"local unused, other = 1, 2
 local config = { ["hp"] = 10, ["hp"] = 20 }
@@ -404,7 +498,14 @@ duplicate_keys = true
 
     server.send(code_action_request(2, &uri, 0, 0, 1, 80, diagnostics));
 
-    assert_eq!(response_with_id(server.output(), 2)["result"], json!([]));
+    let actions = response_with_id(server.output(), 2)["result"]
+        .as_array()
+        .expect("code actions should be an array");
+
+    assert!(!actions.is_empty());
+    assert!(actions.iter().all(|action| action["title"]
+        .as_str()
+        .is_some_and(|title| title.starts_with("Suppress TL"))));
 }
 #[test]
 fn code_action_source_actions_sort_remove_and_organize_imports() {

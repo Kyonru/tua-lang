@@ -251,6 +251,13 @@ Luau's `--!nolint` reports `TL4049` and points to Tua's header-only
 `tua-ignore-line` and `tua-ignore-next-line`; every suppression requires an
 exact diagnostic code.
 
+In editors, diagnostics with eligible exact codes offer quick fixes to
+suppress that code for the current line or the whole file. Tua preserves an
+existing trailing comment by using a next-line directive, and extends an
+existing file header instead of adding a second `tua-ignore-file` comment.
+Suppression quick fixes respect `inline_ignores`, `inline_ignore_scopes`, and
+`inline_ignore_max_per_file`, and are never included in safe fix-all.
+
 The repository's `examples/linter` fixture contains an intentionally broken
 case for every rule Tua can currently emit in the standard set. Running
 `tua lint` there is expected to exit with status `1`.

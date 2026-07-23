@@ -62,6 +62,9 @@ language or editor behavior, and migration notes call out those changes.
   resolved reads.
 - A quick fix that generates a named Tua table type from stable local table
   literals and annotates the local binding in the same workspace edit.
+- Exact-code quick fixes that suppress an eligible diagnostic for its line or
+  file while preserving existing comments and respecting suppression settings;
+  suppression actions are excluded from safe fix-all.
 - SignalBus graph filters for event, bus, file, listener, and emitter views,
   plus direct schema-conflict display and actions to create typed listeners or
   declarations from compiler metadata.

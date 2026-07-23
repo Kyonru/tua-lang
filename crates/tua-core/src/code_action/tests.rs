@@ -5,6 +5,166 @@ use crate::{
 };
 
 #[test]
+fn offers_exact_code_suppression_actions_for_a_diagnostic() {
+    let parsed = parse_tua_source("src/main.tua", "local value = flag and false or true\n")
+        .expect("source should parse");
+    let diagnostic = Diagnostic::new(
+        "src/main.tua",
+        1,
+        15,
+        crate::DiagnosticSeverity::Warning,
+        "misleading and-or expression",
+    )
+    .with_code(DiagnosticCode::LINT_MISLEADING_AND_OR);
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[diagnostic],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert_action_rewrite(
+        &actions,
+        "Suppress TL4048 for this line",
+        " -- tua-ignore-line TL4048",
+    );
+    assert_action_rewrite(
+        &actions,
+        "Suppress TL4048 for this file",
+        "-- tua-ignore-file TL4048\n",
+    );
+}
+
+#[test]
+fn suppression_actions_preserve_comments_and_extend_the_file_header() {
+    let parsed = parse_tua_source(
+        "src/main.tua",
+        "-- tua-ignore-file TL4018\nlocal value = flag and false or true -- keep this note\n",
+    )
+    .expect("source should parse");
+    let diagnostic = Diagnostic::new(
+        "src/main.tua",
+        2,
+        15,
+        crate::DiagnosticSeverity::Warning,
+        "misleading and-or expression",
+    )
+    .with_code(DiagnosticCode::LINT_MISLEADING_AND_OR);
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[diagnostic],
+        range_line(2),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert_action_rewrite(
+        &actions,
+        "Suppress TL4048 for this line",
+        "-- tua-ignore-next-line TL4048\n",
+    );
+    assert_action_rewrite(&actions, "Suppress TL4048 for this file", " TL4048");
+}
+
+#[test]
+fn suppression_actions_respect_diagnostic_configuration() {
+    let parsed = parse_tua_source("src/main.tua", "local value: number = true\n")
+        .expect("source should parse");
+    let diagnostic = Diagnostic::new(
+        "src/main.tua",
+        1,
+        23,
+        crate::DiagnosticSeverity::Error,
+        "type mismatch",
+    )
+    .with_code(DiagnosticCode::TYPE_MISMATCH);
+    let disabled = DiagnosticsConfig {
+        inline_ignores: false,
+        ..DiagnosticsConfig::default()
+    };
+    let disabled_actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        &parsed,
+        std::slice::from_ref(&diagnostic),
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[],
+        &disabled,
+    );
+
+    assert!(disabled_actions.is_empty(), "{disabled_actions:?}");
+
+    let file_only = DiagnosticsConfig {
+        inline_ignore_scopes: vec!["tua-ignore-file".to_owned()],
+        ..DiagnosticsConfig::default()
+    };
+    let file_actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        &parsed,
+        &[diagnostic],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+        &[],
+        &file_only,
+    );
+
+    assert_eq!(file_actions.len(), 1, "{file_actions:?}");
+    assert_eq!(file_actions[0].title, "Suppress TL1003 for this file");
+
+    let maxed_parsed = parse_tua_source(
+        "src/main.tua",
+        "-- tua-ignore-next-line TL4018\nlocal value: number = true\n",
+    )
+    .expect("source should parse");
+    let maxed = DiagnosticsConfig {
+        inline_ignore_max_per_file: 1,
+        ..DiagnosticsConfig::default()
+    };
+    let maxed_actions = code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        &maxed_parsed,
+        &[Diagnostic::new(
+            "src/main.tua",
+            2,
+            23,
+            crate::DiagnosticSeverity::Error,
+            "type mismatch",
+        )
+        .with_code(DiagnosticCode::TYPE_MISMATCH)],
+        range_line(2),
+        std::path::Path::new("src"),
+        "tua",
+        &[],
+        &maxed,
+    );
+
+    assert!(maxed_actions.is_empty(), "{maxed_actions:?}");
+}
+
+#[test]
+fn suppression_actions_skip_diagnostics_created_by_suppression_validation() {
+    let parsed =
+        parse_tua_source("src/main.tua", "local value = true\n").expect("source should parse");
+    let diagnostic = Diagnostic::new(
+        "src/main.tua",
+        1,
+        1,
+        crate::DiagnosticSeverity::Warning,
+        "unused suppression",
+    )
+    .with_code(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED);
+    let actions = code_actions_parsed_source(
+        &parsed,
+        &[diagnostic],
+        range_line(1),
+        std::path::Path::new("src"),
+        "tua",
+    );
+
+    assert!(actions.is_empty(), "{actions:?}");
+}
+
+#[test]
 fn creates_missing_require_target_action() {
     let parsed = parse_tua_source("src/main.tua", "local Player = require(\"player\")\n")
         .expect("source should parse");
@@ -23,10 +183,12 @@ fn creates_missing_require_target_action() {
         "tua",
     );
 
-    assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].title, "Create module `player`");
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Create module `player`")
+        .expect("create-module action should be present");
     assert_eq!(
-        actions[0].edit.create_files[0].path,
+        action.edit.create_files[0].path,
         std::path::Path::new("src/player.tua")
     );
 }
@@ -52,14 +214,16 @@ local Player = require("<|require|>player")
     let position = fixture.position("require");
     let actions = snapshot.assists("src/main.tua", range_line(position.line), &diagnostics);
 
-    assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].title, "Create module `player`");
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Create module `player`")
+        .expect("create-module action should be present");
     assert_eq!(
-        actions[0].edit.create_files[0].path,
+        action.edit.create_files[0].path,
         std::path::Path::new("src/player.tua")
     );
     assert_eq!(
-        actions[0].edit.changes[&std::path::PathBuf::from("src/player.tua")][0].new_text,
+        action.edit.changes[&std::path::PathBuf::from("src/player.tua")][0].new_text,
         "return {}\n"
     );
 }
@@ -84,7 +248,9 @@ fn missing_require_target_action_rejects_unsafe_paths() {
         "tua",
     );
 
-    assert!(actions.is_empty());
+    assert!(actions
+        .iter()
+        .all(|action| action.edit.create_files.is_empty()));
 }
 
 #[test]
@@ -561,10 +727,12 @@ return config
         "tua",
     );
 
-    assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].title, "Rename duplicate key to `hp3`");
+    let action = actions
+        .iter()
+        .find(|action| action.title == "Rename duplicate key to `hp3`")
+        .expect("duplicate-key rename should be present");
     assert_eq!(
-        actions[0].edit.changes[&std::path::PathBuf::from("src/main.tua")][0].new_text,
+        action.edit.changes[&std::path::PathBuf::from("src/main.tua")][0].new_text,
         "hp3"
     );
 

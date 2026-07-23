@@ -562,12 +562,14 @@ impl AnalysisSnapshot {
         };
         let source_dir = self.assist_source_root_for_path(path);
 
-        assists_parsed_source(
+        code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
             &source_dir,
             &self.config.extension,
+            &[],
+            &self.config.diagnostics,
         )
     }
 
@@ -584,13 +586,14 @@ impl AnalysisSnapshot {
         };
         let source_dir = self.assist_source_root_for_path(path);
 
-        code_actions_parsed_source_with_kinds(
+        code_actions_parsed_source_with_kinds_and_diagnostics_config(
             parsed,
             diagnostics,
             range,
             &source_dir,
             &self.config.extension,
             requested_kinds,
+            &self.config.diagnostics,
         )
     }
 

@@ -11,11 +11,15 @@ use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{plain_field_chain_from_expression, plain_field_chain_from_var};
 use crate::inlay_hints_parsed_source;
+use crate::inline_ignore::{active_inline_ignore_count, line_comment_start, parse_code};
 use crate::love_callback;
 use crate::module_link::{module_specifier_literals, ModuleSpecifierKind};
 use crate::scope::{scope_map_parsed_source, ScopeDeclaration, ScopeDeclarationKind, ScopeMap};
 use crate::source_text::{is_identifier_continue, is_identifier_start, line_at};
-use crate::{Diagnostic, DiagnosticCode, ParsedSource, SourcePosition, SourceSpan, TextEdit};
+use crate::{
+    Diagnostic, DiagnosticCode, DiagnosticsConfig, ParsedSource, SourcePosition, SourceSpan,
+    TextEdit,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Assist {
@@ -92,6 +96,26 @@ pub fn code_actions_parsed_source_with_kinds(
     extension: &str,
     requested_kinds: &[AssistKind],
 ) -> Vec<Assist> {
+    code_actions_parsed_source_with_kinds_and_diagnostics_config(
+        parsed,
+        diagnostics,
+        range,
+        source_dir,
+        extension,
+        requested_kinds,
+        &DiagnosticsConfig::default(),
+    )
+}
+
+pub(crate) fn code_actions_parsed_source_with_kinds_and_diagnostics_config(
+    parsed: &ParsedSource,
+    diagnostics: &[Diagnostic],
+    range: AssistRange,
+    source_dir: &Path,
+    extension: &str,
+    requested_kinds: &[AssistKind],
+    diagnostics_config: &DiagnosticsConfig,
+) -> Vec<Assist> {
     let mut actions = Vec::new();
     let include_quick_fixes =
         requested_kinds.is_empty() || requested_kinds.contains(&AssistKind::QuickFix);
@@ -103,6 +127,8 @@ pub fn code_actions_parsed_source_with_kinds(
             range,
             source_dir,
             extension,
+            diagnostics_config,
+            true,
         ));
         actions.extend(love_constructor_helper_actions(parsed, range));
         actions.extend(object_pool_constructor_actions(parsed, range));
@@ -147,6 +173,7 @@ pub fn code_actions_parsed_source_with_kinds(
     }
 
     actions.sort_by(|left, right| left.title.cmp(&right.title));
+    actions.dedup();
     actions
 }
 
@@ -156,8 +183,14 @@ fn diagnostic_quick_fix_actions(
     range: AssistRange,
     source_dir: &Path,
     extension: &str,
+    diagnostics_config: &DiagnosticsConfig,
+    include_suppressions: bool,
 ) -> Vec<Assist> {
     let mut actions = Vec::new();
+    let can_add_suppression_directive = include_suppressions
+        && (diagnostics_config.inline_ignore_max_per_file == 0
+            || active_inline_ignore_count(&parsed.path, &parsed.source, diagnostics_config)
+                < diagnostics_config.inline_ignore_max_per_file);
 
     for diagnostic in diagnostics {
         let position = SourcePosition {
@@ -167,6 +200,15 @@ fn diagnostic_quick_fix_actions(
 
         if !range.contains(position) {
             continue;
+        }
+
+        if include_suppressions {
+            actions.extend(diagnostic_suppression_actions(
+                parsed,
+                diagnostic,
+                diagnostics_config,
+                can_add_suppression_directive,
+            ));
         }
 
         match diagnostic.code {
@@ -212,6 +254,200 @@ fn diagnostic_quick_fix_actions(
     }
 
     actions
+}
+
+fn diagnostic_suppression_actions(
+    parsed: &ParsedSource,
+    diagnostic: &Diagnostic,
+    config: &DiagnosticsConfig,
+    can_add_directive: bool,
+) -> Vec<Assist> {
+    let Some(code) = diagnostic.code.filter(|code| code.is_known()) else {
+        return Vec::new();
+    };
+
+    if !config.inline_ignores
+        || matches!(
+            code,
+            DiagnosticCode::LINT_INLINE_IGNORE_INVALID | DiagnosticCode::LINT_INLINE_IGNORE_UNUSED
+        )
+        || diagnostic_already_suppressed(parsed, diagnostic, code)
+    {
+        return Vec::new();
+    }
+
+    let mut actions = Vec::new();
+
+    if can_add_directive {
+        if let Some(action) = suppress_diagnostic_on_line_action(parsed, diagnostic, code, config) {
+            actions.push(action);
+        }
+    }
+
+    if let Some(action) =
+        suppress_diagnostic_for_file_action(parsed, code, config, can_add_directive)
+    {
+        actions.push(action);
+    }
+
+    actions
+}
+
+fn suppress_diagnostic_on_line_action(
+    parsed: &ParsedSource,
+    diagnostic: &Diagnostic,
+    code: DiagnosticCode,
+    config: &DiagnosticsConfig,
+) -> Option<Assist> {
+    let line = line_at(&parsed.source, diagnostic.line)?;
+    let edit = if inline_ignore_scope_enabled(config, "tua-ignore-line")
+        && line_comment_start(line).is_none()
+    {
+        TextEdit {
+            path: parsed.path.clone(),
+            span: SourceSpan {
+                start: SourcePosition {
+                    line: diagnostic.line,
+                    column: line.chars().count() + 1,
+                },
+                end: SourcePosition {
+                    line: diagnostic.line,
+                    column: line.chars().count() + 1,
+                },
+            },
+            new_text: format!(" -- tua-ignore-line {code}"),
+        }
+    } else if inline_ignore_scope_enabled(config, "tua-ignore-next-line") {
+        TextEdit {
+            path: parsed.path.clone(),
+            span: SourceSpan {
+                start: SourcePosition {
+                    line: diagnostic.line,
+                    column: 1,
+                },
+                end: SourcePosition {
+                    line: diagnostic.line,
+                    column: 1,
+                },
+            },
+            new_text: format!(
+                "{}-- tua-ignore-next-line {code}{}",
+                line.chars()
+                    .take_while(|character| character.is_whitespace())
+                    .collect::<String>(),
+                source_newline(&parsed.source),
+            ),
+        }
+    } else {
+        return None;
+    };
+
+    Some(Assist {
+        title: format!("Suppress {code} for this line"),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(parsed.path.clone(), edit),
+    })
+}
+
+fn suppress_diagnostic_for_file_action(
+    parsed: &ParsedSource,
+    code: DiagnosticCode,
+    config: &DiagnosticsConfig,
+    can_add_directive: bool,
+) -> Option<Assist> {
+    if !inline_ignore_scope_enabled(config, "tua-ignore-file") {
+        return None;
+    }
+
+    let edit = if let Some((line, column)) = file_ignore_line_end(&parsed.source) {
+        TextEdit {
+            path: parsed.path.clone(),
+            span: SourceSpan {
+                start: SourcePosition { line, column },
+                end: SourcePosition { line, column },
+            },
+            new_text: format!(" {code}"),
+        }
+    } else if can_add_directive {
+        TextEdit {
+            path: parsed.path.clone(),
+            span: empty_start_span(),
+            new_text: format!(
+                "-- tua-ignore-file {code}{}",
+                source_newline(&parsed.source)
+            ),
+        }
+    } else {
+        return None;
+    };
+
+    Some(Assist {
+        title: format!("Suppress {code} for this file"),
+        kind: AssistKind::QuickFix,
+        edit: edit_for(parsed.path.clone(), edit),
+    })
+}
+
+fn inline_ignore_scope_enabled(config: &DiagnosticsConfig, directive: &str) -> bool {
+    config
+        .inline_ignore_scopes
+        .iter()
+        .any(|scope| scope == directive)
+}
+
+fn diagnostic_already_suppressed(
+    parsed: &ParsedSource,
+    diagnostic: &Diagnostic,
+    code: DiagnosticCode,
+) -> bool {
+    first_content_line(&parsed.source)
+        .is_some_and(|(_, line)| ignore_line_contains_code(line, "tua-ignore-file", code))
+        || line_at(&parsed.source, diagnostic.line)
+            .is_some_and(|line| ignore_line_contains_code(line, "tua-ignore-line", code))
+        || diagnostic.line.checked_sub(1).is_some_and(|previous_line| {
+            line_at(&parsed.source, previous_line)
+                .is_some_and(|line| ignore_line_contains_code(line, "tua-ignore-next-line", code))
+        })
+}
+
+fn ignore_line_contains_code(line: &str, directive: &str, code: DiagnosticCode) -> bool {
+    let Some(comment_start) = line_comment_start(line) else {
+        return false;
+    };
+    let comment = line[comment_start + 2..].trim();
+
+    if comment.starts_with("[[") {
+        return false;
+    }
+
+    let mut parts = comment.split_whitespace();
+
+    parts.next() == Some(directive) && parts.any(|token| parse_code(token).ok() == Some(code))
+}
+
+fn first_content_line(source: &str) -> Option<(usize, &str)> {
+    source
+        .lines()
+        .enumerate()
+        .find(|(_, line)| !line.trim().is_empty())
+        .map(|(index, line)| (index + 1, line))
+}
+
+fn file_ignore_line_end(source: &str) -> Option<(usize, usize)> {
+    first_content_line(source).and_then(|(line_number, line)| {
+        let comment = line.trim_start().strip_prefix("--")?.trim_start();
+        let directive = comment.split_whitespace().next()?;
+
+        (directive == "tua-ignore-file").then_some((line_number, line.chars().count() + 1))
+    })
+}
+
+fn source_newline(source: &str) -> &'static str {
+    if source.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    }
 }
 
 fn organize_imports_action(parsed: &ParsedSource) -> Option<Assist> {
@@ -329,9 +565,15 @@ fn fix_all_action(
         .cloned()
         .collect::<Vec<_>>();
 
-    for action in
-        diagnostic_quick_fix_actions(parsed, &safe_diagnostics, full_range, source_dir, extension)
-    {
+    for action in diagnostic_quick_fix_actions(
+        parsed,
+        &safe_diagnostics,
+        full_range,
+        source_dir,
+        extension,
+        &DiagnosticsConfig::default(),
+        false,
+    ) {
         if !action.edit.create_files.is_empty() {
             continue;
         }

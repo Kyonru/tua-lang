@@ -72,6 +72,26 @@ pub(crate) fn apply_inline_ignores(
     sort_diagnostics(kept)
 }
 
+pub(crate) fn active_inline_ignore_count(
+    path: &Path,
+    source: &str,
+    config: &DiagnosticsConfig,
+) -> usize {
+    if !config.inline_ignores {
+        return 0;
+    }
+
+    let allowed_scopes = config
+        .inline_ignore_scopes
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+
+    parse_inline_ignores(path, source, config, &allowed_scopes)
+        .0
+        .len()
+}
+
 fn parse_inline_ignores(
     path: &Path,
     source: &str,
@@ -190,7 +210,7 @@ fn line_comment(line: &str) -> Option<&str> {
     (!comment.starts_with("[[")).then(|| comment.trim())
 }
 
-fn line_comment_start(line: &str) -> Option<usize> {
+pub(crate) fn line_comment_start(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut index = 0;
     let mut quote = None;
@@ -224,7 +244,7 @@ fn line_comment_start(line: &str) -> Option<usize> {
     None
 }
 
-fn parse_code(token: &str) -> Result<DiagnosticCode, String> {
+pub(crate) fn parse_code(token: &str) -> Result<DiagnosticCode, String> {
     let normalized = token.trim_matches(|ch| ch == ',' || ch == '[' || ch == ']');
 
     if normalized.is_empty() {

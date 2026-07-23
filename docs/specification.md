@@ -257,6 +257,9 @@ Diagnostics use stable `TLxxxx` codes grouped by syntax, type, asset/build,
 lint/project, and domain families. Default-on suppression comments require
 exact codes and can target the same line, next line, or an entire file from its
 first nonblank line; they cannot alter inference, lowering, or runtime behavior.
+Editor quick fixes can insert an eligible diagnostic's exact code for its line
+or file, subject to the configured suppression scopes and per-file limit; these
+explicit suppressions are excluded from automatic safe fix-all.
 The standard lint rules are enabled by default for checking and editor
 diagnostics; projects can disable that set without disabling type checking.
 The unknown-global lint recognizes explicit global assignments and simple

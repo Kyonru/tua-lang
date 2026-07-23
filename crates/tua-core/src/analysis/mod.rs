@@ -16,6 +16,7 @@ use crate::asset::{
 use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
 };
+use crate::code_action::code_actions_parsed_source_with_kinds_and_diagnostics_config;
 use crate::completion::{
     complete_current_file_field_access_with_environment_and_ranking_inputs,
     complete_current_file_lua_field_access,
@@ -62,17 +63,16 @@ use crate::vfs::{
     VirtualFileSystem,
 };
 use crate::{
-    assists_parsed_source, call_hierarchy_calls_parsed_source,
-    call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
+    call_hierarchy_calls_parsed_source, call_hierarchy_prepare_parsed_source,
+    call_hierarchy_symbols_parsed_source,
     check::{
         check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config_and_asset_index,
         check_parsed_source_with_environment_asset_roots_diagnostics_jit_config_and_asset_index,
     },
-    code_actions_parsed_source_with_kinds, complete_tua_source, definition_parsed_source_with_hir,
-    document_highlights_parsed_source, document_symbols_parsed_source_with_hir,
-    exported_field_for_fields, global_function_definition_count,
-    global_function_name_for_definition, global_references_to_definition_parsed_source_with_hir,
-    global_type_alias_name_for_definition,
+    complete_tua_source, definition_parsed_source_with_hir, document_highlights_parsed_source,
+    document_symbols_parsed_source_with_hir, exported_field_for_fields,
+    global_function_definition_count, global_function_name_for_definition,
+    global_references_to_definition_parsed_source_with_hir, global_type_alias_name_for_definition,
     global_type_alias_references_to_definition_parsed_source_with_hir, is_valid_rename_identifier,
     lower_parsed_source, module_links_tua_source, parse_lua_source, parse_tua_source,
     reference_kind_for_rename, references_to_definition_parsed_source_with_artifacts,

@@ -79,6 +79,13 @@ with `[diagnostics].inline_ignores = false` in `tua.toml` or
 match no diagnostic still produce warnings. A suppression hides a diagnostic;
 it does not change inference or generated Lua.
 
+For diagnostics with a suppressible exact code, the editor offers
+`Suppress TLxxxx for this line` and `Suppress TLxxxx for this file` quick
+fixes. The line action uses a same-line comment when possible and preserves an
+existing trailing comment by inserting a next-line directive instead. The file
+action extends an existing header directive when present. These actions follow
+the project's enabled scopes and are absent when inline ignores are disabled.
+
 ### Completion, Hover, And Signature Help
 
 Completion combines syntax context with local and project semantics. It covers:
@@ -217,6 +224,8 @@ VS Code can override them with `tua.format.indentWidth`,
 Quick fixes and source actions include:
 
 - fixing safe diagnostics in the current file;
+- suppressing one exact diagnostic code for its line or for the file; these
+  explicit actions are excluded from safe fix-all;
 - manually renaming a duplicate table key when the intended replacement is
   known; this intent-dependent edit is excluded from safe fix-all;
 - removing unused local values and function declarations when their complete
