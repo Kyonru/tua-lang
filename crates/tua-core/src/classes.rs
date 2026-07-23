@@ -125,13 +125,54 @@ pub(crate) fn class_lowering_edits(source: &str) -> Vec<ClassLoweringEdit> {
     for (index, declaration) in declarations.iter_mut().enumerate() {
         declaration.type_id = index + 1;
     }
+
+    let declaration_indices = declarations
+        .iter()
+        .enumerate()
+        .map(|(index, declaration)| (declaration.name.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let forward_parent_names = declarations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, declaration)| {
+            let parent = declaration.parent.as_ref()?;
+            declaration_indices
+                .get(parent)
+                .is_some_and(|parent_index| *parent_index > index)
+                .then(|| parent.clone())
+        })
+        .collect::<BTreeSet<_>>();
+    let forward_parent_declarations = declarations
+        .iter()
+        .filter(|declaration| forward_parent_names.contains(&declaration.name))
+        .map(|declaration| format!("local {} = {{}}\n", declaration.name))
+        .collect::<String>();
+
     blocks
         .into_iter()
         .zip(declarations.iter())
-        .map(|(block, declaration)| ClassLoweringEdit {
-            range: block.start..block.end,
-            replacement: lower_class_declaration(declaration, &declarations),
-            source_span: declaration.span,
+        .enumerate()
+        .map(|(index, (block, declaration))| {
+            let parent_is_forward = declaration.parent.as_ref().is_some_and(|parent| {
+                declaration_indices
+                    .get(parent)
+                    .is_some_and(|parent_index| *parent_index > index)
+            });
+            let mut replacement = lower_class_declaration(
+                declaration,
+                &declarations,
+                forward_parent_names.contains(&declaration.name),
+                parent_is_forward,
+            );
+            if index == 0 {
+                replacement.insert_str(0, &forward_parent_declarations);
+            }
+
+            ClassLoweringEdit {
+                range: block.start..block.end,
+                replacement,
+                source_span: declaration.span,
+            }
         })
         .collect()
 }
@@ -506,10 +547,17 @@ fn parse_class_field(
     ))
 }
 
-fn lower_class_declaration(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> String {
+fn lower_class_declaration(
+    class: &ClassDeclaration,
+    classes: &[ClassDeclaration],
+    table_predeclared: bool,
+    parent_is_forward: bool,
+) -> String {
     let mut output = String::new();
     output.push_str(&format!("type {} = {{}}\n\n", class.name));
-    output.push_str(&format!("local {} = {{}}\n", class.name));
+    if !table_predeclared {
+        output.push_str(&format!("local {} = {{}}\n", class.name));
+    }
     output.push_str(&format!("{}.__index = {}\n", class.name, class.name));
     output.push_str(&format!("{}.__type_id = {}\n", class.name, class.type_id));
     output.push_str(&format!("{}.__is = {{\n", class.name));
@@ -521,11 +569,14 @@ fn lower_class_declaration(class: &ClassDeclaration, classes: &[ClassDeclaration
     output.push_str("}\n");
 
     output.push('\n');
-    output.push_str(&lower_init_function(class, classes));
+    output.push_str(&lower_init_function(class, classes, parent_is_forward));
+    if table_predeclared {
+        output.push_str(&format!("{}.__init = {}_init\n", class.name, class.name));
+    }
     output.push('\n');
 
     for method in &class.methods {
-        output.push_str(&lower_method_function(class, method));
+        output.push_str(&lower_method_function(class, method, parent_is_forward));
         output.push('\n');
     }
 
@@ -542,7 +593,11 @@ fn lower_class_declaration(class: &ClassDeclaration, classes: &[ClassDeclaration
     output
 }
 
-fn lower_init_function(class: &ClassDeclaration, classes: &[ClassDeclaration]) -> String {
+fn lower_init_function(
+    class: &ClassDeclaration,
+    classes: &[ClassDeclaration],
+    parent_is_forward: bool,
+) -> String {
     let parameters = class
         .init
         .as_ref()
@@ -558,9 +613,18 @@ fn lower_init_function(class: &ClassDeclaration, classes: &[ClassDeclaration]) -
     ));
 
     if let Some(init) = &class.init {
-        output.push_str(&transform_method_body(class, init, classes));
+        output.push_str(&transform_method_body(
+            class,
+            init,
+            classes,
+            parent_is_forward,
+        ));
     } else if let Some(parent) = &class.parent {
-        output.push_str(&format!("  {}_init(self)\n", parent));
+        if parent_is_forward {
+            output.push_str(&format!("  {}.__init(self)\n", parent));
+        } else {
+            output.push_str(&format!("  {}_init(self)\n", parent));
+        }
     }
 
     for field in &class.fields {
@@ -573,7 +637,11 @@ fn lower_init_function(class: &ClassDeclaration, classes: &[ClassDeclaration]) -
     output
 }
 
-fn lower_method_function(class: &ClassDeclaration, method: &ClassMethod) -> String {
+fn lower_method_function(
+    class: &ClassDeclaration,
+    method: &ClassMethod,
+    parent_is_forward: bool,
+) -> String {
     let mut output = String::new();
     output.push_str(&format!(
         "local function {}_{}(self: {}{}{}){}\n",
@@ -588,7 +656,12 @@ fn lower_method_function(class: &ClassDeclaration, method: &ClassMethod) -> Stri
             .map(|ty| format!(": {ty}"))
             .unwrap_or_default()
     ));
-    output.push_str(&transform_method_body(class, method, &[]));
+    output.push_str(&transform_method_body(
+        class,
+        method,
+        &[],
+        parent_is_forward,
+    ));
     output.push_str("end\n");
     output.push_str(&format!(
         "{}.{} = {}_{}\n",
@@ -637,11 +710,12 @@ fn transform_method_body(
     class: &ClassDeclaration,
     method: &ClassMethod,
     classes: &[ClassDeclaration],
+    parent_is_forward: bool,
 ) -> String {
     let mut body = method.body.clone();
 
     if let Some(parent) = &class.parent {
-        body = replace_super_calls(&body, parent);
+        body = replace_super_calls(&body, parent, parent_is_forward);
     }
 
     let mut output = String::new();
@@ -662,7 +736,7 @@ fn transform_method_body(
     output
 }
 
-fn replace_super_calls(body: &str, parent: &str) -> String {
+fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> String {
     let mut output = String::with_capacity(body.len());
     let mut index = 0usize;
 
@@ -686,11 +760,12 @@ fn replace_super_calls(body: &str, parent: &str) -> String {
             if body[after..].starts_with('(') {
                 if let Some(close) = find_matching_paren(body, after) {
                     let args = body[after + 1..close].trim();
-                    output.push_str(&format!(
-                        "{}_init(self{})",
-                        parent,
-                        comma_prefixed_arguments(args)
-                    ));
+                    let init = if parent_is_forward {
+                        format!("{parent}.__init")
+                    } else {
+                        format!("{parent}_init")
+                    };
+                    output.push_str(&format!("{}(self{})", init, comma_prefixed_arguments(args)));
                     index = close + 1;
                     continue;
                 }
@@ -703,9 +778,13 @@ fn replace_super_calls(body: &str, parent: &str) -> String {
                     if body[call_start..].starts_with('(') {
                         if let Some(close) = find_matching_paren(body, call_start) {
                             let args = body[call_start + 1..close].trim();
+                            let method = if parent_is_forward {
+                                format!("{parent}.{method}")
+                            } else {
+                                format!("{parent}_{method}")
+                            };
                             output.push_str(&format!(
-                                "{}_{}(self{})",
-                                parent,
+                                "{}(self{})",
                                 method,
                                 comma_prefixed_arguments(args)
                             ));

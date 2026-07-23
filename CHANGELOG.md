@@ -74,6 +74,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Classes may now extend a parent declared later in the file. Lowering keeps a
+  stable forward parent table, so inherited methods and `super` calls work once
+  the parent declaration has executed.
 - Class constructors now forward typed varargs and preserve every explicit
   `super(...)` argument, while member calls such as `helper.super()` remain
   ordinary Lua calls.

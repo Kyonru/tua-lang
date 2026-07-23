@@ -342,6 +342,50 @@ final class Child extends Parent {
 }
 
 #[test]
+fn child_classes_declared_before_parents_share_a_forward_runtime_table() {
+    let source = r#"
+final class Child extends Parent {
+  init(_value: number) {
+    super(1)
+  }
+}
+
+open class Parent {
+  values: any
+
+  init(value: number) {
+    self.values = { value }
+  }
+
+  getValue(): any {
+    return self.values
+  }
+}
+
+local child = Child.new(2)
+local _value = child:getValue()
+"#;
+    let emitted = emit_tua_source("src/classes.tua", source)
+        .expect("forward parent declarations should emit valid inheritance");
+
+    crate::check_tua_source("src/classes.tua", source)
+        .expect("forward parent declarations should still type-check");
+
+    let parent_binding = emitted
+        .find("local Parent = {}")
+        .expect("parent runtime table should be declared");
+    let inheritance = emitted
+        .find("setmetatable(Child, { __index = Parent })")
+        .expect("child inheritance should be emitted");
+
+    assert!(parent_binding < inheritance);
+    assert_eq!(emitted.matches("Parent = {}").count(), 1);
+    assert!(emitted.contains("Parent.__init = Parent_init"));
+    assert!(emitted.contains("Parent.__init(self, 1)"));
+    assert!(emitted.contains("Parent.getValue = Parent_getValue"));
+}
+
+#[test]
 fn snapshot_emits_luacats_annotations() {
     let emitted = emit_tua_source_with_mode(
         "src/functions.tua",

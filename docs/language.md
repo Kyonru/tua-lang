@@ -668,6 +668,11 @@ parameter, including `...`, and standalone `super(...)` or `super.method(...)`
 calls preserve their argument expressions. Member calls such as
 `helper.super()` remain ordinary Lua calls.
 
+A child class may appear before its parent in the same file. Tua gives the
+later parent a stable forward table, so inherited methods and `super` calls work
+once the parent declaration has executed; source order does not cause the
+parent declaration to run early.
+
 Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
 Within each class, the `init` body runs before that class's field defaults; this

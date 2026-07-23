@@ -133,7 +133,10 @@ as `TL1008` rather than erased during lowering. Each class's field defaults run
 after its `init` assignments; direct-table constructor optimization preserves
 the same order. Constructor signatures and calls preserve typed varargs, and
 standalone `super(...)` calls forward their argument expressions exactly;
-member fields named `super` remain ordinary Lua members.
+member fields named `super` remain ordinary Lua members. A child may be
+declared before its parent: lowering keeps a stable forward parent table so
+inheritance works once the parent declaration has executed, without executing
+the parent early.
 
 ## Modules And Lua Interoperability
 
