@@ -33,11 +33,13 @@ end
 #[test]
 fn preserves_tua_specific_syntax() {
     let source = r#"type Player={hp:number,name:string}
+type Players=Player[]
 enum Direction
   "North"
   "South"
 end
 local hp:number=10
+local players:Player[]={}
 function damage(player:Player, amount:number):number
 player.hp-=amount
 return player.hp
@@ -46,11 +48,13 @@ end"#;
     assert_eq!(
         format(source),
         r#"type Player = {hp:number, name:string}
+type Players = Player[]
 enum Direction
   "North"
   "South"
 end
 local hp:number = 10
+local players:Player[] = {}
 function damage(player:Player, amount:number):number
   player.hp -= amount
   return player.hp

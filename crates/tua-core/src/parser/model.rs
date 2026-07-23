@@ -36,6 +36,13 @@ impl SourceSpan {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct NativeArrayTypeSyntax {
+    pub item_end: SourcePosition,
+    pub suffix_span: SourceSpan,
+    pub depth: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ParserLineProvenance {
     pub source_span: SourceSpan,
     pub class_generated: bool,
@@ -102,6 +109,7 @@ pub struct RawParsedSource {
     pub source: String,
     pub parser_source: String,
     pub(crate) parser_provenance: Vec<ParserLineProvenance>,
+    pub(crate) native_array_types: Vec<NativeArrayTypeSyntax>,
     pub ast: full_moon::ast::Ast,
     pub span: Option<SourceSpan>,
     pub language: ParsedLanguage,
@@ -112,6 +120,7 @@ pub struct NormalizedSource {
     pub original: String,
     pub parser_source: String,
     pub(crate) parser_provenance: Vec<ParserLineProvenance>,
+    pub(crate) native_array_types: Vec<NativeArrayTypeSyntax>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

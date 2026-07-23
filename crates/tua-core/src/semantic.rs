@@ -1039,6 +1039,10 @@ impl<'a> SemanticModel<'a> {
 
             match stmt {
                 ast::Stmt::Assignment(assignment) => {
+                    for variable in assignment.variables() {
+                        self.collect_assignment_variable_types(variable, position, candidates);
+                    }
+
                     for expression in assignment.expressions() {
                         self.collect_expression_type(expression, position, candidates);
                     }
@@ -1135,6 +1139,38 @@ impl<'a> SemanticModel<'a> {
             for expression in return_stmt.returns() {
                 self.collect_expression_type(expression, position, candidates);
             }
+        }
+    }
+
+    fn collect_assignment_variable_types(
+        &self,
+        variable: &'a Var,
+        position: SourcePosition,
+        candidates: &mut Vec<(Type, SourceSpan)>,
+    ) {
+        let Some(span) = node_span(variable) else {
+            return;
+        };
+        if !contains_position(span, position) {
+            return;
+        }
+
+        let Var::Expression(expression) = variable else {
+            return;
+        };
+
+        if let Prefix::Expression(prefix) = expression.prefix() {
+            self.collect_expression_type(prefix, position, candidates);
+        }
+
+        for suffix in expression.suffixes() {
+            if let Suffix::Index(Index::Brackets { expression, .. }) = suffix {
+                self.collect_expression_type(expression, position, candidates);
+            }
+        }
+
+        if let Some(ty) = self.type_of_var_at_depth(variable, position, 0) {
+            candidates.push((ty, span));
         }
     }
 

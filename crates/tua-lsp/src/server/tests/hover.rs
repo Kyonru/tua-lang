@@ -82,6 +82,28 @@ test(false)
     assert_hover_contains(&output, 2, "function test(a: boolean): string");
     assert_hover_contains(&output, 3, "function test(a: boolean): string");
 }
+
+#[test]
+fn hover_resolves_indexed_assignment_parts_without_comparison_fallbacks() {
+    let uri = "file:///tmp/indexed-assignment-hover.tua";
+    let source = r#"local actors: number[] = {}
+
+actors[1] = 'a'
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        hover_request(2, uri, source, "actors[1]"),
+        hover_request(3, uri, source, "1] ="),
+        hover_request(4, uri, source, "'a'"),
+        hover_request(5, uri, source, "= 'a'"),
+    ]);
+
+    assert_hover_contains(&output, 2, "local actors: number[]");
+    assert_hover_contains(&output, 3, "expression: number");
+    assert_hover_contains(&output, 4, "expression: string");
+    assert!(response_with_id(&output, 5)["result"].is_null());
+}
+
 #[test]
 fn hover_renders_docs_and_declaration_context_as_markdown() {
     let uri = "file:///tmp/documented-hover.tua";

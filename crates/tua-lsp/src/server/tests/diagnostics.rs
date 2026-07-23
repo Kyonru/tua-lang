@@ -101,6 +101,44 @@ fn did_open_rejects_luau_syntax_as_tl0004() {
 }
 
 #[test]
+fn did_open_accepts_native_array_annotations() {
+    let uri = "file:///tmp/native-arrays.tua";
+    let mut server = TestServer::new();
+
+    server.send(did_open(
+        uri,
+        "local values: number[] = { 1, 2 }\nreturn values[1]\n",
+    ));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+}
+
+#[test]
+fn did_open_rejects_invalid_native_array_indexed_assignments() {
+    let uri = "file:///tmp/native-array-assignment.tua";
+    let mut server = TestServer::new();
+
+    server.send(did_open(
+        uri,
+        "local actors: number[] = {}\n\nactors[1] = \"not a number\"\n",
+    ));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL1003")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 2);
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 12);
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("expected number, found string"));
+}
+
+#[test]
 fn did_open_publishes_nested_type_mismatch_paths_and_leaf_ranges() {
     let uri = "file:///tmp/nested-type-mismatch.tua";
     let source = r#"type Animation = { row: number }

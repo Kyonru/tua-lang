@@ -16,7 +16,6 @@ use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{Diagnostic, DiagnosticCode};
 pub(crate) use doc::parse_type_text as parse_tua_type_text;
 pub use doc::{parse_lua_doc_annotations, parse_lua_doc_annotations_with_options};
-pub(crate) use model::ParserLineProvenance;
 pub use model::{
     CompoundAssignment, CompoundOperator, FunctionAnnotation, FunctionTypeParameter,
     LocalAnnotation, LuaDocAlias, LuaDocAnnotation, LuaDocAnnotationKind, LuaDocAs, LuaDocCast,
@@ -27,6 +26,7 @@ pub use model::{
     ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
     TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
 };
+pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance};
 use normalize::normalize_tua_source_for_luau_parser;
 
 pub fn parse_lua_source(
@@ -51,12 +51,14 @@ pub fn parse_tua_source(
 
 pub fn normalize_tua_source(source: impl Into<String>) -> NormalizedSource {
     let original = source.into();
-    let (parser_source, parser_provenance) = normalize_tua_source_for_luau_parser(&original);
+    let (parser_source, parser_provenance, native_array_types) =
+        normalize_tua_source_for_luau_parser(&original);
 
     NormalizedSource {
         original,
         parser_source,
         parser_provenance,
+        native_array_types,
     }
 }
 
@@ -74,6 +76,7 @@ pub fn parse_raw_lua_source(
         source,
         parser_source,
         parser_provenance,
+        Vec::new(),
         LuaVersion::lua51(),
         ParsedLanguage::Lua,
     )
@@ -91,12 +94,15 @@ pub fn parse_raw_tua_source(
         normalized.original,
         normalized.parser_source,
         normalized.parser_provenance,
+        normalized.native_array_types,
         LuaVersion::luau(),
         ParsedLanguage::Tua,
     )?;
     let diagnostics = dialect::validate_tua_dialect(&raw);
 
     if diagnostics.is_empty() {
+        let mut raw = raw;
+        raw.ast = normalize::apply_native_array_types(raw.ast, &raw.native_array_types);
         Ok(raw)
     } else {
         Err(diagnostics)
@@ -149,6 +155,7 @@ fn parse_raw_source(
     source: String,
     parser_source: String,
     parser_provenance: Vec<ParserLineProvenance>,
+    native_array_types: Vec<NativeArrayTypeSyntax>,
     lua_version: LuaVersion,
     language: ParsedLanguage,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
@@ -163,6 +170,7 @@ fn parse_raw_source(
                 source,
                 parser_source,
                 parser_provenance,
+                native_array_types,
                 ast,
                 span,
                 language,
@@ -722,6 +730,7 @@ fn parameter_default_references(
         normalized.original,
         normalized.parser_source,
         normalized.parser_provenance,
+        normalized.native_array_types,
         LuaVersion::luau(),
         ParsedLanguage::Tua,
     ) else {
@@ -1134,6 +1143,15 @@ pub(crate) fn tua_type_from_type_info(type_info: &TypeInfo) -> TuaType {
         TypeInfo::Basic(token) => TuaType::Named(token_text(token)),
         TypeInfo::String(token) => {
             TuaType::StringLiteral(unquote_short_string_token(&token_text(token)))
+        }
+        TypeInfo::Array { type_info, .. } => {
+            let item = tua_type_from_type_info(type_info);
+            let item = match item {
+                TuaType::Tuple(mut items) if items.len() == 1 => items.remove(0),
+                other => other,
+            };
+
+            TuaType::Array(Box::new(item))
         }
         TypeInfo::Optional { base, .. } => TuaType::Union(vec![
             tua_type_from_type_info(base),

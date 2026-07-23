@@ -135,8 +135,10 @@ Generics are not part of Tua. Native function types and LuaDoc `fun(...)`
 annotations share one semantic representation. Arrays use native `T[]` syntax;
 grouped union and function elements use `(T | U)[]` and
 `((value: T) -> U)[]`. An empty table literal can initialize an explicitly
-typed array or dictionary. A record-shaped table whose named string keys and
-field values satisfy a string-keyed dictionary is assignable to that dictionary.
+typed array or dictionary. Indexed writes are checked against the declared
+array item or dictionary value contract. A record-shaped table whose named
+string keys and field values satisfy a string-keyed dictionary is assignable to
+that dictionary.
 When assignability fails inside a table, dictionary, tuple, callback parameter,
 or callback return, `TL1003` reports the nested contract path and leaf types
 instead of printing both complete outer types. Table-literal diagnostics point

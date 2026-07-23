@@ -1974,16 +1974,20 @@ impl<'a> Checker<'a> {
             .map(|function| function.return_types_or_any())
     }
 
-    fn infer_var_assignment_target(&self, var: &Var) -> Option<Type> {
+    fn infer_var_assignment_target(&mut self, var: &Var) -> Option<Type> {
         match var {
             Var::Name(name) => self.infer_named_assignment_target(&token_text(name)),
             Var::Expression(expression) => {
-                let parts = plain_field_chain_from_var_expression(expression)?;
-                let (field, receiver_parts) = parts.split_last()?;
-                let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
+                if let Some(parts) = plain_field_chain_from_var_expression(expression) {
+                    let (field, receiver_parts) = parts.split_last()?;
+                    let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
 
-                self.resolve_direct_table_field_type(&receiver_type, field)
-                    .or_else(|| self.resolve_newindex_assignment_type(&parts))
+                    return self
+                        .resolve_direct_table_field_type(&receiver_type, field)
+                        .or_else(|| self.resolve_newindex_assignment_type(&parts));
+                }
+
+                self.infer_var_expression(expression)
             }
             _ => None,
         }

@@ -74,6 +74,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Native `T[]` array syntax now parses consistently in aliases, locals,
+  parameters, returns, class fields, and class methods. The Luau-only `{ T }`
+  array shorthand remains rejected with guidance to use Tua syntax. Indexed
+  writes are checked against the array element contract, and assignment hover
+  keeps the target index and value types distinct.
 - A post-parse Tua dialect validator now rejects Luau-only grammar as blocking
   `TL0004` before semantic analysis or emission, with targeted remediation for
   constructs such as `::` type assertions and `continue`. Successful emission

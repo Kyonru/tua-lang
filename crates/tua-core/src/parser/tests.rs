@@ -43,6 +43,26 @@ fn normalized_source_preserves_original_and_exposes_parser_text() {
 }
 
 #[test]
+fn normalized_source_rewrites_native_array_types_without_touching_data_or_comments() {
+    let source = r#"local short = "Actor[]"
+local long = [=[Actor[]]=]
+-- Actor[]
+type Actors = Actor[]
+local actors: Actor[][] = {}
+"#;
+    let normalized = normalize_tua_source(source);
+
+    assert!(normalized.parser_source.contains(r#""Actor[]""#));
+    assert!(normalized.parser_source.contains("[=[Actor[]]=]"));
+    assert!(normalized.parser_source.contains("-- Actor[]"));
+    assert!(normalized.parser_source.contains("type Actors = Actor  "));
+    assert!(normalized
+        .parser_source
+        .contains("local actors: Actor     = {}"));
+    assert_eq!(normalized.native_array_types.len(), 2);
+}
+
+#[test]
 fn normalized_source_erases_enum_blocks_for_luau_parser() {
     let normalized = normalize_tua_source(
         r#"enum FilterMode
@@ -674,6 +694,180 @@ end
         function.return_type,
         Some(TuaType::Named("Player".to_owned()))
     );
+}
+
+#[test]
+fn parses_native_array_types_in_all_tua_annotation_positions() {
+    let parsed = parse_tua_source(
+        "src/actors.tua",
+        r#"
+type Actor = {
+  attack: (self: Actor) -> nil,
+}
+type Actors = Actor[]
+type Group = {
+  members: Actor[],
+}
+
+local actors: Actor[] = {}
+local nested: Actor[][] = {}
+local optional_items: Actor?[] = {}
+local optional_array: Actor[]? = nil
+local mixed: (Actor | string)[] = {}
+local callbacks: ((actor: Actor) -> nil)[] = {}
+local records: { name: string }[] = {}
+local multiline: (
+  Actor
+  | string
+)[] = {}
+
+local function keep(values: Actor[]): Actor[]
+  return values
+end
+
+final class Squad {
+  members: Actor[]
+
+  keep(values: Actor[]): Actor[] {
+    return values
+  }
+}
+"#,
+    )
+    .expect("native array syntax should parse in every Tua annotation position");
+
+    assert!(matches!(
+        &parsed.type_aliases[1].ty,
+        TuaType::Array(item) if item.as_ref() == &TuaType::Named("Actor".to_owned())
+    ));
+    assert!(matches!(
+        &parsed.type_aliases[2].ty,
+        TuaType::Table(fields)
+            if matches!(&fields[0].ty, TuaType::Array(item) if item.as_ref() == &TuaType::Named("Actor".to_owned()))
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[0].ty,
+        TuaType::Array(item) if item.as_ref() == &TuaType::Named("Actor".to_owned())
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[1].ty,
+        TuaType::Array(item)
+            if matches!(item.as_ref(), TuaType::Array(nested) if nested.as_ref() == &TuaType::Named("Actor".to_owned()))
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[2].ty,
+        TuaType::Array(item)
+            if matches!(item.as_ref(), TuaType::Union(types) if types.contains(&TuaType::Named("nil".to_owned())))
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[3].ty,
+        TuaType::Union(types)
+            if types.iter().any(|ty| matches!(ty, TuaType::Array(item) if item.as_ref() == &TuaType::Named("Actor".to_owned())))
+                && types.contains(&TuaType::Named("nil".to_owned()))
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[4].ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Union(types) if types.len() == 2)
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[5].ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Function { .. })
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[6].ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Table(_))
+    ));
+    assert!(matches!(
+        &parsed.local_annotations[7].ty,
+        TuaType::Array(item) if matches!(item.as_ref(), TuaType::Union(types) if types.len() == 2)
+    ));
+
+    let keep = parsed
+        .function_annotations
+        .iter()
+        .find(|function| function.name.as_deref() == Some("keep"))
+        .expect("local function signature should be retained");
+    assert!(matches!(keep.parameters[0].ty, TuaType::Array(_)));
+    assert!(matches!(keep.return_type, Some(TuaType::Array(_))));
+
+    let squad = parsed
+        .class_declarations
+        .iter()
+        .find(|class| class.name == "Squad")
+        .expect("class declaration should be retained");
+    assert!(matches!(squad.fields[0].parsed_ty, TuaType::Array(_)));
+    let class_keep = parsed
+        .function_annotations
+        .iter()
+        .find(|function| function.name.as_deref() == Some("Squad_keep"))
+        .expect("lowered class method signature should parse");
+    assert!(matches!(class_keep.parameters[1].ty, TuaType::Array(_)));
+    assert!(matches!(class_keep.return_type, Some(TuaType::Array(_))));
+}
+
+#[test]
+fn native_array_lowering_preserves_the_item_type_token_position() {
+    use full_moon::ast::luau::TypeInfo;
+    use full_moon::visitors::Visitor;
+
+    #[derive(Default)]
+    struct ActorTypePosition {
+        spans: Vec<SourceSpan>,
+    }
+
+    impl Visitor for ActorTypePosition {
+        fn visit_type_info(&mut self, type_info: &TypeInfo) {
+            if matches!(type_info, TypeInfo::Basic(token) if token.to_string().trim() == "Actor") {
+                if let Some((start, end)) = type_info.range() {
+                    self.spans.push(SourceSpan::from_range(start, end));
+                }
+            }
+        }
+    }
+
+    let raw = parse_raw_tua_source("src/actors.tua", "local actors: Actor[] = {}\n")
+        .expect("native array syntax should raw parse");
+    let mut positions = ActorTypePosition::default();
+    positions.visit_ast(&raw.ast);
+
+    assert_eq!(
+        positions.spans,
+        vec![SourceSpan {
+            start: SourcePosition {
+                line: 1,
+                column: 15,
+            },
+            end: SourcePosition {
+                line: 1,
+                column: 20,
+            },
+        }]
+    );
+}
+
+#[test]
+fn rejects_luau_array_type_syntax_and_array_suffixes_outside_types() {
+    let luau_diagnostics = parse_tua_source("src/actors.tua", "local actors: { Actor } = {}\n")
+        .expect_err("Luau array syntax should not become Tua syntax");
+
+    assert_eq!(luau_diagnostics.len(), 1);
+    assert_eq!(
+        luau_diagnostics[0].code,
+        Some(DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT)
+    );
+    assert!(luau_diagnostics[0].message.contains("use native `T[]`"));
+
+    let expression_diagnostics = parse_tua_source("src/actors.tua", "local actors = Actor[]\n")
+        .expect_err("array suffixes should not rewrite runtime expressions");
+
+    assert_eq!(expression_diagnostics.len(), 1);
+    assert_eq!(
+        expression_diagnostics[0].code,
+        Some(DiagnosticCode::SYNTAX_PARSE)
+    );
+    assert!(expression_diagnostics[0]
+        .message
+        .contains("only valid after a type"));
 }
 
 #[test]

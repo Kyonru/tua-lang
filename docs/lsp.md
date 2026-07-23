@@ -128,6 +128,9 @@ fetching packages from the editor. See
 Hover reports inferred or declared types, documentation, module context, asset
 metadata, and LOVE documentation. Short types stay inline, while complex tables,
 unions, callbacks, tuples, and dictionaries use width-aware multiline formatting.
+For an indexed assignment, hover reports the collection, index, and assigned
+value independently; the assignment operator itself is not presented as a
+comparison expression.
 Nested fields and callback parameters inside built-in helper configurations such
 as `spriteSheet({...})`, `stateMachine({...})`, and `objectPool({...})` use their
 expected schema instead of collapsing to the enclosing call's result type.

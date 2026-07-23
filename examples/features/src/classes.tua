@@ -49,6 +49,8 @@ for i = 1, 10 do
   print("")
 end
 
+local actors: number[] = {}
+
 return {
   particle = particle,
 }

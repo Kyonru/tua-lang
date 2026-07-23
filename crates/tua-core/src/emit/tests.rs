@@ -102,6 +102,56 @@ end
 }
 
 #[test]
+fn snapshot_erases_native_array_annotations_from_aliases_locals_and_functions() {
+    let emitted = emit_tua_source(
+        "src/actors.tua",
+        r#"
+type Actor = {
+  name: string,
+}
+type Actors = Actor[]
+
+local function keep(values: Actor[]): Actor[]
+  return values
+end
+
+local function mixed(): (Actor | string)[]
+  return {}
+end
+
+local function records(): { name: string }[]
+  return {}
+end
+
+local actors: Actor[] = {}
+return keep(actors)
+"#,
+    )
+    .expect("native array annotations should emit as ordinary Lua");
+
+    assert_eq!(
+        emitted,
+        r#"local function keep(values)
+  return values
+end
+
+local function mixed()
+  return {}
+end
+
+local function records()
+  return {}
+end
+
+local actors = {}
+return keep(actors)
+"#
+    );
+    crate::parse_raw_lua_source("build/actors.lua", emitted)
+        .expect("native array annotations must erase to Lua 5.1");
+}
+
+#[test]
 fn snapshot_erases_anonymous_function_annotations() {
     let emitted = emit_tua_source(
         "src/functions.tua",

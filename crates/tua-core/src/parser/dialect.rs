@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use full_moon::ast::luau::{
     GenericDeclaration, IndexedTypeInfo, LuauAttribute, TypeField, TypeInfo, TypeInstantiation,
 };
@@ -5,6 +7,7 @@ use full_moon::ast::{BinOp, Expression, LastStmt, Stmt};
 use full_moon::node::Node;
 use full_moon::visitors::Visitor;
 
+use super::normalize::native_array_item_end;
 use super::{RawParsedSource, SourcePosition, SourceSpan};
 use crate::{Diagnostic, DiagnosticCode};
 
@@ -12,14 +15,29 @@ pub(super) fn validate_tua_dialect(raw: &RawParsedSource) -> Vec<Diagnostic> {
     let mut validator = TuaDialectValidator {
         raw,
         diagnostics: Vec::new(),
+        native_array_types: raw
+            .native_array_types
+            .iter()
+            .copied()
+            .map(|syntax| (position_key(syntax.item_end), syntax.suffix_span))
+            .collect(),
     };
     validator.visit_ast(&raw.ast);
+    for parser_span in validator.native_array_types.values().copied() {
+        validator.diagnostics.push(syntax_diagnostic_for_span(
+            raw,
+            parser_span,
+            "array suffix `[]` is only valid after a type",
+            DiagnosticCode::SYNTAX_PARSE,
+        ));
+    }
     validator.diagnostics
 }
 
 struct TuaDialectValidator<'a> {
     raw: &'a RawParsedSource,
     diagnostics: Vec<Diagnostic>,
+    native_array_types: BTreeMap<(usize, usize), SourceSpan>,
 }
 
 impl TuaDialectValidator<'_> {
@@ -101,7 +119,15 @@ impl Visitor for TuaDialectValidator<'_> {
     }
 
     fn visit_type_info(&mut self, type_info: &TypeInfo) {
+        if let Some(item_end) = native_array_item_end(type_info) {
+            self.native_array_types.remove(&position_key(item_end));
+        }
+
         match type_info {
+            TypeInfo::Array { access: None, .. } => self.report(
+                type_info,
+                "Luau `{ T }` array types are not part of Tua; use native `T[]` syntax instead",
+            ),
             TypeInfo::Array {
                 access: Some(access),
                 ..
@@ -161,6 +187,20 @@ fn unsupported_syntax_diagnostic(
             start: SourcePosition { line: 1, column: 1 },
             end: SourcePosition { line: 1, column: 2 },
         });
+    syntax_diagnostic_for_span(
+        raw,
+        parser_span,
+        message,
+        DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT,
+    )
+}
+
+fn syntax_diagnostic_for_span(
+    raw: &RawParsedSource,
+    parser_span: SourceSpan,
+    message: impl Into<String>,
+    code: DiagnosticCode,
+) -> Diagnostic {
     let start = raw.parser_position_origin(parser_span.start);
     let end = raw.parser_position_origin(parser_span.end);
     let source_start = start
@@ -190,5 +230,9 @@ fn unsupported_syntax_diagnostic(
         source_end.line,
         source_end.column,
     )
-    .with_code(DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT)
+    .with_code(code)
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }

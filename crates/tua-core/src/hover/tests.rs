@@ -599,6 +599,49 @@ end
 }
 
 #[test]
+fn hovers_indexed_assignment_parts_without_treating_assignment_as_comparison() {
+    let source = r#"local actors: number[] = {}
+
+actors[1] = 'a'
+"#;
+
+    let actors = hover_tua_source(
+        "src/indexed-assignment.tua",
+        source,
+        position_at(source, "actors[1]"),
+    )
+    .expect("hover should not fail")
+    .expect("assigned array local should hover");
+    let index = hover_tua_source(
+        "src/indexed-assignment.tua",
+        source,
+        position_at(source, "1]"),
+    )
+    .expect("hover should not fail");
+    let value = hover_tua_source(
+        "src/indexed-assignment.tua",
+        source,
+        position_at(source, "'a'"),
+    )
+    .expect("hover should not fail")
+    .expect("assigned value should hover");
+    let equals = hover_tua_source(
+        "src/indexed-assignment.tua",
+        source,
+        position_at(source, "= 'a'"),
+    )
+    .expect("hover should not fail");
+
+    assert_eq!(actors.contents, "local actors: number[]");
+    assert_eq!(value.contents, "expression: string");
+    assert_eq!(equals, None);
+    assert_eq!(
+        index.expect("array index should hover").contents,
+        "expression: number"
+    );
+}
+
+#[test]
 fn hovers_record_index_and_pairs_variable_types() {
     let source = r#"
 local player = { name = "Ada", score = 10 }

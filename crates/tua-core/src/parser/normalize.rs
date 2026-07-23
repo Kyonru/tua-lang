@@ -1,19 +1,248 @@
+use std::collections::BTreeMap;
+
+use full_moon::ast::luau::TypeInfo;
+use full_moon::ast::span::ContainedSpan;
+use full_moon::node::Node;
+use full_moon::tokenizer::TokenReference;
+use full_moon::visitors::VisitorMut;
+
 use crate::emit::lowering;
-use crate::parser::ParserLineProvenance;
+use crate::parser::{NativeArrayTypeSyntax, ParserLineProvenance, SourcePosition, SourceSpan};
 use crate::runtime_type::IS_CHECK_HELPER;
 
 pub(super) fn normalize_tua_source_for_luau_parser(
     source: &str,
-) -> (String, Vec<ParserLineProvenance>) {
+) -> (
+    String,
+    Vec<ParserLineProvenance>,
+    Vec<NativeArrayTypeSyntax>,
+) {
     let (class_source, provenance) = lowering::lower_classes_for_parser(source);
     let parser_source = normalize_parser_syntax(&class_source);
+    let (parser_source, native_array_types) = normalize_native_array_types(&parser_source);
     debug_assert_eq!(
         class_source.split_inclusive('\n').count(),
         parser_source.split_inclusive('\n').count(),
         "parser syntax normalization must preserve class-lowered line count"
     );
 
-    (parser_source, provenance)
+    (parser_source, provenance, native_array_types)
+}
+
+pub(super) fn apply_native_array_types(
+    ast: full_moon::ast::Ast,
+    syntax: &[NativeArrayTypeSyntax],
+) -> full_moon::ast::Ast {
+    // The parser sees spaces where Tua wrote `[]`, so the item tokens retain
+    // their original positions. Restore the semantic array nodes only after
+    // dialect validation has distinguished native syntax from Luau `{ T }`.
+    let mut lowerer = NativeArrayTypeLowerer {
+        depths_by_item_end: syntax
+            .iter()
+            .map(|syntax| (position_key(syntax.item_end), syntax.depth))
+            .collect(),
+    };
+
+    lowerer.visit_ast(ast)
+}
+
+struct NativeArrayTypeLowerer {
+    depths_by_item_end: BTreeMap<(usize, usize), usize>,
+}
+
+impl VisitorMut for NativeArrayTypeLowerer {
+    fn visit_type_info_end(&mut self, type_info: TypeInfo) -> TypeInfo {
+        let Some(item_end) = native_array_item_end(&type_info) else {
+            return type_info;
+        };
+        let Some(depth) = self.depths_by_item_end.remove(&position_key(item_end)) else {
+            return type_info;
+        };
+        let type_text = type_info.to_string();
+        let normalized_trailing =
+            &type_text[type_text.trim_end_matches(char::is_whitespace).len()..];
+        let erased_suffix = " ".repeat(depth * 2);
+        let source_trailing = normalized_trailing
+            .strip_prefix(&erased_suffix)
+            .unwrap_or(normalized_trailing)
+            .to_owned();
+
+        (0..depth).fold(type_info, |item, _| TypeInfo::Array {
+            braces: ContainedSpan::new(
+                TokenReference::symbol("{").expect("array wrapper uses a valid opening brace"),
+                TokenReference::symbol(&format!("}}{source_trailing}"))
+                    .expect("array wrapper uses a valid closing brace"),
+            ),
+            access: None,
+            type_info: Box::new(item),
+        })
+    }
+}
+
+pub(super) fn native_array_item_end(type_info: &TypeInfo) -> Option<SourcePosition> {
+    let end = match type_info {
+        TypeInfo::Table { braces, .. } => braces.tokens().1.end_position()?,
+        TypeInfo::Tuple { parentheses, .. } => parentheses.tokens().1.end_position()?,
+        _ => type_info.range()?.1,
+    };
+
+    Some(SourcePosition::from_full_moon(end))
+}
+
+fn normalize_native_array_types(source: &str) -> (String, Vec<NativeArrayTypeSyntax>) {
+    // Full Moon has no postfix array grammar. Blanking the suffix keeps every
+    // preceding token source-accurate; recorded suffixes are matched to parsed
+    // type endings before the AST is wrapped by `apply_native_array_types`.
+    let mut chars = source.chars().collect::<Vec<_>>();
+    let protected = protected_syntax_characters(&chars);
+    let mut syntax = Vec::new();
+    let mut index = 0usize;
+
+    while index + 1 < chars.len() {
+        if protected[index]
+            || chars[index] != '['
+            || chars[index + 1] != ']'
+            || protected[index + 1]
+        {
+            index += 1;
+            continue;
+        }
+
+        let suffix_start = index;
+        let mut depth = 0usize;
+        while index + 1 < chars.len()
+            && chars[index] == '['
+            && chars[index + 1] == ']'
+            && !protected[index]
+            && !protected[index + 1]
+        {
+            chars[index] = ' ';
+            chars[index + 1] = ' ';
+            depth += 1;
+            index += 2;
+        }
+
+        syntax.push(NativeArrayTypeSyntax {
+            item_end: source_position_for_char_offset(&chars, suffix_start),
+            suffix_span: SourceSpan {
+                start: source_position_for_char_offset(&chars, suffix_start),
+                end: source_position_for_char_offset(&chars, index),
+            },
+            depth,
+        });
+    }
+
+    (chars.into_iter().collect(), syntax)
+}
+
+fn protected_syntax_characters(chars: &[char]) -> Vec<bool> {
+    let mut protected = vec![false; chars.len()];
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        if chars[index] == '-' && chars.get(index + 1) == Some(&'-') {
+            let end = long_bracket_end(chars, index + 2).unwrap_or_else(|| {
+                chars[index..]
+                    .iter()
+                    .position(|character| *character == '\n')
+                    .map_or(chars.len(), |offset| index + offset)
+            });
+            protected[index..end].fill(true);
+            index = end;
+            continue;
+        }
+
+        if let Some(end) = long_bracket_end(chars, index) {
+            protected[index..end].fill(true);
+            index = end;
+            continue;
+        }
+
+        if chars[index] == '"' || chars[index] == '\'' {
+            let quote = chars[index];
+            let start = index;
+            index += 1;
+
+            while index < chars.len() {
+                if chars[index] == '\\' {
+                    index = (index + 2).min(chars.len());
+                    continue;
+                }
+
+                let character = chars[index];
+                index += 1;
+                if character == quote {
+                    break;
+                }
+            }
+
+            protected[start..index].fill(true);
+            continue;
+        }
+
+        index += 1;
+    }
+
+    protected
+}
+
+fn long_bracket_end(chars: &[char], index: usize) -> Option<usize> {
+    if chars.get(index) != Some(&'[') {
+        return None;
+    }
+
+    let mut open_end = index + 1;
+    while chars.get(open_end) == Some(&'=') {
+        open_end += 1;
+    }
+    if chars.get(open_end) != Some(&'[') {
+        return None;
+    }
+
+    let equals = open_end - index - 1;
+    let mut cursor = open_end + 1;
+
+    while cursor < chars.len() {
+        if chars[cursor] != ']' {
+            cursor += 1;
+            continue;
+        }
+
+        let mut close_end = cursor + 1;
+        for _ in 0..equals {
+            if chars.get(close_end) != Some(&'=') {
+                break;
+            }
+            close_end += 1;
+        }
+
+        if close_end == cursor + equals + 1 && chars.get(close_end) == Some(&']') {
+            return Some(close_end + 1);
+        }
+
+        cursor += 1;
+    }
+
+    Some(chars.len())
+}
+
+fn source_position_for_char_offset(chars: &[char], offset: usize) -> SourcePosition {
+    let mut position = SourcePosition { line: 1, column: 1 };
+
+    for character in chars.iter().take(offset) {
+        if *character == '\n' {
+            position.line += 1;
+            position.column = 1;
+        } else {
+            position.column += 1;
+        }
+    }
+
+    position
+}
+
+fn position_key(position: SourcePosition) -> (usize, usize) {
+    (position.line, position.column)
 }
 
 fn normalize_parser_syntax(source: &str) -> String {

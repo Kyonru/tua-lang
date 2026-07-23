@@ -1988,6 +1988,48 @@ end
 }
 
 #[test]
+fn build_accepts_native_array_types_and_erases_them_from_lua() {
+    let temp = TempDir::new("build-native-arrays");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+type Values = number[]
+
+local function first(values: number[]): number
+  return values[1]
+end
+
+local values: Values = { 1, 2 }
+return first(values)
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let emitted =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read output");
+    assert!(emitted.contains("local function first(values)"));
+    assert!(emitted.contains("local values = { 1, 2 }"));
+    assert!(!emitted.contains("number[]"));
+    assert!(!emitted.contains("Values"));
+}
+
+#[test]
 fn fmt_formats_project_files_in_place() {
     let temp = TempDir::new("fmt-in-place");
 

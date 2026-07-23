@@ -1844,6 +1844,74 @@ end
 }
 
 #[test]
+fn accepts_native_class_arrays_across_locals_functions_and_polymorphic_loops() {
+    check_tua_source(
+        "src/actors.tua",
+        r#"
+open class Actor {
+  attack() {
+  }
+}
+
+final class Fighter extends Actor {
+  override attack() {
+  }
+}
+
+final class Mage extends Actor {
+  override attack() {
+  }
+}
+
+local function keep(values: Actor[]): Actor[]
+  return values
+end
+
+local actors: Actor[] = keep({ Fighter.new(), Mage.new() })
+for _, actor in ipairs(actors) do
+  actor:attack()
+end
+"#,
+    )
+    .expect("native arrays should preserve their class item type through functions and loops");
+}
+
+#[test]
+fn rejects_values_that_do_not_match_a_native_array_item_type() {
+    let diagnostics = check_tua_source(
+        "src/actors.tua",
+        r#"
+local actors: number[] = { 1, "not a number" }
+"#,
+    )
+    .expect_err("native array annotations should constrain initializer items");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("expected number, found string")
+    }));
+}
+
+#[test]
+fn rejects_indexed_assignments_that_do_not_match_a_native_array_item_type() {
+    let diagnostics = check_tua_source(
+        "src/actors.tua",
+        r#"
+local actors: number[] = {}
+
+actors[1] = "not a number"
+"#,
+    )
+    .expect_err("native array annotations should constrain indexed assignments");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("expected number, found string")
+            && diagnostic.line == 4
+    }));
+}
+
+#[test]
 fn accepts_pairs_loop_variable_inference_for_record_tables() {
     check_tua_source(
         "src/pairs.tua",
