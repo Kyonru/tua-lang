@@ -69,6 +69,7 @@ impl<'a> CheckQuery<'a> {
             let _trace = profile::diagnostics_span(DiagnosticsTraceCategory::Checker);
 
             checker.check_block(self.parsed.ast.nodes(), None);
+            checker.remap_parser_diagnostics();
 
             if self.options.diagnostics_config.doc_annotations {
                 checker

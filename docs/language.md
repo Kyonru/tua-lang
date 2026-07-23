@@ -663,8 +663,15 @@ Inside `init` and instance methods, `self` resolves to the enclosing class.
 Completion after `self.` and member hover include declared and inherited fields
 and methods with their exact types.
 
+`init` supports typed varargs. Generated constructors forward every declared
+parameter, including `...`, and standalone `super(...)` or `super.method(...)`
+calls preserve their argument expressions. Member calls such as
+`helper.super()` remain ordinary Lua calls.
+
 Generated Lua uses ordinary tables, `__index`, local method functions, and
 per-class `__type_id` / `__is` metadata. `Class.new(...)` constructs instances.
+Within each class, the `init` body runs before that class's field defaults; this
+ordering is preserved across inheritance and constructor optimization.
 When a constructor is proven to contain only field defaults, `self.field = ...`,
 and a flattenable `super(...)`, Tua emits a direct table constructor. Otherwise
 it preserves explicit init calls. Calls to known final methods on known class

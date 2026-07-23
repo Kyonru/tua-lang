@@ -221,6 +221,45 @@ impl<'a> Checker<'a> {
         self.check_block_with_locals(block, current_return, BTreeMap::new());
     }
 
+    fn remap_parser_diagnostics(&mut self) {
+        for diagnostic in &mut self.diagnostics {
+            let parser_start = SourcePosition {
+                line: diagnostic.line,
+                column: diagnostic.column,
+            };
+            let parser_end = SourcePosition {
+                line: diagnostic.end_line,
+                column: diagnostic.end_column,
+            };
+            let Some(start) = self.parsed.raw.parser_position_origin(parser_start) else {
+                continue;
+            };
+            let end = self
+                .parsed
+                .raw
+                .parser_position_origin(parser_end)
+                .unwrap_or(start);
+            let source_start = start.source_position;
+            let source_end = if start.class_generated || end.class_generated {
+                SourcePosition {
+                    line: source_start.line,
+                    column: source_start.column.saturating_add(1),
+                }
+            } else {
+                end.source_position
+            };
+
+            diagnostic.line = source_start.line;
+            diagnostic.column = source_start.column;
+            diagnostic.end_line = source_end.line.max(source_start.line);
+            diagnostic.end_column = if diagnostic.end_line == source_start.line {
+                source_end.column.max(source_start.column.saturating_add(1))
+            } else {
+                source_end.column.max(1)
+            };
+        }
+    }
+
     fn check_block_with_locals(
         &mut self,
         block: &ast::Block,

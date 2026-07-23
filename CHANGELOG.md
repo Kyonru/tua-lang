@@ -74,9 +74,15 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Class constructors now forward typed varargs and preserve every explicit
+  `super(...)` argument, while member calls such as `helper.super()` remain
+  ordinary Lua calls.
+- Optimized class constructors now preserve explicit constructor semantics by
+  applying each class's `init` assignments before its field defaults.
 - Class parsing now preserves class-like text in Lua long-bracket strings and
   comments, reports `TL1008` for unrecognized members, and accepts table-shaped
-  method return types.
+  method return types. Checker diagnostics produced from generated class bodies
+  now map back to the original class declaration instead of generated Lua lines.
 - Exact-code `tua-ignore-line`, `tua-ignore-next-line`, and header-only
   `tua-ignore-file` suppressions are now enabled by default. Empty directives
   and broad category suppressions report `TL4025`, while Luau `--!nolint`

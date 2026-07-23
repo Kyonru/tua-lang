@@ -2702,6 +2702,26 @@ local value: string = counter.add(counter, "wrong")
 }
 
 #[test]
+fn class_body_type_diagnostics_use_source_provenance() {
+    let source = r#"final class Counter {
+  value: number
+
+  init() {
+    self.value = "wrong"
+  }
+}"#;
+    let diagnostics = check_tua_source("src/classes.tua", source)
+        .expect_err("class body type mismatches should be reported");
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .expect("class body mismatch should be present");
+
+    assert_eq!((diagnostic.line, diagnostic.column), (1, 1));
+    assert!(diagnostic.end_line <= source.lines().count());
+}
+
+#[test]
 fn rejects_unknown_class_members_but_keeps_any_dynamic() {
     let diagnostics = check_tua_source(
         "src/classes.tua",

@@ -129,7 +129,11 @@ declared class type, method signatures are checked exactly, and class exports
 retain constructor/member types through static project modules. Classes are
 closed by default: only `open class` declarations can be extended. Class method
 returns may use table shapes, while unrecognized class-body syntax is rejected
-as `TL1008` rather than erased during lowering.
+as `TL1008` rather than erased during lowering. Each class's field defaults run
+after its `init` assignments; direct-table constructor optimization preserves
+the same order. Constructor signatures and calls preserve typed varargs, and
+standalone `super(...)` calls forward their argument expressions exactly;
+member fields named `super` remain ordinary Lua members.
 
 ## Modules And Lua Interoperability
 

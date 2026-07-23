@@ -624,7 +624,7 @@ fn lower_constructor_function(class: &ClassDeclaration, classes: &[ClassDeclarat
         output.push_str(&format!(
             "  {}_init(self{})\n",
             class.name,
-            comma_prefixed_call(parameters)
+            comma_prefixed_parameter_values(parameters)
         ));
         output.push_str("  return self\n");
     }
@@ -680,7 +680,7 @@ fn replace_super_calls(body: &str, parent: &str) -> String {
             continue;
         }
 
-        if starts_keyword(body, index, "super") {
+        if starts_super_reference(body, index) {
             let after = skip_whitespace(body, index + "super".len());
 
             if body[after..].starts_with('(') {
@@ -689,7 +689,7 @@ fn replace_super_calls(body: &str, parent: &str) -> String {
                     output.push_str(&format!(
                         "{}_init(self{})",
                         parent,
-                        comma_prefixed_call(args)
+                        comma_prefixed_arguments(args)
                     ));
                     index = close + 1;
                     continue;
@@ -707,7 +707,7 @@ fn replace_super_calls(body: &str, parent: &str) -> String {
                                 "{}_{}(self{})",
                                 parent,
                                 method,
-                                comma_prefixed_call(args)
+                                comma_prefixed_arguments(args)
                             ));
                             index = close + 1;
                             continue;
@@ -788,6 +788,16 @@ fn flatten_class_constructor_with_substitutions(
         )?);
     }
 
+    if let Some(init) = &class.init {
+        for (name, value) in self_assignments(&init.body, class.parent.is_some())? {
+            let value = substitute_expr(&value, substitutions)?;
+            if !is_flattenable_constructor_value(&value) {
+                return None;
+            }
+            fields.push(FlattenedField { name, value });
+        }
+    }
+
     for field in &class.fields {
         if let Some(default) = &field.default {
             let value = substitute_expr(default, substitutions)?;
@@ -798,16 +808,6 @@ fn flatten_class_constructor_with_substitutions(
                 name: field.name.clone(),
                 value,
             });
-        }
-    }
-
-    if let Some(init) = &class.init {
-        for (name, value) in self_assignments(&init.body, class.parent.is_some())? {
-            let value = substitute_expr(&value, substitutions)?;
-            if !is_flattenable_constructor_value(&value) {
-                return None;
-            }
-            fields.push(FlattenedField { name, value });
         }
     }
 
@@ -1121,7 +1121,7 @@ fn comma_prefixed(value: &str) -> String {
     }
 }
 
-fn comma_prefixed_call(value: &str) -> String {
+fn comma_prefixed_parameter_values(value: &str) -> String {
     let names = parameter_names(value).join(", ");
 
     if names.is_empty() {
@@ -1129,6 +1129,10 @@ fn comma_prefixed_call(value: &str) -> String {
     } else {
         format!(", {names}")
     }
+}
+
+fn comma_prefixed_arguments(value: &str) -> String {
+    comma_prefixed(value)
 }
 
 fn parameter_names(parameters: &str) -> Vec<String> {
@@ -1140,8 +1144,9 @@ fn parameter_names(parameters: &str) -> Vec<String> {
                 .map(|(name, _)| name)
                 .unwrap_or(&parameter)
                 .trim();
+            let name = name.strip_suffix('?').unwrap_or(name).trim();
 
-            is_identifier(name).then(|| name.to_owned())
+            (name == "..." || is_identifier(name)).then(|| name.to_owned())
         })
         .collect()
 }
@@ -1343,6 +1348,17 @@ fn starts_keyword(source: &str, index: usize, keyword: &str) -> bool {
             .next()
             .map(|character| !is_identifier_part(character))
             .unwrap_or(true)
+}
+
+fn starts_super_reference(source: &str, index: usize) -> bool {
+    starts_keyword(source, index, "super")
+        && !matches!(
+            source[..index]
+                .chars()
+                .rev()
+                .find(|character| !character.is_whitespace()),
+            Some('.' | ':')
+        )
 }
 
 fn can_start_keyword(source: &str, index: usize) -> bool {

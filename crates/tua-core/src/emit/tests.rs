@@ -282,6 +282,66 @@ end
 }
 
 #[test]
+fn optimized_class_constructors_apply_field_defaults_after_init_assignments() {
+    let emitted = emit_tua_source(
+        "src/classes.tua",
+        r#"
+final class Optimized {
+  value: number = 10
+
+  init(value: number) {
+    self.value = value
+  }
+}
+
+final class Fallback {
+  value: number = 10
+  unrelated: any = {}
+
+  init(value: number) {
+    self.value = value
+  }
+}
+"#,
+    )
+    .expect("class constructors should emit");
+
+    assert!(emitted
+        .contains("return setmetatable({\n    value = value,\n    value = 10,\n  }, Optimized)"));
+    assert!(emitted.contains(
+        "local function Fallback_init(self, value)\n\n  self.value = value\n\n  self.value = 10\n  self.unrelated = {}\nend"
+    ));
+}
+
+#[test]
+fn class_constructors_preserve_varargs_and_only_rewrite_standalone_super_calls() {
+    let emitted = emit_tua_source(
+        "src/classes.tua",
+        r#"
+open class Parent {
+  init(value: number, ...: string) {
+    print(value, ...)
+  }
+}
+
+final class Child extends Parent {
+  init(helper: any, ...: string) {
+    helper . super()
+    super(1, ...)
+  }
+}
+"#,
+    )
+    .expect("class constructor forwarding should emit");
+
+    assert!(emitted.contains("local function Child_init(self, helper, ...)"));
+    assert!(emitted.contains("helper . super()"));
+    assert!(emitted.contains("Parent_init(self, 1, ...)"));
+    assert!(emitted.contains("local function Child_new(helper, ...)"));
+    assert!(emitted.contains("Child_init(self, helper, ...)"));
+}
+
+#[test]
 fn snapshot_emits_luacats_annotations() {
     let emitted = emit_tua_source_with_mode(
         "src/functions.tua",

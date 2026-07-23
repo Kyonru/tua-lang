@@ -41,6 +41,12 @@ pub(crate) struct ParserLineProvenance {
     pub class_generated: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ParserPositionOrigin {
+    pub source_position: SourcePosition,
+    pub class_generated: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct ParsedSource {
     pub raw: RawParsedSource,
@@ -138,6 +144,32 @@ impl RawParsedSource {
 
     pub fn uses_normalized_parser_source(&self) -> bool {
         self.source != self.parser_source
+    }
+
+    pub(crate) fn parser_position_origin(
+        &self,
+        parser_position: SourcePosition,
+    ) -> Option<ParserPositionOrigin> {
+        let provenance = self
+            .parser_provenance
+            .get(parser_position.line.saturating_sub(1))?;
+        let source_position = if provenance.class_generated {
+            provenance.source_span.start
+        } else {
+            SourcePosition {
+                line: provenance.source_span.start.line,
+                column: provenance
+                    .source_span
+                    .start
+                    .column
+                    .saturating_add(parser_position.column.saturating_sub(1)),
+            }
+        };
+
+        Some(ParserPositionOrigin {
+            source_position,
+            class_generated: provenance.class_generated,
+        })
     }
 }
 

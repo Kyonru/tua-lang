@@ -328,23 +328,12 @@ impl<'a> InlayHintCollector<'a> {
     }
 
     fn source_position(&self, parser_position: SourcePosition) -> Option<SourcePosition> {
-        let provenance = self
-            .parsed
-            .raw
-            .parser_provenance
-            .get(parser_position.line.saturating_sub(1))?;
-        if provenance.class_generated {
+        let origin = self.parsed.raw.parser_position_origin(parser_position)?;
+        if origin.class_generated {
             return None;
         }
 
-        Some(SourcePosition {
-            line: provenance.source_span.start.line,
-            column: provenance
-                .source_span
-                .start
-                .column
-                .saturating_add(parser_position.column.saturating_sub(1)),
-        })
+        Some(origin.source_position)
     }
 }
 
