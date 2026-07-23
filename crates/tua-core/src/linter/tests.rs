@@ -1183,6 +1183,97 @@ end
 }
 
 #[test]
+fn comparison_precedence_reports_operator_specific_messages_and_expression_ranges() {
+    let cases = [
+        (
+            "not a == b",
+            "`not x == y` is equivalent to `(not x) == y`; consider using `x ~= y`, or add parentheses to silence",
+        ),
+        (
+            "not a ~= b",
+            "`not x ~= y` is equivalent to `(not x) ~= y`; consider using `x == y`, or add parentheses to silence",
+        ),
+        (
+            "not a < b",
+            "`not x < y` is equivalent to `(not x) < y`; add parentheses to silence",
+        ),
+        (
+            "not a <= b",
+            "`not x <= y` is equivalent to `(not x) <= y`; add parentheses to silence",
+        ),
+        (
+            "not a > b",
+            "`not x > y` is equivalent to `(not x) > y`; add parentheses to silence",
+        ),
+        (
+            "not a >= b",
+            "`not x >= y` is equivalent to `(not x) >= y`; add parentheses to silence",
+        ),
+        (
+            "a < b < c",
+            "`x < y < z` is equivalent to `(x < y) < z`; did you mean `x < y and y < z`?",
+        ),
+        (
+            "a <= b == c",
+            "`x <= y == z` is equivalent to `(x <= y) == z`; add parentheses to silence",
+        ),
+    ];
+
+    for (expression, expected_message) in cases {
+        let source = format!(
+            "local a, b, c = true, true, true\nlocal result = {expression}\nprint(result)\n"
+        );
+        let diagnostics = check_standard_rules_source(&source)
+            .into_iter()
+            .filter(|diagnostic| {
+                diagnostic.code == Some(DiagnosticCode::LINT_COMPARISON_PRECEDENCE)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(diagnostics.len(), 1, "{expression}: {diagnostics:#?}");
+        assert_eq!(diagnostics[0].message, expected_message, "{expression}");
+        assert_eq!(
+            (
+                diagnostics[0].line,
+                diagnostics[0].column,
+                diagnostics[0].end_line,
+                diagnostics[0].end_column,
+            ),
+            (2, 16, 2, 16 + expression.chars().count()),
+            "{expression}: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn comparison_precedence_accepts_symmetric_negation_and_explicit_parentheses() {
+    let diagnostics = check_standard_rules_source(
+        r#"local a, b, c = true, true, true
+local values = {
+  not a == not b,
+  not a ~= not b,
+  not a <= not b,
+  not (a == b),
+  (not a) == b,
+  not (a ~= b),
+  (not a) ~= b,
+  not (a <= b),
+  (not a) <= b,
+  (a <= b) == c,
+  a <= (b == c),
+}
+print(values)
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_COMPARISON_PRECEDENCE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn misleading_and_or_identifies_the_alternative_and_reports_the_expression() {
     let diagnostics = check_standard_rules_source(
         r#"local condition = true

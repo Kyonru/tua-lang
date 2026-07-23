@@ -81,6 +81,9 @@ language or editor behavior, and migration notes call out those changes.
 - `MisleadingAndOr` now identifies the exact `false` or `nil` alternative,
   points at the complete expression, and recommends a LuaJIT-safe `if`
   statement assignment instead of Luau-only conditional-expression syntax.
+- `ComparisonPrecedence` now exempts symmetric negation, reports the actual
+  operators with inverse-equality or explicit-`and` guidance, and highlights
+  the complete ambiguous expression.
 - `DuplicateCondition` now structurally compares expressions, flattens grouped
   boolean chains, preserves runtime literal identity, suppresses the common Lua
   and-or ternary idiom, and points diagnostics at the repeated condition with

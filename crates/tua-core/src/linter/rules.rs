@@ -307,21 +307,30 @@ impl Visitor for LintRuleVisitor<'_> {
                     );
                 }
 
-                if is_comparison_operator(binop)
-                    && (is_unparenthesized_comparison(lhs) || is_unparenthesized_comparison(rhs))
-                {
-                    self.push(
-                        node_position(binop),
+                if is_comparison_operator(binop) && is_unparenthesized_comparison(lhs) {
+                    let Expression::BinaryOperator {
+                        binop: left_operator,
+                        ..
+                    } = unparenthesized_expression(lhs)
+                    else {
+                        unreachable!("comparison helper must identify a binary expression");
+                    };
+
+                    self.push_node(
+                        expression,
                         DiagnosticCode::LINT_COMPARISON_PRECEDENCE,
-                        "chained comparisons do not compare all operands; add parentheses",
+                        chained_comparison_message(left_operator, binop),
                     );
                 }
 
-                if is_comparison_operator(binop) && is_unparenthesized_not(lhs) {
-                    self.push(
-                        node_position(lhs),
+                if is_comparison_operator(binop)
+                    && is_unparenthesized_not(lhs)
+                    && !is_unparenthesized_not(rhs)
+                {
+                    self.push_node(
+                        expression,
                         DiagnosticCode::LINT_COMPARISON_PRECEDENCE,
-                        "`not x == y` compares `(not x)` with `y`; add parentheses to make the intent explicit",
+                        negated_comparison_message(binop),
                     );
                 }
             }
@@ -1198,6 +1207,49 @@ fn is_comparison_operator(operator: &ast::BinOp) -> bool {
             | ast::BinOp::TwoEqual(_)
             | ast::BinOp::TildeEqual(_)
     )
+}
+
+fn comparison_operator_text(operator: &ast::BinOp) -> &'static str {
+    match operator {
+        ast::BinOp::GreaterThan(_) => ">",
+        ast::BinOp::GreaterThanEqual(_) => ">=",
+        ast::BinOp::LessThan(_) => "<",
+        ast::BinOp::LessThanEqual(_) => "<=",
+        ast::BinOp::TwoEqual(_) => "==",
+        ast::BinOp::TildeEqual(_) => "~=",
+        _ => unreachable!("comparison text requires a comparison operator"),
+    }
+}
+
+fn is_equality_operator(operator: &ast::BinOp) -> bool {
+    matches!(
+        operator,
+        ast::BinOp::TwoEqual(_) | ast::BinOp::TildeEqual(_)
+    )
+}
+
+fn negated_comparison_message(operator: &ast::BinOp) -> String {
+    let operator = comparison_operator_text(operator);
+    let prefix = format!("`not x {operator} y` is equivalent to `(not x) {operator} y`");
+
+    match operator {
+        "==" => format!("{prefix}; consider using `x ~= y`, or add parentheses to silence"),
+        "~=" => format!("{prefix}; consider using `x == y`, or add parentheses to silence"),
+        _ => format!("{prefix}; add parentheses to silence"),
+    }
+}
+
+fn chained_comparison_message(left: &ast::BinOp, right: &ast::BinOp) -> String {
+    let has_equality = is_equality_operator(left) || is_equality_operator(right);
+    let left = comparison_operator_text(left);
+    let right = comparison_operator_text(right);
+    let prefix = format!("`x {left} y {right} z` is equivalent to `(x {left} y) {right} z`");
+
+    if has_equality {
+        format!("{prefix}; add parentheses to silence")
+    } else {
+        format!("{prefix}; did you mean `x {left} y and y {right} z`?")
+    }
 }
 
 fn is_unparenthesized_comparison(expression: &Expression) -> bool {

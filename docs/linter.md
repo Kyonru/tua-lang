@@ -181,6 +181,14 @@ Truthy alternatives such as `true` and `0` remain valid. Parenthesizing the
 left side, as in `(condition and false) or fallback`, records intentional use
 of Lua's fallback behavior and silences this opinionated warning.
 
+`ComparisonPrecedence` reports an unparenthesized `not` on the left side of a
+comparison and comparison chains such as `minimum <= value <= maximum`.
+Equality warnings suggest the inverse operator, while relational chains suggest
+the explicit Lua form `minimum <= value and value <= maximum`. The complete
+expression is highlighted. Comparing two explicitly negated values, such as
+`not left == not right`, remains a valid intentional boolean comparison, and
+parentheses silence the warning when the original grouping is deliberate.
+
 `TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
 strings and signed numeric spellings cannot hide a duplicate. It also reports
 explicit numeric keys that overlap list entries and repeated named fields in

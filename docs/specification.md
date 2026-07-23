@@ -294,6 +294,9 @@ keeps the common Lua `value and value or fallback` idiom permissive.
 Misleading-and-or guidance identifies a literal `false` or `nil` first
 alternative, points at the complete expression, and recommends an ordinary
 `if` statement assignment that remains portable LuaJIT/Lua 5.1 output.
+Comparison-precedence guidance points at the complete expression, distinguishes
+each comparison operator, suggests explicit `and` for relational chains, and
+keeps symmetric negation and parenthesized intent quiet.
 Uninitialized-local guidance tracks each binding's initializer separately,
 allows a final direct call or varargs to supply additional values, and treats a
 compound assignment as a read of the previous value rather than initialization.
