@@ -381,7 +381,7 @@ fn check_enables_standard_lints_by_default() {
 }
 
 #[test]
-fn check_applies_enabled_inline_ignores() {
+fn check_applies_default_inline_ignores() {
     let temp = TempDir::new("check-inline-ignores");
 
     fs::write(
@@ -391,9 +391,6 @@ out = "build"
 target = "love11-luajit"
 extension = "tua"
 emit_maps = true
-
-[diagnostics]
-inline_ignores = true
 "#,
     )
     .expect("failed to write config");

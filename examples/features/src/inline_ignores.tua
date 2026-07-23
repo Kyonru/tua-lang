@@ -1,4 +1,4 @@
--- Feature: inline diagnostic suppression comments are opt-in in tua.toml.
+-- Feature: exact-code diagnostic suppression comments are enabled by default.
 -- They are intended for migration lines where the diagnostic is understood.
 
 local function legacyNumber(): number

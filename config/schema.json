@@ -302,8 +302,8 @@
     {
       "path": "diagnostics.inline_ignores",
       "type": "boolean",
-      "default": false,
-      "description": "Enable inline diagnostic suppression comments.",
+      "default": true,
+      "description": "Enable exact-code diagnostic suppression comments.",
       "editor": "tua.diagnostics.inlineIgnores"
     },
     {
@@ -311,9 +311,10 @@
       "type": "string-array",
       "default": [
         "tua-ignore-line",
-        "tua-ignore-next-line"
+        "tua-ignore-next-line",
+        "tua-ignore-file"
       ],
-      "description": "Allowed inline diagnostic suppression directives.",
+      "description": "Allowed exact-code diagnostic suppression directives.",
       "editor": "tua.diagnostics.inlineIgnoreScopes"
     },
     {

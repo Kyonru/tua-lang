@@ -128,7 +128,7 @@ enforced separately with `tua fmt --check`.
 | `TL4018` | A known LOVE object method uses `.` instead of `:`, so `self` would not be passed. | Always enabled; warning with quick fix. |
 | `TL4019` | More than one project file can satisfy the same module specifier. | `bad_requires` |
 | `TL4020` | The static module graph contains a require/import cycle. | `bad_requires` |
-| `TL4025` | An inline-ignore directive, scope, group, or code is invalid. | `inline_ignores` |
+| `TL4025` | An inline-ignore directive, scope, placement, or exact code is invalid. | `inline_ignores` |
 | `TL4026` | An inline-ignore directive did not suppress any matching diagnostic. | `inline_ignores` |
 | `TL4027` | Assignment target count differs from the explicit value count, excluding multi-value and intentional-`nil` tails. | `assignment_arity` |
 | `TL4028` | Local count differs from the explicit initializer count, excluding multi-value and intentional-`nil` tails. | `local_declaration_arity` |
@@ -197,26 +197,23 @@ VS Code override.
 
 ## Suppress A Diagnostic
 
-Inline suppression is disabled by default. Enable it first:
-
-```toml title="tua.toml"
-[diagnostics]
-inline_ignores = true
-```
-
-Then target one code:
+Inline suppression is enabled by default and always targets exact diagnostic
+codes:
 
 ```tua
+-- tua-ignore-file TL4048
+
 -- tua-ignore-next-line TL1003
 local legacyCount: number = dynamicValue()
 
 player.setFilter("nearest") -- tua-ignore-line TL4018
 ```
 
-Directives can also target category groups such as `TL1000`, `TL2000`,
-`TL3000`, `TL4000`, and `TL5000`, or names such as `syntax`, `type`,
-`lowering`, `config`, `lint`, and `domain`. `TL0000` is the numeric syntax
-group.
+`tua-ignore-file` must be the first nonblank line. Every directive requires at
+least one exact `TLxxxx` code; category names, numeric groups such as `TL4000`,
+and empty directives report `TL4025`. Set `diagnostics.inline_ignores = false`
+to forbid source suppressions, or restrict `inline_ignore_scopes` to selected
+directive forms.
 
 !!! warning "Suppressions only hide diagnostics"
     An inline ignore never changes inference, lowering, emitted Lua, or runtime

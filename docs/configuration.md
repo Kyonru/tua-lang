@@ -79,8 +79,8 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-inline_ignores = false
-inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
+inline_ignores = true
+inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
 globals = []
 ```
@@ -136,8 +136,8 @@ the behavior and tradeoffs of each option.
 | `diagnostics.unused_assignments` | boolean | `false` | `tua.diagnostics.unusedAssignments` |
 | `diagnostics.binary_operator_type_mismatches` | boolean | `false` | `tua.diagnostics.binaryOperatorTypeMismatches` |
 | `diagnostics.uncalled_local_functions` | boolean | `false` | `tua.diagnostics.uncalledLocalFunctions` |
-| `diagnostics.inline_ignores` | boolean | `false` | `tua.diagnostics.inlineIgnores` |
-| `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line"]` | `tua.diagnostics.inlineIgnoreScopes` |
+| `diagnostics.inline_ignores` | boolean | `true` | `tua.diagnostics.inlineIgnores` |
+| `diagnostics.inline_ignore_scopes` | string-array | `["tua-ignore-line","tua-ignore-next-line","tua-ignore-file"]` | `tua.diagnostics.inlineIgnoreScopes` |
 | `diagnostics.inline_ignore_max_per_file` | integer | `0` | `tua.diagnostics.inlineIgnoreMaxPerFile` |
 | `diagnostics.globals` | string-array | `[]` | `tua.diagnostics.globals` |
 <!-- tua-config-schema:end -->
@@ -389,7 +389,7 @@ unused_assignments = true
 binary_operator_type_mismatches = true
 uncalled_local_functions = true
 inline_ignores = true
-inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line"]
+inline_ignore_scopes = ["tua-ignore-line", "tua-ignore-next-line", "tua-ignore-file"]
 inline_ignore_max_per_file = 0
 globals = ["love", "_G"]
 
@@ -491,13 +491,14 @@ called. Indirect callback patterns can stay quiet by leaving this opt-in lint
 disabled.
 
 `inline_ignores`
-: Enables diagnostic suppression comments. This is disabled by default so
-ordinary diagnostics stay visible unless a project explicitly chooses gradual
-migration comments.
+: Enables exact-code diagnostic suppression comments. This is enabled by
+default; set it to `false` when a project wants to forbid source suppressions.
 
 Supported comments are:
 
 ```lua
+-- tua-ignore-file TL4048
+
 -- tua-ignore-next-line TL4018
 player.setFilter("nearest")
 
@@ -506,12 +507,11 @@ local legacy: number = "soon" -- tua-ignore-line TL1003
 
 `tua-ignore-next-line` applies to the immediately following line.
 `tua-ignore-line` applies to diagnostics on the same line. `tua-ignore-file`
-exists for migration-heavy files, but it must be added to
-`inline_ignore_scopes` before it is accepted.
+applies throughout the file and must be its first nonblank line.
 
-Codes may be exact (`TL1003`) or category groups (`TL1000`, `TL4000`, `TL5000`,
-`type`, `lint`, `domain`). If no code is supplied, the comment suppresses all non-syntax
-diagnostics for that target.
+Every directive requires at least one exact code such as `TL1003` or `TL4048`.
+Multiple exact codes may be listed. Empty directives, category names, and broad
+groups such as `TL4000` report `TL4025` instead of hiding unrelated diagnostics.
 
 !!! warning "Suppressions do not change program behavior"
     Invalid codes and unused suppressions produce warnings. A suppression only
@@ -519,7 +519,7 @@ diagnostics for that target.
 
 `inline_ignore_scopes`
 : Lists the suppression directives accepted by this project. The default allows
-only line-targeted suppressions.
+same-line, next-line, and header-only file suppressions.
 
 `inline_ignore_max_per_file`
 : Limits the number of accepted suppression comments per file. `0` means

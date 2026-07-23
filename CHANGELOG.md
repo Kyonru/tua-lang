@@ -71,6 +71,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Exact-code `tua-ignore-line`, `tua-ignore-next-line`, and header-only
+  `tua-ignore-file` suppressions are now enabled by default. Empty directives
+  and broad category suppressions report `TL4025`, while Luau `--!nolint`
+  guidance points to Tua's file form.
 - `MisleadingAndOr` now identifies the exact `false` or `nil` alternative,
   points at the complete expression, and recommends a LuaJIT-safe `if`
   statement assignment instead of Luau-only conditional-expression syntax.
@@ -111,6 +115,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Migration
 
+- Replace empty or category-wide inline ignores with explicit `TLxxxx` codes.
+  Projects that forbid source suppressions can set
+  `[diagnostics].inline_ignores = false`.
 - Replace `TL4008` suppressions or filters with `TL4043`; the
   `duplicate_parameters` setting remains available and now emits `TL4043`.
 - Projects that need the previous lint-free `tua check` and editor behavior can

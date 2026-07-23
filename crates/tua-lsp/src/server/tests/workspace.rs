@@ -1165,7 +1165,7 @@ world:add(entity, Position, { x = 1 })
     assert_eq!(diagnostics.len(), 0);
 }
 #[test]
-fn did_change_configuration_can_enable_inline_ignores() {
+fn did_change_configuration_can_disable_inline_ignores() {
     let temp = TempProject::new("configuration-inline-ignores");
     let source = r#"-- tua-ignore-next-line TL1003
 local value: number = "legacy"
@@ -1179,17 +1179,18 @@ print(value)
 
     server.send(initialize_with_root(1, temp.uri()));
     server.send(did_open(&uri, source));
-    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 1);
+    assert_eq!(last_published_diagnostics(server.output(), &uri).len(), 0);
 
     server.send(did_change_configuration(json!({
         "diagnostics": {
-            "inlineIgnores": true
+            "inlineIgnores": false
         }
     })));
 
     let diagnostics = last_published_diagnostics(server.output(), &uri);
 
-    assert_eq!(diagnostics.len(), 0, "{diagnostics:?}");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0]["code"], "TL1003");
 }
 #[test]
 fn did_change_configuration_null_diagnostics_defer_to_project_config() {

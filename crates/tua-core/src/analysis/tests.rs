@@ -1865,12 +1865,8 @@ local call = world.a
 }
 
 #[test]
-fn pipeline_diagnostics_apply_inline_ignores_from_project_config() {
-    let mut config = ProjectConfig::default();
-
-    config.diagnostics.inline_ignores = true;
-
-    let mut host = AnalysisHost::with_config(config);
+fn pipeline_diagnostics_apply_default_inline_ignores() {
+    let mut host = AnalysisHost::with_config(ProjectConfig::default());
 
     host.set_file(
         "src/main.tua",

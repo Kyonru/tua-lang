@@ -1577,8 +1577,8 @@ fn warns_for_dot_calls_to_every_generated_love_object_method() {
 }
 
 #[test]
-fn inline_ignores_are_disabled_by_default() {
-    let diagnostics = check_tua_source_with_diagnostics_config(
+fn inline_ignores_are_enabled_by_default() {
+    check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
 -- tua-ignore-next-line TL1003
@@ -1586,15 +1586,12 @@ local hp: number = "full"
 "#,
         &diagnostics_without_standard_rules(),
     )
-    .expect_err("disabled inline ignore should not suppress diagnostics");
-
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].code, Some(DiagnosticCode::TYPE_MISMATCH));
+    .expect("default inline ignore should suppress the exact diagnostic code");
 }
 
 #[test]
 fn inline_ignores_suppress_matching_type_diagnostics() {
-    let mut config = crate::DiagnosticsConfig {
+    let config = crate::DiagnosticsConfig {
         inline_ignores: true,
         ..diagnostics_without_standard_rules()
     };
@@ -1609,10 +1606,6 @@ local hp: number = "full"
     )
     .expect("enabled inline ignore should suppress matching diagnostic");
 
-    config
-        .inline_ignore_scopes
-        .push("tua-ignore-file".to_owned());
-
     check_tua_source_with_diagnostics_config(
         "src/main.tua",
         r#"
@@ -1621,7 +1614,46 @@ local hp: number = "full"
 "#,
         &config,
     )
-    .expect("configured file-scope inline ignore should suppress matching diagnostic");
+    .expect("default file-scope inline ignore should suppress matching diagnostic");
+}
+
+#[test]
+fn default_inline_ignores_support_exact_file_and_line_lint_codes() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"-- tua-ignore-file TL4048
+local condition = true
+local fallback = 42
+local result = condition and false or fallback
+local unused = 1
+print(result)
+"#,
+        &DiagnosticsConfig::default(),
+    )
+    .expect_err("an exact file ignore should preserve unrelated lint diagnostics");
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISLEADING_AND_OR))
+            .count(),
+        0,
+        "{diagnostics:#?}"
+    );
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_UNUSED_LOCAL)));
+
+    check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"local condition = true
+local fallback = 42
+local result = condition and false or fallback -- tua-ignore-line TL4048
+print(result)
+"#,
+        &DiagnosticsConfig::default(),
+    )
+    .expect("an exact same-line ignore should suppress its matching lint");
 }
 
 #[test]

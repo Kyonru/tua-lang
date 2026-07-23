@@ -298,12 +298,13 @@ duplicate_keys = true
     assert!(!config.diagnostics.unused_assignments);
     assert!(!config.diagnostics.binary_operator_type_mismatches);
     assert!(!config.diagnostics.uncalled_local_functions);
-    assert!(!config.diagnostics.inline_ignores);
+    assert!(config.diagnostics.inline_ignores);
     assert_eq!(
         config.diagnostics.inline_ignore_scopes,
         vec![
             "tua-ignore-line".to_owned(),
-            "tua-ignore-next-line".to_owned()
+            "tua-ignore-next-line".to_owned(),
+            "tua-ignore-file".to_owned()
         ]
     );
     assert_eq!(config.diagnostics.inline_ignore_max_per_file, 0);

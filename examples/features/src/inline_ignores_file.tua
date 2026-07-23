@@ -1,0 +1,6 @@
+-- tua-ignore-file TL1003
+-- Feature: a file ignore must be first and names the exact diagnostic code.
+
+local legacyValue: number = "legacy module data"
+
+return legacyValue

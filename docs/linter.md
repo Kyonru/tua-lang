@@ -245,7 +245,11 @@ LOVE deprecations from prose in the generated API catalog.
 `DeprecatedGlobal` still depends on a host-provided deprecated-global catalog,
 which Tua does not invent. Likewise, dialect-specific table APIs are ignored on
 Tua's LuaJIT target. Tua does report unsupported `--!` directives so foreign
-configuration comments never silently appear to affect Tua.
+configuration comments never silently appear to affect Tua. In particular,
+Luau's `--!nolint` reports `TL4049` and points to Tua's header-only
+`-- tua-ignore-file TLxxxx` syntax. Same-line and next-line forms use
+`tua-ignore-line` and `tua-ignore-next-line`; every suppression requires an
+exact diagnostic code.
 
 The repository's `examples/linter` fixture contains an intentionally broken
 case for every rule Tua can currently emit in the standard set. Running

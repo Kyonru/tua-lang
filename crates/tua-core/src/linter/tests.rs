@@ -1695,6 +1695,25 @@ return text
 }
 
 #[test]
+fn comment_directive_points_luau_nolint_to_exact_tua_file_suppression() {
+    let diagnostics = check_standard_rules_source(
+        r#"--!nolint MisleadingAndOr
+return true
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_COMMENT_DIRECTIVE))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].message,
+        "Luau comment directive `--!nolint` is not supported by Tua; use `-- tua-ignore-file TLxxxx` as the first nonblank line"
+    );
+}
+
+#[test]
 fn standard_rules_unknown_type_rule_accepts_luajit_cdata() {
     let diagnostics = check_standard_rules_source(
         r#"

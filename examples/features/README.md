@@ -63,8 +63,9 @@ make build-features
   expanded LuaLS/LuaCATS annotation subset: literal unions, optional shorthand,
   arrays, tuples, dictionaries, function types, shallow metadata tags, and
   resolved deprecation metadata.
-- `src/inline_ignores.tua` demonstrates opt-in line-targeted diagnostic
-  suppression comments such as `tua-ignore-next-line` and `tua-ignore-line`.
+- `src/inline_ignores.tua` and `src/inline_ignores_file.tua` demonstrate
+  default exact-code suppression on the same line, next line, or an entire
+  file from its first nonblank line.
 - `src/luahelper_lints.tua` demonstrates opt-in LuaHelper parity diagnostics
   for assignment/local declaration arity, unused assignments, binary operator
   type mismatches, and local functions that are referenced but never directly

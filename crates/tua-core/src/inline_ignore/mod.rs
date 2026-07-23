@@ -2,9 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::profile::{self, DiagnosticsTraceCategory};
-use crate::{
-    Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, DiagnosticsConfig,
-};
+use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, DiagnosticsConfig};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum IgnoreTarget {
@@ -13,18 +11,11 @@ enum IgnoreTarget {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum IgnoreMatcher {
-    All,
-    Code(DiagnosticCode),
-    Category(DiagnosticCategory),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 struct InlineIgnore {
     directive: String,
     line: usize,
     target: IgnoreTarget,
-    matchers: Vec<IgnoreMatcher>,
+    codes: Vec<DiagnosticCode>,
 }
 
 pub(crate) fn apply_inline_ignores(
@@ -47,6 +38,10 @@ pub(crate) fn apply_inline_ignores(
     let (ignores, mut warnings) = parse_inline_ignores(path, source, config, &allowed_scopes);
 
     if ignores.is_empty() {
+        if warnings.is_empty() {
+            return diagnostics;
+        }
+
         warnings.extend(diagnostics);
         return sort_diagnostics(warnings);
     }
@@ -64,12 +59,12 @@ pub(crate) fn apply_inline_ignores(
     }
 
     for (index, ignore) in ignores.iter().enumerate() {
-        for matcher_index in matcher_indices(ignore) {
-            if used.contains_key(&(index, matcher_index)) {
+        for code_index in 0..ignore.codes.len() {
+            if used.contains_key(&(index, code_index)) {
                 continue;
             }
 
-            warnings.push(unused_ignore_diagnostic(path, ignore, matcher_index));
+            warnings.push(unused_ignore_diagnostic(path, ignore, code_index));
         }
     }
 
@@ -85,6 +80,10 @@ fn parse_inline_ignores(
 ) -> (Vec<InlineIgnore>, Vec<Diagnostic>) {
     let mut ignores = Vec::new();
     let mut warnings = Vec::new();
+    let first_content_line = source
+        .lines()
+        .position(|line| !line.trim().is_empty())
+        .map(|index| index + 1);
 
     for (index, line) in source.lines().enumerate() {
         let line_number = index + 1;
@@ -107,6 +106,15 @@ fn parse_inline_ignores(
             continue;
         }
 
+        if directive == "tua-ignore-file" && first_content_line != Some(line_number) {
+            warnings.push(invalid_ignore_diagnostic(
+                path,
+                line_number,
+                "`tua-ignore-file` must be the first nonblank line in the file".to_owned(),
+            ));
+            continue;
+        }
+
         if config.inline_ignore_max_per_file > 0
             && ignores.len() >= config.inline_ignore_max_per_file
         {
@@ -122,6 +130,15 @@ fn parse_inline_ignores(
         }
 
         let tokens = parts.collect::<Vec<_>>();
+        if tokens.is_empty() {
+            warnings.push(invalid_ignore_diagnostic(
+                path,
+                line_number,
+                format!("`{directive}` requires at least one exact diagnostic code"),
+            ));
+            continue;
+        }
+
         if tokens.iter().any(|token| *token == "[]" || *token == "[") {
             warnings.push(invalid_ignore_diagnostic(
                 path,
@@ -131,28 +148,22 @@ fn parse_inline_ignores(
             continue;
         }
 
-        let matchers = if tokens.is_empty() {
-            vec![IgnoreMatcher::All]
-        } else {
-            let mut matchers = Vec::new();
+        let mut codes = Vec::new();
 
-            for token in tokens {
-                match parse_matcher(token) {
-                    Ok(matcher) => matchers.push(matcher),
-                    Err(message) => warnings.push(invalid_ignore_diagnostic(
-                        path,
-                        line_number,
-                        format!("`{directive}` {message}"),
-                    )),
-                }
+        for token in tokens {
+            match parse_code(token) {
+                Ok(code) => codes.push(code),
+                Err(message) => warnings.push(invalid_ignore_diagnostic(
+                    path,
+                    line_number,
+                    format!("`{directive}` {message}"),
+                )),
             }
+        }
 
-            if matchers.is_empty() {
-                continue;
-            }
-
-            matchers
-        };
+        if codes.is_empty() {
+            continue;
+        }
 
         let target = match directive {
             "tua-ignore-line" => IgnoreTarget::Line(line_number),
@@ -165,7 +176,7 @@ fn parse_inline_ignores(
             directive: directive.to_owned(),
             line: line_number,
             target,
-            matchers,
+            codes,
         });
     }
 
@@ -213,27 +224,11 @@ fn line_comment_start(line: &str) -> Option<usize> {
     None
 }
 
-fn parse_matcher(token: &str) -> Result<IgnoreMatcher, String> {
+fn parse_code(token: &str) -> Result<DiagnosticCode, String> {
     let normalized = token.trim_matches(|ch| ch == ',' || ch == '[' || ch == ']');
 
     if normalized.is_empty() {
         return Err("has an empty ignore code".to_owned());
-    }
-
-    match normalized {
-        "syntax" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Syntax)),
-        "type" | "types" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Type)),
-        "lowering" | "emit" | "emission" => {
-            return Ok(IgnoreMatcher::Category(
-                DiagnosticCategory::LoweringEmission,
-            ));
-        }
-        "config" | "project" => {
-            return Ok(IgnoreMatcher::Category(DiagnosticCategory::ProjectConfig));
-        }
-        "lint" | "style" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Lint)),
-        "domain" | "domains" => return Ok(IgnoreMatcher::Category(DiagnosticCategory::Domain)),
-        _ => {}
     }
 
     let Some(number) = normalized
@@ -244,10 +239,6 @@ fn parse_matcher(token: &str) -> Result<IgnoreMatcher, String> {
         return Err(format!("contains unknown diagnostic code `{normalized}`"));
     };
 
-    if let Some(category) = group_category(number) {
-        return Ok(IgnoreMatcher::Category(category));
-    }
-
     let Some(code) = DiagnosticCode::new(number) else {
         return Err(format!("contains unknown diagnostic code `{normalized}`"));
     };
@@ -256,19 +247,7 @@ fn parse_matcher(token: &str) -> Result<IgnoreMatcher, String> {
         return Err(format!("contains unknown diagnostic code `{normalized}`"));
     }
 
-    Ok(IgnoreMatcher::Code(code))
-}
-
-fn group_category(number: u16) -> Option<DiagnosticCategory> {
-    match number {
-        0 => Some(DiagnosticCategory::Syntax),
-        1000 => Some(DiagnosticCategory::Type),
-        2000 => Some(DiagnosticCategory::LoweringEmission),
-        3000 => Some(DiagnosticCategory::ProjectConfig),
-        4000 => Some(DiagnosticCategory::Lint),
-        5000 => Some(DiagnosticCategory::Domain),
-        _ => None,
-    }
+    Ok(code)
 }
 
 fn matching_ignore(ignores: &[InlineIgnore], diagnostic: &Diagnostic) -> Option<(usize, usize)> {
@@ -278,11 +257,11 @@ fn matching_ignore(ignores: &[InlineIgnore], diagnostic: &Diagnostic) -> Option<
         }
 
         ignore
-            .matchers
+            .codes
             .iter()
             .enumerate()
-            .find_map(|(matcher_index, matcher)| {
-                matcher_matches(matcher, diagnostic).then_some((index, matcher_index))
+            .find_map(|(code_index, code)| {
+                (diagnostic.code == Some(*code)).then_some((index, code_index))
             })
     })
 }
@@ -294,44 +273,20 @@ fn target_matches(target: &IgnoreTarget, line: usize) -> bool {
     }
 }
 
-fn matcher_matches(matcher: &IgnoreMatcher, diagnostic: &Diagnostic) -> bool {
-    match matcher {
-        IgnoreMatcher::All => diagnostic
-            .code
-            .is_some_and(|code| code.category() != DiagnosticCategory::Syntax),
-        IgnoreMatcher::Code(code) => diagnostic.code == Some(*code),
-        IgnoreMatcher::Category(category) => diagnostic
-            .code
-            .is_some_and(|code| code.category() == *category),
-    }
-}
-
-fn matcher_indices(ignore: &InlineIgnore) -> Vec<usize> {
-    if ignore.matchers.contains(&IgnoreMatcher::All) {
-        vec![0]
-    } else {
-        (0..ignore.matchers.len()).collect()
-    }
-}
-
 fn invalid_ignore_diagnostic(path: &Path, line: usize, message: String) -> Diagnostic {
     Diagnostic::new(path, line, 1, DiagnosticSeverity::Warning, message)
         .with_code(DiagnosticCode::LINT_INLINE_IGNORE_INVALID)
 }
 
-fn unused_ignore_diagnostic(
-    path: &Path,
-    ignore: &InlineIgnore,
-    matcher_index: usize,
-) -> Diagnostic {
+fn unused_ignore_diagnostic(path: &Path, ignore: &InlineIgnore, code_index: usize) -> Diagnostic {
     let target = match ignore.target {
         IgnoreTarget::Line(line) => format!("line {line}"),
         IgnoreTarget::File => "file".to_owned(),
     };
-    let matcher = ignore
-        .matchers
-        .get(matcher_index)
-        .map(format_matcher)
+    let code = ignore
+        .codes
+        .get(code_index)
+        .map(ToString::to_string)
         .unwrap_or_else(|| "diagnostic".to_owned());
 
     Diagnostic::new(
@@ -340,26 +295,11 @@ fn unused_ignore_diagnostic(
         1,
         DiagnosticSeverity::Warning,
         format!(
-            "`{}` did not suppress matching {matcher} diagnostics on {target}",
+            "`{}` did not suppress matching {code} diagnostics on {target}",
             ignore.directive
         ),
     )
     .with_code(DiagnosticCode::LINT_INLINE_IGNORE_UNUSED)
-}
-
-fn format_matcher(matcher: &IgnoreMatcher) -> String {
-    match matcher {
-        IgnoreMatcher::All => "non-syntax".to_owned(),
-        IgnoreMatcher::Code(code) => code.to_string(),
-        IgnoreMatcher::Category(category) => match category {
-            DiagnosticCategory::Syntax => "syntax".to_owned(),
-            DiagnosticCategory::Type => "type".to_owned(),
-            DiagnosticCategory::LoweringEmission => "lowering/emission".to_owned(),
-            DiagnosticCategory::ProjectConfig => "project config".to_owned(),
-            DiagnosticCategory::Lint => "lint".to_owned(),
-            DiagnosticCategory::Domain => "domain".to_owned(),
-        },
-    }
 }
 
 fn sort_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {

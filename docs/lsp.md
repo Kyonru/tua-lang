@@ -60,16 +60,21 @@ temporarily incomplete. Completion uses the current cursor context with those
 facts, while hover and inlay hints remain useful until valid project analysis
 is available again.
 
-Optional inline suppressions use the same syntax as `tua check`:
+Exact-code inline suppressions use the same syntax as `tua check` and are
+enabled by default:
 
 ```tua
+-- tua-ignore-file TL4048
+
 -- tua-ignore-next-line TL4018
 player.setFilter("nearest")
 
 local legacy: number = "soon" -- tua-ignore-line TL1003
 ```
 
-Enable them with `[diagnostics].inline_ignores` in `tua.toml` or
+The file form must be the first nonblank line. Empty directives and broad
+category suppressions are invalid. Projects can disable source suppressions
+with `[diagnostics].inline_ignores = false` in `tua.toml` or
 `tua.diagnostics.inlineIgnores` in VS Code. Invalid codes and suppressions that
 match no diagnostic still produce warnings. A suppression hides a diagnostic;
 it does not change inference or generated Lua.

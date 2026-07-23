@@ -700,17 +700,18 @@ fn comment_directive_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         if long_bracket_level.is_none() {
             if let Some(directive) = trimmed.strip_prefix("--!") {
                 let directive = directive.split_whitespace().next().unwrap_or("");
+                let message = match directive {
+                    "" => "empty comment directive".to_owned(),
+                    "nolint" => "Luau comment directive `--!nolint` is not supported by Tua; use `-- tua-ignore-file TLxxxx` as the first nonblank line".to_owned(),
+                    _ => format!("comment directive `--!{directive}` is not supported by Tua"),
+                };
                 diagnostics.push(
                     Diagnostic::new(
                         &parsed.path,
                         index + 1,
                         line.len() - trimmed.len() + 1,
                         DiagnosticSeverity::Warning,
-                        if directive.is_empty() {
-                            "empty comment directive".to_owned()
-                        } else {
-                            format!("comment directive `--!{directive}` is not supported by Tua")
-                        },
+                        message,
                     )
                     .with_code(DiagnosticCode::LINT_COMMENT_DIRECTIVE),
                 );

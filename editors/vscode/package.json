@@ -325,7 +325,7 @@
             "null"
           ],
           "default": null,
-          "description": "Enable inline diagnostic suppression comments."
+          "description": "Enable exact-code diagnostic suppression comments."
         },
         "tua.diagnostics.inlineIgnoreScopes": {
           "type": [
@@ -336,7 +336,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Allowed inline diagnostic suppression directives."
+          "description": "Allowed exact-code diagnostic suppression directives."
         },
         "tua.diagnostics.inlineIgnoreMaxPerFile": {
           "type": [

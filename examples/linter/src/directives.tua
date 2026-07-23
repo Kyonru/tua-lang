@@ -1,4 +1,4 @@
 -- CommentDirective (TL4049)
---!unsupported
+--!nolint MisleadingAndOr
 
 return true

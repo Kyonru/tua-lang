@@ -254,8 +254,9 @@ policy gate and does not enable a network-backed provider.
 ## Diagnostics
 
 Diagnostics use stable `TLxxxx` codes grouped by syntax, type, asset/build,
-lint/project, and domain families. Suppression comments can target exact codes
-or documented groups but cannot alter inference, lowering, or runtime behavior.
+lint/project, and domain families. Default-on suppression comments require
+exact codes and can target the same line, next line, or an entire file from its
+first nonblank line; they cannot alter inference, lowering, or runtime behavior.
 The standard lint rules are enabled by default for checking and editor
 diagnostics; projects can disable that set without disabling type checking.
 The unknown-global lint recognizes explicit global assignments and simple

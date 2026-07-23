@@ -72,8 +72,8 @@ local_declaration_arity = false
 unused_assignments = false
 binary_operator_type_mismatches = false
 uncalled_local_functions = false
-inline_ignores = false
-inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\"]
+inline_ignores = true
+inline_ignore_scopes = [\"tua-ignore-line\", \"tua-ignore-next-line\", \"tua-ignore-file\"]
 inline_ignore_max_per_file = 0
 globals = []
 ";
@@ -299,10 +299,11 @@ impl Default for DiagnosticsConfig {
             unused_assignments: false,
             binary_operator_type_mismatches: false,
             uncalled_local_functions: false,
-            inline_ignores: false,
+            inline_ignores: true,
             inline_ignore_scopes: vec![
                 "tua-ignore-line".to_owned(),
                 "tua-ignore-next-line".to_owned(),
+                "tua-ignore-file".to_owned(),
             ],
             inline_ignore_max_per_file: 0,
             globals: Vec::new(),
