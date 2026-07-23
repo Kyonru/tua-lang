@@ -374,6 +374,8 @@ listener or no-op declaration from known payloads.
 shape, `set` validates full replacement state, `update` validates a mutator,
 and `subscribe` receives current and previous state. `watch` derives one
 signature per top-level field so keys and listener value types stay connected.
+Hovering a static watcher key shows the state field type, and definition jumps
+back to that field in the initial store table.
 The helper creates explicit instances rather than an ambient global and lowers
 to the bundled `tuastore.lua` runtime. See [State Stores](stores.md) for module
 sharing, shallow change detection, and LOVE persistence adapters.
@@ -387,6 +389,11 @@ as `onbeforewarn` and `onenteryellow` complete inside `callbacks`, and `is` and
 `tuastatemachine.lua` runtime based on lua-state-machine. See
 [State Machines](state-machines.md) for callbacks, wildcard transitions,
 asynchronous transitions, and dynamic configuration boundaries.
+
+Hover inside nested options, event entries, and callbacks uses the specific
+schema field or callback parameter. Fixed fields navigate to generated built-in
+schemas; generated event methods and callback keys navigate to the source
+event or state string that introduced them.
 
 ### Object Pools
 
@@ -894,8 +901,11 @@ values such as `{ 0.1, 0.5, 0.1 }` and ranges such as
 
 Completion inside the nested configuration suggests sheet, frame, and
 animation fields, inserts their value shapes, and completes common `onLoop`
-method strings. The compiler rejects conflicting selector, timing, and loop
-forms before emitting anim8 calls.
+method strings. Hover uses those same nested schemas, including the `loops`
+callback parameter, and fixed fields navigate to generated schema definitions.
+A runtime access such as `background.animations.green` navigates to the
+`green` entry in the source configuration. The compiler rejects conflicting
+selector, timing, and loop forms before emitting anim8 calls.
 
 ### Vectors
 

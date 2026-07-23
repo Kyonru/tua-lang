@@ -73,6 +73,18 @@ impl AnalysisSnapshot {
             return Some(hover);
         }
 
+        if let Some(hover) = self.project_store_watch_key_hover(parsed, position) {
+            return Some(hover);
+        }
+
+        if let Some(hover) = self.project_derived_helper_hover(parsed, position) {
+            return Some(hover);
+        }
+
+        if let Some(hover) = self.project_expected_table_field_hover(parsed, position) {
+            return Some(hover);
+        }
+
         if let Some(hover) = self.project_contextual_parameter_hover(parsed, position) {
             return Some(hover);
         }

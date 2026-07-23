@@ -14,13 +14,11 @@ use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::source_text::dotted_chain_at_position;
 use crate::types::{
     build_type_environment, format_named_function_pretty, format_type_with_prefix,
-    type_from_tua_type, FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction,
-    TypedFunctionOverload,
+    FunctionParameter, FunctionType, Type, TypeEnvironment, TypedFunction, TypedFunctionOverload,
 };
 use crate::{
     definition_parsed_source, ecs, input, object_pool, parse_tua_source, state_machine, store,
-    Definition, DefinitionKind, Diagnostic, ParameterAnnotation, ParsedSource, SourcePosition,
-    SourceSpan,
+    Definition, DefinitionKind, Diagnostic, ParsedSource, SourcePosition, SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -202,7 +200,7 @@ impl<'a> HoverResolver<'a> {
             return Some(hover(contents, Some(current_part.span)));
         }
 
-        if self.definition_kind_at(position) == Some(DefinitionKind::Parameter) {
+        if self.is_parameter_at_position(position) {
             if let Some(hover) =
                 self.parameter_hover(&current_part.text, position, current_part.span)
             {
@@ -280,21 +278,13 @@ impl<'a> HoverResolver<'a> {
         ))
     }
 
-    fn definition_kind_at(&self, position: SourcePosition) -> Option<DefinitionKind> {
-        definition_parsed_source(self.parsed, position)
-            .ok()
-            .flatten()
-            .map(|definition| definition.kind)
-    }
-
     fn parameter_hover(
         &self,
         name: &str,
         position: SourcePosition,
         hover_span: SourceSpan,
     ) -> Option<Hover> {
-        let parameter = self.parameter_at_position(name, position)?;
-        let base = type_from_tua_type(&parameter.ty);
+        let base = self.semantic.parameter_type_at_position(name, position)?;
         let aliases = self
             .environment
             .aliases()
@@ -317,40 +307,13 @@ impl<'a> HoverResolver<'a> {
         })
     }
 
-    fn parameter_at_position(
-        &self,
-        name: &str,
-        position: SourcePosition,
-    ) -> Option<&'a ParameterAnnotation> {
-        self.parsed
-            .function_annotations
-            .iter()
-            .filter_map(|function| {
-                let function_span = function.span?;
+    fn is_parameter_at_position(&self, position: SourcePosition) -> bool {
+        let scope = crate::scope_map_parsed_source(self.parsed);
 
-                if !span_contains(function_span, position) {
-                    return None;
-                }
-
-                let parameter = function
-                    .parameters
-                    .iter()
-                    .find(|parameter| parameter.name == name)?;
-                let parameter_span = parameter.name_span.or(parameter.span)?;
-
-                starts_before_or_at(parameter_span, position).then_some((
-                    function_span,
-                    parameter_span,
-                    parameter,
-                ))
-            })
-            .max_by_key(|(function_span, parameter_span, _)| {
-                (
-                    position_key(function_span.start),
-                    position_key(parameter_span.start),
-                )
-            })
-            .map(|(_, _, parameter)| parameter)
+        scope
+            .symbol_at_position(position)
+            .and_then(|symbol| scope.declaration(symbol))
+            .is_some_and(|declaration| declaration.kind == crate::ScopeDeclarationKind::Parameter)
     }
 
     fn unannotated_local_hover(
@@ -874,19 +837,6 @@ fn input_local_hover(
         documentation,
         context: Vec::new(),
     })
-}
-
-fn starts_before_or_at(span: SourceSpan, position: SourcePosition) -> bool {
-    position_key(span.start) <= position_key(position)
-}
-
-fn span_contains(span: SourceSpan, position: SourcePosition) -> bool {
-    position_key(span.start) <= position_key(position)
-        && position_key(position) <= position_key(span.end)
-}
-
-fn position_key(position: SourcePosition) -> (usize, usize) {
-    (position.line, position.column)
 }
 
 #[cfg(test)]

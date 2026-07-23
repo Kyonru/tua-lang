@@ -334,7 +334,13 @@ fn sprite_sheet_config_type() -> Type {
             "frame",
             TableField::required(Type::alias(FRAME_CONFIG_TYPE_NAME)),
         ),
-        ("animations", TableField::required(Type::Any)),
+        (
+            "animations",
+            TableField::required(Type::dictionary(
+                Type::string(),
+                Type::alias(ANIMATION_CONFIG_TYPE_NAME),
+            )),
+        ),
     ])
 }
 
@@ -360,7 +366,21 @@ fn sprite_animation_config_type() -> Type {
         ),
         ("fps", TableField::optional(Type::number())),
         ("durations", TableField::optional(Type::Any)),
-        ("onLoop", TableField::optional(Type::Any)),
+        (
+            "onLoop",
+            TableField::optional(Type::union([
+                Type::string(),
+                Type::Function(FunctionType::new_signature(
+                    [
+                        crate::FunctionParameter::named("animation", Type::Any),
+                        crate::FunctionParameter::named("loops", Type::number()),
+                    ],
+                    2,
+                    None,
+                    [Type::nil()],
+                )),
+            ])),
+        ),
         ("loop", TableField::optional(Type::boolean())),
     ])
 }

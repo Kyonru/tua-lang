@@ -780,6 +780,217 @@ local typed: Pl<|complete|> = nil
 }
 
 #[test]
+fn nested_builtin_configuration_fields_hover_and_navigate_to_virtual_schemas() {
+    let fixture = Fixture::parse(
+        r#"local Player = spriteSheet({
+  <|sprite_image|>image = "assets/player.png",
+  frame = { <|frame_width|>width = 128, height = 128 },
+  animations = {
+    green = {
+      from = 0,
+      to = 3,
+      <|animation_row|>row = 2,
+      fps = 8,
+      onLoop = function(animation, loops)
+        if <|sprite_loops|>loops > 1 then
+          animation:pause()
+        end
+      end,
+    },
+  },
+})
+
+local light = stateMachine({
+  <|machine_initial|>initial = "green",
+  events = {
+    { <|event_name|>name = "warn", from = "green", to = "yellow" },
+  },
+})
+
+type Bullet = { active: boolean }
+local bullets = objectPool({
+  <|pool_create|>create = function(): any
+    return {}
+  end,
+  reset = function(bullet: Bullet)
+    <|pool_bullet|>bullet.active = false
+  end,
+  <|pool_initial|>initial = 64,
+})
+
+type CustomFrame = {
+  <|custom_width_definition|>width: number,
+  height: number,
+  left?: number,
+  top?: number,
+  border?: number,
+}
+local customFrame: CustomFrame = {
+  <|custom_width_reference|>width = 32,
+  height = 32,
+}
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    for (marker, field, ty, builtin) in [
+        ("sprite_image", "image", "string", "SpriteSheetConfig.image"),
+        ("frame_width", "width", "number", "SpriteFrameConfig.width"),
+        (
+            "animation_row",
+            "row",
+            "number",
+            "SpriteAnimationConfig.row",
+        ),
+        (
+            "machine_initial",
+            "initial",
+            "string",
+            "StateMachineOptions.initial",
+        ),
+        ("event_name", "name", "string", "StateMachineEvent.name"),
+        (
+            "pool_create",
+            "create",
+            "() -> any",
+            "ObjectPoolOptions.create",
+        ),
+        (
+            "pool_initial",
+            "initial",
+            "number",
+            "ObjectPoolOptions.initial",
+        ),
+    ] {
+        let hover = snapshot
+            .hover(&path, fixture.position(marker))
+            .unwrap_or_else(|| panic!("{field} should have contextual field hover"));
+        assert!(
+            hover.contents.contains(field) && hover.contents.contains(ty),
+            "unexpected {field} hover: {}",
+            hover.contents
+        );
+
+        let definition = snapshot
+            .definition(&path, fixture.position(marker))
+            .unwrap_or_else(|| panic!("{field} should navigate to its builtin schema"));
+        let uri = definition.path.to_string_lossy();
+        assert_eq!(uri, format!("tua:/builtins/{builtin}.tua"));
+        let document = crate::builtin_definition_document(&uri)
+            .unwrap_or_else(|| panic!("{builtin} should have a virtual document"));
+        assert_eq!(text_at_span(&document, definition.span), field);
+    }
+
+    let loops = snapshot
+        .hover(&path, fixture.position("sprite_loops"))
+        .expect("sprite callback parameters should be contextually typed");
+    assert_eq!(loops.contents, "local loops: number");
+
+    let bullet = snapshot
+        .hover(&path, fixture.position("pool_bullet"))
+        .expect("object-pool callback annotations should remain visible");
+    assert_eq!(bullet.contents, "parameter bullet: Bullet");
+
+    let custom_definition = snapshot.definition(&path, fixture.position("custom_width_reference"));
+    assert!(
+        custom_definition
+            .as_ref()
+            .is_none_or(|definition| definition.path == path),
+        "a structurally similar user type must not borrow a builtin schema identity: \
+         {custom_definition:?}"
+    );
+}
+
+#[test]
+fn helper_derived_names_and_nested_callback_expressions_keep_source_identity() {
+    let fixture = Fixture::parse(
+        r#"type GameState = { score: number }
+local game = store({ <|score_definition|>score = 0 })
+game:watch(
+  <|score_reference|>"score",
+  function(score: number, previous: number, state: GameState)
+    print("score", previous, <|score_parameter|>score, state.score)
+  end
+)
+
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    <|green_definition|>green = { from = 0, to = 3, row = 2, fps = 8 },
+  },
+})
+local green = Player.animations.<|green_reference|>green
+
+local light = stateMachine({
+  initial = "green",
+  events = {
+    { name = <|warn_definition|>"warn", from = "green", to = <|red_definition|>"red" },
+  },
+  callbacks = {
+    <|callback_reference|>onenterred = function(
+      self: StateMachine,
+      event: "warn",
+      from: "green" | "red",
+      to: "green" | "red"
+    )
+      print(<|event_parameter|>event, from, to, self.current)
+    end,
+  },
+})
+light:<|warn_reference|>warn()
+"#,
+    );
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, fixture.source("src/main.tua"));
+    let snapshot = host.snapshot();
+
+    let score_hover = snapshot
+        .hover(&path, fixture.position("score_reference"))
+        .expect("watch key should have derived field hover");
+    assert_eq!(score_hover.contents, "(field) score: number");
+
+    let parameter_hover = snapshot
+        .hover(&path, fixture.position("score_parameter"))
+        .expect("nested callback parameter should have parameter hover");
+    assert_eq!(parameter_hover.contents, "parameter score: number");
+
+    let callback_hover = snapshot
+        .hover(&path, fixture.position("callback_reference"))
+        .expect("derived callback key should have an exact function hover");
+    assert!(
+        callback_hover.contents.contains("event: \"warn\"")
+            && callback_hover.contents.contains("\"green\" | \"red\""),
+        "{}",
+        callback_hover.contents
+    );
+
+    let event_hover = snapshot
+        .hover(&path, fixture.position("event_parameter"))
+        .expect("nested state-machine callback parameter should hover");
+    assert_eq!(event_hover.contents, "parameter event: \"warn\"");
+
+    for (reference, definition) in [
+        ("score_reference", "score_definition"),
+        ("green_reference", "green_definition"),
+        ("warn_reference", "warn_definition"),
+        ("callback_reference", "red_definition"),
+    ] {
+        let target = snapshot
+            .definition(&path, fixture.position(reference))
+            .unwrap_or_else(|| panic!("{reference} should retain a source definition"));
+        assert_eq!(target.path, path);
+        assert_eq!(target.span.start, fixture.position(definition));
+    }
+}
+
+#[test]
 fn snapshot_reuses_cached_project_artifacts_until_revision_changes() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
@@ -4320,6 +4531,22 @@ fn source_text(fixture: &Fixture, definition: &Definition) -> String {
         .saturating_sub(definition.span.start.column);
 
     line.chars().skip(start).take(len).collect()
+}
+
+fn text_at_span(source: &str, span: SourceSpan) -> String {
+    assert_eq!(
+        span.start.line, span.end.line,
+        "test helper expects one-line spans"
+    );
+    let line = source
+        .lines()
+        .nth(span.start.line.saturating_sub(1))
+        .expect("span line should exist");
+
+    line.chars()
+        .skip(span.start.column.saturating_sub(1))
+        .take(span.end.column.saturating_sub(span.start.column))
+        .collect()
 }
 
 fn png_header(width: u32, height: u32) -> Vec<u8> {

@@ -379,6 +379,61 @@ player:setFilter()
     assert!(document.contains("function Image:setFilter"));
     assert_eq!(range_text(document, &method["range"]), "setFilter");
 }
+
+#[test]
+fn helper_configuration_hover_and_definition_share_semantic_schema_targets() {
+    let uri = "file:///tmp/helper-navigation.tua";
+    let source = r#"local game = store({ score = 0 })
+game:watch("score", function(score: number)
+  print(score)
+end)
+
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = {
+      from = 0,
+      to = 3,
+      fps = 8,
+      onLoop = function(animation, loops)
+        print(loops)
+      end,
+    },
+  },
+})
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+    server.send(hover_request(2, uri, source, "image ="));
+    server.send(hover_request(3, uri, source, "width ="));
+    server.send(hover_request(4, uri, source, "loops)\n      end"));
+    server.send(hover_request(5, uri, source, "\"score\", function"));
+    server.send(definition_request(6, uri, source, "image =", 0));
+    server.send(definition_request(7, uri, source, "\"score\", function", 0));
+    server.send(builtin_document_request(
+        8,
+        "tua:/builtins/SpriteSheetConfig.image.tua",
+    ));
+
+    assert_hover_contains(server.output(), 2, "(field) image: string");
+    assert_hover_contains(server.output(), 3, "(field) width: number");
+    assert_hover_contains(server.output(), 4, "local loops: number");
+    assert_hover_contains(server.output(), 5, "(field) score: number");
+    assert_eq!(
+        response_with_id(server.output(), 6)["result"]["uri"],
+        "tua:/builtins/SpriteSheetConfig.image.tua"
+    );
+    assert_definition_text(server.output(), 7, uri, source, "score");
+
+    let document = response_with_id(server.output(), 8)["result"]
+        .as_str()
+        .expect("builtin schema document should be returned");
+    assert!(document.contains("type SpriteSheetConfig"));
+    assert!(document.contains("image: string"));
+}
+
 #[test]
 fn definition_recovers_when_an_unrelated_line_is_incomplete() {
     let uri = "file:///tmp/recovered-definition.tua";

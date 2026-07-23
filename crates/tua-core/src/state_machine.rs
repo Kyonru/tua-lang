@@ -135,6 +135,63 @@ pub(crate) fn machine_type_from_call(call: &FunctionCall) -> Option<Type> {
     Some(machine_type(&spec))
 }
 
+pub(crate) fn derived_member_definition_span(
+    call: &FunctionCall,
+    member: &str,
+) -> Option<SourceSpan> {
+    let declaration = declaration_from_call(call)?;
+    let (context, name) = derived_member_source(&declaration.spec, member)?;
+
+    declaration
+        .string_values
+        .into_iter()
+        .find_map(|(span, candidate_context, candidate)| {
+            (candidate_context == context && candidate == name).then_some(span)
+        })
+}
+
+pub(crate) fn derived_member_type(call: &FunctionCall, member: &str) -> Option<Type> {
+    let spec = spec_from_call(call)?;
+    let Type::Table(table) = machine_type(&spec) else {
+        return None;
+    };
+
+    table.semantic_field(member).map(|field| field.ty.clone())
+}
+
+fn derived_member_source(
+    spec: &StateMachineSpec,
+    member: &str,
+) -> Option<(StringValueContext, String)> {
+    if spec.events.iter().any(|event| event == member) {
+        return Some((StringValueContext::Event, member.to_owned()));
+    }
+
+    for prefix in ["onbefore", "onafter"] {
+        if let Some(event) = member.strip_prefix(prefix) {
+            if spec.events.iter().any(|candidate| candidate == event) {
+                return Some((StringValueContext::Event, event.to_owned()));
+            }
+        }
+    }
+    for prefix in ["onleave", "onenter"] {
+        if let Some(state) = member.strip_prefix(prefix) {
+            if spec.states.iter().any(|candidate| candidate == state) {
+                return Some((StringValueContext::State, state.to_owned()));
+            }
+        }
+    }
+    let name = member.strip_prefix("on")?;
+    if spec.events.iter().any(|candidate| candidate == name) {
+        return Some((StringValueContext::Event, name.to_owned()));
+    }
+    if spec.states.iter().any(|candidate| candidate == name) {
+        return Some((StringValueContext::State, name.to_owned()));
+    }
+
+    None
+}
+
 pub(crate) fn type_is_state_machine(environment: &TypeEnvironment, candidate: &Type) -> bool {
     machine_table(environment, candidate, 0).is_some()
 }

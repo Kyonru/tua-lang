@@ -728,6 +728,12 @@ impl AnalysisHost {
             return None;
         }
 
+        if builtin_constructor_call_contains_position(parsed, position)
+            || store_watch_key_reference_at_position(parsed, position).is_some()
+        {
+            return None;
+        }
+
         if let Some(asset) = asset::asset_at_position(&file.assets, position) {
             return Some(Hover {
                 contents: asset.hover_markdown(),

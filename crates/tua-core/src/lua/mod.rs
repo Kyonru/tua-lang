@@ -1,6 +1,6 @@
 use crate::{
     asset, input, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
-    state_machine, store, vector,
+    state_machine, store, vector, Type,
 };
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
@@ -243,6 +243,23 @@ pub(crate) fn builtin_definition_for_item(item: LuaItem) -> Option<BuiltinDefini
     })
 }
 
+pub(crate) fn builtin_type_field_definition(
+    type_name: &str,
+    field_name: &str,
+) -> Option<BuiltinDefinition> {
+    let source = builtin_type_field_definition_source(type_name, field_name)?;
+    let field_declaration = format!("  {field_name}");
+    let mut span = span_for_label(&source, &field_declaration)?;
+    span.start.column += 2;
+
+    Some(BuiltinDefinition {
+        path: std::path::PathBuf::from(format!(
+            "{BUILTIN_DEFINITION_URI_PREFIX}{type_name}.{field_name}.tua"
+        )),
+        span,
+    })
+}
+
 pub fn builtin_definition_document(uri: &str) -> Option<String> {
     let id = uri.strip_prefix(BUILTIN_DEFINITION_URI_PREFIX)?;
     let id = id.strip_suffix(".tua").unwrap_or(id);
@@ -251,6 +268,11 @@ pub fn builtin_definition_document(uri: &str) -> Option<String> {
         .into_iter()
         .find(|item| builtin_definition_id(*item) == id)
         .map(builtin_definition_source_for_item)
+        .or_else(|| {
+            let (type_name, field_name) = id.split_once('.')?;
+
+            builtin_type_field_definition_source(type_name, field_name)
+        })
         .or_else(|| love_api::builtin_definition_document(id))
 }
 
@@ -361,6 +383,29 @@ pub(crate) fn builtin_definition_source_for_item(item: LuaItem) -> String {
         "-- Tua builtin stub\n-- This virtual document is generated from Tua's builtin Lua/LOVE catalog.\n\n--- {}\n{}\n",
         item.documentation, declaration
     )
+}
+
+fn builtin_type_field_definition_source(type_name: &str, field_name: &str) -> Option<String> {
+    let field = crate::semantic_domains::BuiltinDomainRegistry::standard()
+        .builtin_aliases()
+        .into_iter()
+        .find_map(|(name, ty)| {
+            if name != type_name {
+                return None;
+            }
+            let Type::Table(table) = ty else {
+                return None;
+            };
+
+            table.field(field_name).cloned()
+        })?;
+    let optional = if field.optional { "?" } else { "" };
+
+    Some(format!(
+        "-- Tua builtin schema\n-- This virtual document is generated from Tua's builtin domain types.\n\n\
+type {type_name} = {{\n  {field_name}{optional}: {},\n}}\n",
+        field.ty
+    ))
 }
 
 fn span_for_label(source: &str, label: &str) -> Option<crate::SourceSpan> {

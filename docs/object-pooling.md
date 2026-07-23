@@ -157,6 +157,9 @@ The language server keeps object-pool facts in the shared semantic snapshot:
 
 - completion, hover, signature help, inlay hints, definition, and semantic
   highlighting understand `objectPool` and its lifecycle methods;
+- nested option fields and callback parameters have precise hover, and
+  definition on fixed fields such as `create` or `initial` opens the generated
+  `ObjectPoolOptions` schema;
 - a quick fix can wrap repeated zero-argument constructor calls such as
   `Bullet.new()` in a new `objectPool({...})` declaration and rewrite the
   selected call to `bulletPool:acquire()`;

@@ -117,6 +117,20 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         degraded_facts: Option<&DegradedSemanticFacts>,
     ) -> Option<Definition> {
+        if let Some(definition) = self.project_store_watch_key_definition(parsed, position) {
+            return Some(definition);
+        }
+
+        if let Some(definition) = self.project_expected_table_field_definition(parsed, position) {
+            return Some(definition);
+        }
+
+        if let Some(definition) =
+            self.project_derived_helper_definition_at_position(parsed, position)
+        {
+            return Some(definition);
+        }
+
         if let Some(definition) =
             self.project_class_member_definition_at_position(parsed, position, degraded_facts)
         {
@@ -183,6 +197,93 @@ impl AnalysisSnapshot {
         let receiver_type = self.type_for_parts(parsed, &environment, &receiver, position)?;
 
         self.class_member_definition_for_type(&parsed.path, &receiver_type, member, 0)
+    }
+
+    pub(super) fn project_derived_helper_definition_at_position(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        let current = chain.parts.get(chain.cursor_index)?;
+
+        if chain.cursor_index == 0 {
+            let mut syntax = ExpectedTableSyntaxCollector::default();
+            syntax.visit_ast(&parsed.ast);
+
+            if let Some(span) = syntax.calls.into_iter().find_map(|call| {
+                let call_span = node_span(&call)?;
+                if !span_contains_position(call_span, position)
+                    || field_chain_before_first_call(&call)?.as_slice()
+                        != [crate::state_machine::CONSTRUCTOR_NAME]
+                {
+                    return None;
+                }
+
+                crate::state_machine::derived_member_definition_span(&call, &current.text)
+            }) {
+                return Some(Definition {
+                    path: parsed.path.clone(),
+                    span,
+                    kind: DefinitionKind::TableField,
+                });
+            }
+        }
+
+        if chain.cursor_index == 2
+            && !chain.parts.is_empty()
+            && chain
+                .parts
+                .get(1)
+                .is_some_and(|part| part.text == "animations")
+        {
+            let receiver = &chain.parts[0].text;
+            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+            let initializer_span = SemanticModel::new(parsed, &environment)
+                .local_initializer_inference(receiver, position)?
+                .expression_span?;
+            if let Some(animation) = parsed
+                .sprite_declarations
+                .iter()
+                .find(|declaration| {
+                    declaration.name == *receiver
+                        && span_contains_span(declaration.span, initializer_span)
+                })
+                .and_then(|declaration| {
+                    declaration
+                        .animations
+                        .iter()
+                        .find(|animation| animation.name == current.text)
+                })
+            {
+                return Some(Definition {
+                    path: parsed.path.clone(),
+                    span: animation.name_span,
+                    kind: DefinitionKind::TableField,
+                });
+            }
+        }
+
+        if chain.cursor_index == 1 {
+            let receiver = &chain.parts[0].text;
+            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+            let call = helper_constructor_call_for_local(
+                parsed,
+                &environment,
+                receiver,
+                position,
+                crate::state_machine::CONSTRUCTOR_NAME,
+            )?;
+            let span = crate::state_machine::derived_member_definition_span(&call, &current.text)?;
+
+            return Some(Definition {
+                path: parsed.path.clone(),
+                span,
+                kind: DefinitionKind::TableField,
+            });
+        }
+
+        None
     }
 
     pub(super) fn class_member_definition_for_type(

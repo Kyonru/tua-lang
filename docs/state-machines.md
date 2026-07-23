@@ -73,6 +73,12 @@ configured state or event names.
     as `onenterred` or `onbeforewarn`. The inserted function annotates `self`,
     `event`, `from`, and `to` with the machine's exact unions.
 
+Hover inside nested options, events, and callbacks shows the specific field or
+parameter type. Definition on fixed fields such as `initial` and `name` opens a
+generated built-in schema. Definition on an event method such as `light:warn()`
+or a callback key such as `onenterred` returns to the source event or state
+string from which Tua derived it.
+
 ## Configure Events
 
 Each event entry has three fields:

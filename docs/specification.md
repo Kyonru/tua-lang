@@ -181,7 +181,10 @@ An expected table type also drives constructor completion. Known union members
 contribute fields and string-literal values; existing literal fields narrow
 discriminated unions; array, dictionary, tuple, and named-field steps propagate
 the expectation into nested constructors; and expected function fields provide
-callback parameter types.
+callback parameter types. Hover uses the same nested expected-type walk.
+Definition on a fixed built-in helper field opens its generated virtual schema,
+while statically derived names retain a source identity at the entry that
+declared them.
 
 ## LOVE Semantics
 

@@ -123,6 +123,9 @@ fetching packages from the editor. See
 Hover reports inferred or declared types, documentation, module context, asset
 metadata, and LOVE documentation. Short types stay inline, while complex tables,
 unions, callbacks, tuples, and dictionaries use width-aware multiline formatting.
+Nested fields and callback parameters inside built-in helper configurations such
+as `spriteSheet({...})`, `stateMachine({...})`, and `objectPool({...})` use their
+expected schema instead of collapsing to the enclosing call's result type.
 Signature help appears after `(` and `,`, re-evaluates at `)`, and supports
 overloads, optional parameters, typed varargs, multiple returns, callback aliases,
 and parameter documentation.
@@ -158,6 +161,12 @@ Cross-file navigation uses the project module graph for `.tua` and indexed
 LOVE builtins, and static asset strings navigate to their source or generated
 stub. Dynamic dispatch through `any`, runtime-built tables, or unresolved
 modules returns no speculative location.
+
+Built-in helper configuration fields navigate to generated virtual schema
+documents. Names derived from static source retain their source identity:
+`store` watcher keys navigate to the initial state field, sprite animation
+members navigate to the named animation entry, and state-machine event methods
+and callback keys navigate to the event or state string that created them.
 
 Native class names, fields, and methods support definition, references, prepare
 rename, and project-wide rename. The same identity follows locally inferred

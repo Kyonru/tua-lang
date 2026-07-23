@@ -74,6 +74,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Hover now resolves nested built-in helper fields and callback parameters.
+  Definition opens virtual schemas for fixed configuration fields and follows
+  source-derived store keys, sprite animation names, state-machine events, and
+  callback names back to their originating entries.
 - Class names, fields, and methods now support source-accurate definition,
   references, and project-wide rename, including nominal instances exported
   through static modules. Resolved named table-shape fields are also renameable.

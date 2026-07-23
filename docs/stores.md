@@ -80,7 +80,9 @@ end)
 
 Completion after `game:get().` offers `score` and `paused`. Signature help for
 `watch` derives one overload per field, so the key and callback value type stay
-connected. The returned unsubscribe function is idempotent.
+connected. Hovering `"score"` shows its state-field type, and definition on the
+key returns to `score` in the initial table. The returned unsubscribe function
+is idempotent.
 
 !!! warning "Updates are shallow"
     `update` takes a shallow snapshot before running the mutator. Whole-store

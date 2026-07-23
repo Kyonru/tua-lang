@@ -883,16 +883,9 @@ impl AnalysisSnapshot {
             let Some(prefix) = string_literal_prefix_before(source, position) else {
                 return Vec::new();
             };
-            let Some(field_ty) =
-                self.field_type_for_type(&expected.origin_path, &expected.ty, &field)
-            else {
+            let Some(field_ty) = self.expected_table_field_type(parsed, &expected, &field) else {
                 return Vec::new();
             };
-            let field_ty = self.type_database.resolve_type(
-                &self.module_graph,
-                &expected.origin_path,
-                &field_ty,
-            );
             let mut values = BTreeSet::new();
 
             collect_string_literal_values(&field_ty, &mut values);
@@ -949,6 +942,14 @@ impl AnalysisSnapshot {
         parsed: &ParsedSource,
         position: SourcePosition,
     ) -> Option<Hover> {
+        let scope = scope_map_parsed_source(parsed);
+        let resolves_to_parameter = scope
+            .symbol_at_position(position)
+            .and_then(|symbol| scope.declaration(symbol))
+            .is_some_and(|declaration| declaration.kind == ScopeDeclarationKind::Parameter);
+        if !resolves_to_parameter {
+            return None;
+        }
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
         if chain.cursor_index != 0 || chain.parts.len() != 1 {
@@ -956,13 +957,173 @@ impl AnalysisSnapshot {
         }
 
         let part = chain.parts.first()?;
-        let (ty, _) = self.contextual_callback_parameter_type(parsed, &part.text, position)?;
+        let (contextual_ty, _) =
+            self.contextual_callback_parameter_type(parsed, &part.text, position)?;
+        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+        let declared_ty = SemanticModel::new(parsed, &environment)
+            .parameter_type_at_position(&part.text, position);
+        let (prefix, ty) = match declared_ty {
+            Some(ty) if ty != Type::Any => ("parameter", ty),
+            _ => ("local", contextual_ty),
+        };
 
         Some(Hover {
-            contents: format_type_with_prefix(format!("local {}: ", part.text), &ty),
+            contents: format_type_with_prefix(format!("{prefix} {}: ", part.text), &ty),
             span: Some(part.span),
             documentation: None,
             context: vec!["context: expected callback type".to_owned()],
+        })
+    }
+
+    pub(super) fn project_expected_table_field_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let expected = self.expected_table_type(parsed, position)?;
+        let (field, span) = table_field_at_position(&expected.table, position)?;
+        let table_field =
+            self.expected_field_for_type(parsed, &expected.origin_path, &expected.ty, &field)?;
+        let ty = self.resolve_expected_type(parsed, &expected.origin_path, &table_field.ty);
+        let optional = if table_field.optional { "?" } else { "" };
+
+        Some(Hover {
+            contents: format_type_with_prefix(format!("(field) {field}{optional}: "), &ty),
+            span: Some(span),
+            documentation: None,
+            context: expected
+                .builtin_type_name
+                .map(|name| format!("context: {name}"))
+                .into_iter()
+                .collect(),
+        })
+    }
+
+    pub(super) fn project_store_watch_key_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let reference = store_watch_key_reference_at_position(parsed, position)?;
+        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+        let semantic = SemanticModel::new(parsed, &environment);
+        let receiver_type = semantic.type_of_name(&reference.receiver, position)?;
+        let state_type = crate::store::store_state_type(&environment, &receiver_type)?;
+        let state_type = resolve_aliases(&environment, &state_type, 0);
+        let Type::Table(table) = state_type else {
+            return None;
+        };
+        let field = table.semantic_field(&reference.key)?;
+        let ty = if field.optional {
+            Type::union([field.ty.clone(), Type::nil()])
+        } else {
+            field.ty.clone()
+        };
+
+        Some(Hover {
+            contents: format_type_with_prefix(format!("(field) {}: ", reference.key), &ty),
+            span: Some(reference.span),
+            documentation: Some(format!(
+                "Keyed watcher for the `{}` store state field.",
+                reference.key
+            )),
+            context: vec!["context: Store:watch key".to_owned()],
+        })
+    }
+
+    pub(super) fn project_derived_helper_hover(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Hover> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+        if chain.cursor_index != 0 {
+            return None;
+        }
+        let part = chain.parts.first()?;
+
+        if let Some(animation) = parsed
+            .sprite_declarations
+            .iter()
+            .flat_map(|declaration| &declaration.animations)
+            .find(|animation| {
+                animation.name == part.text && span_contains_position(animation.name_span, position)
+            })
+        {
+            return Some(Hover {
+                contents: format!(
+                    "(animation) {}: {}",
+                    animation.name,
+                    crate::sprite::ANIMATION_CONFIG_TYPE_NAME
+                ),
+                span: Some(animation.name_span),
+                documentation: Some("Named sprite-sheet animation configuration.".to_owned()),
+                context: vec!["context: spriteSheet animation".to_owned()],
+            });
+        }
+
+        let mut syntax = ExpectedTableSyntaxCollector::default();
+        syntax.visit_ast(&parsed.ast);
+
+        syntax.calls.into_iter().find_map(|call| {
+            let call_span = node_span(&call)?;
+            if !span_contains_position(call_span, position)
+                || field_chain_before_first_call(&call)?.as_slice()
+                    != [crate::state_machine::CONSTRUCTOR_NAME]
+            {
+                return None;
+            }
+            let ty = crate::state_machine::derived_member_type(&call, &part.text)?;
+
+            Some(Hover {
+                contents: format_type_with_prefix(format!("(field) {}: ", part.text), &ty),
+                span: Some(part.span),
+                documentation: Some(
+                    "Callback derived from this state machine's configured events and states."
+                        .to_owned(),
+                ),
+                context: vec!["context: stateMachine callback".to_owned()],
+            })
+        })
+    }
+
+    pub(super) fn project_store_watch_key_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let reference = store_watch_key_reference_at_position(parsed, position)?;
+        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+        let call = helper_constructor_call_for_local(
+            parsed,
+            &environment,
+            &reference.receiver,
+            position,
+            crate::store::CONSTRUCTOR_NAME,
+        )?;
+        let span = store_state_field_span(&call, &reference.key)?;
+
+        Some(Definition {
+            path: parsed.path.clone(),
+            span,
+            kind: DefinitionKind::TableField,
+        })
+    }
+
+    pub(super) fn project_expected_table_field_definition(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+    ) -> Option<Definition> {
+        let expected = self.expected_table_type(parsed, position)?;
+        let (field, _) = table_field_at_position(&expected.table, position)?;
+        let type_name = expected.builtin_type_name?;
+        let definition = crate::lua::builtin_type_field_definition(&type_name, &field)?;
+
+        Some(Definition {
+            path: definition.path,
+            span: definition.span,
+            kind: DefinitionKind::Builtin,
         })
     }
 
@@ -1040,10 +1201,9 @@ impl AnalysisSnapshot {
                     ast::Parameter::Name(_) | ast::Parameter::Ellipsis(_) => None,
                     _ => None,
                 })?;
-        let field_ty = self.field_type_for_type(&expected.origin_path, &expected.ty, &field)?;
-        let field_ty =
-            self.type_database
-                .resolve_type(&self.module_graph, &expected.origin_path, &field_ty);
+        let field_ty = self
+            .state_machine_callback_type_at_position(parsed, position, &field)
+            .or_else(|| self.expected_table_field_type(parsed, &expected, &field))?;
         let mut parameter_types = Vec::new();
 
         collect_function_parameter_types(&field_ty, parameter_index, &mut parameter_types);
@@ -1055,10 +1215,40 @@ impl AnalysisSnapshot {
         };
 
         Some((
-            self.type_database
-                .resolve_type(&self.module_graph, &expected.origin_path, &ty),
+            self.resolve_expected_type(parsed, &expected.origin_path, &ty),
             expected.origin_path,
         ))
+    }
+
+    fn state_machine_callback_type_at_position(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+        field: &str,
+    ) -> Option<Type> {
+        let (environment, _) = build_type_environment_with_diagnostics(parsed);
+        if environment
+            .local(crate::state_machine::CONSTRUCTOR_NAME)
+            .is_some()
+            || environment
+                .function(crate::state_machine::CONSTRUCTOR_NAME)
+                .is_some()
+        {
+            return None;
+        }
+        let mut syntax = ExpectedTableSyntaxCollector::default();
+        syntax.visit_ast(&parsed.ast);
+
+        syntax.calls.into_iter().find_map(|call| {
+            node_span(&call)
+                .is_some_and(|span| span_contains_position(span, position))
+                .then_some(())?;
+            (field_chain_before_first_call(&call)?.as_slice()
+                == [crate::state_machine::CONSTRUCTOR_NAME])
+            .then_some(())?;
+
+            crate::state_machine::derived_member_type(&call, field)
+        })
     }
 
     fn expected_table_type(
@@ -1087,15 +1277,18 @@ impl AnalysisSnapshot {
             else {
                 continue;
             };
-            let Some(ty) = self.expected_type_after_table_steps(&origin_path, ty, &steps) else {
+            let Some(resolved) =
+                self.expected_type_after_table_steps(parsed, &origin_path, ty, &steps)
+            else {
                 continue;
             };
-            let ty = self.narrow_expected_table_type(&origin_path, ty, &syntax.table);
+            let ty = self.narrow_expected_table_type(&origin_path, resolved.ty, &syntax.table);
 
             return Some(ExpectedTableType {
                 ty,
                 origin_path,
                 table: syntax.table,
+                builtin_type_name: resolved.builtin_type_name,
             });
         }
 
@@ -1138,16 +1331,18 @@ impl AnalysisSnapshot {
                     continue;
                 };
                 let origin_path = parsed.path.clone();
-                let Some(ty) = self.expected_type_after_table_steps(&origin_path, ty, &steps)
+                let Some(resolved) =
+                    self.expected_type_after_table_steps(parsed, &origin_path, ty, &steps)
                 else {
                     continue;
                 };
-                let ty = self.narrow_expected_table_type(&origin_path, ty, &syntax.table);
+                let ty = self.narrow_expected_table_type(&origin_path, resolved.ty, &syntax.table);
 
                 return Some(ExpectedTableType {
                     ty,
                     origin_path,
                     table: syntax.table,
+                    builtin_type_name: resolved.builtin_type_name,
                 });
             }
         }
@@ -1185,9 +1380,6 @@ impl AnalysisSnapshot {
 
                 if let Some(function) = function {
                     let ty = typed_function_parameter_type(&function, argument_index, is_method)?;
-                    let ty = self
-                        .type_database
-                        .resolve_type(&self.module_graph, module_path, &ty);
 
                     return Some((ty, module_path.to_path_buf()));
                 }
@@ -1198,56 +1390,131 @@ impl AnalysisSnapshot {
         let semantic = SemanticModel::new(parsed, &environment);
         let function = semantic.typed_function_for_call(call, node_span(call)?.start)?;
         let ty = typed_function_parameter_type(&function, argument_index, is_method)?;
-        let ty = self
-            .type_database
-            .resolve_type(&self.module_graph, &parsed.path, &ty);
 
         Some((ty, parsed.path.clone()))
     }
 
     fn expected_type_after_table_steps(
         &self,
+        parsed: &ParsedSource,
         origin_path: &Path,
         mut ty: Type,
         steps: &[ExpectedTableStep],
-    ) -> Option<Type> {
+    ) -> Option<ExpectedResolvedType> {
+        let mut builtin_name = builtin_type_name(&ty);
+
         for step in steps {
             ty = match step {
                 ExpectedTableStep::Field(field) => {
-                    self.field_type_for_type(origin_path, &ty, field)?
+                    unresolved_expected_table_field(&ty, field)
+                        .or_else(|| self.expected_field_for_type(parsed, origin_path, &ty, field))?
+                        .ty
                 }
-                ExpectedTableStep::Element => self.expected_table_element_type(origin_path, &ty)?,
+                ExpectedTableStep::Element => {
+                    self.expected_table_element_type(parsed, origin_path, &ty)?
+                }
             };
+            builtin_name = builtin_type_name(&ty);
         }
 
-        Some(
-            self.type_database
-                .resolve_type(&self.module_graph, origin_path, &ty),
-        )
+        let ty = self.resolve_expected_type(parsed, origin_path, &ty);
+        Some(ExpectedResolvedType {
+            ty,
+            builtin_type_name: builtin_name,
+        })
     }
 
-    fn expected_table_element_type(&self, origin_path: &Path, ty: &Type) -> Option<Type> {
-        match self
-            .type_database
-            .resolve_type(&self.module_graph, origin_path, ty)
-        {
-            Type::Array(item) => Some(*item),
-            Type::Tuple(items) => Some(Type::union(items)),
-            Type::Dictionary { value, .. } => Some(*value),
-            Type::Union(types) => {
-                let items = types
-                    .iter()
-                    .filter_map(|ty| self.expected_table_element_type(origin_path, ty))
-                    .collect::<Vec<_>>();
+    fn expected_table_element_type(
+        &self,
+        parsed: &ParsedSource,
+        origin_path: &Path,
+        ty: &Type,
+    ) -> Option<Type> {
+        match ty {
+            Type::Array(item) => Some(item.as_ref().clone()),
+            Type::Tuple(items) => Some(Type::union(items.clone())),
+            Type::Dictionary { value, .. } => Some(value.as_ref().clone()),
+            _ => match self.resolve_expected_type(parsed, origin_path, ty) {
+                Type::Array(item) => Some(*item),
+                Type::Tuple(items) => Some(Type::union(items)),
+                Type::Dictionary { value, .. } => Some(*value),
+                Type::Union(types) => {
+                    let items = types
+                        .iter()
+                        .filter_map(|ty| self.expected_table_element_type(parsed, origin_path, ty))
+                        .collect::<Vec<_>>();
 
-                (!items.is_empty()).then(|| Type::union(items))
+                    (!items.is_empty()).then(|| Type::union(items))
+                }
+                Type::Any
+                | Type::Alias(_)
+                | Type::Function(_)
+                | Type::Primitive(_)
+                | Type::StringLiteral(_)
+                | Type::Table(_) => None,
+            },
+        }
+    }
+
+    fn expected_table_field_type(
+        &self,
+        parsed: &ParsedSource,
+        expected: &ExpectedTableType,
+        field: &str,
+    ) -> Option<Type> {
+        self.expected_field_for_type(parsed, &expected.origin_path, &expected.ty, field)
+            .map(|field| self.resolve_expected_type(parsed, &expected.origin_path, &field.ty))
+    }
+
+    fn expected_field_for_type(
+        &self,
+        parsed: &ParsedSource,
+        origin_path: &Path,
+        ty: &Type,
+        field: &str,
+    ) -> Option<TableField> {
+        match self.resolve_expected_type(parsed, origin_path, ty) {
+            Type::Table(table) => table.semantic_field(field).cloned(),
+            Type::Dictionary { key, value }
+                if dictionary_key_accepts_field(key.as_ref(), field) =>
+            {
+                Some(TableField::required(*value))
             }
-            Type::Any
-            | Type::Alias(_)
+            Type::Union(types) => {
+                let fields = types
+                    .iter()
+                    .filter_map(|ty| self.expected_field_for_type(parsed, origin_path, ty, field))
+                    .collect::<Vec<_>>();
+                let optional = fields.iter().any(|field| field.optional);
+                let types = fields.into_iter().map(|field| field.ty).collect::<Vec<_>>();
+
+                (!types.is_empty()).then(|| TableField {
+                    ty: Type::union(types),
+                    optional,
+                })
+            }
+            Type::Alias(_)
+            | Type::Any
             | Type::Function(_)
             | Type::Primitive(_)
             | Type::StringLiteral(_)
-            | Type::Table(_) => None,
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
+        }
+    }
+
+    fn resolve_expected_type(&self, parsed: &ParsedSource, origin_path: &Path, ty: &Type) -> Type {
+        let ty = self
+            .type_database
+            .resolve_type(&self.module_graph, origin_path, ty);
+
+        if origin_path == parsed.path {
+            let (environment, _) = build_type_environment_with_diagnostics(parsed);
+
+            resolve_aliases(&environment, &ty, 0)
+        } else {
+            ty
         }
     }
 
@@ -1498,5 +1765,64 @@ impl AnalysisSnapshot {
             }
             _ => true,
         }
+    }
+}
+
+fn builtin_type_name(ty: &Type) -> Option<String> {
+    let Type::Alias(name) = ty else {
+        return None;
+    };
+
+    crate::semantic_domains::BuiltinDomainRegistry::standard()
+        .builtin_type_names()
+        .contains(&name.as_str())
+        .then(|| name.clone())
+}
+
+fn unresolved_expected_table_field(ty: &Type, field: &str) -> Option<TableField> {
+    match ty {
+        Type::Table(table) => table.semantic_field(field).cloned(),
+        Type::Dictionary { key, value } if dictionary_key_accepts_field(key, field) => {
+            Some(TableField::required(value.as_ref().clone()))
+        }
+        Type::Alias(type_name) => crate::semantic_domains::BuiltinDomainRegistry::standard()
+            .builtin_aliases()
+            .into_iter()
+            .find_map(|(name, ty)| {
+                if name != *type_name {
+                    return None;
+                }
+                let Type::Table(table) = ty else {
+                    return None;
+                };
+
+                table.semantic_field(field).cloned()
+            }),
+        Type::Any
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::StringLiteral(_)
+        | Type::Union(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => None,
+    }
+}
+
+fn dictionary_key_accepts_field(ty: &Type, field: &str) -> bool {
+    match ty {
+        Type::Primitive(crate::PrimitiveType::String) => true,
+        Type::StringLiteral(value) => value == field,
+        Type::Union(types) => types
+            .iter()
+            .any(|ty| dictionary_key_accepts_field(ty, field)),
+        Type::Any
+        | Type::Alias(_)
+        | Type::Function(_)
+        | Type::Primitive(_)
+        | Type::Table(_)
+        | Type::Array(_)
+        | Type::Tuple(_)
+        | Type::Dictionary { .. } => false,
     }
 }

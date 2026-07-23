@@ -5,6 +5,7 @@ use full_moon::ast::{
     TableConstructor, Var,
 };
 use full_moon::node::Node;
+use full_moon::visitors::Visitor;
 
 use crate::asset::{self, AssetLoaderKind};
 use crate::ast_utils::{
@@ -36,6 +37,17 @@ pub(crate) struct SemanticModel<'a> {
 pub(crate) struct LocalInitializerInference {
     pub(crate) ty: Type,
     pub(crate) expression_span: Option<SourceSpan>,
+}
+
+#[derive(Default)]
+struct FunctionBodyCollector {
+    bodies: Vec<ast::FunctionBody>,
+}
+
+impl Visitor for FunctionBodyCollector {
+    fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+        self.bodies.push(body.clone());
+    }
 }
 
 impl<'a> SemanticModel<'a> {
@@ -1044,6 +1056,11 @@ impl<'a> SemanticModel<'a> {
                 ast::Stmt::FunctionCall(function_call) => {
                     if let Some(span) = node_span(function_call) {
                         if contains_position(span, position) {
+                            self.collect_function_call_expression_types(
+                                function_call,
+                                position,
+                                candidates,
+                            );
                             if let Some(ty) = self
                                 .return_types_of_call(function_call, position)
                                 .first()
@@ -1146,6 +1163,9 @@ impl<'a> SemanticModel<'a> {
                     candidates,
                 );
             }
+            Expression::FunctionCall(function_call) => {
+                self.collect_function_call_expression_types(function_call, position, candidates);
+            }
             Expression::Parentheses { expression, .. }
             | Expression::TypeAssertion { expression, .. }
             | Expression::UnaryOperator { expression, .. } => {
@@ -1170,6 +1190,44 @@ impl<'a> SemanticModel<'a> {
 
         if let Some(ty) = self.type_of_expression_return(expression, position, 0) {
             candidates.push((ty, span));
+        }
+    }
+
+    fn collect_function_call_expression_types(
+        &self,
+        function_call: &'a FunctionCall,
+        position: SourcePosition,
+        candidates: &mut Vec<(Type, SourceSpan)>,
+    ) {
+        if let Prefix::Expression(expression) = function_call.prefix() {
+            self.collect_expression_type(expression, position, candidates);
+        }
+
+        for suffix in function_call.suffixes() {
+            match suffix {
+                Suffix::Index(Index::Brackets { expression, .. }) => {
+                    self.collect_expression_type(expression, position, candidates);
+                }
+                Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses {
+                    arguments, ..
+                })) => {
+                    for argument in arguments {
+                        self.collect_expression_type(argument, position, candidates);
+                    }
+                }
+                Suffix::Call(Call::MethodCall(method)) => {
+                    if let FunctionArgs::Parentheses { arguments, .. } = method.args() {
+                        for argument in arguments {
+                            self.collect_expression_type(argument, position, candidates);
+                        }
+                    }
+                }
+                Suffix::Index(Index::Dot { .. })
+                | Suffix::Call(Call::AnonymousCall(
+                    FunctionArgs::String(_) | FunctionArgs::TableConstructor(_),
+                )) => {}
+                _ => {}
+            }
         }
     }
 
@@ -1257,7 +1315,11 @@ impl<'a> SemanticModel<'a> {
         )
     }
 
-    fn parameter_type_at_position(&self, name: &str, position: SourcePosition) -> Option<Type> {
+    pub(crate) fn parameter_type_at_position(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Type> {
         self.parsed
             .function_annotations
             .iter()
@@ -1274,6 +1336,24 @@ impl<'a> SemanticModel<'a> {
             })
             .next_back()
             .map(|parameter| type_from_tua_type(&parameter.ty))
+            .or_else(|| {
+                let mut collector = FunctionBodyCollector::default();
+                collector.visit_ast(&self.parsed.ast);
+                let body = collector
+                    .bodies
+                    .iter()
+                    .filter(|body| {
+                        node_span(*body).is_some_and(|span| contains_position(span, position))
+                    })
+                    .min_by_key(|body| node_span(*body).map(span_size))?;
+                let Type::Function(function) = function_type_from_body(body) else {
+                    return None;
+                };
+
+                function.parameters.into_iter().find_map(|parameter| {
+                    (parameter.name.as_deref() == Some(name)).then_some(parameter.ty)
+                })
+            })
     }
 
     fn loop_variable_type_at_position(

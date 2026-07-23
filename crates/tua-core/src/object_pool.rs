@@ -51,8 +51,14 @@ pub(crate) fn options_type() -> Type {
             "create",
             TableField::required(Type::Function(FunctionType::new([], Type::Any))),
         ),
-        ("reset", TableField::optional(Type::Any)),
-        ("dispose", TableField::optional(Type::Any)),
+        (
+            "reset",
+            TableField::optional(Type::Function(FunctionType::new([Type::Any], Type::nil()))),
+        ),
+        (
+            "dispose",
+            TableField::optional(Type::Function(FunctionType::new([Type::Any], Type::nil()))),
+        ),
         ("initial", TableField::optional(Type::number())),
     ])
 }

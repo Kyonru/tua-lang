@@ -46,7 +46,7 @@ use crate::profile;
 use crate::scope::{ScopeDeclarationKind, ScopeGlobalKind, ScopeResolution};
 use crate::scope_map_parsed_source;
 use crate::selection_range::selection_ranges_source;
-use crate::semantic::SemanticModel;
+use crate::semantic::{resolve_aliases, SemanticModel};
 use crate::signal::{
     bus_label, graph_call_from_mention, graph_event_id, graph_schema_summary, SignalEventIndex,
     SignalGraph, SignalGraphEvent,
@@ -1138,6 +1138,12 @@ struct ExpectedTableType {
     ty: Type,
     origin_path: PathBuf,
     table: TableConstructor,
+    builtin_type_name: Option<String>,
+}
+
+struct ExpectedResolvedType {
+    ty: Type,
+    builtin_type_name: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -1381,6 +1387,27 @@ fn table_string_value_field(table: &TableConstructor, position: SourcePosition) 
     })
 }
 
+fn table_field_at_position(
+    table: &TableConstructor,
+    position: SourcePosition,
+) -> Option<(String, SourceSpan)> {
+    table.fields().iter().find_map(|field| match field {
+        Field::NameKey { key, .. } => {
+            let span = node_span(key)?;
+
+            span_contains_position(span, position).then(|| (token_text(key), span))
+        }
+        Field::ExpressionKey { key, .. } => {
+            let name = string_literal_expression_value(key)?;
+            let span = node_span(key)?;
+
+            span_contains_position(span, position).then_some((name, span))
+        }
+        Field::NoKey(_) => None,
+        _ => None,
+    })
+}
+
 fn table_named_fields(table: &TableConstructor) -> BTreeSet<String> {
     table
         .fields()
@@ -1438,6 +1465,108 @@ fn table_callback_field_at_position(
         node_span(function)
             .is_some_and(|span| span_contains_position(span, position))
             .then_some((name, function.as_ref()))
+    })
+}
+
+struct StoreWatchKeyReference {
+    receiver: String,
+    key: String,
+    span: SourceSpan,
+}
+
+fn store_watch_key_reference_at_position(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> Option<StoreWatchKeyReference> {
+    let mut syntax = ExpectedTableSyntaxCollector::default();
+    syntax.visit_ast(&parsed.ast);
+
+    syntax.calls.into_iter().find_map(|call| {
+        let parts = field_chain_before_first_call(&call)?;
+        let [receiver, method] = parts.as_slice() else {
+            return None;
+        };
+        if method != "watch" {
+            return None;
+        }
+        let key = call_arguments(&call)?.next()?;
+        let Expression::String(token) = key else {
+            return None;
+        };
+        let span = node_span(key)?;
+
+        span_contains_position(span, position).then(|| StoreWatchKeyReference {
+            receiver: receiver.clone(),
+            key: unquote_string_literal(&token_text(token)).unwrap_or_default(),
+            span,
+        })
+    })
+}
+
+fn helper_constructor_call_for_local(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    receiver: &str,
+    position: SourcePosition,
+    helper: &str,
+) -> Option<FunctionCall> {
+    let initializer_span = SemanticModel::new(parsed, environment)
+        .local_initializer_inference(receiver, position)?
+        .expression_span?;
+    let mut syntax = ExpectedTableSyntaxCollector::default();
+    syntax.visit_ast(&parsed.ast);
+
+    syntax.calls.into_iter().find(|call| {
+        node_span(call) == Some(initializer_span)
+            && field_chain_before_first_call(call).is_some_and(|parts| parts.as_slice() == [helper])
+    })
+}
+
+fn builtin_constructor_call_contains_position(
+    parsed: &ParsedSource,
+    position: SourcePosition,
+) -> bool {
+    let mut syntax = ExpectedTableSyntaxCollector::default();
+    syntax.visit_ast(&parsed.ast);
+    let domains = crate::semantic_domains::BuiltinDomainRegistry::standard();
+
+    syntax.calls.into_iter().any(|call| {
+        node_span(&call).is_some_and(|span| span_contains_position(span, position))
+            && field_chain_before_first_call(&call).is_some_and(|parts| {
+                parts.len() == 1 && domains.constructor_domain(&parts[0]).is_some()
+            })
+    })
+}
+
+fn store_state_field_span(call: &FunctionCall, field_name: &str) -> Option<SourceSpan> {
+    let Expression::TableConstructor(initial) = call_arguments(call)?.next()? else {
+        return None;
+    };
+
+    initial.fields().iter().find_map(|field| match field {
+        Field::NameKey { key, .. } if token_text(key) == field_name => node_span(key),
+        Field::ExpressionKey { key, .. }
+            if string_literal_expression_value(key).as_deref() == Some(field_name) =>
+        {
+            node_span(key)
+        }
+        Field::NameKey { .. } | Field::ExpressionKey { .. } | Field::NoKey(_) => None,
+        _ => None,
+    })
+}
+
+fn call_arguments(call: &FunctionCall) -> Option<impl Iterator<Item = &Expression>> {
+    call.suffixes().find_map(|suffix| match suffix {
+        ast::Suffix::Call(ast::Call::AnonymousCall(ast::FunctionArgs::Parentheses {
+            arguments,
+            ..
+        })) => Some(arguments.iter()),
+        ast::Suffix::Call(ast::Call::MethodCall(method)) => match method.args() {
+            ast::FunctionArgs::Parentheses { arguments, .. } => Some(arguments.iter()),
+            ast::FunctionArgs::String(_) | ast::FunctionArgs::TableConstructor(_) => None,
+            _ => None,
+        },
+        _ => None,
     })
 }
 
