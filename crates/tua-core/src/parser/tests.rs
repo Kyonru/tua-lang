@@ -209,6 +209,89 @@ fn class_fields_parse_grouped_and_function_array_types() {
 }
 
 #[test]
+fn class_scanning_ignores_lua_long_strings_and_comments() {
+    let source = r#"local text = [=[
+class FakeString {
+  value: number
+}
+]=]
+
+--[==[
+class FakeComment {
+}
+]==]
+
+final class Real {
+  text(): string {
+    return [===[} class FakeBody {]===]
+  }
+}
+"#;
+    let normalized = normalize_tua_source(source);
+
+    assert!(normalized.parser_source.contains("class FakeString"));
+    assert!(normalized.parser_source.contains("class FakeComment"));
+    assert!(!normalized.parser_source.contains("local FakeString = {}"));
+    assert!(!normalized.parser_source.contains("local FakeComment = {}"));
+    assert!(!normalized.parser_source.contains("local FakeBody = {}"));
+    assert!(normalized.parser_source.contains("local Real = {}"));
+
+    let parsed = parse_tua_source("src/classes.tua", source)
+        .expect("class-like text in long strings and comments should remain data");
+    assert_eq!(
+        parsed
+            .class_declarations
+            .iter()
+            .map(|class| class.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Real"]
+    );
+    assert_eq!(parsed.class_declarations[0].methods.len(), 1);
+}
+
+#[test]
+fn malformed_class_members_report_a_class_diagnostic() {
+    let diagnostics = parse_tua_source(
+        "src/classes.tua",
+        r#"final class Broken {
+  value number
+  accidental = 42
+}
+"#,
+    )
+    .expect_err("unrecognized class members should not be silently erased");
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_CLASS))
+        .expect("malformed class member should report TL1008");
+
+    assert_eq!((diagnostic.line, diagnostic.column), (2, 3));
+    assert_eq!(
+        diagnostic.message,
+        "unrecognized class member; expected a typed field or method declaration"
+    );
+}
+
+#[test]
+fn class_methods_accept_table_shaped_return_types() {
+    let source = r#"final class Factory {
+  make(): { value: number } {
+    return { value = 1 }
+  }
+}
+"#;
+    let parsed = parse_tua_source("src/classes.tua", source)
+        .expect("table-shaped class method returns should parse");
+    let method = &parsed.class_declarations[0].methods[0];
+
+    assert_eq!(method.return_type.as_deref(), Some("{ value: number }"));
+    assert!(matches!(
+        parse_tua_type_text(method.return_type.as_deref().expect("return type")),
+        TuaType::Table(fields) if fields.len() == 1 && fields[0].name == "value"
+    ));
+}
+
+#[test]
 fn typed_source_extraction_is_separate_from_raw_parse() {
     let raw = parse_raw_tua_source(
         "src/player.tua",

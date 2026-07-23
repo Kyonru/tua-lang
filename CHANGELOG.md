@@ -74,6 +74,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Class parsing now preserves class-like text in Lua long-bracket strings and
+  comments, reports `TL1008` for unrecognized members, and accepts table-shaped
+  method return types.
 - Exact-code `tua-ignore-line`, `tua-ignore-next-line`, and header-only
   `tua-ignore-file` suppressions are now enabled by default. Empty directives
   and broad category suppressions report `TL4025`, while Luau `--!nolint`

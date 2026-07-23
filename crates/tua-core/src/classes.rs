@@ -47,6 +47,7 @@ pub(crate) struct ClassMethod {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ClassBlock {
     declaration: ClassDeclaration,
+    invalid_member_span: Option<SourceSpan>,
     start: usize,
     end: usize,
 }
@@ -85,7 +86,17 @@ pub(crate) fn parse_class_declarations(
     source: &str,
 ) -> (Vec<ClassDeclaration>, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let mut declarations = class_blocks(source)
+    let blocks = class_blocks(source);
+
+    for span in blocks.iter().filter_map(|block| block.invalid_member_span) {
+        diagnostics.push(class_diagnostic(
+            path,
+            span.start,
+            "unrecognized class member; expected a typed field or method declaration",
+        ));
+    }
+
+    let mut declarations = blocks
         .into_iter()
         .map(|block| block.declaration)
         .collect::<Vec<_>>();
@@ -218,10 +229,12 @@ fn class_blocks(source: &str) -> Vec<ClassBlock> {
         };
 
         let body = &source[header.body_start..body_end];
-        let declaration = parse_class_body(source, body, header.clone(), body_end);
+        let (declaration, invalid_member_span) =
+            parse_class_body(source, body, header.clone(), body_end);
 
         blocks.push(ClassBlock {
             declaration,
+            invalid_member_span,
             start: index,
             end: body_end + 1,
         });
@@ -298,11 +311,12 @@ fn parse_class_body(
     body: &str,
     header: ClassHeader,
     body_end: usize,
-) -> ClassDeclaration {
+) -> (ClassDeclaration, Option<SourceSpan>) {
     let mut fields = Vec::new();
     let mut init = None;
     let mut duplicate_init_spans = Vec::new();
     let mut methods = Vec::new();
+    let mut invalid_member_span = None;
     let mut cursor = 0usize;
 
     while cursor < body.len() {
@@ -332,26 +346,37 @@ fn parse_class_body(
             continue;
         }
 
-        cursor += next_char_len(body, cursor);
+        let line_end = body[cursor..]
+            .find('\n')
+            .map(|offset| cursor + offset)
+            .unwrap_or(body.len());
+        invalid_member_span = Some(SourceSpan {
+            start: source_position_from_byte(source, header.body_start + cursor),
+            end: source_position_from_byte(source, header.body_start + line_end),
+        });
+        break;
     }
 
-    ClassDeclaration {
-        name: header.name,
-        parent: header.parent,
-        parent_span: header.parent_span,
-        is_open: header.is_open,
-        is_final: header.is_final,
-        fields,
-        init,
-        duplicate_init_spans,
-        methods,
-        span: SourceSpan {
-            start: header.span_start,
-            end: source_position_from_byte(source, body_end + 1),
+    (
+        ClassDeclaration {
+            name: header.name,
+            parent: header.parent,
+            parent_span: header.parent_span,
+            is_open: header.is_open,
+            is_final: header.is_final,
+            fields,
+            init,
+            duplicate_init_spans,
+            methods,
+            span: SourceSpan {
+                start: header.span_start,
+                end: source_position_from_byte(source, body_end + 1),
+            },
+            name_span: header.name_span,
+            type_id: 0,
         },
-        name_span: header.name_span,
-        type_id: 0,
-    }
+        invalid_member_span,
+    )
 }
 
 fn parse_class_method(
@@ -397,7 +422,7 @@ fn parse_class_method(
 
     let return_type = if body[cursor..].starts_with(':') {
         let return_start = skip_whitespace(body, cursor + 1);
-        let brace = find_next_body_brace(body, return_start)?;
+        let brace = find_method_body_brace(body, return_start)?;
         let ty = body[return_start..brace].trim().to_owned();
         cursor = brace;
         (!ty.is_empty()).then_some(ty)
@@ -1197,21 +1222,44 @@ fn skip_body_ws_and_comments(body: &str, mut index: usize) -> usize {
     }
 }
 
-fn find_next_body_brace(body: &str, mut index: usize) -> Option<usize> {
+fn find_method_body_brace(body: &str, return_start: usize) -> Option<usize> {
+    let mut index = return_start;
+
     while index < body.len() {
+        if body[index..].starts_with("--") {
+            index = consume_comment(body, index);
+            continue;
+        }
+
         if let Some(end) = consume_string_literal(body, index) {
             index = end;
             continue;
         }
 
         if body[index..].starts_with('{') {
-            return Some(index);
+            let prefix = body[return_start..index].trim();
+
+            if complete_type_prefix(prefix) {
+                return Some(index);
+            }
+
+            index = find_matching_brace(body, index)? + 1;
+            continue;
         }
 
         index += next_char_len(body, index);
     }
 
     None
+}
+
+fn complete_type_prefix(prefix: &str) -> bool {
+    let prefix = prefix.trim_end();
+
+    !prefix.is_empty()
+        && !prefix.ends_with('|')
+        && !prefix.ends_with("->")
+        && !matches!(prefix.chars().next_back(), Some(',' | ':' | '<'))
 }
 
 fn find_matching_brace(source: &str, open: usize) -> Option<usize> {
@@ -1323,12 +1371,20 @@ fn skip_whitespace(source: &str, mut index: usize) -> usize {
 }
 
 fn consume_comment(source: &str, index: usize) -> usize {
+    if let Some(end) = consume_long_bracket(source, index + 2) {
+        return end;
+    }
+
     source[index..]
         .find('\n')
         .map_or(source.len(), |offset| index + offset)
 }
 
 fn consume_string_literal(source: &str, index: usize) -> Option<usize> {
+    if let Some(end) = consume_long_bracket(source, index) {
+        return Some(end);
+    }
+
     let quote = match source[index..].chars().next()? {
         '"' => '"',
         '\'' => '\'',
@@ -1361,6 +1417,49 @@ fn consume_string_literal(source: &str, index: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn consume_long_bracket(source: &str, index: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+
+    if bytes.get(index) != Some(&b'[') {
+        return None;
+    }
+
+    let mut open_end = index + 1;
+    while bytes.get(open_end) == Some(&b'=') {
+        open_end += 1;
+    }
+
+    if bytes.get(open_end) != Some(&b'[') {
+        return None;
+    }
+
+    let equals = open_end - index - 1;
+    let mut cursor = open_end + 1;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] != b']' {
+            cursor += 1;
+            continue;
+        }
+
+        let mut close_end = cursor + 1;
+        for _ in 0..equals {
+            if bytes.get(close_end) != Some(&b'=') {
+                break;
+            }
+            close_end += 1;
+        }
+
+        if close_end == cursor + equals + 1 && bytes.get(close_end) == Some(&b']') {
+            return Some(close_end + 1);
+        }
+
+        cursor += 1;
+    }
+
+    Some(source.len())
 }
 
 fn next_char_len(source: &str, index: usize) -> usize {

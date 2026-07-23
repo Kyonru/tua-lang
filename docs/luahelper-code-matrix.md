@@ -70,7 +70,7 @@ valid unless it is listed below.
 | `TL1005` | A comparison is provably impossible because the operand types do not overlap. | Always enabled; warning. |
 | `TL1006` | LuaDoc declarations conflict while building one type environment. | Always enabled. |
 | `TL1007` | A runtime `is` check cannot be represented safely for the requested type. | Always enabled. |
-| `TL1008` | A class declaration, inheritance relation, override, constructor, or member access violates class rules. | Always enabled. |
+| `TL1008` | A class declaration, member syntax, inheritance relation, override, constructor, or member access violates class rules. | Always enabled. |
 
 `TL1003` is the general type-contract error used for annotated assignments,
 stable inferred locals, fields, arguments, returns, and compatible container

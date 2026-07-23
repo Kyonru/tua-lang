@@ -649,6 +649,10 @@ to an annotated array or dictionary field is valid. Fields not declared by the
 class or an ancestor are rejected; use `any` only when a deliberately dynamic
 object is required.
 
+Method parameters and returns accept the same native type surface, including
+table-shaped return types. Unrecognized text in a class body reports `TL1008`
+instead of being discarded during class lowering.
+
 Constructors return the declared class type, and methods keep their exact
 parameter and return types across hover, completion, signature help, checking,
 definition, outlines, workspace symbols, and static module exports. Duplicate

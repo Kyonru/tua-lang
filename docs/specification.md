@@ -127,7 +127,9 @@ typed array or dictionary.
 Class fields accept the same native type surface. Constructors return the
 declared class type, method signatures are checked exactly, and class exports
 retain constructor/member types through static project modules. Classes are
-closed by default: only `open class` declarations can be extended.
+closed by default: only `open class` declarations can be extended. Class method
+returns may use table shapes, while unrecognized class-body syntax is rejected
+as `TL1008` rather than erased during lowering.
 
 ## Modules And Lua Interoperability
 
