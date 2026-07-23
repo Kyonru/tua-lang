@@ -74,6 +74,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- `TL1003` now reports structured nested field, dictionary, tuple, callback
+  parameter, and callback-return mismatch paths. Table-literal failures
+  highlight the offending leaf value, while root mismatches retain concise
+  declared type names.
 - Hover now resolves nested built-in helper fields and callback parameters.
   Definition opens virtual schemas for fixed configuration fields and follows
   source-derived store keys, sprite animation names, state-machine events, and

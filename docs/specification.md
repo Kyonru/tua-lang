@@ -124,6 +124,10 @@ grouped union and function elements use `(T | U)[]` and
 `((value: T) -> U)[]`. An empty table literal can initialize an explicitly
 typed array or dictionary. A record-shaped table whose named string keys and
 field values satisfy a string-keyed dictionary is assignable to that dictionary.
+When assignability fails inside a table, dictionary, tuple, callback parameter,
+or callback return, `TL1003` reports the nested contract path and leaf types
+instead of printing both complete outer types. Table-literal diagnostics point
+at the deepest source value that Tua can identify.
 
 Class fields accept the same native type surface. Constructors return the
 declared class type, method signatures are checked exactly, and class exports

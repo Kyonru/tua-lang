@@ -219,9 +219,9 @@ fn rejects_object_pool_options_without_a_factory() {
     )
     .expect_err("objectPool should require a create callback");
 
-    assert!(diagnostics
-        .iter()
-        .any(|diagnostic| { diagnostic.message.contains("expected ObjectPoolOptions") }));
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic
+        .message
+        .contains("type mismatch at options.create: required field is missing")));
 }
 
 #[test]
@@ -296,12 +296,12 @@ game:watch("missing", function(value) print(value) end)
     )
     .expect_err("stores should reject incompatible replacement state and unknown watch keys");
 
-    assert!(diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic
             .message
-            .contains("expected { paused: boolean, score: number }, found { paused: boolean, score: string }")),
-        "unexpected diagnostics: {diagnostics:?}");
+            .contains("type mismatch at next.score: expected number, found string")),
+        "unexpected diagnostics: {diagnostics:?}"
+    );
     assert!(
         diagnostics
             .iter()
@@ -1037,7 +1037,96 @@ local player: Player = { hp = "low" }
     )
     .expect_err("typed table initializer mismatch should be reported");
 
-    assert_single_mismatch(&diagnostics, "expected Player, found { hp: string }");
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at hp: expected number, found string",
+    );
+}
+
+#[test]
+fn reports_nested_call_argument_mismatch_paths_and_leaf_ranges() {
+    let diagnostics = check_tua_source(
+        "src/animations.tua",
+        r#"type Animation = { row: number }
+type Config = { animations: { [string]: Animation } }
+local function configure(config: Config)
+end
+
+configure({
+  animations = {
+    green = { row = "two" },
+  },
+})
+"#,
+    )
+    .expect_err("the nested animation row should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at config.animations.green.row: expected number, found string",
+    );
+    assert_eq!(diagnostics[0].line, 8);
+    assert_eq!(diagnostics[0].column, 21);
+    assert_eq!(diagnostics[0].end_line, 8);
+    assert_eq!(diagnostics[0].end_column, 26);
+}
+
+#[test]
+fn reports_nested_callback_return_mismatch_paths() {
+    let diagnostics = check_tua_source(
+        "src/callbacks.tua",
+        r#"type Config = {
+  callbacks: {
+    onChange: (value: number) -> number,
+  },
+}
+local function configure(config: Config)
+end
+
+configure({
+  callbacks = {
+    onChange = function(value: number): string
+      return "bad"
+    end,
+  },
+})
+"#,
+    )
+    .expect_err("the nested callback return should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at config.callbacks.onChange return value: expected number, found string",
+    );
+}
+
+#[test]
+fn reports_nested_callback_parameter_mismatch_paths() {
+    let diagnostics = check_tua_source(
+        "src/callback-parameters.tua",
+        r#"type Config = {
+  callbacks: {
+    onChange: (value: number) -> number,
+  },
+}
+local function configure(config: Config)
+end
+
+configure({
+  callbacks = {
+    onChange = function(value: string): number
+      return 1
+    end,
+  },
+})
+"#,
+    )
+    .expect_err("the nested callback parameter should be rejected");
+
+    assert_single_mismatch(
+        &diagnostics,
+        "type mismatch at config.callbacks.onChange parameter `value`: expected number, found string",
+    );
 }
 
 #[test]

@@ -274,6 +274,92 @@ fn table_fields_must_be_assignable() {
 }
 
 #[test]
+fn assignability_failures_preserve_nested_dictionary_field_paths() {
+    let context = TypeContext::new()
+        .with_alias(TypeAlias::new(
+            "Animation",
+            Type::table([("row", TableField::required(Type::number()))]),
+        ))
+        .with_alias(TypeAlias::new(
+            "Config",
+            Type::table([(
+                "animations",
+                TableField::required(Type::dictionary(Type::string(), Type::alias("Animation"))),
+            )]),
+        ));
+    let supplied = Type::table([(
+        "animations",
+        TableField::required(Type::table([(
+            "green",
+            TableField::required(Type::table([("row", TableField::required(Type::string()))])),
+        )])),
+    )]);
+
+    let failure = context
+        .assignability_failure(&supplied, &Type::alias("Config"))
+        .expect("the nested row type should be incompatible");
+
+    assert_eq!(
+        failure.path,
+        vec![
+            AssignabilityPathSegment::Field("animations".to_owned()),
+            AssignabilityPathSegment::Field("green".to_owned()),
+            AssignabilityPathSegment::Field("row".to_owned()),
+        ]
+    );
+    assert_eq!(failure.expected, Type::number());
+    assert_eq!(failure.found, Type::string());
+    assert_eq!(failure.kind, AssignabilityFailureKind::TypeMismatch);
+}
+
+#[test]
+fn assignability_failures_identify_callback_returns() {
+    let supplied = Type::function_returns([Type::number()], [Type::string()]);
+    let expected = Type::function_returns([Type::number()], [Type::number()]);
+
+    let failure = TypeContext::new()
+        .assignability_failure(&supplied, &expected)
+        .expect("the callback return type should be incompatible");
+
+    assert_eq!(
+        failure.path,
+        vec![AssignabilityPathSegment::FunctionReturn(0)]
+    );
+    assert_eq!(failure.expected, Type::number());
+    assert_eq!(failure.found, Type::string());
+}
+
+#[test]
+fn assignability_failures_orient_callback_parameters_to_the_expected_contract() {
+    let supplied = Type::Function(FunctionType::new_signature(
+        [FunctionParameter::named("value", Type::string())],
+        1,
+        None,
+        [Type::nil()],
+    ));
+    let expected = Type::Function(FunctionType::new_signature(
+        [FunctionParameter::named("value", Type::number())],
+        1,
+        None,
+        [Type::nil()],
+    ));
+
+    let failure = TypeContext::new()
+        .assignability_failure(&supplied, &expected)
+        .expect("the callback parameter type should be incompatible");
+
+    assert_eq!(
+        failure.path,
+        vec![AssignabilityPathSegment::FunctionParameter {
+            index: 0,
+            name: Some("value".to_owned()),
+        }]
+    );
+    assert_eq!(failure.expected, Type::number());
+    assert_eq!(failure.found, Type::string());
+}
+
+#[test]
 fn optional_target_fields_may_be_missing() {
     let source = Type::table([("level", TableField::required(Type::number()))]);
     let target = Type::table([

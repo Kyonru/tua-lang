@@ -27,15 +27,18 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
-    build_type_environment_with_domain_registry, widen_inferred_type, FunctionType, MetatableFacts,
-    TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
+    build_type_environment_with_domain_registry, widen_inferred_type, AssignabilityFailure,
+    AssignabilityFailureKind, FunctionType, MetatableFacts, TableField, Type, TypeContext,
+    TypeEnvironment, TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 mod query;
+mod type_mismatch;
 
 use query::{CheckQuery, CheckQueryOptions};
+use type_mismatch::{mismatch_diagnostic, mismatch_diagnostic_for_expression};
 
 pub fn check_tua_source(
     path: impl AsRef<Path>,
@@ -475,7 +478,7 @@ impl<'a> Checker<'a> {
                 let source = self
                     .infer_expression_return(expression, return_index)
                     .unwrap_or(Type::Any);
-                self.check_type_assignable(expression, &source, &target);
+                self.check_inferred_expression_assignable_at(expression, &source, &target, None);
             } else {
                 self.check_type_assignable(local, &Type::nil(), &target);
             }
@@ -541,7 +544,7 @@ impl<'a> Checker<'a> {
             }
 
             if let (Some(source), Some(target)) = (&source, &target) {
-                self.check_type_assignable(expression, source, target);
+                self.check_inferred_expression_assignable_at(expression, source, target, None);
             }
 
             self.record_assignment_type(variable, source, target, expression);
@@ -557,7 +560,7 @@ impl<'a> Checker<'a> {
         }
 
         if let (Some(source), Some(target)) = (&source, &target) {
-            self.check_type_assignable(assignment.rhs(), source, target);
+            self.check_inferred_expression_assignable_at(assignment.rhs(), source, target, None);
         }
 
         self.record_assignment_type(assignment.lhs(), source, target, assignment.rhs());
@@ -830,12 +833,40 @@ impl<'a> Checker<'a> {
         self.insert_scoped_local(root.to_owned(), root_ty);
     }
 
-    fn check_expression_assignable(&mut self, expression: &Expression, target: &Type) {
+    fn check_expression_assignable_at(
+        &mut self,
+        expression: &Expression,
+        target: &Type,
+        root: Option<&str>,
+    ) {
         let Some(source) = self.infer_expression(expression) else {
             return;
         };
 
-        self.check_type_assignable(expression, &source, target);
+        self.check_inferred_expression_assignable_at(expression, &source, target, root);
+    }
+
+    fn check_inferred_expression_assignable_at(
+        &mut self,
+        expression: &Expression,
+        source: &Type,
+        target: &Type,
+        root: Option<&str>,
+    ) {
+        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+            return;
+        }
+
+        let Some(failure) = self.diagnostic_assignability_failure(source, target) else {
+            return;
+        };
+
+        self.diagnostics.push(mismatch_diagnostic_for_expression(
+            &self.parsed.path,
+            expression,
+            &failure,
+            root,
+        ));
     }
 
     fn check_type_assignable(&mut self, node: &impl Node, source: &Type, target: &Type) {
@@ -843,15 +874,26 @@ impl<'a> Checker<'a> {
             return;
         }
 
-        if !self.context.is_assignable(source, target) {
-            let target = self.display_type_for_mismatch(target);
-            self.diagnostics.push(mismatch_diagnostic(
-                &self.parsed.path,
-                node,
-                &target,
-                source,
-            ));
+        let Some(failure) = self.diagnostic_assignability_failure(source, target) else {
+            return;
+        };
+
+        self.diagnostics
+            .push(mismatch_diagnostic(&self.parsed.path, node, &failure, None));
+    }
+
+    fn diagnostic_assignability_failure(
+        &self,
+        source: &Type,
+        target: &Type,
+    ) -> Option<AssignabilityFailure> {
+        let mut failure = self.context.assignability_failure(source, target)?;
+
+        if failure.path.is_empty() {
+            failure.expected = self.display_type_for_mismatch(target);
         }
+
+        Some(failure)
     }
 
     fn display_type_for_mismatch(&self, target: &Type) -> Type {
@@ -883,13 +925,17 @@ impl<'a> Checker<'a> {
         }
 
         for (index, target) in target.iter().enumerate() {
-            let source = assignment_expression_for_local(&expressions, index)
-                .and_then(|(expression, return_index)| {
-                    self.infer_expression_return(expression, return_index)
-                })
+            let Some((expression, return_index)) =
+                assignment_expression_for_local(&expressions, index)
+            else {
+                self.check_type_assignable(return_stmt, &Type::nil(), target);
+                continue;
+            };
+            let source = self
+                .infer_expression_return(expression, return_index)
                 .unwrap_or_else(Type::nil);
 
-            self.check_type_assignable(return_stmt, &source, target);
+            self.check_inferred_expression_assignable_at(expression, &source, target, None);
         }
     }
 
@@ -1479,21 +1525,23 @@ impl<'a> Checker<'a> {
             let parameter = function
                 .parameters
                 .get(index)
-                .map(|parameter| &parameter.ty)
-                .or(function.vararg_type.as_deref())
+                .map(|parameter| (&parameter.ty, parameter.name.as_deref()))
+                .or_else(|| function.vararg_type.as_deref().map(|ty| (ty, Some("..."))))
                 .expect("argument count was validated");
 
             match argument {
                 CallArgument::Expression(argument) => {
-                    self.check_expression_assignable(argument, parameter);
+                    self.check_expression_assignable_at(argument, parameter.0, parameter.1);
                 }
                 CallArgument::Inferred(argument_type) => {
-                    if !self.context.is_assignable(&argument_type, parameter) {
+                    if let Some(failure) =
+                        self.diagnostic_assignability_failure(&argument_type, parameter.0)
+                    {
                         self.diagnostics.push(mismatch_diagnostic(
                             &self.parsed.path,
                             function_call,
-                            parameter,
-                            &argument_type,
+                            &failure,
+                            parameter.1,
                         ));
                     }
                 }
@@ -1593,25 +1641,27 @@ impl<'a> Checker<'a> {
                 continue;
             };
 
-            if self.context.is_assignable(&argument_type, &parameter.ty) {
+            let Some(failure) =
+                self.diagnostic_assignability_failure(&argument_type, &parameter.ty)
+            else {
                 continue;
-            }
+            };
 
             match argument {
                 CallArgument::Expression(argument) => {
-                    self.diagnostics.push(mismatch_diagnostic(
+                    self.diagnostics.push(mismatch_diagnostic_for_expression(
                         &self.parsed.path,
-                        *argument,
-                        &parameter.ty,
-                        &argument_type,
+                        argument,
+                        &failure,
+                        Some(&parameter.name),
                     ));
                 }
                 CallArgument::Inferred(_) => {
                     self.diagnostics.push(mismatch_diagnostic(
                         &self.parsed.path,
                         function_call,
-                        &parameter.ty,
-                        &argument_type,
+                        &failure,
+                        Some(&parameter.name),
                     ));
                 }
             }
@@ -1654,27 +1704,30 @@ impl<'a> Checker<'a> {
                 continue;
             };
 
-            if self.context.is_assignable(argument_type, parameter_type) {
+            let Some(failure) =
+                self.diagnostic_assignability_failure(argument_type, parameter_type)
+            else {
                 continue;
-            }
-
-            let display_type = self.display_type_for_mismatch(parameter_type);
+            };
+            let argument_label = typed_call_parameter_name(candidate, index)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("argument {}", index + 1));
 
             match arguments.get(index) {
                 Some(CallArgument::Expression(argument)) => {
-                    self.diagnostics.push(mismatch_diagnostic(
+                    self.diagnostics.push(mismatch_diagnostic_for_expression(
                         &self.parsed.path,
-                        *argument,
-                        &display_type,
-                        argument_type,
+                        argument,
+                        &failure,
+                        Some(&argument_label),
                     ));
                 }
                 Some(CallArgument::Inferred(_)) | None => {
                     self.diagnostics.push(mismatch_diagnostic(
                         &self.parsed.path,
                         function_call,
-                        &display_type,
-                        argument_type,
+                        &failure,
+                        Some(&argument_label),
                     ));
                 }
             }
@@ -1816,12 +1869,26 @@ impl<'a> Checker<'a> {
                 continue;
             }
 
+            let argument_label = variant
+                .parameter_name(index)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("argument {}", index + 1));
             match arguments.get(index) {
                 Some(CallArgument::Expression(argument)) => {
-                    self.check_external_argument_type(*argument, argument_type, parameter_type);
+                    self.check_external_argument_type(
+                        *argument,
+                        argument_type,
+                        parameter_type,
+                        Some(&argument_label),
+                    );
                 }
                 Some(CallArgument::Inferred(_)) | None => {
-                    self.check_external_argument_type(function_call, argument_type, parameter_type);
+                    self.check_external_argument_type(
+                        function_call,
+                        argument_type,
+                        parameter_type,
+                        Some(&argument_label),
+                    );
                 }
             }
 
@@ -1854,13 +1921,28 @@ impl<'a> Checker<'a> {
                 })
     }
 
-    fn check_external_argument_type(&mut self, node: &impl Node, source: &Type, target: &Type) {
+    fn check_external_argument_type(
+        &mut self,
+        node: &impl Node,
+        source: &Type,
+        target: &Type,
+        root: Option<&str>,
+    ) {
         if self.external_argument_assignable(source, target) {
             return;
         }
 
+        let failure = self
+            .diagnostic_assignability_failure(source, target)
+            .unwrap_or_else(|| AssignabilityFailure {
+                path: Vec::new(),
+                expected: target.clone(),
+                found: source.clone(),
+                kind: AssignabilityFailureKind::TypeMismatch,
+            });
+
         self.diagnostics
-            .push(mismatch_diagnostic(&self.parsed.path, node, target, source));
+            .push(mismatch_diagnostic(&self.parsed.path, node, &failure, root));
     }
 
     fn external_argument_assignable(&self, source: &Type, target: &Type) -> bool {
@@ -2281,10 +2363,18 @@ impl ExternalFunctionVariant {
             .map(|parameter| &parameter.ty)
             .or(self.vararg_type.as_ref())
     }
+
+    fn parameter_name(&self, index: usize) -> Option<&str> {
+        self.parameters
+            .get(index)
+            .and_then(|parameter| parameter.name.as_deref())
+            .or((index >= self.parameters.len()).then_some("..."))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ExternalParameter {
+    name: Option<String>,
     ty: Type,
     optional: bool,
 }
@@ -2292,6 +2382,7 @@ struct ExternalParameter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TypedCallCandidate {
     parameters: Vec<Type>,
+    parameter_names: Vec<Option<String>>,
     required_parameter_count: usize,
     has_varargs: bool,
     vararg_type: Option<Type>,
@@ -2321,6 +2412,11 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
                 .iter()
                 .map(|parameter| parameter.ty.clone())
                 .collect(),
+            parameter_names: overload
+                .parameters
+                .iter()
+                .map(|parameter| Some(parameter.name.clone()))
+                .collect(),
             required_parameter_count: overload.parameters.len(),
             has_varargs: overload.has_varargs,
             vararg_type: overload.vararg_type.clone(),
@@ -2343,6 +2439,11 @@ fn typed_call_candidates(function: &TypedFunction) -> Vec<TypedCallCandidate> {
                 .parameters
                 .iter()
                 .map(|parameter| parameter.ty.clone())
+                .collect(),
+            parameter_names: function
+                .parameters
+                .iter()
+                .map(|parameter| Some(parameter.name.clone()))
                 .collect(),
             required_parameter_count: function.required_parameter_count,
             has_varargs: function.has_varargs,
@@ -2395,6 +2496,14 @@ fn typed_call_parameter_type(candidate: &TypedCallCandidate, index: usize) -> Op
         .parameters
         .get(index)
         .or(candidate.vararg_type.as_ref())
+}
+
+fn typed_call_parameter_name(candidate: &TypedCallCandidate, index: usize) -> Option<&str> {
+    candidate
+        .parameter_names
+        .get(index)
+        .and_then(Option::as_deref)
+        .or((index >= candidate.parameters.len()).then_some("..."))
 }
 
 fn infer_symbol_type(symbol: &str) -> Option<Type> {
@@ -2586,6 +2695,7 @@ fn parameters_from_function_detail(detail: &str) -> Option<(Vec<ExternalParamete
         }
 
         fixed.push(ExternalParameter {
+            name: (!name.is_empty()).then(|| name.trim_end_matches('?').to_owned()),
             ty,
             optional: name.ends_with('?'),
         });
@@ -3309,19 +3419,6 @@ fn dot_method_call_diagnostic(
         ),
     )
     .with_code(DiagnosticCode::LINT_DOT_METHOD_CALL)
-}
-
-fn mismatch_diagnostic(path: &Path, node: &impl Node, expected: &Type, found: &Type) -> Diagnostic {
-    let position = node_position(node);
-    let found = mismatch_found_label(expected, found);
-
-    Diagnostic::error(
-        path,
-        position.line,
-        position.column,
-        format!("type mismatch: expected {expected}, found {found}"),
-    )
-    .with_code(DiagnosticCode::TYPE_MISMATCH)
 }
 
 fn unsupported_runtime_check_diagnostic(

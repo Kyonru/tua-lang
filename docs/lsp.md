@@ -45,6 +45,11 @@ project snapshot. See [Diagnostic Codes](luahelper-code-matrix.md) for
 code definitions and [Configuration](configuration.md#diagnostics) for project
 settings.
 
+Nested `TL1003` errors identify the failing contract path, such as
+`config.animations.green.row: expected number, found string`, and highlight the
+corresponding table value when it is statically available. Root-level failures
+retain concise declared names such as `Player`.
+
 Standard lint rules are published by default. Set `diagnostics.rules = false`
 (or use the `tua.diagnostics.rules` override) to disable them.
 Formatting differences are not diagnostics; editor formatting and

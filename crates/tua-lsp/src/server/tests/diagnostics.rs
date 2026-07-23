@@ -78,6 +78,38 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_publishes_nested_type_mismatch_paths_and_leaf_ranges() {
+    let uri = "file:///tmp/nested-type-mismatch.tua";
+    let source = r#"type Animation = { row: number }
+type Config = { animations: { [string]: Animation } }
+local function configure(config: Config)
+end
+
+configure({
+  animations = {
+    green = { row = "two" },
+  },
+})
+"#;
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, source));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri);
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["code"], "TL1003");
+    assert_eq!(
+        diagnostics[0]["message"],
+        "type mismatch at config.animations.green.row: expected number, found string"
+    );
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 7);
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 20);
+    assert_eq!(diagnostics[0]["range"]["end"]["line"], 7);
+    assert_eq!(diagnostics[0]["range"]["end"]["character"], 25);
+}
+
+#[test]
 fn did_open_publishes_uninitialized_local_arity_and_compound_diagnostics() {
     let uri = "file:///tmp/uninitialized-local.tua";
     let source =
@@ -223,7 +255,7 @@ player:setFilter(123)
     assert!(diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains("type mismatch: expected FilterMode, found number"));
+        .contains("type mismatch at min: expected FilterMode, found number"));
 }
 #[test]
 fn did_open_publishes_love_enum_string_argument_diagnostics() {
@@ -242,7 +274,7 @@ end
     assert!(diagnostics[0]["message"]
         .as_str()
         .expect("diagnostic message should be a string")
-        .contains(r#"type mismatch: expected DrawMode, found "fillter""#));
+        .contains(r#"type mismatch at mode: expected DrawMode, found "fillter""#));
 }
 #[test]
 fn did_open_publishes_love_conf_field_assignment_diagnostics() {

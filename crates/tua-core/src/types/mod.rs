@@ -3,7 +3,10 @@ mod environment;
 mod format;
 mod model;
 
-pub use assignability::{is_assignable, TypeContext};
+pub use assignability::{
+    is_assignable, AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment,
+    TypeContext,
+};
 pub use environment::{
     build_type_environment, TypeEnvironment, TypedFunction, TypedFunctionOverload, TypedParameter,
 };

@@ -74,8 +74,11 @@ valid unless it is listed below.
 
 `TL1003` is the general type-contract error used for annotated assignments,
 stable inferred locals, fields, arguments, returns, and compatible container
-operations. More specialized optional lint codes such as `TL4016` and
-`TL4017` are used by the configurable lint pipeline.
+operations. Nested failures report the field, dictionary, tuple, callback
+parameter, or callback-return path and the incompatible leaf types; table
+literals highlight the deepest corresponding value Tua can identify. More
+specialized optional lint codes such as `TL4016` and `TL4017` are used by the
+configurable lint pipeline.
 
 ## Build And Asset Codes
 

@@ -233,8 +233,9 @@ pub use type_database::{
 };
 pub use type_explanation::{TypeExplanation, TypeExplanationStep, TypeExplanationStepKind};
 pub use types::{
-    build_type_environment, is_assignable, FunctionParameter, FunctionType, PrimitiveType,
-    TableField, TableShape, Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,
+    build_type_environment, is_assignable, AssignabilityFailure, AssignabilityFailureKind,
+    AssignabilityPathSegment, FunctionParameter, FunctionType, PrimitiveType, TableField,
+    TableShape, Type, TypeContext, TypeEnvironment, TypedFunction, TypedParameter,
 };
 pub use vfs::{
     file_uri_from_path, module_name_for_path, normalize_path, path_from_file_uri,
