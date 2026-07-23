@@ -74,6 +74,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Static module exports now preserve nominal class identity and inheritance, so
+  structurally identical classes remain distinct across `require` and `import`
+  boundaries.
 - Classes may now extend a parent declared later in the file. Lowering keeps a
   stable forward parent table, so inherited methods and `super` calls work once
   the parent declaration has executed.

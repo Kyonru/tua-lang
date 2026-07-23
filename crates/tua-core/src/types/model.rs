@@ -245,6 +245,9 @@ pub struct TableShape {
     metatable: Option<Box<MetatableFacts>>,
     self_index: bool,
     constructor_methods: BTreeSet<String>,
+    nominal_identity: Option<String>,
+    nominal_name: Option<String>,
+    nominal_supertypes: BTreeSet<String>,
 }
 
 impl TableShape {
@@ -254,6 +257,9 @@ impl TableShape {
             metatable: None,
             self_index: false,
             constructor_methods: BTreeSet::new(),
+            nominal_identity: None,
+            nominal_name: None,
+            nominal_supertypes: BTreeSet::new(),
         }
     }
 
@@ -306,6 +312,7 @@ impl TableShape {
             && self.metatable.is_none()
             && !self.self_index
             && self.constructor_methods.is_empty()
+            && self.nominal_identity.is_none()
     }
 
     pub fn semantic_fields(&self) -> BTreeMap<String, TableField> {
@@ -360,6 +367,38 @@ impl TableShape {
 
     pub fn constructor_methods(&self) -> impl Iterator<Item = &str> {
         self.constructor_methods.iter().map(String::as_str)
+    }
+
+    pub(crate) fn mark_nominal(
+        &mut self,
+        identity: impl Into<String>,
+        name: impl Into<String>,
+        supertypes: impl IntoIterator<Item = String>,
+    ) {
+        self.nominal_identity = Some(identity.into());
+        self.nominal_name = Some(name.into());
+        self.nominal_supertypes = supertypes.into_iter().collect();
+    }
+
+    pub(crate) fn nominal_identity(&self) -> Option<&str> {
+        self.nominal_identity.as_deref()
+    }
+
+    pub(crate) fn nominal_name(&self) -> Option<&str> {
+        self.nominal_name.as_deref()
+    }
+
+    pub(crate) fn is_nominal_subtype_of(&self, identity: &str) -> bool {
+        self.nominal_identity() == Some(identity) || self.nominal_supertypes.contains(identity)
+    }
+
+    pub(crate) fn copy_semantic_metadata_from(&mut self, source: &Self) {
+        self.metatable = source.metatable.clone();
+        self.self_index = source.self_index;
+        self.constructor_methods = source.constructor_methods.clone();
+        self.nominal_identity = source.nominal_identity.clone();
+        self.nominal_name = source.nominal_name.clone();
+        self.nominal_supertypes = source.nominal_supertypes.clone();
     }
 }
 
@@ -638,6 +677,10 @@ fn fmt_type(ty: &Type, formatter: &mut fmt::Formatter<'_>, depth: usize) -> fmt:
             }
         }
         Type::Table(table) => {
+            if let Some(name) = table.nominal_name() {
+                return write!(formatter, "{name}");
+            }
+
             write!(formatter, "{{ ")?;
             for (index, (name, field)) in table.fields().enumerate() {
                 if index > 0 {

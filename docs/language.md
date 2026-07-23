@@ -655,9 +655,12 @@ instead of being discarded during class lowering.
 
 Constructors return the declared class type, and methods keep their exact
 parameter and return types across hover, completion, signature help, checking,
-definition, outlines, workspace symbols, and static module exports. Duplicate
-`init` declarations, inheritance cycles, extending non-open classes, missing or
-spurious `override`, and override signature drift are diagnosed.
+definition, outlines, workspace symbols, and static module exports. Static
+`require` and `import` boundaries also preserve nominal class identity and
+inheritance, so two structurally identical exported classes are not
+interchangeable. Duplicate `init` declarations, inheritance cycles, extending
+non-open classes, missing or spurious `override`, and override signature drift
+are diagnosed.
 
 Inside `init` and instance methods, `self` resolves to the enclosing class.
 Completion after `self.` and member hover include declared and inherited fields

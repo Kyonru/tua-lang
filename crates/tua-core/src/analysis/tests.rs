@@ -2821,6 +2821,57 @@ return {
 }
 
 #[test]
+fn snapshot_preserves_nominal_class_identity_across_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Classes = require("classes")
+Classes.acceptA(Classes.A.new())
+Classes.acceptA(Classes.Child.new())
+Classes.acceptA(Classes.B.new())
+-- file: src/classes.tua
+open class A {
+  value: number = 1
+}
+
+final class Child extends A {
+}
+
+final class B {
+  value: number = 1
+}
+
+local function acceptA(value: A): A
+  return value
+end
+
+return {
+  A = A,
+  Child = Child,
+  B = B,
+  acceptA = acceptA,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+
+    assert_eq!(mismatches.len(), 1, "{diagnostics:?}");
+    assert!(
+        mismatches[0].message.contains("expected A, found B"),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn snapshot_definition_uses_indexed_module_exports_without_reading_files() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

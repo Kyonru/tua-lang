@@ -14,7 +14,7 @@ use crate::deprecation::{deprecated_declarations, Deprecation};
 use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
-use crate::semantic::{resolve_aliases, SemanticModel};
+use crate::semantic::SemanticModel;
 use crate::types::{
     build_type_environment, function_type_from_tua_signature, FunctionParameter, FunctionType,
     TableField, Type, TypeEnvironment, TypedFunction,
@@ -409,7 +409,7 @@ impl<'a> ExportInferer<'a> {
                 };
 
                 if let Some((table, field)) = name.split_once('.') {
-                    let ty = typed_function_type(function);
+                    let ty = self.resolve_export_type(&typed_function_type(function));
 
                     self.table_members
                         .entry(table.trim().to_owned())
@@ -703,6 +703,7 @@ impl<'a> ExportInferer<'a> {
             .environment
             .and_then(|environment| environment.class_value_type(name))
         {
+            let ty = self.resolve_export_type(&ty);
             self.locals.insert(name.to_owned(), ty.clone());
 
             return Some(ty);
@@ -712,7 +713,7 @@ impl<'a> ExportInferer<'a> {
             .environment
             .and_then(|environment| environment.function(name))
         {
-            let ty = typed_function_type(function);
+            let ty = self.resolve_export_type(&typed_function_type(function));
 
             self.locals.insert(name.to_owned(), ty.clone());
 
@@ -888,23 +889,120 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
 }
 
 fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {
-    match resolve_aliases(environment, ty, 0) {
-        Type::Table(table) => Type::table(table.fields().map(|(name, field)| {
-            (
-                name.to_owned(),
-                TableField {
-                    ty: resolve_export_aliases(environment, &field.ty),
-                    optional: field.optional,
-                },
-            )
-        })),
-        Type::Union(types) => Type::union(
-            types
+    resolve_export_aliases_inner(
+        environment,
+        ty,
+        true,
+        &mut std::collections::BTreeSet::new(),
+    )
+}
+
+fn resolve_export_aliases_inner(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    expand_non_class_alias: bool,
+    visiting: &mut std::collections::BTreeSet<String>,
+) -> Type {
+    match ty {
+        Type::Alias(name) => {
+            if !environment.is_class(name) && !expand_non_class_alias {
+                return ty.clone();
+            }
+            if !visiting.insert(name.clone()) {
+                return nominal_alias_stub(environment, name).unwrap_or(Type::Any);
+            }
+
+            let resolved = if environment.is_class(name) {
+                environment.alias(name).cloned()
+            } else {
+                Some(environment.resolve_aliases(ty))
+            };
+            let result = resolved
+                .filter(|resolved| resolved != ty)
+                .map(|resolved| {
+                    resolve_export_aliases_inner(environment, &resolved, false, visiting)
+                })
+                .unwrap_or_else(|| ty.clone());
+            visiting.remove(name);
+
+            result
+        }
+        Type::Function(function) => {
+            let parameters = function
+                .parameters
                 .iter()
-                .map(|ty| resolve_export_aliases(environment, ty)),
+                .map(|parameter| FunctionParameter {
+                    name: parameter.name.clone(),
+                    ty: resolve_export_aliases_inner(environment, &parameter.ty, false, visiting),
+                })
+                .collect::<Vec<_>>();
+            let vararg_type = function
+                .vararg_type
+                .as_deref()
+                .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting));
+            let return_types = function
+                .return_types_or_any()
+                .iter()
+                .map(|ty| resolve_export_aliases_inner(environment, ty, false, visiting))
+                .collect::<Vec<_>>();
+
+            Type::Function(FunctionType::new_signature(
+                parameters,
+                function.required_parameter_count,
+                vararg_type,
+                return_types,
+            ))
+        }
+        Type::Table(table) => {
+            let mut resolved =
+                crate::TableShape::from_fields(table.fields().map(|(name, field)| {
+                    (
+                        name.to_owned(),
+                        TableField {
+                            ty: resolve_export_aliases_inner(
+                                environment,
+                                &field.ty,
+                                false,
+                                visiting,
+                            ),
+                            optional: field.optional,
+                        },
+                    )
+                }));
+            resolved.copy_semantic_metadata_from(table);
+
+            Type::Table(resolved)
+        }
+        Type::Union(types) => Type::union(types.iter().map(|ty| {
+            resolve_export_aliases_inner(environment, ty, expand_non_class_alias, visiting)
+        })),
+        Type::Array(item) => Type::array(resolve_export_aliases_inner(
+            environment,
+            item,
+            expand_non_class_alias,
+            visiting,
+        )),
+        Type::Tuple(items) => Type::tuple(items.iter().map(|ty| {
+            resolve_export_aliases_inner(environment, ty, expand_non_class_alias, visiting)
+        })),
+        Type::Dictionary { key, value } => Type::dictionary(
+            resolve_export_aliases_inner(environment, key, expand_non_class_alias, visiting),
+            resolve_export_aliases_inner(environment, value, expand_non_class_alias, visiting),
         ),
-        resolved => resolved,
+        Type::Any | Type::Primitive(_) | Type::StringLiteral(_) => ty.clone(),
     }
+}
+
+fn nominal_alias_stub(environment: &TypeEnvironment, name: &str) -> Option<Type> {
+    let Type::Table(table) = environment.alias(name)? else {
+        return None;
+    };
+    table.nominal_identity()?;
+
+    let mut stub = crate::TableShape::new();
+    stub.copy_semantic_metadata_from(table);
+
+    Some(Type::Table(stub))
 }
 
 fn lua_doc_code_field_annotations(

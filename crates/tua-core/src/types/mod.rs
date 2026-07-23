@@ -54,18 +54,7 @@ pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
                     },
                 )
             }));
-
-            if let Some(facts) = table.metatable_facts() {
-                widened.set_metatable_facts(facts.clone());
-            }
-
-            if table.has_self_index() {
-                widened.mark_self_index();
-            }
-
-            for method in table.constructor_methods() {
-                widened.mark_constructor_method(method);
-            }
+            widened.copy_semantic_metadata_from(table);
 
             Type::Table(widened)
         }

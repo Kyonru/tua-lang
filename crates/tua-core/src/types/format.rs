@@ -98,6 +98,10 @@ fn type_doc(ty: &Type, depth: usize) -> TypeDoc {
             ])
         }
         Type::Table(table) => {
+            if let Some(name) = table.nominal_name() {
+                return text(name);
+            }
+
             let fields = table
                 .fields()
                 .map(|(name, field)| {

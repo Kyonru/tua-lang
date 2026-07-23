@@ -311,10 +311,7 @@ impl ProjectTypeDatabase {
                             },
                         )
                     }));
-
-                if let Some(facts) = table.metatable_facts() {
-                    resolved_table.set_metatable_facts(facts.clone());
-                }
+                resolved_table.copy_semantic_metadata_from(table);
 
                 Type::Table(resolved_table)
             }

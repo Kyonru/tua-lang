@@ -370,15 +370,7 @@ impl AliasResolutionContext {
                             },
                         )
                     }));
-                if let Some(facts) = table.metatable_facts() {
-                    resolved.set_metatable_facts(facts.clone());
-                }
-                if table.has_self_index() {
-                    resolved.mark_self_index();
-                }
-                for method in table.constructor_methods() {
-                    resolved.mark_constructor_method(method);
-                }
+                resolved.copy_semantic_metadata_from(table);
                 Type::Table(resolved)
             }
             Type::Array(item) => Type::array(self.resolve(environment, item)),
@@ -707,7 +699,40 @@ fn class_alias_type(
         &context,
         &mut fields,
     );
-    Type::table(fields)
+    let mut table = super::TableShape::from_fields(fields);
+    table.mark_nominal(
+        nominal_class_identity(&parsed.path, class_name),
+        class_name,
+        class_nominal_supertypes(parsed, class_name),
+    );
+
+    Type::Table(table)
+}
+
+fn nominal_class_identity(path: &Path, class_name: &str) -> String {
+    format!("{}::class::{class_name}", path.to_string_lossy())
+}
+
+fn class_nominal_supertypes(parsed: &ParsedSource, class_name: &str) -> Vec<String> {
+    let mut supertypes = Vec::new();
+    let mut current = class_name;
+    let mut visited = BTreeSet::new();
+
+    while visited.insert(current.to_owned()) {
+        let Some(parent) = parsed
+            .class_declarations
+            .iter()
+            .find(|class| class.name == current)
+            .and_then(|class| class.parent.as_deref())
+        else {
+            break;
+        };
+
+        supertypes.push(nominal_class_identity(&parsed.path, parent));
+        current = parent;
+    }
+
+    supertypes
 }
 
 fn collect_class_alias_fields(

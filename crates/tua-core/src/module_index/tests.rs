@@ -103,6 +103,53 @@ return {
 }
 
 #[test]
+fn preserves_nominal_class_types_in_static_module_exports() {
+    let parsed = parse_tua_source(
+        "src/classes.tua",
+        r#"
+final class A {
+  value: number = 1
+}
+
+final class B {
+  value: number = 1
+}
+
+local function acceptA(value: A): A
+  return value
+end
+
+return {
+  A = A,
+  B = B,
+  acceptA = acceptA,
+}
+"#,
+    )
+    .expect("Tua source should parse");
+    let exports = infer_module_exports(&parsed).expect("exports should be inferred");
+
+    let Some(Type::Function(accept_a)) = exports.field("acceptA") else {
+        panic!("acceptA should retain its function type");
+    };
+    let Type::Table(parameter) = &accept_a.parameters[0].ty else {
+        panic!("acceptA parameter should resolve to the nominal class type");
+    };
+    assert_eq!(parameter.nominal_name(), Some("A"));
+
+    let Some(Type::Table(class_b)) = exports.field("B") else {
+        panic!("B should export its class value");
+    };
+    let Some(Type::Function(new_b)) = class_b.field("new").map(|field| &field.ty) else {
+        panic!("B.new should retain its constructor type");
+    };
+    let Type::Table(instance_b) = new_b.return_type.as_ref() else {
+        panic!("B.new should return the nominal class type");
+    };
+    assert_eq!(instance_b.nominal_name(), Some("B"));
+}
+
+#[test]
 fn infers_exports_from_returned_tua_module_table() {
     let parsed = parse_tua_source(
         "src/score.tua",

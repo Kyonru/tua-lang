@@ -256,6 +256,10 @@ impl TypeContext {
         depth: usize,
         resolving: &mut BTreeSet<(bool, String)>,
     ) -> bool {
+        if let Some(target_identity) = target.nominal_identity() {
+            return source.is_nominal_subtype_of(target_identity);
+        }
+
         target.fields().all(|(name, target_field)| {
             if is_index_signature_field(name) {
                 return true;
