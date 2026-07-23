@@ -662,6 +662,18 @@ interchangeable. Duplicate `init` declarations, inheritance cycles, extending
 non-open classes, missing or spurious `override`, and override signature drift
 are diagnosed.
 
+Class names, fields, and methods participate in source definition, references,
+and rename. This includes accesses through locally inferred instances and
+instances exported from static modules; edits target the original class syntax,
+not generated Lua. Dynamic values typed as `any` remain outside this guarantee.
+
+Inherited fields may be redeclared only when their resolved type is unchanged.
+Every field whose type excludes `nil` must also be initialized on every path
+that returns from the constructor. A field default, a definite `self.field =`
+assignment, or a guaranteed `super(...)` call can satisfy the contract;
+assigning in only one conditional branch cannot. Fields whose type accepts
+`nil` may remain absent, matching Lua's field semantics.
+
 Inside `init` and instance methods, `self` resolves to the enclosing class.
 Completion after `self.` and member hover include declared and inherited fields
 and methods with their exact types.
@@ -669,7 +681,9 @@ and methods with their exact types.
 `init` supports typed varargs. Generated constructors forward every declared
 parameter, including `...`, and standalone `super(...)` or `super.method(...)`
 calls preserve their argument expressions. Member calls such as
-`helper.super()` remain ordinary Lua calls.
+`helper.super()` remain ordinary Lua calls. A subclass's constructor signature
+is independent of its parent's signature; the arguments passed to
+`super(...)` are checked separately against the parent initializer.
 
 A child class may appear before its parent in the same file. Tua gives the
 later parent a stable forward table, so inherited methods and `super` calls work

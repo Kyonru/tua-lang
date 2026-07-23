@@ -135,6 +135,49 @@ local after = value
     assert_eq!(texts(source, &inner), vec!["value", "value"]);
 }
 
+#[test]
+fn class_names_fields_and_methods_reference_original_source_symbols() {
+    let source = r#"
+open class Entity {
+  health: number = 10
+
+  damage(amount: number) {
+    self.health -= amount
+  }
+}
+
+local entity = Entity.new()
+local typed: Entity = entity
+print(entity.health)
+entity:damage(1)
+"#;
+    let class_references = references_tua_source(
+        "src/entity.tua",
+        source,
+        position_at(source, "Entity.new"),
+        true,
+    )
+    .expect("source should parse");
+    let mut field_position = position_at(source, "entity.health");
+    field_position.column += "entity.".len();
+    let field_references = references_tua_source("src/entity.tua", source, field_position, true)
+        .expect("source should parse");
+    let mut method_position = position_at(source, "entity:damage");
+    method_position.column += "entity:".len();
+    let method_references = references_tua_source("src/entity.tua", source, method_position, true)
+        .expect("source should parse");
+
+    assert_eq!(
+        texts(source, &class_references),
+        vec!["Entity", "Entity", "Entity"]
+    );
+    assert_eq!(
+        texts(source, &field_references),
+        vec!["health", "health", "health"]
+    );
+    assert_eq!(texts(source, &method_references), vec!["damage", "damage"]);
+}
+
 fn references_at(needle: &str, offset: usize, include_declaration: bool) -> Vec<Reference> {
     let mut position = position_at(SOURCE, needle);
 

@@ -21,6 +21,7 @@ pub enum RenameKind {
     Local,
     Function,
     Parameter,
+    TableField,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -120,7 +121,7 @@ pub fn rename_kind_for_definition(kind: DefinitionKind) -> Option<RenameKind> {
         DefinitionKind::Local => Some(RenameKind::Local),
         DefinitionKind::Function => Some(RenameKind::Function),
         DefinitionKind::Parameter => Some(RenameKind::Parameter),
-        DefinitionKind::TableField => None,
+        DefinitionKind::TableField => Some(RenameKind::TableField),
     }
 }
 
@@ -131,6 +132,7 @@ pub fn reference_kind_for_rename(kind: RenameKind) -> ReferenceKind {
         RenameKind::Local => ReferenceKind::Local,
         RenameKind::Function => ReferenceKind::Function,
         RenameKind::Parameter => ReferenceKind::Parameter,
+        RenameKind::TableField => ReferenceKind::TableField,
     }
 }
 

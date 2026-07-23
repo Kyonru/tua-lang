@@ -133,12 +133,22 @@ default: only `open class` declarations can be extended. Class method returns
 may use table shapes, while unrecognized class-body syntax is rejected as
 `TL1008` rather than erased during lowering. Each class's field defaults run
 after its `init` assignments; direct-table constructor optimization preserves
-the same order. Constructor signatures and calls preserve typed varargs, and
+the same order. Inherited field redeclarations must keep the same resolved type,
+and fields whose type excludes `nil` must be initialized on every returning
+constructor path by a definite assignment, field default, or parent
+initializer. Constructor signatures and calls preserve typed varargs, and
 standalone `super(...)` calls forward their argument expressions exactly;
-member fields named `super` remain ordinary Lua members. A child may be
-declared before its parent: lowering keeps a stable forward parent table so
-inheritance works once the parent declaration has executed, without executing
-the parent early.
+subclasses may declare constructor signatures independent of their parents
+while each `super(...)` call is checked against the parent initializer. Member
+fields named `super` remain ordinary Lua members. A child may be declared
+before its parent: lowering keeps a stable forward parent table so inheritance
+works once the parent declaration has executed, without executing the parent
+early.
+
+Class declarations and their fields and methods have stable source identities
+for definition, references, and rename. Nominal class metadata preserves those
+identities through statically resolved module exports, including exported
+instances; generated Lua locations are not exposed as navigation targets.
 
 ## Modules And Lua Interoperability
 

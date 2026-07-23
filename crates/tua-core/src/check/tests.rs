@@ -2087,6 +2087,22 @@ local level: number = leaf:level()
 }
 
 #[test]
+fn assignments_shadow_metatable_index_fields_instead_of_overriding_them() {
+    check_tua_source(
+        "src/inheritance.tua",
+        r#"
+local Base = { value = 1 }
+local Child = {}
+setmetatable(Child, { __index = Base })
+
+Child.value = "child"
+local value: string = Child.value
+"#,
+    )
+    .expect("a direct table write may shadow a differently typed __index field");
+}
+
+#[test]
 fn accepts_callable_tables_with_static_call_metamethods() {
     check_tua_source(
         "src/callable.tua",
@@ -2596,6 +2612,63 @@ particle.x = particle.speed
 }
 
 #[test]
+fn accepts_independent_subclass_constructor_signatures_and_checks_super_arguments() {
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+open class Base {
+  name: string
+
+  init(name: string) {
+    self.name = name
+  }
+}
+
+final class Child extends Base {
+  id: number
+
+  init(id: number, name: string) {
+    super(name)
+    self.id = id
+  }
+}
+
+local base = Base.new("base")
+local child = Child.new(1, "child")
+"#,
+    )
+    .expect("subclass constructors may intentionally differ from their parent");
+
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+open class Base {
+  name: string
+
+  init(name: string) {
+    self.name = name
+  }
+}
+
+final class Child extends Base {
+  id: number
+
+  init(id: number) {
+    super(id)
+    self.id = id
+  }
+}
+"#,
+    )
+    .expect_err("super arguments should still match the parent initializer");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("expected string, found number")
+    }));
+}
+
+#[test]
 fn accepts_class_any_fields_initialized_with_table_literals() {
     check_tua_source(
         "src/classes.tua",
@@ -2830,6 +2903,135 @@ final class Child extends Base {
     assert!(diagnostics
         .iter()
         .any(|diagnostic| diagnostic.message.contains("signature incompatible")));
+}
+
+#[test]
+fn rejects_incompatible_inherited_class_field_redeclarations() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+open class Base {
+  value: number = 1
+}
+
+final class Child extends Base {
+  value: string = "wrong"
+}
+"#,
+    )
+    .expect_err("inherited fields should keep their parent contract");
+
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_CLASS)
+                && diagnostic.message.contains("inherited field `value`")
+        })
+        .expect("incompatible inherited field should report TL1008");
+
+    assert_eq!(
+        diagnostic.message,
+        "inherited field `value` in class `Child` has type `string`, but class `Base` declares `number`"
+    );
+
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+type Count = number
+
+open class Base {
+  value: Count = 1
+}
+
+final class Child extends Base {
+  value: number = 2
+}
+"#,
+    )
+    .expect("an inherited field may keep the resolved parent contract");
+}
+
+#[test]
+fn requires_class_fields_to_be_initialized_on_every_constructor_path() {
+    let diagnostics = check_tua_source(
+        "src/classes.tua",
+        r#"
+final class Missing {
+  value: number
+
+  init(flag: boolean) {
+    if flag then
+      self.value = 1
+    end
+  }
+}
+
+final class EarlyReturn {
+  value: number = 1
+
+  init(skip: boolean) {
+    if skip then
+      return
+    end
+  }
+}
+
+open class Base {
+  inherited: number
+
+  init() {
+    self.inherited = 1
+  }
+}
+
+final class Child extends Base {
+  init() {
+  }
+}
+"#,
+    )
+    .expect_err("required fields should be initialized on every constructor path");
+
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_CLASS))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(messages.contains(&"class `Missing` does not initialize required field `value`"));
+    assert!(messages.contains(&"class `EarlyReturn` does not initialize required field `value`"));
+    assert!(messages.contains(&"class `Child` does not initialize inherited field `inherited`"));
+    assert_eq!(messages.len(), 3);
+
+    check_tua_source(
+        "src/classes.tua",
+        r#"
+final class Complete extends Base {
+  value: number
+  maybe: number | nil
+
+  init() {
+    super()
+    if self.inherited > 0 then
+      self.value = 1
+    else
+      self.value = 2
+    end
+  }
+}
+
+open class Base {
+  inherited: number
+
+  init() {
+    self.inherited = 1
+  }
+}
+"#,
+    )
+    .expect(
+        "all branches, forward super initialization, and nil-capable fields should be accepted",
+    );
 }
 
 #[test]

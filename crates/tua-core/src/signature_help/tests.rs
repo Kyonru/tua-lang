@@ -899,6 +899,38 @@ counter:add(
     );
 }
 
+#[test]
+fn returns_independent_subclass_constructor_signatures() {
+    let source = r#"
+open class Base {
+  name: string
+
+  init(name: string) {
+    self.name = name
+  }
+}
+
+final class Child extends Base {
+  id: number
+
+  init(id: number, name: string) {
+    super(name)
+    self.id = id
+  }
+}
+
+local child = Child.new(
+)
+"#;
+    let constructor = signature_at(source, "Child.new(")
+        .expect("subclass constructor should provide signature help");
+
+    assert_eq!(
+        constructor.signatures[0].label,
+        "function Child.new(id: number, name: string): Child"
+    );
+}
+
 fn signature_at(source: &str, needle: &str) -> Option<SignatureHelp> {
     signature_help_tua_source("src/main.tua", source, position_after(source, needle))
         .expect("signature help should not fail")

@@ -74,6 +74,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Class names, fields, and methods now support source-accurate definition,
+  references, and project-wide rename, including nominal instances exported
+  through static modules. Resolved named table-shape fields are also renameable.
+- Class inheritance now preserves field contracts: redeclarations must keep the
+  resolved parent type, and non-`nil` fields must be initialized on every
+  constructor path through an assignment, default, or guaranteed parent
+  initializer.
 - Static module exports now preserve nominal class identity and inheritance, so
   structurally identical classes remain distinct across `require` and `import`
   boundaries.
@@ -82,7 +89,9 @@ language or editor behavior, and migration notes call out those changes.
   the parent declaration has executed.
 - Class constructors now forward typed varargs and preserve every explicit
   `super(...)` argument, while member calls such as `helper.super()` remain
-  ordinary Lua calls.
+  ordinary Lua calls. Subclasses may declare constructor signatures independent
+  of their parents; each `super(...)` call is still checked against the parent
+  initializer.
 - Optimized class constructors now preserve explicit constructor semantics by
   applying each class's `init` assignments before its field defaults.
 - Class parsing now preserves class-like text in Lua long-bracket strings and

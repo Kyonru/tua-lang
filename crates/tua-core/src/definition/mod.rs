@@ -8,12 +8,11 @@ use full_moon::ast::{
 };
 use full_moon::node::Node;
 
+use crate::classes::{class_member_target as class_member_source_target, ClassMemberKind};
 use crate::hir::{lower_parsed_source, HirModule, HirSymbol, HirSymbolKind};
 use crate::module_index::resolve_module_specifier;
 use crate::module_link::{module_specifier_at_position, ModuleSpecifierKind};
-use crate::parser::{
-    parse_lua_source, parse_tua_type_text, ParsedSource, SourcePosition, SourceSpan, TuaType,
-};
+use crate::parser::{parse_lua_source, ParsedSource, SourcePosition, SourceSpan, TuaType};
 use crate::semantic::SemanticModel;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
@@ -442,35 +441,16 @@ fn class_member_target(
         return None;
     }
 
-    let class = parsed
-        .class_declarations
-        .iter()
-        .find(|class| class.name == class_name)?;
+    let target = class_member_source_target(parsed, class_name, member)?;
 
-    if let Some(field) = class.fields.iter().find(|field| field.name == member) {
-        return Some(FieldTarget {
-            span: field.name_span,
-            ty: type_from_tua_type(&field.parsed_ty),
-            kind: DefinitionKind::TableField,
-        });
-    }
-
-    if let Some(method) = class.methods.iter().find(|method| method.name == member) {
-        return Some(FieldTarget {
-            span: method.name_span,
-            ty: type_from_tua_type(&parse_tua_type_text(&format!(
-                "({}) -> {}",
-                method.parameters,
-                method.return_type.as_deref().unwrap_or("any")
-            ))),
-            kind: DefinitionKind::Function,
-        });
-    }
-
-    class
-        .parent
-        .as_deref()
-        .and_then(|parent| class_member_target(parsed, parent, member, depth + 1))
+    Some(FieldTarget {
+        span: target.span,
+        ty: type_from_tua_type(&target.ty),
+        kind: match target.kind {
+            ClassMemberKind::Field => DefinitionKind::TableField,
+            ClassMemberKind::Method => DefinitionKind::Function,
+        },
+    })
 }
 
 #[derive(Clone, Debug)]

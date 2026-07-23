@@ -1897,8 +1897,10 @@ impl<'a> Checker<'a> {
             Var::Name(name) => self.infer_named_assignment_target(&token_text(name)),
             Var::Expression(expression) => {
                 let parts = plain_field_chain_from_var_expression(expression)?;
+                let (field, receiver_parts) = parts.split_last()?;
+                let receiver_type = self.resolve_field_chain_type(receiver_parts)?;
 
-                self.resolve_field_chain_type(&parts)
+                self.resolve_direct_table_field_type(&receiver_type, field)
                     .or_else(|| self.resolve_newindex_assignment_type(&parts))
             }
             _ => None,
@@ -1944,6 +1946,25 @@ impl<'a> Checker<'a> {
         }
 
         None
+    }
+
+    fn resolve_direct_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {
+        match resolve_aliases(ty, self.environment, 0) {
+            Type::Table(table) => table.field(field).map(|field| field.ty.clone()),
+            Type::Union(types) => {
+                let resolved = types
+                    .iter()
+                    .filter_map(|ty| self.resolve_direct_table_field_type(ty, field))
+                    .collect::<Vec<_>>();
+
+                match resolved.len() {
+                    0 => None,
+                    1 => resolved.into_iter().next(),
+                    _ => Some(Type::union(resolved)),
+                }
+            }
+            _ => None,
+        }
     }
 
     fn resolve_table_field_type(&self, ty: &Type, field: &str) -> Option<Type> {

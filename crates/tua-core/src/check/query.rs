@@ -70,6 +70,12 @@ impl<'a> CheckQuery<'a> {
 
             checker.check_block(self.parsed.ast.nodes(), None);
             checker.remap_parser_diagnostics();
+            checker
+                .diagnostics
+                .extend(classes::class_contract_diagnostics(
+                    self.parsed,
+                    environment,
+                ));
 
             if self.options.diagnostics_config.doc_annotations {
                 checker

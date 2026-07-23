@@ -4,10 +4,14 @@ use std::path::PathBuf;
 use full_moon::ast::{self, Expression, FunctionArgs, Prefix, Suffix};
 use full_moon::node::Node;
 
+use crate::classes::{
+    class_member_target as class_member_source_target, nominal_class_identity, ClassMemberKind,
+};
 use crate::hir::{HirModule, HirSymbol, HirSymbolKind};
 use crate::module_link::module_specifier_at_position;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+    source_identifiers,
 };
 use crate::types::type_from_tua_type;
 use crate::{
@@ -104,10 +108,8 @@ impl SemanticIndex {
         hir: Option<&HirModule>,
         environment: &TypeEnvironment,
     ) {
-        for token in parsed.ast.tokens() {
-            let Some(span) = node_span(token) else {
-                continue;
-            };
+        for identifier in source_identifiers(&parsed.source) {
+            let span = identifier.span;
             if self.definitions.contains_key(&SpanKey::from(span)) {
                 continue;
             }
@@ -270,9 +272,19 @@ fn field_definition_target(
         current = target.ty;
 
         if index == fields.len() - 1 {
-            return Some(DefinitionTarget::TypeField {
-                path: parsed.path.clone(),
-                span: target.span.or(source_span)?,
+            let span = target.span.or(source_span)?;
+
+            return Some(if target.kind == DefinitionKind::Function {
+                DefinitionTarget::Symbol {
+                    path: parsed.path.clone(),
+                    span,
+                    kind: DefinitionKind::Function,
+                }
+            } else {
+                DefinitionTarget::TypeField {
+                    path: parsed.path.clone(),
+                    span,
+                }
             });
         }
     }
@@ -418,6 +430,17 @@ fn field_target(
 
     match ty {
         Type::Alias(name) => {
+            if let Some(target) = class_member_source_target(parsed, name, field) {
+                return Some(FieldTarget {
+                    span: Some(target.span),
+                    ty: type_from_tua_type(&target.ty),
+                    kind: match target.kind {
+                        ClassMemberKind::Field => DefinitionKind::TableField,
+                        ClassMemberKind::Method => DefinitionKind::Function,
+                    },
+                });
+            }
+
             let alias = parsed
                 .type_aliases
                 .iter()
@@ -433,6 +456,7 @@ fn field_target(
                         Some(FieldTarget {
                             span: Some(span),
                             ty: type_from_tua_type(&candidate.ty),
+                            kind: DefinitionKind::TableField,
                         })
                     }),
                 other => field_target(parsed, &type_from_tua_type(other), field, depth + 1),
@@ -441,10 +465,28 @@ fn field_target(
         Type::Union(types) => types
             .iter()
             .find_map(|ty| field_target(parsed, ty, field, depth + 1)),
-        Type::Table(table) => table.semantic_field(field).map(|field| FieldTarget {
-            span: None,
-            ty: field.ty.clone(),
-        }),
+        Type::Table(table) => {
+            if let (Some(identity), Some(name)) = (table.nominal_identity(), table.nominal_name()) {
+                if identity == nominal_class_identity(&parsed.path, name) {
+                    if let Some(target) = class_member_source_target(parsed, name, field) {
+                        return Some(FieldTarget {
+                            span: Some(target.span),
+                            ty: type_from_tua_type(&target.ty),
+                            kind: match target.kind {
+                                ClassMemberKind::Field => DefinitionKind::TableField,
+                                ClassMemberKind::Method => DefinitionKind::Function,
+                            },
+                        });
+                    }
+                }
+            }
+
+            table.semantic_field(field).map(|field| FieldTarget {
+                span: None,
+                ty: field.ty.clone(),
+                kind: DefinitionKind::TableField,
+            })
+        }
         Type::Any
         | Type::Function(_)
         | Type::Primitive(_)
@@ -459,6 +501,7 @@ fn field_target(
 struct FieldTarget {
     span: Option<SourceSpan>,
     ty: Type,
+    kind: DefinitionKind,
 }
 
 fn enclosing_method_owner(parsed: &ParsedSource, position: SourcePosition) -> Option<String> {

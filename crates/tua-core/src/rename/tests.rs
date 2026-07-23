@@ -75,9 +75,15 @@ fn renames_parameters_within_the_file() {
 }
 
 #[test]
-fn rejects_table_fields_unknowns_any_fields_and_invalid_names() {
-    assert!(prepare_at("target.hp", "target.".len()).is_none());
-    assert!(rename_at("target.hp", "target.".len(), "health").is_none());
+fn renames_resolved_table_fields_and_rejects_unknowns_and_invalid_names() {
+    let target = prepare_at("target.hp", "target.".len()).expect("field should be renameable");
+    let edit = rename_at("target.hp", "target.".len(), "health").expect("field should rename");
+
+    assert_eq!(target.kind, RenameKind::TableField);
+    assert_eq!(
+        edit_texts(&edit),
+        vec!["health", "health", "health", "health"]
+    );
     assert!(rename_at("payload.value", "payload.".len(), "value2").is_none());
     assert!(rename_at("missing", 0, "known").is_none());
     assert!(rename_at("player: Player", "player: ".len(), "not-valid").is_none());
@@ -111,6 +117,49 @@ local after = value
     assert!(renamed.contains("local inner = 2"));
     assert!(renamed.contains("local inside = inner"));
     assert!(renamed.contains("local after = value"));
+}
+
+#[test]
+fn renames_class_names_fields_and_methods_in_original_source() {
+    let source = r#"
+open class Entity {
+  health: number = 10
+
+  damage(amount: number) {
+    self.health -= amount
+  }
+}
+
+local entity = Entity.new()
+local typed: Entity = entity
+print(entity.health)
+entity:damage(1)
+"#;
+    let class_edit = rename_tua_source(
+        "src/entity.tua",
+        source,
+        position_at(source, "Entity.new"),
+        "Actor",
+    )
+    .expect("source should parse")
+    .expect("class should rename");
+    let mut field_position = position_at(source, "entity.health");
+    field_position.column += "entity.".len();
+    let field_edit = rename_tua_source("src/entity.tua", source, field_position, "hitPoints")
+        .expect("source should parse")
+        .expect("field should rename");
+    let mut method_position = position_at(source, "entity:damage");
+    method_position.column += "entity:".len();
+    let method_edit = rename_tua_source("src/entity.tua", source, method_position, "hurt")
+        .expect("source should parse")
+        .expect("method should rename");
+
+    assert_eq!(class_edit.edits.len(), 3);
+    assert_eq!(field_edit.edits.len(), 3);
+    assert_eq!(method_edit.edits.len(), 2);
+    assert!(apply_edit(source, &class_edit).contains("open class Actor"));
+    assert!(apply_edit(source, &field_edit).contains("self.hitPoints"));
+    assert!(apply_edit(source, &method_edit).contains("entity:hurt(1)"));
 }
 
 fn prepare_at(needle: &str, offset: usize) -> Option<RenameTarget> {

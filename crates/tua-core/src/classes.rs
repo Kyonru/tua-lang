@@ -2,7 +2,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::path::Path;
 
-use crate::parser::{parse_tua_type_text, SourcePosition, SourceSpan, TuaType};
+use full_moon::ast::{self, LastStmt};
+use full_moon::node::Node;
+
+use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var, token_text};
+use crate::parser::{parse_tua_type_text, ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::types::{Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,6 +49,19 @@ pub(crate) struct ClassMethod {
     pub parameters_span: SourceSpan,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClassMemberKind {
+    Field,
+    Method,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ClassMemberTarget {
+    pub kind: ClassMemberKind,
+    pub span: SourceSpan,
+    pub ty: TuaType,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ClassBlock {
     declaration: ClassDeclaration,
@@ -80,6 +98,51 @@ struct FlattenedField {
 
 type ClassMethodParameterSignature = (TuaType, bool, bool);
 type ClassMethodSignature = (Vec<ClassMethodParameterSignature>, Vec<TuaType>);
+type InitializedFields = BTreeSet<String>;
+
+pub(crate) fn nominal_class_identity(path: &Path, class_name: &str) -> String {
+    format!("{}::class::{class_name}", path.to_string_lossy())
+}
+
+pub(crate) fn class_member_target(
+    parsed: &ParsedSource,
+    class_name: &str,
+    member: &str,
+) -> Option<ClassMemberTarget> {
+    let mut current = class_name;
+    let mut visited = BTreeSet::new();
+
+    while visited.insert(current.to_owned()) {
+        let class = parsed
+            .class_declarations
+            .iter()
+            .find(|class| class.name == current)?;
+
+        if let Some(field) = class.fields.iter().find(|field| field.name == member) {
+            return Some(ClassMemberTarget {
+                kind: ClassMemberKind::Field,
+                span: field.name_span,
+                ty: field.parsed_ty.clone(),
+            });
+        }
+
+        if let Some(method) = class.methods.iter().find(|method| method.name == member) {
+            return Some(ClassMemberTarget {
+                kind: ClassMemberKind::Method,
+                span: method.name_span,
+                ty: parse_tua_type_text(&format!(
+                    "({}) -> {}",
+                    method.parameters,
+                    method.return_type.as_deref().unwrap_or("any")
+                )),
+            });
+        }
+
+        current = class.parent.as_deref()?;
+    }
+
+    None
+}
 
 pub(crate) fn parse_class_declarations(
     path: &Path,
@@ -1012,6 +1075,428 @@ fn validate_classes(path: &Path, classes: &[ClassDeclaration], diagnostics: &mut
 
         validate_overrides(path, class, classes, diagnostics);
     }
+}
+
+pub(crate) fn class_contract_diagnostics(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<Diagnostic> {
+    // Class syntax has already been lowered into the same init functions that
+    // checking and emission consume. Analyze those functions so field defaults,
+    // super calls, forward parents, and source behavior cannot drift apart.
+    let mut diagnostics = Vec::new();
+    let context = environment.to_type_context();
+    let mut initialization = ClassInitializationAnalysis::new(parsed);
+
+    for class in &parsed.class_declarations {
+        for field in &class.fields {
+            let Some((parent, parent_field)) =
+                inherited_field(&parsed.class_declarations, class, &field.name)
+            else {
+                continue;
+            };
+            let Some(field_type) = class_field_type(environment, &class.name, &field.name) else {
+                continue;
+            };
+            let Some(parent_type) = class_field_type(environment, &parent.name, &parent_field.name)
+            else {
+                continue;
+            };
+
+            if environment.resolve_aliases(field_type) != environment.resolve_aliases(parent_type) {
+                diagnostics.push(class_diagnostic(
+                    &parsed.path,
+                    field.name_span.start,
+                    format!(
+                        "inherited field `{}` in class `{}` has type `{}`, but class `{}` declares `{}`",
+                        field.name, class.name, field.ty, parent.name, parent_field.ty
+                    ),
+                ));
+            }
+        }
+
+        let initialized = initialization.initialized_fields(&class.name);
+        let mut effective_fields = BTreeMap::new();
+        collect_effective_class_fields(
+            &parsed.class_declarations,
+            class,
+            &mut effective_fields,
+            &mut BTreeSet::new(),
+        );
+
+        for (name, (owner, field)) in effective_fields {
+            let Some(field_type) = class_field_type(environment, &class.name, &name) else {
+                continue;
+            };
+
+            if context.is_assignable(&Type::nil(), field_type) || initialized.contains(&name) {
+                continue;
+            }
+
+            if owner.name != class.name {
+                let parent_initializes_field = class.parent.as_deref().is_some_and(|parent| {
+                    initialization.initialized_fields(parent).contains(&name)
+                });
+                if !parent_initializes_field {
+                    continue;
+                }
+            }
+
+            let (position, message) = if owner.name == class.name {
+                (
+                    field.name_span.start,
+                    format!(
+                        "class `{}` does not initialize required field `{name}`",
+                        class.name
+                    ),
+                )
+            } else {
+                (
+                    class.name_span.start,
+                    format!(
+                        "class `{}` does not initialize inherited field `{name}`",
+                        class.name
+                    ),
+                )
+            };
+            diagnostics.push(class_diagnostic(&parsed.path, position, message));
+        }
+    }
+
+    diagnostics
+}
+
+fn class_field_type<'a>(
+    environment: &'a TypeEnvironment,
+    class: &str,
+    field: &str,
+) -> Option<&'a Type> {
+    let Type::Table(table) = environment.alias(class)? else {
+        return None;
+    };
+
+    table.field(field).map(|field| &field.ty)
+}
+
+fn inherited_field<'a>(
+    classes: &'a [ClassDeclaration],
+    class: &ClassDeclaration,
+    field: &str,
+) -> Option<(&'a ClassDeclaration, &'a ClassField)> {
+    let parent = class
+        .parent
+        .as_deref()
+        .and_then(|parent| class_by_name(classes, parent))?;
+
+    parent
+        .fields
+        .iter()
+        .find(|candidate| candidate.name == field)
+        .map(|field| (parent, field))
+        .or_else(|| inherited_field(classes, parent, field))
+}
+
+fn collect_effective_class_fields<'a>(
+    classes: &'a [ClassDeclaration],
+    class: &'a ClassDeclaration,
+    fields: &mut BTreeMap<String, (&'a ClassDeclaration, &'a ClassField)>,
+    visited: &mut BTreeSet<String>,
+) {
+    if !visited.insert(class.name.clone()) {
+        return;
+    }
+
+    if let Some(parent) = class
+        .parent
+        .as_deref()
+        .and_then(|parent| class_by_name(classes, parent))
+    {
+        collect_effective_class_fields(classes, parent, fields, visited);
+    }
+
+    for field in &class.fields {
+        fields.insert(field.name.clone(), (class, field));
+    }
+}
+
+#[derive(Clone, Debug)]
+struct InitializationFlow {
+    fallthrough: Option<InitializedFields>,
+    returns: Vec<InitializedFields>,
+    breaks: Vec<InitializedFields>,
+    continues: Vec<InitializedFields>,
+}
+
+impl InitializationFlow {
+    fn fallthrough(fields: InitializedFields) -> Self {
+        Self {
+            fallthrough: Some(fields),
+            returns: Vec::new(),
+            breaks: Vec::new(),
+            continues: Vec::new(),
+        }
+    }
+
+    fn append_exits(&mut self, other: &mut Self) {
+        self.returns.append(&mut other.returns);
+        self.breaks.append(&mut other.breaks);
+        self.continues.append(&mut other.continues);
+    }
+}
+
+struct ClassInitializationAnalysis<'a> {
+    parsed: &'a ParsedSource,
+    init_blocks: BTreeMap<String, ast::Block>,
+    initialized: BTreeMap<String, InitializedFields>,
+    visiting: BTreeSet<String>,
+}
+
+impl<'a> ClassInitializationAnalysis<'a> {
+    fn new(parsed: &'a ParsedSource) -> Self {
+        let class_names = parsed
+            .class_declarations
+            .iter()
+            .map(|class| class.name.as_str())
+            .collect::<BTreeSet<_>>();
+        let init_blocks = parsed
+            .ast
+            .nodes()
+            .stmts()
+            .filter_map(|statement| {
+                let ast::Stmt::LocalFunction(function) = statement else {
+                    return None;
+                };
+                let name = token_text(function.name());
+                let class = name.strip_suffix("_init")?;
+                if !class_names.contains(class) || !is_class_generated_node(parsed, function.name())
+                {
+                    return None;
+                }
+
+                Some((class.to_owned(), function.body().block().clone()))
+            })
+            .collect();
+
+        Self {
+            parsed,
+            init_blocks,
+            initialized: BTreeMap::new(),
+            visiting: BTreeSet::new(),
+        }
+    }
+
+    fn initialized_fields(&mut self, class_name: &str) -> InitializedFields {
+        if let Some(fields) = self.initialized.get(class_name) {
+            return fields.clone();
+        }
+        if !self.visiting.insert(class_name.to_owned()) {
+            return InitializedFields::new();
+        }
+
+        let Some(class) = class_by_name(&self.parsed.class_declarations, class_name) else {
+            self.visiting.remove(class_name);
+            return InitializedFields::new();
+        };
+        let parent = class.parent.clone();
+        let flow =
+            self.init_blocks.get(class_name).cloned().map(|block| {
+                self.analyze_block(&block, InitializedFields::new(), parent.as_deref())
+            });
+        let fields = flow.map(initialized_on_every_exit).unwrap_or_default();
+
+        self.visiting.remove(class_name);
+        self.initialized
+            .insert(class_name.to_owned(), fields.clone());
+        fields
+    }
+
+    fn analyze_block(
+        &mut self,
+        block: &ast::Block,
+        fields: InitializedFields,
+        parent: Option<&str>,
+    ) -> InitializationFlow {
+        let mut flow = InitializationFlow::fallthrough(fields);
+
+        for statement in block.stmts() {
+            let Some(current) = flow.fallthrough.take() else {
+                break;
+            };
+            let mut statement_flow = self.analyze_statement(statement, current, parent);
+            flow.fallthrough = statement_flow.fallthrough.take();
+            flow.append_exits(&mut statement_flow);
+        }
+
+        let Some(current) = flow.fallthrough.take() else {
+            return flow;
+        };
+        match block.last_stmt() {
+            Some(LastStmt::Return(_)) => flow.returns.push(current),
+            Some(LastStmt::Break(_)) => flow.breaks.push(current),
+            Some(LastStmt::Continue(_)) => flow.continues.push(current),
+            Some(_) | None => flow.fallthrough = Some(current),
+        }
+
+        flow
+    }
+
+    fn analyze_statement(
+        &mut self,
+        statement: &ast::Stmt,
+        mut fields: InitializedFields,
+        parent: Option<&str>,
+    ) -> InitializationFlow {
+        match statement {
+            ast::Stmt::Assignment(assignment) => {
+                for variable in assignment.variables() {
+                    let Some(parts) = plain_field_chain_from_var(variable) else {
+                        continue;
+                    };
+                    if let [receiver, field] = parts.as_slice() {
+                        if receiver == "self" {
+                            fields.insert(field.clone());
+                        }
+                    }
+                }
+                InitializationFlow::fallthrough(fields)
+            }
+            ast::Stmt::FunctionCall(call) => {
+                if let Some(parent) = parent {
+                    if calls_parent_initializer(call, parent) {
+                        fields.extend(self.initialized_fields(parent));
+                    }
+                }
+                InitializationFlow::fallthrough(fields)
+            }
+            ast::Stmt::Do(statement) => self.analyze_block(statement.block(), fields, parent),
+            ast::Stmt::If(statement) => self.analyze_if(statement, fields, parent),
+            ast::Stmt::GenericFor(statement) => {
+                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+            }
+            ast::Stmt::NumericFor(statement) => {
+                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+            }
+            ast::Stmt::While(statement) => {
+                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+            }
+            ast::Stmt::Repeat(statement) => {
+                let mut body = self.analyze_block(statement.block(), fields, parent);
+                let mut exits = Vec::new();
+                exits.extend(body.fallthrough.take());
+                exits.append(&mut body.breaks);
+                exits.append(&mut body.continues);
+
+                InitializationFlow {
+                    fallthrough: intersect_initialized_fields(exits),
+                    returns: body.returns,
+                    breaks: Vec::new(),
+                    continues: Vec::new(),
+                }
+            }
+            _ => InitializationFlow::fallthrough(fields),
+        }
+    }
+
+    fn analyze_if(
+        &mut self,
+        statement: &ast::If,
+        fields: InitializedFields,
+        parent: Option<&str>,
+    ) -> InitializationFlow {
+        let mut branches = vec![self.analyze_block(statement.block(), fields.clone(), parent)];
+
+        if let Some(else_ifs) = statement.else_if() {
+            branches.extend(
+                else_ifs
+                    .iter()
+                    .map(|else_if| self.analyze_block(else_if.block(), fields.clone(), parent)),
+            );
+        }
+        branches.push(
+            statement
+                .else_block()
+                .map(|block| self.analyze_block(block, fields.clone(), parent))
+                .unwrap_or_else(|| InitializationFlow::fallthrough(fields)),
+        );
+
+        merge_initialization_branches(branches)
+    }
+
+    fn analyze_zero_or_more_loop(
+        &mut self,
+        block: &ast::Block,
+        fields: InitializedFields,
+        parent: Option<&str>,
+    ) -> InitializationFlow {
+        let body = self.analyze_block(block, fields.clone(), parent);
+
+        InitializationFlow {
+            fallthrough: Some(fields),
+            returns: body.returns,
+            breaks: Vec::new(),
+            continues: Vec::new(),
+        }
+    }
+}
+
+fn calls_parent_initializer(call: &ast::FunctionCall, parent: &str) -> bool {
+    let Some(parts) = field_chain_before_first_call(call) else {
+        return false;
+    };
+
+    match parts.as_slice() {
+        [function] => function.strip_suffix("_init") == Some(parent),
+        [receiver, method] => receiver == parent && method == "__init",
+        _ => false,
+    }
+}
+
+fn is_class_generated_node(parsed: &ParsedSource, node: &impl Node) -> bool {
+    node.start_position()
+        .map(SourcePosition::from_full_moon)
+        .and_then(|position| parsed.raw.parser_position_origin(position))
+        .is_some_and(|origin| origin.class_generated)
+}
+
+fn merge_initialization_branches(
+    branches: impl IntoIterator<Item = InitializationFlow>,
+) -> InitializationFlow {
+    let mut fallthrough = Vec::new();
+    let mut returns = Vec::new();
+    let mut breaks = Vec::new();
+    let mut continues = Vec::new();
+
+    for mut branch in branches {
+        fallthrough.extend(branch.fallthrough.take());
+        returns.append(&mut branch.returns);
+        breaks.append(&mut branch.breaks);
+        continues.append(&mut branch.continues);
+    }
+
+    InitializationFlow {
+        fallthrough: intersect_initialized_fields(fallthrough),
+        returns,
+        breaks,
+        continues,
+    }
+}
+
+fn initialized_on_every_exit(mut flow: InitializationFlow) -> InitializedFields {
+    let mut exits = Vec::new();
+    exits.extend(flow.fallthrough.take());
+    exits.append(&mut flow.returns);
+
+    intersect_initialized_fields(exits).unwrap_or_default()
+}
+
+fn intersect_initialized_fields(mut fields: Vec<InitializedFields>) -> Option<InitializedFields> {
+    let mut intersection = fields.pop()?;
+
+    for fields in fields {
+        intersection.retain(|field| fields.contains(field));
+    }
+
+    Some(intersection)
 }
 
 fn validate_class_members(

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use full_moon::ast::{self, Expression, Field, FunctionCall, TableConstructor};
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
+use full_moon::tokenizer::TokenReference;
 use full_moon::visitors::Visitor;
 
 use crate::asset::{
@@ -15,6 +15,9 @@ use crate::asset::{
 };
 use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+};
+use crate::classes::{
+    class_member_target as class_member_source_target, nominal_class_identity, ClassMemberKind,
 };
 use crate::code_action::code_actions_parsed_source_with_kinds_and_diagnostics_config;
 use crate::completion::{
@@ -51,6 +54,7 @@ use crate::signal::{
 use crate::signature_help::signature_help_parsed_source_with_environment_and_signal_index;
 use crate::source_text::{
     byte_for_column, dotted_chain_at_position, function_name_table_field, line_at,
+    source_identifiers, SourceIdentifier,
 };
 use crate::text_match::text_matches;
 use crate::types::{
@@ -654,7 +658,14 @@ impl ReverseReferenceIndex {
             return;
         };
 
-        self.references.entry(key).or_default().push(reference);
+        let references = self.references.entry(key).or_default();
+
+        references.push(reference);
+        references.push(Reference {
+            path: definition.path.clone(),
+            span: definition.span,
+            kind: reference_kind_for_definition(definition.kind),
+        });
     }
 
     fn references(
@@ -770,16 +781,6 @@ fn is_project_global_reference(resolution: &ScopeResolution) -> bool {
         ScopeResolution::Global(global) => global.kind == ScopeGlobalKind::Assigned,
         ScopeResolution::Symbol(_) => false,
     }
-}
-
-fn is_identifier_token(token: &TokenReference) -> bool {
-    matches!(token.token().token_type(), TokenType::Identifier { .. })
-}
-
-fn token_span(token: &TokenReference) -> Option<SourceSpan> {
-    token
-        .range()
-        .map(|(start, end)| SourceSpan::from_range(start, end))
 }
 
 fn token_text(token: &TokenReference) -> String {

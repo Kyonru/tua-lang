@@ -159,6 +159,13 @@ LOVE builtins, and static asset strings navigate to their source or generated
 stub. Dynamic dispatch through `any`, runtime-built tables, or unresolved
 modules returns no speculative location.
 
+Native class names, fields, and methods support definition, references, prepare
+rename, and project-wide rename. The same identity follows locally inferred
+instances and nominal instances exported through a static module, so navigating
+`Module.player.health` reaches the original class field rather than generated
+Lua or the module's `player` export. Resolved named table-shape fields are also
+renameable when Tua can prove their declaration identity.
+
 Renaming a source or asset file can update unambiguous static `require(...)`,
 `import(...)`, and LOVE asset paths through LSP file-operation edits.
 

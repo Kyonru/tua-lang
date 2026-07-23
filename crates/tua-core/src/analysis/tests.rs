@@ -2821,6 +2821,214 @@ return {
 }
 
 #[test]
+fn snapshot_navigates_and_renames_local_class_symbols() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+open class <|class_def|>Entity<|/class_def|> {
+  <|field_def|>health<|/field_def|>: number = 10
+
+  <|method_def|>damage<|/method_def|>(amount: number) {
+    self.<|field_self|>health<|/field_self|> -= amount
+  }
+}
+
+local entity = <|class_value|>Entity<|/class_value|>.new()
+local typed: <|class_type|>Entity<|/class_type|> = entity
+print(entity.<|field_use|>health<|/field_use|>)
+entity:<|method_use|>damage<|/method_use|>(1)
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let class_references =
+        snapshot.references("src/main.tua", fixture.position("class_value"), true);
+    let field_references = snapshot.references("src/main.tua", fixture.position("field_use"), true);
+    let method_references =
+        snapshot.references("src/main.tua", fixture.position("method_use"), true);
+
+    assert_reference_ranges(
+        &class_references,
+        &fixture,
+        &["class_def", "class_value", "class_type"],
+    );
+    assert_reference_ranges(
+        &field_references,
+        &fixture,
+        &["field_def", "field_self", "field_use"],
+    );
+    assert_reference_ranges(&method_references, &fixture, &["method_def", "method_use"]);
+
+    let class_rename = snapshot
+        .rename("src/main.tua", fixture.position("class_value"), "Actor")
+        .expect("class should rename");
+    let field_rename = snapshot
+        .rename("src/main.tua", fixture.position("field_use"), "hitPoints")
+        .expect("class field should rename");
+    let method_rename = snapshot
+        .rename("src/main.tua", fixture.position("method_use"), "hurt")
+        .expect("class method should rename");
+
+    assert_edit_ranges(
+        &class_rename,
+        &fixture,
+        &["class_def", "class_value", "class_type"],
+    );
+    assert_edit_ranges(
+        &field_rename,
+        &fixture,
+        &["field_def", "field_self", "field_use"],
+    );
+    assert_edit_ranges(&method_rename, &fixture, &["method_def", "method_use"]);
+}
+
+#[test]
+fn snapshot_keeps_same_named_class_navigation_file_local() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/first.tua
+open class <|first_def|>Player<|/first_def|> {
+  name: string = "first"
+}
+local first = <|first_value|>Player<|/first_value|>.new()
+local firstTyped: <|first_type|>Player<|/first_type|> = first
+-- file: src/second.tua
+open class <|second_def|>Player<|/second_def|> {
+  name: string = "second"
+}
+local second = <|second_value|>Player<|/second_value|>.new()
+local secondTyped: <|second_type|>Player<|/second_type|> = second
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let references = snapshot.references("src/first.tua", fixture.position("first_value"), true);
+    let rename = snapshot
+        .rename(
+            "src/first.tua",
+            fixture.position("first_value"),
+            "FirstPlayer",
+        )
+        .expect("nominal class identity should make rename unambiguous");
+
+    assert_reference_ranges(
+        &references,
+        &fixture,
+        &["first_def", "first_value", "first_type"],
+    );
+    assert_edit_ranges(
+        &rename,
+        &fixture,
+        &["first_def", "first_value", "first_type"],
+    );
+}
+
+#[test]
+fn snapshot_resolves_and_renames_exported_class_instance_members() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local State = require("state")
+local other = State.<|class_use|>Player<|/class_use|>.new()
+print(State.player.<|field_use|>health<|/field_use|>)
+State.player:<|method_use|>damage<|/method_use|>(1)
+-- file: src/state.tua
+open class <|class_def|>Player<|/class_def|> {
+  <|field_def|>health<|/field_def|>: number = 10
+
+  <|method_def|>damage<|/method_def|>(amount: number) {
+    self.<|field_self|>health<|/field_self|> -= amount
+  }
+}
+
+local player = <|class_local|>Player<|/class_local|>.new()
+return {
+  <|class_export_key|>Player<|/class_export_key|> = <|class_export_value|>Player<|/class_export_value|>,
+  player = player,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let class_references = snapshot.references("src/main.tua", fixture.position("class_use"), true);
+    let field_definition = snapshot
+        .definition("src/main.tua", fixture.position("field_use"))
+        .expect("exported instance field should resolve");
+    let method_definition = snapshot
+        .definition("src/main.tua", fixture.position("method_use"))
+        .expect("exported instance method should resolve");
+
+    assert_eq!(field_definition.path, PathBuf::from("src/state.tua"));
+    assert_eq!(field_definition.span, fixture.range("field_def"));
+    assert_eq!(method_definition.path, PathBuf::from("src/state.tua"));
+    assert_eq!(method_definition.span, fixture.range("method_def"));
+
+    assert_reference_ranges(
+        &class_references,
+        &fixture,
+        &[
+            "class_def",
+            "class_local",
+            "class_export_key",
+            "class_export_value",
+            "class_use",
+        ],
+    );
+
+    let field_references = snapshot.references("src/main.tua", fixture.position("field_use"), true);
+    let method_references =
+        snapshot.references("src/main.tua", fixture.position("method_use"), true);
+
+    assert_reference_ranges(
+        &field_references,
+        &fixture,
+        &["field_def", "field_self", "field_use"],
+    );
+    assert_reference_ranges(&method_references, &fixture, &["method_def", "method_use"]);
+
+    let field_rename = snapshot
+        .rename("src/main.tua", fixture.position("field_use"), "hitPoints")
+        .expect("exported instance field should rename");
+    let method_rename = snapshot
+        .rename("src/main.tua", fixture.position("method_use"), "hurt")
+        .expect("exported instance method should rename");
+    let class_rename = snapshot
+        .rename("src/main.tua", fixture.position("class_use"), "Actor")
+        .expect("exported class should rename");
+
+    assert_edit_ranges(
+        &class_rename,
+        &fixture,
+        &[
+            "class_def",
+            "class_local",
+            "class_export_key",
+            "class_export_value",
+            "class_use",
+        ],
+    );
+    assert_edit_ranges(
+        &field_rename,
+        &fixture,
+        &["field_def", "field_self", "field_use"],
+    );
+    assert_edit_ranges(&method_rename, &fixture, &["method_def", "method_use"]);
+}
+
+#[test]
 fn snapshot_preserves_nominal_class_identity_across_module_exports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
@@ -4039,6 +4247,59 @@ fn only_definition(definitions: Vec<Definition>) -> Definition {
     assert_eq!(definitions.len(), 1, "expected exactly one definition");
 
     definitions.into_iter().next().unwrap()
+}
+
+fn assert_reference_ranges(references: &[Reference], fixture: &Fixture, markers: &[&str]) {
+    let mut actual = references
+        .iter()
+        .map(|reference| (reference.path.clone(), reference.span))
+        .collect::<Vec<_>>();
+    let mut expected = markers
+        .iter()
+        .map(|marker| {
+            (
+                fixture.marker_path(marker).to_path_buf(),
+                fixture.range(marker),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    actual.sort_by_key(path_span_key);
+    expected.sort_by_key(path_span_key);
+
+    assert_eq!(actual, expected);
+}
+
+fn assert_edit_ranges(edit: &RenameEdit, fixture: &Fixture, markers: &[&str]) {
+    let mut actual = edit
+        .edits
+        .iter()
+        .map(|edit| (edit.path.clone(), edit.span))
+        .collect::<Vec<_>>();
+    let mut expected = markers
+        .iter()
+        .map(|marker| {
+            (
+                fixture.marker_path(marker).to_path_buf(),
+                fixture.range(marker),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    actual.sort_by_key(path_span_key);
+    expected.sort_by_key(path_span_key);
+
+    assert_eq!(actual, expected);
+}
+
+fn path_span_key((path, span): &(PathBuf, SourceSpan)) -> (PathBuf, usize, usize, usize, usize) {
+    (
+        path.clone(),
+        span.start.line,
+        span.start.column,
+        span.end.line,
+        span.end.column,
+    )
 }
 
 fn source_text(fixture: &Fixture, definition: &Definition) -> String {

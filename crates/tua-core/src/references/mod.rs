@@ -2,10 +2,9 @@ use std::path::{Path, PathBuf};
 
 use full_moon::ast;
 use full_moon::node::Node;
-use full_moon::tokenizer::{TokenReference, TokenType};
 
 use crate::hir::{HirExportValue, HirModule};
-use crate::source_text::{byte_for_column, line_at};
+use crate::source_text::{byte_for_column, line_at, source_identifiers, SourceIdentifier};
 use crate::{
     definition_parsed_source, definition_parsed_source_with_hir, lower_parsed_source,
     parse_tua_source, scope_map_parsed_source, Definition, DefinitionKind, Diagnostic,
@@ -87,12 +86,10 @@ pub fn references_to_definition_parsed_source_with_artifacts(
         return Ok(references);
     }
 
-    let mut references = parsed
-        .ast
-        .tokens()
-        .filter(|token| is_identifier(token))
-        .filter_map(|token| {
-            reference_for_token(parsed, token, target, hir, semantic_index).transpose()
+    let mut references = source_identifiers(&parsed.source)
+        .into_iter()
+        .filter_map(|identifier| {
+            reference_for_identifier(parsed, &identifier, target, hir, semantic_index).transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -335,12 +332,12 @@ pub fn global_references_to_definition_parsed_source_with_hir(
     include_declaration: bool,
     hir: Option<&HirModule>,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
-    let mut references = parsed
-        .ast
-        .tokens()
-        .filter(|token| is_identifier(token))
-        .filter(|token| token_text(token) == name)
-        .filter_map(|token| global_reference_for_token(parsed, token, target, hir).transpose())
+    let mut references = source_identifiers(&parsed.source)
+        .into_iter()
+        .filter(|identifier| identifier.text == name)
+        .filter_map(|identifier| {
+            global_reference_for_identifier(parsed, &identifier, target, hir).transpose()
+        })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
     if !include_declaration {
@@ -384,13 +381,11 @@ pub fn global_type_alias_references_to_definition_parsed_source_with_hir(
     include_declaration: bool,
     hir: Option<&HirModule>,
 ) -> Result<Vec<Reference>, Vec<Diagnostic>> {
-    let mut references = parsed
-        .ast
-        .tokens()
-        .filter(|token| is_identifier(token))
-        .filter(|token| token_text(token) == name)
-        .filter_map(|token| {
-            global_type_alias_reference_for_token(parsed, token, target, hir).transpose()
+    let mut references = source_identifiers(&parsed.source)
+        .into_iter()
+        .filter(|identifier| identifier.text == name)
+        .filter_map(|identifier| {
+            global_type_alias_reference_for_identifier(parsed, &identifier, target, hir).transpose()
         })
         .collect::<Result<Vec<_>, Vec<Diagnostic>>>()?;
 
@@ -413,16 +408,14 @@ pub fn global_type_alias_references_to_definition_parsed_source_with_hir(
     Ok(references)
 }
 
-fn reference_for_token(
+fn reference_for_identifier(
     parsed: &ParsedSource,
-    token: &TokenReference,
+    identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
     semantic_index: Option<&SemanticIndex>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
-    let Some(span) = node_span(token) else {
-        return Ok(None);
-    };
+    let span = identifier.span;
     let definition = semantic_index.and_then(|index| index.definition_at(span.start));
     let definition = if definition.is_some() {
         definition
@@ -440,15 +433,13 @@ fn reference_for_token(
     }))
 }
 
-fn global_reference_for_token(
+fn global_reference_for_identifier(
     parsed: &ParsedSource,
-    token: &TokenReference,
+    identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
-    let Some(span) = node_span(token) else {
-        return Ok(None);
-    };
+    let span = identifier.span;
     let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
 
     if definition
@@ -465,15 +456,13 @@ fn global_reference_for_token(
     }))
 }
 
-fn global_type_alias_reference_for_token(
+fn global_type_alias_reference_for_identifier(
     parsed: &ParsedSource,
-    token: &TokenReference,
+    identifier: &SourceIdentifier,
     target: &Definition,
     hir: Option<&HirModule>,
 ) -> Result<Option<Reference>, Vec<Diagnostic>> {
-    let Some(span) = node_span(token) else {
-        return Ok(None);
-    };
+    let span = identifier.span;
     let definition = definition_parsed_source_with_hir(parsed, hir, span.start)?;
 
     if definition.as_ref().is_some_and(|definition| {
@@ -521,14 +510,6 @@ fn reference_kind(kind: DefinitionKind) -> ReferenceKind {
         DefinitionKind::Parameter => ReferenceKind::Parameter,
         DefinitionKind::TableField => ReferenceKind::TableField,
     }
-}
-
-fn is_identifier(token: &TokenReference) -> bool {
-    matches!(token.token().token_type(), TokenType::Identifier { .. })
-}
-
-fn token_text(token: &TokenReference) -> String {
-    token.to_string().trim().to_owned()
 }
 
 fn is_type_reference(parsed: &ParsedSource, position: SourcePosition) -> bool {

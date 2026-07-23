@@ -1,3 +1,6 @@
+use full_moon::ast::LuaVersion;
+use full_moon::tokenizer::{Lexer, LexerResult, TokenType};
+
 use crate::{SourcePosition, SourceSpan};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +15,33 @@ pub(crate) struct IdentifierPart {
     pub span: SourceSpan,
     pub start_byte: usize,
     pub end_byte: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SourceIdentifier {
+    pub text: String,
+    pub span: SourceSpan,
+}
+
+pub(crate) fn source_identifiers(source: &str) -> Vec<SourceIdentifier> {
+    let tokens = match Lexer::new(source, LuaVersion::luau()).collect() {
+        LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
+        LexerResult::Fatal(_) => return Vec::new(),
+    };
+
+    tokens
+        .into_iter()
+        .filter_map(|token| {
+            let TokenType::Identifier { identifier } = token.token_type() else {
+                return None;
+            };
+
+            Some(SourceIdentifier {
+                text: identifier.to_string(),
+                span: SourceSpan::from_range(token.start_position(), token.end_position()),
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn line_at(source: &str, line: usize) -> Option<&str> {

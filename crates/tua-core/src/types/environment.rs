@@ -10,6 +10,7 @@ use crate::ast_utils::{
     assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
     plain_field_chain_from_var_expression,
 };
+use crate::classes::nominal_class_identity;
 use crate::deprecation::Deprecation;
 use crate::module_index::required_module_export_type_for_fields;
 use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
@@ -707,10 +708,6 @@ fn class_alias_type(
     );
 
     Type::Table(table)
-}
-
-fn nominal_class_identity(path: &Path, class_name: &str) -> String {
-    format!("{}::class::{class_name}", path.to_string_lossy())
 }
 
 fn class_nominal_supertypes(parsed: &ParsedSource, class_name: &str) -> Vec<String> {

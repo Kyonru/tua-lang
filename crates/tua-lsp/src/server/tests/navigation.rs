@@ -47,6 +47,58 @@ account:deposit(25)
         response_with_id(&output, 4)["result"]
     );
 }
+
+#[test]
+fn class_symbols_support_definition_references_and_rename() {
+    let uri = "file:///tmp/class-navigation.tua";
+    let source = r#"open class Entity {
+  health: number = 10
+
+  damage(amount: number) {
+    self.health -= amount
+  }
+}
+
+local entity = Entity.new()
+local typed: Entity = entity
+print(entity.health)
+entity:damage(1)
+"#;
+    let output = run_messages(vec![
+        did_open(uri, source),
+        definition_request(2, uri, source, "entity.health", "entity.".len()),
+        references_request(3, uri, source, "entity.health", "entity.".len(), true),
+        prepare_rename_request(4, uri, source, "entity.health", "entity.".len()),
+        rename_request(
+            5,
+            uri,
+            source,
+            "entity.health",
+            "entity.".len(),
+            "hitPoints",
+        ),
+        references_request(6, uri, source, "Entity.new", 0, true),
+        references_request(7, uri, source, "entity:damage", "entity:".len(), true),
+    ]);
+
+    assert_definition_text(&output, 2, uri, source, "health");
+    assert_reference_texts(&output, 3, source, ["health", "health", "health"]);
+    assert_eq!(
+        response_with_id(&output, 4)["result"]["placeholder"],
+        "health"
+    );
+    assert_rename_edit_texts(
+        &output,
+        5,
+        uri,
+        source,
+        ["health", "health", "health"],
+        "hitPoints",
+    );
+    assert_reference_texts(&output, 6, source, ["Entity", "Entity", "Entity"]);
+    assert_reference_texts(&output, 7, source, ["damage", "damage"]);
+}
+
 #[test]
 fn signal_graph_returns_typed_calls_and_source_locations() {
     let uri = "file:///tmp/signal-graph.tua";
@@ -1281,7 +1333,7 @@ fn references_unknown_document_returns_empty_array() {
     assert_eq!(response["result"], json!([]));
 }
 #[test]
-fn prepare_rename_returns_supported_symbol_range_and_placeholder() {
+fn prepare_rename_returns_alias_and_table_field_ranges_and_placeholders() {
     let uri = "file:///tmp/prepare-rename.tua";
     let source = r#"type Player = { hp: number }
 local player: Player = { hp = 10 }
@@ -1293,11 +1345,12 @@ player.hp = player.hp - 1
         prepare_rename_request(3, uri, source, "player.hp", "player.".len()),
     ]);
     let supported = response_with_id(&output, 2);
-    let unsupported = response_with_id(&output, 3);
+    let field = response_with_id(&output, 3);
 
     assert_eq!(supported["result"]["placeholder"], "Player");
     assert_eq!(range_text(source, &supported["result"]["range"]), "Player");
-    assert!(unsupported["result"].is_null());
+    assert_eq!(field["result"]["placeholder"], "hp");
+    assert_eq!(range_text(source, &field["result"]["range"]), "hp");
 }
 #[test]
 fn rename_returns_workspace_edits_for_alias_function_local_and_parameter() {
@@ -1448,7 +1501,7 @@ local localPlayer: Player = { hp = 10 }
     assert_rename_edit_texts(&output, 2, &enemy_uri, enemy, ["Player"], "Actor");
 }
 #[test]
-fn rename_returns_null_for_unsupported_unknown_and_invalid_names() {
+fn rename_supports_table_fields_and_rejects_unknowns_and_invalid_names() {
     let uri = "file:///tmp/quiet-rename.tua";
     let source = r#"type Player = { hp: number }
 local player: Player = { hp = 10 }
@@ -1470,7 +1523,7 @@ local unresolved = missing
         rename_request(5, uri, source, "player: Player", "player: ".len(), "while"),
     ]);
 
-    assert!(response_with_id(&output, 2)["result"].is_null());
+    assert_rename_edit_texts(&output, 2, uri, source, ["hp", "hp", "hp"], "health");
     assert!(response_with_id(&output, 3)["result"].is_null());
     assert!(response_with_id(&output, 4)["result"].is_null());
     assert!(response_with_id(&output, 5)["result"].is_null());

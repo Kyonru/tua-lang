@@ -117,6 +117,12 @@ impl AnalysisSnapshot {
         position: SourcePosition,
         degraded_facts: Option<&DegradedSemanticFacts>,
     ) -> Option<Definition> {
+        if let Some(definition) =
+            self.project_class_member_definition_at_position(parsed, position, degraded_facts)
+        {
+            return Some(definition);
+        }
+
         if let Some(definition) = self.module_definition(parsed, position) {
             return Some(definition);
         }
@@ -152,6 +158,100 @@ impl AnalysisSnapshot {
         definition_parsed_source_with_hir(parsed, hir, position)
             .ok()
             .flatten()
+    }
+
+    pub(super) fn project_class_member_definition_at_position(
+        &self,
+        parsed: &ParsedSource,
+        position: SourcePosition,
+        degraded_facts: Option<&DegradedSemanticFacts>,
+    ) -> Option<Definition> {
+        let chain = dotted_chain_at_position(&parsed.source, position)?;
+
+        if chain.cursor_index == 0 {
+            return None;
+        }
+
+        let member = &chain.parts.get(chain.cursor_index)?.text;
+        let receiver = chain
+            .parts
+            .iter()
+            .take(chain.cursor_index)
+            .map(|part| part.text.clone())
+            .collect::<Vec<_>>();
+        let environment = self.semantic_query_environment(parsed, degraded_facts);
+        let receiver_type = self.type_for_parts(parsed, &environment, &receiver, position)?;
+
+        self.class_member_definition_for_type(&parsed.path, &receiver_type, member, 0)
+    }
+
+    pub(super) fn class_member_definition_for_type(
+        &self,
+        source_path: &Path,
+        ty: &Type,
+        member: &str,
+        depth: usize,
+    ) -> Option<Definition> {
+        if depth >= 64 {
+            return None;
+        }
+
+        match self
+            .type_database
+            .resolve_type(&self.module_graph, source_path, ty)
+        {
+            Type::Table(table) => {
+                let identity = table.nominal_identity()?;
+
+                for file in self.files.values() {
+                    let Ok(parsed) = &file.parsed else {
+                        continue;
+                    };
+                    let Some(class) = parsed.class_declarations.iter().find(|class| {
+                        nominal_class_identity(&parsed.path, &class.name) == identity
+                    }) else {
+                        continue;
+                    };
+
+                    return class_member_definition_in_parsed(
+                        parsed,
+                        &class.name,
+                        member,
+                        depth + 1,
+                    );
+                }
+
+                None
+            }
+            Type::Union(types) => {
+                let mut definitions = types
+                    .iter()
+                    .filter_map(|ty| {
+                        self.class_member_definition_for_type(source_path, ty, member, depth + 1)
+                    })
+                    .collect::<Vec<_>>();
+
+                definitions.sort_by_key(|definition| {
+                    (
+                        definition.path.clone(),
+                        position_key(definition.span.start),
+                        position_key(definition.span.end),
+                        definition_kind_key(definition.kind),
+                    )
+                });
+                definitions.dedup();
+
+                (definitions.len() == 1).then(|| definitions.remove(0))
+            }
+            Type::Alias(_)
+            | Type::Primitive(_)
+            | Type::Any
+            | Type::StringLiteral(_)
+            | Type::Function(_)
+            | Type::Array(_)
+            | Type::Tuple(_)
+            | Type::Dictionary { .. } => None,
+        }
     }
 
     pub fn type_definition(
@@ -747,15 +847,13 @@ impl AnalysisSnapshot {
             return references;
         }
 
-        if target.kind != DefinitionKind::TableField {
-            let _profile = profile::span("analysis.references.reverse_index.lookup");
+        let _profile = profile::span("analysis.references.reverse_index.lookup");
 
-            if let Some(references) = self
-                .reverse_reference_index()
-                .references(&target, include_declaration)
-            {
-                return references;
-            }
+        if let Some(references) = self
+            .reverse_reference_index()
+            .references(&target, include_declaration)
+        {
+            return references;
         }
 
         self.references_by_scan(&target, include_declaration)
@@ -1110,16 +1208,27 @@ impl AnalysisSnapshot {
         module_export_candidates: &ModuleExportCandidates,
         index: &mut ReverseReferenceIndex,
     ) {
-        for token in parsed
-            .ast
-            .tokens()
-            .filter(|token| is_identifier_token(token))
-        {
-            let Some(span) = token_span(token) else {
-                continue;
-            };
-            let name = token_text(token);
+        for identifier in source_identifiers(&parsed.source) {
+            let span = identifier.span;
+            let name = identifier.text.clone();
             let is_type_reference = is_type_reference_position(parsed, span.start);
+
+            let direct_definition = self.definition_parsed_snapshot(
+                parsed,
+                self.file(&parsed.path).and_then(|file| file.hir()),
+                span.start,
+            );
+
+            if let Some(definition) = direct_definition.as_ref() {
+                index.insert(
+                    definition,
+                    Reference {
+                        path: parsed.path.clone(),
+                        span,
+                        kind: reference_kind_for_definition(definition.kind),
+                    },
+                );
+            }
 
             if is_type_reference && !type_alias_names.contains(&name) {
                 continue;
@@ -1132,7 +1241,11 @@ impl AnalysisSnapshot {
             }
 
             if is_type_reference {
-                self.index_type_alias_token_reference(parsed, token, span, global_aliases, index);
+                if direct_definition.is_some() {
+                    continue;
+                }
+
+                self.index_type_alias_token_reference(parsed, &identifier, global_aliases, index);
                 continue;
             }
 
@@ -1153,13 +1266,12 @@ impl AnalysisSnapshot {
     pub(super) fn index_type_alias_token_reference(
         &self,
         parsed: &ParsedSource,
-        token: &TokenReference,
-        span: SourceSpan,
+        identifier: &SourceIdentifier,
         global_aliases: &BTreeMap<String, Vec<Definition>>,
         index: &mut ReverseReferenceIndex,
     ) {
-        let name = token_text(token);
-        let Some(definitions) = global_aliases.get(&name) else {
+        let name = &identifier.text;
+        let Some(definitions) = global_aliases.get(name) else {
             return;
         };
 
@@ -1168,7 +1280,7 @@ impl AnalysisSnapshot {
                 definition,
                 Reference {
                     path: parsed.path.clone(),
-                    span,
+                    span: identifier.span,
                     kind: ReferenceKind::TypeAlias,
                 },
             );
@@ -1182,7 +1294,7 @@ impl AnalysisSnapshot {
     ) -> Option<Definition> {
         let chain = dotted_chain_at_position(&parsed.source, position)?;
 
-        if chain.cursor_index == 0 {
+        if chain.cursor_index != 1 {
             return None;
         }
 
@@ -1195,11 +1307,7 @@ impl AnalysisSnapshot {
         Some(Definition {
             path: path.to_path_buf(),
             span: entry.definition_span,
-            kind: if matches!(entry.field.ty, Type::Function(_)) {
-                DefinitionKind::Function
-            } else {
-                DefinitionKind::TableField
-            },
+            kind: self.module_export_definition_kind(path, entry),
         })
     }
 
@@ -1242,7 +1350,7 @@ impl AnalysisSnapshot {
             };
 
             for symbol in hir.symbols() {
-                if !matches!(symbol.kind, HirSymbolKind::Class | HirSymbolKind::TypeAlias) {
+                if symbol.kind != HirSymbolKind::TypeAlias {
                     continue;
                 }
                 let definition = definition_from_hir_symbol_for_index(&parsed.path, symbol);
@@ -1584,6 +1692,9 @@ impl AnalysisSnapshot {
                 self.module_definition_span(path),
             ));
         }
+        if chain.cursor_index != 1 {
+            return None;
+        }
 
         let public_name = chain.parts.get(1)?.text.as_str();
         let entry = self.module_graph.export(path, public_name)?;
@@ -1591,12 +1702,29 @@ impl AnalysisSnapshot {
         Some(Definition {
             path: path.to_path_buf(),
             span: entry.definition_span,
-            kind: if matches!(entry.field.ty, Type::Function(_)) {
-                DefinitionKind::Function
-            } else {
-                DefinitionKind::TableField
-            },
+            kind: self.module_export_definition_kind(path, entry),
         })
+    }
+
+    pub(super) fn module_export_definition_kind(
+        &self,
+        path: &Path,
+        entry: &crate::ModuleExportEntry,
+    ) -> DefinitionKind {
+        let is_class = entry.symbol_id.is_some_and(|symbol_id| {
+            self.file(path)
+                .and_then(|file| file.hir())
+                .and_then(|hir| hir.symbol(symbol_id))
+                .is_some_and(|symbol| symbol.kind == HirSymbolKind::Class)
+        });
+
+        if is_class {
+            DefinitionKind::TypeAlias
+        } else if matches!(entry.field.ty, Type::Function(_)) {
+            DefinitionKind::Function
+        } else {
+            DefinitionKind::TableField
+        }
     }
 
     pub(super) fn module_definition_span(&self, path: &Path) -> SourceSpan {
@@ -1693,6 +1821,15 @@ impl AnalysisSnapshot {
                     > 1
             }
             crate::RenameKind::TypeAlias => {
+                if self
+                    .file(&target.path)
+                    .and_then(|file| file.hir())
+                    .and_then(|hir| hir.symbol_at_span(target.span))
+                    .is_some_and(|symbol| symbol.kind == HirSymbolKind::Class)
+                {
+                    return false;
+                }
+
                 let Some(alias_name) = self
                     .file(&target.path)
                     .and_then(|file| file.parsed.as_ref().ok())
@@ -1708,7 +1845,31 @@ impl AnalysisSnapshot {
                     .sum::<usize>()
                     > 1
             }
-            crate::RenameKind::Local | crate::RenameKind::Parameter => false,
+            crate::RenameKind::Local
+            | crate::RenameKind::Parameter
+            | crate::RenameKind::TableField => false,
         }
     }
+}
+
+fn class_member_definition_in_parsed(
+    parsed: &ParsedSource,
+    class_name: &str,
+    member: &str,
+    depth: usize,
+) -> Option<Definition> {
+    if depth >= 64 {
+        return None;
+    }
+
+    let target = class_member_source_target(parsed, class_name, member)?;
+
+    Some(Definition {
+        path: parsed.path.clone(),
+        span: target.span,
+        kind: match target.kind {
+            ClassMemberKind::Field => DefinitionKind::TableField,
+            ClassMemberKind::Method => DefinitionKind::Function,
+        },
+    })
 }
