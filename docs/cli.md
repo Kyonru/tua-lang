@@ -110,7 +110,10 @@ emitted runtime files.
 
 !!! warning "Recovery emission still reports failure"
     Use `--emit-on-error` when you want parseable/lowerable files to emit while
-    errors remain. The command still exits non-zero.
+    errors remain. The command still exits non-zero. Files with syntax or
+    lowering errors are skipped. `TL0004` rejects parser-recognized syntax that
+    is not part of Tua; `TL2010` is the final safety failure when completed
+    compiler output is not valid Lua 5.1.
 
     ```bash
     cargo run -p tua-cli -- build --emit-on-error

@@ -1171,6 +1171,46 @@ fn call_compound_assignment_lhs_emits_lowering_diagnostic() {
 }
 
 #[test]
+fn final_emission_validation_remains_a_lua51_safety_net() {
+    let parsed = crate::parse_tua_source("src/safety.tua", "local value = 1\n")
+        .expect("source should parse");
+    let emission = LuaEmission {
+        code: "local value = if ready then 1 else 2\n".to_owned(),
+        provenance: vec![LuaLineProvenance {
+            generated_line: 1,
+            source_span: parsed.span.expect("parsed source should have a span"),
+            lowering: LoweringKind::Source,
+        }],
+    };
+    let diagnostics = validate_lua51_emission(&parsed, emission)
+        .expect_err("invalid compiler output must fail final Lua 5.1 validation");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::EMIT_UNSUPPORTED_SYNTAX)
+    );
+    assert_eq!(diagnostics[0].line, 1);
+    assert!(diagnostics[0].message.contains("Lua 5.1"));
+    assert!(diagnostics[0].message.contains("compiler output"));
+}
+
+#[test]
+fn successful_emission_is_parseable_as_lua51() {
+    let emitted = emit_tua_source(
+        "src/portable.tua",
+        r#"local value: number = 1
+value += 1
+return value
+"#,
+    )
+    .expect("supported Tua syntax should emit");
+
+    crate::parse_raw_lua_source("build/portable.lua", emitted)
+        .expect("successful Tua emission must parse as Lua 5.1");
+}
+
+#[test]
 fn mixed_lowering_pipeline_emits_stable_lua_with_source_provenance() {
     let emission = emit_tua_source_artifact(
         "src/mixed.tua",

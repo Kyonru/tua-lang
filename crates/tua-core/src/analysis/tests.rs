@@ -75,6 +75,30 @@ fn snapshot_prefers_open_document_over_file_contents() {
 }
 
 #[test]
+fn pipeline_diagnostics_reject_luau_syntax_at_the_parse_boundary() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &path,
+        r#"while running do
+  continue
+end
+"#,
+    );
+
+    let diagnostics = host.snapshot().pipeline_diagnostics(&path);
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT))
+        .expect("full project diagnostics should include Tua dialect validation");
+
+    assert_eq!(diagnostic.line, 2);
+    assert_eq!(diagnostic.column, 3);
+    assert!(diagnostic.message.contains("`continue`"));
+}
+
+#[test]
 fn current_file_field_completion_answers_known_lua_receivers() {
     let path = PathBuf::from("src/main.tua");
     let source = "local value = table.\n";

@@ -1322,6 +1322,136 @@ fn rejects_unsupported_luau_compound_assignment_operators() {
 }
 
 #[test]
+fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
+    let cases = [
+        (
+            "continue",
+            "while running do\n  continue\nend\n",
+            "`continue`",
+        ),
+        (
+            "type assertion",
+            "local value = 1 :: number\n",
+            "assertions",
+        ),
+        (
+            "conditional expression",
+            "local value = if ready then 1 else 2\n",
+            "conditional expressions",
+        ),
+        (
+            "interpolated string",
+            "local value = `hello {name}`\n",
+            "interpolated strings",
+        ),
+        ("floor division", "local value = 5 // 2\n", "floor division"),
+        ("const declaration", "const value = 1\n", "`const`"),
+        (
+            "const function",
+            "const function run() end\n",
+            "`const function`",
+        ),
+        (
+            "function attribute",
+            "@native local function run() end\n",
+            "attributes",
+        ),
+        (
+            "exported type",
+            "export type Value = number\n",
+            "`export type`",
+        ),
+        (
+            "generic declaration",
+            "type Box<T> = { value: T }\n",
+            "generic declarations",
+        ),
+        (
+            "generic type application",
+            "local value: Box<number>\n",
+            "generic type applications",
+        ),
+        (
+            "intersection type",
+            "type Value = number & string\n",
+            "intersection types",
+        ),
+        (
+            "typeof type",
+            "type Value = typeof(value)\n",
+            "`typeof(...)`",
+        ),
+        (
+            "type function",
+            "type function Value() return types.number end\n",
+            "type functions",
+        ),
+        (
+            "exported type function",
+            "export type function Value() return types.number end\n",
+            "exported type functions",
+        ),
+        (
+            "field access modifier",
+            "type Value = { read name: string }\n",
+            "access modifiers",
+        ),
+        (
+            "array access modifier",
+            "type Value = { read number }\n",
+            "access modifiers",
+        ),
+        (
+            "module generic type application",
+            "local value: Module.Box<number>\n",
+            "generic type applications",
+        ),
+        (
+            "generic return pack",
+            "type Callback = () -> T...\n",
+            "generic type packs",
+        ),
+        (
+            "runtime type instantiation",
+            "local value = identity<<number>>(1)\n",
+            "runtime type instantiation",
+        ),
+    ];
+
+    for (name, source, expected_message) in cases {
+        let diagnostics = parse_tua_source(format!("src/{name}.tua"), source)
+            .expect_err("Luau-only syntax should not be accepted as Tua");
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT))
+            .unwrap_or_else(|| panic!("{name} did not produce TL0004: {diagnostics:#?}"));
+
+        assert!(
+            diagnostic.message.contains(expected_message),
+            "{name} produced an unexpected message: {diagnostic:#?}"
+        );
+    }
+}
+
+#[test]
+fn tua_dialect_validation_preserves_documented_type_forms() {
+    parse_tua_source(
+        "src/types.tua",
+        r#"
+type Name = string
+type OptionalName = Name?
+type Choice = "one" | "two"
+type Lookup = { [string]: number }
+type Callback = (value: number, ...string) -> (number, string)
+type Qualified = Module.Value
+
+local callback: Callback
+"#,
+    )
+    .expect("documented Tua type forms should remain valid");
+}
+
+#[test]
 fn keeps_type_syntax_out_of_lua_compatible_parser() {
     let diagnostics = parse_lua_source("src/typed.tua", "local score: number = 0\n")
         .expect_err("plain Lua parser should reject erased type syntax");

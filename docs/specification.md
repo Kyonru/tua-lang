@@ -35,6 +35,19 @@ Tua preserves ordinary Lua workflows:
 The default target is `love11-luajit`. Generated code uses Lua 5.1-compatible
 syntax and avoids Lua 5.2+ runtime-only behavior.
 
+Tua's parser library internally uses a Luau-capable grammar to represent Tua
+types and compound assignments. Immediately after parsing, a Tua dialect
+validator rejects grammar that is not part of the language with `TL0004`;
+unsupported forms never reach type checking or emission. For example, use Tua
+declaration, parameter, or return annotations instead of `value :: Type`, and
+rewrite `continue`, conditional expressions, and interpolated strings with
+documented Tua or Lua 5.1-compatible forms.
+
+Before returning an emission artifact, the compiler also parses the complete
+lowered file as Lua 5.1. A `TL2010` at this stage means the compiler's lowering
+or emission violated the target-language invariant. Tua emits no file for this
+blocking internal safety failure, including under `build --emit-on-error`.
+
 Tua's type syntax is erased. Straightforward Tua code requires no Tua runtime.
 Some source-used built-ins lower to ordinary Lua APIs backed by vendored
 modules:
@@ -254,7 +267,8 @@ The `tua` executable provides:
 
 A successful default build does not emit files that have blocking errors.
 `--emit-on-error` is an explicit recovery mode and still exits unsuccessfully
-when errors exist.
+when errors exist. Source syntax errors such as `TL0004`, lowering errors, and
+`TL2010` Lua 5.1 output-validation failures never produce an output artifact.
 
 ## Editor Integration
 
@@ -363,6 +377,11 @@ parallel type-checking path.
 ## Compatibility And Boundaries
 
 Compatibility targets are Lua 5.1-style syntax, LuaJIT, and LOVE 11.x.
+The parser library's Luau support is an internal implementation detail, not a
+source-compatibility promise. The post-parse dialect validator reports `TL0004`
+for non-Tua constructs before semantic analysis. Successful emission is then
+revalidated as Lua 5.1; `TL2010` is reserved for a compiler output that violates
+that final invariant.
 Pre-1.0 releases follow the migration policy in [Releases](releases.md).
 
 Tua does not provide:

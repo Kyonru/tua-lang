@@ -37,6 +37,7 @@ impl DiagnosticCode {
     pub const SYNTAX_PARSE: Self = Self(1);
     pub const SYNTAX_COMPOUND_ASSIGNMENT: Self = Self(2);
     pub const SYNTAX_DOC_ANNOTATION: Self = Self(3);
+    pub const SYNTAX_UNSUPPORTED_DIALECT: Self = Self(4);
     pub const TYPE_UNKNOWN_NAME: Self = Self(1001);
     pub const TYPE_DUPLICATE_ALIAS: Self = Self(1002);
     pub const TYPE_MISMATCH: Self = Self(1003);
@@ -54,6 +55,7 @@ impl DiagnosticCode {
     pub const LOWERING_OPERATION: Self = Self(2007);
     pub const ASSET_PATH_CASE: Self = Self(2008);
     pub const ASSET_UNUSED: Self = Self(2009);
+    pub const EMIT_UNSUPPORTED_SYNTAX: Self = Self(2010);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -147,6 +149,7 @@ impl DiagnosticCode {
             Self::SYNTAX_PARSE
                 | Self::SYNTAX_COMPOUND_ASSIGNMENT
                 | Self::SYNTAX_DOC_ANNOTATION
+                | Self::SYNTAX_UNSUPPORTED_DIALECT
                 | Self::TYPE_UNKNOWN_NAME
                 | Self::TYPE_DUPLICATE_ALIAS
                 | Self::TYPE_MISMATCH
@@ -164,6 +167,7 @@ impl DiagnosticCode {
                 | Self::LOWERING_OPERATION
                 | Self::ASSET_PATH_CASE
                 | Self::ASSET_UNUSED
+                | Self::EMIT_UNSUPPORTED_SYNTAX
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY

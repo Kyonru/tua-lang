@@ -13,6 +13,14 @@ feedback matters, lightly annotated around module boundaries, or left as normal
 dynamic Lua. Unknown and highly dynamic values fall back to `any` instead of
 forcing the whole project into a strict type system.
 
+The parser library's Luau-capable grammar is an internal implementation detail.
+After parsing, Tua rejects non-Tua constructs with `TL0004` before checking or
+emission. In particular, use Tua annotations instead of `value :: Type`, and
+rewrite `continue`, Luau conditional expressions, and interpolated strings with
+documented Tua or Lua 5.1-compatible forms. Every completed output file is also
+parsed as Lua 5.1; `TL2010` indicates that compiler lowering or emission broke
+that final invariant.
+
 !!! tip "New to Tua?"
     This page is a feature reference. If you are writing your first Tua
     project, start with [Learn Tua](learn.md) and return here when you need exact

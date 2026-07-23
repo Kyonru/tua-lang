@@ -58,6 +58,7 @@ valid unless it is listed below.
 | `TL0001` | Source cannot be parsed as valid Lua/Tua syntax. | Always enabled. |
 | `TL0002` | Compound-assignment syntax or its target is invalid. | Always enabled. |
 | `TL0003` | A supported LuaDoc annotation is malformed. | `diagnostics.doc_annotations` |
+| `TL0004` | The parser recognized a Luau grammar form that is not part of Tua. | Always enabled; blocks analysis and emission. |
 
 ## Type Codes
 
@@ -93,6 +94,7 @@ configurable lint pipeline.
 | `TL2007` | Internal lowering operations overlap or cannot be applied safely. | Always enabled. |
 | `TL2008` | Asset-path letter casing differs from the filesystem's canonical path. | Always enabled; warning. |
 | `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |
+| `TL2010` | Completed compiler output failed the final Lua 5.1 safety validation. | Always enabled; blocks emission. |
 
 ## Configuration Codes
 

@@ -1,3 +1,4 @@
+mod dialect;
 mod doc;
 mod model;
 mod normalize;
@@ -85,14 +86,21 @@ pub fn parse_raw_tua_source(
     let path = path.as_ref().to_path_buf();
     let normalized = normalize_tua_source(source);
 
-    parse_raw_source(
+    let raw = parse_raw_source(
         path,
         normalized.original,
         normalized.parser_source,
         normalized.parser_provenance,
         LuaVersion::luau(),
         ParsedLanguage::Tua,
-    )
+    )?;
+    let diagnostics = dialect::validate_tua_dialect(&raw);
+
+    if diagnostics.is_empty() {
+        Ok(raw)
+    } else {
+        Err(diagnostics)
+    }
 }
 
 pub fn extract_lua_source_model(raw: &RawParsedSource) -> TypedSourceModel {

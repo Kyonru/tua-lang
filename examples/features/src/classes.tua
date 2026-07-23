@@ -45,6 +45,10 @@ if particle is Entity then
   particle.x = particle.x + 1
 end
 
+for i = 1, 10 do
+  print("")
+end
+
 return {
   particle = particle,
 }

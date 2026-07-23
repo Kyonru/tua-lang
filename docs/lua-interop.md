@@ -39,6 +39,13 @@ During `tua build`, Tua sources emit as Lua and plain Lua sources are copied
 unchanged when the source and output roots differ. Both are then loaded through
 the same runtime module paths under `build/`.
 
+The Luau-capable parser used internally does not make Luau syntax part of Tua.
+A post-parse dialect check reports `TL0004` for non-Tua constructs before
+checking or emission. Generated `.lua` files then pass a final Lua 5.1 parse
+before Tua returns an emission artifact; `TL2010` is the blocking safety
+diagnostic if compiler lowering or emission violates that invariant. Plain
+`.lua` files remain outside this transpilation step and are copied unchanged.
+
 ## Use A Lua Module From Tua
 
 Tua can infer simple Lua module exports, but LuaDoc annotations provide stable

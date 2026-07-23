@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
 use full_moon::ast::span::ContainedSpan;
@@ -163,10 +163,69 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
             apply_lowering_operations(&mut document, operations, parsed)?;
         }
 
-        Ok(document.finish())
+        validate_lua51_emission(parsed, document.finish())
     } else {
         Err(diagnostics)
     }
+}
+
+fn validate_lua51_emission(
+    parsed: &ParsedSource,
+    emission: LuaEmission,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
+    let Err(diagnostics) = crate::parse_raw_lua_source(&parsed.path, emission.code.clone()) else {
+        return Ok(emission);
+    };
+
+    let mut seen_ranges = BTreeSet::new();
+    let diagnostics = diagnostics
+        .into_iter()
+        .map(|diagnostic| lua51_compatibility_diagnostic(parsed, &emission, diagnostic))
+        .filter(|diagnostic| {
+            seen_ranges.insert((
+                diagnostic.line,
+                diagnostic.column,
+                diagnostic.end_line,
+                diagnostic.end_column,
+            ))
+        })
+        .collect();
+
+    Err(diagnostics)
+}
+
+fn lua51_compatibility_diagnostic(
+    parsed: &ParsedSource,
+    emission: &LuaEmission,
+    generated: Diagnostic,
+) -> Diagnostic {
+    let source_span = emission
+        .provenance
+        .iter()
+        .find(|line| line.generated_line == generated.line)
+        .map(|line| line.source_span)
+        .or(parsed.span)
+        .unwrap_or(SourceSpan {
+            start: SourcePosition { line: 1, column: 1 },
+            end: SourcePosition { line: 1, column: 2 },
+        });
+
+    Diagnostic::error(
+        parsed.path.clone(),
+        source_span.start.line,
+        source_span.start.column,
+        format!(
+            "compiler output is not valid Lua 5.1 after lowering: {}",
+            generated.message
+        ),
+    )
+    .with_range(
+        source_span.start.line,
+        source_span.start.column,
+        source_span.end.line,
+        source_span.end.column,
+    )
+    .with_code(DiagnosticCode::EMIT_UNSUPPORTED_SYNTAX)
 }
 
 fn apply_lowering_operations(

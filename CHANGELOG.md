@@ -74,6 +74,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- A post-parse Tua dialect validator now rejects Luau-only grammar as blocking
+  `TL0004` before semantic analysis or emission, with targeted remediation for
+  constructs such as `::` type assertions and `continue`. Successful emission
+  still includes a final Lua 5.1 parse, with `TL2010` reserved for compiler
+  output that violates the target-language invariant.
 - `TL1003` now reports structured nested field, dictionary, tuple, callback
   parameter, and callback-return mismatch paths. Table-literal failures
   highlight the offending leaf value, while root mismatches retain concise

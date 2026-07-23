@@ -78,6 +78,29 @@ fn did_open_publishes_matching_core_diagnostics() {
 }
 
 #[test]
+fn did_open_rejects_luau_syntax_as_tl0004() {
+    let uri = "file:///tmp/luau-only.tua";
+    let mut server = TestServer::new();
+
+    server.send(did_open(uri, "while running do\n  continue\nend\n"));
+
+    let diagnostics = last_published_diagnostics(server.output(), uri)
+        .into_iter()
+        .filter(|diagnostic| diagnostic["code"] == "TL0004")
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0]["severity"], 1);
+    assert_eq!(diagnostics[0]["code"], "TL0004");
+    assert_eq!(diagnostics[0]["range"]["start"]["line"], 1);
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 2);
+    assert!(diagnostics[0]["message"]
+        .as_str()
+        .expect("diagnostic message should be a string")
+        .contains("`continue` is not part of Tua"));
+}
+
+#[test]
 fn did_open_publishes_nested_type_mismatch_paths_and_leaf_ranges() {
     let uri = "file:///tmp/nested-type-mismatch.tua";
     let source = r#"type Animation = { row: number }

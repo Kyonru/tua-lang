@@ -1957,6 +1957,37 @@ return hp
 }
 
 #[test]
+fn build_rejects_luau_syntax_at_the_tua_parse_boundary() {
+    let temp = TempDir::new("build-rejects-unlowered-luau");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"
+while running do
+  continue
+end
+"#,
+    )
+    .expect("failed to write source");
+
+    let output = tua()
+        .args(["build", "--emit-on-error"])
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build --emit-on-error");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid UTF-8");
+
+    assert!(stderr.contains("main.tua:3:3 error TL0004"));
+    assert!(stderr.contains("`continue` is not part of Tua"));
+    assert!(!temp.path().join("build/main.lua").exists());
+}
+
+#[test]
 fn fmt_formats_project_files_in_place() {
     let temp = TempDir::new("fmt-in-place");
 
