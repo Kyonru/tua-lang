@@ -162,6 +162,25 @@ idiom remains quiet. `TL4012` covers `if`/`elseif` chains, while `TL4013`
 covers boolean chains and the optional broader `duplicate_binary_operands`
 checks.
 
+`MisleadingAndOr` reports `condition and false or fallback` and the equivalent
+literal-`nil` form because Lua's `or` always selects the fallback instead of
+preserving that first alternative. The diagnostic identifies the exact value,
+points at the complete expression, and recommends an ordinary `if` statement
+assignment so the rewrite remains valid LuaJIT/Lua 5.1 output:
+
+```lua
+local result
+if condition then
+  result = false
+else
+  result = fallback
+end
+```
+
+Truthy alternatives such as `true` and `0` remain valid. Parenthesizing the
+left side, as in `(condition and false) or fallback`, records intentional use
+of Lua's fallback behavior and silences this opinionated warning.
+
 `TableLiteral` compares literal keys by their LuaJIT runtime value, so escaped
 strings and signed numeric spellings cannot hide a duplicate. It also reports
 explicit numeric keys that overlap list entries and repeated named fields in

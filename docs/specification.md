@@ -287,6 +287,9 @@ within each lexical block and cites the original definition for every repeat.
 Duplicate-condition guidance structurally compares runtime expressions across
 flattened `and`/`or` and `if`/`elseif` chains, cites the earlier condition, and
 keeps the common Lua `value and value or fallback` idiom permissive.
+Misleading-and-or guidance identifies a literal `false` or `nil` first
+alternative, points at the complete expression, and recommends an ordinary
+`if` statement assignment that remains portable LuaJIT/Lua 5.1 output.
 Uninitialized-local guidance tracks each binding's initializer separately,
 allows a final direct call or varargs to supply additional values, and treats a
 compound assignment as a read of the previous value rather than initialization.

@@ -284,20 +284,26 @@ impl Visitor for LintRuleVisitor<'_> {
 
         match expression {
             Expression::BinaryOperator { lhs, binop, rhs } => {
-                if matches!(binop, ast::BinOp::Or(_))
-                    && matches!(
-                        unparenthesized_expression(lhs),
+                let misleading_alternative = if matches!(binop, ast::BinOp::Or(_)) {
+                    match unparenthesized_expression(lhs) {
                         Expression::BinaryOperator {
                             binop: ast::BinOp::And(_),
                             rhs,
                             ..
-                        } if is_false_or_nil(rhs)
-                    )
-                {
-                    self.push(
-                        node_position(binop),
+                        } => false_or_nil_literal(rhs),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(alternative) = misleading_alternative {
+                    self.push_node(
+                        expression,
                         DiagnosticCode::LINT_MISLEADING_AND_OR,
-                        "`a and false/nil or b` does not preserve the false/nil value",
+                        format!(
+                            "`and`-`or` expression always selects the fallback because its first alternative is `{alternative}`; use an `if` statement assignment to preserve `{alternative}`"
+                        ),
                     );
                 }
 
@@ -665,6 +671,22 @@ impl LintRuleVisitor<'_> {
                 message,
             )
             .with_code(code),
+        );
+    }
+
+    fn push_node(&mut self, node: &impl Node, code: DiagnosticCode, message: impl Into<String>) {
+        let start = node_position(node);
+        let end = node_end_position(node);
+        self.diagnostics.push(
+            Diagnostic::new(
+                &self.parsed.path,
+                start.line,
+                start.column,
+                DiagnosticSeverity::Warning,
+                message,
+            )
+            .with_code(code)
+            .with_range(start.line, start.column, end.line, end.column),
         );
     }
 }
@@ -1141,11 +1163,16 @@ fn unparenthesized_expression(expression: &Expression) -> &Expression {
     }
 }
 
-fn is_false_or_nil(expression: &Expression) -> bool {
-    matches!(
-        unparenthesized_expression(expression),
-        Expression::Symbol(token) if matches!(token_text(token).as_str(), "false" | "nil")
-    )
+fn false_or_nil_literal(expression: &Expression) -> Option<&'static str> {
+    let Expression::Symbol(token) = unparenthesized_expression(expression) else {
+        return None;
+    };
+
+    match token_text(token).as_str() {
+        "false" => Some("false"),
+        "nil" => Some("nil"),
+        _ => None,
+    }
 }
 
 fn boolean_literal(expression: &Expression) -> Option<bool> {

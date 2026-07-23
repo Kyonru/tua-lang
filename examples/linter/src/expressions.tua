@@ -32,7 +32,7 @@ table.remove(items, 0)
 print(#record)
 ipairs(record)
 
--- MisleadingAndOr (TL4048)
+-- MisleadingAndOr (TL4048): use an if assignment when false or nil must survive.
 local misleading = value and false or true
 
 -- IntegerParsing (TL4050)

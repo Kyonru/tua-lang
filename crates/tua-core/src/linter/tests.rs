@@ -1183,6 +1183,82 @@ end
 }
 
 #[test]
+fn misleading_and_or_identifies_the_alternative_and_reports_the_expression() {
+    let diagnostics = check_standard_rules_source(
+        r#"local condition = true
+local outer = true
+local fallback = 42
+local other = 0
+local falseResult = condition and false or fallback
+local nilResult = condition and nil or fallback
+local nested = outer and (condition and false or fallback) or other
+print(falseResult, nilResult, nested)
+"#,
+    );
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_MISLEADING_AND_OR))
+        .collect::<Vec<_>>();
+
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|diagnostic| (
+                diagnostic.line,
+                diagnostic.column,
+                diagnostic.end_line,
+                diagnostic.end_column,
+                diagnostic.message.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                5,
+                21,
+                5,
+                52,
+                "`and`-`or` expression always selects the fallback because its first alternative is `false`; use an `if` statement assignment to preserve `false`",
+            ),
+            (
+                6,
+                19,
+                6,
+                48,
+                "`and`-`or` expression always selects the fallback because its first alternative is `nil`; use an `if` statement assignment to preserve `nil`",
+            ),
+            (
+                7,
+                27,
+                7,
+                58,
+                "`and`-`or` expression always selects the fallback because its first alternative is `false`; use an `if` statement assignment to preserve `false`",
+            ),
+        ]
+    );
+}
+
+#[test]
+fn misleading_and_or_accepts_truthy_and_parenthesized_alternatives() {
+    let diagnostics = check_standard_rules_source(
+        r#"local condition = true
+local fallback = 42
+local truth = condition and true or fallback
+local zero = condition and 0 or fallback
+local groupedLeft = (condition and false) or fallback
+local groupedAlternative = condition and (false) or fallback
+print(truth, zero, groupedLeft, groupedAlternative)
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_MISLEADING_AND_OR),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn table_operations_report_indices_and_multireturns_exactly() {
     let diagnostics = check_standard_rules_source(
         r#"
