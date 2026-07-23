@@ -122,7 +122,8 @@ Generics are not part of Tua. Native function types and LuaDoc `fun(...)`
 annotations share one semantic representation. Arrays use native `T[]` syntax;
 grouped union and function elements use `(T | U)[]` and
 `((value: T) -> U)[]`. An empty table literal can initialize an explicitly
-typed array or dictionary.
+typed array or dictionary. A record-shaped table whose named string keys and
+field values satisfy a string-keyed dictionary is assignable to that dictionary.
 
 Class fields accept the same native type surface. Constructors return the
 declared class type, method signatures are checked exactly, and class exports

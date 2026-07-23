@@ -78,6 +78,8 @@ language or editor behavior, and migration notes call out those changes.
   Definition opens virtual schemas for fixed configuration fields and follows
   source-derived store keys, sprite animation names, state-machine events, and
   callback names back to their originating entries.
+- Record-shaped tables with compatible named string fields now satisfy
+  string-keyed dictionary types, including static `spriteSheet` animation maps.
 - Class names, fields, and methods now support source-accurate definition,
   references, and project-wide rename, including nominal instances exported
   through static modules. Resolved named table-shape fields are also renameable.

@@ -541,13 +541,16 @@ Use `T[]` for arrays. Tua does not require or provide a `Table<T>` generic:
 local steps: number[] = {}
 local names: string[] = { "major", "minor" }
 local byName: { [string]: number } = {}
+local scores: { [string]: number } = { ada = 10, mina = 12 }
 type Position = [number, number]
 ```
 
 An empty table literal is accepted as the initial value of an annotated array
-or dictionary. Once annotated, writes, indexed reads, `table.insert`, `ipairs`,
-and supported editor features use the declared element type. Parentheses are
-required when the array element is a union or function type:
+or dictionary. A record literal with compatible named string fields is also
+accepted for a string-keyed dictionary. Once annotated, writes, indexed reads,
+`table.insert`, `ipairs`, and supported editor features use the declared
+element type. Parentheses are required when the array element is a union or
+function type:
 
 ```tua
 local values: (number | string)[] = {}

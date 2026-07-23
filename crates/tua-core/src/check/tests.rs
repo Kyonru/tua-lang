@@ -360,6 +360,34 @@ light:reset()
 }
 
 #[test]
+fn accepts_unannotated_sprite_on_loop_callbacks() {
+    check_tua_source(
+        "src/sprites.tua",
+        r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 128, height = 128 },
+  animations = {
+    green = {
+      from = 0,
+      to = 3,
+      row = 2,
+      durations = { 0.1, 0.5, 0.1, 0.1 },
+      onLoop = function(animation, loops)
+        if loops > 1 then
+          animation:pause()
+        end
+      end,
+    },
+  },
+})
+
+return Player
+"#,
+    )
+    .expect("sprite onLoop callbacks may omit annotations and return values");
+}
+
+#[test]
 fn rejects_unknown_typed_state_machine_states_and_events() {
     let state_diagnostics = check_tua_source(
         "src/state_machine.tua",

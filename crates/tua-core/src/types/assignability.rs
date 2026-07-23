@@ -142,11 +142,20 @@ impl TypeContext {
             (Type::Table(source), Type::Table(target)) => {
                 self.is_table_assignable(source, target, depth + 1, resolving)
             }
-            (Type::Table(source), Type::Array(_) | Type::Dictionary { .. })
-                if source.is_plain_empty() =>
-            {
-                true
-            }
+            (
+                Type::Table(source),
+                Type::Dictionary {
+                    key: target_key,
+                    value: target_value,
+                },
+            ) => self.is_table_assignable_to_dictionary(
+                source,
+                target_key,
+                target_value,
+                depth + 1,
+                resolving,
+            ),
+            (Type::Table(source), Type::Array(_)) if source.is_plain_empty() => true,
             (Type::Array(source), Type::Array(target)) => {
                 self.is_assignable_inner(source, target, depth + 1, resolving)
             }
@@ -274,6 +283,26 @@ impl TypeContext {
             }
 
             self.is_assignable_inner(&source_field.ty, &target_field.ty, depth + 1, resolving)
+        })
+    }
+
+    fn is_table_assignable_to_dictionary(
+        &self,
+        source: &TableShape,
+        target_key: &Type,
+        target_value: &Type,
+        depth: usize,
+        resolving: &mut BTreeSet<(bool, String)>,
+    ) -> bool {
+        source.fields().all(|(name, field)| {
+            !is_index_signature_field(name)
+                && self.is_assignable_inner(
+                    &Type::string_literal(name),
+                    target_key,
+                    depth + 1,
+                    resolving,
+                )
+                && self.is_assignable_inner(&field.ty, target_value, depth + 1, resolving)
         })
     }
 }

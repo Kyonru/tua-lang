@@ -342,6 +342,23 @@ fn container_types_are_assignable_by_shape() {
         &Type::dictionary(Type::string(), Type::alias("Source")),
         &Type::dictionary(Type::string(), Type::alias("Source")),
     ));
+
+    let record = Type::table([
+        ("idle", TableField::required(Type::number())),
+        ("running", TableField::required(Type::number())),
+    ]);
+    assert!(is_assignable(
+        &record,
+        &Type::dictionary(Type::string(), Type::number()),
+    ));
+    assert!(!is_assignable(
+        &record,
+        &Type::dictionary(Type::string(), Type::boolean()),
+    ));
+    assert!(!is_assignable(
+        &record,
+        &Type::dictionary(Type::number(), Type::number()),
+    ));
 }
 
 #[test]

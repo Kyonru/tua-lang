@@ -377,7 +377,7 @@ fn sprite_animation_config_type() -> Type {
                     ],
                     2,
                     None,
-                    [Type::nil()],
+                    [Type::Any],
                 )),
             ])),
         ),
