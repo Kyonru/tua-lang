@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Suppressible class-design lints for child constructors that skip `super(...)`
+  on a returning path (`TL4057`), overridable method calls during open-class
+  initialization (`TL4058`), and redundant type-only inherited fields
+  (`TL4059`). Always-on class contract failures remain `TL1008`.
 - Resolved `---@deprecated` API guidance through standard lint `TL4056`,
   module exports, hover, completion tags, and deprecated semantic tokens.
 - Standard lint rules for `tua lint` and the default-on
@@ -77,6 +81,9 @@ language or editor behavior, and migration notes call out those changes.
 - **Tua: Open Generated Lua Beside Tua** now saves the active source, rebuilds
   its project with the selected Tua executable, and reloads an already-open
   generated editor before showing the emitted Lua.
+- Standalone `super(...)` calls remain constructor calls when preceded by
+  comments; punctuation inside comment trivia no longer makes lowering treat
+  them as member access.
 - Native `T[]` array syntax now parses consistently in aliases, locals,
   parameters, returns, class fields, and class methods. The Luau-only `{ T }`
   array shorthand remains rejected with guidance to use Tua syntax. Indexed

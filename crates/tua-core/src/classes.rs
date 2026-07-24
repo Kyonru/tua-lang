@@ -4,9 +4,14 @@ use std::path::Path;
 
 use full_moon::ast::{self, LastStmt};
 use full_moon::node::Node;
+use full_moon::visitors::{Visit, Visitor};
 
 use crate::ast_utils::{field_chain_before_first_call, plain_field_chain_from_var, token_text};
-use crate::parser::{parse_tua_type_text, ParsedSource, SourcePosition, SourceSpan, TuaType};
+use crate::parser::{
+    parse_raw_tua_source, parse_tua_type_text, ParsedSource, RawParsedSource, SourcePosition,
+    SourceSpan, TuaType, TypedSourceModel,
+};
+use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
 use crate::types::{Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode};
 
@@ -47,6 +52,7 @@ pub(crate) struct ClassMethod {
     pub span: SourceSpan,
     pub name_span: SourceSpan,
     pub parameters_span: SourceSpan,
+    pub body_span: SourceSpan,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +66,26 @@ pub(crate) struct ClassMemberTarget {
     pub kind: ClassMemberKind,
     pub span: SourceSpan,
     pub ty: TuaType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ClassLintFact {
+    ParentConstructorPath {
+        class_name: String,
+        parent_name: String,
+        span: SourceSpan,
+    },
+    VirtualCallInInit {
+        class_name: String,
+        method_name: String,
+        span: SourceSpan,
+    },
+    RedundantInheritedField {
+        class_name: String,
+        parent_name: String,
+        field_name: String,
+        span: SourceSpan,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -538,8 +564,9 @@ fn parse_class_method(
         return None;
     }
 
+    let method_body_start = cursor + 1;
     let method_close = find_matching_brace(body, cursor)?;
-    let method_body = body[cursor + 1..method_close].to_owned();
+    let method_body = body[method_body_start..method_close].to_owned();
 
     Some((
         ClassMethod {
@@ -558,6 +585,10 @@ fn parse_class_method(
                 end: source_position_from_byte(source, body_offset + name_end),
             },
             parameters_span,
+            body_span: SourceSpan {
+                start: source_position_from_byte(source, body_offset + method_body_start),
+                end: source_position_from_byte(source, body_offset + method_close),
+            },
         },
         method_close + 1,
     ))
@@ -802,6 +833,7 @@ fn transform_method_body(
 fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> String {
     let mut output = String::with_capacity(body.len());
     let mut index = 0usize;
+    let mut last_significant = None;
 
     while index < body.len() {
         if body[index..].starts_with("--") {
@@ -814,10 +846,11 @@ fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> Str
         if let Some(end) = consume_string_literal(body, index) {
             output.push_str(&body[index..end]);
             index = end;
+            last_significant = Some('"');
             continue;
         }
 
-        if starts_super_reference(body, index) {
+        if starts_super_reference(body, index, last_significant) {
             let after = skip_whitespace(body, index + "super".len());
 
             if body[after..].starts_with('(') {
@@ -830,6 +863,7 @@ fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> Str
                     };
                     output.push_str(&format!("{}(self{})", init, comma_prefixed_arguments(args)));
                     index = close + 1;
+                    last_significant = Some(')');
                     continue;
                 }
             }
@@ -852,6 +886,7 @@ fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> Str
                                 comma_prefixed_arguments(args)
                             ));
                             index = close + 1;
+                            last_significant = Some(')');
                             continue;
                         }
                     }
@@ -865,6 +900,9 @@ fn replace_super_calls(body: &str, parent: &str, parent_is_forward: bool) -> Str
             .expect("index should stay on a valid character boundary");
         output.push(character);
         index += character.len_utf8();
+        if !character.is_whitespace() {
+            last_significant = Some(character);
+        }
     }
 
     output
@@ -1166,6 +1204,210 @@ pub(crate) fn class_contract_diagnostics(
     diagnostics
 }
 
+pub(crate) fn class_lint_facts(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+) -> Vec<ClassLintFact> {
+    let mut facts = Vec::new();
+    let mut initialization = ClassInitializationAnalysis::new(parsed);
+
+    for class in &parsed.class_declarations {
+        if let (Some(init), Some(parent_name)) = (&class.init, &class.parent) {
+            let initialization_facts = initialization.initialization_facts(&class.name);
+            if initialization_facts.has_returning_exit
+                && !initialization_facts.parent_called_on_every_exit
+            {
+                facts.push(ClassLintFact::ParentConstructorPath {
+                    class_name: class.name.clone(),
+                    parent_name: parent_name.clone(),
+                    span: init.name_span,
+                });
+            }
+        }
+
+        if let Some(init) = class.init.as_ref().filter(|_| class.is_open) {
+            for (method_name, span) in direct_self_calls_in_method(init) {
+                if class_method_declaration(&parsed.class_declarations, &class.name, &method_name)
+                    .is_some_and(|(_, method)| !method.is_final)
+                {
+                    facts.push(ClassLintFact::VirtualCallInInit {
+                        class_name: class.name.clone(),
+                        method_name,
+                        span,
+                    });
+                }
+            }
+        }
+
+        for field in class.fields.iter().filter(|field| field.default.is_none()) {
+            let Some((parent, parent_field)) =
+                inherited_field(&parsed.class_declarations, class, &field.name)
+            else {
+                continue;
+            };
+            let Some(field_type) = class_field_type(environment, &class.name, &field.name) else {
+                continue;
+            };
+            let Some(parent_type) = class_field_type(environment, &parent.name, &parent_field.name)
+            else {
+                continue;
+            };
+
+            if environment.resolve_aliases(field_type) == environment.resolve_aliases(parent_type) {
+                facts.push(ClassLintFact::RedundantInheritedField {
+                    class_name: class.name.clone(),
+                    parent_name: parent.name.clone(),
+                    field_name: field.name.clone(),
+                    span: field.name_span,
+                });
+            }
+        }
+    }
+
+    facts
+}
+
+#[derive(Default)]
+struct DirectFunctionCallCollector {
+    nested_function_depth: usize,
+    calls: Vec<ast::FunctionCall>,
+}
+
+impl Visitor for DirectFunctionCallCollector {
+    fn visit_function_declaration(&mut self, _function: &ast::FunctionDeclaration) {
+        self.nested_function_depth += 1;
+    }
+
+    fn visit_function_declaration_end(&mut self, _function: &ast::FunctionDeclaration) {
+        self.nested_function_depth = self.nested_function_depth.saturating_sub(1);
+    }
+
+    fn visit_local_function(&mut self, _function: &ast::LocalFunction) {
+        self.nested_function_depth += 1;
+    }
+
+    fn visit_local_function_end(&mut self, _function: &ast::LocalFunction) {
+        self.nested_function_depth = self.nested_function_depth.saturating_sub(1);
+    }
+
+    fn visit_anonymous_function(&mut self, _function: &ast::AnonymousFunction) {
+        self.nested_function_depth += 1;
+    }
+
+    fn visit_anonymous_function_end(&mut self, _function: &ast::AnonymousFunction) {
+        self.nested_function_depth = self.nested_function_depth.saturating_sub(1);
+    }
+
+    fn visit_function_call(&mut self, call: &ast::FunctionCall) {
+        if self.nested_function_depth == 0 {
+            self.calls.push(call.clone());
+        }
+    }
+}
+
+fn direct_self_calls_in_method(method: &ClassMethod) -> Vec<(String, SourceSpan)> {
+    const WRAPPER_PREFIX: &str = "local function __tua_class_init(self)\n";
+
+    let wrapper = format!("{WRAPPER_PREFIX}{}\nend", method.body);
+    let Ok(raw) = parse_raw_tua_source("<class-init>", wrapper) else {
+        return Vec::new();
+    };
+    let parsed = ParsedSource::from_raw_and_typed(raw, TypedSourceModel::default());
+    let scope = scope_map_parsed_source(&parsed);
+    let Some(self_symbol) = scope.declarations().iter().find_map(|declaration| {
+        (declaration.name == "self"
+            && declaration.kind == ScopeDeclarationKind::Parameter
+            && declaration.name_span.start.line == 1)
+            .then_some(declaration.id)
+    }) else {
+        return Vec::new();
+    };
+    let Some(block) = parsed.ast.nodes().stmts().find_map(|statement| {
+        let ast::Stmt::LocalFunction(function) = statement else {
+            return None;
+        };
+        Some(function.body().block().clone())
+    }) else {
+        return Vec::new();
+    };
+
+    let mut collector = DirectFunctionCallCollector::default();
+    block.visit(&mut collector);
+
+    collector
+        .calls
+        .into_iter()
+        .filter_map(|call| {
+            let parts = field_chain_before_first_call(&call)?;
+            let [receiver, method_name] = parts.as_slice() else {
+                return None;
+            };
+            if receiver != "self" {
+                return None;
+            }
+            if !call_root_resolves_to(&scope, &call, self_symbol) {
+                return None;
+            }
+
+            let span = method_body_node_span(&parsed.raw, method, &call)?;
+            Some((method_name.clone(), span))
+        })
+        .collect()
+}
+
+fn call_root_resolves_to(
+    scope: &crate::scope::ScopeMap,
+    call: &ast::FunctionCall,
+    symbol: ScopeSymbolId,
+) -> bool {
+    let ast::Prefix::Name(root) = call.prefix() else {
+        return false;
+    };
+    let Some((start, _)) = root.range() else {
+        return false;
+    };
+
+    scope.symbol_at_position(SourcePosition::from_full_moon(start)) == Some(symbol)
+}
+
+fn method_body_node_span(
+    raw: &RawParsedSource,
+    method: &ClassMethod,
+    node: &impl Node,
+) -> Option<SourceSpan> {
+    let (start, end) = node.range()?;
+    let start = raw
+        .parser_position_origin(SourcePosition::from_full_moon(start))?
+        .source_position;
+    let end = raw
+        .parser_position_origin(SourcePosition::from_full_moon(end))?
+        .source_position;
+
+    Some(SourceSpan {
+        start: method_body_source_position(method, start)?,
+        end: method_body_source_position(method, end)?,
+    })
+}
+
+fn method_body_source_position(
+    method: &ClassMethod,
+    wrapper_position: SourcePosition,
+) -> Option<SourcePosition> {
+    let body_line = wrapper_position.line.checked_sub(1)?;
+    if body_line == 0 {
+        return None;
+    }
+
+    Some(SourcePosition {
+        line: method.body_span.start.line + body_line - 1,
+        column: if body_line == 1 {
+            method.body_span.start.column + wrapper_position.column - 1
+        } else {
+            wrapper_position.column
+        },
+    })
+}
+
 fn class_field_type<'a>(
     environment: &'a TypeEnvironment,
     class: &str,
@@ -1219,18 +1461,31 @@ fn collect_effective_class_fields<'a>(
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct InitializationState {
+    fields: InitializedFields,
+    parent_called: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ClassInitializationFacts {
+    fields: InitializedFields,
+    has_returning_exit: bool,
+    parent_called_on_every_exit: bool,
+}
+
 #[derive(Clone, Debug)]
 struct InitializationFlow {
-    fallthrough: Option<InitializedFields>,
-    returns: Vec<InitializedFields>,
-    breaks: Vec<InitializedFields>,
-    continues: Vec<InitializedFields>,
+    fallthrough: Option<InitializationState>,
+    returns: Vec<InitializationState>,
+    breaks: Vec<InitializationState>,
+    continues: Vec<InitializationState>,
 }
 
 impl InitializationFlow {
-    fn fallthrough(fields: InitializedFields) -> Self {
+    fn fallthrough(state: InitializationState) -> Self {
         Self {
-            fallthrough: Some(fields),
+            fallthrough: Some(state),
             returns: Vec::new(),
             breaks: Vec::new(),
             continues: Vec::new(),
@@ -1247,7 +1502,7 @@ impl InitializationFlow {
 struct ClassInitializationAnalysis<'a> {
     parsed: &'a ParsedSource,
     init_blocks: BTreeMap<String, ast::Block>,
-    initialized: BTreeMap<String, InitializedFields>,
+    facts: BTreeMap<String, ClassInitializationFacts>,
     visiting: BTreeSet<String>,
 }
 
@@ -1280,43 +1535,45 @@ impl<'a> ClassInitializationAnalysis<'a> {
         Self {
             parsed,
             init_blocks,
-            initialized: BTreeMap::new(),
+            facts: BTreeMap::new(),
             visiting: BTreeSet::new(),
         }
     }
 
     fn initialized_fields(&mut self, class_name: &str) -> InitializedFields {
-        if let Some(fields) = self.initialized.get(class_name) {
-            return fields.clone();
+        self.initialization_facts(class_name).fields
+    }
+
+    fn initialization_facts(&mut self, class_name: &str) -> ClassInitializationFacts {
+        if let Some(facts) = self.facts.get(class_name) {
+            return facts.clone();
         }
         if !self.visiting.insert(class_name.to_owned()) {
-            return InitializedFields::new();
+            return ClassInitializationFacts::default();
         }
 
         let Some(class) = class_by_name(&self.parsed.class_declarations, class_name) else {
             self.visiting.remove(class_name);
-            return InitializedFields::new();
+            return ClassInitializationFacts::default();
         };
         let parent = class.parent.clone();
-        let flow =
-            self.init_blocks.get(class_name).cloned().map(|block| {
-                self.analyze_block(&block, InitializedFields::new(), parent.as_deref())
-            });
-        let fields = flow.map(initialized_on_every_exit).unwrap_or_default();
+        let flow = self.init_blocks.get(class_name).cloned().map(|block| {
+            self.analyze_block(&block, InitializationState::default(), parent.as_deref())
+        });
+        let facts = flow.map(initialization_facts_on_exits).unwrap_or_default();
 
         self.visiting.remove(class_name);
-        self.initialized
-            .insert(class_name.to_owned(), fields.clone());
-        fields
+        self.facts.insert(class_name.to_owned(), facts.clone());
+        facts
     }
 
     fn analyze_block(
         &mut self,
         block: &ast::Block,
-        fields: InitializedFields,
+        state: InitializationState,
         parent: Option<&str>,
     ) -> InitializationFlow {
-        let mut flow = InitializationFlow::fallthrough(fields);
+        let mut flow = InitializationFlow::fallthrough(state);
 
         for statement in block.stmts() {
             let Some(current) = flow.fallthrough.take() else {
@@ -1343,7 +1600,7 @@ impl<'a> ClassInitializationAnalysis<'a> {
     fn analyze_statement(
         &mut self,
         statement: &ast::Stmt,
-        mut fields: InitializedFields,
+        mut state: InitializationState,
         parent: Option<&str>,
     ) -> InitializationFlow {
         match statement {
@@ -1354,69 +1611,70 @@ impl<'a> ClassInitializationAnalysis<'a> {
                     };
                     if let [receiver, field] = parts.as_slice() {
                         if receiver == "self" {
-                            fields.insert(field.clone());
+                            state.fields.insert(field.clone());
                         }
                     }
                 }
-                InitializationFlow::fallthrough(fields)
+                InitializationFlow::fallthrough(state)
             }
             ast::Stmt::FunctionCall(call) => {
                 if let Some(parent) = parent {
                     if calls_parent_initializer(call, parent) {
-                        fields.extend(self.initialized_fields(parent));
+                        state.fields.extend(self.initialized_fields(parent));
+                        state.parent_called = true;
                     }
                 }
-                InitializationFlow::fallthrough(fields)
+                InitializationFlow::fallthrough(state)
             }
-            ast::Stmt::Do(statement) => self.analyze_block(statement.block(), fields, parent),
-            ast::Stmt::If(statement) => self.analyze_if(statement, fields, parent),
+            ast::Stmt::Do(statement) => self.analyze_block(statement.block(), state, parent),
+            ast::Stmt::If(statement) => self.analyze_if(statement, state, parent),
             ast::Stmt::GenericFor(statement) => {
-                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+                self.analyze_zero_or_more_loop(statement.block(), state, parent)
             }
             ast::Stmt::NumericFor(statement) => {
-                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+                self.analyze_zero_or_more_loop(statement.block(), state, parent)
             }
             ast::Stmt::While(statement) => {
-                self.analyze_zero_or_more_loop(statement.block(), fields, parent)
+                self.analyze_zero_or_more_loop(statement.block(), state, parent)
             }
             ast::Stmt::Repeat(statement) => {
-                let mut body = self.analyze_block(statement.block(), fields, parent);
+                let mut body = self.analyze_block(statement.block(), state, parent);
                 let mut exits = Vec::new();
                 exits.extend(body.fallthrough.take());
                 exits.append(&mut body.breaks);
                 exits.append(&mut body.continues);
 
                 InitializationFlow {
-                    fallthrough: intersect_initialized_fields(exits),
+                    fallthrough: intersect_initialization_states(exits),
                     returns: body.returns,
                     breaks: Vec::new(),
                     continues: Vec::new(),
                 }
             }
-            _ => InitializationFlow::fallthrough(fields),
+            _ => InitializationFlow::fallthrough(state),
         }
     }
 
     fn analyze_if(
         &mut self,
         statement: &ast::If,
-        fields: InitializedFields,
+        state: InitializationState,
         parent: Option<&str>,
     ) -> InitializationFlow {
-        let mut branches = vec![self.analyze_block(statement.block(), fields.clone(), parent)];
+        let mut branches = vec![self.analyze_block(statement.block(), state.clone(), parent)];
 
         if let Some(else_ifs) = statement.else_if() {
             branches.extend(
                 else_ifs
                     .iter()
-                    .map(|else_if| self.analyze_block(else_if.block(), fields.clone(), parent)),
+                    .map(|else_if| self.analyze_block(else_if.block(), state.clone(), parent)),
             );
         }
         branches.push(
             statement
                 .else_block()
-                .map(|block| self.analyze_block(block, fields.clone(), parent))
-                .unwrap_or_else(|| InitializationFlow::fallthrough(fields)),
+                .map(|block| self.analyze_block(block, state.clone(), parent))
+                .unwrap_or_else(|| InitializationFlow::fallthrough(state)),
         );
 
         merge_initialization_branches(branches)
@@ -1425,13 +1683,13 @@ impl<'a> ClassInitializationAnalysis<'a> {
     fn analyze_zero_or_more_loop(
         &mut self,
         block: &ast::Block,
-        fields: InitializedFields,
+        state: InitializationState,
         parent: Option<&str>,
     ) -> InitializationFlow {
-        let body = self.analyze_block(block, fields.clone(), parent);
+        let body = self.analyze_block(block, state.clone(), parent);
 
         InitializationFlow {
-            fallthrough: Some(fields),
+            fallthrough: Some(state),
             returns: body.returns,
             breaks: Vec::new(),
             continues: Vec::new(),
@@ -1474,26 +1732,37 @@ fn merge_initialization_branches(
     }
 
     InitializationFlow {
-        fallthrough: intersect_initialized_fields(fallthrough),
+        fallthrough: intersect_initialization_states(fallthrough),
         returns,
         breaks,
         continues,
     }
 }
 
-fn initialized_on_every_exit(mut flow: InitializationFlow) -> InitializedFields {
+fn initialization_facts_on_exits(mut flow: InitializationFlow) -> ClassInitializationFacts {
     let mut exits = Vec::new();
     exits.extend(flow.fallthrough.take());
     exits.append(&mut flow.returns);
+    let has_returning_exit = !exits.is_empty();
+    let state = intersect_initialization_states(exits).unwrap_or_default();
 
-    intersect_initialized_fields(exits).unwrap_or_default()
+    ClassInitializationFacts {
+        fields: state.fields,
+        has_returning_exit,
+        parent_called_on_every_exit: has_returning_exit && state.parent_called,
+    }
 }
 
-fn intersect_initialized_fields(mut fields: Vec<InitializedFields>) -> Option<InitializedFields> {
-    let mut intersection = fields.pop()?;
+fn intersect_initialization_states(
+    mut states: Vec<InitializationState>,
+) -> Option<InitializationState> {
+    let mut intersection = states.pop()?;
 
-    for fields in fields {
-        intersection.retain(|field| fields.contains(field));
+    for state in states {
+        intersection
+            .fields
+            .retain(|field| state.fields.contains(field));
+        intersection.parent_called &= state.parent_called;
     }
 
     Some(intersection)
@@ -1914,15 +2183,8 @@ fn starts_keyword(source: &str, index: usize, keyword: &str) -> bool {
             .unwrap_or(true)
 }
 
-fn starts_super_reference(source: &str, index: usize) -> bool {
-    starts_keyword(source, index, "super")
-        && !matches!(
-            source[..index]
-                .chars()
-                .rev()
-                .find(|character| !character.is_whitespace()),
-            Some('.' | ':')
-        )
+fn starts_super_reference(source: &str, index: usize, last_significant: Option<char>) -> bool {
+    starts_keyword(source, index, "super") && !matches!(last_significant, Some('.' | ':'))
 }
 
 fn can_start_keyword(source: &str, index: usize) -> bool {

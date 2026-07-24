@@ -377,6 +377,7 @@ open class Parent {
 final class Child extends Parent {
   init(helper: any, ...: string) {
     helper . super()
+    -- Parent setup.
     super(1, ...)
   }
 }
@@ -386,6 +387,7 @@ final class Child extends Parent {
 
     assert!(emitted.contains("local function Child_init(self, helper, ...)"));
     assert!(emitted.contains("helper . super()"));
+    assert!(emitted.contains("-- Parent setup."));
     assert!(emitted.contains("Parent_init(self, 1, ...)"));
     assert!(emitted.contains("local function Child_new(helper, ...)"));
     assert!(emitted.contains("Child_init(self, helper, ...)"));

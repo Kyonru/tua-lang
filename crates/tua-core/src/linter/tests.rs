@@ -3757,6 +3757,258 @@ end
     assert!(diagnostics.is_empty());
 }
 
+#[test]
+fn class_lints_report_constructor_paths_virtual_init_calls_and_redundant_fields() {
+    let diagnostics = check_standard_rules_source(
+        r#"open class Base {
+  value: number | nil
+
+  init() {
+  }
+
+  configure() {
+  }
+}
+
+open class Child extends Base {
+  value: number | nil
+
+  init(skip: boolean) {
+    if not skip then
+      super()
+    end
+    -- VirtualCallInInit (TL4058)
+    self:configure()
+  }
+}
+"#,
+    );
+
+    let parent_constructor = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_PARENT_CONSTRUCTOR))
+        .expect("a constructor path that skips super should report TL4057");
+    assert_eq!(
+        parent_constructor.message,
+        "constructor for class `Child` can return without calling parent constructor `Base`; call `super(...)` on every returning path"
+    );
+    assert_eq!(
+        (
+            parent_constructor.line,
+            parent_constructor.column,
+            parent_constructor.end_line,
+            parent_constructor.end_column,
+        ),
+        (14, 3, 14, 7)
+    );
+
+    let virtual_call = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == Some(DiagnosticCode::LINT_CLASS_VIRTUAL_CALL_IN_INIT))
+        .expect("an overridable self call during init should report TL4058");
+    assert_eq!(
+        virtual_call.message,
+        "overridable method `configure` is called during `Child.init`; a subclass override can observe incomplete state, so mark the method `final` or move the call out of `init`"
+    );
+    assert_eq!(
+        (
+            virtual_call.line,
+            virtual_call.column,
+            virtual_call.end_line,
+            virtual_call.end_column,
+        ),
+        (19, 5, 19, 21)
+    );
+
+    let redundant_field = diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::LINT_CLASS_REDUNDANT_INHERITED_FIELD)
+        })
+        .expect("a type-only inherited field redeclaration should report TL4059");
+    assert_eq!(
+        redundant_field.message,
+        "field `value` in class `Child` redundantly redeclares the inherited field from class `Base`; remove this declaration"
+    );
+    assert_eq!(
+        (
+            redundant_field.line,
+            redundant_field.column,
+            redundant_field.end_line,
+            redundant_field.end_column,
+        ),
+        (12, 3, 12, 8)
+    );
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                matches!(
+                    diagnostic.code,
+                    Some(
+                        DiagnosticCode::LINT_CLASS_PARENT_CONSTRUCTOR
+                            | DiagnosticCode::LINT_CLASS_VIRTUAL_CALL_IN_INIT
+                            | DiagnosticCode::LINT_CLASS_REDUNDANT_INHERITED_FIELD
+                    )
+                )
+            })
+            .count(),
+        3,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn class_lints_accept_complete_parent_paths_final_calls_and_deferred_callbacks() {
+    let diagnostics = check_standard_rules_source(
+        r#"open class Base {
+  value: number | nil
+
+  init() {
+  }
+
+  final stable() {
+  }
+
+  configure() {
+  }
+}
+
+open class Safe extends Base {
+  init(early: boolean) {
+    if early then
+      super()
+      return
+    end
+
+    super()
+    self:stable()
+
+    local callback = function()
+      self:overridable()
+    end
+    print(callback)
+  }
+
+  overridable() {
+  }
+}
+
+open class Automatic extends Base {
+}
+
+open class Customized extends Base {
+  value: number | nil = 1
+
+  init() {
+    super()
+  }
+}
+
+open class ForwardChild extends ForwardBase {
+  init() {
+    -- Forward parents use the same source call identity.
+    super()
+  }
+}
+
+open class ForwardBase {
+  init() {
+  }
+}
+
+open class ShadowedSelf extends Base {
+  init() {
+    super()
+    local self = { configure = function() end }
+    self.configure()
+  }
+}
+"#,
+    );
+
+    for code in [
+        DiagnosticCode::LINT_CLASS_PARENT_CONSTRUCTOR,
+        DiagnosticCode::LINT_CLASS_VIRTUAL_CALL_IN_INIT,
+        DiagnosticCode::LINT_CLASS_REDUNDANT_INHERITED_FIELD,
+    ] {
+        assert_eq!(count_code(&diagnostics, code), 0, "{diagnostics:#?}");
+    }
+}
+
+#[test]
+fn disabling_standard_rules_keeps_class_contract_errors_enabled() {
+    let diagnostics = check_tua_source_with_diagnostics_config(
+        "src/main.tua",
+        r#"open class Base {
+  value: number
+
+  init() {
+    self.value = 1
+  }
+
+  update() {
+  }
+}
+
+open class Child extends Base {
+  value: number
+
+  init() {
+    self:update()
+  }
+}
+"#,
+        &diagnostics_without_standard_rules(),
+    )
+    .expect_err("required class fields should remain correctness errors");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_CLASS)),
+        "{diagnostics:#?}"
+    );
+    for code in [
+        DiagnosticCode::LINT_CLASS_PARENT_CONSTRUCTOR,
+        DiagnosticCode::LINT_CLASS_VIRTUAL_CALL_IN_INIT,
+        DiagnosticCode::LINT_CLASS_REDUNDANT_INHERITED_FIELD,
+    ] {
+        assert_eq!(count_code(&diagnostics, code), 0, "{diagnostics:#?}");
+    }
+}
+
+#[test]
+fn exact_codes_suppress_class_lints() {
+    check_tua_source(
+        "src/main.tua",
+        r#"-- tua-ignore-file TL4057 TL4058 TL4059
+open class Base {
+  value: number | nil
+
+  init() {
+  }
+
+  update() {
+  }
+}
+
+open class Child extends Base {
+  value: number | nil
+
+  init(skip: boolean) {
+    if not skip then
+      super()
+    end
+    self:update()
+  }
+}
+"#,
+    )
+    .expect("each class lint should support exact-code suppression");
+}
+
 fn count_code(diagnostics: &[crate::Diagnostic], code: DiagnosticCode) -> usize {
     diagnostics
         .iter()

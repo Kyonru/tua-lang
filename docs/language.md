@@ -692,6 +692,15 @@ assignment, or a guaranteed `super(...)` call can satisfy the contract;
 assigning in only one conditional branch cannot. Fields whose type accepts
 `nil` may remain absent, matching Lua's field semantics.
 
+Those correctness checks are always-on `TL1008` errors. Standard class lints
+separately report constructors that can return without `super(...)` (`TL4057`),
+direct calls to overridable methods during an open class's initialization
+(`TL4058`), and type-only inherited field redeclarations with no child default
+(`TL4059`). They obey `diagnostics.rules` and exact-code suppressions. Empty
+overrides, overrides that replace rather than call parent behavior, exported
+methods with no local use, and open classes with no known local subclass remain
+valid and do not warn.
+
 Inside `init` and instance methods, `self` resolves to the enclosing class.
 Completion after `self.` and member hover include declared and inherited fields
 and methods with their exact types.

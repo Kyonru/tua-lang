@@ -310,6 +310,14 @@ or file, subject to the configured suppression scopes and per-file limit; these
 explicit suppressions are excluded from automatic safe fix-all.
 The standard lint rules are enabled by default for checking and editor
 diagnostics; projects can disable that set without disabling type checking.
+Class correctness remains in always-on `TL1008`: invalid inheritance,
+override-contract failures, unknown members, and uninitialized required fields
+are errors even when standard rules are disabled. Suspicious but valid class
+design uses suppressible `TL4057`-`TL4059` warnings for skipped parent
+constructors, overridable calls during initialization, and redundant inherited
+field declarations. These rules consume source class declarations, resolved
+inheritance, lexical bindings, and constructor-flow facts rather than emitted
+Lua.
 The unknown-global lint recognizes explicit global assignments and simple
 global function declarations anywhere in the current Tua file; runtime-provided
 and cross-file globals remain explicit project configuration.

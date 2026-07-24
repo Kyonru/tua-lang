@@ -38,6 +38,9 @@ share an existing Tua code because they are the same analysis.
 | `LocalUnused` | `TL4005` |
 | `FunctionUnused` | `TL4055` |
 | `DeprecatedApi` | `TL4056` |
+| `ParentConstructorPath` | `TL4057` |
+| `VirtualCallInInit` | `TL4058` |
+| `RedundantInheritedField` | `TL4059` |
 | `ImportUnused` | `TL4054` |
 | `BuiltinGlobalWrite` | `TL4038` |
 | `PlaceholderRead` | `TL4039` |
@@ -249,6 +252,29 @@ lexical shadowing prevents unrelated bindings with the same spelling from
 warning. Hover presents the guidance, completion marks deprecated candidates,
 and semantic tokens mark resolved declarations and uses. Tua does not infer
 LOVE deprecations from prose in the generated API catalog.
+
+Class correctness and class style are separate. Invalid inheritance, missing or
+spurious `override`, incompatible override signatures, unknown members, and
+uninitialized required fields remain always-on `TL1008` errors. The following
+class lints are suppressible standard rules and disappear when
+`diagnostics.rules = false`:
+
+- `ParentConstructorPath` (`TL4057`) reports an explicit child `init` that can
+  return without calling `super(...)`. A child with no explicit constructor
+  inherits the parent initializer automatically and remains quiet.
+- `VirtualCallInInit` (`TL4058`) reports a direct `self` call to an overridable
+  method from an open class's `init`, because a subclass override can observe
+  incomplete subclass state. Final methods, final classes, and calls inside
+  deferred function bodies remain quiet.
+- `RedundantInheritedField` (`TL4059`) reports a type-only child field
+  declaration that repeats an inherited field's resolved type without providing
+  a new default.
+
+These rules analyze source class declarations, resolved inheritance, lexical
+bindings, and constructor flow. They do not inspect emitted Lua. Tua does not
+warn merely because an override omits its parent method, has an empty body, is
+exported but unused locally, or belongs to an open class with no known local
+subclass.
 
 `DeprecatedGlobal` still depends on a host-provided deprecated-global catalog,
 which Tua does not invent. Likewise, dialect-specific table APIs are ignored on

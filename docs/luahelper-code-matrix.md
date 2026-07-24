@@ -165,6 +165,9 @@ enforced separately with `tua fmt --check`.
 | `TL4054` | A direct global `require` or static `import` binding is unused. | `rules` |
 | `TL4055` | A direct local or user-global function declaration is never used. | `unused_locals` |
 | `TL4056` | A resolved function or field explicitly marked `---@deprecated` is used. | `rules` |
+| `TL4057` | An explicit child constructor can return without calling its parent constructor. | `rules` |
+| `TL4058` | An open class constructor directly calls an overridable method on `self`. | `rules` |
+| `TL4059` | A type-only child field declaration redundantly repeats an inherited field contract. | `rules` |
 
 Configuration keys in this table live under `[diagnostics]` unless they start
 with `jit.`. VS Code can override matching diagnostic settings for the running

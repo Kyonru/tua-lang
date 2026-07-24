@@ -74,13 +74,13 @@ pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Opt
         return None;
     };
 
-    let mut parts = vec![token_text(name)];
+    let mut parts = vec![bare_token_text(name)];
 
     for suffix in function_call.suffixes() {
         match suffix {
-            Suffix::Index(Index::Dot { name, .. }) => parts.push(token_text(name)),
+            Suffix::Index(Index::Dot { name, .. }) => parts.push(bare_token_text(name)),
             Suffix::Call(Call::MethodCall(method)) => {
-                parts.push(token_text(method.name()));
+                parts.push(bare_token_text(method.name()));
                 return Some(parts);
             }
             Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { .. }))
@@ -93,4 +93,8 @@ pub(crate) fn field_chain_before_first_call(function_call: &FunctionCall) -> Opt
     }
 
     None
+}
+
+fn bare_token_text(token: &TokenReference) -> String {
+    token.token().to_string().trim().to_owned()
 }

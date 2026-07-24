@@ -26,6 +26,7 @@ use crate::{
     SourceSpan, TuaType,
 };
 
+mod class_rules;
 mod rules;
 
 pub(crate) fn lint_parsed_source(
@@ -116,6 +117,7 @@ pub(crate) fn lint_parsed_source(
     }
 
     if config.rules {
+        diagnostics.extend(class_rules::lint(parsed, environment));
         diagnostics.extend(rules::lint(
             parsed,
             scope

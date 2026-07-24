@@ -1,0 +1,27 @@
+-- This file intentionally breaks suppressible class-design rules.
+
+open class Base {
+  tag: string | nil
+
+  init() {
+    print("base init")
+  }
+
+  configure() {
+  }
+}
+
+open class Child extends Base {
+  -- RedundantInheritedField (TL4059)
+  tag: string | nil
+
+  -- ParentConstructorPath (TL4057)
+  init(skipParent: boolean) {
+    if not skipParent then
+      super()
+    end
+
+    -- VirtualCallInInit (TL4058)
+    self:configure()
+  }
+}
