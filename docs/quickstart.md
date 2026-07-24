@@ -87,8 +87,8 @@ rename, semantic highlighting, and inlay hints for `.tua` files.
 
 These commands are useful immediately:
 
-- **Tua: Open Generated Lua Beside Tua** shows the emitted file for the active
-  saved source file.
+- **Tua: Open Generated Lua Beside Tua** saves and rebuilds the active source,
+  then shows its freshly emitted Lua beside it.
 - **Tua: Debug LOVE Project** builds and starts a source-mapped Lua debug
   session for the project.
 - **Tua: Explain Type / Why Is This Any?** traces where the selected value's

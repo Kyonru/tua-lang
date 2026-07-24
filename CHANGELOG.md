@@ -74,6 +74,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- **Tua: Open Generated Lua Beside Tua** now saves the active source, rebuilds
+  its project with the selected Tua executable, and reloads an already-open
+  generated editor before showing the emitted Lua.
 - Native `T[]` array syntax now parses consistently in aliases, locals,
   parameters, returns, class fields, and class methods. The Luau-only `{ T }`
   array shorthand remains rejected with guidance to use Tua syntax. Indexed

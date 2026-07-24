@@ -283,6 +283,9 @@ The VS Code extension presents those results without duplicating Tua parsing or
 type inference. Requests capture a document revision; stale background results
 are cancelled or discarded after newer edits. Compiler facts determine valid
 candidates before deterministic ranking signals reorder completion.
+The generated-Lua inspection command saves the active Tua document, runs the
+selected compiler against its nearest project, and reloads the emitted editor
+only after a successful build.
 
 LOVE debugging remains Lua debugging. The extension builds generated Lua,
 prepares a build-output-only debugger bootstrap, and launches the optional

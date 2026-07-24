@@ -326,8 +326,8 @@ the useful daily loop:
 
 - **Tua: Explain Type / Why Is This Any?** shows where a selected type came
   from or where information became dynamic.
-- **Tua: Open Generated Lua Beside Tua** opens the emitted file for the active
-  saved source.
+- **Tua: Open Generated Lua Beside Tua** saves and rebuilds the active source,
+  then opens its freshly emitted Lua beside it.
 - **Tua: Select Inlay Hint Mode** controls inferred type and parameter hints.
 - **Tua: Run LOVE Project** builds and runs the configured LOVE output.
 - **Tua: Debug LOVE Project** builds and launches source-mapped Lua debugging,

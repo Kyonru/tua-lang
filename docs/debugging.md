@@ -30,9 +30,9 @@ emit_maps = true
 This is the default for new projects.
 
 !!! important "Opt the launch configuration into Tua"
-    A normal `lua-local` configuration bypasses Tua's build and source-map
-    preparation. Set `tuaProject: true` as shown below, or use **Tua: Debug LOVE
-    Project**, so Tua can prepare and restore the generated output correctly.
+A normal `lua-local` configuration bypasses Tua's build and source-map
+preparation. Set `tuaProject: true` as shown below, or use **Tua: Debug LOVE
+Project**, so Tua can prepare and restore the generated output correctly.
 
 ## Run From The VS Code UI
 
@@ -85,36 +85,36 @@ Neither workflow adds debugger code to project source.
 
 With `emit_maps = true`, each generated Lua file can have two adjacent maps:
 
-| File | Used for |
-| --- | --- |
-| `*.lua.map` | Standard source map v3 consumed by compatible Lua debuggers |
-| `*.lua.map.json` | Tua traceback remapping and source/generated navigation |
+| File             | Used for                                                    |
+| ---------------- | ----------------------------------------------------------- |
+| `*.lua.map`      | Standard source map v3 consumed by compatible Lua debuggers |
+| `*.lua.map.json` | Tua traceback remapping and source/generated navigation     |
 
 Unmapped generated helper lines are skipped while stepping by default. Source
 maps currently provide line provenance, so mapped target columns begin at
 column zero.
 
 !!! warning "Rebuild after source changes"
-    Tua builds whenever the command or launch configuration starts. After
-    editing source, stop the current session and start the configuration again.
-    Restarting only the existing Lua debug session does not invoke a new Tua
-    build.
+Tua builds whenever the command or launch configuration starts. After
+editing source, stop the current session and start the configuration again.
+Restarting only the existing Lua debug session does not invoke a new Tua
+build.
 
 ## Inspect Generated Lua
 
-Use **Tua: Open Generated Lua Beside Tua** to inspect the emitted file for the
-active saved source. Use **Tua: Jump Between Tua and Generated Lua** to move
-between mapped lines in either direction.
+Use **Tua: Open Generated Lua Beside Tua** to save and rebuild the active
+source, then inspect its freshly emitted file. Use
+**Tua: Jump Between Tua and Generated Lua** to move between mapped lines in either direction.
 
 This is useful when a stop lands near lowered class, helper, or compound
 assignment code and you need to see the exact Lua executed by LOVE.
 
 ## Troubleshooting
 
-| Problem | Check |
-| --- | --- |
-| Second Local Lua Debugger is unavailable or disabled by the environment | Install and enable it in the same VS Code build and profile as Tua. |
-| LOVE cannot be launched | Set `tua.love.command` to the LOVE executable and trust the workspace. |
-| A `.tua` breakpoint remains unbound | Confirm `emit_maps = true`, then stop and start the Tua launch configuration or command again. |
-| The session runs stale generated code | Stop it and start the Tua launch configuration or command again so Tua rebuilds first. |
-| The debug build fails | Run **Tua: Focus Output** and fix the reported build diagnostics before relaunching. |
+| Problem                                                                 | Check                                                                                          |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Second Local Lua Debugger is unavailable or disabled by the environment | Install and enable it in the same VS Code build and profile as Tua.                            |
+| LOVE cannot be launched                                                 | Set `tua.love.command` to the LOVE executable and trust the workspace.                         |
+| A `.tua` breakpoint remains unbound                                     | Confirm `emit_maps = true`, then stop and start the Tua launch configuration or command again. |
+| The session runs stale generated code                                   | Stop it and start the Tua launch configuration or command again so Tua rebuilds first.         |
+| The debug build fails                                                   | Run **Tua: Focus Output** and fix the reported build diagnostics before relaunching.           |

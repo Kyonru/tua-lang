@@ -347,9 +347,12 @@ See [Entity Component Systems](ecs.md) and
 
 ### Generated Lua And Running LOVE
 
-**Tua: Open Generated Lua Beside Tua** opens the emitted file for the active
-saved source. It uses the nearest `tua.toml` source, output, and `main` settings;
-it does not build automatically.
+**Tua: Open Generated Lua Beside Tua** saves the active source, runs
+`tua build` with the extension's selected Tua executable from the nearest
+project root, and opens or reloads the emitted file beside it. The command uses
+the nearest `tua.toml` source, output, and `main` settings. A failed build does
+not open stale output, and an already-open generated file with unsaved manual
+edits must be saved or discarded before rebuilding.
 
 **Tua: Jump Between Tua and Generated Lua** uses the emitted
 `*.lua.map.json` sidecar to move between source and output lines. Current source
@@ -374,7 +377,7 @@ Open the command palette and type **Tua**. The most useful commands are:
 | **Tua: Initialize Tua Project** | Create the minimum `tua.toml` and source layout without overwriting existing files |
 | **Tua: Explain Type / Why Is This Any?** | Trace annotations, inference, narrowing, module resolution, and dynamic fallback points |
 | **Tua: Select Inlay Hint Mode** | Choose full, compact, filtered, or disabled hints |
-| **Tua: Open Generated Lua Beside Tua** | Inspect emitted Lua for the active source |
+| **Tua: Open Generated Lua Beside Tua** | Rebuild and inspect emitted Lua for the active source |
 | **Tua: Jump Between Tua and Generated Lua** | Navigate through the generated source map |
 | **Tua: Run LOVE Project** / **Restart LOVE Project** | Build and run LOVE in a VS Code task |
 | **Tua: Debug LOVE Project** | Build and debug generated Lua with breakpoints mapped to Tua |
@@ -482,10 +485,10 @@ Set `tua.trace.server` to `messages` or `verbose` for protocol traces and
 verbose tracing enabled during normal use because the output is intentionally
 high volume.
 
-If generated Lua is missing, run **Tua: Run LOVE Project** or `tua build` before
-using generated-source commands. If sprite preview is unavailable, enable
-`tua.preview.enabled`; ordinary sprite diagnostics and completion do not depend
-on the preview setting.
+If generated Lua cannot be opened, inspect **Tua: Focus Output** for build
+diagnostics. If sprite preview is unavailable, enable `tua.preview.enabled`;
+ordinary sprite diagnostics and completion do not depend on the preview
+setting.
 
 ## Contributor Checks
 

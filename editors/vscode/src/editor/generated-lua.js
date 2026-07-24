@@ -1,5 +1,6 @@
 "use strict";
 
+const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
@@ -16,10 +17,14 @@ const {
   normalizePath,
 } = require("./project-layout");
 
-function registerGeneratedLuaCommand({ isTuaDocument }) {
+function registerGeneratedLuaCommand({ appendOutputLine, getServerCommand, isTuaDocument }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.openGeneratedLua, () =>
-      openGeneratedLuaBesideActiveDocument({ isTuaDocument }),
+      openGeneratedLuaBesideActiveDocument({
+        appendOutputLine,
+        getServerCommand,
+        isTuaDocument,
+      }),
     ),
     vscode.commands.registerCommand(COMMANDS.jumpBetweenSourceAndGenerated, () =>
       jumpBetweenSourceAndGenerated({ isTuaDocument }),
@@ -27,7 +32,11 @@ function registerGeneratedLuaCommand({ isTuaDocument }) {
   );
 }
 
-async function openGeneratedLuaBesideActiveDocument({ isTuaDocument }) {
+async function openGeneratedLuaBesideActiveDocument({
+  appendOutputLine,
+  getServerCommand,
+  isTuaDocument,
+}) {
   const document = vscode.window.activeTextEditor?.document;
   if (!document || !isTuaDocument(document)) {
     vscode.window.showWarningMessage("Open a Tua source file to open generated Lua.");
@@ -37,28 +46,65 @@ async function openGeneratedLuaBesideActiveDocument({ isTuaDocument }) {
     vscode.window.showWarningMessage("Generated Lua can only be opened for saved Tua files.");
     return undefined;
   }
+  if (!vscode.workspace.isTrusted) {
+    vscode.window.showWarningMessage(
+      "Trust this workspace before rebuilding and opening generated Lua.",
+    );
+    return undefined;
+  }
 
   try {
-    const generatedPath = resolveGeneratedLuaPath(document.uri);
-    if (!generatedPath) {
+    const generated = resolveGeneratedLua(document.uri);
+    if (!generated) {
       return undefined;
     }
-    if (!fs.existsSync(generatedPath)) {
+    const openGeneratedDocument = vscode.workspace.textDocuments.find(
+      (candidate) =>
+        candidate.uri.scheme === "file" &&
+        normalizePath(candidate.uri.fsPath) === normalizePath(generated.path),
+    );
+    if (openGeneratedDocument?.isDirty) {
       vscode.window.showWarningMessage(
-        `Generated Lua was not found at ${generatedPath}. Run tua build first.`,
+        "Save or discard edits in the generated Lua file before rebuilding it.",
+      );
+      return undefined;
+    }
+    if (document.isDirty && !(await document.save())) {
+      vscode.window.showErrorMessage("Could not save the active Tua source before rebuilding.");
+      return undefined;
+    }
+
+    const command = getServerCommand?.() || "tua";
+    appendOutputLine?.(`[tua] Rebuilding generated Lua for ${document.uri.fsPath}`);
+    appendOutputLine?.(`$ ${command} build`);
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Tua: Rebuilding generated Lua",
+      },
+      () => runBuild(command, generated.layout.configDirectory, appendOutputLine),
+    );
+
+    if (!fs.existsSync(generated.path)) {
+      vscode.window.showWarningMessage(
+        `The build completed but did not emit generated Lua at ${generated.path}.`,
       );
       return undefined;
     }
 
-    const luaDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(generatedPath));
+    const luaDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(generated.path));
     await vscode.window.showTextDocument(luaDocument, {
       preview: true,
       viewColumn: vscode.ViewColumn.Beside,
     });
+    await vscode.commands.executeCommand("workbench.action.files.revert");
 
-    return generatedPath;
+    return generated.path;
   } catch (error) {
-    vscode.window.showErrorMessage(`Could not open generated Lua: ${formatError(error)}`);
+    appendOutputLine?.(`[tua] Generated Lua rebuild failed: ${formatError(error)}`);
+    vscode.window.showErrorMessage(
+      `Could not rebuild and open generated Lua: ${formatError(error)}`,
+    );
     return undefined;
   }
 }
@@ -144,6 +190,10 @@ async function jumpFromGeneratedToSource(document) {
 }
 
 function resolveGeneratedLuaPath(uri) {
+  return resolveGeneratedLua(uri)?.path;
+}
+
+function resolveGeneratedLua(uri) {
   const resolved = generatedLuaPathForUri(uri);
   if (resolved.kind === "missingWorkspace") {
     vscode.window.showWarningMessage("Tua source file is not inside an open workspace folder.");
@@ -156,7 +206,76 @@ function resolveGeneratedLuaPath(uri) {
     return undefined;
   }
 
-  return resolved.path;
+  return resolved;
+}
+
+function runBuild(command, cwd, appendOutputLine) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+    let child;
+
+    const rejectOnce = (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+
+    try {
+      child = childProcess.spawn(command, ["build"], {
+        cwd,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    } catch (error) {
+      rejectOnce(error);
+      return;
+    }
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("error", rejectOnce);
+    child.once("exit", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+
+      appendCommandOutput(stdout, appendOutputLine);
+      appendCommandOutput(stderr, appendOutputLine);
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const detail = [stderr.trim(), stdout.trim()].find(Boolean);
+      reject(
+        new Error(
+          `\`${command} build\` exited with status ${code}${detail ? `: ${detail}` : ""}`,
+        ),
+      );
+    });
+  });
+}
+
+function appendCommandOutput(output, appendOutputLine) {
+  if (!output || !appendOutputLine) {
+    return;
+  }
+
+  for (const line of output.split(/\r?\n/u)) {
+    if (line) {
+      appendOutputLine(line);
+    }
+  }
 }
 
 function loadGeneratedLuaSourceMap(generatedPath) {

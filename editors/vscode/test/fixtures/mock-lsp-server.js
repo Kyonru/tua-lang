@@ -9,6 +9,11 @@ if (process.argv.includes("--version")) {
   process.stdout.write("tua 0.0.0-vscode-test\n");
   process.exit(0);
 }
+if (process.argv[2] === "build") {
+  mockBuildProject(process.cwd());
+  process.stdout.write("built mock Tua project\n");
+  process.exit(0);
+}
 
 const documents = new Map();
 const cancelledRequests = new Set();
@@ -16,6 +21,28 @@ let workspaceFolders = [];
 let input = Buffer.alloc(0);
 let eventSequence = 0;
 let continuedCompletionCount = 0;
+
+function mockBuildProject(root) {
+  const config = readFile(path.join(root, "tua.toml"));
+  const sourceDirectory = path.join(root, topLevelConfigString(config, "source") || "src");
+  const outputDirectory = path.join(root, topLevelConfigString(config, "out") || "build");
+
+  for (const sourcePath of tuaFiles(sourceDirectory)) {
+    const relative = path.relative(sourceDirectory, sourcePath);
+    const parsed = path.parse(relative);
+    const outputPath = path.join(outputDirectory, parsed.dir, `${parsed.name}.lua`);
+
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.copyFileSync(sourcePath, outputPath);
+  }
+}
+
+function topLevelConfigString(source, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = new RegExp(`^\\s*${escaped}\\s*=\\s*["']([^"']+)["']`, "mu").exec(source);
+
+  return match?.[1];
+}
 
 process.stdin.on("data", (chunk) => {
   input = Buffer.concat([input, chunk]);

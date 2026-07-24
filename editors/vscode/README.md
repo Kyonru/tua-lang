@@ -63,7 +63,7 @@ end
 From there you can:
 
 - use normal completion and hover on LOVE APIs;
-- open emitted Lua with `Tua: Open Generated Lua Beside Tua`;
+- rebuild and open emitted Lua with `Tua: Open Generated Lua Beside Tua`;
 - jump between source and output with `Tua: Jump Between Tua and Generated Lua`;
 - run and restart the LOVE project without leaving VS Code.
 

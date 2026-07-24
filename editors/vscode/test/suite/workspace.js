@@ -29,7 +29,7 @@ async function testOpenGeneratedLuaBesideSource() {
 
   fs.writeFileSync(sourcePath, "local answer = 42\nreturn answer\n");
   fs.mkdirSync(path.dirname(generatedPath), { recursive: true });
-  fs.writeFileSync(generatedPath, "local answer = 42\nreturn answer\n");
+  fs.writeFileSync(generatedPath, "return 'stale generated output'\n");
   fs.writeFileSync(
     sourceMapPath,
     `${JSON.stringify(
@@ -52,14 +52,48 @@ async function testOpenGeneratedLuaBesideSource() {
     preview: false,
     viewColumn: vscode.ViewColumn.One,
   });
+  await sourceEditor.edit((edit) => {
+    const start = new vscode.Position(0, 0);
+    const end = sourceDocument.positionAt(sourceDocument.getText().length);
+
+    edit.replace(new vscode.Range(start, end), "local answer = 99\nreturn answer\n");
+  });
+  assert.equal(sourceDocument.isDirty, true);
   sourceEditor.selection = new vscode.Selection(1, 0, 1, 0);
 
   const openedPath = await vscode.commands.executeCommand("tua.openGeneratedLua");
   assert.equal(openedPath, generatedPath);
+  assert.equal(sourceDocument.isDirty, false);
+  assert.equal(fs.readFileSync(generatedPath, "utf8"), "local answer = 99\nreturn answer\n");
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, generatedPath);
+  assert.equal(
+    vscode.window.activeTextEditor?.document.getText(),
+    "local answer = 99\nreturn answer\n",
+  );
   assert.equal(vscode.window.activeTextEditor?.viewColumn, vscode.ViewColumn.Two);
 
-  const reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
+  let reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
+    preview: false,
+    viewColumn: vscode.ViewColumn.One,
+  });
+  await reopenedSourceEditor.edit((edit) => {
+    const answer = sourceDocument.getText().indexOf("99");
+    edit.replace(
+      new vscode.Range(
+        sourceDocument.positionAt(answer),
+        sourceDocument.positionAt(answer + 2),
+      ),
+      "100",
+    );
+  });
+
+  assert.equal(await vscode.commands.executeCommand("tua.openGeneratedLua"), generatedPath);
+  assert.equal(
+    vscode.window.activeTextEditor?.document.getText(),
+    "local answer = 100\nreturn answer\n",
+  );
+
+  reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
     preview: false,
     viewColumn: vscode.ViewColumn.One,
   });

@@ -38,9 +38,11 @@ async function activate(context) {
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
   context.subscriptions.push(registerLifecycleCommands());
   editorDevex = registerEditorDevex({
+    appendOutputLine: (line) => outputChannel?.appendLine(line),
     context,
     configurationTarget,
     getClient: () => client,
+    getServerCommand: () => currentServerInfo?.command || configuredServerPath(extensionContext),
     isTuaDocument,
   });
   context.subscriptions.push(editorDevex);
