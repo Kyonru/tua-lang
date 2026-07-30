@@ -96,6 +96,17 @@ local player: Player = {
   },
 }
 
+local playerName: string = player.name
+
+function hurtPlayer(player: Player, damage: number)
+  player.hp = player.hp - damage
+  if player.hp <= 0 then
+    player.alive = false
+    print(player.name .. " has been defeated!")
+    return
+  end
+end
+
 -- Feature: table access through dot, bracket, and inferred field chains.
 local firstColor = colors[1]
 local playerName = player.name

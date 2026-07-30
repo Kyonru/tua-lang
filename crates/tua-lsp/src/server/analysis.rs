@@ -9,11 +9,11 @@ use tua_core::{
     CallHierarchyOutgoingCall as CoreCallHierarchyOutgoingCall, CallHierarchySymbol,
     CallHierarchySymbolKind, CodeAction, CodeActionRange, CodeLens, Completion,
     CompletionAdaptiveStats, Diagnostic, DocumentHighlight, DocumentSymbol, FoldingRange,
-    FormatOptions, InlayHint, InspectorItem, ModuleDependencyGraph, ModuleLink,
-    ModuleSpecifierKind, ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference,
-    RenameEdit, RenameTarget, SelectionRange, SemanticToken, SignalGraph, SignatureHelp,
-    SourcePosition, SourceSpan, TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol,
-    CONFIG_FILE,
+    FormatOptions, InlayHint, InspectorItem, ModelCompletionContext, ModelCompletionValidation,
+    ModelCompletionValidationRequest, ModuleDependencyGraph, ModuleLink, ModuleSpecifierKind,
+    ProjectModel, ProjectModelOptions, ProjectWorkspace, Reference, RenameEdit, RenameTarget,
+    SelectionRange, SemanticToken, SignalGraph, SignatureHelp, SourcePosition, SourceSpan,
+    TextEdit, TypeExplanation, VfsSourceKind, WorkspaceSymbol, CONFIG_FILE,
 };
 
 use super::auto_import::{
@@ -95,6 +95,14 @@ impl AnalysisHost {
             settings: settings.clone(),
             project_model: self.project_model.clone(),
         }
+    }
+
+    pub(super) fn validate_model_completion(
+        &self,
+        path: &Path,
+        request: ModelCompletionValidationRequest<'_>,
+    ) -> ModelCompletionValidation {
+        self.core.validate_model_completion(path, request)
     }
 
     pub(super) fn cache_stats(&self) -> AnalysisCacheStats {
@@ -960,6 +968,15 @@ fn byte_for_column(line: &str, column: usize) -> usize {
 impl AnalysisSnapshot {
     pub(super) fn revision(&self) -> u64 {
         self.core.revision()
+    }
+
+    pub(super) fn model_completion_context(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        budget: usize,
+    ) -> Option<ModelCompletionContext> {
+        self.core.model_completion_context(path, position, budget)
     }
 
     pub(super) fn diagnostics_for_uri(&self, uri: &str) -> Vec<Diagnostic> {

@@ -8,6 +8,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Experimental, opt-in local Ollama inline completions with compiler-built FIM
+  context, a Lua-first Tua/LOVE feature harness, inferred-local guidance,
+  foreign-syntax rejection, stale-safe insertion-aware cloned-analysis
+  validation, loopback-only transport, warming/status commands, cancellation,
+  caching, and source-free counters.
+- Read-only `tua api --stdio` JSON-RPC and `tua mcp --stdio` external-tool
+  sessions, including model context/validation, explicit refresh and overlays,
+  edit previews, a compact `llms.txt` contract, and twelve MCP tools.
 - Suppressible class-design lints for child constructors that skip `super(...)`
   on a returning path (`TL4057`), overridable method calls during open-class
   initialization (`TL4058`), and redundant type-only inherited fields
@@ -78,6 +86,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Language-server request workers now use an explicit parser-safe stack budget,
+  so large files remain responsive while functions and nested Lua blocks are
+  temporarily incomplete during editing.
+- Expected inline-completion cancellations and content-modified responses are
+  now quiet. The extension also distinguishes Tua language-server failures from
+  missing Ollama servers, models, and timeouts in its completion status.
 - **Tua: Open Generated Lua Beside Tua** now saves the active source, rebuilds
   its project with the selected Tua executable, and reloads an already-open
   generated editor before showing the emitted Lua.

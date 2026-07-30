@@ -54,6 +54,10 @@ generate-love-api: ## Regenerate all LOVE catalogs from the pinned love-api chec
 generate-config-schema: ## Regenerate VS Code and docs config metadata from config/schema.json.
 	node scripts/generate-config-schema.js
 
+.PHONY: generate-llms
+generate-llms: ## Regenerate the root llms.txt language contract.
+	node scripts/generate-llms.js
+
 .PHONY: sync-version
 sync-version: ## Synchronize package versions from the Rust workspace version.
 	node scripts/sync-version.js
@@ -70,6 +74,10 @@ release-tool-test: ## Test deterministic release archives and changelog extracti
 .PHONY: config-schema-drift-check
 config-schema-drift-check: ## Verify VS Code and docs config metadata matches config/schema.json.
 	node scripts/generate-config-schema.js --check
+
+.PHONY: llms-drift-check
+llms-drift-check: ## Verify root llms.txt matches the documented contract.
+	node scripts/generate-llms.js --check
 
 .PHONY: love-api-drift-check
 love-api-drift-check: ## Verify generated LOVE catalogs match the pinned source checkout.
@@ -90,10 +98,10 @@ clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: verify
-verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -157,6 +165,10 @@ profile-completion: ## Profile completion latency, ranking overhead, and complet
 completion-ranking-smoke: ## Check fixture-driven completion ranking order.
 	$(CARGO) build --package tua-cli
 	node editors/vscode/scripts/lsp-completion-ranking-smoke.js target/debug/tua benchmarks/lsp/medium
+
+.PHONY: ollama-completion-smoke
+ollama-completion-smoke: ## Exercise an installed local Ollama model; set TUA_OLLAMA_MODEL.
+	node scripts/ollama-completion-smoke.js
 
 .PHONY: generate-lsp-benchmarks
 generate-lsp-benchmarks: ## Generate deterministic representative LSP benchmark fixtures under target/.

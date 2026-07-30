@@ -207,6 +207,59 @@ local player = makePlayer()
         "inlay hints should describe the latest document version: {hints:#?}"
     );
 }
+
+#[test]
+fn request_worker_survives_a_large_incomplete_lua_block() {
+    let output = std::thread::Builder::new()
+        .name("tua-large-incomplete-test-coordinator".to_owned())
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let uri = "file:///tmp/large-incomplete-block.tua";
+            let mut source = String::from(
+                "type Player = { hp: number }\n\
+                 local player: Player = { hp = 10 }\n\
+                 function hurtPlayer(player: Player, damage: number)\n\
+                   if player.hp <= 0 then\n",
+            );
+            for index in 0..900 {
+                source.push_str(&format!("local value{index} = {index}\n"));
+            }
+
+            let mut server = LspServer::default();
+            server.handle_message(did_open(uri, &source));
+            server.recent_document_changes.clear();
+
+            let received_input = SharedReceivedInputState::default();
+            let (event_tx, event_rx) = std::sync::mpsc::channel();
+            let mut scheduler = RequestScheduler::new(event_tx, received_input);
+            scheduler.dispatch(
+                &mut server,
+                inlay_hint_request(2, uri, 0, 0, 1_000, 0),
+                Some(1),
+            );
+
+            let result = loop {
+                match event_rx
+                    .recv_timeout(Duration::from_secs(10))
+                    .expect("large incomplete request should finish")
+                {
+                    ServerEvent::RequestFinished(result) => break result,
+                    ServerEvent::Input(_) => continue,
+                }
+            };
+
+            scheduler.finish(&mut server, *result)
+        })
+        .expect("test coordinator should start")
+        .join()
+        .expect("large incomplete request should not overflow");
+
+    assert!(
+        response_with_id(&output, 2)["result"].is_array(),
+        "inlay hints should return a response for a large incomplete block: {output:#?}"
+    );
+}
+
 #[test]
 fn did_change_discards_a_stale_background_result() {
     let uri = "file:///tmp/stale-background.tua";

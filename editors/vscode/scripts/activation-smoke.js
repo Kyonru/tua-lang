@@ -78,8 +78,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      0,
-      "activation should leave automatic suggestions to VS Code instead of observing every edit",
+      1,
+      "activation should observe edits only to cancel stale inline-model requests",
     );
 
     assert.strictEqual(
@@ -928,11 +928,14 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assert.strictEqual(state.clients[1].starts, 1, "restart should start the new client");
 
     state.setConfiguration("log.verbosity", "info");
-    state.configurationListeners[0]?.({
+    const traceConfigurationEvent = {
       affectsConfiguration(section) {
         return section === "tua.log.verbosity";
       },
-    });
+    };
+    for (const listener of state.configurationListeners) {
+      listener(traceConfigurationEvent);
+    }
     await waitUntil(() => state.clients[1].notifications.length === 1);
 
     assert.strictEqual(state.clients.length, 2, "trace updates should not restart the client");
@@ -984,7 +987,7 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert(
       state.informationMessages.some((message) =>
-        message.includes("Tua completion learning stats reset"),
+        message.includes("Tua completion stats reset"),
       ),
       "reset completion stats should report success",
     );
@@ -1102,8 +1105,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      0,
-      "debug logging should not restore the removed suggestion edit listener",
+      1,
+      "debug logging should leave only the stale inline-model cancellation listener",
     );
 
     await extension.deactivate();
@@ -1217,11 +1220,14 @@ async function smokeServerPathChangePrompt(extensionFixture, workspace) {
   const context = createContext(extensionFixture);
 
   await extension.activate(context);
-  state.configurationListeners[0]?.({
+  const serverConfigurationEvent = {
     affectsConfiguration(section) {
       return section === "tua.server.path";
     },
-  });
+  };
+  for (const listener of state.configurationListeners) {
+    listener(serverConfigurationEvent);
+  }
   await waitUntil(() => state.clients.length === 2);
 
   assert(
@@ -1535,6 +1541,12 @@ function createMockState(workspace, options = {}) {
         this.range = range;
       }
     },
+    InlineCompletionItem: class InlineCompletionItem {
+      constructor(insertText, range) {
+        this.insertText = insertText;
+        this.range = range;
+      }
+    },
     MarkdownString: class MarkdownString {
       constructor(value = "", supportThemeIcons = false) {
         this.value = value;
@@ -1742,12 +1754,18 @@ function createMockState(workspace, options = {}) {
         return collection;
       },
       createLanguageStatusItem(id, selector) {
-        statusItem = {
+        const item = {
           id,
           selector,
           dispose() {},
         };
-        return statusItem;
+        if (id === "tua.languageServer") {
+          statusItem = item;
+        }
+        return item;
+      },
+      registerInlineCompletionItemProvider(selector, provider) {
+        return { selector, provider, dispose() {} };
       },
       registerHoverProvider(selector, provider) {
         hoverProviders.push({ selector, provider });
@@ -1757,6 +1775,9 @@ function createMockState(workspace, options = {}) {
     window: {
       get activeTextEditor() {
         return activeTextEditor;
+      },
+      onDidChangeTextEditorSelection() {
+        return { dispose() {} };
       },
       createOutputChannel() {
         return {

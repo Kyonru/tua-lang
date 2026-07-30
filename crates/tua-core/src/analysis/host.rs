@@ -606,6 +606,16 @@ impl AnalysisHost {
             .map(|cached| cached.snapshot.clone())
     }
 
+    pub(crate) fn detached_clone_for_ephemeral_analysis(&self) -> Self {
+        let mut detached = self.clone();
+        detached.completion_cache = Arc::new(Mutex::new(BTreeMap::new()));
+        detached.completion_cache_stats = Arc::new(Mutex::new(CompletionCacheStats::default()));
+        detached.definition_cache = Arc::new(Mutex::new(BTreeMap::new()));
+        detached.module_path_index_cache = Arc::new(Mutex::new(None));
+        detached.snapshot_cache = Arc::new(Mutex::new(None));
+        detached
+    }
+
     pub fn file_paths(&self) -> Vec<PathBuf> {
         self.vfs.paths().into_iter().collect()
     }

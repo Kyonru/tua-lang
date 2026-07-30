@@ -1,0 +1,132 @@
+# Tua language contract for models
+
+Tua is Lua first: a gradual typed superset that emits readable Lua
+5.1-compatible code for LuaJIT and LOVE 11.x. Write normal Lua unless a Tua
+addition supplies useful static information or nearby source already uses it.
+Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
+
+## Completion policy
+
+- Continue the syntax and style around the cursor. Output only the inserted
+  source: no explanation, fence, suffix repetition, or unrelated rewrite.
+- Prefer Lua control flow, tables, functions, closures, varargs, metatables,
+  `require`, standard globals, and `math`, `string`, and `table` libraries.
+- Locals infer one stable widened type from a known initializer. Prefer
+  `local score = 0` and `local image = love.graphics.newImage(path)`, not
+  redundant forms such as `local score: number = 0`.
+- Annotate a local only when the annotation adds information: for example
+  `local value: number | nil = nil`, `local names: string[] = {}`, an explicit
+  `any` boundary, or a wider/public shape not established by the initializer.
+- Function, callback, and module boundaries benefit from parameter and return
+  annotations, but normal unannotated Lua functions and inferred returns work.
+- Prefer visible bindings, existing modules/helpers, and project-native APIs.
+  Keep inline completions short and syntactically local.
+- Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;
+  aliases, shapes, optional fields, arrays, dictionaries, tuples, unions,
+  literals, enums, function types, defaults, varargs, multiple returns, and
+  runtime `is`; compound assignment; metatable-style classes and inheritance;
+  mixed Lua/Tua modules, static imports, and LuaDoc; the LOVE 11.x catalog,
+  callbacks, objects, and assets; `Vec2`, asset helpers, sprite sheets,
+  Signals, stores, state machines, Baton input, object pools, and ECS.
+
+## Lua and modules
+
+- Normal Lua assignments and multiple returns, `nil`, truthiness, tables,
+  numeric/generic `for`, `while`, `repeat`/`until`, `if`/`elseif`/`else`,
+  local/global functions, colon methods, closures, varargs, and metatables are
+  the runtime foundation. Blocks use `then`, `do`, and `end`.
+- `require("module")` keeps Lua semantics. Mixed `.lua`/`.tua` projects,
+  simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.
+- Static top-level local bindings may use `import("./child")` or
+  `import("project.module")`; these lower to `require` and are not JavaScript
+  imports. Tua has no JavaScript-style `export`.
+- LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,
+  `---@param`, `---@return`, `---@overload`, and `---@vararg`, including
+  declaration-only external type libraries.
+- Statically visible Lua metatable patterns can type `__index`, constructor
+  prototypes, `__newindex`, arithmetic/comparison/length/call metamethods,
+  `__pairs`, `__ipairs`, and `tostring`; dynamic mutation stays conservative.
+- Unknown modules, keys, and metatable behavior stay dynamic through `any`;
+  never invent types for runtime-computed Lua.
+
+## LOVE 11.x foundation
+
+- In game code, suggest suitable `love.*` callbacks, modules, constructors,
+  enums, and methods rather than browser or Node APIs.
+- Callbacks are Lua functions such as `function love.load() ... end`,
+  `function love.update(dt) ... end`, `function love.draw() ... end`, and
+  `function love.keypressed(key) ... end`; unused parameters may be omitted.
+- Native loaders include `love.graphics.newImage`, `newFont`, `newShader`,
+  `newCanvas`, `newQuad`, `newSpriteBatch`, `newParticleSystem`,
+  `love.image.newImageData`, and `love.audio.newSource`.
+- LOVE object methods require colon calls, for example
+  `image:setFilter("nearest")`, `image:getWidth()`, and `source:play()`.
+- The LOVE catalog supplies callbacks, overloads, enums, object inheritance,
+  parameter names, returns, and documentation. Known explicit annotations
+  should agree with it.
+- Native loader and helper asset paths receive project-aware completion,
+  validation, metadata, definition, and references.
+
+## Tua types and syntax
+
+- Primitive types are `number`, `string`, `boolean`, `nil`, and `any`.
+  Annotations use `name: Type`; function returns use `): Type`.
+- `type Name = ...` declares an erased alias; `Self` refers to the supported
+  current alias or receiver.
+- Shapes use `{ field: Type, optional?: Type }`; arrays use `T[]`;
+  dictionaries use `{ [Key]: Value }`; tuples use `[First, Second]`;
+  unions use `A | B`; exact strings use literal types such as
+  `"idle" | "running"`.
+- `enum Name ... end` is erased string-union sugar.
+- Function types use `(value: T) -> U`; parenthesized returns represent
+  multiple returns. Declarations support typed `...: Type`, optional trailing
+  `mode?: string`, and defaults such as `amount: number = 5`.
+- `value is Type` performs supported runtime identity checks and branch
+  narrowing. Tua has no generics; use concrete aliases and containers or
+  gradual `any`, never `<T>` or `Table<T>`.
+- Ordinary functions remain Lua:
+  `function name(args): Return ... end` and
+  `local function name(args): Return ... end`.
+- `+=`, `-=`, `*=`, `/=`, and `%=` work on names and plain field chains.
+- Classes use `class Name { ... }`, `open class Base { ... }`, or
+  `final class Child extends Base { ... }`. Bodies support typed fields and
+  defaults, `init(...) { ... }`, methods `name(args): Return { ... }`,
+  `override`, final methods, `super(...)`, inheritance, and typed `self`.
+  Classes are closed/final by default and construct with `Name.new(...)`.
+- Class/method bodies close with `}`; Lua functions and control flow close
+  with `end`. Types, enums, classes, imports, defaults, `is`, and compound
+  assignments lower to LuaJIT-compatible Lua and add no new VM.
+
+## Tua LOVE and game helpers
+
+- Typed asset helpers lower to native LOVE: `image "path"`, `sound "path"`,
+  `music "path"`, `font(path, size)`, `shader "path"`, `imageData "path"`,
+  `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and
+  `particles(image, count)`.
+- `Vec2`/`vec2(x, y)` provide typed BrineVector operations.
+- `spriteSheet({...})` provides typed anim8 grids, animations, durations/fps,
+  per-animation frames, and loop callbacks.
+- `signal()` provides typed event names/payloads through `on`, `once`,
+  `declare`, `emit`, `off`, `clear`, `has`, and `listeners`.
+- `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and
+  typed field `watch`.
+- `stateMachine({...})` derives state/event names, event methods, transition
+  checks, and lifecycle callbacks.
+- `input({...})` provides Baton-backed controls/pairs, LOVE key/gamepad source
+  completion, polling, deadzones, and joystick support.
+- `objectPool({...})` types factory results and supports `acquire`, `release`,
+  `prewarm`, ownership/count inspection, cleanup, and `clear`.
+- Built-in `ecs` supplies typed components, worlds, systems, and queries
+  without an explicit package import.
+- Use native LOVE freely. Use a Tua helper when nearby code uses it or its
+  typed configuration fits the task; do not force helpers into ordinary LOVE.
+
+## Never emit
+
+- JavaScript/TypeScript: `const`, `let`, `=>`, `interface`, `namespace`,
+  `null`, `undefined`, `this.`, `console.*`, `===`, `!==`, `?.`, `??`,
+  JavaScript objects, or `}` to close a Lua function.
+- Luau-only casts (`value :: Type`), `continue`, conditional expressions,
+  interpolated strings, or Luau generics.
+- Invented package managers, runtime type objects, decorators, async/promises,
+  DOM APIs, or executable plugins.

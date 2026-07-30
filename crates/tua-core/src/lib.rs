@@ -33,6 +33,7 @@ mod love_api_signatures;
 mod love_callback;
 mod love_conf;
 mod lua;
+pub mod model_completion;
 pub mod module_graph;
 pub mod module_index;
 pub mod module_link;
@@ -154,6 +155,12 @@ pub use inspector::{
     SpriteSheetInspection,
 };
 pub use lua::builtin_definition_document;
+pub use model_completion::{
+    language_contract, ModelCompletionContext, ModelCompletionRejectionReason,
+    ModelCompletionStatus, ModelCompletionValidation, ModelCompletionValidationRequest,
+    DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_COMPLETION_BYTES, MAX_MODEL_COMPLETION_LINES,
+    MAX_MODEL_CONTEXT_BYTES,
+};
 pub use module_graph::{
     ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,
     ModuleExportEntry, ModuleExportOrigin, ModuleGraph, ModuleGraphInput, ModuleGraphModule,

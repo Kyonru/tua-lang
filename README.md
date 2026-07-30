@@ -52,6 +52,11 @@ It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
 generated Lua inspection, project commands for running or debugging LOVE, and
 explorers for assets, modules, signals, ECS, and object pools.
 
+Experimental local Ollama ghost-text completion is opt-in and compiler
+validated before display. Trusted local tools can also explicitly start the
+read-only `tua api --stdio` JSON-RPC session or `tua mcp --stdio`; neither
+service opens a network socket or starts automatically.
+
 ## Learn More
 
 - [Documentation site](https://kyonru.github.io/tua-lang/)
@@ -63,6 +68,7 @@ explorers for assets, modules, signals, ECS, and object pools.
 - [Typed input](https://kyonru.github.io/tua-lang/input/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
+- [External API and MCP](https://kyonru.github.io/tua-lang/external-api-bridge/)
 - [Debugging](https://kyonru.github.io/tua-lang/debugging/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)
 - [Releases and compatibility](https://kyonru.github.io/tua-lang/releases/)

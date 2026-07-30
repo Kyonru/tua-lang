@@ -596,19 +596,17 @@ function requestCacheStats() {
 }
 
 async function resetCompletionStats() {
-  if (!client) {
-    vscode.window.showWarningMessage("Tua language server is not running.");
-    return;
-  }
-
   try {
-    const result = await client.sendRequest("tua/resetCompletionStats");
+    await editorDevex?.ollamaCompletion?.resetStats();
+    const result = client
+      ? await client.sendRequest("tua/resetCompletionStats")
+      : { removedFiles: 0 };
     const removedFiles =
       result && Number.isFinite(result.removedFiles) ? Number(result.removedFiles) : 0;
     const message =
       removedFiles === 1
-        ? "Tua completion learning stats reset. Removed 1 workspace stats file."
-        : `Tua completion learning stats reset. Removed ${removedFiles} workspace stats files.`;
+        ? "Tua completion stats reset. Removed 1 workspace learning-stats file; local Ollama counters were reset."
+        : `Tua completion stats reset. Removed ${removedFiles} workspace learning-stats files; local Ollama counters were reset.`;
 
     outputChannel?.appendLine(message);
     vscode.window.showInformationMessage(message);
@@ -749,6 +747,9 @@ function debugInfoText() {
   if (currentServerInfo?.error) {
     lines.push(`Last server error: ${currentServerInfo.error}`);
   }
+  lines.push(
+    `Local Ollama completion counters: ${editorDevex?.ollamaCompletion?.debugInfo() || "{}"}`,
+  );
 
   return lines.join("\n");
 }

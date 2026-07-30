@@ -1,3 +1,4 @@
+mod api;
 mod args;
 mod build;
 mod check;
@@ -11,6 +12,7 @@ mod source_map;
 mod traceback;
 mod watch;
 
+pub use api::{run_api_command, run_mcp_command};
 pub use args::{parse_args, version_text, CliAction, CommandName, CommandOptions, HELP};
 pub use command::{run_command, run_lsp_command, run_watch_command};
 pub use error::CliError;

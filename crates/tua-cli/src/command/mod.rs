@@ -58,6 +58,9 @@ pub fn run_command(
 
             Ok("lsp stopped".to_owned())
         }
+        CommandName::Api | CommandName::Mcp => Err(CliError::usage(
+            "stdio protocol commands must be run through the tua executable",
+        )),
     }
 }
 

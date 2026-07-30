@@ -1422,7 +1422,7 @@ fn lsp_symbol_kind(kind: DocumentSymbolKind) -> u8 {
     }
 }
 
-fn lsp_range(span: SourceSpan) -> Value {
+pub(super) fn lsp_range(span: SourceSpan) -> Value {
     json!({
         "start": {
             "line": span.start.line.saturating_sub(1),

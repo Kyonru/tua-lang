@@ -54,8 +54,6 @@ language, tooling, and workflow pages under `docs/`. Completed work belongs in
 
 - Compact generated LOVE data only if measured compile time, binary size, or
   maintenance cost justifies replacing generated Rust source.
-- Revisit an external tooling bridge only after a concrete local consumer
-  exists.
 - Reconsider generics when identity-preserving APIs cannot be modeled clearly
   with concrete types.
 - Keep executable third-party plugins out until ownership, ordering, security,

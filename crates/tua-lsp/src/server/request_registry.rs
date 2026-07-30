@@ -14,6 +14,8 @@ pub(super) enum RequestKind {
     CacheStats,
     Health,
     ResetCompletionStats,
+    InlineCompletionContext,
+    ValidateInlineCompletion,
     Inspect,
     ExplainType,
     AssetInventory,
@@ -63,6 +65,8 @@ impl RequestKind {
             "tua/cacheStats" => Self::CacheStats,
             "tua/health" => Self::Health,
             "tua/resetCompletionStats" => Self::ResetCompletionStats,
+            "tua/inlineCompletionContext" => Self::InlineCompletionContext,
+            "tua/validateInlineCompletion" => Self::ValidateInlineCompletion,
             "tua/inspect" => Self::Inspect,
             "tua/explainType" => Self::ExplainType,
             "tua/assetInventory" => Self::AssetInventory,
@@ -143,6 +147,14 @@ mod tests {
         assert_eq!(
             NotificationKind::from_method("textDocument/didChange"),
             Some(NotificationKind::DidChange)
+        );
+        assert_eq!(
+            RequestKind::from_method("tua/inlineCompletionContext"),
+            Some(RequestKind::InlineCompletionContext)
+        );
+        assert_eq!(
+            RequestKind::from_method("tua/validateInlineCompletion"),
+            Some(RequestKind::ValidateInlineCompletion)
         );
         assert_eq!(RequestKind::from_method("tua/unknown"), None);
         assert_eq!(NotificationKind::from_method("tua/unknown"), None);

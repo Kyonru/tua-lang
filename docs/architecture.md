@@ -356,9 +356,16 @@ These are review requirements, not future goals:
   provenance.
 - Optional helper runtimes are emitted only when lowering requires them.
 
-The external tooling bridge is not implemented. Its design is documented in
-[External API Bridge](external-api-bridge.md); an implementation must remain
-local-only, disabled by default, and backed by the same snapshot queries.
+The explicitly started `tua api --stdio` session exposes these snapshot queries
+as read-only newline-delimited JSON-RPC. `tua mcp --stdio` maps twelve tools
+onto the same session. Neither starts from LSP, opens a socket, calls a model,
+or applies edits. See [External API And MCP](external-api-bridge.md).
+
+Model completion follows the same ownership boundary. Core constructs bounded,
+fingerprinted FIM context and validates candidates in an ephemeral cloned
+analysis host. LSP only converts protocol positions and versions. The VS Code
+extension owns loopback Ollama transport and ghost-text lifecycle, so ordinary
+compiler completion remains deterministic and model-independent.
 
 ## Change Workflows
 

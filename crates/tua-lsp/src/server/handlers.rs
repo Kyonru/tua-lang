@@ -3,7 +3,11 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tua_core::{AnalysisCacheStats, AssistKind, RenameEdit, SourcePosition, SourceSpan};
+use tua_core::{
+    AnalysisCacheStats, AssistKind, ModelCompletionRejectionReason,
+    ModelCompletionValidationRequest, RenameEdit, SourcePosition, SourceSpan,
+    DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_CONTEXT_BYTES,
+};
 
 use super::configuration::WorkspaceSettings;
 use super::protocol::{
@@ -15,13 +19,13 @@ use super::protocol::{
     lsp_document_symbol_from_core, lsp_ecs_graph_from_core, lsp_folding_range_from_core,
     lsp_full_document_text_edit, lsp_hover_from_core, lsp_inlay_hint_from_core,
     lsp_inspector_items_from_core, lsp_location_from_core, lsp_module_dependency_graph_from_core,
-    lsp_object_pool_graph_from_core, lsp_prepare_rename_from_core, lsp_reference_location,
-    lsp_resolved_completion_item, lsp_resolved_reference_code_lens, lsp_selection_range_from_core,
-    lsp_semantic_token_data_from_core, lsp_semantic_token_delta, lsp_semantic_tokens,
-    lsp_semantic_tokens_from_core, lsp_signal_graph_from_core, lsp_signature_help_from_core,
-    lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core, lsp_workspace_edit,
-    lsp_workspace_symbol_from_core, publish_diagnostics, response, source_position_from_lsp,
-    workspace_diagnostic_refresh_request, SourceRange,
+    lsp_object_pool_graph_from_core, lsp_prepare_rename_from_core, lsp_range,
+    lsp_reference_location, lsp_resolved_completion_item, lsp_resolved_reference_code_lens,
+    lsp_selection_range_from_core, lsp_semantic_token_data_from_core, lsp_semantic_token_delta,
+    lsp_semantic_tokens, lsp_semantic_tokens_from_core, lsp_signal_graph_from_core,
+    lsp_signature_help_from_core, lsp_source_range, lsp_text_edit, lsp_type_explanation_from_core,
+    lsp_workspace_edit, lsp_workspace_symbol_from_core, publish_diagnostics, response,
+    source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::request_registry::{NotificationKind, RequestKind};
 use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
@@ -250,6 +254,12 @@ impl LspServer {
             RequestKind::Health => response(id, self.health_response()),
             RequestKind::ResetCompletionStats => {
                 response(id, self.reset_completion_stats_response())
+            }
+            RequestKind::InlineCompletionContext => {
+                response(id, self.inline_completion_context_response(&message))
+            }
+            RequestKind::ValidateInlineCompletion => {
+                response(id, self.validate_inline_completion_response(&message))
             }
             RequestKind::Inspect => response(id, self.inspector_response(&message)),
             RequestKind::ExplainType => response(id, self.type_explanation_response(&message)),
@@ -1630,6 +1640,120 @@ impl LspServer {
         })
     }
 
+    fn inline_completion_context_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return Value::Null;
+        };
+        let Some(position) = request.params.get("position").and_then(|lsp_position| {
+            self.analysis
+                .document_text(request.uri)
+                .and_then(|source| model_completion_position(source, lsp_position))
+        }) else {
+            return Value::Null;
+        };
+        let current_version = self.document_versions.get(request.uri).copied();
+        if requested_document_version(request.params)
+            .is_some_and(|version| current_version.is_some_and(|current| current != version))
+        {
+            return Value::Null;
+        }
+
+        let budget = request
+            .params
+            .get("contextBytes")
+            .and_then(Value::as_u64)
+            .map(|value| value as usize)
+            .unwrap_or(DEFAULT_MODEL_CONTEXT_BYTES)
+            .min(MAX_MODEL_CONTEXT_BYTES);
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        let Some(context) = snapshot.model_completion_context(&request.path, position, budget)
+        else {
+            return Value::Null;
+        };
+
+        json!({
+            "contextId": context.context_id,
+            "analysisRevision": context.analysis_revision,
+            "contextBytes": context.context_bytes,
+            "documentVersion": current_version,
+            "sourceFingerprint": context.source_fingerprint,
+            "position": {
+                "line": context.position.line.saturating_sub(1),
+                "character": context.position.column.saturating_sub(1)
+            },
+            "prompt": context.prompt,
+            "suffix": context.suffix,
+            "range": inline_request_range(request.params)
+        })
+    }
+
+    fn validate_inline_completion_response(&self, message: &Value) -> Value {
+        let Some(request) = self.document_request(message) else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let Some(position) = request.params.get("position").and_then(|lsp_position| {
+            self.analysis
+                .document_text(request.uri)
+                .and_then(|source| model_completion_position(source, lsp_position))
+        }) else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let current_version = self.document_versions.get(request.uri).copied();
+        if requested_document_version(request.params) != current_version {
+            return rejected_inline_completion(
+                ModelCompletionRejectionReason::Stale,
+                Some(SourceSpan {
+                    start: position,
+                    end: position,
+                }),
+            );
+        }
+        let Some(context_id) = request.params.get("contextId").and_then(Value::as_str) else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let Some(analysis_revision) = request
+            .params
+            .get("analysisRevision")
+            .and_then(Value::as_u64)
+        else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let Some(context_bytes) = request.params.get("contextBytes").and_then(Value::as_u64) else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let Some(source_fingerprint) = request
+            .params
+            .get("sourceFingerprint")
+            .and_then(Value::as_str)
+        else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Stale, None);
+        };
+        let Some(candidate) = request.params.get("candidate").and_then(Value::as_str) else {
+            return rejected_inline_completion(ModelCompletionRejectionReason::Empty, None);
+        };
+
+        let validation = self.analysis.validate_model_completion(
+            &request.path,
+            ModelCompletionValidationRequest {
+                context_id,
+                analysis_revision,
+                context_bytes: (context_bytes as usize).min(MAX_MODEL_CONTEXT_BYTES),
+                source_fingerprint,
+                position,
+                candidate,
+            },
+        );
+        json!({
+            "status": validation.status.as_str(),
+            "reason": validation.reason.map(|reason| reason.as_str()),
+            "insertText": validation.normalized_insertion,
+            "range": inline_request_range(request.params),
+            "documentVersion": current_version
+        })
+    }
+
     fn prepare_call_hierarchy_response(&self, message: &Value) -> Value {
         let Some(request) = self.document_request(message) else {
             return json!([]);
@@ -2217,6 +2341,38 @@ fn document_uri(params: &Value) -> Option<&str> {
         .get("textDocument")
         .and_then(|document| document.get("uri"))
         .and_then(Value::as_str)
+}
+
+fn requested_document_version(params: &Value) -> Option<i64> {
+    params.get("documentVersion").and_then(Value::as_i64)
+}
+
+fn model_completion_position(source: &str, lsp_position: &Value) -> Option<SourcePosition> {
+    let line = lsp_position.get("line")?.as_u64()? as usize;
+    let offset = byte_offset_from_lsp_position(source, lsp_position)?;
+    let line_start = source[..offset].rfind('\n').map_or(0, |index| index + 1);
+    Some(SourcePosition {
+        line: line + 1,
+        column: source[line_start..offset].chars().count() + 1,
+    })
+}
+
+fn inline_request_range(params: &Value) -> Value {
+    let position = params.get("position").cloned().unwrap_or(Value::Null);
+    json!({"start": position, "end": position})
+}
+
+fn rejected_inline_completion(
+    reason: ModelCompletionRejectionReason,
+    span: Option<SourceSpan>,
+) -> Value {
+    json!({
+        "status": "rejected",
+        "reason": reason.as_str(),
+        "insertText": Value::Null,
+        "range": span.map(lsp_range),
+        "documentVersion": Value::Null
+    })
 }
 
 fn completion_request_is_invoked(message: &Value) -> bool {

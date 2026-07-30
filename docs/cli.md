@@ -180,6 +180,27 @@ Starts the language server over stdio. Editors and tests call this command
 directly. `--stdio` is accepted for editor-client compatibility and has the same
 behavior as `tua lsp`.
 
+## `api`
+
+```bash
+cargo run -p tua-cli -- api --stdio
+cargo run -p tua-cli -- api --stdio --workspace /path/to/project
+```
+
+Starts the read-only, newline-delimited JSON-RPC API. It keeps one project
+analysis session alive and refreshes disk state only after
+`tua.api/refresh`. See [External API And MCP](external-api-bridge.md).
+
+## `mcp`
+
+```bash
+cargo run -p tua-cli -- mcp --stdio
+cargo run -p tua-cli -- mcp --stdio --workspace /path/to/project
+```
+
+Starts the stdio-only MCP adapter with twelve read-only Tua tools. It pins MCP
+protocol `2025-11-25` and applies no edits.
+
 ## Make Targets
 
 Common repository targets:
@@ -192,6 +213,7 @@ make ci-check
 make build-features
 make lsp-smoke
 make lsp-features-smoke
+TUA_OLLAMA_MODEL=qwen2.5-coder:1.5b-base make ollama-completion-smoke
 ```
 
 `make verify` is non-mutating: it checks formatting, tests, strict Clippy,

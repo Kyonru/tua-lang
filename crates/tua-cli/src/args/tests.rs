@@ -28,6 +28,8 @@ fn parses_known_commands() {
         ("traceback", CommandName::Traceback),
         ("watch", CommandName::Watch),
         ("lsp", CommandName::Lsp),
+        ("api", CommandName::Api),
+        ("mcp", CommandName::Mcp),
     ];
 
     for (raw, expected) in cases {
@@ -36,6 +38,26 @@ fn parses_known_commands() {
             Ok(CliAction::Command {
                 name: expected,
                 options: CommandOptions::default(),
+            })
+        );
+    }
+}
+
+#[test]
+fn api_and_mcp_accept_workspace_and_stdio() {
+    for command in ["api", "mcp"] {
+        assert_eq!(
+            parse_args([command, "--stdio", "--workspace", "example"]),
+            Ok(CliAction::Command {
+                name: if command == "api" {
+                    CommandName::Api
+                } else {
+                    CommandName::Mcp
+                },
+                options: CommandOptions {
+                    workspace: Some("example".into()),
+                    ..CommandOptions::default()
+                },
             })
         );
     }

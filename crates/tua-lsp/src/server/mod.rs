@@ -704,7 +704,10 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/didClose"
         | "tua/setTrace"
         | "tua/health" => Some(0),
-        "textDocument/completion" | "completionItem/resolve" => Some(1),
+        "textDocument/completion"
+        | "completionItem/resolve"
+        | "tua/inlineCompletionContext"
+        | "tua/validateInlineCompletion" => Some(1),
         "textDocument/signatureHelp"
         | "textDocument/definition"
         | "textDocument/typeDefinition"

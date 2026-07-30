@@ -154,9 +154,61 @@ directions. See [Input](input.md).
 
 !!! info "Experimental completion stays local"
     **Tua: Toggle Experimental Completions** controls contextual sequence
-    ranking and validated multi-token suggestions for the workspace. Both are
-    off by default and local-only. Tua sends no project source, completion
-    history, or ranking data to a network service.
+    ranking and compiler-generated multi-token suggestions for the workspace.
+    Both are off by default.
+
+    **Tua: Toggle Local Ollama Completions** separately opts into model-backed
+    inline ghost text. The extension sends a bounded prefix, suffix, language
+    contract, and visible type facts directly to a configured loopback Ollama
+    server, then asks Tua to validate the candidate in a cloned analysis host.
+    Normal completion-menu results never go through Ollama.
+
+### Local Ollama Inline Completion
+
+Install Ollama separately, then pull the default model:
+
+```bash
+ollama pull qwen2.5-coder:1.5b-base
+```
+
+Run **Tua: Test and Warm Ollama Model** to preload it. Enable the feature with
+**Tua: Toggle Local Ollama Completions** after reviewing the source-sharing
+consent message. Tua never installs or pulls a model.
+
+The first release accepts unauthenticated `http://` endpoints only on
+`localhost`, `127.0.0.0/8`, or IPv6 loopback. It keeps one Ollama request in
+flight and cancels it on edits, cursor movement, configuration changes,
+provider cancellation, or a newer request. Requests are skipped in comments,
+strings, multi-cursor sessions, and while a normal completion item is selected.
+These expected cancellations and document-version races are counted locally
+but do not produce warnings. Completion status distinguishes Tua language-server
+availability from Ollama transport, missing-model, and timeout failures.
+
+Candidates are limited to five lines and 512 bytes. Tua removes FIM/end tokens
+and duplicated suffix text, then rejects Markdown, empty output, stale
+fingerprints, obvious foreign-language constructs such as TypeScript/JavaScript
+function syntax, and every newly introduced error. The model prompt is itself
+valid commented Tua source. It teaches that ordinary Lua/LuaJIT is the base,
+prefers inferred locals over redundant annotations, includes native LOVE 11.x
+guidance, and carries a bounded inventory of the implemented Tua type, class,
+module, interop, and game-helper features. Cursor-specific expected types and
+visible bindings appear before that inventory. Existing unrelated diagnostics
+and gradual `any` are preserved. The live document and analysis host are never
+mutated.
+
+The extension stores only source-free local counters: request/cancellation/
+timeout/empty/rejection counts, suggestions shown and accepted, and accepted
+character totals. They appear in copied debug information and are cleared by
+**Tua: Reset Completion Learning Stats**.
+
+The feature remains experimental and disabled by default. It should not be
+considered for a different default until local dogfooding records at least 100
+shown suggestions, at least 15% acceptance, and no regression in ordinary
+completion latency.
+
+The custom semantic requests are `tua/inlineCompletionContext` and
+`tua/validateInlineCompletion`. Responses bind the document version, analysis
+revision, UTF-16 position, context ID, and source fingerprint.
 
 ### Navigation And Symbols
 

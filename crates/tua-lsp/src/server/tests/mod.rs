@@ -18,6 +18,7 @@ mod formatting;
 mod hover;
 mod inlay_hints;
 mod inspector;
+mod model_completion;
 mod module_graph;
 mod navigation;
 mod object_pool_graph;

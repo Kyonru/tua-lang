@@ -23,6 +23,7 @@ const REQUEST_CANCELLED: i64 = -32800;
 const CONTENT_MODIFIED: i64 = -32801;
 const INTERNAL_SLOW_DIAGNOSTICS: &str = "tua/internalSlowDiagnostics";
 const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
+const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -85,8 +86,8 @@ impl RequestScheduler {
         event_tx: Sender<ServerEvent>,
         received_input: SharedReceivedInputState,
     ) -> Self {
-        let foreground_tx = spawn_worker_lane(2, event_tx.clone());
-        let background_tx = spawn_worker_lane(1, event_tx);
+        let foreground_tx = spawn_worker_lane("foreground", 2, event_tx.clone());
+        let background_tx = spawn_worker_lane("background", 1, event_tx);
 
         Self {
             foreground_tx,
@@ -469,89 +470,97 @@ impl RequestScheduler {
     }
 }
 
-fn spawn_worker_lane(worker_count: usize, event_tx: Sender<ServerEvent>) -> Sender<WorkerJob> {
+fn spawn_worker_lane(
+    lane: &str,
+    worker_count: usize,
+    event_tx: Sender<ServerEvent>,
+) -> Sender<WorkerJob> {
     let (tx, rx) = mpsc::channel::<WorkerJob>();
     let rx = Arc::new(Mutex::new(rx));
 
-    for _ in 0..worker_count {
+    for worker_index in 0..worker_count {
         let rx = Arc::clone(&rx);
         let event_tx = event_tx.clone();
 
-        thread::spawn(move || loop {
-            let job = {
-                let receiver = rx.lock().expect("request worker queue lock poisoned");
-                receiver.recv()
-            };
-            let Ok(job) = job else {
-                break;
-            };
-            let WorkerJob {
-                job_id,
-                mut server,
-                message,
-                method,
-                cancelled,
-                warm_work,
-            } = job;
-            let (response, warm_result) = if let Some(work) = warm_work {
-                let succeeded = if cancelled.load(Ordering::Acquire) {
-                    false
-                } else {
-                    panic::catch_unwind(AssertUnwindSafe(|| match &work {
-                        WorkspaceWarmWork::File { path, priority, .. } => {
-                            server.analysis.warm_file(path, *priority)
-                        }
-                        WorkspaceWarmWork::Snapshot { .. } => {
-                            let _ = server
-                                .analysis
-                                .snapshot(&server.workspace_folders, &server.settings);
-                            true
-                        }
-                    }))
-                    .unwrap_or(false)
+        thread::Builder::new()
+            .name(format!("tua-lsp-{lane}-{worker_index}"))
+            .stack_size(REQUEST_WORKER_STACK_BYTES)
+            .spawn(move || loop {
+                let job = {
+                    let receiver = rx.lock().expect("request worker queue lock poisoned");
+                    receiver.recv()
                 };
-                let analysis =
-                    matches!(work, WorkspaceWarmWork::File { .. }).then_some(server.analysis);
+                let Ok(job) = job else {
+                    break;
+                };
+                let WorkerJob {
+                    job_id,
+                    mut server,
+                    message,
+                    method,
+                    cancelled,
+                    warm_work,
+                } = job;
+                let (response, warm_result) = if let Some(work) = warm_work {
+                    let succeeded = if cancelled.load(Ordering::Acquire) {
+                        false
+                    } else {
+                        panic::catch_unwind(AssertUnwindSafe(|| match &work {
+                            WorkspaceWarmWork::File { path, priority, .. } => {
+                                server.analysis.warm_file(path, *priority)
+                            }
+                            WorkspaceWarmWork::Snapshot { .. } => {
+                                let _ = server
+                                    .analysis
+                                    .snapshot(&server.workspace_folders, &server.settings);
+                                true
+                            }
+                        }))
+                        .unwrap_or(false)
+                    };
+                    let analysis =
+                        matches!(work, WorkspaceWarmWork::File { .. }).then_some(server.analysis);
 
-                (
-                    Value::Null,
-                    Some(WorkspaceWarmResult {
-                        work,
-                        analysis,
-                        succeeded,
-                    }),
-                )
-            } else if cancelled.load(Ordering::Acquire) {
-                (
-                    error_response(
+                    (
                         Value::Null,
-                        REQUEST_CANCELLED,
-                        "request cancelled".to_owned(),
-                    ),
-                    None,
-                )
-            } else {
-                let response = panic::catch_unwind(AssertUnwindSafe(|| {
-                    execute_worker_request(&mut server, message, &method)
-                }))
-                .unwrap_or_else(|_| {
-                    error_response(
-                        Value::Null,
-                        -32603,
-                        "language server request worker panicked".to_owned(),
+                        Some(WorkspaceWarmResult {
+                            work,
+                            analysis,
+                            succeeded,
+                        }),
                     )
-                });
+                } else if cancelled.load(Ordering::Acquire) {
+                    (
+                        error_response(
+                            Value::Null,
+                            REQUEST_CANCELLED,
+                            "request cancelled".to_owned(),
+                        ),
+                        None,
+                    )
+                } else {
+                    let response = panic::catch_unwind(AssertUnwindSafe(|| {
+                        execute_worker_request(&mut server, message, &method)
+                    }))
+                    .unwrap_or_else(|_| {
+                        error_response(
+                            Value::Null,
+                            -32603,
+                            "language server request worker panicked".to_owned(),
+                        )
+                    });
 
-                (response, None)
-            };
+                    (response, None)
+                };
 
-            let event = ServerEvent::RequestFinished(Box::new(WorkerResult {
-                job_id,
-                response,
-                warm_result,
-            }));
-            let _ = event_tx.send(event);
-        });
+                let event = ServerEvent::RequestFinished(Box::new(WorkerResult {
+                    job_id,
+                    response,
+                    warm_result,
+                }));
+                let _ = event_tx.send(event);
+            })
+            .expect("language server request worker should start");
     }
 
     tx

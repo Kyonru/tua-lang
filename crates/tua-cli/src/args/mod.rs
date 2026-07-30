@@ -18,9 +18,12 @@ Commands:
   traceback Remap generated Lua traceback lines to Tua source
   watch     Rebuild when source files change
   lsp       Start the tua language server over stdio
+  api       Start the read-only Tua JSON-RPC API over stdio
+  mcp       Start the read-only Tua MCP server over stdio
 
 Options:
-  --stdio           With lsp, accepted for editor-client compatibility
+  --stdio           With lsp, api, or mcp, use standard input/output
+  --workspace PATH  With api or mcp, load PATH instead of the current directory
   --emit-on-error   With build, emit parseable/lowerable files even if errors exist
   --check           With fmt, report files that would change without writing
   --strict          With lint, enable all lint diagnostics
@@ -46,6 +49,7 @@ pub struct CommandOptions {
     pub lint_strict: bool,
     pub traceback_maps: Option<PathBuf>,
     pub traceback_input: Option<PathBuf>,
+    pub workspace: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,6 +62,8 @@ pub enum CommandName {
     Traceback,
     Watch,
     Lsp,
+    Api,
+    Mcp,
 }
 
 pub fn parse_args<I, S>(args: I) -> Result<CliAction, CliError>
@@ -91,6 +97,8 @@ where
         "traceback" => CommandName::Traceback,
         "watch" => CommandName::Watch,
         "lsp" => CommandName::Lsp,
+        "api" => CommandName::Api,
+        "mcp" => CommandName::Mcp,
         other => {
             return Err(CliError::usage(format!("unknown command `{other}`")));
         }
@@ -137,7 +145,27 @@ where
                     options.traceback_input = Some(PathBuf::from(raw));
                 }
             }
-            "--stdio" if command == CommandName::Lsp => {}
+            "--stdio"
+                if matches!(
+                    command,
+                    CommandName::Lsp | CommandName::Api | CommandName::Mcp
+                ) => {}
+            "--workspace" if matches!(command, CommandName::Api | CommandName::Mcp) => {
+                index += 1;
+                let Some(path) = args.get(index) else {
+                    return Err(CliError::usage("`--workspace` expects a path"));
+                };
+                options.workspace = Some(PathBuf::from(path));
+            }
+            raw if matches!(command, CommandName::Api | CommandName::Mcp)
+                && raw.starts_with("--workspace=") =>
+            {
+                let path = raw.trim_start_matches("--workspace=");
+                if path.is_empty() {
+                    return Err(CliError::usage("`--workspace` expects a path"));
+                }
+                options.workspace = Some(PathBuf::from(path));
+            }
             "--emit-on-error" => {
                 return Err(CliError::usage(
                     "`--emit-on-error` is only valid with `tua build`",

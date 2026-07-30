@@ -22,16 +22,16 @@
 ---@param mode "static" | "stream" loader mode
 ---@return Image loaded image
 local function loadImage(path, mode)
-  return love.graphics.newImage(path)
+	return love.graphics.newImage(path)
 end
 
 -- Feature: deprecated API metadata reaches Tua consumers through module exports.
 ---@deprecated use loadImage instead
 local function legacyLoadImage(path, mode)
-  return loadImage(path, mode)
+	return loadImage(path, mode)
 end
 
 return {
-  loadImage = loadImage,
-  legacyLoadImage = legacyLoadImage,
+	loadImage = loadImage,
+	legacyLoadImage = legacyLoadImage,
 }

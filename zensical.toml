@@ -37,7 +37,7 @@ nav = [
     { "Debugging" = "debugging.md" },
     { "Diagnostic Codes" = "luahelper-code-matrix.md" },
     { "Completion Benchmark Guide" = "completion-benchmarks.md" },
-    { "External API Bridge" = "external-api-bridge.md" },
+    { "External API And MCP" = "external-api-bridge.md" },
   ] },
   { "Project" = [
     { "Releases" = "releases.md" },

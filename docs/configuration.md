@@ -570,10 +570,19 @@ Supported editor settings:
   completion lane. It defaults to `false`.
 - `tua.completion.multiToken.advanced`: allows multi-token suggestions even when
   normal compiler completion has ordinary confidence.
-- `tua.completion.multiToken.allowModelIntegration`: explicit policy gate for
-  future model-backed providers. The current implementation is local-only.
+- `tua.completion.multiToken.allowModelIntegration`: explicit opt-in policy
+  gate for local Ollama inline completions. It defaults to `false`.
 - `tua.completion.multiToken.maxSuggestions`: maximum validated multi-token
   suggestions appended to completion results.
+- `tua.completion.ollama.endpoint`: machine-scoped loopback endpoint; defaults
+  to `http://127.0.0.1:11434`.
+- `tua.completion.ollama.model`: machine-scoped model name; defaults to
+  `qwen2.5-coder:1.5b-base`.
+- `tua.completion.ollama.timeoutMs`: warm request timeout; defaults to `1000`.
+- `tua.completion.ollama.keepAlive`: Ollama residency hint; defaults to `10m`.
+- `tua.completion.ollama.contextTokens`: requested Ollama context window;
+  defaults to `4096`.
+- `tua.completion.ollama.maxTokens`: generation limit; defaults to `48`.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`. Static `import(...)` lowering uses the same separator when mapping a
@@ -583,10 +592,12 @@ Supported editor settings:
   language server through `tua/inspect`; no project source or asset metadata is
   sent off-device. It does not enable proposed VS Code APIs,
   source-definition/multi-document-highlight/auto-insert behavior, or the
-  external API bridge design.
+  external API or MCP processes.
 
 Run **Tua: Toggle Experimental Completions** to switch both
 `tua.completion.sequenceRanking.enabled` and
 `tua.completion.multiToken.enabled` for the current workspace. If either
 feature is off, the command enables both; if both are on, it disables both.
 Advanced multi-token and model-integration policy settings are not changed.
+Use **Tua: Toggle Local Ollama Completions** for the separate model-integration
+gate and consent flow.

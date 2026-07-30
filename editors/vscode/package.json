@@ -33,7 +33,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
-    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/activation-smoke.js",
+    "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
     "test:love-debugger": "node scripts/love-debugger-e2e.js",
     "test:vscode": "node test/run.js"
   },
@@ -406,7 +406,49 @@
         "tua.completion.multiToken.allowModelIntegration": {
           "type": "boolean",
           "default": false,
-          "description": "Explicit policy gate for any future model-backed multi-token completion provider. The current implementation remains local-only."
+          "description": "Explicit opt-in gate for local model-backed inline completions. When enabled, bounded source context is sent to the configured loopback Ollama server."
+        },
+        "tua.completion.ollama.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "scope": "machine",
+          "description": "Loopback HTTP endpoint for local Ollama completions. Non-loopback and HTTPS endpoints are rejected."
+        },
+        "tua.completion.ollama.model": {
+          "type": "string",
+          "default": "qwen2.5-coder:1.5b-base",
+          "scope": "machine",
+          "description": "Local Ollama model used for Tua fill-in-the-middle inline completions."
+        },
+        "tua.completion.ollama.timeoutMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 30000,
+          "scope": "machine",
+          "description": "Timeout in milliseconds for warm Ollama inline-completion requests."
+        },
+        "tua.completion.ollama.keepAlive": {
+          "type": "string",
+          "default": "10m",
+          "scope": "machine",
+          "description": "Ollama keep_alive value used to retain the local model in memory."
+        },
+        "tua.completion.ollama.contextTokens": {
+          "type": "number",
+          "default": 4096,
+          "minimum": 512,
+          "maximum": 32768,
+          "scope": "machine",
+          "description": "Maximum Ollama context window requested for inline completion."
+        },
+        "tua.completion.ollama.maxTokens": {
+          "type": "number",
+          "default": 48,
+          "minimum": 1,
+          "maximum": 256,
+          "scope": "machine",
+          "description": "Maximum tokens Ollama may generate for one inline completion."
         },
         "tua.completion.multiToken.maxSuggestions": {
           "type": "number",
@@ -507,6 +549,16 @@
       {
         "command": "tua.completion.toggleExperimental",
         "title": "Toggle Experimental Completions",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.completion.toggleOllama",
+        "title": "Toggle Local Ollama Completions",
+        "category": "Tua"
+      },
+      {
+        "command": "tua.completion.warmOllama",
+        "title": "Test and Warm Ollama Model",
         "category": "Tua"
       },
       {
