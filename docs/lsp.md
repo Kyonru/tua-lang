@@ -184,17 +184,23 @@ These expected cancellations and document-version races are counted locally
 but do not produce warnings. Completion status distinguishes Tua language-server
 availability from Ollama transport, missing-model, and timeout failures.
 
-Candidates are limited to five lines and 512 bytes. Tua removes FIM/end tokens
-and duplicated suffix text, then rejects Markdown, empty output, stale
-fingerprints, obvious foreign-language constructs such as TypeScript/JavaScript
-function syntax, and every newly introduced error. The model prompt is itself
-valid commented Tua source. It teaches that ordinary Lua/LuaJIT is the base,
-prefers inferred locals over redundant annotations, includes native LOVE 11.x
-guidance, and carries a bounded inventory of the implemented Tua type, class,
-module, interop, and game-helper features. Cursor-specific expected types and
-visible bindings appear before that inventory. Existing unrelated diagnostics
-and gradual `any` are preserved. The live document and analysis host are never
-mutated.
+Tua classifies each request as a local or function completion. Local expression
+and statement candidates remain bounded to eight lines and 1 KiB. Inside an
+unfinished function or method, Ollama may complete the remaining body and its
+closing `end` or `}` with up to 64 lines and 8 KiB. The default generation
+ceiling is 256 tokens, with a 5-second timeout; the function lane can use up to
+512 configured tokens.
+
+Tua removes FIM/end tokens and duplicated suffix text, then rejects Markdown,
+empty output, stale fingerprints, obvious foreign-language constructs such as
+TypeScript/JavaScript function syntax, and every newly introduced error. The
+model prompt is itself valid commented Tua source. It teaches that ordinary
+Lua/LuaJIT is the base, prefers inferred locals over redundant annotations,
+includes native LOVE 11.x guidance, and carries a bounded inventory of the
+implemented Tua type, class, module, interop, and game-helper features.
+Cursor-specific expected types and visible bindings appear before that
+inventory. Existing unrelated diagnostics and gradual `any` are preserved. The
+live document and analysis host are never mutated.
 
 The extension stores only source-free local counters: request/cancellation/
 timeout/empty/rejection counts, suggestions shown and accepted, and accepted

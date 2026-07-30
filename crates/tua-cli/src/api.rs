@@ -400,6 +400,9 @@ impl ApiSession {
             "position": position_json(context.position),
             "prompt": context.prompt,
             "suffix": context.suffix,
+            "completionScope": context.completion_scope.as_str(),
+            "maxCompletionBytes": context.max_completion_bytes,
+            "maxCompletionLines": context.max_completion_lines,
             "range": span_json(context.insertion_span)
         }))
     }
@@ -983,6 +986,8 @@ mod tests {
         assert!(allowed[2]["result"]["prompt"]
             .as_str()
             .is_some_and(|prompt| prompt.ends_with("local next = ")));
+        assert_eq!(allowed[2]["result"]["completionScope"], "local");
+        assert_eq!(allowed[2]["result"]["maxCompletionLines"], 8);
         assert_eq!(
             allowed[4]["result"]["overlays"].as_array().map(Vec::len),
             Some(0)

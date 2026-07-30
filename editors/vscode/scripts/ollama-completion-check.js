@@ -5,6 +5,7 @@ const http = require("http");
 const {
   STOP_TOKENS,
   generate,
+  generationTokenBudget,
   isCancellationError,
   loopbackGenerateUrl,
   touchCache,
@@ -22,6 +23,10 @@ async function main() {
   assert(isCancellationError({ code: -32801, message: "content modified" }));
   assert(isCancellationError(new Error("document changed while request was running")));
   assert(!isCancellationError(new Error("connect ECONNREFUSED 127.0.0.1:11434")));
+  assert.strictEqual(generationTokenBudget(256, "function"), 256);
+  assert.strictEqual(generationTokenBudget(1024, "function"), 512);
+  assert.strictEqual(generationTokenBudget(256, "local"), 64);
+  assert.strictEqual(generationTokenBudget(32, "function"), 32);
 
   assert.throws(
     () => loopbackGenerateUrl("https://127.0.0.1:11434"),

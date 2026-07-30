@@ -42,7 +42,7 @@ The session supports:
 | `tua.api/moduleGraph` | Static require edges and exports |
 | `tua.api/references` | Project references at a zero-based position |
 | `tua.api/assetMetadata` | LOVE asset inventory and reference metadata |
-| `tua.api/completionContext` | Bounded FIM prompt, suffix, revision, and fingerprint |
+| `tua.api/completionContext` | Bounded FIM prompt, suffix, revision, fingerprint, local/function scope, and candidate limits |
 | `tua.api/validateCompletion` | Normalized candidate or stable rejection reason |
 | `tua.api/formatPreview` | Formatted text preview; never applied |
 | `tua.api/codeActions` | Compiler-proven edit previews; never applied |

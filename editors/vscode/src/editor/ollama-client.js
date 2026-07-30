@@ -98,9 +98,16 @@ function isCancellationError(error) {
   );
 }
 
+function generationTokenBudget(configuredMaximum, completionScope) {
+  const maximum = Math.max(1, Number(configuredMaximum) || 1);
+  const scopeLimit = completionScope === "function" ? 512 : 64;
+  return Math.min(maximum, scopeLimit);
+}
+
 module.exports = {
   STOP_TOKENS,
   generate,
+  generationTokenBudget,
   isCancellationError,
   loopbackGenerateUrl,
   touchCache,

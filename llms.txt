@@ -20,7 +20,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - Function, callback, and module boundaries benefit from parameter and return
   annotations, but normal unannotated Lua functions and inferred returns work.
 - Prefer visible bindings, existing modules/helpers, and project-native APIs.
-  Keep inline completions short and syntactically local.
+  Keep expression and statement completions short and syntactically local.
+  When the cursor is in an unfinished function or method, complete its useful
+  remaining body and required closing `end` or `}` without repeating suffix
+  code.
 - Feature index: Lua/LuaJIT syntax and libraries; gradual inference and `any`;
   aliases, shapes, optional fields, arrays, dictionaries, tuples, unions,
   literals, enums, function types, defaults, varargs, multiple returns, and

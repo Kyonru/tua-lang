@@ -1685,6 +1685,9 @@ impl LspServer {
             },
             "prompt": context.prompt,
             "suffix": context.suffix,
+            "completionScope": context.completion_scope.as_str(),
+            "maxCompletionBytes": context.max_completion_bytes,
+            "maxCompletionLines": context.max_completion_lines,
             "range": inline_request_range(request.params)
         })
     }

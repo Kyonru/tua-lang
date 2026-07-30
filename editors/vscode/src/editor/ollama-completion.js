@@ -6,6 +6,7 @@ const { formatError } = require("../shared/errors");
 const {
   STOP_TOKENS,
   generate,
+  generationTokenBudget,
   isCancellationError,
   loopbackGenerateUrl,
   touchCache,
@@ -100,10 +101,10 @@ class OllamaCompletionController {
         "completion.ollama.model",
         "qwen2.5-coder:1.5b-base",
       ),
-      timeoutMs: configuration.get("completion.ollama.timeoutMs", 1000),
+      timeoutMs: configuration.get("completion.ollama.timeoutMs", 5000),
       keepAlive: configuration.get("completion.ollama.keepAlive", "10m"),
       contextTokens: configuration.get("completion.ollama.contextTokens", 4096),
-      maxTokens: configuration.get("completion.ollama.maxTokens", 48),
+      maxTokens: configuration.get("completion.ollama.maxTokens", 256),
     };
   }
 
@@ -183,7 +184,10 @@ class OllamaCompletionController {
           temperature: 0.1,
           top_p: 0.9,
           num_ctx: config.contextTokens,
-          num_predict: config.maxTokens,
+          num_predict: generationTokenBudget(
+            config.maxTokens,
+            semanticContext.completionScope,
+          ),
           stop: STOP_TOKENS,
         },
       }, config.timeoutMs, abortController.signal);

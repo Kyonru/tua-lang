@@ -11,8 +11,10 @@ use crate::{
 
 pub const DEFAULT_MODEL_CONTEXT_BYTES: usize = 12 * 1024;
 pub const MAX_MODEL_CONTEXT_BYTES: usize = 32 * 1024;
-pub const MAX_MODEL_COMPLETION_BYTES: usize = 512;
-pub const MAX_MODEL_COMPLETION_LINES: usize = 5;
+pub const MAX_MODEL_COMPLETION_BYTES: usize = 8 * 1024;
+pub const MAX_MODEL_COMPLETION_LINES: usize = 64;
+const LOCAL_MODEL_COMPLETION_BYTES: usize = 1024;
+const LOCAL_MODEL_COMPLETION_LINES: usize = 8;
 pub const LANGUAGE_CONTRACT: &str = include_str!("../../../llms.txt");
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +27,38 @@ pub struct ModelCompletionContext {
     pub prompt: String,
     pub suffix: String,
     pub insertion_span: SourceSpan,
+    pub completion_scope: ModelCompletionScope,
+    pub max_completion_bytes: usize,
+    pub max_completion_lines: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModelCompletionScope {
+    Local,
+    Function,
+}
+
+impl ModelCompletionScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Function => "function",
+        }
+    }
+
+    fn max_bytes(self) -> usize {
+        match self {
+            Self::Local => LOCAL_MODEL_COMPLETION_BYTES,
+            Self::Function => MAX_MODEL_COMPLETION_BYTES,
+        }
+    }
+
+    fn max_lines(self) -> usize {
+        match self {
+            Self::Local => LOCAL_MODEL_COMPLETION_LINES,
+            Self::Function => MAX_MODEL_COMPLETION_LINES,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,7 +160,8 @@ impl AnalysisSnapshot {
             end: position,
         };
 
-        let semantic_preamble = self.model_completion_preamble(path, position);
+        let completion_scope = self.model_completion_scope(path, position, source, cursor);
+        let semantic_preamble = self.model_completion_preamble(path, position, completion_scope);
         let suffix_budget = budget / 4;
         let suffix = utf8_prefix(&source[cursor..], suffix_budget).to_owned();
         let prompt_budget = budget.saturating_sub(suffix.len());
@@ -142,6 +177,7 @@ impl AnalysisSnapshot {
             position.column,
             &prompt,
             &suffix,
+            completion_scope.as_str(),
         ));
 
         Some(ModelCompletionContext {
@@ -153,10 +189,50 @@ impl AnalysisSnapshot {
             prompt,
             suffix,
             insertion_span,
+            completion_scope,
+            max_completion_bytes: completion_scope.max_bytes(),
+            max_completion_lines: completion_scope.max_lines(),
         })
     }
 
-    fn model_completion_preamble(&self, path: &Path, position: SourcePosition) -> String {
+    fn model_completion_scope(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        source: &str,
+        cursor: usize,
+    ) -> ModelCompletionScope {
+        if self.containing_function(path, position).is_some()
+            || textual_cursor_is_in_lua_function(&source[..cursor])
+            || textual_cursor_is_in_tua_method(&source[..cursor])
+        {
+            ModelCompletionScope::Function
+        } else {
+            ModelCompletionScope::Local
+        }
+    }
+
+    fn containing_function(&self, path: &Path, position: SourcePosition) -> Option<&str> {
+        self.scope_map(path).and_then(|scope| {
+            scope
+                .declarations()
+                .iter()
+                .filter(|declaration| {
+                    matches!(declaration.kind, ScopeDeclarationKind::Function)
+                        && position_key(declaration.scope_span.start) <= position_key(position)
+                        && position_key(position) <= position_key(declaration.scope_span.end)
+                })
+                .max_by_key(|declaration| position_key(declaration.scope_span.start))
+                .map(|declaration| declaration.name.as_str())
+        })
+    }
+
+    fn model_completion_preamble(
+        &self,
+        path: &Path,
+        position: SourcePosition,
+        completion_scope: ModelCompletionScope,
+    ) -> String {
         let mut facts = Vec::new();
         let environment = self.type_environment(path);
 
@@ -212,18 +288,7 @@ impl AnalysisSnapshot {
             }
         }
 
-        let containing_function = self.scope_map(path).and_then(|scope| {
-            scope
-                .declarations()
-                .iter()
-                .filter(|declaration| {
-                    matches!(declaration.kind, ScopeDeclarationKind::Function)
-                        && position_key(declaration.scope_span.start) <= position_key(position)
-                        && position_key(position) <= position_key(declaration.scope_span.end)
-                })
-                .max_by_key(|declaration| position_key(declaration.scope_span.start))
-                .map(|declaration| declaration.name.as_str())
-        });
+        let containing_function = self.containing_function(path, position);
         let parsed_containing_class = self.parse(path).and_then(Result::ok).and_then(|parsed| {
             parsed
                 .class_declarations
@@ -244,6 +309,18 @@ impl AnalysisSnapshot {
             .and_then(|source| expected_type_at_cursor(source, position, environment));
 
         let mut preamble = model_harness_preamble();
+        match completion_scope {
+            ModelCompletionScope::Local => preamble.push_str(
+                "-- COMPLETION SCOPE: Finish only the current expression or nearby statement. \
+                 Keep this completion local and concise.\n",
+            ),
+            ModelCompletionScope::Function => preamble.push_str(
+                "-- COMPLETION SCOPE: Complete the remainder of the current function or method. \
+                 Emit all useful body statements and required closing `end` or `}` tokens, but \
+                 do not repeat closing code already present in the suffix. Multiline output up \
+                 to 64 lines is allowed.\n",
+            ),
+        }
         preamble.push_str("-- Cursor semantics:\n");
         if let Some(function) = containing_function {
             preamble.push_str(&format!("-- Containing function: {function}\n"));
@@ -314,13 +391,13 @@ impl AnalysisHost {
                 insertion_span,
             );
         }
-        if normalized.len() > MAX_MODEL_COMPLETION_BYTES {
+        if normalized.len() > context.max_completion_bytes {
             return ModelCompletionValidation::rejected(
                 ModelCompletionRejectionReason::TooLarge,
                 insertion_span,
             );
         }
-        if normalized.lines().count() > MAX_MODEL_COMPLETION_LINES {
+        if normalized.lines().count() > context.max_completion_lines {
             return ModelCompletionValidation::rejected(
                 ModelCompletionRejectionReason::TooManyLines,
                 insertion_span,
@@ -626,6 +703,97 @@ fn ascii_identifiers(value: &str) -> Vec<String> {
         })
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn textual_cursor_is_in_lua_function(prefix: &str) -> bool {
+    #[derive(Clone, Copy)]
+    enum Block {
+        Function,
+        Other,
+        Repeat,
+    }
+
+    let code = code_without_strings_and_comments(prefix);
+    let mut blocks = Vec::new();
+    let mut pending_loop_do = 0usize;
+
+    for token in ascii_identifiers(&code) {
+        match token.as_str() {
+            "function" => blocks.push(Block::Function),
+            "if" => blocks.push(Block::Other),
+            "for" | "while" => {
+                blocks.push(Block::Other);
+                pending_loop_do += 1;
+            }
+            "repeat" => blocks.push(Block::Repeat),
+            "do" if pending_loop_do > 0 => pending_loop_do -= 1,
+            "do" => blocks.push(Block::Other),
+            "end" => {
+                blocks.pop();
+            }
+            "until" => {
+                if let Some(index) = blocks
+                    .iter()
+                    .rposition(|block| matches!(block, Block::Repeat))
+                {
+                    blocks.truncate(index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    blocks.iter().any(|block| matches!(block, Block::Function))
+}
+
+fn textual_cursor_is_in_tua_method(prefix: &str) -> bool {
+    let code = code_without_strings_and_comments(prefix);
+    let mut blocks = Vec::new();
+    let mut segment_start = 0usize;
+
+    for (index, character) in code.char_indices() {
+        match character {
+            '{' => {
+                let header = code[segment_start..index].trim();
+                blocks.push(looks_like_tua_method_header(header));
+                segment_start = index + character.len_utf8();
+            }
+            '}' => {
+                blocks.pop();
+                segment_start = index + character.len_utf8();
+            }
+            '\n' => segment_start = index + character.len_utf8(),
+            _ => {}
+        }
+    }
+
+    blocks.iter().any(|is_method| *is_method)
+}
+
+fn looks_like_tua_method_header(header: &str) -> bool {
+    if header.is_empty() || header.contains('=') {
+        return false;
+    }
+    let Some(open_parenthesis) = header.find('(') else {
+        return false;
+    };
+    let Some(close_parenthesis) = header.rfind(')') else {
+        return false;
+    };
+    if close_parenthesis < open_parenthesis {
+        return false;
+    }
+
+    let before = header[..open_parenthesis].trim();
+    let name = before.split_whitespace().last().unwrap_or_default();
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        && !matches!(
+            name,
+            "if" | "for" | "while" | "function" | "return" | "local"
+        )
 }
 
 fn expected_type_at_cursor(
@@ -979,6 +1147,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(first, second);
+        assert_eq!(first.completion_scope, ModelCompletionScope::Local);
+        assert_eq!(first.max_completion_lines, LOCAL_MODEL_COMPLETION_LINES);
         assert!(first.prompt.starts_with("-- TUA INLINE COMPLETION HARNESS"));
         assert!(first.prompt.contains("never as TypeScript"));
         assert!(first.prompt.contains("write `local score = 0`"));
@@ -1121,6 +1291,7 @@ mod tests {
 
         assert!(context.prompt.contains("Containing class: Counter"));
         assert!(context.prompt.contains("Expected type: number"));
+        assert_eq!(context.completion_scope, ModelCompletionScope::Function);
     }
 
     #[test]
@@ -1244,6 +1415,77 @@ mod tests {
             },
         );
         assert_eq!(valid.status, ModelCompletionStatus::Accepted);
+    }
+
+    #[test]
+    fn function_context_accepts_a_complete_multiline_body() {
+        let host = host("function update(dt: number)\n  ");
+        let position = SourcePosition { line: 2, column: 3 };
+        let context = host
+            .snapshot()
+            .model_completion_context("main.tua", position, DEFAULT_MODEL_CONTEXT_BYTES)
+            .unwrap();
+
+        assert_eq!(context.completion_scope, ModelCompletionScope::Function);
+        assert_eq!(context.max_completion_lines, MAX_MODEL_COMPLETION_LINES);
+        assert_eq!(context.max_completion_bytes, MAX_MODEL_COMPLETION_BYTES);
+        assert!(context
+            .prompt
+            .contains("Complete the remainder of the current function"));
+
+        let mut candidate = String::new();
+        for index in 0..10 {
+            candidate.push_str(&format!("local value{index} = dt + {index}\n"));
+        }
+        candidate.push_str("print(value9)\nend");
+
+        let result = host.validate_model_completion(
+            "main.tua",
+            ModelCompletionValidationRequest {
+                context_id: &context.context_id,
+                analysis_revision: context.analysis_revision,
+                context_bytes: context.context_bytes,
+                source_fingerprint: &context.source_fingerprint,
+                position,
+                candidate: &candidate,
+            },
+        );
+
+        assert_eq!(candidate.lines().count(), 12);
+        assert_eq!(result.status, ModelCompletionStatus::Accepted);
+        assert_eq!(result.normalized_insertion.as_deref(), Some(&*candidate));
+    }
+
+    #[test]
+    fn local_context_keeps_long_unrelated_completions_bounded() {
+        let host = host("");
+        let position = SourcePosition { line: 1, column: 1 };
+        let context = host
+            .snapshot()
+            .model_completion_context("main.tua", position, DEFAULT_MODEL_CONTEXT_BYTES)
+            .unwrap();
+        let candidate = (0..=LOCAL_MODEL_COMPLETION_LINES)
+            .map(|index| format!("local value{index} = {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let result = host.validate_model_completion(
+            "main.tua",
+            ModelCompletionValidationRequest {
+                context_id: &context.context_id,
+                analysis_revision: context.analysis_revision,
+                context_bytes: context.context_bytes,
+                source_fingerprint: &context.source_fingerprint,
+                position,
+                candidate: &candidate,
+            },
+        );
+
+        assert_eq!(context.completion_scope, ModelCompletionScope::Local);
+        assert_eq!(
+            result.reason,
+            Some(ModelCompletionRejectionReason::TooManyLines)
+        );
     }
 
     #[test]

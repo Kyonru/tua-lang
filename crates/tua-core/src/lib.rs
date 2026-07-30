@@ -157,9 +157,9 @@ pub use inspector::{
 pub use lua::builtin_definition_document;
 pub use model_completion::{
     language_contract, ModelCompletionContext, ModelCompletionRejectionReason,
-    ModelCompletionStatus, ModelCompletionValidation, ModelCompletionValidationRequest,
-    DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_COMPLETION_BYTES, MAX_MODEL_COMPLETION_LINES,
-    MAX_MODEL_CONTEXT_BYTES,
+    ModelCompletionScope, ModelCompletionStatus, ModelCompletionValidation,
+    ModelCompletionValidationRequest, DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_COMPLETION_BYTES,
+    MAX_MODEL_COMPLETION_LINES, MAX_MODEL_CONTEXT_BYTES,
 };
 pub use module_graph::{
     ModuleDependencyEdge, ModuleDependencyExport, ModuleDependencyGraph, ModuleDependencyModule,

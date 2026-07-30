@@ -578,11 +578,13 @@ Supported editor settings:
   to `http://127.0.0.1:11434`.
 - `tua.completion.ollama.model`: machine-scoped model name; defaults to
   `qwen2.5-coder:1.5b-base`.
-- `tua.completion.ollama.timeoutMs`: warm request timeout; defaults to `1000`.
+- `tua.completion.ollama.timeoutMs`: generation timeout; defaults to `5000`.
 - `tua.completion.ollama.keepAlive`: Ollama residency hint; defaults to `10m`.
 - `tua.completion.ollama.contextTokens`: requested Ollama context window;
   defaults to `4096`.
-- `tua.completion.ollama.maxTokens`: generation limit; defaults to `48`.
+- `tua.completion.ollama.maxTokens`: user generation ceiling; defaults to
+  `256`. Tua uses at most 64 tokens for local expressions and 512 for function
+  bodies.
 - `tua.ignoredPaths`: excludes matching paths from indexing and diagnostics.
 - `tua.requirePathSeparator`: controls suggested require paths, either `.` or
   `/`. Static `import(...)` lowering uses the same separator when mapping a

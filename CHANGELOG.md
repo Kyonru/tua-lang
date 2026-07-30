@@ -86,6 +86,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Model completion now distinguishes short local edits from function-body
+  completion. Function contexts may generate and validate complete bodies up to
+  64 lines instead of sharing the former five-line limit.
 - Language-server request workers now use an explicit parser-safe stack budget,
   so large files remain responsive while functions and nested Lua blocks are
   temporarily incomplete during editing.

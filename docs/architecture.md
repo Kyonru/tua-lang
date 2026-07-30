@@ -363,9 +363,11 @@ or applies edits. See [External API And MCP](external-api-bridge.md).
 
 Model completion follows the same ownership boundary. Core constructs bounded,
 fingerprinted FIM context and validates candidates in an ephemeral cloned
-analysis host. LSP only converts protocol positions and versions. The VS Code
-extension owns loopback Ollama transport and ghost-text lifecycle, so ordinary
-compiler completion remains deterministic and model-independent.
+analysis host. Core also classifies local versus function-body completion and
+owns the corresponding candidate limits. LSP only converts protocol positions
+and versions. The VS Code extension owns loopback Ollama transport and
+ghost-text lifecycle, so ordinary compiler completion remains deterministic and
+model-independent.
 
 ## Change Workflows
 

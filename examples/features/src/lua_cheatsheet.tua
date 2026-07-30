@@ -640,6 +640,11 @@ local cheatsheetMusic = music "assets/theme.ogg"
 local cheatsheetFont = font("assets/ui.ttf", 18)
 cheatsheetImage:setFilter("nearest", "nearest")
 
+local makeMusic = function()
+  return music "assets/theme.ogg"
+end
+local musicPlayer = makeMusic()
+
 -- Feature: return table exports are indexed for module-aware hover,
 -- completion, definition, references, and workspace symbols.
 return {

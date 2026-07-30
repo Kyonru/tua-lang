@@ -422,11 +422,11 @@
         },
         "tua.completion.ollama.timeoutMs": {
           "type": "number",
-          "default": 1000,
+          "default": 5000,
           "minimum": 100,
           "maximum": 30000,
           "scope": "machine",
-          "description": "Timeout in milliseconds for warm Ollama inline-completion requests."
+          "description": "Timeout in milliseconds for Ollama inline-completion requests."
         },
         "tua.completion.ollama.keepAlive": {
           "type": "string",
@@ -444,11 +444,11 @@
         },
         "tua.completion.ollama.maxTokens": {
           "type": "number",
-          "default": 48,
+          "default": 256,
           "minimum": 1,
-          "maximum": 256,
+          "maximum": 512,
           "scope": "machine",
-          "description": "Maximum tokens Ollama may generate for one inline completion."
+          "description": "Maximum tokens Ollama may generate for one inline completion. Tua uses at most 64 for local expressions and 512 for function bodies."
         },
         "tua.completion.multiToken.maxSuggestions": {
           "type": "number",

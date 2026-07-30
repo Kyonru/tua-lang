@@ -297,7 +297,9 @@ configurations opt into Tua's build and map preparation with
 
 No source content or completion-learning data is sent off-device by default.
 Completion providers are local-only. The model-integration setting is an inert
-policy gate and does not enable a network-backed provider.
+policy gate and does not enable a network-backed provider. Opt-in local model
+completion keeps expressions and statements short, while compiler-identified
+function contexts may return a complete validated function body.
 
 ## Diagnostics
 

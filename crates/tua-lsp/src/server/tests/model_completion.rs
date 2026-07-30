@@ -16,6 +16,9 @@ fn inline_context_and_validation_are_versioned_and_stale_safe() {
 
     let context = response_with_id(server.output(), 1)["result"].clone();
     assert_eq!(context["documentVersion"], 1);
+    assert_eq!(context["completionScope"], "local");
+    assert_eq!(context["maxCompletionLines"], 8);
+    assert_eq!(context["maxCompletionBytes"], 1024);
     assert!(context["analysisRevision"].as_u64().is_some());
     assert!(context["sourceFingerprint"].as_str().is_some());
     assert!(context["prompt"]
@@ -73,6 +76,23 @@ fn inline_context_skips_comments_and_converts_utf16_positions() {
         }
     }));
     assert!(response_with_id(server.output(), 2)["result"].is_null());
+}
+
+#[test]
+fn inline_context_reports_complete_function_generation_scope() {
+    let uri = "file:///tmp/model-completion-function.tua";
+    let source = "function update(dt: number)\n  ";
+    let mut server = TestServer::new();
+    server.send(did_open(uri, source));
+    server.send(inline_context_request(1, uri, source, source, 1));
+
+    let context = &response_with_id(server.output(), 1)["result"];
+    assert_eq!(context["completionScope"], "function");
+    assert_eq!(context["maxCompletionLines"], 64);
+    assert_eq!(context["maxCompletionBytes"], 8 * 1024);
+    assert!(context["prompt"]
+        .as_str()
+        .is_some_and(|prompt| prompt.contains("Complete the remainder of the current function")));
 }
 
 fn inline_context_request(id: u64, uri: &str, source: &str, needle: &str, version: u64) -> Value {
