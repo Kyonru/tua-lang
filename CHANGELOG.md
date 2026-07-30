@@ -86,6 +86,14 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Example profiling now measures intentional lint-diagnostic exits instead of
+  aborting before JSON reports are written. CI workflows also use Node
+  24-compatible GitHub action releases for checkout, setup, and artifacts. The
+  reduced-sample representative completion smoke gate now allows 2.5 seconds
+  for shared-runner contention while retaining its stale-result and response
+  validation checks. Full performance-trend runs use a separate 30-second
+  shared-runner ceiling, and their freshness check now uses a validated
+  new-version completion as its protocol-ordering barrier.
 - Model completion now distinguishes short local edits from function-body
   completion. Function contexts may generate and validate complete bodies up to
   64 lines instead of sharing the former five-line limit.

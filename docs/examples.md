@@ -127,8 +127,11 @@ make profile-all
 The examples suite discovers every `examples/*/tua.toml` and times CLI commands
 and LSP editor requests. The representative suite measures generated large-file
 and project-scale fixtures, including request contention. Both write JSON
-reports under `target/tua-speed/`. Example timing comparisons use local soft
-thresholds because timing varies by machine:
+reports under `target/tua-speed/`. The lint timing includes intentional warning
+fixtures; their documented diagnostic exit is measured rather than treated as
+a profiler failure. Check, formatting, build, process, and LSP failures still
+stop the suite. Example timing comparisons use local soft thresholds because
+timing varies by machine:
 
 ```bash
 TUA_SPEED_BASELINE=target/tua-speed/examples-baseline.json make profile-examples

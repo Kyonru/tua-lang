@@ -336,8 +336,6 @@ async function profileContention(client, main) {
     version += 1;
     const probe = `profile_contention_probe_${String(round + 1).padStart(2, "0")}`;
     currentText = `${main.text}\nlocal ${probe} = profile_primary.label\n`;
-    const changeSentAt = process.hrtime.bigint();
-
     client.notify("textDocument/didChange", {
       textDocument: { uri: main.uri, version },
       contentChanges: [{ text: currentText }],
@@ -358,6 +356,9 @@ async function profileContention(client, main) {
     freshCompletionCount += Number(freshCompletion);
     validationFailures += Number(!freshCompletion);
 
+    // A response received before the new-version completion may have already
+    // left the server before it processed didChange. The validated completion
+    // is the protocol barrier that proves the change has been observed.
     const responses = await Promise.all(background);
     for (const response of responses) {
       backgroundRequestAges.push(response.ageMs);
@@ -371,7 +372,7 @@ async function profileContention(client, main) {
         cancelledRequests += 1;
       }
 
-      if (response.message.result !== undefined && response.receivedAt > changeSentAt) {
+      if (response.message.result !== undefined && response.receivedAt > fresh.receivedAt) {
         resultsAfterChange += 1;
         staleResultCount += 1;
       }

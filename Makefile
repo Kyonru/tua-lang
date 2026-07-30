@@ -190,7 +190,7 @@ representative-benchmark-smoke: representative-benchmark-test ## Gate completion
 	TUA_REPRESENTATIVE_COLD_REPEAT=1 \
 	TUA_REPRESENTATIVE_WARM_REPEAT=2 \
 	TUA_REPRESENTATIVE_CONTENTION_REPEAT=2 \
-	TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS=2000 \
+	TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS=2500 \
 	TUA_REPRESENTATIVE_PROFILE_OUT=$${TUA_REPRESENTATIVE_PROFILE_OUT:-target/tua-speed/representative-profile-smoke.json} \
 	node editors/vscode/scripts/lsp-representative-profile.js $(RELEASE_TUA)
 

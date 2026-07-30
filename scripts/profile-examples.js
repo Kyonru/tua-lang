@@ -110,7 +110,13 @@ function profileCliProject(project) {
   const metrics = [];
   const commands = [
     { label: "check", args: ["check"], trace: true, tempCopy: true },
-    { label: "lint", args: ["lint"], trace: true, tempCopy: true },
+    {
+      label: "lint",
+      args: ["lint"],
+      trace: true,
+      tempCopy: true,
+      acceptDiagnosticExit: true,
+    },
     { label: "fmt --check", args: ["fmt", "--check"], trace: false, tempCopy: true },
     { label: "build", args: ["build"], trace: false, tempCopy: true },
   ];
@@ -178,7 +184,12 @@ function runCliCommand(project, item) {
     throw result.error;
   }
 
-  if (result.status !== 0) {
+  const expectedDiagnosticExit =
+    item.acceptDiagnosticExit &&
+    result.status === 1 &&
+    parseDiagnosticTrace(result.stderr || "") !== null;
+
+  if (result.status !== 0 && !expectedDiagnosticExit) {
     throw new Error(
       `${project.name}: tua ${item.args.join(" ")} failed with ${result.status}\n` +
         `${result.stdout || ""}${result.stderr || ""}`,

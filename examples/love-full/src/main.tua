@@ -17,7 +17,6 @@ clouds_front:setFilter("linear", "nearest")
 local clouds_back = love.graphics.newImage("assets/clouds/clouds_back.png")
 clouds_back:setFilter("linear", "nearest")
 
-
 function love.load()
   player.load()
   obstacles.load()

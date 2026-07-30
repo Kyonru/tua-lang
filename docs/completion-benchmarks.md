@@ -213,13 +213,17 @@ finished before cancellation was necessary; it is not itself a failure.
 ### Smoke Versus Full Profile
 
 `make representative-benchmark-smoke` uses only `single-1000` and
-`project-100` with reduced repeats and a 2-second completion p95 budget. It is a
-CI reliability gate designed to catch stalls, stale results, and invalid
-responses without acting as a microbenchmark.
+`project-100` with reduced repeats and a 2.5-second completion p95 budget. The
+extra shared-runner allowance keeps this a CI reliability gate designed to
+catch stalls, stale results, and invalid responses without treating its
+two-sample p95 as a microbenchmark.
 
 `make profile-representative` runs every fixture with more samples and a broad
 10-second default budget. Use its report for scale comparisons and diagnosis,
-not as proof that a 9-second completion is acceptable.
+not as proof that a 9-second completion is acceptable. The performance-trend
+workflow raises only this full-profile ceiling to 30 seconds because shared
+GitHub runners can take roughly four times longer on the generated 5,000-line
+fixture. That runner allowance is not a local target or baseline.
 
 ## Useful Environment Variables
 
@@ -247,7 +251,7 @@ not as proof that a 9-second completion is acceptable.
 | `TUA_REPRESENTATIVE_CONTENTION_REPEAT` | Contention rounds. |
 | `TUA_REPRESENTATIVE_BACKGROUND_BURST` | Background requests started before each edit. |
 | `TUA_REPRESENTATIVE_CONTENTION_DELAY_MS` | Delay before changing the document during contention. |
-| `TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS` | Warm and contended completion failure budget. |
+| `TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS` | Warm and contended completion failure budget; defaults to 10,000 ms, while the shared-runner trend workflow uses 30,000 ms. |
 | `TUA_REPRESENTATIVE_PROFILE_OUT` | JSON report path. |
 | `TUA_LSP_REQUEST_TIMEOUT_MS` | Per-request timeout. |
 
@@ -263,7 +267,7 @@ create or mutate fixture-local `.tua/completion-stats.json` files. Set it to
 | Ranking p95 rises | Candidate scoring, usage index, adaptive stats, or sorting | Compare candidate counts and ranking spans before changing thresholds. |
 | Repeated contexts keep missing cache | Request key, source fingerprint, revision scope, or prefix reuse | Inspect `completionContext` and `usageIndex` hits/misses across identical requests. |
 | Known local or LOVE `.` completion takes seconds | Current-file lane fell back to project snapshot construction | Run `make editor-regression-smoke` and inspect current-file completion routing. |
-| Stale result count is non-zero | Cancellation or revision validation | Reproduce with the representative contention profile; do not mask it with a larger latency budget. |
+| Stale result count is non-zero | Cancellation or revision validation | Reproduce with the representative contention profile. Results are stale only when an old request succeeds after the validated new-version completion barrier; do not mask them with a larger latency budget. |
 | Semantic validation fails | Result correctness, not performance | Inspect the failing fixture and request before comparing timing. |
 | Only p99 moves on a short run | Sample noise or one stall | Increase repeats and rerun on the same machine. |
 
