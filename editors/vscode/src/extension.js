@@ -13,6 +13,7 @@ const { registerLoveDevex } = require("./love");
 const { registerModuleDevex } = require("./modules");
 const { registerObjectPoolDevex } = require("./object-pools");
 const { registerSignalDevex } = require("./signals");
+const { registerStateMachineDevex } = require("./state-machines");
 const { createDebugLogger, DEBUG_LSP_ENV } = require("./shared/debug-log");
 const { isTuaDocument } = require("./shared/documents");
 const { formatError } = require("./shared/errors");
@@ -54,6 +55,13 @@ async function activate(context) {
     isTuaDocument,
   });
   context.subscriptions.push(loveDevex);
+  context.subscriptions.push(
+    registerStateMachineDevex({
+      configurationTarget,
+      getClient: () => client,
+      isTuaDocument,
+    }),
+  );
   context.subscriptions.push(registerSignalDevex({ getClient: () => client }));
   context.subscriptions.push(registerModuleDevex({ getClient: () => client }));
   context.subscriptions.push(registerEcsDevex({ getClient: () => client }));

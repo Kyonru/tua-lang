@@ -572,6 +572,26 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                             .collect::<Vec<_>>()
                     })
                 }
+                InspectorItem::StateMachine(machine) => json!({
+                    "kind": "stateMachine",
+                    "name": machine.name,
+                    "initial": machine.initial,
+                    "range": lsp_range(machine.span),
+                    "selectionRange": lsp_range(machine.name_span),
+                    "states": machine.states.into_iter().map(|state| json!({
+                        "name": state.name,
+                        "initial": state.initial,
+                        "range": lsp_range(state.span)
+                    })).collect::<Vec<_>>(),
+                    "transitions": machine.transitions.into_iter().map(|transition| json!({
+                        "event": transition.event,
+                        "from": transition.from,
+                        "wildcardFrom": transition.wildcard_from,
+                        "to": transition.to,
+                        "range": lsp_range(transition.span),
+                        "selectionRange": lsp_range(transition.event_span)
+                    })).collect::<Vec<_>>()
+                }),
             })
             .collect(),
     )

@@ -79,6 +79,27 @@ generated built-in schema. Definition on an event method such as `light:warn()`
 or a callback key such as `onenterred` returns to the source event or state
 string from which Tua derived it.
 
+## Preview The Graph
+
+Enable `tua.preview.enabled`, then run **Tua: Preview State Machine** from a
+Tua file, or follow **Preview `<name>` State Machine** directly from the
+machine's hover. The compiler-backed preview shows the initial state, all
+statically derived states, event routes, multi-source transitions, wildcard
+transitions, cycles, and self-transitions. Selecting a state or route opens a
+source-linked inspector; double-clicking it jumps to the declaration.
+
+The layout keeps states in ordered columns and reserves separate corridors for
+long forward routes, return routes, same-column transitions, and self-loops.
+This keeps transition paths outside state cards and separates repeated loops as
+the graph becomes denser. Each real state receives a distinct, theme-aware
+pastel color for quick visual tracking; the wildcard source stays neutral.
+
+The preview follows edits and can switch between multiple machines in one
+file. It reads the same static model used for checking and completion, so it
+does not execute project code or simulate the machine's current runtime state.
+Computed configurations remain valid Tua, but cannot produce a graph until
+their states and events are visible in a direct table literal.
+
 ## Configure Events
 
 Each event entry has three fields:

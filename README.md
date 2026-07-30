@@ -100,7 +100,7 @@ extension, documentation site, and bundled example projects.
   helps.
 - Build LOVE projects with editor-aware assets, generated-Lua/source-map
   navigation, source-mapped Lua debugging, and project graphs for modules,
-  signals, ECS, and object pools.
+  signals, state machines, ECS, and object pools.
 - Use one versioned toolchain across the CLI, language server, release VSIXs,
   and documentation.
 
@@ -113,7 +113,8 @@ platform, so extension installs do not download a server at activation time.
 
 It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
 generated Lua inspection, project commands for running or debugging LOVE, and
-explorers for assets, modules, signals, ECS, and object pools.
+source-linked explorers for assets, modules, signals, state machines, ECS, and
+object pools.
 
 Experimental local Ollama ghost-text completion is opt-in and compiler
 validated before display. Trusted local tools can also explicitly start the

@@ -74,3 +74,52 @@ local selected = Player
         "Player"
     );
 }
+
+#[test]
+fn inspector_returns_source_linked_state_machine_graph_metadata() {
+    let temp = TempProject::new("state-machine-inspector");
+    let source = r#"local flow = stateMachine({
+  initial = "idle",
+  events = {
+    { name = "start", from = "idle", to = "running" },
+    { name = "reset", from = { "running", "paused" }, to = "idle" },
+    { name = "stop", from = "*", to = "idle" },
+  },
+})
+local selected = flow
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/flow.tua", source);
+
+    let uri = temp.uri_for("src/flow.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        inspector_request(2, &uri, None),
+        inspector_request(3, &uri, Some(lsp_position_after(source, "selected = flo"))),
+    ]);
+    let response = response_with_id(&output, 2);
+    let machine = response["result"]["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["kind"] == "stateMachine"))
+        .expect("state machine inspection");
+
+    assert_eq!(response["result"]["documentVersion"], 1);
+    assert_eq!(machine["name"], "flow");
+    assert_eq!(machine["initial"], "idle");
+    assert_eq!(machine["states"][0]["name"], "idle");
+    assert_eq!(machine["states"][0]["initial"], true);
+    assert_eq!(machine["transitions"][0]["event"], "start");
+    assert_eq!(machine["transitions"][0]["from"][0], "idle");
+    assert_eq!(machine["transitions"][0]["to"], "running");
+    assert_eq!(machine["transitions"][1]["from"][1], "paused");
+    assert_eq!(machine["transitions"][2]["wildcardFrom"], true);
+    assert!(machine["transitions"][0]["selectionRange"]["start"]["line"]
+        .as_u64()
+        .is_some());
+    assert_eq!(
+        response_with_id(&output, 3)["result"]["items"][0]["name"],
+        "flow"
+    );
+}

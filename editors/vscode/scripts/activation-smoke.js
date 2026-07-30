@@ -6,6 +6,14 @@ const Module = require("module");
 const os = require("os");
 const path = require("path");
 const vm = require("vm");
+const {
+  GRAPH_LAYOUT,
+  connectionGeometry,
+  connectionRoutes,
+  orthogonalPath,
+  statePastelHue,
+  stateLayout,
+} = require("../src/state-machines/template");
 
 const extensionPath = path.resolve(__dirname, "..", "src", "extension.js");
 const extensionRoot = path.resolve(__dirname, "..");
@@ -17,6 +25,8 @@ main().catch((error) => {
 });
 
 async function main() {
+  assertConnectionRouting();
+
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tua-vscode-smoke-"));
   const mockServer = path.join(temp, process.platform === "win32" ? "tua-smoke.cmd" : "tua-smoke");
   const workspace = path.join(temp, "workspace");
@@ -40,6 +50,146 @@ async function main() {
     delete process.env.TUA_DEBUG_LSP;
     fs.rmSync(temp, { force: true, recursive: true });
   }
+}
+
+function assertConnectionRouting() {
+  const pastelHues = Array.from({ length: 32 }, (_, index) => statePastelHue(index));
+  assert.strictEqual(
+    new Set(pastelHues).size,
+    pastelHues.length,
+    "state cards should receive distinct deterministic pastel hues",
+  );
+
+  const edge = (source, target, event) => ({
+    source,
+    target,
+    transition: { event },
+  });
+  const edges = [
+    edge("idle", "running", "stop"),
+    edge("running", "idle", "reset"),
+    edge("idle", "running", "start"),
+    edge("idle", "idle", "wait"),
+    edge("idle", "idle", "tick"),
+    edge("idle", "complete", "finish"),
+  ];
+  const routes = connectionRoutes(
+    edges,
+    new Map([
+      ["idle", 0],
+      ["running", 1],
+      ["complete", 3],
+    ]),
+  );
+
+  assert.deepStrictEqual(
+    routes.map((route) => route.offset),
+    [0, 36, -36, 0, 0, 0],
+    "parallel and reciprocal transitions should occupy distinct stable lanes",
+  );
+  assert.deepStrictEqual(
+    routes.map((route) => route.loopIndex),
+    [0, 0, 0, 0, 1, 0],
+    "multiple self-transitions should expand into separate loops",
+  );
+  assert.deepStrictEqual(
+    routes.map((route) => route.kind),
+    ["forward", "backward", "forward", "loop", "loop", "longForward"],
+    "return, loop, adjacent, and long transitions should use separate route classes",
+  );
+
+  const machine = {
+    initial: "idle",
+    states: ["idle", "running", "paused"].map((name) => ({ name, range: {} })),
+  };
+  const layoutEdges = [
+    edge("*", "idle", "reset"),
+    edge("idle", "running", "start"),
+    edge("running", "paused", "pause"),
+    edge("paused", "idle", "restart"),
+    edge("paused", "paused", "wait"),
+  ];
+  const layout = stateLayout(machine, layoutEdges, GRAPH_LAYOUT);
+  const state = (name) => layout.states.find((candidate) => candidate.name === name);
+
+  assert.strictEqual(state("*").depth, 0, "wildcard routes should receive a dedicated column");
+  assert.strictEqual(state("idle").depth, 1, "the initial state should follow the wildcard column");
+  assert.strictEqual(state("idle").colorIndex, 0, "state color identity should follow declaration order");
+  assert.strictEqual(state("*").colorIndex, undefined, "the wildcard source should remain color-neutral");
+  assert(
+    layout.bottomReserve >= GRAPH_LAYOUT.routeGap,
+    "return transitions should reserve a corridor below every state",
+  );
+  assert(
+    layout.states.every((candidate) => candidate.y > layout.topReserve),
+    "state nodes should stay outside reserved top routing corridors",
+  );
+  const box = (name) => {
+    const candidate = state(name);
+    return {
+      centerY: candidate.y + GRAPH_LAYOUT.nodeHeight / 2,
+      left: candidate.x,
+      right: candidate.x + GRAPH_LAYOUT.nodeWidth,
+      top: candidate.y,
+    };
+  };
+  const backwardGeometry = connectionGeometry(
+    layoutEdges[3],
+    layout.routes[3],
+    box("paused"),
+    box("idle"),
+    layout,
+    { height: layout.height, width: layout.width },
+    GRAPH_LAYOUT,
+  );
+  const lowestStateEdge = Math.max(
+    ...layout.states.map((candidate) => candidate.y + GRAPH_LAYOUT.nodeHeight),
+  );
+  assert(
+    backwardGeometry.points[2].y > lowestStateEdge &&
+      backwardGeometry.points[3].y > lowestStateEdge,
+    "return transitions should run below every state node",
+  );
+  const loopGeometry = connectionGeometry(
+    layoutEdges[4],
+    layout.routes[4],
+    box("paused"),
+    box("paused"),
+    layout,
+    { height: layout.height, width: layout.width },
+    GRAPH_LAYOUT,
+  );
+  assert(
+    loopGeometry.points[1].x > box("paused").right &&
+      loopGeometry.points[2].x > box("paused").right,
+    "self-transitions should loop beside their state instead of behind nearby nodes",
+  );
+  const secondLoopGeometry = connectionGeometry(
+    layoutEdges[4],
+    { ...layout.routes[4], loopIndex: 1 },
+    box("paused"),
+    box("paused"),
+    layout,
+    { height: layout.height, width: layout.width },
+    GRAPH_LAYOUT,
+  );
+  assert.equal(secondLoopGeometry.labelX, loopGeometry.labelX);
+  assert(
+    secondLoopGeometry.labelY !== loopGeometry.labelY &&
+      secondLoopGeometry.points[0].y !== loopGeometry.points[0].y,
+    "repeated self-transitions should separate paths, anchors, and labels",
+  );
+
+  const rounded = orthogonalPath([
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 30 },
+    { x: 40, y: 30 },
+  ]);
+  assert(
+    rounded.includes(" Q ") && !rounded.includes("NaN"),
+    "orthogonal corridors should use finite rounded corners",
+  );
 }
 
 async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
@@ -78,8 +228,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      1,
-      "activation should observe edits only to cancel stale inline-model requests",
+      2,
+      "activation should observe edits for inline-model cancellation and live state-machine previews",
     );
 
     assert.strictEqual(
@@ -694,18 +844,126 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     assert.deepStrictEqual(
       spriteHover.contents[0].isTrusted,
-      { enabledCommands: ["tua.previewSprites"] },
-      "sprite preview hover should trust only the preview command",
+      {
+        enabledCommands: [
+          "tua.previewSprites",
+          "tua.hover.references",
+          "tua.hover.implementations",
+        ],
+      },
+      "sprite hover should trust only its preview and standard navigation actions",
+    );
+    const assetHover = await state.hoverProviders
+      .at(-1)
+      ?.provider.provideHover(spriteDocument, { line: 1, character: 14 });
+    assert(
+      assetHover?.contents?.[0]?.value.includes("command:tua.assets.preview") &&
+        assetHover.contents[0].value.includes("Preview Asset"),
+      "asset-path hover should retain a direct asset preview link",
     );
     assert(
       state.clients[0].requests.filter((request) => request.method === "tua/inspect").length >= 5,
       "sprite preview rendering, reload, and hover should request compiler-backed inspection data",
     );
 
+    const stateMachineDocument = mockDocument(
+      path.join(workspace, "src", "flow.tua"),
+      "tua",
+      "file",
+      `local flow = stateMachine({
+  initial = "idle",
+  events = {
+    { name = "start", from = "idle", to = "running" },
+    { name = "pause", from = "running", to = "paused" },
+    { name = "reset", from = "*", to = "idle" },
+  },
+})
+`,
+    );
+    state.setActiveDocument(stateMachineDocument);
+    const stateMachineHoverTarget = {
+      uri: stateMachineDocument.uri.toString(),
+      position: { line: 0, character: 8 },
+    };
+    const stateMachineHover = await state.hoverProviders
+      .at(-1)
+      ?.provider.provideHover(stateMachineDocument, stateMachineHoverTarget.position);
+    assert(
+      stateMachineHover?.contents?.[0]?.value.includes("command:tua.previewStateMachine") &&
+        stateMachineHover.contents[0].value.includes("Preview flow State Machine"),
+      "state-machine variable hover should link directly to its graph preview",
+    );
+    assert(
+      stateMachineHover.contents[0].isTrusted.enabledCommands.includes(
+        "tua.previewStateMachine",
+      ),
+      "state-machine hover should explicitly trust only registered hover actions",
+    );
+    const stateMachinePreview = await state.commands.get("tua.previewStateMachine")(
+      stateMachineHoverTarget,
+    );
+    assert.deepStrictEqual(
+      state.clients[0].requests
+        .filter((request) => request.method === "tua/inspect")
+        .at(-1)?.params?.position,
+      stateMachineHoverTarget.position,
+      "the hover link target should focus inspection on the hovered state machine",
+    );
+
+    assert.deepStrictEqual(
+      stateMachinePreview,
+      { machineCount: 1, stateCount: 3, transitionCount: 3 },
+      "state-machine preview should report the rendered graph summary",
+    );
+    assert.strictEqual(
+      state.webviewPanels.length,
+      2,
+      "state-machine preview should open one webview panel",
+    );
+    const stateMachinePanel = state.webviewPanels[1];
+    assert(
+      stateMachinePanel.html.includes("State Machine") &&
+        stateMachinePanel.html.includes('"name":"flow"') &&
+        stateMachinePanel.html.includes('"event":"start"') &&
+        stateMachinePanel.html.includes('"event":"reset"') &&
+        stateMachinePanel.html.includes("Any state") &&
+        stateMachinePanel.html.includes("openLocation"),
+      "state-machine preview should render states, transitions, wildcard routes, and source navigation",
+    );
+    assertWebviewScriptsParse(stateMachinePanel.html, "state-machine preview");
+    await stateMachinePanel.messageListener({
+      command: "openLocation",
+      uri: stateMachineDocument.uri.toString(),
+      range: {
+        start: { line: 3, character: 4 },
+        end: { line: 3, character: 11 },
+      },
+    });
+    assert.strictEqual(
+      state.executedCommands.at(-1).command,
+      "vscode.open",
+      "state-machine nodes and routes should open their source definition",
+    );
+    await stateMachinePanel.messageListener({ command: "reload" });
+    assert(
+      state.clients[0].requests.filter((request) => request.method === "tua/inspect").length >= 7,
+      "state-machine rendering and reload should use compiler-backed inspection data",
+    );
+    const inspectRequestsBeforeEdit = state.clients[0].requests.filter(
+      (request) => request.method === "tua/inspect",
+    ).length;
+    state.fireTextDocumentChange(stateMachineDocument, " ");
+    await waitUntil(
+      () =>
+        state.clients[0].requests.filter((request) => request.method === "tua/inspect")
+          .length > inspectRequestsBeforeEdit,
+    );
+
+    state.setActiveDocument(spriteDocument);
     await state.commands.get("tua.showSignalGraph")();
 
-    assert.strictEqual(state.webviewPanels.length, 2, "signal graph should open one webview panel");
-    const signalPanel = state.webviewPanels[1];
+    assert.strictEqual(state.webviewPanels.length, 3, "signal graph should open one webview panel");
+    const signalPanel = state.webviewPanels[2];
     assert(
       signalPanel.html.includes("Signal Graph") &&
         signalPanel.html.includes("player.hit") &&
@@ -766,8 +1024,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     await state.commands.get("tua.whyModuleIncluded")();
 
-    assert.strictEqual(state.webviewPanels.length, 3, "module graph should open one webview panel");
-    const modulePanel = state.webviewPanels[2];
+    assert.strictEqual(state.webviewPanels.length, 4, "module graph should open one webview panel");
+    const modulePanel = state.webviewPanels[3];
     assert(
       modulePanel.html.includes("Module Graph") &&
         modulePanel.html.includes("Unresolved") &&
@@ -801,8 +1059,8 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     await state.commands.get("tua.showEcsExplorer")();
 
-    assert.strictEqual(state.webviewPanels.length, 4, "ECS Explorer should open one webview panel");
-    const ecsPanel = state.webviewPanels[3];
+    assert.strictEqual(state.webviewPanels.length, 5, "ECS Explorer should open one webview panel");
+    const ecsPanel = state.webviewPanels[4];
     assert(
       ecsPanel.html.includes("ECS Explorer") &&
         ecsPanel.html.includes('"runtimeName":"Position"') &&
@@ -836,10 +1094,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.webviewPanels.length,
-      5,
+      6,
       "Object Pool Explorer should open one webview panel",
     );
-    const objectPoolPanel = state.webviewPanels[4];
+    const objectPoolPanel = state.webviewPanels[5];
     assert(
       objectPoolPanel.html.includes("Object Pool Explorer") &&
         objectPoolPanel.html.includes('"name":"bullets"') &&
@@ -873,10 +1131,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
 
     assert.strictEqual(
       state.webviewPanels.length,
-      6,
+      7,
       "server health should open one webview panel",
     );
-    const healthPanel = state.webviewPanels[5];
+    const healthPanel = state.webviewPanels[6];
     assert(
       healthPanel.html.includes("Language Server Health") &&
         healthPanel.html.includes("Warm coverage") &&
@@ -1105,8 +1363,8 @@ async function smokeDebugLspLogging(mockServer, workspace) {
 
     assert.strictEqual(
       state.documentChangeListeners.length,
-      1,
-      "debug logging should leave only the stale inline-model cancellation listener",
+      2,
+      "debug logging should retain inline-model cancellation and state-machine preview listeners",
     );
 
     await extension.deactivate();
@@ -1317,6 +1575,11 @@ function mockDocument(filename, languageId = "tua", scheme = "file", text = "") 
       return {
         start: { line: position.line, character: start },
         end: { line: position.line, character: end },
+      };
+    },
+    lineAt(line) {
+      return {
+        text: text.split(/\r?\n/)[line] || "",
       };
     },
     setText(value) {
@@ -2292,7 +2555,7 @@ function createMockState(workspace, options = {}) {
       }
 
       if (method === "tua/inspect") {
-        return Promise.resolve(mockSpriteInspection(activeTextEditor?.document));
+        return Promise.resolve(mockInspection(activeTextEditor?.document));
       }
 
       if (method === "tua/explainType") {
@@ -2708,6 +2971,94 @@ function mockSpriteInspection(document) {
   };
 }
 
+function mockInspection(document) {
+  const spriteInspection = mockSpriteInspection(document);
+  const stateMachineInspection = mockStateMachineInspection(document);
+
+  return {
+    analysisRevision: Math.max(
+      spriteInspection.analysisRevision || 0,
+      stateMachineInspection.analysisRevision || 0,
+    ),
+    documentVersion: document?.version,
+    items: [...spriteInspection.items, ...stateMachineInspection.items],
+  };
+}
+
+function mockStateMachineInspection(document) {
+  const source = document?.getText?.() || "";
+  const name = /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*stateMachine\s*\(/.exec(source)?.[1];
+
+  if (!name) {
+    return {
+      analysisRevision: 1,
+      documentVersion: document?.version,
+      items: [],
+    };
+  }
+
+  const range = {
+    start: { line: 0, character: 0 },
+    end: { line: Math.max(0, source.split(/\r?\n/).length - 1), character: 0 },
+  };
+  const stateRange = (line, name) => ({
+    start: { line, character: 4 },
+    end: { line, character: 4 + name.length },
+  });
+  const transitionRange = (line, event) => ({
+    start: { line, character: 4 },
+    end: { line, character: 4 + event.length },
+  });
+
+  return {
+    analysisRevision: 1,
+    documentVersion: document.version,
+    items: [
+      {
+        kind: "stateMachine",
+        name,
+        initial: "idle",
+        range,
+        selectionRange: {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 6 + name.length },
+        },
+        states: [
+          { name: "idle", initial: true, range: stateRange(3, "idle") },
+          { name: "running", initial: false, range: stateRange(3, "running") },
+          { name: "paused", initial: false, range: stateRange(4, "paused") },
+        ],
+        transitions: [
+          {
+            event: "start",
+            from: ["idle"],
+            wildcardFrom: false,
+            to: "running",
+            range: transitionRange(3, "start"),
+            selectionRange: transitionRange(3, "start"),
+          },
+          {
+            event: "pause",
+            from: ["running"],
+            wildcardFrom: false,
+            to: "paused",
+            range: transitionRange(4, "pause"),
+            selectionRange: transitionRange(4, "pause"),
+          },
+          {
+            event: "reset",
+            from: [],
+            wildcardFrom: true,
+            to: "idle",
+            range: transitionRange(5, "reset"),
+            selectionRange: transitionRange(5, "reset"),
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function mockTypeExplanation(document) {
   return {
     analysisRevision: document?.version || 0,
@@ -2792,6 +3143,8 @@ function assertRegisteredCommands(state) {
     "tua.inlayHints.selectMode",
     "tua.previewSprites",
     "tua.previewSprites.reload",
+    "tua.previewStateMachine",
+    "tua.previewStateMachine.reload",
     "tua.assets.refresh",
     "tua.assets.preview",
     "tua.assets.open",

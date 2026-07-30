@@ -2,6 +2,7 @@
 
 const vscode = require("vscode");
 const { COMMANDS, STATUS_SELECTOR } = require("../constants");
+const { isStaleDocumentResponse } = require("../shared/documents");
 const { formatError } = require("../shared/errors");
 const { lspRangeToVscode } = require("../shared/locations");
 
@@ -20,6 +21,16 @@ const SIGNAL_EVENT_METHODS = new Set([
   "has",
   "listeners",
 ]);
+const INSPECTION_PREVIEWS = {
+  spriteSheet: {
+    command: COMMANDS.previewSprites,
+    title: (item) => `Preview ${item.name}`,
+  },
+  stateMachine: {
+    command: COMMANDS.previewStateMachine,
+    title: (item) => `Preview ${item.name} State Machine`,
+  },
+};
 
 function registerHoverActions({ getClient, isTuaDocument }) {
   return vscode.Disposable.from(
@@ -54,9 +65,12 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   const stringLiteral = stringLiteralAtPosition(document, position);
   const identifierRange = stringLiteral ? undefined : wordRange;
   const signalEvent = stringLiteral ? isSignalEventLiteral(document, stringLiteral) : false;
-  const asset = await assetAtStringLiteral({ document, getClient, position, stringLiteral });
+  const [asset, inspectionPreview] = await Promise.all([
+    assetAtStringLiteral({ document, getClient, position, stringLiteral }),
+    inspectionPreviewAtPosition({ document, getClient, position }),
+  ]);
 
-  if (!identifierRange && !signalEvent && !asset) {
+  if (!identifierRange && !signalEvent && !asset && !inspectionPreview) {
     return undefined;
   }
 
@@ -64,8 +78,22 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
   const actions = [];
   const enabledCommands = [];
 
-  actions.push(markdownCommandLink(COMMANDS.showHoverReferences, "References", [target]));
-  enabledCommands.push(COMMANDS.showHoverReferences);
+  if (inspectionPreview) {
+    actions.push(
+      markdownCommandLink(inspectionPreview.command, inspectionPreview.title, [target]),
+    );
+    enabledCommands.push(inspectionPreview.command);
+  }
+
+  if (asset?.uri) {
+    actions.push(markdownCommandLink(COMMANDS.previewAsset, "Preview Asset", [{ uri: asset.uri }]));
+    enabledCommands.push(COMMANDS.previewAsset);
+  }
+
+  if (identifierRange || signalEvent || asset) {
+    actions.push(markdownCommandLink(COMMANDS.showHoverReferences, "References", [target]));
+    enabledCommands.push(COMMANDS.showHoverReferences);
+  }
 
   if (identifierRange) {
     actions.push(
@@ -79,15 +107,55 @@ async function hoverActionsAtPosition({ document, getClient, isTuaDocument, posi
     enabledCommands.push(COMMANDS.showSignalGraph);
   }
 
-  if (asset?.uri) {
-    actions.push(markdownCommandLink(COMMANDS.previewAsset, "Preview Asset", [{ uri: asset.uri }]));
-    enabledCommands.push(COMMANDS.previewAsset);
-  }
-
   const markdown = new vscode.MarkdownString(actions.join(" · "), true);
   markdown.isTrusted = { enabledCommands };
 
-  return new vscode.Hover(markdown, identifierRange || stringLiteral.range);
+  return new vscode.Hover(
+    markdown,
+    identifierRange ||
+      stringLiteral?.range ||
+      lspRangeToVscode(inspectionPreview?.selectionRange),
+  );
+}
+
+async function inspectionPreviewAtPosition({ document, getClient, position }) {
+  const client = getClient();
+  if (!client) {
+    return undefined;
+  }
+
+  const params = {
+    textDocument: { uri: document.uri.toString() },
+    position: {
+      line: position.line,
+      character: position.character,
+    },
+  };
+
+  try {
+    let response = await client.sendRequest("tua/inspect", params);
+    if (isStaleDocumentResponse(response, document)) {
+      response = await client.sendRequest("tua/inspect", params);
+    }
+    if (isStaleDocumentResponse(response, document)) {
+      return undefined;
+    }
+
+    for (const item of Array.isArray(response?.items) ? response.items : []) {
+      const preview = INSPECTION_PREVIEWS[item?.kind];
+      if (preview && typeof item.name === "string") {
+        return {
+          command: preview.command,
+          title: preview.title(item),
+          selectionRange: item.selectionRange,
+        };
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 async function showProviderLocations({ providerCommand, target, title }) {

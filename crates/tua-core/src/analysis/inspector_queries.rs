@@ -16,25 +16,30 @@ impl AnalysisSnapshot {
         };
         let definition = position.and_then(|position| self.definition(path, position));
 
-        crate::sprite::inspections(
+        let mut items = crate::sprite::inspections(
             path,
             &parsed.sprite_declarations,
             &file.assets,
             self.effective_asset_roots(),
             self.asset_index.as_ref(),
-        )
-        .into_iter()
-        .filter(|item| {
-            let InspectorItem::SpriteSheet(sprite) = item;
+        );
+        items.extend(
+            crate::state_machine::inspections(parsed)
+                .into_iter()
+                .map(InspectorItem::StateMachine),
+        );
 
-            position.is_none_or(|position| {
-                contains_position(sprite.span, position)
-                    || definition.as_ref().is_some_and(|definition| {
-                        definition.path == path && definition.span == sprite.name_span
-                    })
+        items
+            .into_iter()
+            .filter(|item| {
+                position.is_none_or(|position| {
+                    contains_position(item.span(), position)
+                        || definition.as_ref().is_some_and(|definition| {
+                            definition.path == path && definition.span == item.selection_span()
+                        })
+                })
             })
-        })
-        .collect()
+            .collect()
     }
 }
 

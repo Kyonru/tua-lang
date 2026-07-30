@@ -139,7 +139,8 @@ overloads, optional parameters, typed varargs, multiple returns, callback aliase
 and parameter documentation.
 
 Static `stateMachine({...})` calls share one derived model across completion,
-hover, signature help, checking, and inlay hints. See
+hover, signature help, checking, inlay hints, inspection, and the experimental
+source-linked graph preview. See
 [State Machines](state-machines.md) for the generated event and callback
 surface.
 
@@ -381,6 +382,15 @@ validation for image paths, grid geometry, frame ranges, durations, and loop
 callbacks. Set `tua.preview.enabled` to use the experimental
 **Tua: Preview Sprite Animations** webview.
 
+Static state-machine configurations use the same preview gate for
+**Tua: Preview State Machine**. The graph highlights the declared initial
+state, expands multi-source and wildcard event routes, follows source edits,
+and navigates back to state and event declarations. Sprite sheets and state
+machines link directly to their previews from hover; recognized asset-path
+hovers likewise link to the native asset preview. Preview links trust only
+their registered Tua commands. The graph never runs the project or claims to
+show the machine's live runtime state.
+
 ### Project Explorers
 
 The extension renders project facts returned by compiler-backed requests. It
@@ -394,11 +404,12 @@ does not parse Tua or resolve modules and assets independently.
 | **Tua: Show ECS Explorer** | Components, schemas, systems, queries, access patterns, and non-diagnostic performance insights |
 | **Tua: Show Object Pool Explorer** | Pool declarations, inferred item types, lifecycle calls, and conservative unreleased-acquire insights |
 | **Tua: Preview Sprite Animations** | Resolved sprite frames, timing, loop behavior, and the synchronized source configuration |
+| **Tua: Preview State Machine** | Initial state, statically derived states, source-linked event routes, wildcard transitions, and cycles |
 
 Module, ECS, object-pool, and asset inventory requests run on the background
-lane so completion and document edits remain responsive. Signal and sprite
-inspection still use synchronized compiler snapshots rather than extension-side
-source scans.
+lane so completion and document edits remain responsive. Signal, sprite, and
+state-machine inspection still use synchronized compiler snapshots rather than
+extension-side source scans.
 
 See [Entity Component Systems](ecs.md) and
 [Object Pooling](object-pooling.md) for the corresponding runtime APIs.
@@ -506,7 +517,7 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | Method | Result |
 | --- | --- |
 | `tua/explainType` | Source-linked type inference explanation |
-| `tua/inspect` | Structured document inspector data, including sprite sheets |
+| `tua/inspect` | Structured document inspector data, including sprite sheets and static state machines |
 | `tua/assetInventory` | Project assets, metadata, references, and hints |
 | `tua/signalGraph` | Typed SignalBus project graph |
 | `tua/moduleGraph` | Module dependency and export graph |

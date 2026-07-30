@@ -8,6 +8,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- An experimental compiler-backed **Tua: Preview State Machine** graph with
+  initial-state emphasis, multi-source and wildcard routes, cycles, live edit
+  refresh, multiple-machine selection, distinct theme-aware pastel state
+  colors, obstacle-aware routing corridors, and source navigation without
+  executing project code. Hover actions now link directly to state-machine,
+  sprite-sheet, and recognized asset previews through explicitly trusted
+  commands.
 - Experimental, opt-in local Ollama inline completions with compiler-built FIM
   context, a Lua-first Tua/LOVE feature harness, inferred-local guidance,
   foreign-syntax rejection, stale-safe insertion-aware cloned-analysis

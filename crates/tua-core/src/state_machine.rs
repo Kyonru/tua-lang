@@ -7,6 +7,9 @@ use full_moon::node::Node;
 use full_moon::visitors::Visitor;
 
 use crate::ast_utils::{field_chain_before_first_call, token_text};
+use crate::inspector::{
+    StateMachineInspection, StateMachineStateInspection, StateMachineTransitionInspection,
+};
 use crate::types::{FunctionParameter, FunctionType, TableField, Type, TypeEnvironment};
 use crate::{ParsedSource, SourcePosition, SourceSpan, TypedFunction, TypedParameter};
 
@@ -127,6 +130,12 @@ pub(crate) const fn workflow_snippet() -> &'static str {
 
 pub(crate) fn runtime_source() -> &'static str {
     include_str!("../../../vendor/runtime/tuastatemachine.lua")
+}
+
+pub(crate) fn inspections(parsed: &ParsedSource) -> Vec<StateMachineInspection> {
+    let mut visitor = InspectionVisitor::default();
+    visitor.visit_ast(&parsed.ast);
+    visitor.inspections
 }
 
 pub(crate) fn machine_type_from_call(call: &FunctionCall) -> Option<Type> {
@@ -827,6 +836,144 @@ impl Visitor for DeclarationVisitor {
             self.declarations.push(declaration);
         }
     }
+}
+
+#[derive(Default)]
+struct InspectionVisitor {
+    inspections: Vec<StateMachineInspection>,
+}
+
+impl Visitor for InspectionVisitor {
+    fn visit_local_assignment(&mut self, local: &full_moon::ast::LocalAssignment) {
+        if let Some(inspection) = inspection_from_local_assignment(local) {
+            self.inspections.push(inspection);
+        }
+    }
+}
+
+fn inspection_from_local_assignment(
+    local: &full_moon::ast::LocalAssignment,
+) -> Option<StateMachineInspection> {
+    let names = local.names().iter().collect::<Vec<_>>();
+    let expressions = local.expressions().iter().collect::<Vec<_>>();
+
+    if names.len() != 1 || expressions.len() != 1 {
+        return None;
+    }
+
+    let name = names[0];
+    let call = state_machine_call(&expressions[0])?;
+    let declaration = declaration_from_call(call)?;
+    let Expression::TableConstructor(config) = first_parenthesized_argument(call)? else {
+        return None;
+    };
+    let span = node_span(local)?;
+    let name_span = node_span(name)?;
+    let initial_expression = named_field(config, "initial");
+    let initial = initial_expression
+        .and_then(string_expression)
+        .unwrap_or_else(|| "none".to_owned());
+    let mut state_spans = BTreeMap::new();
+
+    state_spans.insert(
+        initial.clone(),
+        initial_expression
+            .and_then(node_span)
+            .unwrap_or(declaration.config_span),
+    );
+
+    let mut transitions = Vec::new();
+    if let Some(event_list) = named_field(config, "events").and_then(table_expression) {
+        for event in table_values(event_list).filter_map(table_expression) {
+            let Some(name_expression) = named_field(event, "name") else {
+                continue;
+            };
+            let Some(event_name) = string_expression(name_expression) else {
+                continue;
+            };
+            let Some(to_expression) = named_field(event, "to") else {
+                continue;
+            };
+            let Some(to) = string_expression(to_expression) else {
+                continue;
+            };
+            let from_entries = named_field(event, "from")
+                .map(string_value_entries)
+                .unwrap_or_default();
+            let wildcard_from = from_entries.iter().any(|(state, _)| state == "*");
+            let from = from_entries
+                .iter()
+                .filter(|(state, _)| state != "*")
+                .map(|(state, _)| state.clone())
+                .collect::<Vec<_>>();
+            let event_span = node_span(name_expression)?;
+            let transition_span = node_span(event)?;
+
+            for (state, state_span) in from_entries {
+                if state != "*" {
+                    state_spans.entry(state).or_insert(state_span);
+                }
+            }
+            state_spans
+                .entry(to.clone())
+                .or_insert(node_span(to_expression)?);
+            transitions.push(StateMachineTransitionInspection {
+                event: event_name,
+                from,
+                wildcard_from,
+                to,
+                span: transition_span,
+                event_span,
+            });
+        }
+    }
+
+    let states = declaration
+        .spec
+        .states
+        .into_iter()
+        .map(|state| StateMachineStateInspection {
+            initial: state == initial,
+            span: state_spans
+                .get(&state)
+                .copied()
+                .unwrap_or(declaration.config_span),
+            name: state,
+        })
+        .collect();
+
+    Some(StateMachineInspection {
+        name: token_text(name),
+        initial,
+        states,
+        transitions,
+        span,
+        name_span,
+    })
+}
+
+fn state_machine_call(expression: &Expression) -> Option<&FunctionCall> {
+    match expression {
+        Expression::FunctionCall(call) => {
+            (field_chain_before_first_call(call)?.as_slice() == [CONSTRUCTOR_NAME]).then_some(call)
+        }
+        Expression::Parentheses { expression, .. }
+        | Expression::TypeAssertion { expression, .. } => state_machine_call(expression),
+        _ => None,
+    }
+}
+
+fn string_value_entries(expression: &Expression) -> Vec<(String, SourceSpan)> {
+    if let (Some(value), Some(span)) = (string_expression(expression), node_span(expression)) {
+        return vec![(value, span)];
+    }
+    let Some(table) = table_expression(expression) else {
+        return Vec::new();
+    };
+
+    table_values(table)
+        .filter_map(|value| Some((string_expression(value)?, node_span(value)?)))
+        .collect()
 }
 
 fn declaration_from_call(call: &FunctionCall) -> Option<StateMachineDeclaration> {

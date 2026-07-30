@@ -30,6 +30,8 @@ const COMMANDS = {
   selectInlayHintMode: "tua.inlayHints.selectMode",
   previewSprites: "tua.previewSprites",
   reloadSpritePreview: "tua.previewSprites.reload",
+  previewStateMachine: "tua.previewStateMachine",
+  reloadStateMachinePreview: "tua.previewStateMachine.reload",
   refreshAssets: "tua.assets.refresh",
   previewAsset: "tua.assets.preview",
   openAsset: "tua.assets.open",

@@ -33,6 +33,7 @@ const expected = [
   "tua.explainType",
   "tua.inlayHints.selectMode",
   "tua.previewSprites",
+  "tua.previewStateMachine",
   "tua.assets.refresh",
   "tua.assets.preview",
   "tua.assets.open",

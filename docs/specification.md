@@ -235,7 +235,8 @@ Stores are explicit runtime instances and have no built-in LOVE filesystem or
 serialization behavior.
 
 Static state-machine configuration derives exact state and event literal
-unions, event methods, callback names, and state/event argument completion.
+unions, event methods, callback names, state/event argument completion, and
+source-linked inspection data for editor graph previews.
 Computed configuration remains valid through the generic gradual
 `StateMachine` surface; analysis does not execute configuration code to infer
 dynamic names.

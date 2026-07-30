@@ -152,7 +152,8 @@ pub use ide_db::{
 pub use inlay_hint::{inlay_hints_parsed_source, inlay_hints_tua_source, InlayHint, InlayHintKind};
 pub use inspector::{
     InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
-    SpriteSheetInspection,
+    SpriteSheetInspection, StateMachineInspection, StateMachineStateInspection,
+    StateMachineTransitionInspection,
 };
 pub use lua::builtin_definition_document;
 pub use model_completion::{

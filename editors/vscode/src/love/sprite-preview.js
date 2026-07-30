@@ -1,8 +1,8 @@
 "use strict";
 
 const vscode = require("vscode");
-const { COMMANDS, STATUS_SELECTOR } = require("../constants");
-const { lspRangeToVscode } = require("../shared/locations");
+const { COMMANDS } = require("../constants");
+const { ensureExperimentalPreviewEnabled } = require("../shared/preview-gate");
 const { inspectSpriteSheets } = require("./sprite-preview/inspector");
 const { createSpritePreviewState } = require("./sprite-preview/state");
 const {
@@ -29,7 +29,6 @@ function registerSpritePreviewFeature({
     vscode.commands.registerCommand(COMMANDS.reloadSpritePreview, () =>
       reloadSpritePreview({ getClient, state }),
     ),
-    registerSpritePreviewHover({ getClient, isTuaDocument }),
     {
       dispose() {
         state.dispose();
@@ -38,48 +37,18 @@ function registerSpritePreviewFeature({
   );
 }
 
-function registerSpritePreviewHover({ getClient, isTuaDocument }) {
-  return vscode.languages.registerHoverProvider(STATUS_SELECTOR, {
-    async provideHover(document, position) {
-      if (!isTuaDocument(document)) {
-        return undefined;
-      }
-
-      try {
-        const inspection = await inspectSpriteSheets({
-          client: getClient(),
-          document,
-          position,
-        });
-        const sprite = inspection.items[0];
-
-        if (!sprite) {
-          return undefined;
-        }
-
-        const label = `Preview ${sprite.name}`;
-        const markdown = new vscode.MarkdownString(
-          `[${label}](command:${COMMANDS.previewSprites})`,
-          true,
-        );
-
-        markdown.isTrusted = { enabledCommands: [COMMANDS.previewSprites] };
-
-        return new vscode.Hover(markdown, lspRangeToVscode(sprite.selectionRange));
-      } catch {
-        return undefined;
-      }
-    },
-  });
-}
-
 async function previewSpriteAnimations({
   configurationTarget,
   getClient,
   isTuaDocument,
   state,
 }) {
-  if (!(await ensurePreviewEnabled(configurationTarget))) {
+  if (
+    !(await ensureExperimentalPreviewEnabled(
+      configurationTarget,
+      "Tua sprite animation previews",
+    ))
+  ) {
     return undefined;
   }
 
@@ -201,34 +170,6 @@ function createPreviewPanel(state, onReload) {
   });
 
   return panel;
-}
-
-async function ensurePreviewEnabled(configurationTarget) {
-  const config = vscode.workspace.getConfiguration("tua");
-
-  if (config.get("preview.enabled", false)) {
-    return true;
-  }
-
-  const choice = await vscode.window.showInformationMessage(
-    "Tua sprite animation previews are experimental. Enable preview features for this workspace?",
-    "Enable",
-    "Open Settings",
-  );
-
-  if (choice === "Enable") {
-    await config.update("preview.enabled", true, configurationTarget());
-    return true;
-  }
-
-  if (choice === "Open Settings") {
-    await vscode.commands.executeCommand(
-      "workbench.action.openSettings",
-      "tua.preview.enabled",
-    );
-  }
-
-  return false;
 }
 
 function activePreviewDocument(state, isTuaDocument) {

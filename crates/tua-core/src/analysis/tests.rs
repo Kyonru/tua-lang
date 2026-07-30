@@ -1955,7 +1955,9 @@ local selected = Player
 
     let snapshot = host.snapshot();
     let inspections = snapshot.inspect(&path, None);
-    let InspectorItem::SpriteSheet(sprite) = &inspections[0];
+    let InspectorItem::SpriteSheet(sprite) = &inspections[0] else {
+        panic!("expected sprite sheet inspection");
+    };
 
     assert_eq!(sprite.name, "Player");
     assert_eq!(
@@ -2009,7 +2011,9 @@ fn incomplete_sprite_configuration_is_shared_by_diagnostics_and_inspection() {
         .map(|diagnostic| diagnostic.message)
         .collect::<Vec<_>>();
     let inspections = snapshot.inspect(&path, None);
-    let InspectorItem::SpriteSheet(sprite) = &inspections[0];
+    let InspectorItem::SpriteSheet(sprite) = &inspections[0] else {
+        panic!("expected sprite sheet inspection");
+    };
     let inspection_messages = sprite
         .diagnostics
         .iter()
@@ -2026,6 +2030,64 @@ fn incomplete_sprite_configuration_is_shared_by_diagnostics_and_inspection() {
     assert!(inspection_messages
         .iter()
         .any(|message| message.contains("at least one animation")));
+}
+
+#[test]
+fn state_machine_inspection_reuses_static_states_transitions_and_source_spans() {
+    let path = PathBuf::from("src/flow.tua");
+    let source = r#"local flow = stateMachine({
+  initial = "idle",
+  events = {
+    { name = "start", from = "idle", to = "running" },
+    { name = "reset", from = { "running", "paused" }, to = "idle" },
+    { name = "stop", from = "*", to = "idle" },
+  },
+})
+local selected = flow
+"#;
+    let mut host = AnalysisHost::new();
+
+    host.set_file(&path, source);
+
+    let snapshot = host.snapshot();
+    let inspections = snapshot.inspect(&path, None);
+    let machine = inspections
+        .iter()
+        .find_map(|item| match item {
+            InspectorItem::StateMachine(machine) => Some(machine),
+            _ => None,
+        })
+        .expect("state machine inspection");
+
+    assert_eq!(machine.name, "flow");
+    assert_eq!(machine.initial, "idle");
+    assert_eq!(
+        machine
+            .states
+            .iter()
+            .map(|state| (state.name.as_str(), state.initial))
+            .collect::<Vec<_>>(),
+        vec![("idle", true), ("paused", false), ("running", false)]
+    );
+    assert_eq!(machine.transitions.len(), 3);
+    assert_eq!(machine.transitions[0].event, "start");
+    assert_eq!(machine.transitions[0].from, ["idle"]);
+    assert_eq!(machine.transitions[0].to, "running");
+    assert_eq!(machine.transitions[1].from, ["running", "paused"]);
+    assert!(machine.transitions[2].wildcard_from);
+    assert_eq!(machine.transitions[2].to, "idle");
+    assert!(machine.transitions[0].event_span.start.line > 1);
+
+    let usage_inspections = snapshot.inspect(
+        &path,
+        Some(SourcePosition {
+            line: 9,
+            column: 18,
+        }),
+    );
+    assert!(usage_inspections.iter().any(
+        |item| matches!(item, InspectorItem::StateMachine(machine) if machine.name == "flow")
+    ));
 }
 
 #[test]

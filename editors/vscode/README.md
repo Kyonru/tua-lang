@@ -109,9 +109,12 @@ From there you can:
   conditional breakpoints, and evaluation remain standard Lua debugging. Game
   workspaces can also opt a `lua-local` launch configuration into the same
   preparation pipeline with `tuaProject: true`.
-- Compiler-backed sprite sheet inspection and preview through
-  `spriteSheet({...})` metadata. Preview is currently gated by
-  `tua.preview.enabled`.
+- Compiler-backed sprite-sheet and state-machine previews. State graphs expose
+  initial states, event routes, wildcard transitions, cycles, and source
+  navigation without executing project code, with reserved routing corridors
+  that keep return paths and self-loops clear of state cards. Hover links open
+  sprite, state-machine, and recognized asset previews directly. Experimental
+  previews are gated by `tua.preview.enabled`.
 
 ### Game-Focused Project Tooling
 
@@ -126,6 +129,8 @@ From there you can:
   access insights.
 - Object pool explorer showing declarations plus visible `acquire`, `release`,
   `clear`, and `prewarm` lifecycle operations.
+- State-machine graph preview for static `stateMachine({...})` definitions,
+  with live edit refresh and source-linked states and event routes.
 
 ## Key Commands
 
@@ -155,6 +160,7 @@ From there you can:
 
 - `Tua: Refresh Asset Explorer`
 - `Tua: Preview Sprite Animations`
+- `Tua: Preview State Machine`
 - `Tua: Show Signal Graph`
 - `Tua: Show Module Dependency Graph`
 - `Tua: Show ECS Explorer`
@@ -187,8 +193,8 @@ Important VS Code settings:
 - `tua.trace.server`: LSP trace level (`off`, `messages`, `verbose`).
 - `tua.log.verbosity`: server log verbosity (`off`, `error`, `info`, `debug`,
   `trace`).
-- `tua.preview.enabled`: enables experimental editor previews such as sprite
-  animation preview.
+- `tua.preview.enabled`: enables experimental sprite-animation and
+  state-machine previews.
 - `tua.completion.sequenceRanking.enabled` and
   `tua.completion.multiToken.enabled`: experimental completion lanes controlled
   together by `Tua: Toggle Experimental Completions`.

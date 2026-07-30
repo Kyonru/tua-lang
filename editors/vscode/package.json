@@ -489,7 +489,7 @@
         "tua.preview.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable experimental preview features in editor integrations."
+          "description": "Enable experimental sprite-animation and state-machine previews in editor integrations."
         }
       }
     },
@@ -640,6 +640,12 @@
         "category": "Tua"
       },
       {
+        "command": "tua.previewStateMachine",
+        "title": "Preview State Machine",
+        "category": "Tua",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "tua.assets.refresh",
         "title": "Refresh Asset Explorer",
         "category": "Tua",
@@ -784,6 +790,11 @@
           "command": "tua.showSignalGraph",
           "when": "editorLangId == tua",
           "group": "navigation@50"
+        },
+        {
+          "command": "tua.previewStateMachine",
+          "when": "editorLangId == tua",
+          "group": "navigation@51"
         }
       ],
       "commandPalette": [
@@ -796,6 +807,10 @@
         },
         {
           "command": "tua.inlayHints.selectMode",
+          "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.previewStateMachine",
           "when": "editorLangId == tua"
         },
         {

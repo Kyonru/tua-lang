@@ -590,9 +590,10 @@ Supported editor settings:
   `/`. Static `import(...)` lowering uses the same separator when mapping a
   source path back to the emitted Lua `require("...")` module name.
 - `tua.preview.enabled`: enables explicit experimental editor previews such as
-  `Tua: Preview Sprite Animations`. Preview metadata comes from the local Tua
-  language server through `tua/inspect`; no project source or asset metadata is
-  sent off-device. It does not enable proposed VS Code APIs,
+  `Tua: Preview Sprite Animations` and `Tua: Preview State Machine`. Preview
+  metadata comes from the local Tua language server through `tua/inspect`; no
+  project source or asset metadata is sent off-device. It does not execute
+  state-machine code or enable proposed VS Code APIs,
   source-definition/multi-document-highlight/auto-insert behavior, or the
   external API or MCP processes.
 
