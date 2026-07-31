@@ -30,7 +30,7 @@ jobs:
         env:
           # The full representative profile is a trend artifact, and GitHub's
           # shared runners are substantially slower on the generated 5k file.
-          # PR freshness gating remains at 2.5s in benchmark-smoke.
+          # PR freshness gating remains at 3s in benchmark-smoke.
           TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 30000
       - name: Upload profile reports
         if: always()

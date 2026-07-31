@@ -213,7 +213,7 @@ finished before cancellation was necessary; it is not itself a failure.
 ### Smoke Versus Full Profile
 
 `make representative-benchmark-smoke` uses only `single-1000` and
-`project-100` with reduced repeats and a 2.5-second completion p95 budget. The
+`project-100` with reduced repeats and a 3-second completion p95 budget. The
 extra shared-runner allowance keeps this a CI reliability gate designed to
 catch stalls, stale results, and invalid responses without treating its
 two-sample p95 as a microbenchmark.

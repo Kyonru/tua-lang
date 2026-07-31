@@ -84,6 +84,10 @@ jobs:
           unzip -q "${debugger_archive}" -d "${debugger_directory}"
           echo "TUA_DEBUGGER_EXTENSION_PATH=${debugger_directory}/extension" >> "${GITHUB_ENV}"
       - name: Test workspace
+        env:
+          # Match the explicit analysis-thread stack used by the CLI and LSP.
+          # Windows test threads otherwise default too low for debug AST walks.
+          RUST_MIN_STACK: "8388608"
         run: cargo test --workspace
       - name: Build love-minimal
         working-directory: examples/love-minimal
