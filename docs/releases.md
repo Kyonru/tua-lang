@@ -14,8 +14,8 @@ metadata is checked by `make version-drift-check`.
 - [GitHub Releases](https://github.com/Kyonru/tua-lang/releases) ship the
   standalone `tua` archives, platform VSIX packages, per-file checksums, and
   the combined `SHA256SUMS` manifest.
-- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua)
-  and [Open VSX](https://open-vsx.org/extension/tua-lang/tua) publish the same
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SolenodonteLabs.tua)
+  and [Open VSX](https://open-vsx.org/extension/SolenodonteLabs/tua) publish the same
   platform VSIX packages after the matching GitHub release is published.
 - [GitHub Pages](https://kyonru.github.io/tua-lang/) serves the public
   documentation site from the repository's `main` branch.
@@ -56,7 +56,7 @@ sha256sum --check SHA256SUMS
 On macOS:
 
 ```bash
-shasum -a 256 tua-0.2.5-darwin-arm64.vsix
+shasum -a 256 tua-0.2.6-darwin-arm64.vsix
 ```
 
 Compare the printed value with the matching line in `SHA256SUMS`. On Windows,

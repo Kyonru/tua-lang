@@ -5,7 +5,10 @@ use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tua_core::{CompletionAdaptiveStats, Diagnostic, DiagnosticSeverity, Fixture, SourcePosition};
+use tua_core::{
+    file_uri_from_path, CompletionAdaptiveStats, Diagnostic, DiagnosticSeverity, Fixture,
+    SourcePosition,
+};
 
 mod assets;
 mod code_actions;
@@ -1864,5 +1867,5 @@ impl Drop for TempProject {
 }
 
 fn path_uri(path: &Path) -> String {
-    format!("file://{}", path.display())
+    file_uri_from_path(path)
 }

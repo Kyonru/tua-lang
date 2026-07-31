@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-07-30
+
+### Changed
+
+- The VS Code extension is now published as `SolenodonteLabs.tua` on Visual
+  Studio Marketplace and under the `SolenodonteLabs` Open VSX namespace.
+
 ## [0.2.5] - 2026-07-30
 
 ### Fixed
@@ -265,7 +272,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...v0.2.5
 [0.2.0]: https://github.com/Kyonru/tua-lang/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kyonru/tua-lang/releases/tag/v0.1.0

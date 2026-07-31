@@ -324,7 +324,7 @@ extension-install: extension-package ## Install the built VS Code extension with
 
 .PHONY: extension-uninstall
 extension-uninstall: ## Uninstall the VS Code extension with the code CLI.
-	$(CODE) --uninstall-extension tua-lang.tua
+	$(CODE) --uninstall-extension SolenodonteLabs.tua
 
 .PHONY: extension-open-example
 extension-open-example: ## Open the full LOVE example in VS Code for extension smoke testing.

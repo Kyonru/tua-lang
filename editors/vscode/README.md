@@ -27,8 +27,8 @@ Code without changing the normal Lua and LOVE workflow.
 ## Quick Start
 
 1. Install the extension from the
-   [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua),
-   [Open VSX](https://open-vsx.org/extension/tua-lang/tua), or a
+   [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SolenodonteLabs.tua),
+   [Open VSX](https://open-vsx.org/extension/SolenodonteLabs/tua), or a
    [GitHub release VSIX](https://github.com/Kyonru/tua-lang/releases).
 2. Run `Tua: Initialize Tua Project`.
 3. Open `src/main.tua`.

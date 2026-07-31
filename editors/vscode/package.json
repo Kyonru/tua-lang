@@ -1,9 +1,9 @@
 {
   "name": "tua",
-  "displayName": "tua",
+  "displayName": "Tua",
   "description": "Language support for tua, a typed Lua superset for LuaJIT and LOVE projects.",
-  "version": "0.2.5",
-  "publisher": "tua-lang",
+  "version": "0.2.6",
+  "publisher": "SolenodonteLabs",
   "license": "MIT",
   "repository": {
     "type": "git",

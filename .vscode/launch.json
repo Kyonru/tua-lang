@@ -9,7 +9,7 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -29,7 +29,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -48,7 +48,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/features"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -63,7 +63,7 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -82,7 +82,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -101,7 +101,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],
@@ -115,10 +115,10 @@
       "runtimeExecutable": "${execPath}",
       "args": [
         "--disable-extension",
-        "tua-lang.tua",
+        "SolenodonteLabs.tua",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "--log",
-        "tua-lang.tua:debug",
+        "SolenodonteLabs.tua:debug",
         "${workspaceFolder}/examples/love-full"
       ],
       "outFiles": ["${workspaceFolder}/editors/vscode/src/**/*.js"],

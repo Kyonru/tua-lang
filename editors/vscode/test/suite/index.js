@@ -27,7 +27,7 @@ async function run() {
     `unsupported TUA_TEST_SUITE value: ${selectedSuite}`,
   );
 
-  const extension = vscode.extensions.getExtension("tua-lang.tua");
+  const extension = vscode.extensions.getExtension("SolenodonteLabs.tua");
   assert(extension, "the Tua extension should be available in the extension host");
 
   await extension.activate();

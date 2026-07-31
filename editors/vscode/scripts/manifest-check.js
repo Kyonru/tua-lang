@@ -7,6 +7,12 @@ const packagePath = path.resolve(__dirname, "..", "package.json");
 const extensionRoot = path.dirname(packagePath);
 const manifest = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 const commands = new Set((manifest.contributes?.commands || []).map((command) => command.command));
+
+if (manifest.publisher !== "SolenodonteLabs") {
+  console.error("Extension publisher should be SolenodonteLabs.");
+  process.exit(1);
+}
+
 const expected = [
   "tua.initProject",
   "tua.restartServer",

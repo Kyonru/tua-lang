@@ -13,8 +13,8 @@ icon: lucide/package
 
 Install Tua from one of these channels:
 
-- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=tua-lang.tua)
-- [Open VSX](https://open-vsx.org/extension/tua-lang/tua)
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=SolenodonteLabs.tua)
+- [Open VSX](https://open-vsx.org/extension/SolenodonteLabs/tua)
 - [GitHub release VSIX packages](https://github.com/Kyonru/tua-lang/releases)
 
 The extension requires VS Code 1.94 or newer. Each published platform package
