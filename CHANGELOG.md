@@ -6,6 +6,17 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- `make release-version VERSION=<version>` now synchronizes release metadata,
+  runs CI checks, creates the release commit, and adds an annotated local tag
+  without pushing it.
+
+### Fixed
+
+- Repeated version synchronization now preserves Cargo lockfile package
+  boundaries before the release helper performs its verification pass.
+
 ## [0.2.8] - 2026-07-31
 
 ### Changed

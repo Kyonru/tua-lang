@@ -67,6 +67,7 @@ version = "0.2.8"
   assert.match(updatedManifest, /version = "0\.2\.9"\r\n$/);
   assert.match(updatedLockfile, /name = "dependency"\nversion = "0\.2\.8"/);
   assert.strictEqual((updatedLockfile.match(/version = "0\.2\.9"/g) || []).length, 3);
+  assert.strictEqual(synchronizedCargoLock(updatedLockfile, "0.2.9"), updatedLockfile);
 });
 
 test("version updates reject invalid versions and incomplete Cargo locks", () => {

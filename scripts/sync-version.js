@@ -73,12 +73,12 @@ function synchronizedCargoLock(contents, version) {
       if (found.has(name)) {
         throw new Error(`Cargo.lock contains duplicate workspace package '${name}'`);
       }
-      if (!/^version = "[^"]+"\s*$/m.test(block)) {
+      if (!/^version = "[^"]+"[ \t]*$/m.test(block)) {
         throw new Error(`Cargo.lock package '${name}' is missing its version`);
       }
 
       found.add(name);
-      return block.replace(/^version = "[^"]+"\s*$/m, `version = "${version}"`);
+      return block.replace(/^version = "[^"]+"[ \t]*$/m, `version = "${version}"`);
     })
     .join("");
   const missing = [...workspacePackages].filter((name) => !found.has(name));

@@ -81,12 +81,16 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
 
 ## Release Process
 
-1. Update `[Unreleased]` and add a dated version section in `CHANGELOG.md` with
-   compatibility and migration notes.
-2. Run `make set-version VERSION=<version>` to update the Rust workspace,
-   Cargo lockfile, and VS Code package metadata together.
-3. Run `make ci-check` and the required extension-host suite.
-4. Tag the exact commit as `v<version>` and push the tag.
+1. Add release notes under `[Unreleased]`, including compatibility and
+   migration notes when needed, commit them, and leave the worktree clean.
+2. Run the required extension-host suite.
+3. Run `make release-version VERSION=<version>`. The guarded script updates
+   Rust, VS Code, lockfile, changelog, and release-documentation versions; runs
+   `make ci-check`; creates a `release: v<version>` commit; and adds an
+   annotated `v<version>` tag. It refuses empty release notes, dirty worktrees,
+   non-increasing versions, and existing tags.
+4. Inspect the commit and tag, then push both with
+   `git push origin HEAD v<version>`. The script never pushes automatically.
 5. The release workflow validates the tag and changelog, builds all platform
    pairs, verifies checksums, and publishes the GitHub release.
 6. After the release workflow completes successfully, the extension publish

@@ -67,13 +67,18 @@ sync-version: ## Synchronize package versions from the Rust workspace version.
 set-version: ## Set every package version; usage: make set-version VERSION=0.2.9.
 	node scripts/sync-version.js --set "$(VERSION)"
 
+.PHONY: release-version
+release-version: ## Validate, commit, and create the local vVERSION tag.
+	@test -n "$(VERSION)" || { echo "error: set VERSION, for example make release-version VERSION=0.2.9"; exit 1; }
+	node scripts/release-version.js "$(VERSION)"
+
 .PHONY: version-drift-check
 version-drift-check: ## Verify every package uses the Rust workspace version.
 	node scripts/sync-version.js --check
 
 .PHONY: release-tool-test
 release-tool-test: ## Test deterministic release archives and changelog extraction.
-	node --test scripts/sync-version.test.js
+	node --test scripts/sync-version.test.js scripts/release-version.test.js
 	PYTHONPATH=scripts python3 -m unittest scripts/package_release_test.py
 
 .PHONY: config-schema-drift-check
