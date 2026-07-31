@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-30
+
 ### Added
 
 - An experimental compiler-backed **Tua: Preview State Machine** graph with
@@ -245,5 +247,6 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Kyonru/tua-lang/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kyonru/tua-lang/releases/tag/v0.1.0
