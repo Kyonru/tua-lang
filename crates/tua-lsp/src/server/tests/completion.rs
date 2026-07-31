@@ -902,7 +902,7 @@ return {
     temp.write("src/player.tua", player);
 
     let main_uri = temp.uri_for("src/main.tua");
-    let module_path = temp.path.join("src/player.tua");
+    let module_path = tua_core::normalize_path(temp.path.join("src/player.tua"));
     let mut server = TestServer::new();
 
     server.send(initialize_with_root_and_completion_label_details(
@@ -1187,8 +1187,7 @@ return {
     );
     assert_eq!(
         response["result"]["data"]["modulePath"],
-        temp.path
-            .join("src/audio.lua")
+        tua_core::normalize_path(temp.path.join("src/audio.lua"))
             .to_string_lossy()
             .to_string()
     );

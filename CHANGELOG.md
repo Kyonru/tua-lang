@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-31
+
+### Fixed
+
+- LSP test fixtures now normalize module paths and derive declaration paths
+  from file URIs, keeping completion and hover assertions portable on Windows.
+
 ## [0.2.6] - 2026-07-30
 
 ### Changed
@@ -272,7 +279,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...v0.2.5
 [0.2.0]: https://github.com/Kyonru/tua-lang/compare/v0.1.0...v0.2.0

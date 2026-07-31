@@ -127,7 +127,10 @@ damage({ hp = 10 })
     assert!(contents.starts_with("```tua\nfunction damage(target: Player): Player\n```"));
     assert!(contents.contains("Applies damage.\naffected player\nupdated player"));
     assert!(contents.contains("- kind: function"));
-    assert!(contents.contains("- declared: /tmp/documented-hover.tua:"));
+    assert!(contents.contains(&format!(
+        "- declared: {}:",
+        tua_core::path_from_file_uri(uri).display()
+    )));
 }
 #[test]
 fn hover_unknown_symbol_returns_null_result() {
