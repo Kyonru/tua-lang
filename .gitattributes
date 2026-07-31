@@ -2,3 +2,6 @@
 # Keep the intended repository override here so it starts working once accepted.
 *.tua linguist-language=Tua
 
+# This template is embedded verbatim and must match the LF-only Rust constant
+# on every checkout, including Windows runners with automatic CRLF conversion.
+config/templates/*.toml text eol=lf

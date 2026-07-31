@@ -6,6 +6,24 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-07-30
+
+### Fixed
+
+- Windows release tests now use the same analysis-thread stack size as the Tua
+  CLI and language server, preventing debug AST walks from overflowing the
+  smaller default Windows test-thread stack.
+- File URI conversion now preserves valid separators and drive prefixes on
+  Windows, handles UNC paths, and keeps virtual `tua:/` document identities
+  stable across platforms.
+- The embedded default `tua.toml` template now retains LF line endings on
+  Windows checkouts, keeping generated configuration and schema drift checks
+  deterministic.
+- The mixed Tua/Lua LOVE showcase is included in release checkouts so its
+  compiler and runtime integration test can run on every platform.
+- The two-sample representative benchmark smoke gate now allows shared-runner
+  variance without relaxing stale-result or semantic-validation failures.
+
 ## [0.2.0] - 2026-07-30
 
 ### Added
@@ -247,6 +265,7 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...v0.2.5
 [0.2.0]: https://github.com/Kyonru/tua-lang/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kyonru/tua-lang/releases/tag/v0.1.0

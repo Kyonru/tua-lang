@@ -74,6 +74,10 @@ fn uri_conversion_preserves_spaces_nested_paths_and_tua_uris() {
         file_uri_from_path("tua:/builtins/Image.setFilter.tua"),
         "tua:/builtins/Image.setFilter.tua"
     );
+    assert_eq!(
+        file_uri_from_path(r"C:\Users\Tua Game\src\main.tua"),
+        "file:///C:/Users/Tua%20Game/src/main.tua"
+    );
 }
 
 #[test]
@@ -85,6 +89,36 @@ fn normalizes_cross_platform_separators_and_dot_segments() {
     assert_eq!(
         path_from_file_uri("file:///tmp/tua%20game/src/../src/main.tua"),
         PathBuf::from("/tmp/tua game/src/main.tua")
+    );
+}
+
+#[test]
+fn normalizes_windows_file_uri_path_text() {
+    assert_eq!(
+        windows_path_text_from_file_uri("/C:/Tua%20Game/main.tua", "/C:/Tua Game/main.tua".into()),
+        "C:/Tua Game/main.tua"
+    );
+    assert_eq!(
+        windows_path_text_from_file_uri("server/share/main.tua", "server/share/main.tua".into()),
+        "//server/share/main.tua"
+    );
+    assert_eq!(
+        windows_path_text_from_file_uri("/tmp/main.tua", "/tmp/main.tua".into()),
+        "/tmp/main.tua"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn uri_conversion_round_trips_windows_drive_and_unc_paths() {
+    let drive_path = PathBuf::from(r"C:\Users\Tua Game\src\main.tua");
+    let drive_uri = file_uri_from_path(&drive_path);
+
+    assert_eq!(drive_uri, "file:///C:/Users/Tua%20Game/src/main.tua");
+    assert_eq!(path_from_file_uri(&drive_uri), normalize_path(&drive_path));
+    assert_eq!(
+        path_from_file_uri("file://server/share/Tua%20Game/main.tua"),
+        normalize_path(r"\\server\share\Tua Game\main.tua")
     );
 }
 

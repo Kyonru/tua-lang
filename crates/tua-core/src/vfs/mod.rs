@@ -333,13 +333,20 @@ pub fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
 }
 
 pub fn file_uri_from_path(path: impl AsRef<Path>) -> String {
-    let path = normalize_path(path);
+    let raw = path.as_ref().to_string_lossy().replace('\\', "/");
 
-    if let Some(uri) = path.to_str().filter(|path| path.starts_with("tua:/")) {
-        return uri.to_owned();
+    if raw.starts_with("tua:/") {
+        return raw;
     }
 
-    format!("file://{}", percent_encode_path(&path))
+    let path = normalize_path(path);
+    let encoded = percent_encode_path(&path);
+
+    if encoded.starts_with("//") {
+        format!("file:{encoded}")
+    } else {
+        format!("file://{encoded}")
+    }
 }
 
 pub fn path_from_file_uri(uri: &str) -> PathBuf {
@@ -347,8 +354,12 @@ pub fn path_from_file_uri(uri: &str) -> PathBuf {
         return normalize_path(uri);
     };
     let raw_path = raw_path.strip_prefix("localhost").unwrap_or(raw_path);
+    let decoded = percent_decode(raw_path);
 
-    normalize_path(percent_decode(raw_path))
+    #[cfg(windows)]
+    let decoded = windows_path_text_from_file_uri(raw_path, decoded);
+
+    normalize_path(decoded)
 }
 
 pub fn module_name_for_path(
@@ -445,11 +456,17 @@ fn normalized_path_text(path: &Path) -> String {
 }
 
 fn percent_encode_path(path: &Path) -> String {
+    let mut path = path.to_string_lossy().replace('\\', "/");
+
+    if has_windows_drive_prefix(&path) && !path.starts_with('/') {
+        path.insert(0, '/');
+    }
+
     let mut encoded = String::new();
 
-    for byte in path.to_string_lossy().bytes() {
+    for byte in path.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' | b':' => {
                 encoded.push(byte as char)
             }
             _ => encoded.push_str(&format!("%{byte:02X}")),
@@ -457,6 +474,27 @@ fn percent_encode_path(path: &Path) -> String {
     }
 
     encoded
+}
+
+fn has_windows_drive_prefix(path: &str) -> bool {
+    let bytes = path.as_bytes();
+
+    bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
+}
+
+#[cfg(any(windows, test))]
+fn windows_path_text_from_file_uri(raw_path: &str, decoded: String) -> String {
+    if decoded
+        .strip_prefix('/')
+        .is_some_and(has_windows_drive_prefix)
+    {
+        return decoded[1..].to_owned();
+    }
+    if has_windows_drive_prefix(&decoded) || raw_path.starts_with('/') {
+        return decoded;
+    }
+
+    format!("//{decoded}")
 }
 
 fn percent_decode(input: &str) -> String {
