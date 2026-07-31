@@ -1,9 +1,11 @@
 name: VS Code extension publish
 
 on:
-  release:
+  workflow_run:
+    workflows:
+      - Release
     types:
-      - published
+      - completed
   workflow_dispatch:
     inputs:
       tag:
@@ -14,12 +16,13 @@ on:
 jobs:
   publish-vs-marketplace:
     name: Publish to Visual Studio Marketplace
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
       VSCE_PAT: ${{ secrets.VS_MARKETPLACE_TOKEN }}
     steps:
       - name: Validate publish inputs
@@ -54,13 +57,14 @@ jobs:
 
   publish-open-vsx:
     name: Publish to Open VSX
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
       GH_TOKEN: ${{ github.token }}
       OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
     steps:
       - name: Validate publish inputs
         shell: bash

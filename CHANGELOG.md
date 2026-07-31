@@ -6,6 +6,20 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-31
+
+### Changed
+
+- Extension registry publishing now starts only after the GitHub release
+  workflow completes successfully, while retaining manual tag-based recovery.
+- Version bumps now use `make set-version VERSION=<version>` to update the Rust
+  workspace, Cargo lockfile, and VS Code package metadata together.
+
+### Fixed
+
+- Debug-server Make targets now select the platform executable suffix, so LSP
+  smoke, profiling, ranking, and debugger commands invoke `tua.exe` on Windows.
+
 ## [0.2.7] - 2026-07-31
 
 ### Fixed
@@ -279,7 +293,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/Kyonru/tua-lang/compare/v0.2.0...v0.2.5

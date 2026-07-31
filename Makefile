@@ -17,6 +17,7 @@ VSIX := $(VSCODE_DIR)/tua-$(PROJECT_VERSION).vsix
 EXAMPLE ?= examples/love-minimal
 UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
+DEBUG_TUA := target/debug/tua$(EXE_SUFFIX)
 RELEASE_TUA := target/release/tua$(EXE_SUFFIX)
 VSCODE_TUA := $(VSCODE_DIR)/bin/tua$(EXE_SUFFIX)
 LOGO_SVG := logo.svg
@@ -61,6 +62,10 @@ generate-llms: ## Regenerate the root llms.txt language contract.
 .PHONY: sync-version
 sync-version: ## Synchronize package versions from the Rust workspace version.
 	node scripts/sync-version.js
+
+.PHONY: set-version
+set-version: ## Set every package version; usage: make set-version VERSION=0.2.9.
+	node scripts/sync-version.js --set "$(VERSION)"
 
 .PHONY: version-drift-check
 version-drift-check: ## Verify every package uses the Rust workspace version.
@@ -139,12 +144,12 @@ lsp: ## Run the raw stdio LSP server; it waits silently for an editor/client.
 .PHONY: lsp-smoke
 lsp-smoke: ## Initialize and shutdown the LSP server to prove it responds.
 	$(CARGO) build --package tua-cli
-	node editors/vscode/scripts/lsp-smoke.js target/debug/tua
+	node editors/vscode/scripts/lsp-smoke.js $(DEBUG_TUA)
 
 .PHONY: lsp-features-smoke
 lsp-features-smoke: ## Exercise LSP requests against examples/features with the debug server.
 	$(CARGO) build --package tua-cli
-	node editors/vscode/scripts/lsp-features-smoke.js target/debug/tua examples/features
+	node editors/vscode/scripts/lsp-features-smoke.js $(DEBUG_TUA) examples/features
 
 .PHONY: editor-regression-smoke
 editor-regression-smoke: ## Gate typing freshness and closed/unopened module navigation through the real LSP server.
@@ -154,17 +159,17 @@ editor-regression-smoke: ## Gate typing freshness and closed/unopened module nav
 .PHONY: profile-lsp
 profile-lsp: ## Profile LSP request latency against small/medium/large benchmark fixtures.
 	$(CARGO) build --package tua-cli
-	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-3} node editors/vscode/scripts/lsp-profile.js target/debug/tua benchmarks/lsp/small benchmarks/lsp/medium benchmarks/lsp/large
+	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-3} node editors/vscode/scripts/lsp-profile.js $(DEBUG_TUA) benchmarks/lsp/small benchmarks/lsp/medium benchmarks/lsp/large
 
 .PHONY: profile-completion
 profile-completion: ## Profile completion latency, ranking overhead, and completion cache behavior.
 	$(CARGO) build --package tua-cli
-	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-20} node editors/vscode/scripts/lsp-completion-profile.js target/debug/tua benchmarks/lsp/medium
+	TUA_PROFILE_REPEAT=$${TUA_PROFILE_REPEAT:-20} node editors/vscode/scripts/lsp-completion-profile.js $(DEBUG_TUA) benchmarks/lsp/medium
 
 .PHONY: completion-ranking-smoke
 completion-ranking-smoke: ## Check fixture-driven completion ranking order.
 	$(CARGO) build --package tua-cli
-	node editors/vscode/scripts/lsp-completion-ranking-smoke.js target/debug/tua benchmarks/lsp/medium
+	node editors/vscode/scripts/lsp-completion-ranking-smoke.js $(DEBUG_TUA) benchmarks/lsp/medium
 
 .PHONY: ollama-completion-smoke
 ollama-completion-smoke: ## Exercise an installed local Ollama model; set TUA_OLLAMA_MODEL.
@@ -269,7 +274,7 @@ love-runtime-test: ## Build and run LOVE example smoke tests with an installed L
 .PHONY: love-debugger-e2e
 love-debugger-e2e: extension-deps ## Bind and hit a real source-mapped .tua breakpoint in LOVE.
 	$(CARGO) build --package tua-cli
-	TUA_BIN="$(CURDIR)/target/debug/tua" TUA_LOVE_COMMAND="$(LOVE)" $(NPM) --prefix $(VSCODE_DIR) run test:love-debugger
+	TUA_BIN="$(CURDIR)/$(DEBUG_TUA)" TUA_LOVE_COMMAND="$(LOVE)" $(NPM) --prefix $(VSCODE_DIR) run test:love-debugger
 
 .PHONY: run-love-minimal
 run-love-minimal: build-love-minimal ## Build and run the minimal LOVE example.

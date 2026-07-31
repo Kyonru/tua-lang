@@ -56,7 +56,7 @@ sha256sum --check SHA256SUMS
 On macOS:
 
 ```bash
-shasum -a 256 tua-0.2.7-darwin-arm64.vsix
+shasum -a 256 tua-0.2.8-darwin-arm64.vsix
 ```
 
 Compare the printed value with the matching line in `SHA256SUMS`. On Windows,
@@ -83,16 +83,20 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
 
 1. Update `[Unreleased]` and add a dated version section in `CHANGELOG.md` with
    compatibility and migration notes.
-2. Change the root workspace version and run `make sync-version`.
+2. Run `make set-version VERSION=<version>` to update the Rust workspace,
+   Cargo lockfile, and VS Code package metadata together.
 3. Run `make ci-check` and the required extension-host suite.
 4. Tag the exact commit as `v<version>` and push the tag.
 5. The release workflow validates the tag and changelog, builds all platform
    pairs, verifies checksums, and publishes the GitHub release.
-6. The extension publish workflow downloads the published release VSIX assets
-   and pushes them to Visual Studio Marketplace and Open VSX.
+6. After the release workflow completes successfully, the extension publish
+   workflow downloads its published VSIX assets and pushes them to Visual
+   Studio Marketplace and Open VSX. Failed releases never start publishing.
 
-Manual workflow dispatch is accepted only when it runs from the exact matching
-tag. This prevents an untagged branch from publishing versioned artifacts.
+Manual dispatch of the release workflow is accepted only when it runs from the
+exact matching tag. The extension workflow can also be dispatched manually with
+an existing release tag. This prevents an untagged build from publishing
+versioned artifacts while preserving a recovery path for extension registries.
 
 See [CHANGELOG.md](https://github.com/Kyonru/tua-lang/blob/main/CHANGELOG.md)
 for release-specific additions and migration notes.
