@@ -1,0 +1,215 @@
+-- Tua keeps the game loop recognizably Lua while giving each gameplay system
+-- a small typed boundary. No framework setup or generated source is checked in.
+local patterns = require("patterns")
+local feel = require("lib.feel")
+
+type Position = {
+  x: number,
+  y: number,
+}
+
+type Velocity = {
+  x: number,
+  y: number,
+}
+
+type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  active: boolean,
+}
+
+type GameState = {
+  score: number,
+  shots: number,
+  wave: number,
+}
+
+-- Built-in ECS keeps the player data-oriented and gives the movement callback
+-- the exact component shapes requested by the system.
+local PositionComponent = ecs.component("Position", { x = "number", y = "number" })
+local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
+local world = ecs.world()
+local player = world:create()
+
+world:add(player, PositionComponent, { x = 360, y = 390 })
+world:add(player, VelocityComponent, { x = 0, y = 0 })
+
+local movement = ecs.system(
+  world,
+  { PositionComponent, VelocityComponent },
+  function(_, position: Position, velocity: Velocity, dt: number)
+    position.x = math.max(18, math.min(702, position.x + velocity.x * dt))
+    position.y = math.max(18, math.min(462, position.y + velocity.y * dt))
+  end
+)
+
+-- Object pooling makes projectile reuse explicit without losing Bullet types.
+local bullets = objectPool({
+  create = function(): Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0, active = false }
+  end,
+  reset = function(bullet: Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.dx = 0
+    bullet.dy = 0
+    bullet.active = false
+  end,
+  initial = 48,
+})
+local activeBullets: Bullet[] = {}
+
+-- The store owns observable run data instead of spreading globals through the
+-- callbacks. Its shape is inferred from this table.
+local game = store({
+  score = 0,
+  shots = 0,
+  wave = 1,
+})
+
+-- State and event strings become checked unions and generated methods.
+local flow = stateMachine({
+  initial = "playing",
+  events = {
+    { name = "pause", from = "playing", to = "paused" },
+    { name = "resume", from = "paused", to = "playing" },
+    { name = "finish", from = { "playing", "paused" }, to = "gameover" },
+    { name = "restart", from = "gameover", to = "playing" },
+  },
+})
+
+-- Input names and directional pairs are derived from this Baton configuration.
+local controls = input({
+  controls = {
+    left = { "key:left", "key:a" },
+    right = { "key:right", "key:d" },
+    up = { "key:up", "key:w" },
+    down = { "key:down", "key:s" },
+    fire = { "key:space", "key:z" },
+    pause = { "key:escape", "key:p" },
+  },
+  pairs = {
+    move = { "left", "right", "up", "down" },
+  },
+})
+
+-- This call is checked through a declaration-only library. The matching
+-- runtime file remains ordinary Lua and is copied unchanged.
+feel.define("player.fire", { duration = 0.14, strength = 1 })
+
+local function spawnRing()
+  local position = world:get(player, PositionComponent)
+  local wave = patterns.ring(8, 110)
+
+  for _, shot in ipairs(wave) do
+    local bullet = bullets:acquire()
+    bullet.x = position.x
+    bullet.y = position.y - 14
+    bullet.dx = shot.dx
+    bullet.dy = shot.dy
+    bullet.active = true
+    activeBullets[#activeBullets + 1] = bullet
+  end
+
+  game:update(function(state: GameState)
+    state.shots += #wave
+    state.score += 10
+  end)
+  feel.play("player.fire")
+end
+
+local function updateBullets(dt: number)
+  for index = #activeBullets, 1, -1 do
+    local bullet = activeBullets[index]
+    bullet.x += bullet.dx * dt
+    bullet.y += bullet.dy * dt
+
+    if bullet.x < -20 or bullet.x > 740 or bullet.y < -20 or bullet.y > 500 then
+      bullets:release(bullet)
+      table.remove(activeBullets, index)
+    end
+  end
+end
+
+function love.load()
+  spawnRing()
+
+  -- CI opens a real LOVE process, exercises every mixed-source dependency,
+  -- and exits instead of relying on a rendering screenshot.
+  if os.getenv("TUA_LOVE_TUA_SMOKE") == "1" then
+    controls:update()
+    movement:update(1 / 60)
+    updateBullets(1 / 60)
+    feel.update(1 / 60)
+
+    if game:get().shots ~= 8 or bullets:activeCount() ~= 8 then
+      error("Tua LOVE showcase did not initialize")
+    end
+
+    love.event.quit(0)
+  end
+end
+
+function love.update(dt: number)
+  controls:update()
+
+  if controls:pressed("pause") then
+    if flow:is("playing") then
+      flow:pause()
+    elseif flow:is("paused") then
+      flow:resume()
+    end
+  end
+
+  if not flow:is("playing") then
+    feel.update(dt)
+    return
+  end
+
+  local moveX, moveY = controls:get("move")
+  local velocity = world:get(player, VelocityComponent)
+  velocity.x = moveX * 220
+  velocity.y = moveY * 220
+  movement:update(dt)
+
+  if controls:pressed("fire") then
+    spawnRing()
+  end
+
+  updateBullets(dt)
+  feel.update(dt)
+end
+
+function love.draw()
+  local flash = feel.amount("player.fire")
+  love.graphics.clear(0.035 + flash * 0.08, 0.045, 0.075, 1)
+
+  for _, bullet in ipairs(activeBullets) do
+    love.graphics.setColor(0.98, 0.66, 0.38, 1)
+    love.graphics.circle("fill", bullet.x, bullet.y, 3)
+  end
+
+  local position = world:get(player, PositionComponent)
+  love.graphics.setColor(0.42, 0.86, 0.78, 1)
+  love.graphics.polygon(
+    "fill",
+    position.x,
+    position.y - 12,
+    position.x - 9,
+    position.y + 10,
+    position.x + 9,
+    position.y + 10
+  )
+
+  local state = game:get()
+  love.graphics.setColor(0.92, 0.94, 1, 1)
+  love.graphics.print("score " .. state.score .. "   shots " .. state.shots, 16, 14)
+  love.graphics.print("move: arrows/WASD   fire: space/Z   pause: escape/P", 16, 446)
+
+  if flow:is("paused") then
+    love.graphics.printf("PAUSED", 0, 220, 720, "center")
+  end
+end

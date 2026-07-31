@@ -862,7 +862,7 @@ fn inspection_from_local_assignment(
     }
 
     let name = names[0];
-    let call = state_machine_call(&expressions[0])?;
+    let call = state_machine_call(expressions[0])?;
     let declaration = declaration_from_call(call)?;
     let Expression::TableConstructor(config) = first_parenthesized_argument(call)? else {
         return None;

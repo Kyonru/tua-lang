@@ -34,7 +34,11 @@ async function runSpritePreviewTests() {
   assert.match(text, /command:tua\.previewSprites/);
   assert.match(text, /Preview Player/);
   assert.deepEqual(previewLink.isTrusted, {
-    enabledCommands: ["tua.previewSprites"],
+    enabledCommands: [
+      "tua.previewSprites",
+      "tua.hover.references",
+      "tua.hover.implementations",
+    ],
   });
   const hoverInspection = await waitForEvent(
     (event) =>

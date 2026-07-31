@@ -1,0 +1,21 @@
+source = "."
+out = "build"
+main = "main.tua"
+target = "love11-luajit"
+extension = "tua"
+emit_maps = true
+
+[[type_libraries]]
+path = "lib/feel/types"
+declaration_prefix = "feel"
+runtime_prefix = "lib.feel"
+
+[ecs]
+enabled = true
+backend = "tua"
+
+[diagnostics]
+rules = true
+missing_requires = true
+doc_annotations = true
+
