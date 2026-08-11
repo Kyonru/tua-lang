@@ -273,7 +273,7 @@ function parseTuaToml(configPath) {
 function copyProjectToTemp(project) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `tua-speed-${project.name}-`));
   const root = path.join(tempRoot, project.name);
-  const files = gitTrackedFiles(project.relativeRoot);
+  const files = projectWorktreeFiles(project.relativeRoot);
 
   fs.mkdirSync(root, { recursive: true });
 
@@ -295,12 +295,16 @@ function copyProjectToTemp(project) {
   };
 }
 
-function gitTrackedFiles(relativeRoot) {
-  const result = childProcess.spawnSync("git", ["ls-files", "--", relativeRoot], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    windowsHide: true,
-  });
+function projectWorktreeFiles(relativeRoot) {
+  const result = childProcess.spawnSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", relativeRoot],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  );
 
   if (result.error) {
     throw result.error;
