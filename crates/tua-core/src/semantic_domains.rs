@@ -29,6 +29,7 @@ const DEFAULT_DOMAINS: &[BuiltinDomain] = &[
 
 const MEMBER_DOMAINS: &[BuiltinDomain] = &[
     BuiltinDomain::Ecs,
+    BuiltinDomain::Sprite,
     BuiltinDomain::Signal,
     BuiltinDomain::ObjectPool,
     BuiltinDomain::StateMachine,
@@ -187,7 +188,7 @@ impl BuiltinDomain {
     }
 
     pub(crate) const fn preserves_literal_unions(self) -> bool {
-        matches!(self, Self::StateMachine | Self::Input)
+        matches!(self, Self::Sprite | Self::StateMachine | Self::Input)
     }
 
     pub(crate) fn inferred_constructor_return_type(
@@ -196,6 +197,8 @@ impl BuiltinDomain {
         first_argument_type: Option<&Type>,
     ) -> Option<Type> {
         match self {
+            Self::Sprite => sprite::sprite_sheet_type_from_call(call)
+                .or_else(|| Some(Type::alias(sprite::TYPE_NAME))),
             Self::StateMachine => state_machine::machine_type_from_call(call)
                 .or_else(|| Some(Type::alias(state_machine::TYPE_NAME))),
             Self::Input => {
@@ -211,14 +214,16 @@ impl BuiltinDomain {
                     .map(store::store_type_from_initial)
                     .unwrap_or_else(|| Type::alias(store::TYPE_NAME)),
             ),
-            Self::Vector | Self::Sprite | Self::Signal | Self::Ecs => None,
+            Self::Vector | Self::Signal | Self::Ecs => None,
         }
     }
 
     fn constructor(self) -> Option<BuiltinConstructor> {
         match self {
             Self::Vector => Some(BuiltinConstructor::Function(vector::constructor_type())),
-            Self::Sprite => Some(BuiltinConstructor::Function(sprite::constructor_type())),
+            Self::Sprite => Some(BuiltinConstructor::Typed(
+                Box::new(sprite::typed_function()),
+            )),
             Self::Signal => Some(BuiltinConstructor::Function(signal::constructor_type())),
             Self::ObjectPool => Some(BuiltinConstructor::Typed(Box::new(
                 object_pool::constructor_typed_function(),
@@ -251,7 +256,8 @@ impl BuiltinDomain {
             Self::StateMachine => state_machine::typed_member(environment, receiver_type, member),
             Self::Store => store::typed_member(environment, receiver_type, member),
             Self::Input => input::typed_member(environment, receiver_type, member),
-            Self::Vector | Self::Sprite | Self::Signal => None,
+            Self::Sprite => sprite::typed_member(environment, receiver_type, member),
+            Self::Vector | Self::Signal => None,
         }
     }
 

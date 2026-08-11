@@ -6,8 +6,23 @@ fn inspector_returns_compiler_backed_sprite_metadata_and_diagnostics() {
     let source = r#"local Player = spriteSheet({
   image = "assets/player.png",
   frame = { width = 16, height = 16, left = 2, top = 4, border = 1 },
+  origin = { x = 8, y = 16 },
   animations = {
-    idle = { from = 0, to = 3, row = 1, fps = 8 },
+    idle = {
+      frames = {
+        { from = 0, to = 1, row = 1 },
+        { from = 0, to = 1, row = 2 },
+      },
+      origin = { x = 7, y = 15 },
+      fps = 8,
+      markers = { { frame = 1, name = "step" } },
+      metadata = {
+        { origin = { x = 7, y = 15 }, sourceWidth = 16, sourceHeight = 16 },
+        { origin = { x = 8, y = 14 }, trimX = 1, trimY = 2, sourceWidth = 18, sourceHeight = 20 },
+        { origin = { x = 7, y = 15 }, sourceWidth = 16, sourceHeight = 16 },
+        { origin = { x = 7, y = 15 }, sourceWidth = 16, sourceHeight = 16 },
+      },
+    },
     idle = {
       from = 4,
       to = 2,
@@ -47,9 +62,22 @@ local selected = Player
     assert_eq!(sprite["frame"]["left"], 2);
     assert_eq!(sprite["frame"]["top"], 4);
     assert_eq!(sprite["frame"]["border"], 1);
+    assert_eq!(sprite["origin"]["x"], 8);
+    assert_eq!(sprite["origin"]["y"], 16);
     assert_eq!(sprite["animations"][0]["name"], "idle");
     assert_eq!(sprite["animations"][0]["fps"], 8.0);
     assert_eq!(sprite["animations"][0]["row"], 1);
+    assert_eq!(
+        sprite["animations"][0]["frames"].as_array().map(Vec::len),
+        Some(2)
+    );
+    assert_eq!(sprite["animations"][0]["frames"][1]["row"], 2);
+    assert_eq!(sprite["animations"][0]["origin"]["x"], 7);
+    assert_eq!(sprite["animations"][0]["durationValues"][0], 0.125);
+    assert_eq!(sprite["animations"][0]["markers"][0]["name"], "step");
+    assert_eq!(sprite["animations"][0]["metadata"][1]["trimX"], 1);
+    assert_eq!(sprite["animations"][0]["metadata"][1]["trimY"], 2);
+    assert_eq!(sprite["animations"][0]["metadata"][1]["sourceWidth"], 18);
     assert_eq!(sprite["animations"][1]["frame"]["width"], 8);
     assert_eq!(sprite["animations"][1]["frame"]["left"], 6);
     assert_eq!(sprite["animations"][1]["durations"], "0.25");

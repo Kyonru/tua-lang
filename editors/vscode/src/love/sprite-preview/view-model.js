@@ -41,10 +41,36 @@ function spriteViewModel(webview, item) {
         from: integer(animation.from, 0),
         column: animation.column == null ? undefined : integer(animation.column, 0),
         durations: animation.durations == null ? undefined : String(animation.durations),
+        durationValues: (Array.isArray(animation.durationValues)
+          ? animation.durationValues
+          : []).map((duration) => finiteNumber(duration, 0)),
         frame: frameViewModel(animation.frame),
+        frames: (Array.isArray(animation.frames) ? animation.frames : []).map(
+          (range) => ({
+            from: integer(range.from, 0),
+            row: integer(range.row, 0),
+            to: integer(range.to, 0),
+          }),
+        ),
         loop: animation.loop !== false,
+        markers: (Array.isArray(animation.markers) ? animation.markers : []).map(
+          (marker) => ({
+            frame: integer(marker.frame, 0),
+            name: String(marker.name || ""),
+          }),
+        ),
+        metadata: (Array.isArray(animation.metadata) ? animation.metadata : []).map(
+          (metadata) => ({
+            origin: originViewModel(metadata.origin),
+            sourceHeight: integer(metadata.sourceHeight, 0),
+            sourceWidth: integer(metadata.sourceWidth, 0),
+            trimX: integer(metadata.trimX, 0),
+            trimY: integer(metadata.trimY, 0),
+          }),
+        ),
         name: String(animation.name || ""),
         onLoop: animation.onLoop == null ? undefined : String(animation.onLoop),
+        origin: originViewModel(animation.origin),
         row: integer(animation.row, 0),
         to: integer(animation.to, 0),
       }),
@@ -57,10 +83,18 @@ function spriteViewModel(webview, item) {
       }),
     ),
     frame: frameViewModel(item.frame),
+    origin: originViewModel(item.origin),
     imagePath: String(item.image?.path || ""),
     imageStatus: String(item.image?.status || "unchecked"),
     imageUri: imageUri ? webview.asWebviewUri(imageUri).toString() : undefined,
     name: item.name,
+  };
+}
+
+function originViewModel(origin) {
+  return {
+    x: integer(origin?.x, 0),
+    y: integer(origin?.y, 0),
   };
 }
 

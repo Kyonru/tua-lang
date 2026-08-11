@@ -544,6 +544,10 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                         "selectionRange": lsp_range(sprite.name_span),
                         "image": image,
                         "frame": frame,
+                        "origin": {
+                            "x": sprite.origin.x,
+                            "y": sprite.origin.y
+                        },
                         "animations": sprite.animations.into_iter().map(|animation| {
                             json!({
                                 "name": animation.name,
@@ -551,6 +555,11 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                 "to": animation.to,
                                 "row": animation.row,
                                 "column": animation.column,
+                                "frames": animation.ranges.into_iter().map(|range| json!({
+                                    "from": range.from,
+                                    "to": range.to,
+                                    "row": range.row
+                                })).collect::<Vec<_>>(),
                                 "frame": animation.frame.map(|frame| json!({
                                     "width": frame.width,
                                     "height": frame.height,
@@ -559,14 +568,45 @@ pub(super) fn lsp_inspector_items_from_core(items: Vec<InspectorItem>) -> Value 
                                     "border": frame.border,
                                     "range": lsp_range(frame.span)
                                 })),
+                                "origin": {
+                                    "x": animation.origin.x,
+                                    "y": animation.origin.y
+                                },
                                 "fps": animation.fps,
                                 "durations": animation.durations,
+                                "durationValues": animation.duration_values,
+                                "markers": animation.markers.into_iter().map(|marker| json!({
+                                    "frame": marker.frame,
+                                    "name": marker.name
+                                })).collect::<Vec<_>>(),
+                                "metadata": animation.metadata.into_iter().map(|metadata| json!({
+                                    "origin": {
+                                        "x": metadata.origin.x,
+                                        "y": metadata.origin.y
+                                    },
+                                    "trimX": metadata.trim_x,
+                                    "trimY": metadata.trim_y,
+                                    "sourceWidth": metadata.source_width,
+                                    "sourceHeight": metadata.source_height
+                                })).collect::<Vec<_>>(),
                                 "onLoop": animation.on_loop,
                                 "loop": animation.looping,
                                 "range": lsp_range(animation.span),
                                 "selectionRange": lsp_range(animation.name_span)
                             })
                         }).collect::<Vec<_>>(),
+                        "children": sprite.children.into_iter().map(|child| json!({
+                            "name": child.name,
+                            "sheet": child.sheet,
+                            "initial": child.initial,
+                            "x": child.x,
+                            "y": child.y,
+                            "rotation": child.rotation,
+                            "scaleX": child.scale_x,
+                            "scaleY": child.scale_y,
+                            "range": lsp_range(child.span),
+                            "selectionRange": lsp_range(child.name_span)
+                        })).collect::<Vec<_>>(),
                         "diagnostics": sprite.diagnostics.into_iter()
                             .map(lsp_diagnostic_from_core)
                             .collect::<Vec<_>>()

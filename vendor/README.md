@@ -11,6 +11,10 @@ generated project output.
   helper emission. `tua build` copies it to `build/anim8.lua` only when generated
   Lua requires it, and only when the project did not already provide its own
   `anim8.lua`.
+- `runtime/tuasprite.lua` is Tua's small, replaceable controller over anim8.
+  It provides independent named playback, manual seeking, marker events, and
+  registration-aware drawing. It follows the same require-driven copy and
+  project-override rules.
 - `runtime/tuasignal.lua`, `runtime/tuaecs.lua`, and
   `runtime/tuaobjectpool.lua` are Tua's bundled signal, ECS, and object-pool
   runtimes. They follow the same require-driven copy and project-override

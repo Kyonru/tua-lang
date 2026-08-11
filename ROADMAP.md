@@ -10,7 +10,7 @@ language, tooling, and workflow pages under `docs/`. Completed work belongs in
 
 ## Now
 
-### Ship And Observe The Coordinated 0.1 Release
+### Harden The Current 0.2 Release Line
 
 - Exercise the checksummed platform server and VSIX pipeline from a real tag.
 - Keep CLI, server, extension, changelog, and migration notes synchronized.

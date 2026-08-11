@@ -31,8 +31,24 @@ pub struct SpriteSheetInspection {
     pub name_span: SourceSpan,
     pub image: Option<SpriteAssetInspection>,
     pub frame: Option<SpriteFrameInspection>,
+    pub origin: SpriteOriginInspection,
     pub animations: Vec<SpriteAnimationInspection>,
+    pub children: Vec<SpriteChildInspection>,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpriteChildInspection {
+    pub name: String,
+    pub sheet: Option<String>,
+    pub initial: Option<String>,
+    pub x: String,
+    pub y: String,
+    pub rotation: String,
+    pub scale_x: String,
+    pub scale_y: String,
+    pub span: SourceSpan,
+    pub name_span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -54,6 +70,34 @@ pub struct SpriteFrameInspection {
     pub span: SourceSpan,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpriteOriginInspection {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpriteFrameRangeInspection {
+    pub from: u32,
+    pub to: u32,
+    pub row: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpriteMarkerInspection {
+    pub frame: u32,
+    pub name: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpriteFrameMetadataInspection {
+    pub origin: SpriteOriginInspection,
+    pub trim_x: i32,
+    pub trim_y: i32,
+    pub source_width: u32,
+    pub source_height: u32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpriteAnimationInspection {
     pub name: String,
@@ -61,9 +105,14 @@ pub struct SpriteAnimationInspection {
     pub to: u32,
     pub row: u32,
     pub column: Option<u32>,
+    pub ranges: Vec<SpriteFrameRangeInspection>,
     pub frame: Option<SpriteFrameInspection>,
+    pub origin: SpriteOriginInspection,
     pub fps: f64,
     pub durations: Option<String>,
+    pub duration_values: Vec<f64>,
+    pub markers: Vec<SpriteMarkerInspection>,
+    pub metadata: Vec<SpriteFrameMetadataInspection>,
     pub on_loop: Option<String>,
     pub looping: bool,
     pub span: SourceSpan,

@@ -107,8 +107,14 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and
   `particles(image, count)`.
 - `Vec2`/`vec2(x, y)` provide typed BrineVector operations.
-- `spriteSheet({...})` provides typed anim8 grids, animations, durations/fps,
-  per-animation frames, and loop callbacks.
+- `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`
+  values, supports ordered multi-row ranges, registration origins,
+  durations/fps, per-animation frames, markers, and loop callbacks.
+- `sheet:player(name)` returns a replaceable-runtime `SpritePlayer` with checked
+  `play`, `gotoAndPlay`, `gotoAndStop`, marker subscriptions, time updates,
+  manual seeking, and origin-aware drawing.
+- Sprite sheets may contain optional named child sheets; `player:child(name)`
+  checks the child name and returns its recursively updated/drawn controller.
 - `signal()` provides typed event names/payloads through `on`, `once`,
   `declare`, `emit`, `off`, `clear`, `has`, and `listeners`.
 - `store({...})` infers state for `get`, `set`, `update`, `subscribe`, and

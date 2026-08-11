@@ -31,7 +31,7 @@ use crate::types::{
     AssignabilityFailureKind, FunctionType, MetatableFacts, TableField, Type, TypeContext,
     TypeEnvironment, TypedFunction,
 };
-use crate::{asset, love_callback, lua, signal, state_machine};
+use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
 
 mod query;
@@ -508,7 +508,9 @@ impl<'a> Checker<'a> {
 
             if let Some(ty) = ty {
                 let preserve_literal_unions =
-                    state_machine::type_is_state_machine(self.environment, &ty);
+                    state_machine::type_is_state_machine(self.environment, &ty)
+                        || sprite::type_is_sprite_sheet(self.environment, &ty)
+                        || sprite::type_is_sprite_player(self.environment, &ty);
                 let ty = if has_annotation || preserve_literal_unions {
                     ty
                 } else {
@@ -1184,6 +1186,10 @@ impl<'a> Checker<'a> {
             Callable::Any => vec![Type::Any],
             Callable::Function(function) => {
                 self.check_call_arguments(function_call, &function);
+
+                if let Some(ty) = self.builtin_constructor_call_return_type(function_call) {
+                    return vec![ty];
+                }
 
                 if let Some(ty) = self.constructor_call_return_type(function_call) {
                     return vec![ty];

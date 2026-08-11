@@ -147,7 +147,7 @@ local field = player.hp
         completion_request(3, uri, source, "player."),
     ]);
 
-    assert_completion_labels(&output, 2, ["Player"]);
+    assert_completion_labels(&output, 2, ["Player", "SpritePlayer"]);
     assert_eq!(
         completion_with_label(&output, 2, "Player")["labelDetails"]["description"],
         "type alias"
@@ -503,7 +503,7 @@ end
     ]);
 
     assert_completion_labels(&output, 2, ["param", "type"]);
-    assert_completion_labels(&output, 3, ["Player"]);
+    assert_completion_labels(&output, 3, ["Player", "SpritePlayer"]);
     assert_completion_labels(&output, 4, ["document function"]);
 
     let snippet = response_with_id(&output, 4)["result"][0].clone();
@@ -528,7 +528,7 @@ end
         completion_request(2, uri, source, "---@return Pl"),
     ]);
 
-    assert_completion_labels(&output, 2, ["Player"]);
+    assert_completion_labels(&output, 2, ["Player", "SpritePlayer"]);
 }
 #[test]
 fn completion_is_quiet_for_any_and_unknown_field_receivers() {

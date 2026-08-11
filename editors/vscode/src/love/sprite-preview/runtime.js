@@ -159,6 +159,7 @@ function spritePreviewRuntime(sprites) {
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       let animation = sprite.animations[0];
       let frameOffset = 0;
+      let elapsed = 0;
       let lastTime = 0;
       let playing = !reducedMotion;
       let speedScale = 1;
@@ -171,6 +172,7 @@ function spritePreviewRuntime(sprites) {
         tab.addEventListener("click", () => {
           animation = candidate;
           frameOffset = 0;
+          elapsed = 0;
           playing = !reducedMotion;
           lastTime = 0;
           updateAll();
@@ -221,16 +223,31 @@ function spritePreviewRuntime(sprites) {
       image.src = sprite.imageUri;
 
       function tick(time) {
-        const fps = Math.max(0.001, animation.fps || 1);
-        if (playing && time - lastTime >= 1000 / (fps * speedScale)) {
+        if (!lastTime) {
           lastTime = time;
+        }
+        const delta = Math.max(0, time - lastTime) / 1000 * speedScale;
+        lastTime = time;
+
+        if (playing) {
+          elapsed += delta;
           const frames = animationFrames(animation);
-          if (animation.loop || frameOffset < frames.length - 1) {
-            frameOffset = (frameOffset + 1) % frames.length;
-          } else {
-            playing = false;
+          let changed = false;
+          let duration = frameDuration(frameOffset);
+          while (elapsed >= duration && playing) {
+            elapsed -= duration;
+            if (animation.loop || frameOffset < frames.length - 1) {
+              frameOffset = (frameOffset + 1) % frames.length;
+            } else {
+              elapsed = 0;
+              playing = false;
+            }
+            changed = true;
+            duration = frameDuration(frameOffset);
           }
-          updateAll();
+          if (changed) {
+            updateAll();
+          }
         }
 
         requestAnimationFrame(tick);
@@ -260,7 +277,7 @@ function spritePreviewRuntime(sprites) {
       function updateZoom() {
         zoomScale = Number(zoomInput.value) || zoomScale;
 
-        const frame = animationFrame();
+        const frame = previewFrame();
         const fitScale = containedFrameScale();
         const displayScale = fitScale * zoomScale;
 
@@ -270,7 +287,7 @@ function spritePreviewRuntime(sprites) {
       }
 
       function containedFrameScale() {
-        const frame = animationFrame();
+        const frame = previewFrame();
         const availableWidth = Math.max(1, stageFrame.clientWidth - 24);
         const availableHeight = Math.max(1, stageFrame.clientHeight - 24);
 
@@ -286,9 +303,12 @@ function spritePreviewRuntime(sprites) {
         const rect = sourceRect(frame);
         const geometry = animationFrame();
 
-        frameValue.textContent = frame + " (" + (frameOffset + 1) + "/" + frames.length + ")";
+        frameValue.textContent = frame.column + "," + frame.row + " (" + (frameOffset + 1) + "/" + frames.length + ")";
         rectValue.textContent = rect.x + "," + rect.y + " " + geometry.width + "x" + geometry.height;
-        rangeValue.textContent = animation.from + ".." + animation.to + ", row " + animation.row;
+        const ranges = animation.frames.length > 0
+          ? animation.frames
+          : [{ from: animation.from, to: animation.to, row: animation.row }];
+        rangeValue.textContent = ranges.map((range) => range.from + ".." + range.to + " @ " + range.row).join("; ");
         fpsValue.textContent = animation.durations || (animation.fps + " fps");
         modeValue.textContent = animation.loop ? "Loop" : "Pause at end";
         frameCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s");
@@ -297,6 +317,7 @@ function spritePreviewRuntime(sprites) {
       function stepFrame(direction) {
         const frames = animationFrames(animation);
         frameOffset = (frameOffset + direction + frames.length) % frames.length;
+        elapsed = 0;
         playing = false;
         updateAll();
       }
@@ -304,6 +325,7 @@ function spritePreviewRuntime(sprites) {
       function drawFrame() {
         const rect = sourceRect(currentFrame());
         const frame = animationFrame();
+        const metadata = currentMetadata();
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(
@@ -312,10 +334,10 @@ function spritePreviewRuntime(sprites) {
           rect.y,
           frame.width,
           frame.height,
-          0,
-          0,
-          canvas.width,
-          canvas.height,
+          metadata?.trimX || 0,
+          metadata?.trimY || 0,
+          frame.width,
+          frame.height,
         );
       }
 
@@ -346,9 +368,10 @@ function spritePreviewRuntime(sprites) {
           const entry = document.createElement("button");
           entry.type = "button";
           entry.className = index === frameOffset ? "frame-chip active" : "frame-chip";
-          entry.textContent = String(frame);
+          entry.textContent = frame.column + "," + frame.row;
           entry.addEventListener("click", () => {
             frameOffset = index;
+            elapsed = 0;
             playing = false;
             updateAll();
           });
@@ -358,24 +381,48 @@ function spritePreviewRuntime(sprites) {
 
       function currentFrame() {
         const frames = animationFrames(animation);
-        return frames[Math.min(frameOffset, frames.length - 1)] || animation.from;
+        return frames[Math.min(frameOffset, frames.length - 1)] || {
+          column: animation.from,
+          row: animation.row,
+        };
       }
 
       function sourceRect(frame) {
         const geometry = animationFrame();
 
         return {
-          x: geometry.left + frame * geometry.width + (frame + 1) * geometry.border,
-          y: geometry.top + animation.row * geometry.height + (animation.row + 1) * geometry.border,
+          x: geometry.left + frame.column * geometry.width + (frame.column + 1) * geometry.border,
+          y: geometry.top + frame.row * geometry.height + (frame.row + 1) * geometry.border,
         };
+      }
+
+      function frameDuration(index) {
+        const configured = animation.durationValues[index];
+        if (Number.isFinite(configured) && configured > 0) {
+          return configured;
+        }
+        return 1 / Math.max(0.001, animation.fps || 1);
       }
 
       function animationFrame() {
         return animation.frame || sprite.frame;
       }
 
-      function updateCanvasDimensions() {
+      function currentMetadata() {
+        return animation.metadata[frameOffset];
+      }
+
+      function previewFrame() {
         const frame = animationFrame();
+        const metadata = currentMetadata();
+        return {
+          width: metadata?.sourceWidth > 0 ? metadata.sourceWidth : frame.width,
+          height: metadata?.sourceHeight > 0 ? metadata.sourceHeight : frame.height,
+        };
+      }
+
+      function updateCanvasDimensions() {
+        const frame = previewFrame();
 
         if (canvas.width !== frame.width || canvas.height !== frame.height) {
           canvas.width = frame.width;
@@ -395,11 +442,16 @@ function spritePreviewRuntime(sprites) {
     }
 
     function animationFrames(animation) {
-      const step = animation.to >= animation.from ? 1 : -1;
       const frames = [];
 
-      for (let frame = animation.from; step > 0 ? frame <= animation.to : frame >= animation.to; frame += step) {
-        frames.push(frame);
+      const ranges = animation.frames.length > 0
+        ? animation.frames
+        : [{ from: animation.from, to: animation.to, row: animation.row }];
+      for (const range of ranges) {
+        const step = range.to >= range.from ? 1 : -1;
+        for (let column = range.from; step > 0 ? column <= range.to : column >= range.to; column += step) {
+          frames.push({ column, row: range.row });
+        }
       }
 
       return frames;

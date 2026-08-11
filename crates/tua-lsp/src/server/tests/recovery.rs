@@ -50,7 +50,7 @@ local health = player.hp
     server.send(inlay_hint_request(5, uri, 0, 0, 8, 0));
 
     assert_hover_contains(server.output(), 3, "local player: Player");
-    assert_completion_labels(server.output(), 4, ["Player"]);
+    assert_completion_labels(server.output(), 4, ["Player", "SpritePlayer"]);
 
     let hints = response_with_id(server.output(), 5)["result"]
         .as_array()

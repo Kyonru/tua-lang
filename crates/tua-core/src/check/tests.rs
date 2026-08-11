@@ -1643,6 +1643,42 @@ load("dynamic")
 }
 
 #[test]
+fn checks_derived_sprite_player_animation_and_marker_names() {
+    let diagnostics = check_tua_source(
+        "src/sprites.tua",
+        r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = {
+      from = 0,
+      to = 3,
+      fps = 8,
+      markers = { { frame = 1, name = "footstep" } },
+    },
+    run = { from = 4, to = 7, fps = 12 },
+  },
+})
+local player = Player:player("idle")
+Player:player("missing-initial")
+player:play("missing")
+player:on("missing-marker", function(player, marker, animation, frame) end)
+"#,
+    )
+    .expect_err("unknown sprite animation and marker names should be rejected");
+    let messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(messages.iter().any(|message| message.contains("missing")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("missing-marker")));
+}
+
+#[test]
 fn warns_for_love_method_dot_calls() {
     let diagnostics = check_tua_source_with_asset_roots_and_diagnostics_config(
         "src/assets.tua",

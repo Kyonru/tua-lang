@@ -137,6 +137,21 @@ impl CompletionDomainRegistry {
         active_parameter: usize,
         prefix: &str,
     ) -> Option<Vec<Completion>> {
+        if let Some(items) = sprite::method_string_completion_items(
+            environment,
+            receiver_type,
+            method,
+            active_parameter,
+        ) {
+            return Some(
+                items
+                    .into_iter()
+                    .filter(|item| completion_text_matches(&item.label, prefix))
+                    .map(|item| value_completion(item.label, item.detail, item.documentation, None))
+                    .collect(),
+            );
+        }
+
         if let Some(items) = state_machine::method_string_completion_items(
             environment,
             receiver_type,

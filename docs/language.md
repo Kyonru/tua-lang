@@ -886,15 +886,29 @@ Tua; lowering converts them to anim8's one-based selectors:
 local background = spriteSheet({
   image = "assets/images/spritesheet_stall.png",
   frame = { width = 256, height = 256, left = 2, top = 4, border = 1 },
+  origin = { x = 128, y = 256 },
   animations = {
     orange = { column = 1, row = 0, durations = 1 },
     blue = { from = 0, to = 3, row = 1, fps = 8, onLoop = "pauseAtEnd" },
     green = {
-      from = 0,
-      to = 3,
-      row = 2,
+      frames = {
+        { from = 0, to = 3, row = 2 },
+        { from = 0, to = 1, row = 3 },
+      },
       frame = { width = 128, height = 64, left = 8, top = 16, border = 2 },
-      durations = { 0.1, 0.5, 0.1, 0.1 },
+      origin = { x = 64, y = 64 },
+      durations = { 0.1, 0.5, 0.1, 0.1, 0.1, 0.1 },
+      markers = {
+        { frame = 1, name = "step" },
+      },
+      metadata = {
+        { origin = { x = 64, y = 64 }, trimX = 0, trimY = 0, sourceWidth = 128, sourceHeight = 64 },
+        { origin = { x = 66, y = 62 }, trimX = 2, trimY = 3, sourceWidth = 132, sourceHeight = 68 },
+        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
+        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
+        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
+        { origin = { x = 64, y = 64 }, sourceWidth = 128, sourceHeight = 64 },
+      },
       onLoop = function(animation, loops)
         if loops > 1 then
           animation:pause()
@@ -906,10 +920,14 @@ local background = spriteSheet({
 ```
 
 `frame.width` and `frame.height` define the default grid cell. `left` and `top`
-move the grid origin, while `border` represents spacing around adjacent cells.
+move the grid's source-image offset, while `border` represents spacing around
+adjacent cells. `origin.x` and `origin.y` are the registration point used when
+a `SpritePlayer` draws the frame; an animation may override the sheet origin.
 An animation may provide its own `frame` when a sheet contains regions with
 different cell sizes or origins. Use `column` for one cell, or `from`/`to` for
-an inclusive column range; `row` defaults to `0`.
+an inclusive column range; `row` defaults to `0`. Use ordered `frames` ranges
+when one animation crosses grid rows. `frames` cannot be combined with the
+top-level `column`, `from`, `to`, or `row` selectors.
 
 `fps` is shorthand for a uniform `1 / fps` duration. `durations` accepts the
 same number or table passed to `anim8.newAnimation`, including individual
@@ -919,13 +937,58 @@ values such as `{ 0.1, 0.5, 0.1 }` and ranges such as
 `loop = false` form remains supported as shorthand for `onLoop =
 "pauseAtEnd"`, but it cannot be combined with `onLoop`.
 
+Static animation keys derive the exact runtime animation map and animation-name
+union. Create an independent controller with `sheet:player("idle")`. The
+controller checks and completes names for `play`, `gotoAndPlay`, and
+`gotoAndStop`; supports `stop`, `resume`, `update`, `seek`, and `seekFrame`;
+and draws with the configured registration point. Manual seeking lets movement
+code drive a run or roll pose from distance instead of elapsed time.
+
+`markers` attach named events to zero-based, animation-local frame indexes.
+`player:on("step", callback)` and `player:off("step")` check and complete those
+names. Normal playback emits every crossed marker, including across loops and
+large updates. Direct seeking is silent unless its optional `emitMarkers`
+argument is `true`.
+
+Optional `metadata` preserves one record per animation frame. `origin` is the
+frame's registration point, `trimX`/`trimY` place the trimmed atlas rectangle
+inside its untrimmed frame, and `sourceWidth`/`sourceHeight` retain that
+untrimmed size. The player compensates the draw origin for trim offsets, and
+the VS Code preview reconstructs the untrimmed canvas. When `metadata` is
+present, its entry count must match the animation's resolved frame count.
+
 Completion inside the nested configuration suggests sheet, frame, and
-animation fields, inserts their value shapes, and completes common `onLoop`
+animation, range, origin, and marker fields, inserts their value shapes, and completes common `onLoop`
 method strings. Hover uses those same nested schemas, including the `loops`
 callback parameter, and fixed fields navigate to generated schema definitions.
-A runtime access such as `background.animations.green` navigates to the
-`green` entry in the source configuration. The compiler rejects conflicting
-selector, timing, and loop forms before emitting anim8 calls.
+A runtime access such as `background.animations.green` is typed as
+`SpriteAnimation`, completes known animation keys, and navigates to the `green`
+entry in the source configuration. The compiler rejects conflicting selector,
+timing, marker, and loop forms before emitting anim8 and `tuasprite` calls.
+Both runtimes are emitted only when required and project-provided replacements
+are never overwritten.
+
+Sheets may optionally compose previously declared sheets as nested clips:
+
+```tua
+-- Hat is another spriteSheet declared above.
+local player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 32, height = 32 },
+  animations = { idle = { column = 0, fps = 1 } },
+  children = {
+    hat = { sheet = Hat, initial = "idle", x = 4, y = -8 },
+  },
+})
+
+local controller = player:player("idle")
+controller:child("hat"):gotoAndPlay("idle", 1)
+```
+
+Child names are checked and completed. Child players update recursively and
+draw through parent-local translation, rotation, and scale. This is a small
+declarative display tree; it does not interpret ActionScript. Game-state logic
+and arbitrary timeline scripts remain ordinary Tua/Lua code.
 
 ### Vectors
 

@@ -8,12 +8,19 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Static `spriteSheet({...})` configurations now derive exact animation and
+  marker names, ordered multi-row frame ranges, registration origins, and a
+  replaceable `SpritePlayer` runtime with named playback and manual seeking.
+- Sprite animations can preserve per-frame trim/source metadata, and sheets
+  can compose named child sheets through a declarative nested display tree.
 - `make release-version VERSION=<version>` now synchronizes release metadata,
   runs CI checks, creates the release commit, and adds an annotated local tag
   without pushing it.
 
 ### Fixed
 
+- Sprite previews now honor static nonuniform duration tables, and API/MCP
+  asset metadata refreshes the workspace asset index before answering.
 - Repeated version synchronization now preserves Cargo lockfile package
   boundaries before the release helper performs its verification pass.
 

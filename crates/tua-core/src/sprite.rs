@@ -12,8 +12,9 @@ use crate::ast_utils::{
 use crate::emit::lowering::{LoweringDocument, LoweringOperation};
 use crate::emit::LoweringKind;
 use crate::inspector::{
-    InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteFrameInspection,
-    SpriteSheetInspection,
+    InspectorItem, SpriteAnimationInspection, SpriteAssetInspection, SpriteChildInspection,
+    SpriteFrameInspection, SpriteFrameMetadataInspection, SpriteFrameRangeInspection,
+    SpriteMarkerInspection, SpriteOriginInspection, SpriteSheetInspection,
 };
 use crate::types::{FunctionType, TableField, Type};
 use crate::{
@@ -25,26 +26,57 @@ pub(crate) const TYPE_NAME: &str = "SpriteSheet";
 pub(crate) const CONFIG_TYPE_NAME: &str = "SpriteSheetConfig";
 pub(crate) const FRAME_CONFIG_TYPE_NAME: &str = "SpriteFrameConfig";
 pub(crate) const ANIMATION_CONFIG_TYPE_NAME: &str = "SpriteAnimationConfig";
+pub(crate) const ANIMATION_TYPE_NAME: &str = "SpriteAnimation";
+pub(crate) const PLAYER_TYPE_NAME: &str = "SpritePlayer";
+pub(crate) const ORIGIN_CONFIG_TYPE_NAME: &str = "SpriteOriginConfig";
+pub(crate) const RANGE_CONFIG_TYPE_NAME: &str = "SpriteFrameRangeConfig";
+pub(crate) const MARKER_CONFIG_TYPE_NAME: &str = "SpriteMarkerConfig";
+pub(crate) const FRAME_METADATA_CONFIG_TYPE_NAME: &str = "SpriteFrameMetadataConfig";
+pub(crate) const CHILD_CONFIG_TYPE_NAME: &str = "SpriteChildConfig";
 pub(crate) const RUNTIME_MODULE: &str = "anim8";
+pub(crate) const PLAYER_RUNTIME_MODULE: &str = "tuasprite";
 
 const BUILTIN_TYPE_NAMES: &[&str] = &[
     TYPE_NAME,
     CONFIG_TYPE_NAME,
     FRAME_CONFIG_TYPE_NAME,
     ANIMATION_CONFIG_TYPE_NAME,
+    ANIMATION_TYPE_NAME,
+    PLAYER_TYPE_NAME,
+    ORIGIN_CONFIG_TYPE_NAME,
+    RANGE_CONFIG_TYPE_NAME,
+    MARKER_CONFIG_TYPE_NAME,
+    FRAME_METADATA_CONFIG_TYPE_NAME,
+    CHILD_CONFIG_TYPE_NAME,
 ];
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct SpriteSpec {
+    animations: Vec<String>,
+    markers: Vec<String>,
+    children: Vec<String>,
+    exact: bool,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SpriteDeclaration {
     pub(crate) name: String,
     pub(crate) image_path: Option<String>,
     pub(crate) frame: Option<SpriteFrame>,
+    pub(crate) origin: SpriteOrigin,
     pub(crate) animations: Vec<SpriteAnimation>,
+    pub(crate) children: Vec<SpriteChild>,
     pub(crate) span: SourceSpan,
     pub(crate) name_span: SourceSpan,
     pub(crate) image_span: Option<SourceSpan>,
     config_span: SourceSpan,
     frame_config_spans: Vec<SourceSpan>,
+    origin_config_spans: Vec<SourceSpan>,
+    range_config_spans: Vec<SourceSpan>,
+    marker_config_spans: Vec<SourceSpan>,
+    metadata_config_spans: Vec<SourceSpan>,
+    children_span: Option<SourceSpan>,
+    child_config_spans: Vec<SourceSpan>,
     animations_span: Option<SourceSpan>,
     animation_config_spans: Vec<SourceSpan>,
     statement_text: String,
@@ -61,6 +93,49 @@ pub(crate) struct SpriteFrame {
     pub(crate) span: SourceSpan,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct SpriteOrigin {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SpriteFrameRange {
+    pub(crate) start_frame: u32,
+    pub(crate) end_frame: u32,
+    pub(crate) row: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SpriteMarker {
+    pub(crate) frame: u32,
+    pub(crate) name: String,
+    pub(crate) span: SourceSpan,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct SpriteFrameMetadata {
+    pub(crate) origin: Option<SpriteOrigin>,
+    pub(crate) trim_x: i32,
+    pub(crate) trim_y: i32,
+    pub(crate) source_width: Option<u32>,
+    pub(crate) source_height: Option<u32>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SpriteChild {
+    pub(crate) name: String,
+    pub(crate) sheet: Option<String>,
+    pub(crate) initial: Option<String>,
+    pub(crate) x: String,
+    pub(crate) y: String,
+    pub(crate) rotation: String,
+    pub(crate) scale_x: String,
+    pub(crate) scale_y: String,
+    pub(crate) span: SourceSpan,
+    pub(crate) name_span: SourceSpan,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SpriteAnimation {
     pub(crate) name: String,
@@ -68,10 +143,15 @@ pub(crate) struct SpriteAnimation {
     pub(crate) end_frame: u32,
     pub(crate) row: u32,
     pub(crate) column: Option<u32>,
+    pub(crate) ranges: Vec<SpriteFrameRange>,
     pub(crate) frame: Option<SpriteFrame>,
+    pub(crate) origin: Option<SpriteOrigin>,
+    pub(crate) markers: Vec<SpriteMarker>,
+    pub(crate) metadata: Vec<SpriteFrameMetadata>,
     pub(crate) fps: Option<String>,
     pub(crate) durations: Option<String>,
     duration_preview: Option<String>,
+    duration_values: Vec<String>,
     pub(crate) on_loop: Option<String>,
     pub(crate) looping: bool,
     pub(crate) span: SourceSpan,
@@ -122,7 +202,19 @@ pub(crate) fn inspections(
                     to: animation.end_frame,
                     row: animation.row,
                     column: animation.column,
+                    ranges: animation
+                        .ranges
+                        .iter()
+                        .map(|range| SpriteFrameRangeInspection {
+                            from: range.start_frame,
+                            to: range.end_frame,
+                            row: range.row,
+                        })
+                        .collect(),
                     frame: animation.frame.map(sprite_frame_inspection),
+                    origin: sprite_origin_inspection(
+                        animation.origin.unwrap_or(declaration.origin),
+                    ),
                     fps: animation
                         .fps
                         .as_deref()
@@ -130,6 +222,49 @@ pub(crate) fn inspections(
                         .or_else(|| uniform_duration_fps(animation.duration_preview.as_deref()))
                         .unwrap_or(0.0),
                     durations: animation.durations.clone(),
+                    duration_values: animation
+                        .duration_values
+                        .iter()
+                        .filter_map(|duration| duration.parse().ok())
+                        .collect(),
+                    markers: animation
+                        .markers
+                        .iter()
+                        .map(|marker| SpriteMarkerInspection {
+                            frame: marker.frame,
+                            name: marker.name.clone(),
+                        })
+                        .collect(),
+                    metadata: animation
+                        .metadata
+                        .iter()
+                        .map(|metadata| {
+                            let frame =
+                                animation
+                                    .frame
+                                    .or(declaration.frame)
+                                    .unwrap_or(SpriteFrame {
+                                        width: 0,
+                                        height: 0,
+                                        left: 0,
+                                        top: 0,
+                                        border: 0,
+                                        span: animation.span,
+                                    });
+                            SpriteFrameMetadataInspection {
+                                origin: sprite_origin_inspection(
+                                    metadata
+                                        .origin
+                                        .or(animation.origin)
+                                        .unwrap_or(declaration.origin),
+                                ),
+                                trim_x: metadata.trim_x,
+                                trim_y: metadata.trim_y,
+                                source_width: metadata.source_width.unwrap_or(frame.width),
+                                source_height: metadata.source_height.unwrap_or(frame.height),
+                            }
+                        })
+                        .collect(),
                     on_loop: animation.on_loop.as_ref().map(|on_loop| {
                         quoted_expression_value(on_loop)
                             .unwrap_or(on_loop)
@@ -140,6 +275,22 @@ pub(crate) fn inspections(
                     name_span: animation.name_span,
                 })
                 .collect();
+            let children = declaration
+                .children
+                .iter()
+                .map(|child| SpriteChildInspection {
+                    name: child.name.clone(),
+                    sheet: child.sheet.clone(),
+                    initial: child.initial.clone(),
+                    x: child.x.clone(),
+                    y: child.y.clone(),
+                    rotation: child.rotation.clone(),
+                    scale_x: child.scale_x.clone(),
+                    scale_y: child.scale_y.clone(),
+                    span: child.span,
+                    name_span: child.name_span,
+                })
+                .collect();
 
             InspectorItem::SpriteSheet(SpriteSheetInspection {
                 name: declaration.name.clone(),
@@ -147,11 +298,20 @@ pub(crate) fn inspections(
                 name_span: declaration.name_span,
                 image,
                 frame,
+                origin: sprite_origin_inspection(declaration.origin),
                 animations,
+                children,
                 diagnostics: sprite_declaration_diagnostics(path, assets, declaration),
             })
         })
         .collect()
+}
+
+fn sprite_origin_inspection(origin: SpriteOrigin) -> SpriteOriginInspection {
+    SpriteOriginInspection {
+        x: origin.x,
+        y: origin.y,
+    }
 }
 
 fn sprite_frame_inspection(frame: SpriteFrame) -> SpriteFrameInspection {
@@ -296,11 +456,33 @@ pub(crate) fn runtime_source() -> &'static str {
     include_str!("../../../vendor/runtime/anim8.lua")
 }
 
+pub(crate) fn player_runtime_source() -> &'static str {
+    include_str!("../../../vendor/runtime/tuasprite.lua")
+}
+
 pub(crate) fn builtin_type_names() -> &'static [&'static str] {
     BUILTIN_TYPE_NAMES
 }
 
 pub(crate) fn sprite_sheet_type() -> Type {
+    sprite_sheet_type_for_spec(&SpriteSpec::default())
+}
+
+fn sprite_sheet_type_for_spec(spec: &SpriteSpec) -> Type {
+    let animation_names = literal_union_or_string(&spec.animations);
+    let child_names = literal_union_or_string(&spec.children);
+    let animations = if spec.exact {
+        Type::table(spec.animations.iter().map(|name| {
+            (
+                name.clone(),
+                TableField::required(Type::alias(ANIMATION_TYPE_NAME)),
+            )
+        }))
+    } else {
+        Type::dictionary(Type::string(), Type::alias(ANIMATION_TYPE_NAME))
+    };
+    let player = sprite_player_type(spec);
+
     Type::table([
         ("image", TableField::required(Type::alias("Image"))),
         ("grid", TableField::required(Type::Any)),
@@ -308,13 +490,298 @@ pub(crate) fn sprite_sheet_type() -> Type {
             "frame",
             TableField::required(Type::alias(FRAME_CONFIG_TYPE_NAME)),
         ),
-        ("animations", TableField::required(Type::Any)),
+        (
+            "origin",
+            TableField::required(Type::alias(ORIGIN_CONFIG_TYPE_NAME)),
+        ),
+        ("animations", TableField::required(animations)),
+        (
+            "animationOrder",
+            TableField::required(Type::array(animation_names.clone())),
+        ),
+        ("markers", TableField::required(Type::Any)),
+        ("frameMetadata", TableField::required(Type::Any)),
+        ("children", TableField::required(Type::Any)),
+        (
+            "childOrder",
+            TableField::required(Type::array(child_names.clone())),
+        ),
+        ("origins", TableField::required(Type::Any)),
+        ("looping", TableField::required(Type::Any)),
+        (
+            "player",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("initial", animation_names),
+                ],
+                1,
+                [player],
+            ),
+        ),
     ])
+}
+
+fn sprite_animation_type() -> Type {
+    Type::table([
+        ("frames", TableField::required(Type::array(Type::Any))),
+        (
+            "durations",
+            TableField::required(Type::array(Type::number())),
+        ),
+        (
+            "intervals",
+            TableField::required(Type::array(Type::number())),
+        ),
+        ("totalDuration", TableField::required(Type::number())),
+        ("timer", TableField::required(Type::number())),
+        ("position", TableField::required(Type::number())),
+        ("status", TableField::required(Type::string())),
+        ("flippedH", TableField::required(Type::boolean())),
+        ("flippedV", TableField::required(Type::boolean())),
+        (
+            "update",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("dt", Type::number()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "pause",
+            method_field(
+                [crate::FunctionParameter::named("self", Type::Any)],
+                1,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "resume",
+            method_field(
+                [crate::FunctionParameter::named("self", Type::Any)],
+                1,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "gotoFrame",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("frame", Type::number()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "getDimensions",
+            method_field(
+                [crate::FunctionParameter::named("self", Type::Any)],
+                1,
+                [Type::number(), Type::number()],
+            ),
+        ),
+    ])
+}
+
+fn sprite_player_type(spec: &SpriteSpec) -> Type {
+    let animation_name = literal_union_or_string(&spec.animations);
+    let marker_name = literal_union_or_string(&spec.markers);
+    let child_name = literal_union_or_string(&spec.children);
+    let optional_animation_name = Type::union([animation_name.clone(), Type::nil()]);
+    let marker_callback = Type::Function(FunctionType::new_signature(
+        [
+            crate::FunctionParameter::named("player", Type::Any),
+            crate::FunctionParameter::named("marker", marker_name.clone()),
+            crate::FunctionParameter::named("animation", animation_name.clone()),
+            crate::FunctionParameter::named("frame", Type::number()),
+        ],
+        4,
+        None,
+        [Type::nil()],
+    ));
+
+    Type::table([
+        ("name", TableField::required(optional_animation_name)),
+        ("playing", TableField::required(Type::boolean())),
+        ("speed", TableField::required(Type::number())),
+        ("children", TableField::required(Type::Any)),
+        (
+            "play",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("name", animation_name.clone()),
+                    crate::FunctionParameter::named("restart", Type::boolean()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "stop",
+            method_field(
+                [crate::FunctionParameter::named("self", Type::Any)],
+                1,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "resume",
+            method_field(
+                [crate::FunctionParameter::named("self", Type::Any)],
+                1,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "gotoAndPlay",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("name", animation_name.clone()),
+                    crate::FunctionParameter::named("frame", Type::number()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "gotoAndStop",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("name", animation_name),
+                    crate::FunctionParameter::named("frame", Type::number()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "seekFrame",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("frame", Type::number()),
+                    crate::FunctionParameter::named("emitMarkers", Type::boolean()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "seek",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("progress", Type::number()),
+                    crate::FunctionParameter::named("emitMarkers", Type::boolean()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "update",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("dt", Type::number()),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "draw",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("x", Type::number()),
+                    crate::FunctionParameter::named("y", Type::number()),
+                    crate::FunctionParameter::named("rotation", Type::number()),
+                    crate::FunctionParameter::named("scaleX", Type::number()),
+                    crate::FunctionParameter::named("scaleY", Type::number()),
+                    crate::FunctionParameter::named("originX", Type::number()),
+                    crate::FunctionParameter::named("originY", Type::number()),
+                    crate::FunctionParameter::named("shearX", Type::number()),
+                    crate::FunctionParameter::named("shearY", Type::number()),
+                ],
+                3,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "on",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("marker", marker_name.clone()),
+                    crate::FunctionParameter::named("callback", marker_callback),
+                ],
+                3,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "off",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("marker", marker_name),
+                ],
+                2,
+                [Type::nil()],
+            ),
+        ),
+        (
+            "child",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("name", child_name),
+                ],
+                2,
+                [Type::alias(PLAYER_TYPE_NAME)],
+            ),
+        ),
+    ])
+}
+
+fn method_field(
+    parameters: impl IntoIterator<Item = crate::FunctionParameter>,
+    required_parameter_count: usize,
+    returns: impl IntoIterator<Item = Type>,
+) -> TableField {
+    TableField::required(Type::Function(FunctionType::new_signature(
+        parameters,
+        required_parameter_count,
+        None,
+        returns,
+    )))
+}
+
+fn literal_union_or_string(values: &[String]) -> Type {
+    match values {
+        [] => Type::string(),
+        [value] => Type::string_literal(value),
+        _ => Type::union(values.iter().map(Type::string_literal)),
+    }
 }
 
 pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
     vec![
         (TYPE_NAME.to_owned(), sprite_sheet_type()),
+        (ANIMATION_TYPE_NAME.to_owned(), sprite_animation_type()),
+        (
+            PLAYER_TYPE_NAME.to_owned(),
+            sprite_player_type(&SpriteSpec::default()),
+        ),
         (CONFIG_TYPE_NAME.to_owned(), sprite_sheet_config_type()),
         (
             FRAME_CONFIG_TYPE_NAME.to_owned(),
@@ -323,6 +790,26 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
         (
             ANIMATION_CONFIG_TYPE_NAME.to_owned(),
             sprite_animation_config_type(),
+        ),
+        (
+            ORIGIN_CONFIG_TYPE_NAME.to_owned(),
+            sprite_origin_config_type(),
+        ),
+        (
+            RANGE_CONFIG_TYPE_NAME.to_owned(),
+            sprite_frame_range_config_type(),
+        ),
+        (
+            MARKER_CONFIG_TYPE_NAME.to_owned(),
+            sprite_marker_config_type(),
+        ),
+        (
+            FRAME_METADATA_CONFIG_TYPE_NAME.to_owned(),
+            sprite_frame_metadata_config_type(),
+        ),
+        (
+            CHILD_CONFIG_TYPE_NAME.to_owned(),
+            sprite_child_config_type(),
         ),
     ]
 }
@@ -335,10 +822,21 @@ fn sprite_sheet_config_type() -> Type {
             TableField::required(Type::alias(FRAME_CONFIG_TYPE_NAME)),
         ),
         (
+            "origin",
+            TableField::optional(Type::alias(ORIGIN_CONFIG_TYPE_NAME)),
+        ),
+        (
             "animations",
             TableField::required(Type::dictionary(
                 Type::string(),
                 Type::alias(ANIMATION_CONFIG_TYPE_NAME),
+            )),
+        ),
+        (
+            "children",
+            TableField::optional(Type::dictionary(
+                Type::string(),
+                Type::alias(CHILD_CONFIG_TYPE_NAME),
             )),
         ),
     ])
@@ -354,6 +852,54 @@ fn sprite_frame_config_type() -> Type {
     ])
 }
 
+fn sprite_origin_config_type() -> Type {
+    Type::table([
+        ("x", TableField::optional(Type::number())),
+        ("y", TableField::optional(Type::number())),
+    ])
+}
+
+fn sprite_frame_range_config_type() -> Type {
+    Type::table([
+        ("from", TableField::optional(Type::number())),
+        ("to", TableField::optional(Type::number())),
+        ("column", TableField::optional(Type::number())),
+        ("row", TableField::optional(Type::number())),
+    ])
+}
+
+fn sprite_marker_config_type() -> Type {
+    Type::table([
+        ("frame", TableField::required(Type::number())),
+        ("name", TableField::required(Type::string())),
+    ])
+}
+
+fn sprite_frame_metadata_config_type() -> Type {
+    Type::table([
+        (
+            "origin",
+            TableField::optional(Type::alias(ORIGIN_CONFIG_TYPE_NAME)),
+        ),
+        ("trimX", TableField::optional(Type::number())),
+        ("trimY", TableField::optional(Type::number())),
+        ("sourceWidth", TableField::optional(Type::number())),
+        ("sourceHeight", TableField::optional(Type::number())),
+    ])
+}
+
+fn sprite_child_config_type() -> Type {
+    Type::table([
+        ("sheet", TableField::required(Type::alias(TYPE_NAME))),
+        ("initial", TableField::optional(Type::string())),
+        ("x", TableField::optional(Type::number())),
+        ("y", TableField::optional(Type::number())),
+        ("rotation", TableField::optional(Type::number())),
+        ("scaleX", TableField::optional(Type::number())),
+        ("scaleY", TableField::optional(Type::number())),
+    ])
+}
+
 fn sprite_animation_config_type() -> Type {
     Type::table([
         ("from", TableField::optional(Type::number())),
@@ -361,8 +907,24 @@ fn sprite_animation_config_type() -> Type {
         ("column", TableField::optional(Type::number())),
         ("row", TableField::optional(Type::number())),
         (
+            "frames",
+            TableField::optional(Type::array(Type::alias(RANGE_CONFIG_TYPE_NAME))),
+        ),
+        (
             "frame",
             TableField::optional(Type::alias(FRAME_CONFIG_TYPE_NAME)),
+        ),
+        (
+            "origin",
+            TableField::optional(Type::alias(ORIGIN_CONFIG_TYPE_NAME)),
+        ),
+        (
+            "markers",
+            TableField::optional(Type::array(Type::alias(MARKER_CONFIG_TYPE_NAME))),
+        ),
+        (
+            "metadata",
+            TableField::optional(Type::array(Type::alias(FRAME_METADATA_CONFIG_TYPE_NAME))),
         ),
         ("fps", TableField::optional(Type::number())),
         ("durations", TableField::optional(Type::Any)),
@@ -387,6 +949,192 @@ fn sprite_animation_config_type() -> Type {
 
 pub(crate) fn constructor_type() -> FunctionType {
     FunctionType::new([Type::alias(CONFIG_TYPE_NAME)], Type::alias(TYPE_NAME))
+}
+
+pub(crate) fn sprite_sheet_type_from_call(call: &FunctionCall) -> Option<Type> {
+    let config = first_table_argument(call)?;
+    let animations = named_field(config, "animations").and_then(table_expression)?;
+    let mut spec = SpriteSpec {
+        exact: true,
+        ..SpriteSpec::default()
+    };
+    if let Some(children) = named_field(config, "children").and_then(table_expression) {
+        for field in children.fields().iter() {
+            let Field::NameKey { key, .. } = field else {
+                return Some(Type::alias(TYPE_NAME));
+            };
+            spec.children.push(token_text(key));
+        }
+    }
+
+    for field in animations.fields().iter() {
+        let Field::NameKey { key, value, .. } = field else {
+            return Some(Type::alias(TYPE_NAME));
+        };
+        spec.animations.push(token_text(key));
+
+        let Some(animation) = table_expression(value) else {
+            continue;
+        };
+        let Some(markers) = named_field(animation, "markers").and_then(table_expression) else {
+            continue;
+        };
+        for marker in markers.fields().iter() {
+            let marker = match marker {
+                Field::NoKey(value) => table_expression(value),
+                _ => None,
+            };
+            let Some(name) = marker
+                .and_then(|marker| named_field(marker, "name"))
+                .and_then(string_expression)
+                .map(|(name, _)| name)
+            else {
+                continue;
+            };
+            if !spec.markers.contains(&name) {
+                spec.markers.push(name);
+            }
+        }
+    }
+
+    (!spec.animations.is_empty()).then(|| sprite_sheet_type_for_spec(&spec))
+}
+
+pub(crate) fn direct_type_is_sprite_player(candidate: &Type) -> bool {
+    let Type::Table(table) = candidate else {
+        return false;
+    };
+
+    table.field("play").is_some()
+        && table.field("gotoAndPlay").is_some()
+        && table.field("seekFrame").is_some()
+        && table.field("draw").is_some()
+}
+
+pub(crate) fn type_is_sprite_sheet(environment: &crate::TypeEnvironment, candidate: &Type) -> bool {
+    let Type::Table(table) = environment.resolve_aliases(candidate) else {
+        return false;
+    };
+
+    table.field("animations").is_some()
+        && table.field("animationOrder").is_some()
+        && table.field("player").is_some()
+}
+
+pub(crate) fn type_is_sprite_player(
+    environment: &crate::TypeEnvironment,
+    candidate: &Type,
+) -> bool {
+    direct_type_is_sprite_player(&environment.resolve_aliases(candidate))
+}
+
+pub(crate) fn typed_member(
+    environment: &crate::TypeEnvironment,
+    receiver_type: &Type,
+    member: &str,
+) -> Option<crate::TypedFunction> {
+    let Type::Table(player) = environment.resolve_aliases(receiver_type) else {
+        return None;
+    };
+    if !direct_type_is_sprite_player(&Type::Table(player.clone())) {
+        return None;
+    }
+    let Type::Function(function) = &player.field(member)?.ty else {
+        return None;
+    };
+
+    Some(crate::TypedFunction {
+        name: Some(format!("{PLAYER_TYPE_NAME}:{member}")),
+        parameters: function
+            .parameters
+            .iter()
+            .map(|parameter| TypedParameter {
+                name: parameter.name.clone().unwrap_or_else(|| "value".to_owned()),
+                ty: parameter.ty.clone(),
+                documentation: None,
+            })
+            .collect(),
+        parameter_count: function.parameters.len(),
+        required_parameter_count: function.required_parameter_count,
+        has_varargs: function.vararg_type.is_some(),
+        vararg_type: function.vararg_type.as_deref().cloned(),
+        return_type: function.return_types_or_any().first().cloned(),
+        return_types: function.return_types_or_any().to_vec(),
+        documentation: Some(player_method_documentation(member).to_owned()),
+        overloads: Vec::new(),
+    })
+}
+
+fn player_method_documentation(member: &str) -> &'static str {
+    match member {
+        "play" => "Play a configured animation, optionally restarting it.",
+        "stop" => "Pause playback on the current frame.",
+        "resume" => "Resume the current animation.",
+        "gotoAndPlay" => "Select an animation and continue from a chosen frame.",
+        "gotoAndStop" => "Select an animation and pause on a chosen frame.",
+        "seekFrame" => "Seek to a one-based frame, optionally emitting its markers.",
+        "seek" => "Seek by normalized animation progress.",
+        "update" => "Advance the player using elapsed time and its signed speed.",
+        "draw" => "Draw the current frame using its configured registration point.",
+        "on" => "Subscribe to a configured frame-marker event.",
+        "off" => "Remove callbacks for a configured frame-marker event.",
+        "child" => "Return a configured nested sprite player's controller.",
+        _ => "Sprite player operation.",
+    }
+}
+
+pub(crate) fn method_string_completion_items(
+    environment: &crate::TypeEnvironment,
+    receiver_type: &Type,
+    method: &str,
+    active_parameter: usize,
+) -> Option<Vec<SpriteMethodCompletionItem>> {
+    if active_parameter != 0 {
+        return None;
+    }
+    let field = match method {
+        "play" | "gotoAndPlay" | "gotoAndStop" => "play",
+        "on" | "off" => "on",
+        "child" => "child",
+        _ => return None,
+    };
+    let Type::Table(player) = environment.resolve_aliases(receiver_type) else {
+        return None;
+    };
+    if !direct_type_is_sprite_player(&Type::Table(player.clone())) {
+        return None;
+    }
+    let Type::Function(function) = &player.field(field)?.ty else {
+        return None;
+    };
+    let values = string_literal_values(&function.parameters.get(1)?.ty);
+    if values.is_empty() {
+        return None;
+    }
+    let detail = match field {
+        "play" => "sprite animation",
+        "on" => "sprite marker",
+        _ => "nested sprite clip",
+    };
+
+    Some(
+        values
+            .into_iter()
+            .map(|value| SpriteMethodCompletionItem {
+                label: value.clone(),
+                detail: detail.to_owned(),
+                documentation: format!("Configured {detail} `{value}`."),
+            })
+            .collect(),
+    )
+}
+
+fn string_literal_values(ty: &Type) -> Vec<String> {
+    match ty {
+        Type::StringLiteral(value) => vec![value.clone()],
+        Type::Union(types) => types.iter().flat_map(string_literal_values).collect(),
+        _ => Vec::new(),
+    }
 }
 
 pub(crate) fn typed_function() -> crate::TypedFunction {
@@ -430,8 +1178,14 @@ pub(crate) const fn sprite_sheet_snippet() -> &'static str {
 pub(crate) enum SpriteConfigContext {
     Sheet,
     Frame,
+    Origin,
     Animations,
     Animation,
+    Range,
+    Marker,
+    Metadata,
+    Children,
+    Child,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -440,6 +1194,13 @@ pub(crate) struct SpriteConfigCompletionItem {
     pub(crate) detail: &'static str,
     pub(crate) documentation: &'static str,
     pub(crate) insert_text: &'static str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SpriteMethodCompletionItem {
+    pub(crate) label: String,
+    pub(crate) detail: String,
+    pub(crate) documentation: String,
 }
 
 pub(crate) fn config_context_at(
@@ -456,6 +1217,47 @@ pub(crate) fn config_context_at(
             .any(|span| span_contains_position(*span, position))
         {
             return Some(SpriteConfigContext::Frame);
+        }
+        if declaration
+            .origin_config_spans
+            .iter()
+            .any(|span| span_contains_position(*span, position))
+        {
+            return Some(SpriteConfigContext::Origin);
+        }
+        if declaration
+            .range_config_spans
+            .iter()
+            .any(|span| span_contains_position(*span, position))
+        {
+            return Some(SpriteConfigContext::Range);
+        }
+        if declaration
+            .marker_config_spans
+            .iter()
+            .any(|span| span_contains_position(*span, position))
+        {
+            return Some(SpriteConfigContext::Marker);
+        }
+        if declaration
+            .metadata_config_spans
+            .iter()
+            .any(|span| span_contains_position(*span, position))
+        {
+            return Some(SpriteConfigContext::Metadata);
+        }
+        if declaration
+            .child_config_spans
+            .iter()
+            .any(|span| span_contains_position(*span, position))
+        {
+            return Some(SpriteConfigContext::Child);
+        }
+        if declaration
+            .children_span
+            .is_some_and(|span| span_contains_position(span, position))
+        {
+            return Some(SpriteConfigContext::Children);
         }
         if declaration
             .animation_config_spans
@@ -493,10 +1295,22 @@ pub(crate) fn config_completion_items(
                 insert_text: "frame = { width = ${1:16}, height = ${2:16}, left = ${3:0}, top = ${4:0}, border = ${5:0} },",
             },
             SpriteConfigCompletionItem {
+                label: "origin",
+                detail: ORIGIN_CONFIG_TYPE_NAME,
+                documentation: "Default registration point for player drawing.",
+                insert_text: "origin = { x = ${1:0}, y = ${2:0} },",
+            },
+            SpriteConfigCompletionItem {
                 label: "animations",
                 detail: "{ [string]: SpriteAnimationConfig }",
                 documentation: "Named animation definitions built from the sprite grid.",
                 insert_text: "animations = {\n  ${1:idle} = { from = ${2:0}, to = ${3:3}, row = ${4:0}, fps = ${5:8} },\n},",
+            },
+            SpriteConfigCompletionItem {
+                label: "children",
+                detail: "{ [string]: SpriteChildConfig }",
+                documentation: "Optional nested sprite sheets with local display transforms.",
+                insert_text: "children = {\n  ${1:clip} = { sheet = ${2:ChildSheet}, initial = \"${3:idle}\", x = ${4:0}, y = ${5:0} },\n},",
             },
         ],
         SpriteConfigContext::Frame => &[
@@ -531,6 +1345,20 @@ pub(crate) fn config_completion_items(
                 insert_text: "border = ${1:0},",
             },
         ],
+        SpriteConfigContext::Origin => &[
+            SpriteConfigCompletionItem {
+                label: "x",
+                detail: "number",
+                documentation: "Horizontal registration point measured from the untrimmed frame's left edge.",
+                insert_text: "x = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "y",
+                detail: "number",
+                documentation: "Vertical registration point measured from the untrimmed frame's top edge.",
+                insert_text: "y = ${1:0},",
+            },
+        ],
         SpriteConfigContext::Animations => &[SpriteConfigCompletionItem {
             label: "animation",
             detail: ANIMATION_CONFIG_TYPE_NAME,
@@ -563,10 +1391,34 @@ pub(crate) fn config_completion_items(
                 insert_text: "row = ${1:0},",
             },
             SpriteConfigCompletionItem {
+                label: "frames",
+                detail: "SpriteFrameRangeConfig[]",
+                documentation: "Ordered row/column ranges for animations that cross grid rows.",
+                insert_text: "frames = {\n  { from = ${1:0}, to = ${2:7}, row = ${3:0} },\n  { from = ${4:0}, to = ${5:7}, row = ${6:1} },\n},",
+            },
+            SpriteConfigCompletionItem {
                 label: "frame",
                 detail: FRAME_CONFIG_TYPE_NAME,
                 documentation: "Optional per-animation grid size and origin override.",
                 insert_text: "frame = { width = ${1:16}, height = ${2:16}, left = ${3:0}, top = ${4:0}, border = ${5:0} },",
+            },
+            SpriteConfigCompletionItem {
+                label: "origin",
+                detail: ORIGIN_CONFIG_TYPE_NAME,
+                documentation: "Optional registration-point override for this animation.",
+                insert_text: "origin = { x = ${1:0}, y = ${2:0} },",
+            },
+            SpriteConfigCompletionItem {
+                label: "markers",
+                detail: "SpriteMarkerConfig[]",
+                documentation: "Named events attached to zero-based animation-local frame indexes.",
+                insert_text: "markers = {\n  { frame = ${1:0}, name = \"${2:event}\" },\n},",
+            },
+            SpriteConfigCompletionItem {
+                label: "metadata",
+                detail: "SpriteFrameMetadataConfig[]",
+                documentation: "Optional per-frame registration, trim offset, and untrimmed source size metadata.",
+                insert_text: "metadata = {\n  { origin = { x = ${1:0}, y = ${2:0} }, trimX = ${3:0}, trimY = ${4:0}, sourceWidth = ${5:16}, sourceHeight = ${6:16} },\n},",
             },
             SpriteConfigCompletionItem {
                 label: "fps",
@@ -591,6 +1443,128 @@ pub(crate) fn config_completion_items(
                 detail: "boolean",
                 documentation: "Legacy shorthand; `false` maps to `onLoop = \"pauseAtEnd\"`.",
                 insert_text: "loop = ${1:false},",
+            },
+        ],
+        SpriteConfigContext::Range => &[
+            SpriteConfigCompletionItem {
+                label: "from",
+                detail: "number",
+                documentation: "Zero-based first column in this ordered frame range.",
+                insert_text: "from = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "to",
+                detail: "number",
+                documentation: "Zero-based last column in this ordered frame range.",
+                insert_text: "to = ${1:7},",
+            },
+            SpriteConfigCompletionItem {
+                label: "column",
+                detail: "number",
+                documentation: "Zero-based single-column selector.",
+                insert_text: "column = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "row",
+                detail: "number",
+                documentation: "Zero-based grid row for this range.",
+                insert_text: "row = ${1:0},",
+            },
+        ],
+        SpriteConfigContext::Marker => &[
+            SpriteConfigCompletionItem {
+                label: "frame",
+                detail: "number",
+                documentation: "Zero-based animation-local frame index that emits the marker.",
+                insert_text: "frame = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "name",
+                detail: "string",
+                documentation: "Marker event name checked by SpritePlayer:on and off.",
+                insert_text: "name = \"${1:event}\",",
+            },
+        ],
+        SpriteConfigContext::Metadata => &[
+            SpriteConfigCompletionItem {
+                label: "origin",
+                detail: ORIGIN_CONFIG_TYPE_NAME,
+                documentation: "Optional registration-point override for this frame.",
+                insert_text: "origin = { x = ${1:0}, y = ${2:0} },",
+            },
+            SpriteConfigCompletionItem {
+                label: "trimX",
+                detail: "number",
+                documentation: "Horizontal offset of the trimmed atlas rectangle in the untrimmed source frame.",
+                insert_text: "trimX = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "trimY",
+                detail: "number",
+                documentation: "Vertical offset of the trimmed atlas rectangle in the untrimmed source frame.",
+                insert_text: "trimY = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "sourceWidth",
+                detail: "number",
+                documentation: "Width of the frame before atlas trimming.",
+                insert_text: "sourceWidth = ${1:16},",
+            },
+            SpriteConfigCompletionItem {
+                label: "sourceHeight",
+                detail: "number",
+                documentation: "Height of the frame before atlas trimming.",
+                insert_text: "sourceHeight = ${1:16},",
+            },
+        ],
+        SpriteConfigContext::Children => &[SpriteConfigCompletionItem {
+            label: "child",
+            detail: CHILD_CONFIG_TYPE_NAME,
+            documentation: "Named nested sprite sheet and its local transform.",
+            insert_text: "${1:name} = { sheet = ${2:ChildSheet}, initial = \"${3:idle}\", x = ${4:0}, y = ${5:0} },",
+        }],
+        SpriteConfigContext::Child => &[
+            SpriteConfigCompletionItem {
+                label: "sheet",
+                detail: TYPE_NAME,
+                documentation: "Sprite sheet used by this nested clip.",
+                insert_text: "sheet = ${1:ChildSheet},",
+            },
+            SpriteConfigCompletionItem {
+                label: "initial",
+                detail: "string",
+                documentation: "Optional initial animation for the child player.",
+                insert_text: "initial = \"${1:idle}\",",
+            },
+            SpriteConfigCompletionItem {
+                label: "x",
+                detail: "number",
+                documentation: "Horizontal child offset in parent-local coordinates.",
+                insert_text: "x = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "y",
+                detail: "number",
+                documentation: "Vertical child offset in parent-local coordinates.",
+                insert_text: "y = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "rotation",
+                detail: "number",
+                documentation: "Child rotation in radians.",
+                insert_text: "rotation = ${1:0},",
+            },
+            SpriteConfigCompletionItem {
+                label: "scaleX",
+                detail: "number",
+                documentation: "Horizontal child scale.",
+                insert_text: "scaleX = ${1:1},",
+            },
+            SpriteConfigCompletionItem {
+                label: "scaleY",
+                detail: "number",
+                documentation: "Vertical child scale.",
+                insert_text: "scaleY = ${1:1},",
             },
         ],
     }
@@ -714,10 +1688,16 @@ fn sprite_declaration_from_config(
         .unwrap_or((None, None));
     let frame_table = named_field(table, "frame").and_then(table_expression);
     let frame = frame_table.and_then(parse_frame_table);
+    let origin_table = named_field(table, "origin").and_then(table_expression);
+    let origin = origin_table
+        .and_then(parse_origin_table)
+        .unwrap_or_default();
     let animations_table = named_field(table, "animations").and_then(table_expression);
     let animations = animations_table
         .map(parse_animation_table)
         .unwrap_or_default();
+    let children_table = named_field(table, "children").and_then(table_expression);
+    let children = children_table.map(parse_children).unwrap_or_default();
     let animation_config_spans = animations_table
         .map(animation_table_spans)
         .unwrap_or_default();
@@ -728,17 +1708,45 @@ fn sprite_declaration_from_config(
     if let Some(animations_table) = animations_table {
         frame_config_spans.extend(animation_frame_table_spans(animations_table));
     }
+    let mut origin_config_spans = origin_table
+        .and_then(node_span)
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut range_config_spans = Vec::new();
+    let mut marker_config_spans = Vec::new();
+    let mut metadata_config_spans = Vec::new();
+    if let Some(animations_table) = animations_table {
+        origin_config_spans.extend(animation_nested_table_spans(animations_table, "origin"));
+        origin_config_spans.extend(animation_list_nested_table_spans(
+            animations_table,
+            "metadata",
+            "origin",
+        ));
+        range_config_spans.extend(animation_list_item_spans(animations_table, "frames"));
+        marker_config_spans.extend(animation_list_item_spans(animations_table, "markers"));
+        metadata_config_spans.extend(animation_list_item_spans(animations_table, "metadata"));
+    }
 
     SpriteDeclaration {
         name,
         image_path,
         frame,
+        origin,
         animations,
+        children,
         span,
         name_span,
         image_span,
         config_span: node_span(table).unwrap_or(span),
         frame_config_spans,
+        origin_config_spans,
+        range_config_spans,
+        marker_config_spans,
+        metadata_config_spans,
+        children_span: children_table.and_then(node_span),
+        child_config_spans: children_table
+            .map(animation_table_spans)
+            .unwrap_or_default(),
         animations_span: animations_table.and_then(node_span),
         animation_config_spans,
         statement_text,
@@ -780,12 +1788,62 @@ fn parse_frame_table(table: &ast::TableConstructor) -> Option<SpriteFrame> {
     })
 }
 
+fn parse_origin_table(table: &ast::TableConstructor) -> Option<SpriteOrigin> {
+    Some(SpriteOrigin {
+        x: named_field(table, "x")
+            .and_then(i32_expression)
+            .map(|(value, _)| value)
+            .unwrap_or(0),
+        y: named_field(table, "y")
+            .and_then(i32_expression)
+            .map(|(value, _)| value)
+            .unwrap_or(0),
+    })
+}
+
 fn parse_animation_table(table: &ast::TableConstructor) -> Vec<SpriteAnimation> {
     table
         .fields()
         .iter()
         .filter_map(parse_animation_field)
         .collect()
+}
+
+fn parse_children(table: &ast::TableConstructor) -> Vec<SpriteChild> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NameKey { key, value, .. } = field else {
+                return None;
+            };
+            let child = table_expression(value)?;
+
+            Some(SpriteChild {
+                name: token_text(key),
+                sheet: named_field(child, "sheet")
+                    .and_then(expression_text)
+                    .map(|(value, _)| value),
+                initial: named_field(child, "initial")
+                    .and_then(expression_text)
+                    .map(|(value, _)| value),
+                x: child_expression_or(child, "x", "0"),
+                y: child_expression_or(child, "y", "0"),
+                rotation: child_expression_or(child, "rotation", "0"),
+                scale_x: child_expression_or(child, "scaleX", "1"),
+                scale_y: child_expression_or(child, "scaleY", "1"),
+                span: node_span(value)?,
+                name_span: node_span(key)?,
+            })
+        })
+        .collect()
+}
+
+fn child_expression_or(table: &ast::TableConstructor, name: &str, fallback: &str) -> String {
+    named_field(table, name)
+        .and_then(expression_text)
+        .map(|(value, _)| value)
+        .unwrap_or_else(|| fallback.to_owned())
 }
 
 fn animation_table_spans(table: &ast::TableConstructor) -> Vec<SourceSpan> {
@@ -803,6 +1861,13 @@ fn animation_table_spans(table: &ast::TableConstructor) -> Vec<SourceSpan> {
 }
 
 fn animation_frame_table_spans(table: &ast::TableConstructor) -> Vec<SourceSpan> {
+    animation_nested_table_spans(table, "frame")
+}
+
+fn animation_nested_table_spans(
+    table: &ast::TableConstructor,
+    field_name: &str,
+) -> Vec<SourceSpan> {
     table
         .fields()
         .iter()
@@ -812,9 +1877,58 @@ fn animation_frame_table_spans(table: &ast::TableConstructor) -> Vec<SourceSpan>
             };
             let animation = table_expression(value)?;
 
-            named_field(animation, "frame")
+            named_field(animation, field_name)
                 .and_then(table_expression)
                 .and_then(node_span)
+        })
+        .collect()
+}
+
+fn animation_list_item_spans(table: &ast::TableConstructor, field_name: &str) -> Vec<SourceSpan> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NameKey { value, .. } = field else {
+                return None;
+            };
+            table_expression(value)
+        })
+        .filter_map(|animation| named_field(animation, field_name).and_then(table_expression))
+        .flat_map(|items| {
+            items.fields().iter().filter_map(|field| match field {
+                Field::NoKey(value) => table_expression(value).and_then(node_span),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+fn animation_list_nested_table_spans(
+    table: &ast::TableConstructor,
+    list_name: &str,
+    field_name: &str,
+) -> Vec<SourceSpan> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NameKey { value, .. } = field else {
+                return None;
+            };
+            table_expression(value)
+        })
+        .filter_map(|animation| named_field(animation, list_name).and_then(table_expression))
+        .flat_map(|items| {
+            items.fields().iter().filter_map(|field| {
+                let Field::NoKey(value) = field else {
+                    return None;
+                };
+                table_expression(value)
+                    .and_then(|item| named_field(item, field_name))
+                    .and_then(table_expression)
+                    .and_then(node_span)
+            })
         })
         .collect()
 }
@@ -830,11 +1944,39 @@ fn parse_animation_field(field: &Field) -> Option<SpriteAnimation> {
     let range = named_field(table, "from")
         .and_then(u32_expression)
         .zip(named_field(table, "to").and_then(u32_expression));
-    let (start_frame, end_frame) = match (column, range) {
-        (Some(column), _) => (column, column),
-        (None, Some(((start, _), (end, _)))) => (start, end),
-        (None, None) => return None,
+    let row = named_field(table, "row")
+        .and_then(u32_expression)
+        .map(|(value, _)| value)
+        .unwrap_or(0);
+    let ranges_expression = named_field(table, "frames");
+    let explicit_ranges = ranges_expression
+        .and_then(table_expression)
+        .map(parse_frame_ranges)
+        .unwrap_or_default();
+    let top_level_range = match (column, range) {
+        (Some(column), _) => Some(SpriteFrameRange {
+            start_frame: column,
+            end_frame: column,
+            row,
+        }),
+        (None, Some(((start_frame, _), (end_frame, _)))) => Some(SpriteFrameRange {
+            start_frame,
+            end_frame,
+            row,
+        }),
+        (None, None) => None,
     };
+    let ranges = if explicit_ranges.is_empty() {
+        vec![top_level_range?]
+    } else {
+        explicit_ranges
+    };
+    let first_range = ranges.first().copied()?;
+    let (start_frame, end_frame, row) = (
+        first_range.start_frame,
+        first_range.end_frame,
+        first_range.row,
+    );
     let fps = named_field(table, "fps").and_then(number_string_expression);
     let durations_expression = named_field(table, "durations");
     let durations = durations_expression.and_then(expression_text);
@@ -851,34 +1993,145 @@ fn parse_animation_field(field: &Field) -> Option<SpriteAnimation> {
         .map(|method| !matches!(method, "pauseAtEnd" | "pauseAtStart" | "pause"))
         .unwrap_or(legacy_looping);
     let name_span = node_span(key)?;
+    let frame_count = ranges.iter().map(frame_range_len).sum::<usize>();
+    let duration_values = durations_expression
+        .and_then(|durations| static_duration_values(durations, frame_count))
+        .or_else(|| {
+            fps.as_ref().and_then(|(fps, _)| {
+                let fps = fps.parse::<f64>().ok()?;
+                (fps > 0.0).then(|| vec![(1.0 / fps).to_string(); frame_count])
+            })
+        })
+        .unwrap_or_default();
+    let markers = named_field(table, "markers")
+        .and_then(table_expression)
+        .map(parse_markers)
+        .unwrap_or_default();
+    let metadata = named_field(table, "metadata")
+        .and_then(table_expression)
+        .map(parse_frame_metadata_list)
+        .unwrap_or_default();
 
     Some(SpriteAnimation {
         name: token_text(key),
         start_frame,
         end_frame,
-        row: named_field(table, "row")
-            .and_then(u32_expression)
-            .map(|(value, _)| value)
-            .unwrap_or(0),
+        row,
         column,
+        ranges,
         frame: named_field(table, "frame")
             .and_then(table_expression)
             .and_then(parse_frame_table),
+        origin: named_field(table, "origin")
+            .and_then(table_expression)
+            .and_then(parse_origin_table),
+        markers,
+        metadata,
         fps: fps.as_ref().map(|(value, _)| value.clone()),
         durations: durations.as_ref().map(|(value, _)| value.clone()),
         duration_preview: durations_expression.and_then(duration_preview_value),
+        duration_values,
         on_loop: on_loop.as_ref().map(|(value, _)| value.clone()),
         looping,
         span: node_span(value)?,
         name_span,
         fps_span: fps.map(|(_, span)| span),
         durations_span: durations.map(|(_, span)| span),
-        has_selector_conflict: column.is_some() && range.is_some(),
+        has_selector_conflict: (column.is_some() && range.is_some())
+            || (ranges_expression.is_some() && top_level_range.is_some()),
         has_timing_conflict: named_field(table, "fps").is_some()
             && named_field(table, "durations").is_some(),
         has_loop_conflict: named_field(table, "onLoop").is_some()
             && named_field(table, "loop").is_some(),
     })
+}
+
+fn parse_frame_ranges(table: &ast::TableConstructor) -> Vec<SpriteFrameRange> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| match field {
+            Field::NoKey(value) => table_expression(value).and_then(parse_frame_range),
+            _ => None,
+        })
+        .collect()
+}
+
+fn parse_frame_range(table: &ast::TableConstructor) -> Option<SpriteFrameRange> {
+    let column = named_field(table, "column")
+        .and_then(u32_expression)
+        .map(|(value, _)| value);
+    let range = named_field(table, "from")
+        .and_then(u32_expression)
+        .zip(named_field(table, "to").and_then(u32_expression));
+    let (start_frame, end_frame) = match (column, range) {
+        (Some(column), _) => (column, column),
+        (None, Some(((start, _), (end, _)))) => (start, end),
+        (None, None) => return None,
+    };
+
+    Some(SpriteFrameRange {
+        start_frame,
+        end_frame,
+        row: named_field(table, "row")
+            .and_then(u32_expression)
+            .map(|(value, _)| value)
+            .unwrap_or(0),
+    })
+}
+
+fn frame_range_len(range: &SpriteFrameRange) -> usize {
+    range.start_frame.abs_diff(range.end_frame) as usize + 1
+}
+
+fn parse_markers(table: &ast::TableConstructor) -> Vec<SpriteMarker> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NoKey(value) = field else {
+                return None;
+            };
+            let marker = table_expression(value)?;
+            let (frame, _) = named_field(marker, "frame").and_then(u32_expression)?;
+            let (name, span) = named_field(marker, "name").and_then(string_expression)?;
+
+            Some(SpriteMarker { frame, name, span })
+        })
+        .collect()
+}
+
+fn parse_frame_metadata_list(table: &ast::TableConstructor) -> Vec<SpriteFrameMetadata> {
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NoKey(value) = field else {
+                return None;
+            };
+            let metadata = table_expression(value)?;
+
+            Some(SpriteFrameMetadata {
+                origin: named_field(metadata, "origin")
+                    .and_then(table_expression)
+                    .and_then(parse_origin_table),
+                trim_x: named_field(metadata, "trimX")
+                    .and_then(i32_expression)
+                    .map(|(value, _)| value)
+                    .unwrap_or(0),
+                trim_y: named_field(metadata, "trimY")
+                    .and_then(i32_expression)
+                    .map(|(value, _)| value)
+                    .unwrap_or(0),
+                source_width: named_field(metadata, "sourceWidth")
+                    .and_then(u32_expression)
+                    .map(|(value, _)| value),
+                source_height: named_field(metadata, "sourceHeight")
+                    .and_then(u32_expression)
+                    .map(|(value, _)| value),
+            })
+        })
+        .collect()
 }
 
 fn named_field<'a>(table: &'a ast::TableConstructor, name: &str) -> Option<&'a Expression> {
@@ -915,6 +2168,16 @@ fn u32_expression(expression: &Expression) -> Option<(u32, SourceSpan)> {
     Some((number.parse().ok()?, span))
 }
 
+fn i32_expression(expression: &Expression) -> Option<(i32, SourceSpan)> {
+    let (text, span) = expression_text(expression)?;
+    let number = text
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    Some((number.parse().ok()?, span))
+}
+
 fn number_string_expression(expression: &Expression) -> Option<(String, SourceSpan)> {
     match expression {
         Expression::Number(token) => Some((token_text(token), node_span(token)?)),
@@ -946,6 +2209,69 @@ fn duration_preview_value(expression: &Expression) -> Option<String> {
 
         number_string_expression(value).map(|(duration, _)| duration)
     })
+}
+
+fn static_duration_values(expression: &Expression, frame_count: usize) -> Option<Vec<String>> {
+    if let Some((duration, _)) = number_string_expression(expression) {
+        let parsed = duration.parse::<f64>().ok()?;
+        return (parsed > 0.0).then(|| vec![duration; frame_count]);
+    }
+
+    let table = table_expression(expression)?;
+    let mut values = vec![None; frame_count];
+    let mut sequential_index = 0usize;
+
+    for field in table.fields().iter() {
+        match field {
+            Field::NoKey(value) => {
+                let duration = number_string_expression(value)?.0;
+                if duration
+                    .parse::<f64>()
+                    .ok()
+                    .is_none_or(|value| value <= 0.0)
+                    || sequential_index >= values.len()
+                {
+                    return None;
+                }
+                values[sequential_index] = Some(duration);
+                sequential_index += 1;
+            }
+            Field::ExpressionKey { key, value, .. } => {
+                let (interval, _) = string_expression(key)?;
+                let duration = number_string_expression(value)?.0;
+                if duration
+                    .parse::<f64>()
+                    .ok()
+                    .is_none_or(|value| value <= 0.0)
+                {
+                    return None;
+                }
+                let (start, end) = parse_duration_interval(&interval)?;
+                let step = if start <= end { 1 } else { -1 };
+                let mut index = start;
+                loop {
+                    let zero_based = usize::try_from(index.checked_sub(1)?).ok()?;
+                    *values.get_mut(zero_based)? = Some(duration.clone());
+                    if index == end {
+                        break;
+                    }
+                    index += step;
+                }
+            }
+            _ => return None,
+        }
+    }
+
+    values.into_iter().collect()
+}
+
+fn parse_duration_interval(value: &str) -> Option<(i64, i64)> {
+    let value = value.trim();
+    if let Some((start, end)) = value.split_once('-') {
+        return Some((start.trim().parse().ok()?, end.trim().parse().ok()?));
+    }
+    let index = value.parse().ok()?;
+    Some((index, index))
 }
 
 fn quoted_expression_value(expression: &str) -> Option<&str> {
@@ -1061,15 +2387,17 @@ fn sprite_declaration_diagnostics(
             ));
         }
 
-        if animation.end_frame < animation.start_frame {
-            diagnostics.push(sprite_diagnostic(
-                path,
-                animation.span,
-                format!(
-                    "sprite animation `{}` has invalid frame range {}..{}",
-                    animation.name, animation.start_frame, animation.end_frame
-                ),
-            ));
+        for range in &animation.ranges {
+            if range.end_frame < range.start_frame {
+                diagnostics.push(sprite_diagnostic(
+                    path,
+                    animation.span,
+                    format!(
+                        "sprite animation `{}` has invalid frame range {}..{}",
+                        animation.name, range.start_frame, range.end_frame
+                    ),
+                ));
+            }
         }
 
         if animation.has_selector_conflict {
@@ -1077,7 +2405,7 @@ fn sprite_declaration_diagnostics(
                 path,
                 animation.span,
                 format!(
-                    "sprite animation `{}` cannot combine `column` with `from`/`to`",
+                    "sprite animation `{}` cannot combine `column` with `from`/`to`, or `frames` with top-level selectors",
                     animation.name
                 ),
             ));
@@ -1145,6 +2473,64 @@ fn sprite_declaration_diagnostics(
                 &mut diagnostics,
             );
         }
+
+        let frame_count = animation.ranges.iter().map(frame_range_len).sum::<usize>();
+        if !animation.metadata.is_empty() && animation.metadata.len() != frame_count {
+            diagnostics.push(sprite_diagnostic(
+                path,
+                animation.span,
+                format!(
+                    "sprite animation `{}` has {} metadata entries, but the animation has {} frame(s)",
+                    animation.name,
+                    animation.metadata.len(),
+                    frame_count
+                ),
+            ));
+        }
+        if animation
+            .metadata
+            .iter()
+            .any(|metadata| metadata.source_width == Some(0) || metadata.source_height == Some(0))
+        {
+            diagnostics.push(sprite_diagnostic(
+                path,
+                animation.span,
+                format!(
+                    "sprite animation `{}` metadata source size must be greater than zero",
+                    animation.name
+                ),
+            ));
+        }
+        for marker in &animation.markers {
+            if marker.frame as usize >= frame_count {
+                diagnostics.push(sprite_diagnostic(
+                    path,
+                    marker.span,
+                    format!(
+                        "sprite animation `{}` marker `{}` targets frame {}, but the animation has {} frame(s)",
+                        animation.name, marker.name, marker.frame, frame_count
+                    ),
+                ));
+            }
+        }
+    }
+
+    let mut child_names = BTreeSet::new();
+    for child in &declaration.children {
+        if !child_names.insert(child.name.as_str()) {
+            diagnostics.push(sprite_diagnostic(
+                path,
+                child.name_span,
+                format!("sprite child `{}` is defined more than once", child.name),
+            ));
+        }
+        if child.sheet.is_none() {
+            diagnostics.push(sprite_diagnostic(
+                path,
+                child.span,
+                format!("sprite child `{}` requires a `sheet`", child.name),
+            ));
+        }
     }
 
     diagnostics
@@ -1208,6 +2594,9 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
     ));
     output.push_str(&format!("local anim8 = require(\"{RUNTIME_MODULE}\")\n"));
     output.push_str(&format!(
+        "local tuasprite = require(\"{PLAYER_RUNTIME_MODULE}\")\n"
+    ));
+    output.push_str(&format!(
         "local {image_local} = love.graphics.newImage({image_value})\n"
     ));
     output.push_str(&format!(
@@ -1231,6 +2620,10 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
         "  frame = {{ width = {}, height = {}, left = {}, top = {}, border = {} }},\n",
         frame.width, frame.height, frame.left, frame.top, frame.border
     ));
+    output.push_str(&format!(
+        "  origin = {{ x = {}, y = {} }},\n",
+        declaration.origin.x, declaration.origin.y
+    ));
     output.push_str("  animations = {\n");
 
     for animation in &declaration.animations {
@@ -1246,6 +2639,85 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
     }
 
     output.push_str("  },\n");
+    output.push_str("  animationOrder = {\n");
+    for animation in &declaration.animations {
+        output.push_str(&format!("    {},\n", lua_string_literal(&animation.name)));
+    }
+    output.push_str("  },\n");
+    output.push_str("  origins = {\n");
+    for animation in &declaration.animations {
+        let origin = animation.origin.unwrap_or(declaration.origin);
+        output.push_str(&format!(
+            "    {} = {{ x = {}, y = {} }},\n",
+            animation.name, origin.x, origin.y
+        ));
+    }
+    output.push_str("  },\n");
+    output.push_str("  markers = {\n");
+    for animation in &declaration.animations {
+        output.push_str(&format!("    {} = {{\n", animation.name));
+        for marker in &animation.markers {
+            output.push_str(&format!(
+                "      {{ frame = {}, name = {} }},\n",
+                marker.frame + 1,
+                lua_string_literal(&marker.name)
+            ));
+        }
+        output.push_str("    },\n");
+    }
+    output.push_str("  },\n");
+    output.push_str("  frameMetadata = {\n");
+    for animation in &declaration.animations {
+        let animation_frame = animation.frame.unwrap_or(frame);
+        let animation_origin = animation.origin.unwrap_or(declaration.origin);
+        output.push_str(&format!("    {} = {{\n", animation.name));
+        for metadata in &animation.metadata {
+            let origin = metadata.origin.unwrap_or(animation_origin);
+            output.push_str(&format!(
+                "      {{ originX = {}, originY = {}, trimX = {}, trimY = {}, sourceWidth = {}, sourceHeight = {} }},\n",
+                origin.x,
+                origin.y,
+                metadata.trim_x,
+                metadata.trim_y,
+                metadata.source_width.unwrap_or(animation_frame.width),
+                metadata.source_height.unwrap_or(animation_frame.height),
+            ));
+        }
+        output.push_str("    },\n");
+    }
+    output.push_str("  },\n");
+    output.push_str("  childOrder = {\n");
+    for child in &declaration.children {
+        output.push_str(&format!("    {},\n", lua_string_literal(&child.name)));
+    }
+    output.push_str("  },\n");
+    output.push_str("  children = {\n");
+    for child in &declaration.children {
+        output.push_str(&format!(
+            "    {} = {{ sheet = {}, initial = {}, x = {}, y = {}, rotation = {}, scaleX = {}, scaleY = {} }},\n",
+            child.name,
+            child.sheet.as_deref().unwrap_or("nil"),
+            child.initial.as_deref().unwrap_or("nil"),
+            child.x,
+            child.y,
+            child.rotation,
+            child.scale_x,
+            child.scale_y,
+        ));
+    }
+    output.push_str("  },\n");
+    output.push_str("  looping = {\n");
+    for animation in &declaration.animations {
+        output.push_str(&format!(
+            "    {} = {},\n",
+            animation.name,
+            if animation.looping { "true" } else { "false" }
+        ));
+    }
+    output.push_str("  },\n");
+    output.push_str("  player = function(self, initial)\n");
+    output.push_str("    return tuasprite.new(self, initial)\n");
+    output.push_str("  end,\n");
     output.push_str("}\n");
     output
 }
@@ -1271,14 +2743,23 @@ fn animation_grid_local(declaration: &SpriteDeclaration, animation: &SpriteAnima
 }
 
 fn lower_animation(animation: &SpriteAnimation, grid_local: &str) -> String {
-    let start = animation.start_frame + 1;
-    let end = animation.end_frame + 1;
-    let row = animation.row + 1;
-    let frames = if start == end {
-        format!("{grid_local}({start}, {row})")
-    } else {
-        format!("{grid_local}({:?}, {row})", format!("{start}-{end}"))
-    };
+    let selectors = animation
+        .ranges
+        .iter()
+        .flat_map(|range| {
+            let start = range.start_frame + 1;
+            let end = range.end_frame + 1;
+            let row = range.row + 1;
+            let columns = if start == end {
+                start.to_string()
+            } else {
+                format!("{start}-{end}")
+            };
+            [lua_string_or_number(&columns), row.to_string()]
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let frames = format!("{grid_local}({selectors})");
     let durations = animation
         .durations
         .clone()
@@ -1297,6 +2778,14 @@ fn lower_animation(animation: &SpriteAnimation, grid_local: &str) -> String {
         });
 
     format!("anim8.newAnimation({frames}, {durations}{on_loop})")
+}
+
+fn lua_string_or_number(value: &str) -> String {
+    if value.parse::<u32>().is_ok() {
+        value.to_owned()
+    } else {
+        lua_string_literal(value)
+    }
 }
 
 fn string_literal_value(token: &TokenReference) -> Option<String> {
@@ -1496,5 +2985,144 @@ mod tests {
         assert!(messages
             .iter()
             .any(|message| message.contains("cannot combine `loop`")));
+    }
+
+    #[test]
+    fn lowers_multi_row_ranges_origins_and_markers() {
+        let source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 180, height = 140 },
+  origin = { x = 90, y = 140 },
+  animations = {
+    run = {
+      frames = {
+        { from = 0, to = 1, row = 0 },
+        { column = 0, row = 1 },
+      },
+      fps = 12,
+      markers = {
+        { frame = 1, name = "step" },
+      },
+      metadata = {
+        { origin = { x = 90, y = 140 }, sourceWidth = 180, sourceHeight = 140 },
+        { origin = { x = 92, y = 138 }, trimX = 2, trimY = 4, sourceWidth = 184, sourceHeight = 144 },
+        { origin = { x = 90, y = 140 }, sourceWidth = 180, sourceHeight = 140 },
+      },
+    },
+  },
+})
+"#;
+        let parsed = parse_tua_source("src/sprites.tua", source).expect("sprite should parse");
+        let animation = &parsed.sprite_declarations[0].animations[0];
+
+        assert_eq!(animation.ranges.len(), 2);
+        assert_eq!(
+            animation
+                .ranges
+                .iter()
+                .map(super::frame_range_len)
+                .sum::<usize>(),
+            3
+        );
+        assert_eq!(animation.markers[0].name, "step");
+
+        let lowered = crate::emit_tua_source("src/sprites.tua", source)
+            .expect("multi-row sprite should lower");
+        assert!(lowered.contains("PlayerGrid(\"1-2\", 1, 1, 2)"));
+        assert!(lowered.contains("origin = { x = 90, y = 140 }"));
+        assert!(lowered.contains("{ frame = 2, name = \"step\" }"));
+        assert!(lowered.contains(
+            "{ originX = 92, originY = 138, trimX = 2, trimY = 4, sourceWidth = 184, sourceHeight = 144 }"
+        ));
+        assert!(lowered.contains("return tuasprite.new(self, initial)"));
+    }
+
+    #[test]
+    fn infers_exact_sprite_sheet_and_player_types() {
+        let parsed =
+            parse_tua_source("src/sprites.tua", SPRITE_SOURCE).expect("sprite should parse");
+        let environment =
+            crate::TypeEnvironment::from_parsed(&parsed).expect("sprite environment should build");
+        assert!(environment.function(super::HELPER_NAME).is_none());
+        let call = parsed
+            .ast
+            .nodes()
+            .stmts()
+            .filter_map(|stmt| match stmt {
+                full_moon::ast::Stmt::LocalAssignment(local) => local
+                    .expressions()
+                    .iter()
+                    .find_map(|expression| match expression {
+                        full_moon::ast::Expression::FunctionCall(call) => Some(call),
+                        _ => None,
+                    }),
+                _ => None,
+            })
+            .next()
+            .expect("sprite call");
+        let player = super::sprite_sheet_type_from_call(call).expect("sprite should be typed");
+        let crate::Type::Table(sheet) = player else {
+            panic!("expected specialized sprite table, got {player}");
+        };
+        let animations = &sheet.field("animations").expect("animations field").ty;
+        let crate::Type::Table(animations) = animations else {
+            panic!("expected exact animation table, got {animations}");
+        };
+
+        assert!(animations.field("idle").is_some());
+        assert!(animations.field("run").is_some());
+        assert!(sheet.field("player").is_some());
+
+        let resolved = environment.resolve_aliases(&crate::Type::Table(sheet.clone()));
+        let crate::Type::Table(resolved) = resolved else {
+            unreachable!()
+        };
+        let crate::Type::Function(factory) = &resolved.field("player").expect("player field").ty
+        else {
+            unreachable!()
+        };
+        let crate::Type::Table(player) = &factory.return_types_or_any()[0] else {
+            unreachable!()
+        };
+        let crate::Type::Function(play) = &player.field("play").expect("play field").ty else {
+            unreachable!()
+        };
+        assert_eq!(
+            super::string_literal_values(&play.parameters[1].ty),
+            vec!["idle".to_owned(), "run".to_owned()]
+        );
+    }
+
+    #[test]
+    fn lowers_optional_nested_sprite_children() {
+        let source = r#"local Hat = spriteSheet({
+  image = "assets/hat.png",
+  frame = { width = 16, height = 16 },
+  animations = { idle = { column = 0, fps = 1 } },
+})
+
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 32, height = 32 },
+  animations = { idle = { column = 0, fps = 1 } },
+  children = {
+    hat = { sheet = Hat, initial = "idle", x = 4, y = -8, scaleX = 2, scaleY = 2 },
+  },
+})
+"#;
+        let parsed = parse_tua_source("src/sprites.tua", source).expect("sprites should parse");
+        let player = &parsed.sprite_declarations[1];
+
+        assert_eq!(player.children.len(), 1);
+        assert_eq!(player.children[0].name, "hat");
+        assert_eq!(player.children[0].sheet.as_deref(), Some("Hat"));
+        assert_eq!(player.children[0].y, "-8");
+
+        let lowered =
+            crate::emit_tua_source("src/sprites.tua", source).expect("nested sprites should lower");
+        assert!(lowered.contains("childOrder = {\n    \"hat\","));
+        assert!(lowered.contains(
+            "hat = { sheet = Hat, initial = \"idle\", x = 4, y = -8, rotation = 0, scaleX = 2, scaleY = 2 }"
+        ));
     }
 }

@@ -1367,11 +1367,16 @@ return Player
     let runtime =
         fs::read_to_string(temp.path().join("build/anim8.lua")).expect("failed to read anim8");
 
-    assert!(stdout.contains("built 3 file(s)"));
+    assert!(stdout.contains("built 4 file(s)"));
     assert!(emitted.contains(r#"local anim8 = require("anim8")"#));
+    assert!(emitted.contains(r#"local tuasprite = require("tuasprite")"#));
     assert!(emitted.contains("idle = anim8.newAnimation(PlayerGrid(\"1-4\", 1), 1 / 8)"));
     assert!(runtime.contains("_VERSION     = 'anim8 v2.3.1'"));
     assert!(runtime.contains("_URL         = 'https://github.com/kikito/anim8'"));
+    let player_runtime = fs::read_to_string(temp.path().join("build/tuasprite.lua"))
+        .expect("failed to read sprite player runtime");
+    assert!(player_runtime.contains("function SpritePlayer:gotoAndPlay"));
+    assert!(player_runtime.contains("function SpritePlayer:seekFrame"));
 }
 
 #[test]
@@ -1417,6 +1422,52 @@ return Player
         fs::read_to_string(temp.path().join("build/anim8.lua")).expect("failed to read anim8");
 
     assert_eq!(runtime, "return { custom = true }\n");
+}
+
+#[test]
+fn build_does_not_overwrite_project_tuasprite_runtime() {
+    let temp = TempDir::new("build-custom-sprite-player-runtime");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src/assets")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = { from = 0, to = 3, fps = 8 },
+  },
+})
+
+return Player:player("idle")
+"#,
+    )
+    .expect("failed to write source");
+    fs::write(
+        temp.path().join("src/assets/player.png"),
+        [0x89, b'P', b'N', b'G'],
+    )
+    .expect("failed to write asset");
+    fs::write(
+        temp.path().join("src/tuasprite.lua"),
+        "return { new = function(sheet) return { custom = sheet } end }\n",
+    )
+    .expect("failed to write custom runtime");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(output.status.success());
+    let runtime = fs::read_to_string(temp.path().join("build/tuasprite.lua"))
+        .expect("failed to read sprite player runtime");
+    assert_eq!(
+        runtime,
+        "return { new = function(sheet) return { custom = sheet } end }\n"
+    );
 }
 
 #[test]

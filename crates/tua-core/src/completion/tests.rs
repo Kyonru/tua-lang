@@ -60,7 +60,10 @@ fn completes_builtin_ecs_module_and_documented_members() {
 fn completes_type_aliases_in_annotation_positions() {
     let completions = complete_at("typed: Pl").expect("alias completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["Player".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["Player".to_owned(), "SpritePlayer".to_owned()]
+    );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
     assert_eq!(completions[0].detail.as_deref(), Some("type alias"));
 }
@@ -210,7 +213,10 @@ end
         complete_tua_source("src/main.tua", source, position_after(source, "player Pl"))
             .expect("annotation type completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["Player".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["Player".to_owned(), "SpritePlayer".to_owned()]
+    );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
 }
 
@@ -228,7 +234,10 @@ end
     )
     .expect("Lua annotation type completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["Player".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["Player".to_owned(), "SpritePlayer".to_owned()]
+    );
     assert_eq!(completions[0].kind, CompletionKind::TypeAlias);
 }
 
@@ -251,6 +260,7 @@ fn completes_love_builtin_type_names() {
             "Image".to_owned(),
             "ImageData".to_owned(),
             "CompressedImageData".to_owned(),
+            "SpriteAnimation".to_owned(),
             "SpriteAnimationConfig".to_owned()
         ]
     );
@@ -1379,6 +1389,96 @@ fn completes_sprite_on_loop_method_values() {
             "pauseAtStart".to_owned(),
         ]
     );
+}
+
+#[test]
+fn completes_derived_sprite_animations_and_player_names() {
+    let source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = {
+      from = 0,
+      to = 3,
+      fps = 8,
+      markers = { { frame = 1, name = "footstep" } },
+    },
+    run = { from = 4, to = 7, fps = 12 },
+  },
+})
+local animation = Player.animations.
+"#;
+    let animations = complete_tua_source(
+        "src/sprites.tua",
+        source,
+        position_after(source, "Player.animations."),
+    )
+    .expect("derived sprite animations should complete");
+    let animation_labels = labels(&animations);
+
+    assert!(animation_labels.contains(&"idle".to_owned()));
+    assert!(animation_labels.contains(&"run".to_owned()));
+
+    let player_source = r#"local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = {
+    idle = {
+      from = 0,
+      to = 3,
+      fps = 8,
+      markers = { { frame = 1, name = "footstep" } },
+    },
+    run = { from = 4, to = 7, fps = 12 },
+  },
+})
+local player = Player:player("idle")
+player:play("r")
+"#;
+    let names = complete_tua_source(
+        "src/sprites.tua",
+        player_source,
+        position_after(player_source, "player:play(\"r"),
+    )
+    .expect("SpritePlayer animation names should complete");
+
+    assert_eq!(labels(&names), vec!["run".to_owned()]);
+
+    let marker_source = player_source.replace(
+        "player:play(\"r\")",
+        "player:on(\"fo\", function(player, marker, animation, frame) end)",
+    );
+    let markers = complete_tua_source(
+        "src/sprites.tua",
+        &marker_source,
+        position_after(&marker_source, "player:on(\"fo"),
+    )
+    .expect("SpritePlayer marker names should complete");
+
+    assert_eq!(labels(&markers), vec!["footstep".to_owned()]);
+
+    let child_source = r#"local Hat = spriteSheet({
+  image = "assets/hat.png",
+  frame = { width = 16, height = 16 },
+  animations = { idle = { column = 0, fps = 1 } },
+})
+local Player = spriteSheet({
+  image = "assets/player.png",
+  frame = { width = 16, height = 16 },
+  animations = { idle = { column = 0, fps = 1 } },
+  children = { hat = { sheet = Hat, initial = "idle" } },
+})
+local player = Player:player("idle")
+player:child("h")
+"#;
+    let children = complete_tua_source(
+        "src/sprites.tua",
+        child_source,
+        position_after(child_source, "player:child(\"h"),
+    )
+    .expect("nested sprite child names should complete");
+
+    assert_eq!(labels(&children), vec!["hat".to_owned()]);
 }
 
 #[test]

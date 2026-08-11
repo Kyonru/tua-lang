@@ -379,7 +379,10 @@ conservative because dynamically loaded files remain valid.
 
 `spriteSheet({...})` receives nested configuration completion and shared
 validation for image paths, grid geometry, frame ranges, durations, and loop
-callbacks. Set `tua.preview.enabled` to use the experimental
+callbacks. Static sheets also complete exact runtime animation, marker, and
+child names. The inspector carries ordered multi-row ranges, nonuniform frame
+durations, registration origins, trim/source metadata, markers, and child
+descriptors from the same compiler model. Set `tua.preview.enabled` to use the experimental
 **Tua: Preview Sprite Animations** webview.
 
 Static state-machine configurations use the same preview gate for

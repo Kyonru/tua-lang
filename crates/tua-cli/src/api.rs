@@ -620,6 +620,7 @@ fn load_analysis(
             indexed.insert(file.path);
         }
     }
+    host.refresh_asset_index_from_disk();
     Ok((workspace, host, indexed.into_iter().collect()))
 }
 
@@ -992,6 +993,33 @@ mod tests {
             allowed[4]["result"]["overlays"].as_array().map(Vec::len),
             Some(0)
         );
+    }
+
+    #[test]
+    fn api_asset_metadata_indexes_assets_from_disk() {
+        let project = TempProject::new();
+        project.write("tua.toml", "source = \"src\"\n");
+        project.write(
+            "src/main.tua",
+            "local player = image \"assets/player.png\"\nreturn player\n",
+        );
+        project.write("src/assets/player.png", "placeholder");
+
+        let responses = run_api(
+            &project,
+            vec![
+                json!({"jsonrpc":"2.0","id":1,"method":"tua.api/initialize","params":{"capabilities":{}}}),
+                json!({"jsonrpc":"2.0","id":2,"method":"tua.api/assetMetadata","params":{}}),
+                json!({"jsonrpc":"2.0","id":3,"method":"shutdown"}),
+            ],
+        );
+        let assets = responses[1]["result"]["assets"]
+            .as_array()
+            .expect("asset metadata should be an array");
+
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0]["relativePath"], "assets/player.png");
+        assert_eq!(assets[0]["references"].as_array().map(Vec::len), Some(1));
     }
 
     #[test]

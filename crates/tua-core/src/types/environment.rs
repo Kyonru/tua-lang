@@ -2583,7 +2583,7 @@ fn infer_local_assignment_types(
                 })
                 .is_some(),
             _ => false,
-        };
+        } || crate::sprite::direct_type_is_sprite_player(&ty);
         let ty = if context.parsed.raw.language == ParsedLanguage::Tua && !preserve_literal_unions {
             widen_inferred_type(&ty)
         } else {

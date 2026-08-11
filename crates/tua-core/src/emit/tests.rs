@@ -898,16 +898,49 @@ fn snapshot_lowers_sprite_declarations_to_anim8_structure() {
         emitted,
         r#"-- Sprite helper: Player lowers to anim8-backed Lua.
 local anim8 = require("anim8")
+local tuasprite = require("tuasprite")
 local PlayerImage = love.graphics.newImage("assets/player.png")
 local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:getHeight())
 local Player = {
   image = PlayerImage,
   grid = PlayerGrid,
   frame = { width = 16, height = 16, left = 0, top = 0, border = 0 },
+  origin = { x = 0, y = 0 },
   animations = {
     idle = anim8.newAnimation(PlayerGrid("1-4", 1), 1 / 8),
     run = anim8.newAnimation(PlayerGrid("5-10", 1), 1 / 12, "pauseAtEnd"),
   },
+  animationOrder = {
+    "idle",
+    "run",
+  },
+  origins = {
+    idle = { x = 0, y = 0 },
+    run = { x = 0, y = 0 },
+  },
+  markers = {
+    idle = {
+    },
+    run = {
+    },
+  },
+  frameMetadata = {
+    idle = {
+    },
+    run = {
+    },
+  },
+  childOrder = {
+  },
+  children = {
+  },
+  looping = {
+    idle = true,
+    run = false,
+  },
+  player = function(self, initial)
+    return tuasprite.new(self, initial)
+  end,
 }
 "#
     );

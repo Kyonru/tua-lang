@@ -247,11 +247,20 @@ queries return `"kbm" | "joy" | "none"`, and LOVE-backed source strings receive
 completion and validation. Computed configuration remains valid through the
 generic gradual `Input` surface.
 
-The sprite domain describes anim8 grid cell size, left/top origin, border
-spacing, zero-based row/column ranges, per-animation grid overrides, numeric or
-table durations, and `onLoop` method strings or callbacks. One shared semantic
-model supplies these facts to diagnostics, completion, inspection, preview,
-and Lua emission.
+The sprite domain describes anim8 grid cell size, left/top image offsets,
+registration origins, border spacing, zero-based row/column ranges, ordered
+multi-row frame ranges, per-animation grid overrides, numeric or table
+durations, typed frame markers, and `onLoop` method strings or callbacks.
+Per-frame metadata preserves registration points, trim offsets, and untrimmed
+source dimensions for atlas-import workflows.
+Static configurations derive exact animation and marker name unions. A
+replaceable `tuasprite` controller provides checked named playback, manual
+seeking, marker dispatch, and origin-aware drawing. One shared semantic model
+supplies these facts to diagnostics, completion, inspection, preview, and Lua
+emission.
+Optional named child sheets form a declarative nested display tree with local
+translation, rotation, scale, recursive update/draw, and typed child lookup.
+Tua does not embed an ActionScript VM.
 
 ## CLI
 

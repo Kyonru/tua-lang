@@ -171,6 +171,15 @@ impl<'a> SemanticModel<'a> {
         };
 
         if parts.len() == 1
+            && sprite::is_helper(&parts[0])
+            && self.environment.local(&parts[0]).is_none()
+            && self.environment.function(&parts[0]).is_none()
+        {
+            return vec![sprite::sprite_sheet_type_from_call(function_call)
+                .unwrap_or_else(|| Type::alias(sprite::TYPE_NAME))];
+        }
+
+        if parts.len() == 1
             && state_machine::is_constructor(&parts[0])
             && self.environment.local(&parts[0]).is_none()
             && self.environment.function(&parts[0]).is_none()

@@ -1073,7 +1073,7 @@
         },
         {
           "name": "support.type.builtin.tua",
-          "match": "\\b(?:Self|Vec2|SignalBus|ObjectPool|ObjectPoolOptions|SpriteSheet|SpriteAnimation|EcsWorld|EcsComponent|EcsQuery|EcsSystem|Drawable|Image|Canvas|Font|Shader|Source|Video|Quad|Mesh|ParticleSystem|SpriteBatch|Text)\\b"
+          "match": "\\b(?:Self|Vec2|SignalBus|ObjectPool|ObjectPoolOptions|SpriteSheet|SpriteAnimation|SpritePlayer|SpriteFrameConfig|SpriteAnimationConfig|SpriteOriginConfig|SpriteFrameRangeConfig|SpriteMarkerConfig|SpriteFrameMetadataConfig|SpriteChildConfig|EcsWorld|EcsComponent|EcsQuery|EcsSystem|Drawable|Image|Canvas|Font|Shader|Source|Video|Quad|Mesh|ParticleSystem|SpriteBatch|Text)\\b"
         },
         {
           "name": "entity.name.type.tua",
