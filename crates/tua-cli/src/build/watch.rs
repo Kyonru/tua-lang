@@ -14,6 +14,7 @@ impl WatchBuildSession {
         loaded: LoadedConfig,
     ) -> Result<(Self, BuildOutcome), CliError> {
         let cwd = cwd.as_ref().to_path_buf();
+        let pipeline_outcome = crate::asset_pipeline::run_asset_pipelines(&cwd, &loaded.config);
         let workspace = ProjectWorkspace::from_loaded(&cwd, loaded);
         let source_dir = workspace.primary_source_root().to_path_buf();
         let out_dir = workspace.primary_output_root().to_path_buf();
@@ -40,7 +41,8 @@ impl WatchBuildSession {
             in_place,
             host,
         };
-        let mut diagnostics = load_type_libraries(&mut session.host, &session.workspace);
+        let mut diagnostics = pipeline_outcome.diagnostics;
+        diagnostics.extend(load_type_libraries(&mut session.host, &session.workspace));
         let mut tua_paths = BTreeSet::new();
         let mut asset_paths = BTreeSet::new();
         let tua_output_owners = tua_output_owners_for_paths(

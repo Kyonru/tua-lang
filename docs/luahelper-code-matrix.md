@@ -93,6 +93,7 @@ configurable lint pipeline.
 | `TL2006` | An asset exists but belongs to the wrong asset kind for the selected loader. | Always enabled for supported asset loaders. |
 | `TL2007` | Internal lowering operations overlap or cannot be applied safely. | Always enabled. |
 | `TL2008` | Asset-path letter casing differs from the filesystem's canonical path. | Always enabled; warning. |
+| `TL2011` | An asset-pipeline configuration, importer execution, manifest, cache entry, diagnostic, or generated output is invalid. | Enabled for configured asset pipelines. |
 | `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |
 | `TL2010` | Completed compiler output failed the final Lua 5.1 safety validation. | Always enabled; blocks emission. |
 

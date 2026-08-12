@@ -34,6 +34,7 @@ target = "love11-luajit"
 extension = "tua"
 emit_maps = true
 type_libraries = []
+asset_pipelines = []
 
 [emit]
 annotation_mode = "off"
@@ -101,6 +102,7 @@ the behavior and tradeoffs of each option.
 | `extension` | string | `"tua"` | - |
 | `emit_maps` | boolean | `true` | - |
 | `type_libraries` | array | `[]` | - |
+| `asset_pipelines` | array | `[]` | - |
 | `emit.annotation_mode` | string | `"off"` | - |
 | `format.indent_width` | integer | `2` | `tua.format.indentWidth` |
 | `format.line_width` | integer | `100` | `tua.format.lineWidth` |
@@ -204,6 +206,26 @@ editor.
 The installed library owns its declarations. Updating a vendored or
 package-managed Feel checkout therefore updates Tua completion without a Tua
 release and without bundling Feel itself.
+
+## Asset Pipelines
+
+`asset_pipelines` configures opt-in standalone importers that run before
+`check`, `build`, and `watch`. Each importer is cached by its configuration and
+input contents, writes a versioned manifest, and can generate typed `.tua` or
+declaration-only `.d.tua` modules under its dedicated source directory.
+
+```toml title="tua.toml"
+[[asset_pipelines]]
+name = "world-maps"
+inputs = ["maps/**/*.ldtk", "tools/import_maps.lua"]
+command = ["lua", "tools/import_maps.lua"]
+output = "src/generated/world-maps"
+version = "1"
+```
+
+See [Asset Pipelines](asset-pipelines.md) for field definitions, importer
+environment variables, the manifest protocol, diagnostics, caching, watch
+behavior, and security guidance.
 
 ## Emit
 

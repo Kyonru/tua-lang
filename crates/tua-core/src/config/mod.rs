@@ -27,6 +27,7 @@ target = \"love11-luajit\"
 extension = \"tua\"
 emit_maps = true
 type_libraries = []
+asset_pipelines = []
 
 [emit]
 annotation_mode = \"off\"
@@ -93,6 +94,7 @@ pub struct ProjectConfig {
     pub extension: String,
     pub emit_maps: bool,
     pub type_libraries: Vec<TypeLibraryConfig>,
+    pub asset_pipelines: Vec<AssetPipelineConfig>,
     pub emit: EmitConfig,
     pub format: FormatConfig,
     pub jit: JitConfig,
@@ -110,6 +112,7 @@ impl Default for ProjectConfig {
             extension: "tua".to_owned(),
             emit_maps: true,
             type_libraries: Vec::new(),
+            asset_pipelines: Vec::new(),
             emit: EmitConfig::default(),
             format: FormatConfig::default(),
             jit: JitConfig::default(),
@@ -125,6 +128,20 @@ pub struct TypeLibraryConfig {
     pub path: PathBuf,
     pub declaration_prefix: String,
     pub runtime_prefix: String,
+}
+
+/// One opt-in external asset importer. Paths are relative to the project root.
+/// The importer writes a versioned manifest and generated files into the staging
+/// paths supplied through `TUA_ASSET_PIPELINE_*` environment variables.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AssetPipelineConfig {
+    pub name: String,
+    pub inputs: Vec<String>,
+    pub command: Vec<String>,
+    pub output: PathBuf,
+    #[serde(default)]
+    pub version: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

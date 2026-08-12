@@ -260,7 +260,6 @@ supplies these facts to diagnostics, completion, inspection, preview, and Lua
 emission.
 Optional named child sheets form a declarative nested display tree with local
 translation, rotation, scale, recursive update/draw, and typed child lookup.
-Tua does not embed an ActionScript VM.
 
 ## CLI
 

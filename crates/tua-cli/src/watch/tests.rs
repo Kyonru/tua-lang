@@ -24,12 +24,14 @@ fn snapshot_diff_tracks_changed_and_deleted_files() {
             (main.clone(), fingerprint(10)),
             (player.clone(), fingerprint(20)),
         ]),
+        pipeline_inputs: BTreeSet::new(),
     };
     let next = SourceSnapshot {
         files: BTreeMap::from([
             (main.clone(), fingerprint(11)),
             (hud.clone(), fingerprint(30)),
         ]),
+        pipeline_inputs: BTreeSet::new(),
     };
 
     let changes = previous.diff(&next);
@@ -44,6 +46,7 @@ fn snapshot_diff_is_empty_for_identical_inputs() {
     let path = PathBuf::from("/project/src/main.tua");
     let snapshot = SourceSnapshot {
         files: BTreeMap::from([(path, fingerprint(10))]),
+        pipeline_inputs: BTreeSet::new(),
     };
 
     assert!(snapshot.diff(&snapshot).is_empty());
@@ -54,11 +57,13 @@ fn snapshot_diff_detects_content_changes_with_identical_metadata() {
     let path = PathBuf::from("/project/src/main.tua");
     let previous = SourceSnapshot {
         files: BTreeMap::from([(path.clone(), fingerprint(10))]),
+        pipeline_inputs: BTreeSet::new(),
     };
     let mut changed = fingerprint(10);
     changed.content_hash = 99;
     let next = SourceSnapshot {
         files: BTreeMap::from([(path.clone(), changed)]),
+        pipeline_inputs: BTreeSet::new(),
     };
 
     assert_eq!(previous.diff(&next).changed, vec![path]);
@@ -77,6 +82,7 @@ fn event_hint_rehashes_same_metadata_file() {
                 content_hash: 1,
             },
         )]),
+        pipeline_inputs: BTreeSet::new(),
     };
     let batch = WatchBatch {
         paths: [path.clone()].into_iter().collect(),

@@ -44,6 +44,12 @@
       "description": "Declaration-only LuaCATS libraries mapped from declaration module identities to runtime require prefixes."
     },
     {
+      "path": "asset_pipelines",
+      "type": "array",
+      "default": [],
+      "description": "Opt-in external importers with content-addressed cached generated modules and structured diagnostics."
+    },
+    {
       "path": "emit.annotation_mode",
       "type": "string",
       "default": "off",

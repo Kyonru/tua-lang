@@ -5,6 +5,7 @@ target = "love11-luajit"
 extension = "tua"
 emit_maps = true
 type_libraries = []
+asset_pipelines = []
 
 [emit]
 annotation_mode = "off"

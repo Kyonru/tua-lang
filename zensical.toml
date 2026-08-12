@@ -24,6 +24,7 @@ nav = [
     { "Typing" = "typing.md" },
     { "Toolchain Reference" = "specification.md" },
     { "Lua Interop" = "lua-interop.md" },
+    { "Asset Pipelines" = "asset-pipelines.md" },
     { "State Stores" = "stores.md" },
     { "State Machines" = "state-machines.md" },
     { "Input" = "input.md" },

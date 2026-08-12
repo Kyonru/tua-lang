@@ -988,8 +988,8 @@ controller:child("hat"):gotoAndPlay("idle", 1)
 
 Child names are checked and completed. Child players update recursively and
 draw through parent-local translation, rotation, and scale. This is a small
-declarative display tree; it does not interpret ActionScript. Game-state logic
-and arbitrary timeline scripts remain ordinary Tua/Lua code.
+declarative display tree. Game-state logic and arbitrary animation behavior
+remain ordinary Tua/Lua code.
 
 ### Vectors
 

@@ -80,6 +80,10 @@ cargo run -p tua-cli -- build
 Checks the project and writes emitted Lua to the configured output directory.
 Emission is blocked by errors by default.
 
+Configured [asset pipelines](asset-pipelines.md) run or restore their cached
+outputs before source discovery, so generated `.tua` and `.d.tua` modules use
+the same checking and emission path as handwritten source.
+
 Build output mirrors the configured source tree. The configured `main` source
 file also emits to `<out>/main.lua` for LOVE entrypoint loading while keeping
 its normal mirrored output path.
@@ -168,6 +172,10 @@ Changing, creating, or removing `tua.toml` reloads the project layout and starts
 a fresh warm analysis session for the new source root, output root, extension,
 and diagnostics settings. Invalid configuration is reported while the previous
 valid configuration remains active.
+
+Input roots declared by [asset pipelines](asset-pipelines.md) are watched even
+when they live outside `source`. A changed input reruns its content-addressed
+importer before Tua rebuilds the generated module consumers.
 
 ## `lsp`
 

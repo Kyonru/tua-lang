@@ -755,6 +755,147 @@ fn declaration_modules_reject_runtime_statements() {
 }
 
 #[test]
+fn asset_pipeline_caches_typed_generated_modules_and_invalidates_by_content() {
+    let temp = TempDir::new("asset-pipeline-cache");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("assets/world.txt"), "first\n")
+        .expect("failed to write pipeline input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+main = "main.tua"
+extension = "tua"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/**/*.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+version = "1"
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "import type { Room } from \"./generated/world/types\"\nlocal _room: Room = { name = \"start\" }\n",
+    )
+    .expect("failed to write main");
+    fs::write(
+        temp.path().join("tools/import.sh"),
+        r#"set -eu
+count_file="$TUA_ASSET_PIPELINE_PROJECT_ROOT/runs.txt"
+count=0
+if [ -f "$count_file" ]; then count=$(sed -n '1p' "$count_file"); fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$count_file"
+mkdir -p "$TUA_ASSET_PIPELINE_OUTPUT_DIR"
+printf 'export type Room = { name: string }\n' > "$TUA_ASSET_PIPELINE_OUTPUT_DIR/types.d.tua"
+printf '{"version":1,"outputs":["types.d.tua"],"diagnostics":[]}\n' > "$TUA_ASSET_PIPELINE_MANIFEST"
+"#,
+    )
+    .expect("failed to write importer");
+
+    let first = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run first check");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("runs.txt")).expect("missing importer count"),
+        "1\n"
+    );
+    assert!(temp
+        .path()
+        .join("src/generated/world/types.d.tua")
+        .is_file());
+
+    let cached = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run cached check");
+    assert!(cached.status.success());
+    assert_eq!(
+        fs::read_to_string(temp.path().join("runs.txt")).expect("missing importer count"),
+        "1\n",
+        "unchanged inputs should reuse the content-addressed cache"
+    );
+
+    fs::write(temp.path().join("assets/world.txt"), "second\n")
+        .expect("failed to update pipeline input");
+    let rebuilt = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to build after input edit");
+    assert!(
+        rebuilt.status.success(),
+        "{}",
+        String::from_utf8_lossy(&rebuilt.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("runs.txt")).expect("missing importer count"),
+        "2\n"
+    );
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(!temp
+        .path()
+        .join("build/generated/world/types.d.lua")
+        .exists());
+}
+
+#[test]
+fn asset_pipeline_surfaces_structured_importer_diagnostics() {
+    let temp = TempDir::new("asset-pipeline-diagnostic");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("src/main.tua"), "return {}\n").expect("failed to write main");
+    fs::write(temp.path().join("assets/world.txt"), "bad room\n").expect("failed to write input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/world.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(
+        temp.path().join("tools/import.sh"),
+        r#"set -eu
+printf '{"version":1,"outputs":[],"diagnostics":[{"severity":"error","message":"unknown room symbol","path":"assets/world.txt","line":1,"column":5}]}\n' > "$TUA_ASSET_PIPELINE_MANIFEST"
+"#,
+    )
+    .expect("failed to write importer");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("assets/world.txt:1:5 error TL2011"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("asset pipeline `world`: unknown room symbol"));
+}
+
+#[test]
 fn traceback_remaps_generated_lua_locations_from_source_maps() {
     let temp = TempDir::new("traceback-source-map");
 
@@ -2690,6 +2831,87 @@ return { accept = accept }
         stderr.contains("expected string, found number"),
         "unexpected stderr:\n{stderr}"
     );
+}
+
+#[test]
+fn watch_reruns_asset_pipelines_when_external_inputs_change() {
+    let _guard = watch_test_guard();
+    let temp = TempDir::new("watch-asset-pipeline");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("assets/world.txt"), "first\n").expect("failed to write input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/**/*.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "import type { Room } from \"./generated/world/types\"\nlocal _room: Room = { name = \"start\" }\n",
+    )
+    .expect("failed to write main");
+    fs::write(
+        temp.path().join("tools/import.sh"),
+        r#"set -eu
+count_file="$TUA_ASSET_PIPELINE_PROJECT_ROOT/runs.txt"
+count=0
+if [ -f "$count_file" ]; then count=$(sed -n '1p' "$count_file"); fi
+printf '%s\n' "$((count + 1))" > "$count_file"
+mkdir -p "$TUA_ASSET_PIPELINE_OUTPUT_DIR"
+printf 'export type Room = { name: string }\n' > "$TUA_ASSET_PIPELINE_OUTPUT_DIR/types.d.tua"
+printf '{"version":1,"outputs":["types.d.tua"],"diagnostics":[]}\n' > "$TUA_ASSET_PIPELINE_MANIFEST"
+"#,
+    )
+    .expect("failed to write importer");
+
+    let child = tua()
+        .arg("watch")
+        .current_dir(temp.path())
+        .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
+        .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
+        .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
+        .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run tua watch");
+
+    wait_until(
+        || {
+            fs::read_to_string(temp.path().join("runs.txt"))
+                .ok()
+                .as_deref()
+                == Some("1\n")
+                && temp.path().join("build/main.lua").is_file()
+        },
+        Duration::from_secs(3),
+        "watch did not run the initial asset pipeline build",
+    );
+    fs::write(temp.path().join("assets/world.txt"), "second\n").expect("failed to change input");
+
+    let output = wait_for_child_output(child, Duration::from_secs(5));
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        fs::read_to_string(temp.path().join("runs.txt")).expect("missing importer count"),
+        "2\n"
+    );
+    assert!(
+        stdout.contains("asset pipeline rebuild: rebuilt"),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
 }
 
 fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration, failure_message: &str) {

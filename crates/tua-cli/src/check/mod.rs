@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{discover_build_files, load_type_libraries, read_source_file, SourceKind};
@@ -30,6 +31,11 @@ pub(crate) fn run_project_diagnostics(
     error_message: &str,
 ) -> Result<String, CliError> {
     let cwd = cwd.as_ref();
+    let pipeline_outcome = if mode == ProjectDiagnosticMode::Check {
+        run_asset_pipelines(cwd, &loaded.config)
+    } else {
+        Default::default()
+    };
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let source_dir = workspace.primary_source_root().to_path_buf();
     let mut source_files = {
@@ -44,7 +50,7 @@ pub(crate) fn run_project_diagnostics(
         .iter()
         .filter(|source_file| source_file.kind == SourceKind::Tua)
         .count();
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = pipeline_outcome.diagnostics;
     let mut host = AnalysisHost::with_config(workspace.config().clone());
 
     host.set_source_roots(workspace.source_roots().iter().cloned());

@@ -1,5 +1,6 @@
 mod api;
 mod args;
+mod asset_pipeline;
 mod build;
 mod check;
 mod command;

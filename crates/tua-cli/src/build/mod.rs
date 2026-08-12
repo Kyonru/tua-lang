@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
 use crate::source::{
@@ -121,6 +122,7 @@ pub(crate) fn build_project(
     emit_on_error: bool,
 ) -> Result<BuildOutcome, CliError> {
     let cwd = cwd.as_ref();
+    let pipeline_outcome = run_asset_pipelines(cwd, &loaded.config);
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
@@ -140,6 +142,7 @@ pub(crate) fn build_project(
         annotation_mode,
         source_files,
         emit_on_error,
+        pipeline_outcome.diagnostics,
     ))
 }
 
@@ -149,12 +152,13 @@ fn build_project_files(
     annotation_mode: AnnotationMode,
     source_files: Vec<SourceFile>,
     emit_on_error: bool,
+    initial_diagnostics: Vec<Diagnostic>,
 ) -> BuildOutcome {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = initial_diagnostics;
     let mut units = Vec::new();
     let tua_output_owners = tua_output_owners_for_paths(
         &workspace,

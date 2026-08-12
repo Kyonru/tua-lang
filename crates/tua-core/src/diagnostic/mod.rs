@@ -58,6 +58,7 @@ impl DiagnosticCode {
     pub const ASSET_PATH_CASE: Self = Self(2008);
     pub const ASSET_UNUSED: Self = Self(2009);
     pub const EMIT_UNSUPPORTED_SYNTAX: Self = Self(2010);
+    pub const ASSET_PIPELINE: Self = Self(2011);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -175,6 +176,7 @@ impl DiagnosticCode {
                 | Self::ASSET_PATH_CASE
                 | Self::ASSET_UNUSED
                 | Self::EMIT_UNSUPPORTED_SYNTAX
+                | Self::ASSET_PIPELINE
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY

@@ -40,6 +40,7 @@ flowchart LR
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
 | Model data and share type-safe module APIs | [Typing In Tua](typing.md) |
+| Generate typed modules from source assets | [Asset Pipelines](asset-pipelines.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
 | Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Check exact compiler and toolchain behavior | [Language and Toolchain Reference](specification.md) |
@@ -126,6 +127,8 @@ distributed with the rest of the project.
   exported types, and declaration-only `.d.tua` modules.
 - [Lua Interoperability](lua-interop.md) covers mixed `.lua` and `.tua`
   projects, module exports, and LuaDoc annotations.
+- [Asset Pipelines](asset-pipelines.md) covers cached external importers,
+  generated modules, and structured asset diagnostics.
 - [Examples](examples.md) explains the bundled feature tour and LOVE projects.
 - [State Stores](stores.md), [State Machines](state-machines.md),
   [Entity Component Systems](ecs.md), and [Object Pooling](object-pooling.md)

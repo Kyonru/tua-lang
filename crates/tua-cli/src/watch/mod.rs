@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::asset_pipeline::{asset_pipeline_input_files, asset_pipeline_watch_roots};
 use crate::build::{
     has_errors, output_path_for_asset, output_paths_for_tua_source, BuildOutcome, WatchBuildSession,
 };
@@ -52,6 +53,7 @@ struct SourceFingerprint {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SourceSnapshot {
     files: BTreeMap<PathBuf, SourceFingerprint>,
+    pipeline_inputs: BTreeSet<PathBuf>,
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -68,12 +70,15 @@ struct RemovalOutcome {
 
 #[derive(Clone, Debug)]
 struct WatchLayout {
+    project_root: PathBuf,
+    project_config: tua_core::ProjectConfig,
     config_path: PathBuf,
     source_dir: PathBuf,
     out_dir: PathBuf,
     in_place: bool,
     extension: String,
     type_library_roots: Vec<PathBuf>,
+    pipeline_watch_roots: Vec<PathBuf>,
 }
 
 struct ReloadedWatch {
@@ -105,6 +110,8 @@ impl WatchLayout {
         let out_dir = workspace.primary_output_root().to_path_buf();
 
         Self {
+            project_root: cwd.to_path_buf(),
+            project_config: loaded.config.clone(),
             config_path: cwd.join(CONFIG_FILE),
             in_place: paths_same_location(&source_dir, &out_dir),
             extension: workspace.config().extension.clone(),
@@ -113,6 +120,7 @@ impl WatchLayout {
                 .iter()
                 .map(|library| library.root().to_path_buf())
                 .collect(),
+            pipeline_watch_roots: asset_pipeline_watch_roots(cwd, &loaded.config),
             source_dir,
             out_dir,
         }
@@ -122,6 +130,16 @@ impl WatchLayout {
         self.type_library_roots
             .iter()
             .any(|root| path.starts_with(root))
+    }
+
+    fn additional_watch_roots(&self) -> Vec<PathBuf> {
+        self.type_library_roots
+            .iter()
+            .chain(&self.pipeline_watch_roots)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 }
 
@@ -188,7 +206,7 @@ fn run_watch_with_options<W: Write, E: Write>(
     let (mut watcher, fallback_error) = WatchBackend::start(
         cwd,
         &layout.source_dir,
-        &layout.type_library_roots,
+        &layout.additional_watch_roots(),
         options.poll_interval,
         options.force_poll,
     )
@@ -203,9 +221,9 @@ fn run_watch_with_options<W: Write, E: Write>(
         write_stdout(stdout, "using polling file watcher")?;
     }
 
+    let (mut build_session, initial) = WatchBuildSession::start(cwd, loaded.clone())?;
     let mut snapshot = snapshot_watch_tree(&layout, None, &WatchBatch::rescan_all())
         .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
-    let (mut build_session, initial) = WatchBuildSession::start(cwd, loaded.clone())?;
     write_outcome(stdout, stderr, "initial build", "built", &initial)?;
 
     let mut rebuilds = 0usize;
@@ -221,7 +239,7 @@ fn run_watch_with_options<W: Write, E: Write>(
                 watcher = WatchBackend::poll(
                     cwd,
                     &layout.source_dir,
-                    &layout.type_library_roots,
+                    &layout.additional_watch_roots(),
                     options.poll_interval,
                 )
                 .map_err(watch_backend_error)?;
@@ -238,9 +256,32 @@ fn run_watch_with_options<W: Write, E: Write>(
         let next = snapshot_watch_tree(&layout, Some(&snapshot), &batch)
             .map_err(|diagnostic| watch_error("failed to read watched files", diagnostic))?;
         let mut changes = snapshot.diff(&next);
+        let pipeline_changed = changes.changed.iter().chain(&changes.deleted).any(|path| {
+            snapshot.pipeline_inputs.contains(path) || next.pipeline_inputs.contains(path)
+        });
         snapshot = next;
 
         if changes.is_empty() {
+            continue;
+        }
+
+        if pipeline_changed {
+            let (next_session, outcome) = WatchBuildSession::start(cwd, loaded.clone())?;
+            build_session = next_session;
+            snapshot = snapshot_watch_tree(&layout, None, &WatchBatch::rescan_all())
+                .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
+            write_outcome(
+                stdout,
+                stderr,
+                "asset pipeline rebuild",
+                "rebuilt",
+                &outcome,
+            )?;
+
+            rebuilds += 1;
+            if reached_rebuild_limit(rebuilds, options.exit_after_rebuilds) {
+                return Ok(());
+            }
             continue;
         }
 
@@ -323,14 +364,14 @@ fn reload_watch(cwd: &Path, options: WatchOptions) -> Result<ReloadedWatch, CliE
     let (watcher, fallback_error) = WatchBackend::start(
         cwd,
         &layout.source_dir,
-        &layout.type_library_roots,
+        &layout.additional_watch_roots(),
         options.poll_interval,
         options.force_poll,
     )
     .map_err(watch_backend_error)?;
+    let (session, outcome) = WatchBuildSession::start(cwd, loaded.clone())?;
     let snapshot = snapshot_watch_tree(&layout, None, &WatchBatch::rescan_all())
         .map_err(|diagnostic| watch_error("failed to read source directory", diagnostic))?;
-    let (session, outcome) = WatchBuildSession::start(cwd, loaded.clone())?;
 
     Ok(ReloadedWatch {
         loaded,
@@ -349,6 +390,9 @@ fn snapshot_watch_tree(
     batch: &WatchBatch,
 ) -> Result<SourceSnapshot, Diagnostic> {
     let mut files = BTreeMap::new();
+    let pipeline_inputs = asset_pipeline_input_files(&layout.project_root, &layout.project_config)?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
     let source_files = match fs::metadata(&layout.source_dir) {
         Ok(metadata) if metadata.is_dir() => discover_build_files(
             &layout.source_dir,
@@ -409,7 +453,18 @@ fn snapshot_watch_tree(
         files.insert(layout.config_path.clone(), fingerprint);
     }
 
-    Ok(SourceSnapshot { files })
+    for path in &pipeline_inputs {
+        if files.contains_key(path) {
+            continue;
+        }
+        let fingerprint = fingerprint_path(path, previous, batch)?;
+        files.insert(path.clone(), fingerprint);
+    }
+
+    Ok(SourceSnapshot {
+        files,
+        pipeline_inputs,
+    })
 }
 
 fn fingerprint_path(

@@ -420,6 +420,7 @@ name = "tua-cli"
 version = "0.2.8"
 dependencies = [
  "notify",
+ "serde",
  "serde_json",
  "tua-core",
  "tua-lsp",

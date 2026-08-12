@@ -44,6 +44,7 @@ fn default_config_matches_spec() {
             extension: "tua".to_owned(),
             emit_maps: true,
             type_libraries: Vec::new(),
+            asset_pipelines: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Off,
             },
@@ -78,6 +79,32 @@ runtime_prefix = "lib.feel"
             path: PathBuf::from("lib/feel/types"),
             declaration_prefix: "feel".to_owned(),
             runtime_prefix: "lib.feel".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn parses_asset_pipelines() {
+    let config = parse_config(
+        r#"
+[[asset_pipelines]]
+name = "world-art"
+inputs = ["maps/**/*.json", "tools/import.py"]
+command = ["python3", "tools/import.py"]
+output = "src/generated/world-art"
+version = "3"
+"#,
+    )
+    .expect("asset pipeline config should parse");
+
+    assert_eq!(
+        config.asset_pipelines,
+        vec![AssetPipelineConfig {
+            name: "world-art".to_owned(),
+            inputs: vec!["maps/**/*.json".to_owned(), "tools/import.py".to_owned(),],
+            command: vec!["python3".to_owned(), "tools/import.py".to_owned()],
+            output: PathBuf::from("src/generated/world-art"),
+            version: "3".to_owned(),
         }]
     );
 }
@@ -154,6 +181,7 @@ globals = ["Game", "World"]
             extension: "tl".to_owned(),
             emit_maps: false,
             type_libraries: Vec::new(),
+            asset_pipelines: Vec::new(),
             emit: EmitConfig {
                 annotation_mode: AnnotationMode::Luacats,
             },

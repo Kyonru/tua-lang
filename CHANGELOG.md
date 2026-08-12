@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Opt-in `[[asset_pipelines]]` run standalone importers through a versioned
+  manifest protocol, cache results by configuration and input content, surface
+  source-linked diagnostics, materialize typed generated modules safely, and
+  participate in `check`, `build`, and `watch`.
 - Declaration-only `.d.tua` modules publish aliases with `export type` without
   producing Lua output. Namespace and named `import type` declarations plus
   named type re-exports support project diagnostics, navigation, type-context
