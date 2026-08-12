@@ -22,7 +22,7 @@ use crate::source_text::line_at;
 use crate::text_match::{text_match_rank, text_matches, TextMatchRank};
 use crate::types::{build_type_environment_with_diagnostics, TableShape, Type, TypeEnvironment};
 use crate::usage_index::{MemberUsageCounts, MemberUsageSummary, ProjectUsageIndex};
-use crate::{asset, ecs, input, love_conf, object_pool, signal, state_machine, store};
+use crate::{asset, audio, ecs, input, love_conf, object_pool, signal, state_machine, store};
 use crate::{
     parse_tua_source, Diagnostic, FunctionAnnotation, ParsedSource, SourcePosition, TextEdit,
     TuaType,
@@ -1028,6 +1028,12 @@ fn syntax_snippet_completions(prefix: &str, include_ecs: bool) -> Vec<Completion
             None,
             "Tua Baton input helper",
             input::workflow_snippet(),
+        ),
+        (
+            audio::CONSTRUCTOR_NAME,
+            None,
+            "Tua LÖVE audio system",
+            audio::workflow_snippet(),
         ),
         (
             "ecs component",

@@ -479,6 +479,21 @@ pub(super) fn lsp_object_pool_graph_from_core(graph: ObjectPoolGraph) -> Value {
     })
 }
 
+pub(super) fn lsp_audio_graph_from_core(graph: tua_core::AudioGraph) -> Value {
+    json!({
+        "systems": graph.systems.into_iter().map(|system| json!({
+            "id": system.id,
+            "uri": uri_from_path(&system.path),
+            "range": lsp_range(system.span),
+            "buses": system.buses,
+            "cues": system.cues,
+            "effects": system.effects,
+            "musicStates": system.music_states,
+            "layers": system.layers,
+        })).collect::<Vec<_>>()
+    })
+}
+
 fn lsp_ecs_component_use(component: EcsComponentUse) -> Value {
     json!({
         "reference": component.reference,

@@ -406,16 +406,17 @@ does not parse Tua or resolve modules and assets independently.
 | **Tua: Show Module Dependency Graph** | Tua/Lua modules, imports, missing or duplicate resolutions, cycles, reverse dependencies, exports, and inclusion paths |
 | **Tua: Show ECS Explorer** | Components, schemas, systems, queries, access patterns, and non-diagnostic performance insights |
 | **Tua: Show Object Pool Explorer** | Pool declarations, inferred item types, lifecycle calls, and conservative unreleased-acquire insights |
+| **Tua: Show Audio Explorer** | Static audio systems with their buses, cues, effects, music scenes, and layers |
 | **Tua: Preview Sprite Animations** | Resolved sprite frames, timing, loop behavior, and the synchronized source configuration |
 | **Tua: Preview State Machine** | Initial state, statically derived states, source-linked event routes, wildcard transitions, and cycles |
 
-Module, ECS, object-pool, and asset inventory requests run on the background
+Module, ECS, object-pool, audio, and asset inventory requests run on the background
 lane so completion and document edits remain responsive. Signal, sprite, and
 state-machine inspection still use synchronized compiler snapshots rather than
 extension-side source scans.
 
 See [Entity Component Systems](ecs.md) and
-[Object Pooling](object-pooling.md) for the corresponding runtime APIs.
+[Object Pooling](object-pooling.md) and [Audio Systems](audio.md) for the corresponding runtime APIs.
 
 ### Generated Lua And Running LOVE
 
@@ -526,6 +527,7 @@ The bundled VS Code extension also uses version-matched Tua requests:
 | `tua/moduleGraph` | Module dependency and export graph |
 | `tua/ecsGraph` | ECS components, systems, queries, and insights |
 | `tua/objectPoolGraph` | Object-pool declarations and lifecycle facts |
+| `tua/audioGraph` | Static audio-system declarations and their exact configured names |
 | `tua/builtinDocument` | Generated Lua and LOVE builtin stub source |
 | `tua/cacheStats` | Analysis cache and workspace-warming counters |
 | `tua/health` | Server revision, queue, cache, stale-result, and latency health |

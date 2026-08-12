@@ -1,6 +1,7 @@
 pub mod analysis;
 mod asset;
 mod ast_utils;
+mod audio;
 pub mod call_hierarchy;
 pub mod check;
 mod classes;
@@ -76,6 +77,7 @@ pub use asset::{
     AssetCategory, AssetInventory, AssetLoaderKind, AssetMetadata, AssetReference,
     AssetValidationStatus, ProjectAsset,
 };
+pub use audio::{AudioGraph, AudioGraphSystem};
 pub use call_hierarchy::{
     call_hierarchy_calls_parsed_source, call_hierarchy_exports_parsed_source,
     call_hierarchy_prepare_parsed_source, call_hierarchy_symbols_parsed_source,
@@ -286,6 +288,10 @@ pub fn tuastatemachine_runtime_source() -> &'static str {
 
 pub fn tuastore_runtime_source() -> &'static str {
     store::runtime_source()
+}
+
+pub fn tuaaudio_runtime_source() -> &'static str {
+    audio::runtime_source()
 }
 
 pub fn baton_runtime_source() -> &'static str {

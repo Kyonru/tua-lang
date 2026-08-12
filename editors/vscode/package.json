@@ -709,6 +709,12 @@
         "icon": "$(database)"
       },
       {
+        "command": "tua.showAudioExplorer",
+        "title": "Show Audio Explorer",
+        "category": "Tua",
+        "icon": "$(unmute)"
+      },
+      {
         "command": "tua.whyModuleIncluded",
         "title": "Why Is This Module Included?",
         "category": "Tua",
@@ -859,6 +865,10 @@
         },
         {
           "command": "tua.showObjectPoolExplorer",
+          "when": "editorLangId == tua"
+        },
+        {
+          "command": "tua.showAudioExplorer",
           "when": "editorLangId == tua"
         },
         {

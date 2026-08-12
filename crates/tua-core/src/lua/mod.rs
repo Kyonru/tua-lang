@@ -1,6 +1,6 @@
 use crate::{
-    asset, input, love_api, love_api_extra, love_api_signatures, object_pool, signal, sprite,
-    state_machine, store, vector, Type,
+    asset, audio, input, love_api, love_api_extra, love_api_signatures, object_pool, signal,
+    sprite, state_machine, store, vector, Type,
 };
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
@@ -52,6 +52,7 @@ pub(crate) fn top_level_items(prefix: &str) -> Vec<LuaItem> {
         .chain(STATE_MACHINE_ITEMS.iter())
         .chain(STORE_ITEMS.iter())
         .chain(INPUT_ITEMS.iter())
+        .chain(AUDIO_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .copied()
         .filter(|item| item.label.starts_with(prefix))
@@ -68,6 +69,7 @@ pub(crate) fn is_protected_global(name: &str) -> bool {
             .chain(STATE_MACHINE_ITEMS.iter())
             .chain(STORE_ITEMS.iter())
             .chain(INPUT_ITEMS.iter())
+            .chain(AUDIO_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .any(|item| item.label == name)
 }
@@ -180,6 +182,7 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
             .chain(STATE_MACHINE_ITEMS.iter())
             .chain(STORE_ITEMS.iter())
             .chain(INPUT_ITEMS.iter())
+            .chain(AUDIO_ITEMS.iter())
             .chain(SPRITE_ITEMS.iter())
             .find(|item| item.label == name)
             .copied();
@@ -313,6 +316,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .chain(STATE_MACHINE_ITEMS.iter())
         .chain(STORE_ITEMS.iter())
         .chain(INPUT_ITEMS.iter())
+        .chain(AUDIO_ITEMS.iter())
         .chain(SPRITE_ITEMS.iter())
         .chain(OBJECT_POOL_METHOD_ITEMS.iter())
         .chain(STATE_MACHINE_METHOD_ITEMS.iter())
@@ -916,6 +920,7 @@ const OBJECT_POOL_ITEMS: &[LuaItem] = &[object_pool_item()];
 const STATE_MACHINE_ITEMS: &[LuaItem] = &[state_machine_item()];
 const STORE_ITEMS: &[LuaItem] = &[store_item()];
 const INPUT_ITEMS: &[LuaItem] = &[input_item()];
+const AUDIO_ITEMS: &[LuaItem] = &[audio_item()];
 const SPRITE_ITEMS: &[LuaItem] = &[sprite_item()];
 
 const fn vector_item() -> LuaItem {
@@ -969,6 +974,15 @@ const fn input_item() -> LuaItem {
         kind: LuaItemKind::Function,
         detail: input::detail(),
         documentation: input::documentation(),
+    }
+}
+
+const fn audio_item() -> LuaItem {
+    LuaItem {
+        label: audio::CONSTRUCTOR_NAME,
+        kind: LuaItemKind::Function,
+        detail: audio::detail(),
+        documentation: audio::documentation(),
     }
 }
 

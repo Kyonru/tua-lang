@@ -223,6 +223,10 @@ output = "src/generated/world-maps"
 version = "1"
 ```
 
+An asset pipeline may use `builtin = "audio-analysis"` instead of `command`.
+The two fields are mutually exclusive. Built-in-specific scalar settings live
+under `[asset_pipelines.options]`; see [Audio Systems](audio.md#cached-audio-analysis).
+
 See [Asset Pipelines](asset-pipelines.md) for field definitions, importer
 environment variables, the manifest protocol, diagnostics, caching, watch
 behavior, and security guidance.

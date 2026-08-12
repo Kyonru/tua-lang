@@ -11,9 +11,9 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, ecs, infer_module_exports, input, object_pool, parse_tua_source, signal, state_machine,
-    store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault, ParsedSource,
-    ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
+    asset, audio, ecs, infer_module_exports, input, object_pool, parse_tua_source, signal,
+    state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault,
+    ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
 };
 
 pub(crate) mod lowering;
@@ -1496,6 +1496,7 @@ fn lower_builtin_call_operations(
     let mut tuaobjectpool_span = None;
     let mut tuastatemachine_span = None;
     let mut tuastore_span = None;
+    let mut tuaaudio_span = None;
     let mut baton_span = None;
     let mut tuaecs_span = None;
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
@@ -1505,6 +1506,7 @@ fn lower_builtin_call_operations(
         explicit_binding_position(parsed, state_machine::CONSTRUCTOR_NAME);
     let explicit_store_binding = explicit_binding_position(parsed, store::CONSTRUCTOR_NAME);
     let explicit_input_binding = explicit_binding_position(parsed, input::CONSTRUCTOR_NAME);
+    let explicit_audio_binding = explicit_binding_position(parsed, audio::CONSTRUCTOR_NAME);
 
     while index < output.len() {
         let rest = &output[index..];
@@ -1688,6 +1690,28 @@ fn lower_builtin_call_operations(
                 }
             }
 
+            if can_start_builtin_call(&output, index) && audio::is_constructor(name) {
+                let argument_start = skip_whitespace(&output, index + identifier_end);
+                let source_span = document.source_span_at(index);
+                let binding_is_active = explicit_audio_binding.is_some_and(|position| {
+                    (position.line, position.column)
+                        <= (source_span.start.line, source_span.start.column)
+                });
+                if !binding_is_active {
+                    if output[argument_start..].starts_with('(') {
+                        tuaaudio_span.get_or_insert(source_span);
+                        operations.push(lowering::LoweringOperation::replace(
+                            index..index + identifier_end,
+                            audio::EMITTED_CONSTRUCTOR_LOCAL,
+                            source_span,
+                            LoweringKind::BuiltinCall,
+                        ));
+                        index += identifier_end;
+                        continue;
+                    }
+                }
+            }
+
             if ecs_enabled && name == ecs::MODULE_NAME {
                 let field_start = skip_whitespace(&output, index + identifier_end);
 
@@ -1722,6 +1746,7 @@ fn lower_builtin_call_operations(
         || tuastatemachine_span.is_some()
         || tuastore_span.is_some()
         || baton_span.is_some()
+        || tuaaudio_span.is_some()
         || tuaecs_span.is_some()
     {
         let leading_whitespace =
@@ -1802,6 +1827,18 @@ fn lower_builtin_call_operations(
                 "local {} = require(\"{}\").new\n",
                 input::EMITTED_CONSTRUCTOR_LOCAL,
                 input::RUNTIME_MODULE,
+            ),
+            source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    if let Some(source_span) = tuaaudio_span {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            format!(
+                "local {} = require(\"{}\")\n",
+                audio::EMITTED_CONSTRUCTOR_LOCAL,
+                audio::RUNTIME_MODULE,
             ),
             source_span,
             LoweringKind::BuiltinCall,

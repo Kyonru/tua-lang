@@ -103,10 +103,34 @@ version = "3"
             name: "world-art".to_owned(),
             inputs: vec!["maps/**/*.json".to_owned(), "tools/import.py".to_owned(),],
             command: vec!["python3".to_owned(), "tools/import.py".to_owned()],
+            builtin: None,
             output: PathBuf::from("src/generated/world-art"),
             version: "3".to_owned(),
+            options: std::collections::BTreeMap::new(),
         }]
     );
+}
+
+#[test]
+fn parses_builtin_audio_analysis_pipeline_options() {
+    let config = parse_config(
+        r#"
+[[asset_pipelines]]
+name = "audio"
+builtin = "audio-analysis"
+inputs = ["assets/**/*.ogg"]
+output = "src/generated/audio"
+
+[asset_pipelines.options]
+envelope_hz = 20
+tempo_min = 60
+"#,
+    )
+    .expect("built-in audio analysis config should parse");
+    let pipeline = &config.asset_pipelines[0];
+    assert_eq!(pipeline.builtin.as_deref(), Some("audio-analysis"));
+    assert!(pipeline.command.is_empty());
+    assert_eq!(pipeline.options["envelope_hz"].as_i64(), Some(20));
 }
 
 #[test]

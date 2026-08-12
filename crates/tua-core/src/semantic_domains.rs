@@ -2,7 +2,8 @@ use full_moon::ast::FunctionCall;
 
 use crate::types::{FunctionType, Type, TypeEnvironment, TypedFunction};
 use crate::{
-    ecs, input, object_pool, signal, sprite, state_machine, store, vector, Diagnostic, ParsedSource,
+    audio, ecs, input, object_pool, signal, sprite, state_machine, store, vector, Diagnostic,
+    ParsedSource,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,6 +15,7 @@ pub(crate) enum BuiltinDomain {
     StateMachine,
     Store,
     Input,
+    Audio,
     Ecs,
 }
 
@@ -25,6 +27,7 @@ const DEFAULT_DOMAINS: &[BuiltinDomain] = &[
     BuiltinDomain::StateMachine,
     BuiltinDomain::Store,
     BuiltinDomain::Input,
+    BuiltinDomain::Audio,
 ];
 
 const MEMBER_DOMAINS: &[BuiltinDomain] = &[
@@ -35,6 +38,7 @@ const MEMBER_DOMAINS: &[BuiltinDomain] = &[
     BuiltinDomain::StateMachine,
     BuiltinDomain::Store,
     BuiltinDomain::Input,
+    BuiltinDomain::Audio,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -120,6 +124,12 @@ impl BuiltinDomainRegistry {
             diagnostics.extend(input::config_diagnostics(parsed));
         }
 
+        if environment.local(audio::CONSTRUCTOR_NAME).is_none()
+            && environment.function(audio::CONSTRUCTOR_NAME).is_none()
+        {
+            diagnostics.extend(audio::config_diagnostics(parsed));
+        }
+
         diagnostics
     }
 }
@@ -155,6 +165,7 @@ impl BuiltinDomain {
             Self::StateMachine => state_machine::builtin_type_names(),
             Self::Store => store::builtin_type_names(),
             Self::Input => input::builtin_type_names(),
+            Self::Audio => audio::builtin_type_names(),
             Self::Ecs => ecs::builtin_type_names(),
         };
 
@@ -170,6 +181,7 @@ impl BuiltinDomain {
             Self::StateMachine => state_machine::builtin_aliases(),
             Self::Store => store::builtin_aliases(),
             Self::Input => input::builtin_aliases(),
+            Self::Audio => audio::builtin_aliases(),
             Self::Ecs => ecs::builtin_aliases(),
         }
     }
@@ -183,12 +195,16 @@ impl BuiltinDomain {
             Self::StateMachine => state_machine::is_constructor(name),
             Self::Store => store::is_constructor(name),
             Self::Input => input::is_constructor(name),
+            Self::Audio => audio::is_constructor(name),
             Self::Ecs => false,
         }
     }
 
     pub(crate) const fn preserves_literal_unions(self) -> bool {
-        matches!(self, Self::Sprite | Self::StateMachine | Self::Input)
+        matches!(
+            self,
+            Self::Sprite | Self::StateMachine | Self::Input | Self::Audio
+        )
     }
 
     pub(crate) fn inferred_constructor_return_type(
@@ -203,6 +219,9 @@ impl BuiltinDomain {
                 .or_else(|| Some(Type::alias(state_machine::TYPE_NAME))),
             Self::Input => {
                 input::input_type_from_call(call).or_else(|| Some(Type::alias(input::TYPE_NAME)))
+            }
+            Self::Audio => {
+                audio::audio_type_from_call(call).or_else(|| Some(Type::alias(audio::TYPE_NAME)))
             }
             Self::ObjectPool => Some(
                 first_argument_type
@@ -237,6 +256,9 @@ impl BuiltinDomain {
             Self::Input => Some(BuiltinConstructor::Typed(Box::new(
                 input::constructor_typed_function(),
             ))),
+            Self::Audio => Some(BuiltinConstructor::Typed(Box::new(
+                audio::constructor_typed_function(),
+            ))),
             Self::Ecs => None,
         }
     }
@@ -256,6 +278,7 @@ impl BuiltinDomain {
             Self::StateMachine => state_machine::typed_member(environment, receiver_type, member),
             Self::Store => store::typed_member(environment, receiver_type, member),
             Self::Input => input::typed_member(environment, receiver_type, member),
+            Self::Audio => audio::typed_member(environment, receiver_type, member),
             Self::Sprite => sprite::typed_member(environment, receiver_type, member),
             Self::Vector | Self::Signal => None,
         }
@@ -274,6 +297,7 @@ impl BuiltinDomain {
             | Self::ObjectPool
             | Self::StateMachine
             | Self::Store
+            | Self::Audio
             | Self::Ecs => None,
         }
     }

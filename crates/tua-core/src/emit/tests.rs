@@ -1620,3 +1620,60 @@ return controls
 "#
     );
 }
+
+#[test]
+fn lowers_audio_system_calls_to_replaceable_runtime() {
+    let emitted = emit_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  buses = { master = { volume = 1 }, sfx = { parent = "master" } },
+  cues = { jump = { source = sound("assets/jump.wav"), bus = "sfx" } },
+  music = {},
+})
+return audio
+"#,
+    )
+    .expect("audio system should emit");
+
+    assert!(emitted.starts_with("local __tua_audio_system = require(\"tuaaudio\")\n"));
+    assert!(emitted.contains("local audio = __tua_audio_system({"));
+}
+
+#[test]
+fn lowers_asset_helpers_nested_in_audio_system_declarations() {
+    let emitted = emit_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  cues = { jump = { source = sound("assets/jump.wav") } },
+  music = {
+    sample = { layers = { track = { source = music("assets/sample.wav") } } },
+  },
+})
+return audio
+"#,
+    )
+    .expect("nested audio asset helpers should emit");
+
+    assert!(
+        emitted.contains("source = love.audio.newSource(\"assets/jump.wav\", \"static\")"),
+        "{emitted}"
+    );
+    assert!(
+        emitted.contains("source = love.audio.newSource(\"assets/sample.wav\", \"stream\")"),
+        "{emitted}"
+    );
+    assert!(!emitted.contains("source = music("));
+}
+
+#[test]
+fn preserves_explicit_audio_system_bindings() {
+    let emitted = emit_tua_source(
+        "src/audio.tua",
+        r#"local audioSystem = require("project_audio")
+return audioSystem({})
+"#,
+    )
+    .expect("explicit audio binding should emit");
+    assert!(!emitted.contains("require(\"tuaaudio\")"));
+    assert!(emitted.contains("return audioSystem({})"));
+}

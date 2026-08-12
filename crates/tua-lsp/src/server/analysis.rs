@@ -1038,6 +1038,10 @@ impl AnalysisSnapshot {
         self.core.object_pool_graph()
     }
 
+    pub(super) fn audio_graph(&self) -> tua_core::AudioGraph {
+        self.core.audio_graph()
+    }
+
     pub(super) fn hover(&self, path: &Path, position: SourcePosition) -> Option<tua_core::Hover> {
         self.core.hover(path, position)
     }

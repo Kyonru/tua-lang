@@ -896,6 +896,147 @@ printf '{"version":1,"outputs":[],"diagnostics":[{"severity":"error","message":"
 }
 
 #[test]
+fn builtin_audio_analysis_generates_typed_cached_catalog() {
+    let temp = TempDir::new("builtin-audio-analysis");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets/audio")).expect("failed to create assets");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "local catalog = require(\"generated.audio.catalog\")\nreturn catalog\n",
+    )
+    .expect("failed to write main");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+main = "main.tua"
+extension = "tua"
+
+[[asset_pipelines]]
+name = "audio"
+builtin = "audio-analysis"
+inputs = ["assets/audio/*.wav"]
+output = "src/generated/audio"
+version = "1"
+
+[asset_pipelines.options]
+envelope_hz = 20
+tempo_min = 60
+tempo_max = 180
+confidence_warning = 0
+"#,
+    )
+    .expect("failed to write config");
+    let rate = 8000_u32;
+    let frames = rate;
+    let data_bytes = frames * 2;
+    let mut wav = Vec::new();
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16_u32.to_le_bytes());
+    wav.extend_from_slice(&1_u16.to_le_bytes());
+    wav.extend_from_slice(&1_u16.to_le_bytes());
+    wav.extend_from_slice(&rate.to_le_bytes());
+    wav.extend_from_slice(&(rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2_u16.to_le_bytes());
+    wav.extend_from_slice(&16_u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_bytes.to_le_bytes());
+    for index in 0..frames {
+        let pulse: i16 = if index % (rate / 2) < 80 { 16000 } else { 0 };
+        wav.extend_from_slice(&pulse.to_le_bytes());
+    }
+    fs::write(temp.path().join("assets/audio/pulse.wav"), wav).expect("failed to write wav");
+
+    let first = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run check");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    for output in ["catalog.tua", "catalog_data.lua", "audio-index.json"] {
+        assert!(
+            temp.path()
+                .join("src/generated/audio")
+                .join(output)
+                .is_file(),
+            "missing {output}"
+        );
+    }
+    let index: Value = serde_json::from_slice(
+        &fs::read(temp.path().join("src/generated/audio/audio-index.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(index[0]["channels"], 1);
+    assert_eq!(index[0]["sampleRate"], rate);
+    assert!(index[0]["energy"]
+        .as_array()
+        .is_some_and(|values| !values.is_empty()));
+    let cached = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run cached check");
+    assert!(
+        cached.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cached.stderr)
+    );
+}
+
+#[test]
+fn audio_runtime_priority_fades_pooling_and_snapshots() {
+    let lua = Command::new("lua").arg("-v").output();
+    if lua.is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/audio_runtime.lua"))
+        .arg(&root)
+        .output()
+        .expect("failed to run audio runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn build_emits_audio_runtime_and_transitive_helpers_on_demand() {
+    let temp = TempDir::new("audio-runtime-build");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::write(temp.path().join("src/main.tua"), "local audio = audioSystem({ buses = { master = {} }, cues = {}, music = {} })\nreturn audio\n").expect("failed to write main");
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to build");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for runtime in ["tuaaudio.lua", "tuasignal.lua", "tuastore.lua"] {
+        assert!(
+            temp.path().join("build").join(runtime).is_file(),
+            "missing {runtime}"
+        );
+    }
+    assert!(fs::read_to_string(temp.path().join("build/main.lua"))
+        .unwrap()
+        .contains("require(\"tuaaudio\")"));
+}
+
+#[test]
 fn traceback_remaps_generated_lua_locations_from_source_maps() {
     let temp = TempDir::new("traceback-source-map");
 

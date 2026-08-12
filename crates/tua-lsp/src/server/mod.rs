@@ -750,6 +750,7 @@ fn method_is_background_refresh(method: &str) -> bool {
             | "tua/ecsGraph"
             | "tua/moduleGraph"
             | "tua/objectPoolGraph"
+            | "tua/audioGraph"
             | "workspace/symbol"
     )
 }

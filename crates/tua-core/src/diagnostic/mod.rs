@@ -59,6 +59,7 @@ impl DiagnosticCode {
     pub const ASSET_UNUSED: Self = Self(2009);
     pub const EMIT_UNSUPPORTED_SYNTAX: Self = Self(2010);
     pub const ASSET_PIPELINE: Self = Self(2011);
+    pub const AUDIO_ANALYSIS: Self = Self(2012);
     pub const CONFIG_PARSE: Self = Self(3001);
     pub const CONFIG_IO: Self = Self(3002);
     pub const LINT_DUPLICATE_TABLE_KEY: Self = Self(4001);
@@ -124,6 +125,7 @@ impl DiagnosticCode {
     pub const DOMAIN_LOVE_CALLBACK: Self = Self(5006);
     pub const DOMAIN_OBJECT_POOL_LIFECYCLE: Self = Self(5007);
     pub const DOMAIN_INPUT_CONFIG: Self = Self(5008);
+    pub const DOMAIN_AUDIO_CONFIG: Self = Self(5009);
 
     pub fn new(number: u16) -> Option<Self> {
         if (1..=5999).contains(&number) {
@@ -177,6 +179,7 @@ impl DiagnosticCode {
                 | Self::ASSET_UNUSED
                 | Self::EMIT_UNSUPPORTED_SYNTAX
                 | Self::ASSET_PIPELINE
+                | Self::AUDIO_ANALYSIS
                 | Self::CONFIG_PARSE
                 | Self::CONFIG_IO
                 | Self::LINT_DUPLICATE_TABLE_KEY
@@ -241,6 +244,7 @@ impl DiagnosticCode {
                 | Self::DOMAIN_LOVE_CALLBACK
                 | Self::DOMAIN_OBJECT_POOL_LIFECYCLE
                 | Self::DOMAIN_INPUT_CONFIG
+                | Self::DOMAIN_AUDIO_CONFIG
         )
     }
 }

@@ -267,6 +267,7 @@ impl LspServer {
             RequestKind::ModuleGraph => response(id, self.module_dependency_graph_response()),
             RequestKind::EcsGraph => response(id, self.ecs_graph_response()),
             RequestKind::ObjectPoolGraph => response(id, self.object_pool_graph_response()),
+            RequestKind::AudioGraph => response(id, self.audio_graph_response()),
             RequestKind::SignalGraph => response(id, self.signal_graph_response()),
             RequestKind::PrepareCallHierarchy => {
                 response(id, self.prepare_call_hierarchy_response(&message))
@@ -1588,6 +1589,16 @@ impl LspServer {
         json!({
             "analysisRevision": snapshot.revision(),
             "graph": lsp_object_pool_graph_from_core(snapshot.object_pool_graph())
+        })
+    }
+
+    fn audio_graph_response(&self) -> Value {
+        let snapshot = self
+            .analysis
+            .snapshot(&self.workspace_folders, &self.settings);
+        json!({
+            "analysisRevision": snapshot.revision(),
+            "graph": crate::server::protocol::lsp_audio_graph_from_core(snapshot.audio_graph())
         })
     }
 

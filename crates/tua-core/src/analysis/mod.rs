@@ -98,6 +98,7 @@ use crate::{
 };
 
 mod asset_queries;
+mod audio_queries;
 mod database;
 mod ecs_queries;
 mod editor_queries;

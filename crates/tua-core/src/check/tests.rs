@@ -3448,3 +3448,56 @@ impl Drop for TempProject {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn audio_system_derives_exact_cue_bus_scene_and_layer_names() {
+    let diagnostics = check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  buses = { master = {}, sfx = { parent = "master" } },
+  cues = { jump = { source = nil, bus = "sfx" } },
+  music = { exploration = { layers = { base = { source = nil } } } },
+})
+audio:play("missing")
+audio:setBusVolume("wrong", 1)
+audio:setMusicState("combat")
+audio:setMusicLayer("drums", 1)
+"#,
+    )
+    .expect_err("unknown audio names should fail checking");
+    assert!(
+        diagnostics
+            .iter()
+            .filter(|item| item.code == Some(DiagnosticCode::TYPE_MISMATCH))
+            .count()
+            >= 4
+    );
+    for name in ["missing", "wrong", "combat", "drums"] {
+        assert!(
+            diagnostics.iter().any(|item| item.message.contains(name)),
+            "missing exact-name diagnostic for {name}: {diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
+fn audio_system_reports_unknown_bus_references_and_cycles() {
+    let diagnostics = check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  buses = { a = { parent = "b" }, b = { parent = "a" } },
+  cues = { jump = { source = nil, bus = "missing" } },
+})
+"#,
+    )
+    .expect_err("invalid audio graph should fail checking");
+    assert!(diagnostics
+        .iter()
+        .any(|item| item.code == Some(DiagnosticCode::DOMAIN_AUDIO_CONFIG)));
+    assert!(diagnostics
+        .iter()
+        .any(|item| item.message.contains("cycle")));
+    assert!(diagnostics
+        .iter()
+        .any(|item| item.message.contains("unknown bus")));
+}

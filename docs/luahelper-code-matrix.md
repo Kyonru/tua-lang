@@ -94,6 +94,7 @@ configurable lint pipeline.
 | `TL2007` | Internal lowering operations overlap or cannot be applied safely. | Always enabled. |
 | `TL2008` | Asset-path letter casing differs from the filesystem's canonical path. | Always enabled; warning. |
 | `TL2011` | An asset-pipeline configuration, importer execution, manifest, cache entry, diagnostic, or generated output is invalid. | Enabled for configured asset pipelines. |
+| `TL2012` | Built-in audio decoding or analysis failed, or its timing/channel metadata needs attention. | Enabled for `audio-analysis` pipelines. |
 | `TL2009` | A statically indexed asset has no known source reference. | Asset Explorer analysis; hint. |
 | `TL2010` | Completed compiler output failed the final Lua 5.1 safety validation. | Always enabled; blocks emission. |
 
@@ -185,6 +186,7 @@ language server without rewriting `tua.toml`.
 | `TL5006` | A LOVE callback name is likely misspelled or its declared signature is incompatible with LOVE. | LOVE callback analysis; severity depends on the condition. |
 | `TL5007` | A directly visible object-pool acquisition has no later release or pool clear in the same file. | Object-pool analysis; conservative warning. |
 | `TL5008` | An `input({...})` declaration has an invalid Baton source, pair, control reference, duplicate name, or deadzone. | Baton input analysis. |
+| `TL5009` | An `audioSystem({...})` declaration has an invalid bus graph or unknown bus reference. | Audio-system analysis. |
 
 ## Enable Optional Diagnostics
 

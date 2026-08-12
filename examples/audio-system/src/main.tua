@@ -1,0 +1,103 @@
+local function tone(frequency: number, seconds: number): Source
+  local rate = 44100
+  local data = love.sound.newSoundData(math.floor(rate * seconds), rate, 16, 1)
+  for sample = 0, data:getSampleCount() - 1 do
+    local envelope = 1 - sample / data:getSampleCount()
+    data:setSample(sample, math.sin(sample / rate * frequency * math.pi * 2) * envelope * 0.25)
+  end
+  local source = love.audio.newQueueableSource(rate, 16, 1, 2)
+  source:queue(data)
+  return source
+end
+
+local analysis = require("generated.audio.catalog")
+
+local audio = audioSystem({
+  maxVoices = 8,
+  buses = {
+    master = { volume = 1 },
+    music = { parent = "master", maxVoices = 2 },
+    sfx = { parent = "master", maxVoices = 6 },
+  },
+  cues = {
+    low = { source = tone(220, 0.3), bus = "sfx", priority = 10, maxVoices = 3 },
+    high = { source = tone(660, 0.2), bus = "sfx", priority = 50, maxVoices = 3 },
+  },
+  music = {
+    sample = {
+      -- Analysis keys are project-relative; LÖVE asset paths are source-relative.
+      analysis = "src/sample.wav",
+      signature = { 4, 4 },
+      layers = {
+        track = { source = music("sample.wav") },
+      },
+    },
+    sample2 = {
+      analysis = "src/sample2.wav",
+      -- Authored timing overrides the analyzer; the detected offset remains available.
+      bpm = 90,
+      signature = { 4, 4 },
+      layers = {
+        track = { source = music("sample2.wav") },
+      },
+    },
+  },
+  analysis = analysis,
+})
+
+local detected = analysis["src/sample.wav"]
+local detected2 = analysis["src/sample2.wav"]
+local beat = -1
+local bar = -1
+local current = "sample2"
+local message = "Sample2 starts automatically; Space: sample1; Enter: sample2; 1/2: cues"
+
+audio:on("beat", function(event)
+  beat = event.beat or beat
+end)
+
+audio:on("bar", function(event)
+  bar = event.bar or bar
+end)
+
+function love.load()
+  audio:setMusicState("sample2")
+end
+
+function love.keypressed(key: string)
+  if key == "space" then
+    current = "sample"
+    audio:setMusicState("sample")
+  end
+  if key == "return" then
+    current = "sample2"
+    audio:setMusicState("sample2")
+  end
+  if key == "1" then audio:play("low", { fadeIn = 0.03 }) end
+  if key == "2" then audio:play("high", { fadeIn = { duration = 0.08, curve = "smoothstep" } }) end
+  if key == "m" then
+    local muted = audio:snapshot().buses.sfx.muted
+    audio:setBusMuted("sfx", not muted)
+  end
+  if key == "left" then audio:setBusVolume("sfx", 0.15, 0.5) end
+  if key == "right" then audio:setBusVolume("sfx", 1, 0.5) end
+end
+
+function love.update(dt: number)
+  audio:update(dt)
+end
+
+function love.draw()
+  local snapshot = audio:snapshot()
+  love.graphics.print("Tua first-class audio", 32, 32)
+  love.graphics.print(message, 32, 72)
+  love.graphics.print("Active voices: " .. snapshot.activeVoices, 32, 118)
+  love.graphics.print("Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: " .. snapshot.rejected, 32, 146)
+  love.graphics.print("Effective SFX gain: " .. string.format("%.2f", snapshot.buses.sfx.gain), 32, 174)
+  love.graphics.print("Current scene: " .. current, 32, 202)
+  love.graphics.print("Sample1 BPM: " .. (detected.bpm and string.format("%.2f", detected.bpm) or "low confidence"), 32, 230)
+  love.graphics.print("Sample2 detected BPM: " .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"), 32, 258)
+  love.graphics.print("Sample2 effective BPM: 90.00 (authored override)", 32, 286)
+  love.graphics.print("Sample2 confidence: " .. string.format("%.2f", detected2.confidence), 32, 314)
+  love.graphics.print("Beat: " .. beat .. "  Bar: " .. bar, 32, 342)
+end

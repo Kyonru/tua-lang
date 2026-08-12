@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::audio;
 use crate::ecs;
 use crate::input;
 use crate::module_graph::{ModuleExportOrigin, ModuleGraph, RequireResolution};
@@ -659,6 +660,9 @@ fn builtin_type(name: &str) -> Option<Type> {
             .into_iter()
             .find_map(|(alias, ty)| (alias == name).then_some(ty)),
         name if input::builtin_type_names().contains(&name) => input::builtin_aliases()
+            .into_iter()
+            .find_map(|(alias, ty)| (alias == name).then_some(ty)),
+        name if audio::builtin_type_names().contains(&name) => audio::builtin_aliases()
             .into_iter()
             .find_map(|(alias, ty)| (alias == name).then_some(ty)),
         name if sprite::builtin_type_names().contains(&name) => sprite::builtin_aliases()

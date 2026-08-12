@@ -51,6 +51,7 @@ const expected = [
   "tua.showModuleGraph",
   "tua.showEcsExplorer",
   "tua.showObjectPoolExplorer",
+  "tua.showAudioExplorer",
   "tua.whyModuleIncluded",
   "tua.source.organizeImports",
   "tua.source.sortImports",

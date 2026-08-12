@@ -6,6 +6,12 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
 use tua_core::{
     AssetPipelineConfig, Diagnostic, DiagnosticCode, DiagnosticSeverity, ProjectConfig,
 };
@@ -61,6 +67,376 @@ struct MaterializedState {
 
 fn one() -> usize {
     1
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioAnalysis {
+    path: String,
+    duration: f64,
+    channels: usize,
+    sample_rate: u32,
+    envelope_hz: f64,
+    rms: f64,
+    peak: f64,
+    bpm: Option<f64>,
+    confidence: f64,
+    beat_offset: f64,
+    beat_grid: Vec<f64>,
+    energy: Vec<f64>,
+    low: Vec<f64>,
+    mid: Vec<f64>,
+    high: Vec<f64>,
+    onset: Vec<f64>,
+}
+
+fn option_number(pipeline: &AssetPipelineConfig, name: &str, fallback: f64) -> f64 {
+    pipeline
+        .options
+        .get(name)
+        .and_then(|value| value.as_f64())
+        .unwrap_or(fallback)
+}
+
+fn execute_audio_analysis(
+    cwd: &Path,
+    pipeline: &AssetPipelineConfig,
+    inputs: &[PathBuf],
+    output: &Path,
+) -> Result<ImportManifest, Vec<Diagnostic>> {
+    let envelope_hz = option_number(pipeline, "envelope_hz", 20.0).clamp(1.0, 200.0);
+    let tempo_min = option_number(pipeline, "tempo_min", 60.0).clamp(20.0, 400.0);
+    let tempo_max = option_number(pipeline, "tempo_max", 200.0).clamp(tempo_min, 400.0);
+    let confidence_warning = option_number(pipeline, "confidence_warning", 0.35).clamp(0.0, 1.0);
+    let mut analyses = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    for input in inputs {
+        match analyze_audio_file(cwd, input, envelope_hz, tempo_min, tempo_max) {
+            Ok(analysis) => {
+                if analysis.bpm.is_none() || analysis.confidence < confidence_warning {
+                    diagnostics.push(ImportDiagnostic {
+                        severity: "warning".to_owned(),
+                        message: "tempo confidence is low; author BPM and beat offset before using quantized transitions".to_owned(),
+                        path: analysis.path.clone(), line: 1, column: 1,
+                        end_line: None, end_column: None, code: Some(2012),
+                    });
+                }
+                if analysis.channels > 1 {
+                    diagnostics.push(ImportDiagnostic {
+                        severity: "info".to_owned(),
+                        message: "stereo audio cannot use LÖVE positional playback".to_owned(),
+                        path: analysis.path.clone(),
+                        line: 1,
+                        column: 1,
+                        end_line: None,
+                        end_column: None,
+                        code: Some(2012),
+                    });
+                }
+                analyses.push(analysis);
+            }
+            Err(message) => diagnostics.push(ImportDiagnostic {
+                severity: "error".to_owned(),
+                message,
+                path: display_path(input.strip_prefix(cwd).unwrap_or(input)),
+                line: 1,
+                column: 1,
+                end_line: None,
+                end_column: None,
+                code: Some(2012),
+            }),
+        }
+    }
+
+    if diagnostics.iter().any(|item| item.severity == "error") {
+        return Err(manifest_diagnostics(
+            cwd,
+            pipeline,
+            &ImportManifest {
+                version: MANIFEST_VERSION,
+                outputs: Vec::new(),
+                diagnostics,
+            },
+        ));
+    }
+    analyses.sort_by(|left, right| left.path.cmp(&right.path));
+    let data_lua = audio_catalog_lua(&analyses);
+    let module = pipeline
+        .output
+        .components()
+        .skip(1)
+        .map(|part| part.as_os_str().to_string_lossy())
+        .chain(std::iter::once(std::borrow::Cow::Borrowed("catalog_data")))
+        .collect::<Vec<_>>()
+        .join(".");
+    let facade = format!(
+        r#"export type AudioAnalysis = {{
+  path: string,
+  duration: number,
+  channels: number,
+  sampleRate: number,
+  envelopeHz: number,
+  rms: number,
+  peak: number,
+  bpm: number | nil,
+  confidence: number,
+  beatOffset: number,
+  beatGrid: number[],
+  energy: number[],
+  low: number[],
+  mid: number[],
+  high: number[],
+  onset: number[],
+}}
+
+local catalog: {{ [string]: AudioAnalysis }} = require("{module}")
+return catalog
+"#
+    );
+    let index = serde_json::to_vec_pretty(&analyses)
+        .map_err(|error| vec![pipeline_error(cwd, pipeline, error.to_string())])?;
+    for (name, bytes) in [
+        ("catalog.tua", facade.into_bytes()),
+        ("catalog_data.lua", data_lua.into_bytes()),
+        ("audio-index.json", index),
+    ] {
+        let path = output.join(name);
+        fs::write(&path, bytes).map_err(|source| vec![io_diagnostic(&path, source)])?;
+    }
+    Ok(ImportManifest {
+        version: MANIFEST_VERSION,
+        outputs: vec![
+            "catalog.tua".to_owned(),
+            "catalog_data.lua".to_owned(),
+            "audio-index.json".to_owned(),
+        ],
+        diagnostics,
+    })
+}
+
+fn analyze_audio_file(
+    cwd: &Path,
+    path: &Path,
+    envelope_hz: f64,
+    tempo_min: f64,
+    tempo_max: f64,
+) -> Result<AudioAnalysis, String> {
+    let file = File::open(path).map_err(|error| error.to_string())?;
+    let stream = MediaSourceStream::new(Box::new(file), Default::default());
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let mut hint = Hint::new();
+    hint.with_extension(extension);
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            stream,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .map_err(|error| format!("unsupported or corrupt audio: {error}"))?;
+    let mut format = probed.format;
+    let track = format
+        .default_track()
+        .ok_or_else(|| "audio contains no default track".to_owned())?;
+    let track_id = track.id;
+    let params = track.codec_params.clone();
+    let sample_rate = params
+        .sample_rate
+        .ok_or_else(|| "audio sample rate is unknown".to_owned())?;
+    let channels = params
+        .channels
+        .map(|channels| channels.count())
+        .unwrap_or(1);
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&params, &DecoderOptions::default())
+        .map_err(|error| format!("audio codec is unsupported: {error}"))?;
+    let mut mono = Vec::<f32>::new();
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(symphonia::core::errors::Error::IoError(error))
+                if error.kind() == io::ErrorKind::UnexpectedEof =>
+            {
+                break
+            }
+            Err(error) => return Err(format!("failed to read audio packet: {error}")),
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(decoded) => decoded,
+            Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
+            Err(error) => return Err(format!("failed to decode audio: {error}")),
+        };
+        let spec = *decoded.spec();
+        let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
+        samples.copy_interleaved_ref(decoded);
+        for frame in samples.samples().chunks(channels) {
+            mono.push(frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32);
+        }
+    }
+    let window = ((sample_rate as f64 / envelope_hz).round() as usize).max(1);
+    let mut energy = Vec::new();
+    let mut low = Vec::new();
+    let mut mid = Vec::new();
+    let mut high = Vec::new();
+    let mut onset = Vec::new();
+    let mut peak = 0.0_f64;
+    let mut square_sum = 0.0_f64;
+    let low_alpha = (-2.0 * std::f64::consts::PI * 200.0 / sample_rate as f64).exp();
+    let mid_alpha = (-2.0 * std::f64::consts::PI * 2000.0 / sample_rate as f64).exp();
+    let mut low_pass = 0.0_f64;
+    let mut mid_pass = 0.0_f64;
+    for samples in mono.chunks(window) {
+        let mut broad_sum = 0.0;
+        let mut low_sum = 0.0;
+        let mut mid_sum = 0.0;
+        let mut high_sum = 0.0;
+        for &sample in samples {
+            let sample = sample as f64;
+            peak = peak.max(sample.abs());
+            square_sum += sample * sample;
+            broad_sum += sample * sample;
+            low_pass = low_alpha * low_pass + (1.0 - low_alpha) * sample;
+            mid_pass = mid_alpha * mid_pass + (1.0 - mid_alpha) * sample;
+            low_sum += low_pass * low_pass;
+            let middle = mid_pass - low_pass;
+            mid_sum += middle * middle;
+            let upper = sample - mid_pass;
+            high_sum += upper * upper;
+        }
+        let divisor = samples.len().max(1) as f64;
+        energy.push((broad_sum / divisor).sqrt());
+        low.push((low_sum / divisor).sqrt());
+        mid.push((mid_sum / divisor).sqrt());
+        high.push((high_sum / divisor).sqrt());
+    }
+    onset.push(0.0);
+    for pair in energy.windows(2) {
+        onset.push((pair[1] - pair[0]).max(0.0));
+    }
+    let (bpm, confidence, beat_offset) = estimate_tempo(&onset, envelope_hz, tempo_min, tempo_max);
+    let duration = mono.len() as f64 / sample_rate as f64;
+    let mut beat_grid = Vec::new();
+    if let Some(bpm) = bpm {
+        let interval = 60.0 / bpm;
+        let mut beat = beat_offset;
+        while beat <= duration {
+            beat_grid.push(beat);
+            beat += interval;
+        }
+    }
+    Ok(AudioAnalysis {
+        path: display_path(path.strip_prefix(cwd).unwrap_or(path)),
+        duration,
+        channels,
+        sample_rate,
+        envelope_hz,
+        rms: (square_sum / mono.len().max(1) as f64).sqrt(),
+        peak,
+        bpm,
+        confidence,
+        beat_offset,
+        beat_grid,
+        energy,
+        low,
+        mid,
+        high,
+        onset,
+    })
+}
+
+fn estimate_tempo(
+    onset: &[f64],
+    envelope_hz: f64,
+    tempo_min: f64,
+    tempo_max: f64,
+) -> (Option<f64>, f64, f64) {
+    if onset.len() < 4 || onset.iter().copied().fold(0.0_f64, f64::max) <= 1e-9 {
+        return (None, 0.0, 0.0);
+    }
+    let min_lag = ((60.0 * envelope_hz / tempo_max).round() as usize).max(1);
+    let max_lag = ((60.0 * envelope_hz / tempo_min).round() as usize).min(onset.len() - 1);
+    let mut best_lag = min_lag;
+    let mut best = 0.0;
+    let mut total = 0.0;
+    for lag in min_lag..=max_lag {
+        let score = onset
+            .iter()
+            .skip(lag)
+            .zip(onset)
+            .map(|(right, left)| right * left)
+            .sum::<f64>();
+        total += score;
+        if score > best {
+            best = score;
+            best_lag = lag;
+        }
+    }
+    let confidence = if total > 0.0 {
+        (best / total * (max_lag - min_lag + 1) as f64).min(1.0)
+    } else {
+        0.0
+    };
+    let first = onset
+        .iter()
+        .enumerate()
+        .max_by(|left, right| left.1.total_cmp(right.1))
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    (
+        Some(60.0 * envelope_hz / best_lag as f64),
+        confidence,
+        (first % best_lag) as f64 / envelope_hz,
+    )
+}
+
+fn audio_catalog_lua(analyses: &[AudioAnalysis]) -> String {
+    let mut output = String::from("--!tua generated\nreturn {\n");
+    for analysis in analyses {
+        output.push_str(&format!("  [{}] = {{ path = {}, duration = {:.9}, channels = {}, sampleRate = {}, envelopeHz = {:.6}, rms = {:.9}, peak = {:.9}, bpm = {}, confidence = {:.9}, beatOffset = {:.9},\n",
+            lua_string(&analysis.path), lua_string(&analysis.path), analysis.duration, analysis.channels,
+            analysis.sample_rate, analysis.envelope_hz, analysis.rms, analysis.peak,
+            analysis.bpm.map(|value| format!("{value:.9}")).unwrap_or_else(|| "nil".to_owned()),
+            analysis.confidence, analysis.beat_offset));
+        for (name, values) in [
+            ("beatGrid", &analysis.beat_grid),
+            ("energy", &analysis.energy),
+            ("low", &analysis.low),
+            ("mid", &analysis.mid),
+            ("high", &analysis.high),
+            ("onset", &analysis.onset),
+        ] {
+            output.push_str("    ");
+            output.push_str(name);
+            output.push_str(" = {");
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                output.push_str(&format!("{value:.7}"));
+            }
+            output.push_str("},\n");
+        }
+        output.push_str("  },\n");
+    }
+    output.push_str("}\n");
+    output
+}
+
+fn lua_string(value: &str) -> String {
+    format!(
+        "\"{}\"",
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+    )
 }
 
 pub(crate) fn run_asset_pipelines(cwd: &Path, config: &ProjectConfig) -> AssetPipelineOutcome {
@@ -161,7 +537,15 @@ fn run_one_pipeline(
         ));
         return;
     }
-    if pipeline.command.is_empty() {
+    if pipeline.builtin.is_some() && !pipeline.command.is_empty() {
+        outcome.diagnostics.push(pipeline_error(
+            cwd,
+            pipeline,
+            "`builtin` and `command` are mutually exclusive",
+        ));
+        return;
+    }
+    if pipeline.command.is_empty() && pipeline.builtin.is_none() {
         outcome
             .diagnostics
             .push(pipeline_error(cwd, pipeline, "command must not be empty"));
@@ -289,6 +673,16 @@ fn pipeline_cache_key(
     hash.add(b"\0");
     hash.add(display_path(&pipeline.output).as_bytes());
 
+    if let Some(builtin) = &pipeline.builtin {
+        hash.add(b"\0builtin\0");
+        hash.add(builtin.as_bytes());
+    }
+    for (name, value) in &pipeline.options {
+        hash.add(b"\0option\0");
+        hash.add(name.as_bytes());
+        hash.add(value.to_string().as_bytes());
+    }
+
     for argument in &pipeline.command {
         hash.add(b"\0command\0");
         hash.add(argument.as_bytes());
@@ -362,6 +756,45 @@ fn execute_importer(
                     .replace("{cache_key}", cache_key),
             );
         }
+    }
+
+    if let Some(builtin) = pipeline.builtin.as_deref() {
+        let result = match builtin {
+            "audio-analysis" => execute_audio_analysis(cwd, pipeline, inputs, &files_dir),
+            _ => Err(vec![pipeline_error(
+                cwd,
+                pipeline,
+                format!("unknown built-in importer `{builtin}`"),
+            )]),
+        };
+        let manifest = match result {
+            Ok(manifest) => manifest,
+            Err(diagnostics) => {
+                let _ = fs::remove_dir_all(&staging);
+                return Err(diagnostics);
+            }
+        };
+        if let Err(source) = fs::write(
+            &manifest_path,
+            serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
+        ) {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(vec![io_diagnostic(&manifest_path, source)]);
+        }
+        if let Err(diagnostic) = validate_manifest(cwd, pipeline, &staging, &manifest) {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(vec![diagnostic]);
+        }
+        if cache_entry.exists() {
+            let _ = fs::remove_dir_all(&staging);
+            return read_manifest(&cache_entry.join("manifest.json")).map_err(|error| vec![error]);
+        }
+        if let Err(source) = fs::rename(&staging, cache_entry) {
+            let diagnostic = io_diagnostic(cache_entry, source);
+            let _ = fs::remove_dir_all(&staging);
+            return Err(vec![diagnostic]);
+        }
+        return Ok(manifest);
     }
 
     let configured_program = &pipeline.command[0];

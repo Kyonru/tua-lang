@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::fs::{self, OpenOptions};
@@ -138,10 +139,15 @@ pub struct TypeLibraryConfig {
 pub struct AssetPipelineConfig {
     pub name: String,
     pub inputs: Vec<String>,
+    #[serde(default)]
     pub command: Vec<String>,
+    #[serde(default)]
+    pub builtin: Option<String>,
     pub output: PathBuf,
     #[serde(default)]
     pub version: String,
+    #[serde(default)]
+    pub options: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

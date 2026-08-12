@@ -60,6 +60,7 @@ modules:
 - `stateMachine({...})` emits a `tuastatemachine` require when used;
 - `store({...})` emits a `tuastore` require when used;
 - `input({...})` emits a `baton` require when used.
+- `audioSystem({...})` emits a `tuaaudio` require plus its signal and store runtime dependencies when used.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same

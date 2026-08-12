@@ -35,8 +35,14 @@ version = "1"
 | `name` | Stable cache identity. Use letters, digits, `.`, `-`, or `_`. |
 | `inputs` | Project-relative files, directories, or `*`, `?`, and `**` globs. Every matched file contributes to the cache key. |
 | `command` | Executable followed by arguments. Tua invokes it from the project root. |
+| `builtin` | Built-in importer name. Use `audio-analysis` instead of `command` for cached audio metadata. |
 | `output` | Dedicated generated directory strictly below `source`. Pipeline outputs are materialized here. |
 | `version` | Optional importer/schema version. Change it when behavior changes without a corresponding input-file change. |
+| `options` | Built-in importer scalar options; included in the content cache key. |
+
+Exactly one of `command` and `builtin` is required. See
+[Audio Systems](audio.md#cached-audio-analysis) for the `audio-analysis`
+outputs and options.
 
 Include the importer script or executable in `inputs`. Tua hashes a relative
 first command executable when it is a file, but it cannot hash an interpreter
