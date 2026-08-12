@@ -58,10 +58,6 @@ impl Visitor for TuaDialectValidator<'_> {
                 function.const_token(),
                 "Luau `const function` declarations are not part of Tua; use `local function` instead",
             ),
-            Stmt::ExportedTypeDeclaration(declaration) => self.report(
-                declaration.export_token(),
-                "Luau `export type` declarations are not part of Tua; declare a normal Tua type alias instead",
-            ),
             Stmt::TypeFunction(function) => self.report(
                 function.type_token(),
                 "Luau type functions are not part of Tua",

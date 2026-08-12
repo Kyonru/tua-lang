@@ -3829,6 +3829,43 @@ return {}
 }
 
 #[test]
+fn snapshot_hover_and_definition_resolve_type_only_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local player: Shared.<|type_ref|>Player = { hp = 10 }
+local other: Shared.Pla<|complete|> = player
+return player.hp
+-- file: src/types.tua
+export type <|type_def|>Player<|/type_def|> = { hp: number }
+type PlayerPrivate = { hp: number }
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("type_ref"))
+        .expect("type-only alias should hover");
+    let definition = snapshot
+        .type_definition("src/main.tua", fixture.position("type_ref"))
+        .expect("type-only alias should navigate");
+
+    assert_eq!(hover.contents, "type Shared.Player = { hp: number }");
+    assert_eq!(definition.kind, DefinitionKind::TypeAlias);
+    assert_eq!(definition.path, PathBuf::from("src/types.tua"));
+    assert_eq!(definition.span, fixture.range("type_def"));
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete"))),
+        vec!["Player".to_owned()]
+    );
+}
+
+#[test]
 fn snapshot_implementation_resolves_functions_and_stays_conservative() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

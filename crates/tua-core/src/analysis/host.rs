@@ -502,6 +502,7 @@ impl AnalysisHost {
                     source_kind: file.kind,
                     environment: file.environment(),
                     scope: file.scope(),
+                    parsed: file.parsed.as_ref().ok(),
                 }),
                 &module_graph,
             )

@@ -35,6 +35,24 @@ type Player = {
 }
 
 #[test]
+fn parses_exported_aliases_and_erases_type_only_imports_for_the_runtime_ast() {
+    let source = r#"import type Shared from "./shared_types"
+export type Room = { name: string, owner: Shared.Player }
+local room: Room
+"#;
+    let parsed =
+        parse_tua_source("src/rooms.tua", source).expect("type-only module syntax should parse");
+
+    assert_eq!(parsed.type_imports.len(), 1);
+    assert_eq!(parsed.type_imports[0].namespace, "Shared");
+    assert_eq!(parsed.type_imports[0].module, "./shared_types");
+    assert_eq!(parsed.type_aliases.len(), 1);
+    assert!(parsed.type_aliases[0].exported);
+    assert!(!parsed.raw.parser_source.contains("import type"));
+    assert_eq!(parsed.statement_count(), 2);
+}
+
+#[test]
 fn raw_tua_parse_keeps_large_plain_lua_literals_on_the_lua51_fast_path() {
     let records = (0..4_000)
         .map(|index| {
@@ -1642,11 +1660,6 @@ fn rejects_luau_only_forms_at_the_tua_parse_boundary() {
             "function attribute",
             "@native local function run() end\n",
             "attributes",
-        ),
-        (
-            "exported type",
-            "export type Value = number\n",
-            "`export type`",
         ),
         (
             "generic declaration",

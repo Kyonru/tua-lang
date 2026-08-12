@@ -24,7 +24,7 @@ pub use model::{
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
     LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
     ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
-    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypedSourceModel,
+    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypeImport, TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -178,6 +178,7 @@ pub fn extract_tua_source_model(
         lua_doc_annotations: doc_result.annotations,
         lua_doc_diagnostics: doc_result.diagnostics,
         type_aliases: syntax.type_aliases,
+        type_imports: syntax.type_imports,
         local_annotations: syntax.local_annotations,
         function_annotations: syntax.function_annotations,
         compound_assignments: syntax.compound_assignments,
@@ -253,6 +254,7 @@ fn source_line_provenance(source: &str) -> Vec<ParserLineProvenance> {
 #[derive(Default)]
 struct TuaSyntax {
     type_aliases: Vec<TypeAlias>,
+    type_imports: Vec<TypeImport>,
     local_annotations: Vec<LocalAnnotation>,
     function_annotations: Vec<FunctionAnnotation>,
     compound_assignments: Vec<CompoundAssignment>,
@@ -264,9 +266,112 @@ fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
     let mut syntax = TuaSyntax::default();
 
     collect_block_tua_syntax(path, source, ast.nodes(), &mut syntax);
+    collect_type_imports(path, source, &mut syntax);
     collect_enum_declarations(path, source, &mut syntax);
 
     syntax
+}
+
+fn collect_type_imports(path: &Path, source: &str, syntax: &mut TuaSyntax) {
+    let mut namespaces = BTreeSet::new();
+
+    for (line_index, line) in source.lines().enumerate() {
+        let line_number = line_index + 1;
+        let leading = line.len() - line.trim_start().len();
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("import type ") else {
+            continue;
+        };
+        let Some((namespace, module_text)) = rest.split_once(" from ") else {
+            syntax.diagnostics.push(type_import_diagnostic(
+                path,
+                line_number,
+                leading + 1,
+                "type import must use `import type Namespace from \"module\"`",
+            ));
+            continue;
+        };
+        let namespace = namespace.trim();
+        let module_text = module_text.trim();
+        let valid_namespace = !namespace.is_empty()
+            && namespace.chars().enumerate().all(|(index, character)| {
+                character == '_'
+                    || character.is_ascii_alphabetic()
+                    || (index > 0 && character.is_ascii_digit())
+            });
+        let quote = module_text.chars().next();
+        let module = quote
+            .filter(|quote| matches!(quote, '\'' | '"'))
+            .and_then(|quote| module_text.strip_prefix(quote)?.strip_suffix(quote));
+
+        if !valid_namespace || module.is_none_or(str::is_empty) {
+            syntax.diagnostics.push(type_import_diagnostic(
+                path,
+                line_number,
+                leading + 1,
+                "type import must use `import type Namespace from \"module\"`",
+            ));
+            continue;
+        }
+        if !namespaces.insert(namespace.to_owned()) {
+            syntax.diagnostics.push(type_import_diagnostic(
+                path,
+                line_number,
+                leading + "import type ".len() + 1,
+                format!("duplicate type import namespace `{namespace}`"),
+            ));
+            continue;
+        }
+
+        let namespace_byte = line.find(namespace).unwrap_or(leading);
+        let module = module.unwrap();
+        let module_byte = line
+            .find(module)
+            .unwrap_or(namespace_byte + namespace.len());
+        syntax.type_imports.push(TypeImport {
+            namespace: namespace.to_owned(),
+            module: module.to_owned(),
+            namespace_span: SourceSpan {
+                start: SourcePosition {
+                    line: line_number,
+                    column: column_for_byte(line, namespace_byte),
+                },
+                end: SourcePosition {
+                    line: line_number,
+                    column: column_for_byte(line, namespace_byte + namespace.len()),
+                },
+            },
+            module_span: SourceSpan {
+                start: SourcePosition {
+                    line: line_number,
+                    column: column_for_byte(line, module_byte),
+                },
+                end: SourcePosition {
+                    line: line_number,
+                    column: column_for_byte(line, module_byte + module.len()),
+                },
+            },
+            span: SourceSpan {
+                start: SourcePosition {
+                    line: line_number,
+                    column: leading + 1,
+                },
+                end: SourcePosition {
+                    line: line_number,
+                    column: line.chars().count() + 1,
+                },
+            },
+        });
+    }
+}
+
+fn type_import_diagnostic(
+    path: &Path,
+    line: usize,
+    column: usize,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::error(path, line, column, message).with_code(DiagnosticCode::SYNTAX_PARSE)
 }
 
 fn collect_block_tua_syntax(path: &Path, source: &str, block: &ast::Block, syntax: &mut TuaSyntax) {
@@ -281,6 +386,12 @@ fn collect_stmt_tua_syntax(path: &Path, source: &str, stmt: &ast::Stmt, syntax: 
             syntax
                 .type_aliases
                 .push(type_alias_from_declaration(declaration, source));
+        }
+        ast::Stmt::ExportedTypeDeclaration(declaration) => {
+            let mut alias = type_alias_from_declaration(declaration.type_declaration(), source);
+            alias.exported = true;
+            alias.span = node_span(declaration);
+            syntax.type_aliases.push(alias);
         }
         ast::Stmt::LocalAssignment(local) => {
             for (name, specifier) in local.names().iter().zip(local.type_specifiers()) {
@@ -367,6 +478,7 @@ fn type_alias_from_declaration(declaration: &TypeDeclaration, source: &str) -> T
         kind: TypeAliasKind::Alias,
         name_span: node_span(declaration.type_name()),
         span,
+        exported: false,
     }
 }
 
@@ -523,6 +635,7 @@ fn collect_enum_declarations(path: &Path, source: &str, syntax: &mut TuaSyntax) 
                         .unwrap_or(1),
                 },
             }),
+            exported: false,
         });
     }
 }

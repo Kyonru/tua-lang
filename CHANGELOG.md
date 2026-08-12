@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Type-only modules can publish aliases with `export type` and consume them as
+  qualified names through `import type Namespace from "module"`; both forms
+  erase from Lua while retaining project diagnostics, navigation, recursive
+  type dependencies, and cache invalidation.
 - `--!tua generated` marks Lua 5.1-compatible generated `.tua` modules for
   direct parsing, while LuaDoc array contracts validate records incrementally
   without requiring a plain-Lua data module and handwritten typed facade.

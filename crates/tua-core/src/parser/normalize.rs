@@ -324,6 +324,14 @@ fn normalize_parser_syntax(source: &str) -> String {
     let mut index = 0;
 
     while index < chars.len() {
+        if starts_type_import(&chars, index) {
+            while index < chars.len() && chars[index] != '\n' {
+                normalized.push(' ');
+                index += 1;
+            }
+            continue;
+        }
+
         if starts_line_comment(&chars, index) {
             index = push_until_line_end(&chars, index, &mut normalized);
             continue;
@@ -385,6 +393,30 @@ fn normalize_parser_syntax(source: &str) -> String {
     }
 
     normalized
+}
+
+fn starts_type_import(chars: &[char], index: usize) -> bool {
+    const PREFIX: &str = "import type ";
+
+    if !PREFIX
+        .chars()
+        .enumerate()
+        .all(|(offset, expected)| chars.get(index + offset) == Some(&expected))
+    {
+        return false;
+    }
+    let line_start = chars[..index]
+        .iter()
+        .rposition(|character| *character == '\n')
+        .map_or(0, |line| line + 1);
+    if !chars[line_start..index]
+        .iter()
+        .all(|character| character.is_whitespace())
+    {
+        return false;
+    }
+
+    true
 }
 
 fn is_optional_field_marker(chars: &[char], index: usize) -> bool {

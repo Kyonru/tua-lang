@@ -9,8 +9,8 @@ use crate::store;
 use crate::vector;
 use crate::vfs::normalize_path;
 use crate::{
-    AnalysisSourceKind, FunctionType, ModuleExportField, ScopeDeclarationKind, ScopeMap, Type,
-    TypeEnvironment, TypedFunction,
+    AnalysisSourceKind, FunctionType, ModuleExportField, ParsedSource, ScopeDeclarationKind,
+    ScopeMap, Type, TypeEnvironment, TypedFunction,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -27,6 +27,8 @@ pub struct ProjectTypeModule {
     locals: BTreeMap<String, ProjectTypeBinding>,
     functions: BTreeMap<String, TypedFunction>,
     module_aliases: BTreeMap<String, String>,
+    type_import_namespaces: BTreeSet<String>,
+    exported_aliases: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,6 +53,7 @@ pub struct ProjectTypeDatabaseInput<'a> {
     pub source_kind: AnalysisSourceKind,
     pub environment: Option<&'a TypeEnvironment>,
     pub scope: Option<&'a ScopeMap>,
+    pub parsed: Option<&'a ParsedSource>,
 }
 
 impl ProjectTypeDatabase {
@@ -70,7 +73,20 @@ impl ProjectTypeDatabase {
                 aliases: BTreeMap::new(),
                 locals: BTreeMap::new(),
                 functions: BTreeMap::new(),
-                module_aliases: module_aliases(input.scope),
+                module_aliases: module_aliases(input.scope, input.parsed),
+                type_import_namespaces: input
+                    .parsed
+                    .into_iter()
+                    .flat_map(|parsed| &parsed.type_imports)
+                    .map(|import| import.namespace.clone())
+                    .collect(),
+                exported_aliases: input
+                    .parsed
+                    .into_iter()
+                    .flat_map(|parsed| &parsed.type_aliases)
+                    .filter(|alias| alias.exported)
+                    .map(|alias| alias.name.clone())
+                    .collect(),
             };
 
             if let Some(environment) = input.environment {
@@ -352,9 +368,15 @@ impl ProjectTypeDatabase {
             let alias = alias.trim();
             let member = member.trim();
             let module_path = self.module_path_for_alias(module_graph, source_path, alias)?;
+            let source_module = self.module(source_path)?;
+            let target_module = self.module(&module_path)?;
+            if source_module.type_import_namespaces.contains(alias)
+                && !target_module.exported_aliases.contains(member)
+            {
+                return None;
+            }
 
-            return self
-                .module(&module_path)?
+            return target_module
                 .aliases
                 .get(member)
                 .cloned()
@@ -452,10 +474,17 @@ impl ProjectTypeModule {
     pub fn module_alias(&self, name: &str) -> Option<&str> {
         self.module_aliases.get(name).map(String::as_str)
     }
+
+    pub(crate) fn exported_alias_names(&self) -> impl Iterator<Item = &str> {
+        self.exported_aliases.iter().map(String::as_str)
+    }
 }
 
-fn module_aliases(scope: Option<&ScopeMap>) -> BTreeMap<String, String> {
-    scope
+fn module_aliases(
+    scope: Option<&ScopeMap>,
+    parsed: Option<&ParsedSource>,
+) -> BTreeMap<String, String> {
+    let mut aliases = scope
         .into_iter()
         .flat_map(ScopeMap::declarations)
         .filter_map(|declaration| match &declaration.kind {
@@ -467,7 +496,14 @@ fn module_aliases(scope: Option<&ScopeMap>) -> BTreeMap<String, String> {
             | ScopeDeclarationKind::Function
             | ScopeDeclarationKind::TableField => None,
         })
-        .collect()
+        .collect::<BTreeMap<_, _>>();
+    aliases.extend(parsed.into_iter().flat_map(|parsed| {
+        parsed
+            .type_imports
+            .iter()
+            .map(|import| (import.namespace.clone(), import.module.clone()))
+    }));
+    aliases
 }
 
 fn origin_for_source_kind(kind: AnalysisSourceKind) -> ProjectTypeOrigin {

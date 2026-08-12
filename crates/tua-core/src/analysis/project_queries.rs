@@ -152,6 +152,13 @@ impl AnalysisSnapshot {
             return asset_completions;
         }
 
+        let type_import_completions =
+            self.project_type_import_completions(parsed, source, position);
+
+        if !type_import_completions.is_empty() {
+            return type_import_completions;
+        }
+
         let module_completions = self.project_module_field_completions(parsed, source, position);
 
         if !module_completions.is_empty() {
@@ -210,6 +217,13 @@ impl AnalysisSnapshot {
 
         if !asset_completions.is_empty() {
             return asset_completions;
+        }
+
+        let type_import_completions =
+            self.project_type_import_completions(parsed, source, position);
+
+        if !type_import_completions.is_empty() {
+            return type_import_completions;
         }
 
         let module_completions = self.project_module_field_completions(parsed, source, position);
@@ -351,6 +365,7 @@ impl AnalysisSnapshot {
     ) -> TypeEnvironment {
         let _profile = profile::span("analysis.semantic.environment");
         let environment = base_environment
+            .with_alias_types(self.project_imported_alias_types(parsed))
             .with_local_types(self.project_module_binding_types(parsed))
             .with_deprecated_accesses(self.project_module_binding_deprecations(parsed))
             .with_local_types(project_inference.local_types.clone())
@@ -388,6 +403,41 @@ impl AnalysisSnapshot {
                 Some((binding.alias, ty))
             })
             .collect()
+    }
+
+    fn project_imported_alias_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
+        let mut aliases = Vec::new();
+
+        for import in &parsed.type_imports {
+            let Some(resolution) = self
+                .module_graph
+                .resolve_require(&parsed.path, &import.module)
+            else {
+                continue;
+            };
+            let module_path = match resolution {
+                crate::module_graph::RequireResolution::Resolved { path }
+                | crate::module_graph::RequireResolution::Duplicate { selected: path, .. } => path,
+                crate::module_graph::RequireResolution::Missing { .. }
+                | crate::module_graph::RequireResolution::Invalid { .. } => continue,
+            };
+            let Some(module) = self.type_database.module(module_path) else {
+                continue;
+            };
+
+            for name in module.exported_alias_names() {
+                let qualified = format!("{}.{}", import.namespace, name);
+                if let Some(binding) = self.type_database.resolve_type_name(
+                    &self.module_graph,
+                    &parsed.path,
+                    &qualified,
+                ) {
+                    aliases.push((qualified, binding.ty));
+                }
+            }
+        }
+
+        aliases
     }
 
     fn project_module_binding_deprecations(
@@ -830,6 +880,32 @@ impl AnalysisSnapshot {
             .or_else(|| self.module_graph.declaration_module(&module))
             .or_else(|| {
                 self.indexed_module_candidates(&module)
+                    .into_iter()
+                    .find(|candidate| self.type_database.module(candidate).is_some())
+                    .and_then(|candidate| {
+                        self.type_database
+                            .module(&candidate)
+                            .map(|module| module.path.as_path())
+                    })
+            })?;
+
+        self.type_database
+            .module(path)
+            .map(|module| module.path.as_path())
+    }
+
+    fn indexed_type_import_path(&self, parsed: &ParsedSource, namespace: &str) -> Option<&Path> {
+        let module = &parsed
+            .type_imports
+            .iter()
+            .find(|import| import.namespace == namespace)?
+            .module;
+
+        let path = self
+            .resolved_module_path(&parsed.path, module)
+            .or_else(|| self.module_graph.declaration_module(module))
+            .or_else(|| {
+                self.indexed_module_candidates(module)
                     .into_iter()
                     .find(|candidate| self.type_database.module(candidate).is_some())
                     .and_then(|candidate| {
@@ -1667,6 +1743,52 @@ impl AnalysisSnapshot {
             .collect()
     }
 
+    fn project_type_import_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let Some(crate::completion::context::CompletionContext::FieldAccess {
+            receiver_parts,
+            prefix,
+            ..
+        }) = crate::completion::context::completion_context(source, position)
+        else {
+            return Vec::new();
+        };
+        let [namespace] = receiver_parts.as_slice() else {
+            return Vec::new();
+        };
+        let Some(module_path) = self.indexed_type_import_path(parsed, namespace) else {
+            return Vec::new();
+        };
+        let Some(module) = self.type_database.module(module_path) else {
+            return Vec::new();
+        };
+
+        module
+            .exported_alias_names()
+            .filter(|name| text_matches(name, &prefix))
+            .filter_map(|name| {
+                let binding = module.alias(name)?;
+                Some(Completion {
+                    label: name.to_owned(),
+                    kind: CompletionKind::TypeAlias,
+                    detail: Some(format!("type: {}", binding.ty)),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: Some(module_path.to_path_buf()),
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                })
+            })
+            .collect()
+    }
+
     pub(super) fn project_aware_diagnostics(
         &self,
         path: &Path,
@@ -1695,10 +1817,18 @@ impl AnalysisSnapshot {
         path: &Path,
         file: &AnalysisFile,
     ) -> Vec<Diagnostic> {
-        if file.hir().is_none_or(|hir| hir.require_bindings.is_empty())
+        if (file.hir().is_none_or(|hir| hir.require_bindings.is_empty())
+            && file
+                .parsed
+                .as_ref()
+                .is_ok_and(|parsed| parsed.type_imports.is_empty()))
             || file
                 .semantics()
                 .is_some_and(|semantics| !semantics.environment_diagnostics.is_empty())
+                && file
+                    .parsed
+                    .as_ref()
+                    .is_ok_and(|parsed| parsed.type_imports.is_empty())
         {
             return Vec::new();
         }

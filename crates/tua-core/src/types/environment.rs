@@ -660,6 +660,13 @@ fn collect_alias_names(
         }
     }
 
+    names.extend(
+        parsed
+            .type_imports
+            .iter()
+            .map(|import| import.namespace.clone()),
+    );
+
     names
 }
 
@@ -3833,6 +3840,22 @@ fn resolve_named_type(
             }
         }),
         _ if alias_names.contains(name) => Type::alias(name),
+        _ if name.split_once('.').is_some_and(|(namespace, member)| {
+            !member.is_empty() && alias_names.contains(namespace)
+        }) =>
+        {
+            // Project analysis resolves this qualified alias after module graph
+            // construction. Preserve its identity while keeping an unknown
+            // diagnostic that project-aware filtering removes only when the
+            // target exists and is publicly exported.
+            diagnostics.push(type_diagnostic(
+                path,
+                span,
+                format!("unknown type `{name}`"),
+                DiagnosticCode::TYPE_UNKNOWN_NAME,
+            ));
+            Type::alias(name)
+        }
         _ => {
             diagnostics.push(type_diagnostic(
                 path,

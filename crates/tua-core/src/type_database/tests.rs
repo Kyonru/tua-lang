@@ -53,6 +53,139 @@ return {}
 }
 
 #[test]
+fn resolves_only_exported_aliases_from_type_only_imports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local _player: Shared.Player = { hp = 10 }
+-- file: src/types.tua
+export type Player = { hp: number }
+type PrivateState = { debug: boolean }
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let player = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Shared.Player")
+        .expect("exported type-only alias should resolve");
+
+    assert_eq!(player.name, "Player");
+    assert_eq!(player.module_path, PathBuf::from("src/types.tua"));
+    assert_eq!(
+        player.ty,
+        Type::table([("hp", TableField::required(Type::number()))])
+    );
+    assert!(snapshot
+        .type_database()
+        .resolve_type_name(
+            snapshot.module_graph(),
+            "src/main.tua",
+            "Shared.PrivateState"
+        )
+        .is_none());
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn type_only_imports_participate_in_project_type_checking() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local player: Shared.Player = { hp = "wrong" }
+-- file: src/types.tua
+export type Player = { hp: number }
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == Some(crate::DiagnosticCode::TYPE_MISMATCH) }),
+        "expected imported contract mismatch: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn type_only_imports_remain_precise_in_function_signatures() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local function keep(player: Shared.Player): Shared.Player
+  return player
+end
+keep({ hp = "wrong" })
+-- file: src/types.tua
+export type Player = { hp: number }
+"#,
+    );
+    let diagnostics = host_from_fixture(&fixture)
+        .snapshot()
+        .diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == Some(crate::DiagnosticCode::TYPE_MISMATCH) }),
+        "expected imported function contract mismatch: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn type_only_imports_reject_private_or_missing_aliases() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local hidden: Shared.PrivateState
+local missing: Shared.DoesNotExist
+-- file: src/types.tua
+type PrivateState = { debug: boolean }
+"#,
+    );
+    let diagnostics = host_from_fixture(&fixture)
+        .snapshot()
+        .diagnostics("src/main.tua");
+    let unknown = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME))
+        .count();
+
+    assert_eq!(
+        unknown, 2,
+        "expected private and missing type errors: {diagnostics:#?}"
+    );
+}
+
+#[test]
+fn recursive_type_only_imports_do_not_create_runtime_require_cycles() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/a.tua
+import type BTypes from "./b"
+export type A = { b: BTypes.B }
+-- file: src/b.tua
+import type ATypes from "./a"
+export type B = { a: ATypes.A | nil }
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+
+    assert!(snapshot.module_graph().cycles().is_empty());
+    assert!(snapshot.diagnostics("src/a.tua").is_empty());
+    assert!(snapshot.diagnostics("src/b.tua").is_empty());
+    assert!(snapshot
+        .module_graph()
+        .reverse_dependency_closure(["src/a.tua"])
+        .contains(&PathBuf::from("src/b.tua")));
+}
+
+#[test]
 fn required_tua_aliases_do_not_report_unknown_type_diagnostics() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

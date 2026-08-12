@@ -192,7 +192,7 @@ pub use parser::{
     LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource,
     ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
     RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
-    TypedSourceModel,
+    TypeImport, TypedSourceModel,
 };
 pub use project::project_description;
 pub use project_model::ProjectTypeLibrary;

@@ -161,6 +161,48 @@ In VS Code:
 Every graph step opens the original `require` or `import` range. The extension
 reads the compiler's module graph instead of parsing source independently.
 
+## Share Types Without Runtime Imports
+
+Use `export type` to make selected aliases public and `import type` to consume
+them through a compile-time namespace:
+
+```tua title="src/shared_types.tua"
+export type Room = {
+  name: string,
+  spawnX: number,
+  spawnY: number,
+}
+
+export type Player = {
+  x: number,
+  y: number,
+  health: number,
+}
+
+type GeneratorScratch = { id: number }
+```
+
+```tua title="src/world.tua"
+import type Shared from "./shared_types"
+
+local function enter(room: Shared.Room, player: Shared.Player)
+  player.x = room.spawnX
+  player.y = room.spawnY
+end
+```
+
+Both declarations disappear from emitted Lua; unlike `require(...)` or runtime
+`import(...)`, `import type` creates no local, module load, or side effect.
+Only aliases declared with `export type` are visible. Private or missing aliases
+produce an unknown-type diagnostic, missing modules use the normal project
+module diagnostic, and aliases from imported namespaces work in locals,
+parameters, returns, arrays, and nested table shapes.
+
+Type-only dependencies participate in cache invalidation and navigation but do
+not create runtime require-cycle warnings. Recursive types may therefore be
+split across type modules safely. Namespace imports intentionally avoid merging
+foreign names into the current file and make ownership visible at every use.
+
 ## Use A Tua Module From Lua
 
 !!! warning "Lua loads emitted modules"

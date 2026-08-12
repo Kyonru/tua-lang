@@ -151,6 +151,13 @@ fn module_specifier_literals_on_line(
                 }
 
                 if let Some(kind) = module_specifier_kind_at(line, index) {
+                    if kind == ModuleSpecifierKind::Import {
+                        if let Some(literal) = type_import_literal_after(line, line_number, index) {
+                            index = byte_for_column(line, literal.span.end.column).max(index + 1);
+                            literals.push(literal);
+                            continue;
+                        }
+                    }
                     if kind == ModuleSpecifierKind::Import
                         && !looks_like_local_import_binding(line, index)
                     {
@@ -181,6 +188,42 @@ fn module_specifier_literals_on_line(
     }
 
     literals
+}
+
+fn type_import_literal_after(
+    line: &str,
+    line_number: usize,
+    import_start: usize,
+) -> Option<ModuleSpecifierLiteral> {
+    let prefix = line[..import_start].trim();
+    if !prefix.is_empty() {
+        return None;
+    }
+    let rest = line[import_start + "import".len()..].trim_start();
+    let rest = rest.strip_prefix("type ")?;
+    let (_, module_text) = rest.split_once(" from ")?;
+    let module_text = module_text.trim();
+    let quote = module_text.as_bytes().first().copied()?;
+    if !matches!(quote, b'\'' | b'"') {
+        return None;
+    }
+    let module_start = line.find(module_text)? + 1;
+    let quote_end = find_short_string_end(line, module_start - 1, quote)?;
+
+    Some(ModuleSpecifierLiteral {
+        module: line[module_start..quote_end].to_owned(),
+        kind: ModuleSpecifierKind::Import,
+        span: SourceSpan {
+            start: SourcePosition {
+                line: line_number,
+                column: column_for_byte(line, module_start),
+            },
+            end: SourcePosition {
+                line: line_number,
+                column: column_for_byte(line, quote_end),
+            },
+        },
+    })
 }
 
 fn module_specifier_literal_after(
@@ -430,6 +473,22 @@ print(import("./runtime"))
             .collect::<Vec<_>>();
 
         assert_eq!(modules, vec!["./player", "./typed"]);
+    }
+
+    #[test]
+    fn type_import_literals_participate_in_module_navigation() {
+        let source = r#"import type Shared from "./shared_types"
+local text = "import type Fake from './fake'"
+"#;
+        let literals = module_specifier_literals(source);
+
+        assert_eq!(literals.len(), 1);
+        assert_eq!(literals[0].module, "./shared_types");
+        assert_eq!(literals[0].kind, ModuleSpecifierKind::Import);
+        assert_eq!(
+            literals[0].span.start,
+            position_at(source, "./shared_types")
+        );
     }
 
     #[test]

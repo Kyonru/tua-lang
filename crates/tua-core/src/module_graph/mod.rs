@@ -68,6 +68,7 @@ pub struct RequireGraphEdge {
     pub source: PathBuf,
     pub module: String,
     pub kind: ModuleSpecifierKind,
+    pub type_only: bool,
     pub span: SourceSpan,
     pub resolution: RequireResolution,
 }
@@ -147,8 +148,7 @@ impl ModuleGraph {
             };
 
             if let Some(parsed) = input.parsed {
-                module.require_edges =
-                    require_edges_for_source(&path, &parsed.source, resolution_context);
+                module.require_edges = require_edges_for_source(&path, parsed, resolution_context);
             }
 
             if let Some(exports) = input.exports {
@@ -374,6 +374,7 @@ impl ModuleGraph {
                 module
                     .require_edges
                     .iter()
+                    .filter(|edge| !edge.type_only)
                     .filter_map(|edge| match &edge.resolution {
                         RequireResolution::Resolved { path }
                         | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
@@ -395,10 +396,10 @@ impl ModuleGraph {
 
 fn require_edges_for_source(
     source_path: &Path,
-    source: &str,
+    parsed: &ParsedSource,
     context: ModuleResolutionContext<'_>,
 ) -> Vec<RequireGraphEdge> {
-    module_specifier_literals(source)
+    module_specifier_literals(&parsed.source)
         .into_iter()
         .map(|literal| {
             let resolution = match literal.kind {
@@ -422,10 +423,15 @@ fn require_edges_for_source(
                 }
             };
 
+            let type_only = parsed.type_imports.iter().any(|import| {
+                import.module == literal.module && import.module_span == literal.span
+            });
+
             RequireGraphEdge {
                 source: source_path.to_path_buf(),
                 module: literal.module,
                 kind: literal.kind,
+                type_only,
                 span: literal.span,
                 resolution,
             }

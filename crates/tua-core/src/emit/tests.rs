@@ -10,11 +10,23 @@ type Vec2 = {
   x: number,
   y: number,
 }
-
 type MaybeNumber = number | nil
 "#,
     )
     .expect("type-only source should emit");
+
+    assert_eq!(emitted, "");
+}
+
+#[test]
+fn snapshot_type_only_modules_emit_no_runtime_imports_or_exports() {
+    let emitted = emit_tua_source(
+        "src/rooms.tua",
+        r#"import type Shared from "./shared"
+export type Room = { owner: Shared.Player }
+"#,
+    )
+    .expect("type module should emit");
 
     assert_eq!(emitted, "");
 }

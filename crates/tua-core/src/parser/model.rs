@@ -65,6 +65,7 @@ pub struct ParsedSource {
     pub lua_doc_annotations: Vec<LuaDocAnnotation>,
     pub lua_doc_diagnostics: Vec<crate::Diagnostic>,
     pub type_aliases: Vec<TypeAlias>,
+    pub type_imports: Vec<TypeImport>,
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
@@ -83,6 +84,7 @@ impl ParsedSource {
             lua_doc_annotations: typed.lua_doc_annotations.clone(),
             lua_doc_diagnostics: typed.lua_doc_diagnostics.clone(),
             type_aliases: typed.type_aliases.clone(),
+            type_imports: typed.type_imports.clone(),
             local_annotations: typed.local_annotations.clone(),
             function_annotations: typed.function_annotations.clone(),
             compound_assignments: typed.compound_assignments.clone(),
@@ -128,6 +130,7 @@ pub struct TypedSourceModel {
     pub lua_doc_annotations: Vec<LuaDocAnnotation>,
     pub lua_doc_diagnostics: Vec<crate::Diagnostic>,
     pub type_aliases: Vec<TypeAlias>,
+    pub type_imports: Vec<TypeImport>,
     pub local_annotations: Vec<LocalAnnotation>,
     pub function_annotations: Vec<FunctionAnnotation>,
     pub compound_assignments: Vec<CompoundAssignment>,
@@ -189,6 +192,16 @@ pub struct TypeAlias {
     pub kind: TypeAliasKind,
     pub name_span: Option<SourceSpan>,
     pub span: Option<SourceSpan>,
+    pub exported: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypeImport {
+    pub namespace: String,
+    pub module: String,
+    pub namespace_span: SourceSpan,
+    pub module_span: SourceSpan,
+    pub span: SourceSpan,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
