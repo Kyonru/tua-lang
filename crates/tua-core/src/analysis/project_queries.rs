@@ -152,6 +152,12 @@ impl AnalysisSnapshot {
             return asset_completions;
         }
 
+        let named_type_completions =
+            self.project_named_type_import_completions(parsed, source, position);
+        if !named_type_completions.is_empty() {
+            return named_type_completions;
+        }
+
         let type_import_completions =
             self.project_type_import_completions(parsed, source, position);
 
@@ -217,6 +223,12 @@ impl AnalysisSnapshot {
 
         if !asset_completions.is_empty() {
             return asset_completions;
+        }
+
+        let named_type_completions =
+            self.project_named_type_import_completions(parsed, source, position);
+        if !named_type_completions.is_empty() {
+            return named_type_completions;
         }
 
         let type_import_completions =
@@ -354,6 +366,13 @@ impl AnalysisSnapshot {
     }
 
     pub(super) fn semantic_environment(&self, parsed: &ParsedSource) -> TypeEnvironment {
+        if let Some(file) = self.file(&parsed.path) {
+            if file.semantics().is_none() {
+                if let Some(facts) = self.degraded_semantic_facts(&parsed.path, file) {
+                    return facts.environment.clone();
+                }
+            }
+        }
         self.semantic_facts_for_parsed(parsed).environment.clone()
     }
 
@@ -406,38 +425,21 @@ impl AnalysisSnapshot {
     }
 
     fn project_imported_alias_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
-        let mut aliases = Vec::new();
-
-        for import in &parsed.type_imports {
-            let Some(resolution) = self
-                .module_graph
-                .resolve_require(&parsed.path, &import.module)
-            else {
-                continue;
-            };
-            let module_path = match resolution {
-                crate::module_graph::RequireResolution::Resolved { path }
-                | crate::module_graph::RequireResolution::Duplicate { selected: path, .. } => path,
-                crate::module_graph::RequireResolution::Missing { .. }
-                | crate::module_graph::RequireResolution::Invalid { .. } => continue,
-            };
-            let Some(module) = self.type_database.module(module_path) else {
-                continue;
-            };
-
-            for name in module.exported_alias_names() {
-                let qualified = format!("{}.{}", import.namespace, name);
-                if let Some(binding) = self.type_database.resolve_type_name(
-                    &self.module_graph,
-                    &parsed.path,
-                    &qualified,
-                ) {
-                    aliases.push((qualified, binding.ty));
-                }
-            }
-        }
-
-        aliases
+        referenced_tua_type_names(parsed)
+            .into_iter()
+            .filter_map(|name| {
+                self.type_database
+                    .resolve_type_name(&self.module_graph, &parsed.path, &name)
+                    .map(|binding| {
+                        let ty = self.type_database.resolve_type(
+                            &self.module_graph,
+                            &binding.module_path,
+                            &binding.ty,
+                        );
+                        (name, ty)
+                    })
+            })
+            .collect()
     }
 
     fn project_module_binding_deprecations(
@@ -805,7 +807,13 @@ impl AnalysisSnapshot {
             TuaType::Named(name) => self
                 .type_database
                 .resolve_type_name(&self.module_graph, &parsed.path, name)
-                .map(|binding| binding.ty)
+                .map(|binding| {
+                    self.type_database.resolve_type(
+                        &self.module_graph,
+                        &binding.module_path,
+                        &binding.ty,
+                    )
+                })
                 .or_else(|| self.required_module_type(parsed, name))
                 .or_else(|| Some(Type::named(name.trim()))),
             TuaType::StringLiteral(value) => Some(Type::string_literal(value)),
@@ -853,7 +861,16 @@ impl AnalysisSnapshot {
         let (receiver, member) = name.trim().split_once('.')?;
 
         if let Some(path) = self.indexed_required_module_path(parsed, receiver) {
-            let binding = self.type_database.module(path)?.alias(member.trim())?;
+            let module = self.type_database.module(path)?;
+            let binding = if module.source_kind == AnalysisSourceKind::Tua {
+                self.type_database.exported_alias_binding(
+                    &self.module_graph,
+                    path,
+                    member.trim(),
+                )?
+            } else {
+                module.alias(member.trim())?.clone()
+            };
 
             return Some(self.type_database.resolve_type(
                 &self.module_graph,
@@ -875,23 +892,7 @@ impl AnalysisSnapshot {
             .find(|binding| binding.alias == receiver)?
             .module;
 
-        let path = self
-            .resolved_module_path(&parsed.path, &module)
-            .or_else(|| self.module_graph.declaration_module(&module))
-            .or_else(|| {
-                self.indexed_module_candidates(&module)
-                    .into_iter()
-                    .find(|candidate| self.type_database.module(candidate).is_some())
-                    .and_then(|candidate| {
-                        self.type_database
-                            .module(&candidate)
-                            .map(|module| module.path.as_path())
-                    })
-            })?;
-
-        self.type_database
-            .module(path)
-            .map(|module| module.path.as_path())
+        self.indexed_module_path_for_specifier(parsed, &module)
     }
 
     fn indexed_type_import_path(&self, parsed: &ParsedSource, namespace: &str) -> Option<&Path> {
@@ -901,49 +902,76 @@ impl AnalysisSnapshot {
             .find(|import| import.namespace == namespace)?
             .module;
 
-        let path = self
-            .resolved_module_path(&parsed.path, module)
-            .or_else(|| self.module_graph.declaration_module(module))
-            .or_else(|| {
-                self.indexed_module_candidates(module)
-                    .into_iter()
-                    .find(|candidate| self.type_database.module(candidate).is_some())
-                    .and_then(|candidate| {
-                        self.type_database
-                            .module(&candidate)
-                            .map(|module| module.path.as_path())
-                    })
-            })?;
-
-        self.type_database
-            .module(path)
-            .map(|module| module.path.as_path())
+        self.indexed_module_path_for_specifier(parsed, module)
     }
 
-    fn indexed_module_candidates(&self, module: &str) -> Vec<PathBuf> {
-        let relative = module
-            .split('.')
-            .filter(|part| !part.is_empty())
-            .collect::<PathBuf>();
-        let extensions = if self.config.extension == "lua" {
-            vec!["lua"]
-        } else {
-            vec![self.config.extension.as_str(), "lua"]
-        };
-        let mut candidates = Vec::new();
-
-        for root in self.source_roots() {
-            for extension in &extensions {
-                candidates.push(normalize_path(
-                    root.join(&relative).with_extension(extension),
-                ));
-                candidates.push(normalize_path(
-                    root.join(&relative).join(format!("init.{extension}")),
-                ));
+    fn indexed_module_path_for_specifier(
+        &self,
+        parsed: &ParsedSource,
+        module: &str,
+    ) -> Option<&Path> {
+        if let Some(path) = self
+            .module_graph
+            .resolve_require(&parsed.path, module)
+            .and_then(|resolution| match resolution {
+                crate::module_graph::RequireResolution::Resolved { path }
+                | crate::module_graph::RequireResolution::Duplicate { selected: path, .. } => {
+                    Some(path)
+                }
+                crate::module_graph::RequireResolution::Missing { .. }
+                | crate::module_graph::RequireResolution::Invalid { .. } => None,
+            })
+        {
+            return self
+                .type_database
+                .module(path)
+                .map(|module| module.path.as_path());
+        }
+        if let Some(path) = self.module_graph.declaration_module(module) {
+            if let Some(module) = self.type_database.module(path) {
+                return Some(module.path.as_path());
             }
         }
 
-        candidates
+        let type_only = parsed
+            .type_imports
+            .iter()
+            .any(|import| import.module == module);
+        let relative =
+            module_relative_path(module.trim_start_matches("./"), self.require_path_separator);
+        let roots = if module.starts_with("./") {
+            parsed.path.parent().into_iter().collect::<Vec<_>>()
+        } else {
+            self.source_roots().iter().map(PathBuf::as_path).collect()
+        };
+        for root in roots {
+            let base = root.join(&relative);
+            let mut candidates = Vec::new();
+            if type_only && self.config.extension != "lua" {
+                candidates.push(base.with_extension(format!("d.{}", self.config.extension)));
+                candidates.push(base.join(format!("init.d.{}", self.config.extension)));
+            }
+            candidates.push(base.with_extension(&self.config.extension));
+            candidates.push(base.join(format!("init.{}", self.config.extension)));
+            if self.config.extension != "lua" {
+                candidates.push(base.with_extension("lua"));
+                candidates.push(base.join("init.lua"));
+            }
+            if let Some(path) = candidates
+                .into_iter()
+                .map(normalize_path)
+                .find(|candidate| {
+                    self.vfs.file(candidate).is_some()
+                        && self.type_database.module(candidate).is_some()
+                })
+            {
+                return self
+                    .type_database
+                    .module(&path)
+                    .map(|module| module.path.as_path());
+            }
+        }
+        None
     }
 
     pub(super) fn project_table_literal_completions(
@@ -1749,6 +1777,9 @@ impl AnalysisSnapshot {
         source: &str,
         position: SourcePosition,
     ) -> Vec<Completion> {
+        if !is_type_annotation_position(parsed, position) {
+            return Vec::new();
+        }
         let Some(crate::completion::context::CompletionContext::FieldAccess {
             receiver_parts,
             prefix,
@@ -1771,7 +1802,11 @@ impl AnalysisSnapshot {
             .exported_alias_names()
             .filter(|name| text_matches(name, &prefix))
             .filter_map(|name| {
-                let binding = module.alias(name)?;
+                let binding = self.type_database.exported_alias_binding(
+                    &self.module_graph,
+                    module_path,
+                    name,
+                )?;
                 Some(Completion {
                     label: name.to_owned(),
                     kind: CompletionKind::TypeAlias,
@@ -1787,6 +1822,99 @@ impl AnalysisSnapshot {
                 })
             })
             .collect()
+    }
+
+    fn project_named_type_import_completions(
+        &self,
+        parsed: &ParsedSource,
+        source: &str,
+        position: SourcePosition,
+    ) -> Vec<Completion> {
+        let Some(crate::completion::context::CompletionContext::TypeAnnotation { prefix }) =
+            crate::completion::context::completion_context(source, position)
+        else {
+            return Vec::new();
+        };
+
+        let mut completions = Vec::new();
+        for import in parsed.type_imports.iter().filter(|import| !import.reexport) {
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &import.module)
+            else {
+                continue;
+            };
+            for binding in &import.bindings {
+                if !text_matches(&binding.local, &prefix) {
+                    continue;
+                }
+                let Some(resolved) = self.type_database.exported_alias_binding(
+                    &self.module_graph,
+                    module_path,
+                    &binding.imported,
+                ) else {
+                    continue;
+                };
+                completions.push(Completion {
+                    label: binding.local.clone(),
+                    kind: CompletionKind::TypeAlias,
+                    detail: Some(format!("type: {}", resolved.ty)),
+                    documentation: None,
+                    deprecation: None,
+                    insert_text: None,
+                    filter_text: None,
+                    is_snippet: false,
+                    module_path: Some(module_path.to_path_buf()),
+                    source_module: None,
+                    additional_text_edits: Vec::new(),
+                });
+            }
+        }
+        completions
+    }
+
+    fn type_import_binding_diagnostics(&self, parsed: &ParsedSource) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        for import in &parsed.type_imports {
+            let Some(module_path) = self.indexed_module_path_for_specifier(parsed, &import.module)
+            else {
+                continue;
+            };
+            for binding in &import.bindings {
+                if self
+                    .type_database
+                    .exported_alias_binding(&self.module_graph, module_path, &binding.imported)
+                    .is_some()
+                {
+                    continue;
+                }
+                let cycle = self.type_database.reexport_cycle(
+                    &self.module_graph,
+                    module_path,
+                    &binding.imported,
+                );
+                let message = if cycle {
+                    format!("cyclic type re-export involving `{}`", binding.imported)
+                } else {
+                    format!(
+                        "module `{}` does not export type `{}`",
+                        import.module, binding.imported
+                    )
+                };
+                diagnostics.push(
+                    Diagnostic::error(
+                        &parsed.path,
+                        binding.imported_span.start.line,
+                        binding.imported_span.start.column,
+                        message,
+                    )
+                    .with_code(if cycle {
+                        crate::DiagnosticCode::TYPE_IMPORT_CYCLE
+                    } else {
+                        crate::DiagnosticCode::TYPE_UNKNOWN_NAME
+                    }),
+                );
+            }
+        }
+        diagnostics
     }
 
     pub(super) fn project_aware_diagnostics(
@@ -1871,6 +1999,7 @@ impl AnalysisSnapshot {
                 diagnostics.retain(|diagnostic| {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
+                diagnostics.extend(self.type_import_binding_diagnostics(parsed));
 
                 diagnostics
             })
@@ -1894,6 +2023,66 @@ impl AnalysisSnapshot {
                 self.config.diagnostics.bad_requires
             }
             _ => true,
+        }
+    }
+}
+
+fn referenced_tua_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for ty in parsed
+        .type_aliases
+        .iter()
+        .map(|alias| &alias.ty)
+        .chain(
+            parsed
+                .local_annotations
+                .iter()
+                .map(|annotation| &annotation.ty),
+        )
+        .chain(parsed.function_annotations.iter().flat_map(|function| {
+            function
+                .parameters
+                .iter()
+                .map(|parameter| &parameter.ty)
+                .chain(function.return_type.iter())
+        }))
+    {
+        collect_tua_type_names(ty, &mut names);
+    }
+    names
+}
+
+fn collect_tua_type_names(ty: &TuaType, names: &mut BTreeSet<String>) {
+    match ty {
+        TuaType::Named(name) => {
+            names.insert(name.clone());
+        }
+        TuaType::StringLiteral(_) => {}
+        TuaType::Union(types) | TuaType::Tuple(types) => {
+            for ty in types {
+                collect_tua_type_names(ty, names);
+            }
+        }
+        TuaType::Table(fields) => {
+            for field in fields {
+                collect_tua_type_names(&field.ty, names);
+            }
+        }
+        TuaType::Array(item) => collect_tua_type_names(item, names),
+        TuaType::Dictionary { key, value } => {
+            collect_tua_type_names(key, names);
+            collect_tua_type_names(value, names);
+        }
+        TuaType::Function {
+            parameters,
+            returns,
+        } => {
+            for parameter in parameters {
+                collect_tua_type_names(&parameter.ty, names);
+            }
+            for ty in returns {
+                collect_tua_type_names(ty, names);
+            }
         }
     }
 }

@@ -27,8 +27,16 @@ pub struct ProjectTypeModule {
     locals: BTreeMap<String, ProjectTypeBinding>,
     functions: BTreeMap<String, TypedFunction>,
     module_aliases: BTreeMap<String, String>,
+    named_type_imports: BTreeMap<String, ImportedTypeReference>,
+    reexported_aliases: BTreeMap<String, ImportedTypeReference>,
     type_import_namespaces: BTreeSet<String>,
     exported_aliases: BTreeSet<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ImportedTypeReference {
+    module: String,
+    imported: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,11 +82,23 @@ impl ProjectTypeDatabase {
                 locals: BTreeMap::new(),
                 functions: BTreeMap::new(),
                 module_aliases: module_aliases(input.scope, input.parsed),
+                named_type_imports: named_type_imports(input.parsed, false),
+                reexported_aliases: named_type_imports(input.parsed, true),
                 type_import_namespaces: input
                     .parsed
                     .into_iter()
                     .flat_map(|parsed| &parsed.type_imports)
+                    .filter(|import| !import.reexport && !import.namespace.is_empty())
                     .map(|import| import.namespace.clone())
+                    .chain(
+                        input
+                            .parsed
+                            .into_iter()
+                            .flat_map(|parsed| &parsed.type_imports)
+                            .filter(|import| import.reexport)
+                            .flat_map(|import| import.bindings.iter())
+                            .map(|binding| binding.local.clone()),
+                    )
                     .collect(),
                 exported_aliases: input
                     .parsed
@@ -371,9 +391,14 @@ impl ProjectTypeDatabase {
             let source_module = self.module(source_path)?;
             let target_module = self.module(&module_path)?;
             if source_module.type_import_namespaces.contains(alias)
-                && !target_module.exported_aliases.contains(member)
+                || target_module.source_kind == AnalysisSourceKind::Tua
             {
-                return None;
+                return self.resolve_exported_alias_binding(
+                    module_graph,
+                    &module_path,
+                    member,
+                    &mut BTreeSet::new(),
+                );
             }
 
             return target_module
@@ -383,7 +408,88 @@ impl ProjectTypeDatabase {
                 .or_else(|| self.module(&module_path)?.locals.get(member).cloned());
         }
 
-        self.module(source_path)?.aliases.get(name).cloned()
+        let source_module = self.module(source_path)?;
+        if let Some(binding) = source_module.aliases.get(name) {
+            return Some(binding.clone());
+        }
+        let imported = source_module.named_type_imports.get(name)?;
+        let module_path =
+            self.module_path_for_specifier(module_graph, source_path, &imported.module)?;
+        self.resolve_exported_alias_binding(
+            module_graph,
+            &module_path,
+            &imported.imported,
+            &mut BTreeSet::new(),
+        )
+    }
+
+    fn resolve_exported_alias_binding(
+        &self,
+        module_graph: &ModuleGraph,
+        module_path: &Path,
+        name: &str,
+        visiting: &mut BTreeSet<(PathBuf, String)>,
+    ) -> Option<ProjectTypeBinding> {
+        let key = (module_path.to_path_buf(), name.to_owned());
+        if !visiting.insert(key.clone()) {
+            return None;
+        }
+        let module = self.module(module_path)?;
+        let result = if let Some(binding) = module.aliases.get(name) {
+            module
+                .exported_aliases
+                .contains(name)
+                .then(|| binding.clone())
+        } else if let Some(reexport) = module.reexported_aliases.get(name) {
+            let target =
+                self.module_path_for_specifier(module_graph, module_path, &reexport.module)?;
+            self.resolve_exported_alias_binding(module_graph, &target, &reexport.imported, visiting)
+        } else {
+            None
+        };
+        visiting.remove(&key);
+        result
+    }
+
+    pub(crate) fn exported_alias_binding(
+        &self,
+        module_graph: &ModuleGraph,
+        module_path: &Path,
+        name: &str,
+    ) -> Option<ProjectTypeBinding> {
+        self.resolve_exported_alias_binding(module_graph, module_path, name, &mut BTreeSet::new())
+    }
+
+    pub(crate) fn reexport_cycle(
+        &self,
+        module_graph: &ModuleGraph,
+        module_path: &Path,
+        name: &str,
+    ) -> bool {
+        let mut visiting = BTreeSet::new();
+        let mut current_path = module_path.to_path_buf();
+        let mut current_name = name.to_owned();
+        loop {
+            if !visiting.insert((current_path.clone(), current_name.clone())) {
+                return true;
+            }
+            let Some(module) = self.module(&current_path) else {
+                return false;
+            };
+            if module.aliases.contains_key(&current_name) {
+                return false;
+            }
+            let Some(reexport) = module.reexported_aliases.get(&current_name) else {
+                return false;
+            };
+            let Some(next_path) =
+                self.module_path_for_specifier(module_graph, &current_path, &reexport.module)
+            else {
+                return false;
+            };
+            current_path = next_path;
+            current_name = reexport.imported.clone();
+        }
     }
 
     fn module_path_for_alias(
@@ -393,7 +499,15 @@ impl ProjectTypeDatabase {
         alias: &str,
     ) -> Option<PathBuf> {
         let module = self.module(source_path)?.module_aliases.get(alias)?;
+        self.module_path_for_specifier(module_graph, source_path, module)
+    }
 
+    fn module_path_for_specifier(
+        &self,
+        module_graph: &ModuleGraph,
+        source_path: &Path,
+        module: &str,
+    ) -> Option<PathBuf> {
         match module_graph.resolve_require(source_path, module)? {
             RequireResolution::Resolved { path }
             | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
@@ -501,9 +615,32 @@ fn module_aliases(
         parsed
             .type_imports
             .iter()
+            .filter(|import| !import.reexport && !import.namespace.is_empty())
             .map(|import| (import.namespace.clone(), import.module.clone()))
     }));
     aliases
+}
+
+fn named_type_imports(
+    parsed: Option<&ParsedSource>,
+    reexport: bool,
+) -> BTreeMap<String, ImportedTypeReference> {
+    parsed
+        .into_iter()
+        .flat_map(|parsed| &parsed.type_imports)
+        .filter(|import| import.reexport == reexport)
+        .flat_map(|import| {
+            import.bindings.iter().map(|binding| {
+                (
+                    binding.local.clone(),
+                    ImportedTypeReference {
+                        module: import.module.clone(),
+                        imported: binding.imported.clone(),
+                    },
+                )
+            })
+        })
+        .collect()
 }
 
 fn origin_for_source_kind(kind: AnalysisSourceKind) -> ProjectTypeOrigin {

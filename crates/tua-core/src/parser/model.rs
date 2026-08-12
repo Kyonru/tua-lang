@@ -198,10 +198,20 @@ pub struct TypeAlias {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeImport {
     pub namespace: String,
+    pub bindings: Vec<TypeImportBinding>,
+    pub reexport: bool,
     pub module: String,
     pub namespace_span: SourceSpan,
     pub module_span: SourceSpan,
     pub span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypeImportBinding {
+    pub imported: String,
+    pub local: String,
+    pub imported_span: SourceSpan,
+    pub local_span: SourceSpan,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

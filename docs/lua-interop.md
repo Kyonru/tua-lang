@@ -166,7 +166,15 @@ reads the compiler's module graph instead of parsing source independently.
 Use `export type` to make selected aliases public and `import type` to consume
 them through a compile-time namespace:
 
-```tua title="src/shared_types.tua"
+This section focuses on the module boundary. For the complete type model,
+including inference, table shapes, functions, unions, narrowing, and practical
+annotation guidance, see [Typing In Tua](typing.md).
+
+Put declaration-only APIs in `.d.tua` files. They are parsed, checked, indexed,
+and watched like other Tua sources, but builds never create a Lua file or source
+map for them.
+
+```tua title="src/shared_types.d.tua"
 export type Room = {
   name: string,
   spawnX: number,
@@ -191,17 +199,39 @@ local function enter(room: Shared.Room, player: Shared.Player)
 end
 ```
 
-Both declarations disappear from emitted Lua; unlike `require(...)` or runtime
-`import(...)`, `import type` creates no local, module load, or side effect.
+Import selected names when a namespace would be noisy, and re-export types to
+build a public declaration facade:
+
+```tua title="src/game_types.d.tua"
+export type { Player, Room as LevelRoom } from "./shared_types"
+```
+
+```tua title="src/hud.tua"
+import type { Player, LevelRoom as Room } from "./game_types"
+
+local function drawHud(player: Player, room: Room)
+end
+```
+
+Unlike `require(...)` or runtime `import(...)`, `import type` creates no local,
+module load, or side effect. A regular `.tua` file erases type declarations from
+its generated Lua; a `.d.tua` file has no generated output at all and rejects
+runtime statements.
 Only aliases declared with `export type` are visible. Private or missing aliases
 produce an unknown-type diagnostic, missing modules use the normal project
 module diagnostic, and aliases from imported namespaces work in locals,
 parameters, returns, arrays, and nested table shapes.
 
-Type-only dependencies participate in cache invalidation and navigation but do
-not create runtime require-cycle warnings. Recursive types may therefore be
-split across type modules safely. Namespace imports intentionally avoid merging
-foreign names into the current file and make ownership visible at every use.
+Imported names cannot collide with runtime locals or local type aliases.
+Export visibility is consistent for type-only imports and types reached through
+runtime module aliases: cross-module Tua aliases must use `export type`.
+
+Type-only dependencies participate in navigation and symbol-level cache
+invalidation but do not create runtime require-cycle warnings. Editing one
+exported alias rebuilds consumers of that alias rather than every consumer of
+the declaration module. Recursive structural types may be split across modules;
+pure re-export cycles receive a dedicated diagnostic. Namespace imports remain
+the clearest default because ownership stays visible at every use.
 
 ## Use A Tua Module From Lua
 

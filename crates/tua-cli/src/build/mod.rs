@@ -292,6 +292,10 @@ fn build_project_files(
                 if emit_on_error && !emit_candidate {
                     continue;
                 }
+                if tua_core::is_tua_declaration_path(&source_path, &workspace.config().extension) {
+                    remove_declaration_outputs(&workspace, &source_path, &mut diagnostics);
+                    continue;
+                }
 
                 let emission = match emit_tua_source_with_workspace_artifact(
                     &source_path,
@@ -507,6 +511,19 @@ pub(crate) fn output_paths_for_tua_source(
                 SourceKind::Tua,
             )]
         })
+}
+
+pub(crate) fn remove_declaration_outputs(
+    workspace: &ProjectWorkspace,
+    source_path: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(mirrored) = workspace.mirrored_output_path_for_source(source_path) else {
+        return;
+    };
+    let output = mirrored.with_extension("lua");
+    remove_output_if_exists(&output, diagnostics);
+    remove_source_maps(&output, diagnostics);
 }
 
 pub(crate) fn output_path_for_asset(workspace: &ProjectWorkspace, source_path: &Path) -> PathBuf {

@@ -46,6 +46,8 @@ impl DiagnosticCode {
     pub const TYPE_DOC_CONFLICT: Self = Self(1006);
     pub const TYPE_UNSUPPORTED_RUNTIME_CHECK: Self = Self(1007);
     pub const TYPE_CLASS: Self = Self(1008);
+    pub const TYPE_IMPORT_COLLISION: Self = Self(1009);
+    pub const TYPE_IMPORT_CYCLE: Self = Self(1010);
     pub const LOWERING_COMPOUND_ASSIGNMENT: Self = Self(2001);
     pub const EMIT_IO: Self = Self(2002);
     pub const EMIT_OUTPUT_COLLISION: Self = Self(2003);
@@ -161,6 +163,8 @@ impl DiagnosticCode {
                 | Self::TYPE_DOC_CONFLICT
                 | Self::TYPE_UNSUPPORTED_RUNTIME_CHECK
                 | Self::TYPE_CLASS
+                | Self::TYPE_IMPORT_COLLISION
+                | Self::TYPE_IMPORT_CYCLE
                 | Self::LOWERING_COMPOUND_ASSIGNMENT
                 | Self::EMIT_IO
                 | Self::EMIT_OUTPUT_COLLISION

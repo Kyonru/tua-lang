@@ -660,12 +660,37 @@ fn collect_alias_names(
         }
     }
 
-    names.extend(
-        parsed
-            .type_imports
-            .iter()
-            .map(|import| import.namespace.clone()),
-    );
+    for import in &parsed.type_imports {
+        if import.reexport {
+            continue;
+        }
+        if !import.namespace.is_empty() {
+            if !names.insert(import.namespace.clone()) {
+                diagnostics.push(type_diagnostic(
+                    &parsed.path,
+                    Some(import.namespace_span),
+                    format!(
+                        "type import name `{}` conflicts with a type alias",
+                        import.namespace
+                    ),
+                    DiagnosticCode::TYPE_IMPORT_COLLISION,
+                ));
+            }
+        }
+        for binding in &import.bindings {
+            if names.contains(&binding.local) {
+                diagnostics.push(type_diagnostic(
+                    &parsed.path,
+                    Some(binding.local_span),
+                    format!(
+                        "type import name `{}` conflicts with a type alias",
+                        binding.local
+                    ),
+                    DiagnosticCode::TYPE_IMPORT_COLLISION,
+                ));
+            }
+        }
+    }
 
     names
 }

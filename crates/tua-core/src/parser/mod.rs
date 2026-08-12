@@ -24,7 +24,8 @@ pub use model::{
     LuaDocParseOptions, LuaDocParseResult, LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation,
     LuaDocVararg, LuaDocVersion, NormalizedSource, ParameterAnnotation, ParameterDefault,
     ParameterOptional, ParsedLanguage, ParsedSource, RawParsedSource, SourcePosition, SourceSpan,
-    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypeImport, TypedSourceModel,
+    TableFieldType, TuaType, TypeAlias, TypeAliasKind, TypeImport, TypeImportBinding,
+    TypedSourceModel,
 };
 pub(crate) use model::{NativeArrayTypeSyntax, ParserLineProvenance};
 use normalize::normalize_tua_source_for_luau_parser;
@@ -169,6 +170,7 @@ pub fn extract_tua_source_model(
     let mut diagnostics = class_diagnostics;
     diagnostics.extend(sprite_diagnostics);
     diagnostics.extend(syntax.diagnostics);
+    diagnostics.extend(declaration_file_diagnostics(raw));
 
     if !diagnostics.is_empty() {
         return Err(diagnostics);
@@ -186,6 +188,39 @@ pub fn extract_tua_source_model(
         sprite_declarations,
         class_declarations,
     })
+}
+
+fn declaration_file_diagnostics(raw: &RawParsedSource) -> Vec<Diagnostic> {
+    let is_declaration = raw
+        .path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.ends_with(".d"));
+    if !is_declaration {
+        return Vec::new();
+    }
+
+    let runtime_statement = raw.ast.nodes().stmts().find(|statement| {
+        !matches!(
+            statement,
+            ast::Stmt::TypeDeclaration(_) | ast::Stmt::ExportedTypeDeclaration(_)
+        )
+    });
+    let span = runtime_statement
+        .and_then(node_span)
+        .or_else(|| raw.ast.nodes().last_stmt().and_then(node_span));
+
+    span.into_iter()
+        .map(|span| {
+            Diagnostic::error(
+                &raw.path,
+                span.start.line,
+                span.start.column,
+                "declaration files (`.d.tua`) may only contain type declarations, type imports, enums, and type re-exports",
+            )
+            .with_code(DiagnosticCode::SYNTAX_UNSUPPORTED_DIALECT)
+        })
+        .collect()
 }
 
 fn parse_raw_source(
@@ -273,84 +308,235 @@ fn collect_tua_syntax(path: &Path, source: &str, ast: &ast::Ast) -> TuaSyntax {
 }
 
 fn collect_type_imports(path: &Path, source: &str, syntax: &mut TuaSyntax) {
-    let mut namespaces = BTreeSet::new();
+    let (imports, mut diagnostics) = scan_type_imports(path, source);
+    let mut exported_names = syntax
+        .type_aliases
+        .iter()
+        .filter(|alias| alias.exported)
+        .map(|alias| alias.name.clone())
+        .collect::<BTreeSet<_>>();
+    for import in imports.iter().filter(|import| import.reexport) {
+        for binding in &import.bindings {
+            if !exported_names.insert(binding.local.clone()) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        path,
+                        binding.local_span.start.line,
+                        binding.local_span.start.column,
+                        format!("duplicate exported type name `{}`", binding.local),
+                    )
+                    .with_code(DiagnosticCode::TYPE_IMPORT_COLLISION),
+                );
+            }
+        }
+    }
+    syntax.type_imports = imports;
+    syntax.diagnostics.extend(diagnostics);
+}
+
+pub(crate) fn scan_type_imports(path: &Path, source: &str) -> (Vec<TypeImport>, Vec<Diagnostic>) {
+    let mut imports = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut local_names = BTreeSet::new();
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut consumed_lines = BTreeSet::new();
+
+    for start in 0..lines.len() {
+        let first = strip_type_module_comment(lines[start].trim()).trim();
+        if !is_type_module_statement_line(first)
+            || !first.contains('{')
+            || split_from_clause(first).is_some()
+        {
+            continue;
+        }
+        let mut combined = first.to_owned();
+        let mut end = start;
+        while end + 1 < lines.len() {
+            end += 1;
+            combined.push(' ');
+            combined.push_str(strip_type_module_comment(lines[end].trim()).trim());
+            if split_from_clause(&combined)
+                .is_some_and(|(_, module)| quoted_module(module.trim()).is_some())
+            {
+                break;
+            }
+        }
+        match parse_multiline_type_import(&lines, start, end, &combined) {
+            Ok(import) => {
+                let mut duplicate = None;
+                if !import.reexport {
+                    for binding in &import.bindings {
+                        if !local_names.insert(binding.local.clone()) {
+                            duplicate = Some((binding.local.clone(), binding.local_span));
+                            break;
+                        }
+                    }
+                }
+                if let Some((name, span)) = duplicate {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            path,
+                            span.start.line,
+                            span.start.column,
+                            format!("duplicate imported type name `{name}`"),
+                        )
+                        .with_code(DiagnosticCode::SYNTAX_PARSE),
+                    );
+                } else {
+                    imports.push(import);
+                }
+            }
+            Err(message) => diagnostics.push(type_import_diagnostic(path, start + 1, 1, message)),
+        }
+        consumed_lines.extend(start..=end);
+    }
 
     for (line_index, line) in source.lines().enumerate() {
+        if consumed_lines.contains(&line_index) {
+            continue;
+        }
         let line_number = line_index + 1;
         let leading = line.len() - line.trim_start().len();
-        let trimmed = line.trim();
-        let Some(rest) = trimmed.strip_prefix("import type ") else {
+        let statement = strip_type_module_comment(line.trim())
+            .trim_end_matches(';')
+            .trim();
+        if !is_type_module_statement_line(statement) {
+            continue;
+        }
+        let (reexport, rest) = if let Some(rest) = strip_keywords(statement, &["import", "type"]) {
+            (false, rest)
+        } else if let Some(rest) = strip_keywords(statement, &["export", "type"])
+            .filter(|rest| rest.trim_start().starts_with('{'))
+        {
+            (true, rest)
+        } else {
             continue;
         };
-        let Some((namespace, module_text)) = rest.split_once(" from ") else {
-            syntax.diagnostics.push(type_import_diagnostic(
+        let Some((binding_text, module_text)) = split_from_clause(rest) else {
+            diagnostics.push(type_import_diagnostic(
                 path,
                 line_number,
                 leading + 1,
-                "type import must use `import type Namespace from \"module\"`",
+                "type import must end with `from \"module\"`",
             ));
             continue;
         };
-        let namespace = namespace.trim();
-        let module_text = module_text.trim();
-        let valid_namespace = !namespace.is_empty()
-            && namespace.chars().enumerate().all(|(index, character)| {
-                character == '_'
-                    || character.is_ascii_alphabetic()
-                    || (index > 0 && character.is_ascii_digit())
-            });
-        let quote = module_text.chars().next();
-        let module = quote
-            .filter(|quote| matches!(quote, '\'' | '"'))
-            .and_then(|quote| module_text.strip_prefix(quote)?.strip_suffix(quote));
-
-        if !valid_namespace || module.is_none_or(str::is_empty) {
-            syntax.diagnostics.push(type_import_diagnostic(
+        let Some(module) = quoted_module(module_text.trim()) else {
+            diagnostics.push(type_import_diagnostic(
                 path,
                 line_number,
                 leading + 1,
-                "type import must use `import type Namespace from \"module\"`",
+                "type import module must be a non-empty quoted string",
             ));
             continue;
-        }
-        if !namespaces.insert(namespace.to_owned()) {
-            syntax.diagnostics.push(type_import_diagnostic(
+        };
+
+        let binding_text = binding_text.trim();
+        let (namespace, bindings) = if binding_text.starts_with('{') && binding_text.ends_with('}')
+        {
+            let mut bindings = Vec::new();
+            let body = &binding_text[1..binding_text.len() - 1];
+            let mut search_from = line.find('{').unwrap_or(leading) + 1;
+
+            for item in body
+                .split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+            {
+                let words = item.split_whitespace().collect::<Vec<_>>();
+                let (imported, local) = match words.as_slice() {
+                    [name] if is_type_import_identifier(name) => (*name, *name),
+                    [imported, "as", local]
+                        if is_type_import_identifier(imported)
+                            && is_type_import_identifier(local) =>
+                    {
+                        (*imported, *local)
+                    }
+                    _ => {
+                        diagnostics.push(type_import_diagnostic(
+                            path,
+                            line_number,
+                            leading + 1,
+                            "named type imports use `Name` or `Name as LocalName`",
+                        ));
+                        bindings.clear();
+                        break;
+                    }
+                };
+                if !reexport && !local_names.insert(local.to_owned()) {
+                    diagnostics.push(type_import_diagnostic(
+                        path,
+                        line_number,
+                        leading + 1,
+                        format!("duplicate imported type name `{local}`"),
+                    ));
+                    bindings.clear();
+                    break;
+                }
+                let imported_byte = line[search_from..]
+                    .find(imported)
+                    .map_or(search_from, |offset| search_from + offset);
+                let local_byte = if local == imported {
+                    imported_byte
+                } else {
+                    line[imported_byte + imported.len()..]
+                        .find(local)
+                        .map_or(imported_byte, |offset| {
+                            imported_byte + imported.len() + offset
+                        })
+                };
+                search_from = local_byte + local.len();
+                bindings.push(TypeImportBinding {
+                    imported: imported.to_owned(),
+                    local: local.to_owned(),
+                    imported_span: span_on_line(line, line_number, imported_byte, imported.len()),
+                    local_span: span_on_line(line, line_number, local_byte, local.len()),
+                });
+            }
+            if bindings.is_empty() {
+                if body.trim().is_empty() {
+                    diagnostics.push(type_import_diagnostic(
+                        path,
+                        line_number,
+                        leading + 1,
+                        "named type import list cannot be empty",
+                    ));
+                }
+                continue;
+            }
+            (String::new(), bindings)
+        } else if !reexport && is_type_import_identifier(binding_text) {
+            if !local_names.insert(binding_text.to_owned()) {
+                diagnostics.push(type_import_diagnostic(
+                    path,
+                    line_number,
+                    leading + 1,
+                    format!("duplicate type import namespace `{binding_text}`"),
+                ));
+                continue;
+            }
+            (binding_text.to_owned(), Vec::new())
+        } else {
+            diagnostics.push(type_import_diagnostic(
                 path,
                 line_number,
-                leading + "import type ".len() + 1,
-                format!("duplicate type import namespace `{namespace}`"),
+                leading + 1,
+                "type import must use a namespace or `{ Name, Name as LocalName }`",
             ));
             continue;
-        }
+        };
 
-        let namespace_byte = line.find(namespace).unwrap_or(leading);
-        let module = module.unwrap();
+        let namespace_byte = line.find(&namespace).unwrap_or(leading);
         let module_byte = line
-            .find(module)
+            .find(&module)
             .unwrap_or(namespace_byte + namespace.len());
-        syntax.type_imports.push(TypeImport {
-            namespace: namespace.to_owned(),
-            module: module.to_owned(),
-            namespace_span: SourceSpan {
-                start: SourcePosition {
-                    line: line_number,
-                    column: column_for_byte(line, namespace_byte),
-                },
-                end: SourcePosition {
-                    line: line_number,
-                    column: column_for_byte(line, namespace_byte + namespace.len()),
-                },
-            },
-            module_span: SourceSpan {
-                start: SourcePosition {
-                    line: line_number,
-                    column: column_for_byte(line, module_byte),
-                },
-                end: SourcePosition {
-                    line: line_number,
-                    column: column_for_byte(line, module_byte + module.len()),
-                },
-            },
+        imports.push(TypeImport {
+            namespace,
+            bindings,
+            reexport,
+            module: module.clone(),
+            namespace_span: span_on_line(line, line_number, namespace_byte, binding_text.len()),
+            module_span: span_on_line(line, line_number, module_byte, module.len()),
             span: SourceSpan {
                 start: SourcePosition {
                     line: line_number,
@@ -362,6 +548,226 @@ fn collect_type_imports(path: &Path, source: &str, syntax: &mut TuaSyntax) {
                 },
             },
         });
+    }
+
+    imports.sort_by_key(|import| (import.span.start.line, import.span.start.column));
+    diagnostics.sort_by_key(|diagnostic| (diagnostic.line, diagnostic.column));
+    (imports, diagnostics)
+}
+
+fn parse_multiline_type_import(
+    lines: &[&str],
+    start: usize,
+    end: usize,
+    statement: &str,
+) -> Result<TypeImport, String> {
+    let (reexport, rest) = if let Some(rest) = strip_keywords(statement, &["import", "type"]) {
+        (false, rest)
+    } else if let Some(rest) = strip_keywords(statement, &["export", "type"])
+        .filter(|rest| rest.trim_start().starts_with('{'))
+    {
+        (true, rest)
+    } else {
+        return Err("invalid multiline type import".to_owned());
+    };
+    let (binding_text, module_text) = split_from_clause(rest)
+        .ok_or_else(|| "type import must end with `from \"module\"`".to_owned())?;
+    let module = quoted_module(module_text.trim())
+        .ok_or_else(|| "type import module must be a non-empty quoted string".to_owned())?;
+    let binding_text = binding_text.trim();
+    if !binding_text.starts_with('{') || !binding_text.ends_with('}') {
+        return Err("multiline type imports require a named `{ ... }` list".to_owned());
+    }
+    let body = &binding_text[1..binding_text.len() - 1];
+    let pairs = body
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(
+            |item| match item.split_whitespace().collect::<Vec<_>>().as_slice() {
+                [name] if is_type_import_identifier(name) => {
+                    Ok(((*name).to_owned(), (*name).to_owned()))
+                }
+                [imported, "as", local]
+                    if is_type_import_identifier(imported) && is_type_import_identifier(local) =>
+                {
+                    Ok(((*imported).to_owned(), (*local).to_owned()))
+                }
+                _ => Err("named type imports use `Name` or `Name as LocalName`".to_owned()),
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()?;
+    if pairs.is_empty() {
+        return Err("named type import list cannot be empty".to_owned());
+    }
+
+    let mut cursor = (start, lines[start].find('{').unwrap_or(0) + 1);
+    let mut bindings = Vec::new();
+    for (imported, local) in pairs {
+        let (imported_line, imported_byte) = find_text_in_lines(lines, cursor, end, &imported)
+            .ok_or_else(|| "could not locate imported type name".to_owned())?;
+        let (local_line, local_byte) = if local == imported {
+            (imported_line, imported_byte)
+        } else {
+            find_text_in_lines(
+                lines,
+                (imported_line, imported_byte + imported.len()),
+                end,
+                &local,
+            )
+            .ok_or_else(|| "could not locate local type name".to_owned())?
+        };
+        cursor = (local_line, local_byte + local.len());
+        bindings.push(TypeImportBinding {
+            imported: imported.clone(),
+            local: local.clone(),
+            imported_span: span_on_line(
+                lines[imported_line],
+                imported_line + 1,
+                imported_byte,
+                imported.len(),
+            ),
+            local_span: span_on_line(lines[local_line], local_line + 1, local_byte, local.len()),
+        });
+    }
+    let module_line = (start..=end)
+        .rev()
+        .find(|line| lines[*line].contains(&module))
+        .ok_or_else(|| "could not locate type import module".to_owned())?;
+    let module_byte = lines[module_line].find(&module).unwrap_or(0);
+
+    Ok(TypeImport {
+        namespace: String::new(),
+        namespace_span: bindings[0].local_span,
+        bindings,
+        reexport,
+        module: module.clone(),
+        module_span: span_on_line(
+            lines[module_line],
+            module_line + 1,
+            module_byte,
+            module.len(),
+        ),
+        span: SourceSpan {
+            start: SourcePosition {
+                line: start + 1,
+                column: lines[start].len() - lines[start].trim_start().len() + 1,
+            },
+            end: SourcePosition {
+                line: end + 1,
+                column: lines[end].chars().count() + 1,
+            },
+        },
+    })
+}
+
+fn find_text_in_lines(
+    lines: &[&str],
+    cursor: (usize, usize),
+    end: usize,
+    text: &str,
+) -> Option<(usize, usize)> {
+    for line_index in cursor.0..=end {
+        let start = if line_index == cursor.0 { cursor.1 } else { 0 };
+        if let Some(offset) = lines[line_index].get(start..)?.find(text) {
+            return Some((line_index, start + offset));
+        }
+    }
+    None
+}
+
+pub(crate) fn is_type_module_statement_line(line: &str) -> bool {
+    let statement = strip_type_module_comment(line.trim())
+        .trim_end_matches(';')
+        .trim();
+    strip_keywords(statement, &["import", "type"]).is_some()
+        || strip_keywords(statement, &["export", "type"])
+            .is_some_and(|rest| rest.trim_start().starts_with('{'))
+}
+
+fn strip_keywords<'a>(mut text: &'a str, keywords: &[&str]) -> Option<&'a str> {
+    for keyword in keywords {
+        text = text.trim_start();
+        text = text.strip_prefix(keyword)?;
+        if text
+            .chars()
+            .next()
+            .is_some_and(|character| character == '_' || character.is_ascii_alphanumeric())
+        {
+            return None;
+        }
+    }
+    Some(text)
+}
+
+fn split_from_clause(text: &str) -> Option<(&str, &str)> {
+    let mut result = None;
+    for (index, _) in text.match_indices("from") {
+        let before = text[..index].chars().next_back();
+        let after = text[index + 4..].chars().next();
+        if before.is_some_and(char::is_whitespace) && after.is_some_and(char::is_whitespace) {
+            result = Some((&text[..index], &text[index + 4..]));
+        }
+    }
+    result
+}
+
+fn quoted_module(text: &str) -> Option<String> {
+    let quote = text.chars().next()?;
+    if !matches!(quote, '\'' | '"') {
+        return None;
+    }
+    let end = text[1..].find(quote)? + 1;
+    if !text[end + 1..].trim().is_empty() || end == 1 {
+        return None;
+    }
+    Some(text[1..end].to_owned())
+}
+
+fn strip_type_module_comment(text: &str) -> &str {
+    let bytes = text.as_bytes();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut index = 0;
+    while index + 1 < bytes.len() {
+        let byte = bytes[index];
+        if let Some(active) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == active {
+                quote = None;
+            }
+        } else if matches!(byte, b'\'' | b'"') {
+            quote = Some(byte);
+        } else if byte == b'-' && bytes[index + 1] == b'-' {
+            return &text[..index];
+        }
+        index += 1;
+    }
+    text
+}
+
+fn is_type_import_identifier(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().enumerate().all(|(index, character)| {
+            character == '_'
+                || character.is_ascii_alphabetic()
+                || (index > 0 && character.is_ascii_digit())
+        })
+}
+
+fn span_on_line(line: &str, line_number: usize, byte: usize, len: usize) -> SourceSpan {
+    SourceSpan {
+        start: SourcePosition {
+            line: line_number,
+            column: column_for_byte(line, byte),
+        },
+        end: SourcePosition {
+            line: line_number,
+            column: column_for_byte(line, byte + len),
+        },
     }
 }
 

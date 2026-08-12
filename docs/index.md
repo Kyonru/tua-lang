@@ -39,6 +39,7 @@ flowchart LR
 | Debug generated LOVE code from `.tua` source | [Debugging](debugging.md) |
 | Learn the language by building a small LOVE project | [Learn Tua](learn.md) |
 | Add Tua to an existing Lua codebase | [Lua Interoperability](lua-interop.md) and [Configuration](configuration.md) |
+| Model data and share type-safe module APIs | [Typing In Tua](typing.md) |
 | Look up syntax or a specific feature | [Language Guide](language.md) |
 | Define typed keyboard, mouse, or gamepad controls | [Input](input.md) |
 | Check exact compiler and toolchain behavior | [Language and Toolchain Reference](specification.md) |
@@ -121,6 +122,8 @@ distributed with the rest of the project.
   modules, classes, and LOVE callbacks.
 - [Language](language.md) is the navigable feature guide for exact syntax,
   emitted Lua, and game-focused features.
+- [Typing In Tua](typing.md) explains inference, type forms, narrowing,
+  exported types, and declaration-only `.d.tua` modules.
 - [Lua Interoperability](lua-interop.md) covers mixed `.lua` and `.tua`
   projects, module exports, and LuaDoc annotations.
 - [Examples](examples.md) explains the bundled feature tour and LOVE projects.

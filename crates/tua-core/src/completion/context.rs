@@ -275,7 +275,10 @@ fn module_path_context(line: &str, cursor: usize) -> Option<CompletionContext> {
         });
     }
 
-    if before_quote.ends_with("import(") {
+    if before_quote.ends_with("import(")
+        || (before_quote.starts_with("import type ") || before_quote.starts_with("export type "))
+            && before_quote.split_whitespace().next_back() == Some("from")
+    {
         return Some(CompletionContext::ImportPath {
             prefix: prefix[quote_start + 1..].to_owned(),
         });

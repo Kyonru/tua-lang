@@ -162,6 +162,12 @@ pub fn resolve_module_specifier(
         })
 }
 
+pub(crate) fn resolve_type_module_specifier(current_path: &Path, module: &str) -> Option<PathBuf> {
+    ProjectModel::load_for_path(current_path)
+        .ok()
+        .and_then(|model| model.resolve_type_imported_module(current_path, module))
+}
+
 fn export_field_type(ty: &Type, fields: &[String]) -> Option<Type> {
     let mut current = ty.clone();
 

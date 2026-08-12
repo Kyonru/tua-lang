@@ -21,6 +21,7 @@ nav = [
   ] },
   { "Language" = [
     { "Overview" = "language.md" },
+    { "Typing" = "typing.md" },
     { "Toolchain Reference" = "specification.md" },
     { "Lua Interop" = "lua-interop.md" },
     { "State Stores" = "stores.md" },

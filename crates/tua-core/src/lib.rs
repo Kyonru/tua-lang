@@ -192,13 +192,13 @@ pub use parser::{
     LuaDocReturn, LuaDocReturnType, LuaDocTypeAnnotation, LuaDocVersion, NormalizedSource,
     ParameterAnnotation, ParameterDefault, ParameterOptional, ParsedLanguage, ParsedSource,
     RawParsedSource, SourcePosition, SourceSpan, TableFieldType, TuaType, TypeAlias, TypeAliasKind,
-    TypeImport, TypedSourceModel,
+    TypeImport, TypeImportBinding, TypedSourceModel,
 };
 pub use project::project_description;
 pub use project_model::ProjectTypeLibrary;
 pub use project_model::{
-    LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel, ProjectModelOptions,
-    ProjectTarget, ProjectWorkspace,
+    is_tua_declaration_path, LoveVersion, LuaVersion, ProjectFileAssociation, ProjectModel,
+    ProjectModelOptions, ProjectTarget, ProjectWorkspace,
 };
 pub use references::{
     global_function_definition_count, global_function_name_for_definition,

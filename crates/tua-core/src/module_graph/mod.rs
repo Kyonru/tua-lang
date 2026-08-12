@@ -402,6 +402,9 @@ fn require_edges_for_source(
     module_specifier_literals(&parsed.source)
         .into_iter()
         .map(|literal| {
+            let type_only = parsed.type_imports.iter().any(|import| {
+                import.module == literal.module && import.module_span == literal.span
+            });
             let resolution = match literal.kind {
                 ModuleSpecifierKind::Require => {
                     let candidates = context
@@ -414,7 +417,12 @@ fn require_edges_for_source(
                     resolution_for_candidates(candidates, context.search_roots.to_vec())
                 }
                 ModuleSpecifierKind::Import => {
-                    match imported_module_candidates(source_path, &literal.module, context) {
+                    match imported_module_candidates(
+                        source_path,
+                        &literal.module,
+                        context,
+                        type_only,
+                    ) {
                         Ok((candidates, search_roots)) => {
                             resolution_for_candidates(candidates, search_roots)
                         }
@@ -422,10 +430,6 @@ fn require_edges_for_source(
                     }
                 }
             };
-
-            let type_only = parsed.type_imports.iter().any(|import| {
-                import.module == literal.module && import.module_span == literal.span
-            });
 
             RequireGraphEdge {
                 source: source_path.to_path_buf(),
@@ -461,14 +465,20 @@ fn imported_module_candidates(
     source_path: &Path,
     specifier: &str,
     context: ModuleResolutionContext<'_>,
+    include_declarations: bool,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
     if is_child_relative_import_specifier(specifier) {
         let search_roots = source_path
             .parent()
             .map(|path| vec![normalize_path(path)])
             .unwrap_or_default();
-        let candidates =
-            child_relative_import_candidates(source_path, specifier, search_roots, context)?;
+        let candidates = child_relative_import_candidates(
+            source_path,
+            specifier,
+            search_roots,
+            context,
+            include_declarations,
+        )?;
 
         return Ok(candidates);
     }
@@ -487,7 +497,8 @@ fn imported_module_candidates(
         );
     }
 
-    let candidates = existing_candidates(specifier, context);
+    let candidates =
+        existing_candidates_with_declarations(specifier, context, include_declarations);
 
     Ok((candidates, context.search_roots.to_vec()))
 }
@@ -497,6 +508,7 @@ fn child_relative_import_candidates(
     specifier: &str,
     search_roots: Vec<PathBuf>,
     context: ModuleResolutionContext<'_>,
+    include_declarations: bool,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
     let parent = source_path
         .parent()
@@ -516,7 +528,11 @@ fn child_relative_import_candidates(
     let import_candidates = if base.extension().is_some() {
         vec![base]
     } else {
-        import_module_candidates(&base, &module_extensions(context.extension))
+        import_module_candidates_with_declarations(
+            &base,
+            &module_extensions(context.extension),
+            include_declarations,
+        )
     };
 
     for candidate in import_candidates {
@@ -564,10 +580,18 @@ fn module_name_for_any_root(
         .and_then(|root| module_name_for_path(root, path, separator))
 }
 
-fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+fn import_module_candidates_with_declarations(
+    base: &Path,
+    extensions: &[&str],
+    include_declarations: bool,
+) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
 
     for extension in extensions {
+        if include_declarations && *extension != "lua" {
+            candidates.push(base.with_extension(format!("d.{extension}")));
+            candidates.push(base.join(format!("init.d.{extension}")));
+        }
         candidates.push(base.with_extension(extension));
         candidates.push(base.join(format!("init.{extension}")));
     }
@@ -576,12 +600,22 @@ fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
 }
 
 fn existing_candidates(module: &str, context: ModuleResolutionContext<'_>) -> Vec<PathBuf> {
+    existing_candidates_with_declarations(module, context, false)
+}
+
+fn existing_candidates_with_declarations(
+    module: &str,
+    context: ModuleResolutionContext<'_>,
+    include_declarations: bool,
+) -> Vec<PathBuf> {
     let relative = module_relative_path(module, context.separator);
     let extensions = module_extensions(context.extension);
     let mut candidates = Vec::new();
 
     for root in context.search_roots {
-        for candidate in module_candidates(root, &relative, &extensions) {
+        for candidate in
+            module_candidates_with_declarations(root, &relative, &extensions, include_declarations)
+        {
             let candidate = normalize_path(candidate);
 
             if module_candidate_exists(&candidate, context.indexed_paths)
@@ -757,11 +791,20 @@ fn module_extensions(project_extension: &str) -> Vec<&str> {
     extensions
 }
 
-fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+fn module_candidates_with_declarations(
+    root: &Path,
+    relative: &Path,
+    extensions: &[&str],
+    include_declarations: bool,
+) -> Vec<PathBuf> {
     let base = root.join(relative);
     let mut candidates = Vec::new();
 
     for extension in extensions {
+        if include_declarations && *extension != "lua" {
+            candidates.push(base.with_extension(format!("d.{extension}")));
+            candidates.push(base.join(format!("init.d.{extension}")));
+        }
         candidates.push(base.with_extension(extension));
         candidates.push(base.join(format!("init.{extension}")));
     }

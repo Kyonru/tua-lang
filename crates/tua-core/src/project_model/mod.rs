@@ -148,6 +148,16 @@ impl ProjectModel {
             .and_then(|workspace| workspace.resolve_imported_module(current_path, specifier))
     }
 
+    pub fn resolve_type_imported_module(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        let current_path = current_path.as_ref();
+        self.workspace_for_path(current_path)
+            .and_then(|workspace| workspace.resolve_type_imported_module(current_path, specifier))
+    }
+
     pub fn module_name_for_import(
         &self,
         current_path: impl AsRef<Path>,
@@ -286,6 +296,9 @@ impl ProjectWorkspace {
         source_path: impl AsRef<Path>,
     ) -> Option<Vec<PathBuf>> {
         let source_path = normalize_path(source_path);
+        if is_tua_declaration_path(&source_path, &self.config.extension) {
+            return Some(Vec::new());
+        }
         let mirrored = self.mirrored_output_path_for_source(&source_path)?;
         let mut paths = vec![mirrored.with_extension("lua")];
         let main_output = normalize_path(self.primary_output_root().join("main.lua"));
@@ -418,10 +431,47 @@ impl ProjectWorkspace {
         }
     }
 
+    pub fn resolve_type_imported_module(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+    ) -> Option<PathBuf> {
+        if is_child_relative_import_specifier(specifier) {
+            return self.resolve_child_imported_module_with_declarations(
+                current_path,
+                specifier,
+                true,
+            );
+        }
+        if !is_project_import_specifier(specifier) {
+            return None;
+        }
+        let relative = module_relative_path(specifier, self.require_path_separator);
+        let extensions = module_extensions(&self.config.extension);
+        for root in &self.require_roots {
+            for candidate in module_candidates_with_declarations(root, &relative, &extensions, true)
+            {
+                if candidate.is_file() {
+                    return Some(normalize_path(candidate));
+                }
+            }
+        }
+        None
+    }
+
     fn resolve_child_imported_module(
         &self,
         current_path: impl AsRef<Path>,
         specifier: &str,
+    ) -> Option<PathBuf> {
+        self.resolve_child_imported_module_with_declarations(current_path, specifier, false)
+    }
+
+    fn resolve_child_imported_module_with_declarations(
+        &self,
+        current_path: impl AsRef<Path>,
+        specifier: &str,
+        include_declarations: bool,
     ) -> Option<PathBuf> {
         let base = child_relative_import_base(current_path.as_ref(), specifier)?;
         let extensions = module_extensions(&self.config.extension);
@@ -435,7 +485,7 @@ impl ProjectWorkspace {
         let candidates = if base.extension().is_some() {
             vec![base]
         } else {
-            import_module_candidates(&base, &extensions)
+            import_module_candidates_with_declarations(&base, &extensions, include_declarations)
         };
 
         for candidate in candidates {
@@ -484,6 +534,12 @@ impl ProjectWorkspace {
 
         Some(parts.join("/"))
     }
+}
+
+pub fn is_tua_declaration_path(path: &Path, extension: &str) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(&format!(".d.{extension}")))
 }
 
 impl ProjectTypeLibrary {
@@ -561,10 +617,23 @@ fn module_extensions(project_extension: &str) -> Vec<&str> {
 }
 
 fn module_candidates(root: &Path, relative: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    module_candidates_with_declarations(root, relative, extensions, false)
+}
+
+fn module_candidates_with_declarations(
+    root: &Path,
+    relative: &Path,
+    extensions: &[&str],
+    include_declarations: bool,
+) -> Vec<PathBuf> {
     let base = root.join(relative);
     let mut candidates = Vec::new();
 
     for extension in extensions {
+        if include_declarations && *extension != "lua" {
+            candidates.push(base.with_extension(format!("d.{extension}")));
+            candidates.push(base.join(format!("init.d.{extension}")));
+        }
         candidates.push(base.with_extension(extension));
         candidates.push(base.join(format!("init.{extension}")));
     }
@@ -599,10 +668,18 @@ fn has_parent_path_component(specifier: &str) -> bool {
         .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
-fn import_module_candidates(base: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+fn import_module_candidates_with_declarations(
+    base: &Path,
+    extensions: &[&str],
+    include_declarations: bool,
+) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
 
     for extension in extensions {
+        if include_declarations && *extension != "lua" {
+            candidates.push(base.with_extension(format!("d.{extension}")));
+            candidates.push(base.join(format!("init.d.{extension}")));
+        }
         candidates.push(base.with_extension(extension));
         candidates.push(base.join(format!("init.{extension}")));
     }

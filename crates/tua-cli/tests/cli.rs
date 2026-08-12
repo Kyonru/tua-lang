@@ -270,7 +270,7 @@ return {
     fs::write(
         temp.path().join("src/types.tua"),
         r#"
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 "#,
@@ -693,6 +693,68 @@ emit_maps = false
 }
 
 #[test]
+fn declaration_modules_are_checked_but_never_emitted() {
+    let temp = TempDir::new("declaration-module-output");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+main = "main.tua"
+extension = "tua"
+"#,
+    )
+    .expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("build")).expect("failed to create build");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        "import type { Player } from \"./types\"\nlocal player: Player = { hp = 1 }\n",
+    )
+    .expect("failed to write main");
+    fs::write(
+        temp.path().join("src/types.d.tua"),
+        "export type Player = { hp: number }\n",
+    )
+    .expect("failed to write declarations");
+    fs::write(temp.path().join("build/types.d.lua"), "stale\n")
+        .expect("failed to write stale declaration output");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(!temp.path().join("build/types.d.lua").exists());
+}
+
+#[test]
+fn declaration_modules_reject_runtime_statements() {
+    let temp = TempDir::new("declaration-module-runtime");
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(temp.path().join("src/main.tua"), "return {}\n").expect("failed to write main");
+    fs::write(temp.path().join("src/bad.d.tua"), "local value = 1\n")
+        .expect("failed to write declaration");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("declaration files"));
+    assert!(!temp.path().join("build/bad.d.lua").exists());
+}
+
+#[test]
 fn traceback_remaps_generated_lua_locations_from_source_maps() {
     let temp = TempDir::new("traceback-source-map");
 
@@ -1024,7 +1086,7 @@ return {
     fs::write(
         temp.path().join("src/types.tua"),
         r#"
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 "#,

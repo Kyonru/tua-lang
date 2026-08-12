@@ -127,6 +127,7 @@ fn duplicates_configured_main_source_to_root_main_lua() {
     let workspace = model.primary_workspace().expect("workspace should exist");
     let start = project.path().join("src/love/start.tua");
     let helper = project.path().join("src/shared/helper.tua");
+    let declarations = project.path().join("src/shared/types.d.tua");
 
     assert_eq!(
         workspace.lua_output_paths_for_tua_source(&start),
@@ -138,6 +139,10 @@ fn duplicates_configured_main_source_to_root_main_lua() {
     assert_eq!(
         workspace.lua_output_paths_for_tua_source(&helper),
         Some(vec![project.path().join("build/shared/helper.lua")])
+    );
+    assert_eq!(
+        workspace.lua_output_paths_for_tua_source(&declarations),
+        Some(Vec::new())
     );
 }
 

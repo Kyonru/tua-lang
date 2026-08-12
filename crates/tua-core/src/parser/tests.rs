@@ -36,19 +36,30 @@ type Player = {
 
 #[test]
 fn parses_exported_aliases_and_erases_type_only_imports_for_the_runtime_ast() {
-    let source = r#"import type Shared from "./shared_types"
+    let source = r#"import   type Shared   from   "./shared_types" -- compile-time only
+import type {
+  Player,
+  Room as ImportedRoom,
+} from "./models"
+export type { Player as PublicPlayer } from "./models"
 export type Room = { name: string, owner: Shared.Player }
 local room: Room
 "#;
     let parsed =
         parse_tua_source("src/rooms.tua", source).expect("type-only module syntax should parse");
 
-    assert_eq!(parsed.type_imports.len(), 1);
+    assert_eq!(parsed.type_imports.len(), 3);
     assert_eq!(parsed.type_imports[0].namespace, "Shared");
     assert_eq!(parsed.type_imports[0].module, "./shared_types");
+    assert_eq!(parsed.type_imports[1].bindings.len(), 2);
+    assert_eq!(parsed.type_imports[1].bindings[1].imported, "Room");
+    assert_eq!(parsed.type_imports[1].bindings[1].local, "ImportedRoom");
+    assert!(parsed.type_imports[2].reexport);
+    assert_eq!(parsed.type_imports[2].bindings[0].local, "PublicPlayer");
     assert_eq!(parsed.type_aliases.len(), 1);
     assert!(parsed.type_aliases[0].exported);
-    assert!(!parsed.raw.parser_source.contains("import type"));
+    assert!(!parsed.raw.parser_source.contains("import"));
+    assert!(!parsed.raw.parser_source.contains("PublicPlayer"));
     assert_eq!(parsed.statement_count(), 2);
 }
 

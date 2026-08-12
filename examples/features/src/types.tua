@@ -4,7 +4,7 @@ type Vec2 = {
   y: number,
 }
 
-type Player = {
+export type Player = {
   name: string,
   pos: Vec2,
   hp: number,

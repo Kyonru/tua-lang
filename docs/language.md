@@ -24,7 +24,8 @@ that final invariant.
 !!! tip "New to Tua?"
     This page is a feature reference. If you are writing your first Tua
     project, start with [Learn Tua](learn.md) and return here when you need exact
-    syntax or behavior.
+    syntax or behavior. For a focused explanation of inference, narrowing,
+    shared aliases, and declaration modules, see [Typing In Tua](typing.md).
 
 ## Find A Feature
 

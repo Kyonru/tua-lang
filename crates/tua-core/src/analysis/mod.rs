@@ -350,6 +350,7 @@ struct AnalysisQueryCache {
     parsed_files: BTreeMap<ParsedCacheKey, Result<ParsedSource, Vec<Diagnostic>>>,
     dependencies: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
     importers: BTreeMap<PathBuf, BTreeSet<PathBuf>>,
+    type_dependency_uses: BTreeMap<(PathBuf, PathBuf), Option<BTreeSet<String>>>,
     stats: AnalysisCacheStats,
 }
 
@@ -375,15 +376,18 @@ struct ModuleDependencySurface {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TypeDependencySurface {
     aliases: BTreeMap<String, Type>,
+    public_aliases: BTreeMap<String, Type>,
+    reexports: BTreeMap<String, (String, String)>,
     locals: BTreeMap<String, Type>,
     functions: BTreeMap<String, TypedFunction>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct DependencyInvalidation {
     require_graph: bool,
     exports: bool,
     types: bool,
+    changed_aliases: Option<BTreeSet<String>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -416,6 +420,8 @@ impl DependencySurface {
         Self::from_parts(
             file.exports.clone(),
             file.environment(),
+            file.parsed.as_ref().ok(),
+            file.kind,
             require_targets_for_links(&file.require_edges),
         )
     }
@@ -428,12 +434,20 @@ impl DependencySurface {
         let (environment, _) = build_analysis_type_environment_with_diagnostics(parsed, config);
         let exports = infer_module_exports_with_optional_environment(parsed, Some(&environment));
 
-        Self::from_parts(exports, Some(&environment), require_targets)
+        Self::from_parts(
+            exports,
+            Some(&environment),
+            Some(parsed),
+            AnalysisSourceKind::Tua,
+            require_targets,
+        )
     }
 
     fn from_parts(
         exports: Option<ModuleExports>,
         environment: Option<&TypeEnvironment>,
+        parsed: Option<&ParsedSource>,
+        source_kind: AnalysisSourceKind,
         require_targets: BTreeSet<PathBuf>,
     ) -> Self {
         Self {
@@ -446,6 +460,40 @@ impl DependencySurface {
                     .into_iter()
                     .flat_map(TypeEnvironment::aliases)
                     .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                    .collect(),
+                public_aliases: environment
+                    .into_iter()
+                    .flat_map(TypeEnvironment::aliases)
+                    .filter(|(name, _)| {
+                        source_kind != AnalysisSourceKind::Tua
+                            || parsed.is_some_and(|parsed| {
+                                parsed
+                                    .type_aliases
+                                    .iter()
+                                    .any(|alias| alias.exported && alias.name == **name)
+                                    || parsed.type_imports.iter().any(|import| {
+                                        import.reexport
+                                            && import
+                                                .bindings
+                                                .iter()
+                                                .any(|binding| binding.local == **name)
+                                    })
+                            })
+                    })
+                    .map(|(name, ty)| (name.to_owned(), ty.clone()))
+                    .collect(),
+                reexports: parsed
+                    .into_iter()
+                    .flat_map(|parsed| &parsed.type_imports)
+                    .filter(|import| import.reexport)
+                    .flat_map(|import| {
+                        import.bindings.iter().map(|binding| {
+                            (
+                                binding.local.clone(),
+                                (import.module.clone(), binding.imported.clone()),
+                            )
+                        })
+                    })
                     .collect(),
                 locals: environment
                     .into_iter()
@@ -467,10 +515,33 @@ impl DependencySurface {
     }
 
     fn invalidation_from(&self, previous: &Self) -> DependencyInvalidation {
+        let changed_aliases = self
+            .types
+            .public_aliases
+            .keys()
+            .chain(previous.types.public_aliases.keys())
+            .filter(|name| {
+                self.types.public_aliases.get(*name) != previous.types.public_aliases.get(*name)
+            })
+            .cloned()
+            .chain(
+                self.types
+                    .reexports
+                    .keys()
+                    .chain(previous.types.reexports.keys())
+                    .filter(|name| {
+                        self.types.reexports.get(*name) != previous.types.reexports.get(*name)
+                    })
+                    .cloned(),
+            )
+            .collect::<BTreeSet<_>>();
+        let non_alias_types_changed = self.types.locals != previous.types.locals
+            || self.types.functions != previous.types.functions;
         DependencyInvalidation {
             require_graph: self.module.require_targets != previous.module.require_targets,
             exports: self.module.exports != previous.module.exports,
-            types: self.types != previous.types,
+            types: non_alias_types_changed || !changed_aliases.is_empty(),
+            changed_aliases: (!non_alias_types_changed).then_some(changed_aliases),
         }
     }
 }
@@ -481,10 +552,11 @@ impl DependencyInvalidation {
             require_graph: true,
             exports: true,
             types: true,
+            changed_aliases: None,
         }
     }
 
-    fn invalidates_importers(self) -> bool {
+    fn invalidates_importers(&self) -> bool {
         self.exports || self.types
     }
 }
@@ -1016,7 +1088,11 @@ fn unknown_type_name(message: &str) -> Option<&str> {
 }
 
 fn is_type_annotation_position(parsed: &ParsedSource, position: SourcePosition) -> bool {
-    parsed.local_annotations.iter().any(|annotation| {
+    parsed.type_aliases.iter().any(|alias| {
+        alias
+            .span
+            .is_some_and(|span| contains_position(span, position))
+    }) || parsed.local_annotations.iter().any(|annotation| {
         annotation
             .span
             .is_some_and(|span| contains_position(span, position))

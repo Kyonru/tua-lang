@@ -676,7 +676,7 @@ impl AnalysisHost {
 
         let mut cache = self.cache.borrow_mut();
 
-        cache.update_dependencies(&path, &cached.file.require_edges);
+        cache.update_dependencies(&path, &cached.file);
         cache.files.insert(path, cached);
         cache.parsed_files.extend(parsed_files);
 

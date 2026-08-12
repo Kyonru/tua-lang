@@ -350,6 +350,8 @@ changes. Treat the output directory as generated code; edit files under `src/`.
 ## Next Steps
 
 - [Language](language.md) is the complete syntax and type reference.
+- [Typing In Tua](typing.md) covers inference, type forms, narrowing, shared
+  types, and declaration-only `.d.tua` modules in one focused guide.
 - [Lua Interop](lua-interop.md) covers `.lua` modules and LuaDoc annotations.
 - [Configuration](configuration.md) documents project paths, diagnostics,
   formatting, LuaJIT guidance, and editor settings.

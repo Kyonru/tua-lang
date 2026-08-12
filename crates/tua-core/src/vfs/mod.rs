@@ -370,7 +370,14 @@ pub fn module_name_for_path(
     let source_root = normalize_path(source_root);
     let path = normalize_path(path);
     let relative = path.strip_prefix(source_root).ok()?;
-    let without_extension = relative.with_extension("");
+    let mut without_extension = relative.with_extension("");
+    if without_extension
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".d"))
+    {
+        without_extension.set_extension("");
+    }
     let mut parts = without_extension
         .components()
         .map(|component| component.as_os_str().to_string_lossy().to_string())

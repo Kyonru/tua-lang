@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::module_index::resolve_module_specifier;
+use crate::module_index::resolve_type_module_specifier;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{SourcePosition, SourceSpan};
 
@@ -16,11 +17,19 @@ pub fn module_links_tua_source(
 ) -> Vec<ModuleLink> {
     let path = path.as_ref();
     let source = source.into();
+    let (type_imports, _) = crate::parser::scan_type_imports(path, &source);
 
     module_specifier_literals(&source)
         .into_iter()
         .filter_map(|literal| {
-            let target = resolve_module_specifier(path, &literal.module, literal.kind)?;
+            let type_only = type_imports.iter().any(|import| {
+                import.module == literal.module && import.module_span == literal.span
+            });
+            let target = if type_only {
+                resolve_type_module_specifier(path, &literal.module)
+            } else {
+                resolve_module_specifier(path, &literal.module, literal.kind)
+            }?;
 
             Some(ModuleLink {
                 span: literal.span,
@@ -74,8 +83,7 @@ pub(crate) struct ModuleSpecifierLiteral {
 
 pub(crate) fn module_specifier_literals(source: &str) -> Vec<ModuleSpecifierLiteral> {
     let mut state = RequireScanState::Code;
-
-    source
+    let mut literals = source
         .split('\n')
         .enumerate()
         .flat_map(|(line_index, line)| {
@@ -84,7 +92,20 @@ pub(crate) fn module_specifier_literals(source: &str) -> Vec<ModuleSpecifierLite
 
             module_specifier_literals_on_line(line, line_number, &mut state)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    let (type_imports, _) = crate::parser::scan_type_imports(Path::new(""), source);
+    literals.extend(
+        type_imports
+            .into_iter()
+            .map(|import| ModuleSpecifierLiteral {
+                module: import.module,
+                kind: ModuleSpecifierKind::Import,
+                span: import.module_span,
+            }),
+    );
+    literals.sort_by_key(|literal| (literal.span.start.line, literal.span.start.column));
+    literals.dedup_by(|left, right| left.span == right.span && left.kind == right.kind);
+    literals
 }
 
 #[cfg(test)]
@@ -151,13 +172,6 @@ fn module_specifier_literals_on_line(
                 }
 
                 if let Some(kind) = module_specifier_kind_at(line, index) {
-                    if kind == ModuleSpecifierKind::Import {
-                        if let Some(literal) = type_import_literal_after(line, line_number, index) {
-                            index = byte_for_column(line, literal.span.end.column).max(index + 1);
-                            literals.push(literal);
-                            continue;
-                        }
-                    }
                     if kind == ModuleSpecifierKind::Import
                         && !looks_like_local_import_binding(line, index)
                     {
@@ -188,42 +202,6 @@ fn module_specifier_literals_on_line(
     }
 
     literals
-}
-
-fn type_import_literal_after(
-    line: &str,
-    line_number: usize,
-    import_start: usize,
-) -> Option<ModuleSpecifierLiteral> {
-    let prefix = line[..import_start].trim();
-    if !prefix.is_empty() {
-        return None;
-    }
-    let rest = line[import_start + "import".len()..].trim_start();
-    let rest = rest.strip_prefix("type ")?;
-    let (_, module_text) = rest.split_once(" from ")?;
-    let module_text = module_text.trim();
-    let quote = module_text.as_bytes().first().copied()?;
-    if !matches!(quote, b'\'' | b'"') {
-        return None;
-    }
-    let module_start = line.find(module_text)? + 1;
-    let quote_end = find_short_string_end(line, module_start - 1, quote)?;
-
-    Some(ModuleSpecifierLiteral {
-        module: line[module_start..quote_end].to_owned(),
-        kind: ModuleSpecifierKind::Import,
-        span: SourceSpan {
-            start: SourcePosition {
-                line: line_number,
-                column: column_for_byte(line, module_start),
-            },
-            end: SourcePosition {
-                line: line_number,
-                column: column_for_byte(line, quote_end),
-            },
-        },
-    })
 }
 
 fn module_specifier_literal_after(

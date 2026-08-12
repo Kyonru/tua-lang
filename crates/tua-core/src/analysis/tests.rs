@@ -2744,6 +2744,41 @@ fn changing_exported_module_invalidates_transitive_importers() {
 }
 
 #[test]
+fn changing_one_exported_type_invalidates_only_consumers_of_that_type() {
+    let temp = TempProject::new("selective-type-dependency");
+    let player_user = temp.write(
+        "src/player_user.tua",
+        "import type { Player } from \"./types\"\nlocal value: Player\n",
+    );
+    let room_user = temp.write(
+        "src/room_user.tua",
+        "import type { Room } from \"./types\"\nlocal value: Room\n",
+    );
+    let types = temp.write(
+        "src/types.d.tua",
+        "export type Player = { hp: number }\nexport type Room = { name: string }\n",
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([temp.path().join("src")]);
+    for path in [&player_user, &room_user, &types] {
+        host.set_file(path, fs::read_to_string(path).expect("source should read"));
+    }
+    host.snapshot();
+
+    let changed = host.update_file_with_kind(
+        &types,
+        "export type Player = { hp: string }\nexport type Room = { name: string }\n",
+        AnalysisSourceKind::Tua,
+    );
+    let stats = host.cache_stats();
+
+    assert!(changed);
+    assert_eq!(stats.invalidations, 2);
+    assert_eq!(stats.dependent_invalidations, 1);
+    assert_eq!(stats.type_surface_invalidations, 1);
+}
+
+#[test]
 fn changing_required_module_body_without_surface_change_keeps_importers_cached() {
     let temp = TempProject::new("module-body-dependency");
 
@@ -3557,7 +3592,7 @@ local LuaDocTypes = require("lua_doc_types")
 local player: Types.<|player_type|>Player = nil
 local enemy: LuaDocTypes.<|enemy_type|>Enemy = nil
 -- file: src/types.tua
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 -- file: src/lua_doc_types.lua
@@ -3749,8 +3784,8 @@ return {
             .len(),
         1
     );
-    assert!(labels.contains(&"hp".to_owned()));
-    assert!(labels.contains(&"name".to_owned()));
+    assert!(labels.contains(&"hp".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"name".to_owned()), "{labels:?}");
     assert!(direct_labels.contains(&"hp".to_owned()));
     assert_eq!(definition.kind, DefinitionKind::TableField);
     assert_eq!(definition.path, PathBuf::from("src/functions.tua"));
@@ -3804,7 +3839,7 @@ fn snapshot_type_definition_resolves_required_module_aliases() {
 local Types = require("types")
 local player: Types.<|type_ref|>Player = { hp = 10 }
 -- file: src/types.tua
-type Player = {
+export type Player = {
   hp: number,
 }
 
@@ -3833,8 +3868,12 @@ fn snapshot_hover_and_definition_resolve_type_only_imports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua
 import type Shared from "./types"
+import type { Player as NamedPlayer } from "./types"
 local player: Shared.<|type_ref|>Player = { hp = 10 }
 local other: Shared.Pla<|complete|> = player
+local named: <|named_ref|>NamedPlayer = player
+local namedTyping: NamedP<|named_complete|> = player
+local runtime = Shared.Pla<|runtime_complete|>
 return player.hp
 -- file: src/types.tua
 export type <|type_def|>Player<|/type_def|> = { hp: number }
@@ -3854,15 +3893,28 @@ type PlayerPrivate = { hp: number }
     let definition = snapshot
         .type_definition("src/main.tua", fixture.position("type_ref"))
         .expect("type-only alias should navigate");
+    let named_definition = snapshot
+        .type_definition("src/main.tua", fixture.position("named_ref"))
+        .expect("named type import should navigate");
 
     assert_eq!(hover.contents, "type Shared.Player = { hp: number }");
     assert_eq!(definition.kind, DefinitionKind::TypeAlias);
     assert_eq!(definition.path, PathBuf::from("src/types.tua"));
     assert_eq!(definition.span, fixture.range("type_def"));
+    assert_eq!(named_definition.path, PathBuf::from("src/types.tua"));
+    assert_eq!(named_definition.span, fixture.range("type_def"));
     assert_eq!(
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete"))),
         vec!["Player".to_owned()]
     );
+    assert_eq!(
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("named_complete"))),
+        vec!["NamedPlayer".to_owned()]
+    );
+    assert!(!completion_labels(
+        &snapshot.completion("src/main.tua", fixture.position("runtime_complete"))
+    )
+    .contains(&"Player".to_owned()));
 }
 
 #[test]
@@ -3978,8 +4030,8 @@ return {
     let labels =
         completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
 
-    assert!(labels.contains(&"hp".to_owned()));
-    assert!(labels.contains(&"name".to_owned()));
+    assert!(labels.contains(&"hp".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"name".to_owned()), "{labels:?}");
 }
 
 #[test]

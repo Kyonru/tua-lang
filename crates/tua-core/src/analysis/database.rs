@@ -1,5 +1,6 @@
 use super::*;
 use crate::types::build_type_environment_with_domain_registry;
+use crate::DiagnosticCode;
 
 impl AnalysisQueryCache {
     pub(super) fn cached_file(
@@ -25,7 +26,7 @@ impl AnalysisQueryCache {
         self.record_file_rebuild(parsed_cache_hit);
 
         let file = build_analysis_file(&path, source.to_owned(), kind, context, parsed);
-        self.update_dependencies(&path, &file.require_edges);
+        self.update_dependencies(&path, &file);
         self.files.insert(
             path,
             CachedAnalysisFile {
@@ -79,7 +80,7 @@ impl AnalysisQueryCache {
         self.stats.export_surface_invalidations += usize::from(invalidation.exports);
         self.stats.type_surface_invalidations += usize::from(invalidation.types);
 
-        self.invalidate_file(path, invalidate_dependents);
+        self.invalidate_file_for_change(path, &invalidation);
         invalidate_dependents
     }
 
@@ -133,6 +134,32 @@ impl AnalysisQueryCache {
         }
     }
 
+    fn invalidate_file_for_change(&mut self, path: &Path, invalidation: &DependencyInvalidation) {
+        let path = normalize_path(path);
+        let mut invalidated = BTreeSet::new();
+        self.invalidate_one(&path, &mut invalidated, false);
+        if invalidation.require_graph && !invalidation.exports && !invalidation.types {
+            return;
+        }
+
+        let importers = self.importers.get(&path).cloned().unwrap_or_default();
+        for importer in importers {
+            let dependency = self
+                .type_dependency_uses
+                .get(&(importer.clone(), path.clone()));
+            let runtime_dependency = dependency.is_none_or(Option::is_none);
+            let type_dependency_matches = invalidation.types
+                && match (&invalidation.changed_aliases, dependency) {
+                    (None, _) | (_, None) | (_, Some(None)) => true,
+                    (Some(changed), Some(Some(used))) => !changed.is_disjoint(used),
+                };
+            if invalidation.exports && runtime_dependency || type_dependency_matches {
+                self.invalidate_one(&importer, &mut invalidated, true);
+                self.invalidate_dependents(&importer, &mut invalidated);
+            }
+        }
+    }
+
     pub(super) fn invalidate_dependents(
         &mut self,
         path: &Path,
@@ -155,6 +182,7 @@ impl AnalysisQueryCache {
         self.files.clear();
         self.dependencies.clear();
         self.importers.clear();
+        self.type_dependency_uses.clear();
     }
 
     pub(super) fn retain_paths(&mut self, live_paths: &BTreeSet<PathBuf>) {
@@ -202,9 +230,11 @@ impl AnalysisQueryCache {
                 }
             }
         }
+        self.type_dependency_uses
+            .retain(|(importer, _), _| importer != &path);
     }
 
-    pub(super) fn update_dependencies(&mut self, path: &Path, require_edges: &[ModuleLink]) {
+    pub(super) fn update_dependencies(&mut self, path: &Path, file: &AnalysisFile) {
         let path = normalize_path(path);
 
         if let Some(old_dependencies) = self.dependencies.remove(&path) {
@@ -217,8 +247,11 @@ impl AnalysisQueryCache {
                 }
             }
         }
+        self.type_dependency_uses
+            .retain(|(importer, _), _| importer != &path);
 
-        let dependencies = require_edges
+        let dependencies = file
+            .require_edges
             .iter()
             .map(|edge| normalize_path(&edge.target))
             .collect::<BTreeSet<_>>();
@@ -228,6 +261,46 @@ impl AnalysisQueryCache {
                 .entry(dependency.clone())
                 .or_default()
                 .insert(path.clone());
+        }
+
+        let referenced_names = file
+            .parsed
+            .as_ref()
+            .ok()
+            .map(referenced_type_names_for_dependencies)
+            .unwrap_or_default();
+        for edge in &file.require_edges {
+            let target = normalize_path(&edge.target);
+            let type_import = file.parsed.as_ref().ok().and_then(|parsed| {
+                parsed
+                    .type_imports
+                    .iter()
+                    .find(|import| import.module_span == edge.span)
+            });
+            let Some(import) = type_import else {
+                self.type_dependency_uses
+                    .insert((path.clone(), target), None);
+                continue;
+            };
+            let used = self
+                .type_dependency_uses
+                .entry((path.clone(), target))
+                .or_insert_with(|| Some(BTreeSet::new()));
+            let Some(used) = used else {
+                continue;
+            };
+            if !import.namespace.is_empty() {
+                let prefix = format!("{}.", import.namespace);
+                used.extend(
+                    referenced_names
+                        .iter()
+                        .filter_map(|name| name.strip_prefix(&prefix).map(str::to_owned)),
+                );
+            }
+            used.extend(import.bindings.iter().filter_map(|binding| {
+                (import.reexport || referenced_names.contains(&binding.local))
+                    .then(|| binding.imported.clone())
+            }));
         }
 
         self.dependencies.insert(path, dependencies);
@@ -290,13 +363,14 @@ fn build_analysis_file(
 
                 scope_map_parsed_source(parsed)
             };
-            let (environment, diagnostics) = {
+            let (environment, mut diagnostics) = {
                 let _profile = profile::span_for_path("analysis.types.environment", path);
                 let _trace =
                     profile::diagnostics_span(profile::DiagnosticsTraceCategory::TypeEnvironment);
 
                 build_analysis_type_environment_with_diagnostics(parsed, context.config)
             };
+            diagnostics.extend(type_import_collision_diagnostics(parsed, &scope));
 
             (
                 Some(AnalysisFileSemantics {
@@ -528,6 +602,99 @@ fn build_analysis_file(
         object_pool_index,
         symbols,
     }
+}
+
+fn type_import_collision_diagnostics(parsed: &ParsedSource, scope: &ScopeMap) -> Vec<Diagnostic> {
+    let runtime_names = scope
+        .declarations()
+        .iter()
+        .map(|declaration| declaration.name.as_str())
+        .collect::<BTreeSet<_>>();
+    parsed
+        .type_imports
+        .iter()
+        .filter(|import| !import.reexport)
+        .flat_map(|import| {
+            let namespace = (!import.namespace.is_empty())
+                .then_some((import.namespace.as_str(), import.namespace_span));
+            namespace.into_iter().chain(
+                import
+                    .bindings
+                    .iter()
+                    .map(|binding| (binding.local.as_str(), binding.local_span)),
+            )
+        })
+        .filter(|(name, _)| runtime_names.contains(name))
+        .map(|(name, span)| {
+            Diagnostic::error(
+                &parsed.path,
+                span.start.line,
+                span.start.column,
+                format!("type import name `{name}` conflicts with a runtime declaration"),
+            )
+            .with_code(DiagnosticCode::TYPE_IMPORT_COLLISION)
+        })
+        .collect()
+}
+
+fn referenced_type_names_for_dependencies(parsed: &ParsedSource) -> BTreeSet<String> {
+    fn collect(ty: &TuaType, names: &mut BTreeSet<String>) {
+        match ty {
+            TuaType::Named(name) => {
+                names.insert(name.clone());
+            }
+            TuaType::StringLiteral(_) => {}
+            TuaType::Union(types) | TuaType::Tuple(types) => {
+                for ty in types {
+                    collect(ty, names);
+                }
+            }
+            TuaType::Table(fields) => {
+                for field in fields {
+                    collect(&field.ty, names);
+                }
+            }
+            TuaType::Array(item) => collect(item, names),
+            TuaType::Dictionary { key, value } => {
+                collect(key, names);
+                collect(value, names);
+            }
+            TuaType::Function {
+                parameters,
+                returns,
+            } => {
+                for parameter in parameters {
+                    collect(&parameter.ty, names);
+                }
+                for ty in returns {
+                    collect(ty, names);
+                }
+            }
+        }
+    }
+
+    let mut names = BTreeSet::new();
+    for ty in parsed
+        .type_aliases
+        .iter()
+        .map(|alias| &alias.ty)
+        .chain(
+            parsed
+                .local_annotations
+                .iter()
+                .map(|annotation| &annotation.ty),
+        )
+        .chain(parsed.function_annotations.iter().flat_map(|function| {
+            function
+                .parameters
+                .iter()
+                .map(|parameter| &parameter.ty)
+                .chain(function.return_type.iter())
+        }))
+    {
+        collect(ty, &mut names);
+    }
+    names
 }
 
 pub(super) fn parse_analysis_source(

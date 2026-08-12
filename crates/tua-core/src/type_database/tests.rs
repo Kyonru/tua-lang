@@ -31,7 +31,7 @@ fn resolves_aliases_from_required_tua_modules() {
 local Types = require("types")
 local player: Types.Player = { hp = 10 }
 -- file: src/types.tua
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 "#,
@@ -89,6 +89,97 @@ type PrivateState = { debug: boolean }
         diagnostics.is_empty(),
         "unexpected diagnostics: {diagnostics:#?}"
     );
+}
+
+#[test]
+fn declaration_modules_support_named_imports_aliases_and_reexports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Hero as Player, PublicRoom } from "./api"
+local _player: Player = { hp = 10 }
+local _room: PublicRoom = { name = "start" }
+-- file: src/api.d.tua
+export type { Player as Hero } from "./models"
+export type PublicRoom = { name: string }
+-- file: src/models.d.tua
+export type Player = { hp: number }
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+
+    assert!(
+        snapshot.diagnostics("src/main.tua").is_empty(),
+        "unexpected diagnostics: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+    let player = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Player")
+        .expect("named re-export should resolve");
+    assert_eq!(
+        player.ty,
+        Type::table([("hp", TableField::required(Type::number()))])
+    );
+}
+
+#[test]
+fn cyclic_type_reexports_report_a_dedicated_diagnostic() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type { Player } from "./a"
+local player: Player
+-- file: src/a.d.tua
+export type { Player } from "./b"
+-- file: src/b.d.tua
+export type { Player } from "./a"
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.code == Some(crate::DiagnosticCode::TYPE_IMPORT_CYCLE) }));
+}
+
+#[test]
+fn type_import_names_cannot_shadow_runtime_or_local_type_names() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local Shared = {}
+-- file: src/types.d.tua
+export type Player = { hp: number }
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(crate::DiagnosticCode::TYPE_IMPORT_COLLISION)
+    }));
+}
+
+#[test]
+fn runtime_module_aliases_obey_tua_export_visibility() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Types = require("types")
+local _player: Types.PrivatePlayer
+-- file: src/types.tua
+type PrivatePlayer = { hp: number }
+return {}
+"#,
+    );
+    let host = host_from_fixture(&fixture);
+    let diagnostics = host.snapshot().diagnostics("src/main.tua");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
+            && diagnostic.message.contains("Types.PrivatePlayer")
+    }));
 }
 
 #[test]
@@ -192,7 +283,7 @@ fn required_tua_aliases_do_not_report_unknown_type_diagnostics() {
 local Types = require("types")
 local player: Types.Player = { hp = 10 }
 -- file: src/types.tua
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 "#,
@@ -246,7 +337,7 @@ fn resolves_required_module_export_field_types() {
 local Factory = require("factory")
 local player = Factory.newPlayer()
 -- file: src/factory.tua
-type Player = { hp: number }
+export type Player = { hp: number }
 
 local function newPlayer(): Player
   return { hp = 10 }
@@ -310,7 +401,7 @@ fn invalidates_project_type_data_when_required_module_changes() {
 local Types = require("types")
 local player: Types.Player = { hp = 10 }
 -- file: src/types.tua
-type Player = { hp: number }
+export type Player = { hp: number }
 
 return {}
 "#,
@@ -330,7 +421,7 @@ return {}
     host.set_file(
         "src/types.tua",
         r#"
-type Player = { name: string }
+export type Player = { name: string }
 
 return {}
 "#,

@@ -264,6 +264,10 @@ impl WatchBuildSession {
             if blocked.contains(&source_path) {
                 continue;
             }
+            if tua_core::is_tua_declaration_path(&source_path, &self.workspace.config().extension) {
+                remove_declaration_outputs(&self.workspace, &source_path, &mut diagnostics);
+                continue;
+            }
             let Some(source) = snapshot.source(&source_path) else {
                 continue;
             };

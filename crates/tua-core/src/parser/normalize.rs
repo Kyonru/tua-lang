@@ -320,15 +320,33 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 
 fn normalize_parser_syntax(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
+    let (type_imports, _) = super::scan_type_imports(std::path::Path::new(""), source);
+    let erased_type_lines = type_imports
+        .iter()
+        .flat_map(|import| import.span.start.line..=import.span.end.line)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut current_line = 1;
+    let erased_type_chars = chars
+        .iter()
+        .map(|character| {
+            let erased = erased_type_lines.contains(&current_line);
+            if *character == '\n' {
+                current_line += 1;
+            }
+            erased
+        })
+        .collect::<Vec<_>>();
     let mut normalized = String::with_capacity(source.len());
     let mut index = 0;
 
     while index < chars.len() {
-        if starts_type_import(&chars, index) {
-            while index < chars.len() && chars[index] != '\n' {
+        if erased_type_chars[index] {
+            if chars[index] == '\n' {
+                normalized.push('\n');
+            } else {
                 normalized.push(' ');
-                index += 1;
             }
+            index += 1;
             continue;
         }
 
@@ -393,30 +411,6 @@ fn normalize_parser_syntax(source: &str) -> String {
     }
 
     normalized
-}
-
-fn starts_type_import(chars: &[char], index: usize) -> bool {
-    const PREFIX: &str = "import type ";
-
-    if !PREFIX
-        .chars()
-        .enumerate()
-        .all(|(offset, expected)| chars.get(index + offset) == Some(&expected))
-    {
-        return false;
-    }
-    let line_start = chars[..index]
-        .iter()
-        .rposition(|character| *character == '\n')
-        .map_or(0, |line| line + 1);
-    if !chars[line_start..index]
-        .iter()
-        .all(|character| character.is_whitespace())
-    {
-        return false;
-    }
-
-    true
 }
 
 fn is_optional_field_marker(chars: &[char], index: usize) -> bool {
