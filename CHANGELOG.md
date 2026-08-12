@@ -19,6 +19,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Large generated table modules now stay on a Lua 5.1 parser fast path when
+  they contain no Tua-only syntax, class discovery avoids a quadratic source
+  position scan, and inferred structural unions use hash-bucketed stable
+  deduplication instead of repeated deep comparisons.
 - Sprite previews now honor static nonuniform duration tables, and API/MCP
   asset metadata refreshes the workspace asset index before answering.
 - Repeated version synchronization now preserves Cargo lockfile package

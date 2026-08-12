@@ -4,6 +4,7 @@ mod model;
 mod normalize;
 
 use std::collections::BTreeSet;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::luau::{TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
@@ -87,6 +88,42 @@ pub fn parse_raw_tua_source(
     source: impl Into<String>,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
     let path = path.as_ref().to_path_buf();
+    let source = source.into();
+
+    // Large generated modules are commonly plain Lua with a `.tua` extension.
+    // Full Moon's Luau grammar becomes disproportionately expensive for deeply
+    // nested table literals, while its Lua 5.1 grammar handles the same source
+    // in linear time. A successful Lua parse proves that no Luau-only type
+    // syntax needs normalization; keep the file's Tua language identity so
+    // checking, diagnostics, and emission behavior remain unchanged.
+    // Full Moon 2.2's Lua 5.1 lexer panics on Luau interpolated strings, so
+    // bypass the speculative grammar when their backtick delimiter is present.
+    let lua51_attempt = (!source.contains('`')).then(|| {
+        catch_unwind(AssertUnwindSafe(|| {
+            parse_raw_source(
+                path.clone(),
+                source.clone(),
+                source.clone(),
+                source_line_provenance(&source),
+                Vec::new(),
+                LuaVersion::lua51(),
+                ParsedLanguage::Tua,
+            )
+        }))
+    });
+    if let Some(raw) = lua51_attempt
+        .and_then(|attempt| attempt.ok())
+        .and_then(Result::ok)
+    {
+        let diagnostics = dialect::validate_tua_dialect(&raw);
+
+        if diagnostics.is_empty() {
+            return Ok(raw);
+        }
+
+        return Err(diagnostics);
+    }
+
     let normalized = normalize_tua_source(source);
 
     let raw = parse_raw_source(
@@ -122,12 +159,22 @@ pub fn extract_lua_source_model(raw: &RawParsedSource) -> TypedSourceModel {
 pub fn extract_tua_source_model(
     raw: &RawParsedSource,
 ) -> Result<TypedSourceModel, Vec<Diagnostic>> {
-    let doc_result = doc::collect_lua_doc_annotations(&raw.path, &raw.source);
-    let (class_declarations, class_diagnostics) =
-        classes::parse_class_declarations(&raw.path, &raw.source);
-    let (sprite_declarations, sprite_diagnostics) =
-        crate::sprite::parse_sprite_declarations(&raw.ast);
-    let syntax = collect_tua_syntax(&raw.path, &raw.source, &raw.ast);
+    let doc_result = {
+        let _profile = crate::profile::span("parse.tua.doc_model");
+        doc::collect_lua_doc_annotations(&raw.path, &raw.source)
+    };
+    let (class_declarations, class_diagnostics) = {
+        let _profile = crate::profile::span("parse.tua.class_model");
+        classes::parse_class_declarations(&raw.path, &raw.source)
+    };
+    let (sprite_declarations, sprite_diagnostics) = {
+        let _profile = crate::profile::span("parse.tua.sprite_model");
+        crate::sprite::parse_sprite_declarations(&raw.ast)
+    };
+    let syntax = {
+        let _profile = crate::profile::span("parse.tua.syntax_model");
+        collect_tua_syntax(&raw.path, &raw.source, &raw.ast)
+    };
 
     let mut diagnostics = class_diagnostics;
     diagnostics.extend(sprite_diagnostics);

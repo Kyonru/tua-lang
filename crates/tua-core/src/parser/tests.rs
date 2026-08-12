@@ -35,6 +35,27 @@ type Player = {
 }
 
 #[test]
+fn raw_tua_parse_keeps_large_plain_lua_literals_on_the_lua51_fast_path() {
+    let records = (0..4_000)
+        .map(|index| {
+            format!(
+                "  {{ id = {index}, name = \"room-{index}\", bounds = {{ min = 0, max = 100 }} }},\n"
+            )
+        })
+        .collect::<String>();
+    let source = format!("local rooms = {{\n{records}}}\nreturn rooms\n");
+    let raw = parse_raw_tua_source("src/generated_rooms.tua", source.clone())
+        .expect("plain generated Lua should parse as Tua");
+
+    assert_eq!(raw.language, ParsedLanguage::Tua);
+    assert_eq!(raw.parser_source, source);
+    assert!(!raw.uses_normalized_parser_source());
+    assert_eq!(raw.statement_count(), 1);
+
+    extract_tua_source_model(&raw).expect("large plain generated data should build a Tua model");
+}
+
+#[test]
 fn normalized_source_preserves_original_and_exposes_parser_text() {
     let normalized = normalize_tua_source("type Slot = { name?: string }\n");
 

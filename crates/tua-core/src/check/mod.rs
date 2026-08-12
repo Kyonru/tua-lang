@@ -27,9 +27,9 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
-    build_type_environment_with_domain_registry, widen_inferred_type, AssignabilityFailure,
-    AssignabilityFailureKind, FunctionType, MetatableFacts, TableField, Type, TypeContext,
-    TypeEnvironment, TypedFunction,
+    build_type_environment_with_domain_registry, deduplicate_inferred_types, widen_inferred_type,
+    AssignabilityFailure, AssignabilityFailureKind, FunctionType, MetatableFacts, TableField, Type,
+    TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -475,6 +475,15 @@ impl<'a> Checker<'a> {
             if let Some((expression, return_index)) =
                 assignment_expression_for_local(&expressions, index)
             {
+                if return_index == 0
+                    && matches!(target, Type::Any)
+                    && matches!(expression, Expression::TableConstructor(_))
+                {
+                    // `any` is an explicit trust boundary. Avoid materializing
+                    // the full structural type of generated data that cannot
+                    // fail assignability against it.
+                    continue;
+                }
                 let source = self
                     .infer_expression_return(expression, return_index)
                     .unwrap_or(Type::Any);
@@ -3262,12 +3271,7 @@ fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>
 }
 
 fn union_types(types: Vec<Type>) -> Type {
-    let mut unique = Vec::new();
-    for ty in types {
-        if !unique.contains(&ty) {
-            unique.push(ty);
-        }
-    }
+    let unique = deduplicate_inferred_types(types);
 
     match unique.len() {
         0 => Type::Any,

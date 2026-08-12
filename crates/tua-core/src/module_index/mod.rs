@@ -16,8 +16,8 @@ use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::SemanticModel;
 use crate::types::{
-    build_type_environment, function_type_from_tua_signature, FunctionParameter, FunctionType,
-    TableField, Type, TypeEnvironment, TypedFunction,
+    build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
+    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
 };
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
@@ -1107,12 +1107,7 @@ fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>
 }
 
 fn union_types(types: Vec<Type>) -> Type {
-    let mut unique = Vec::new();
-    for ty in types {
-        if !unique.contains(&ty) {
-            unique.push(ty);
-        }
-    }
+    let unique = deduplicate_inferred_types(types);
 
     match unique.len() {
         0 => Type::Any,

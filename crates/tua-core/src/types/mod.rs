@@ -3,6 +3,9 @@ mod environment;
 mod format;
 mod model;
 
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 pub use assignability::{
     is_assignable, AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment,
     TypeContext,
@@ -18,6 +21,31 @@ pub use model::{
     FunctionParameter, FunctionType, IndexFallback, MetatableFacts, NewIndexRule, PrimitiveType,
     TableField, TableShape, Type, TypeAlias,
 };
+
+/// Remove duplicate inferred types without repeatedly comparing every deeply
+/// nested type with every type already seen. Generated table literals can
+/// contain thousands of structurally large records; the previous Vec::contains
+/// loop made array inference quadratic in both item count and type size.
+pub(crate) fn deduplicate_inferred_types(types: Vec<Type>) -> Vec<Type> {
+    let mut unique: Vec<Type> = Vec::new();
+    let mut buckets: HashMap<u64, Vec<usize>> = HashMap::new();
+
+    for ty in types {
+        let mut hasher = DefaultHasher::new();
+        ty.hash(&mut hasher);
+        let fingerprint = hasher.finish();
+        let bucket = buckets.entry(fingerprint).or_default();
+
+        if bucket.iter().any(|index| unique[*index] == ty) {
+            continue;
+        }
+
+        bucket.push(unique.len());
+        unique.push(ty);
+    }
+
+    unique
+}
 
 use crate::parser::{FunctionTypeParameter as ParsedFunctionTypeParameter, TuaType};
 use full_moon::ast;

@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 const MAX_METATABLE_FIELD_DEPTH: usize = 16;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
     Primitive(PrimitiveType),
     Any,
@@ -110,7 +111,7 @@ impl Type {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PrimitiveType {
     Number,
     String,
@@ -118,7 +119,7 @@ pub enum PrimitiveType {
     Nil,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TypeAlias {
     pub name: String,
     pub ty: Type,
@@ -147,6 +148,14 @@ impl PartialEq for FunctionParameter {
 
 impl Eq for FunctionParameter {}
 
+impl Hash for FunctionParameter {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Parameter labels are documentation and intentionally do not
+        // participate in PartialEq; hashing must preserve that contract.
+        self.ty.hash(state);
+    }
+}
+
 impl FunctionParameter {
     pub fn anonymous(ty: Type) -> Self {
         Self { name: None, ty }
@@ -170,7 +179,7 @@ impl fmt::Display for FunctionParameter {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionType {
     pub parameters: Vec<FunctionParameter>,
     pub required_parameter_count: usize,
@@ -239,7 +248,7 @@ impl FunctionType {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TableShape {
     fields: BTreeMap<String, TableField>,
     metatable: Option<Box<MetatableFacts>>,
@@ -414,7 +423,7 @@ impl Default for TableShape {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TableField {
     pub ty: Type,
     pub optional: bool,
@@ -433,7 +442,7 @@ impl TableField {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Default)]
 pub struct MetatableFacts {
     pub index: IndexFallback,
     pub newindex: NewIndexRule,
@@ -574,7 +583,7 @@ fn is_metamethod_field(name: &str) -> bool {
     name.starts_with("__")
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Default)]
 pub enum IndexFallback {
     #[default]
     None,
@@ -583,7 +592,7 @@ pub enum IndexFallback {
     Unknown,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Default)]
 pub enum NewIndexRule {
     #[default]
     None,

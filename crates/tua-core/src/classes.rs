@@ -376,7 +376,13 @@ fn class_blocks(source: &str) -> Vec<ClassBlock> {
 }
 
 fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
-    if !can_start_keyword(source, index) {
+    // Position conversion scans from the beginning of the source. Do not do
+    // that work at every token boundary in ordinary non-class files: a large
+    // generated table used to turn this scanner into an O(n²) pre-pass.
+    if !(starts_keyword(source, index, "class")
+        || starts_keyword(source, index, "open")
+        || starts_keyword(source, index, "final"))
+    {
         return None;
     }
 

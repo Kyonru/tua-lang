@@ -23,6 +23,49 @@ fn arrays_parenthesize_union_and_function_item_types() {
 }
 
 #[test]
+fn inferred_type_deduplication_is_stable_for_deep_types() {
+    let first = Type::Function(FunctionType::new_signature(
+        [FunctionParameter::named(
+            "left",
+            Type::array(Type::table([(
+                "position",
+                TableField::required(Type::table([
+                    ("x", TableField::required(Type::number())),
+                    ("y", TableField::required(Type::number())),
+                ])),
+            )])),
+        )],
+        1,
+        None,
+        [Type::boolean()],
+    ));
+    let equal_with_documentation_name = Type::Function(FunctionType::new_signature(
+        [FunctionParameter::named(
+            "right",
+            Type::array(Type::table([(
+                "position",
+                TableField::required(Type::table([
+                    ("x", TableField::required(Type::number())),
+                    ("y", TableField::required(Type::number())),
+                ])),
+            )])),
+        )],
+        1,
+        None,
+        [Type::boolean()],
+    ));
+    let distinct = Type::string();
+
+    let unique = deduplicate_inferred_types(vec![
+        first.clone(),
+        equal_with_documentation_name,
+        distinct.clone(),
+    ]);
+
+    assert_eq!(unique, vec![first, distinct]);
+}
+
+#[test]
 fn pretty_type_formatting_keeps_short_shapes_inline() {
     let ty = Type::table([
         ("x", TableField::required(Type::number())),

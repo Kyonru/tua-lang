@@ -19,8 +19,8 @@ use crate::module_index::{
 };
 use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
 use crate::types::{
-    type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType, TableField, Type,
-    TypeEnvironment, TypedFunction,
+    deduplicate_inferred_types, type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType,
+    TableField, Type, TypeEnvironment, TypedFunction,
 };
 use crate::{
     ecs, input, object_pool, signal, sprite, state_machine, store, vector, ParsedLanguage,
@@ -1775,12 +1775,7 @@ fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>
 }
 
 fn union_types(types: Vec<Type>) -> Type {
-    let mut unique = Vec::new();
-    for ty in types {
-        if !unique.contains(&ty) {
-            unique.push(ty);
-        }
-    }
+    let unique = deduplicate_inferred_types(types);
 
     match unique.len() {
         0 => Type::Any,

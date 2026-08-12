@@ -25,7 +25,8 @@ use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
-    function_type_from_tua_signature, widen_inferred_type, FunctionParameter, TypeContext,
+    deduplicate_inferred_types, function_type_from_tua_signature, widen_inferred_type,
+    FunctionParameter, TypeContext,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2552,8 +2553,20 @@ fn infer_local_assignment_types(
     locals: &mut BTreeMap<String, Type>,
 ) {
     let expressions = local.expressions().iter().collect::<Vec<_>>();
+    let specifiers = local.type_specifiers().collect::<Vec<_>>();
 
     for (index, name) in local.names().iter().enumerate() {
+        // Native annotations have already been resolved into `locals`. Keep
+        // that compact contract instead of replacing it with the complete
+        // inferred shape of a potentially enormous generated initializer.
+        if specifiers
+            .get(index)
+            .and_then(|specifier| *specifier)
+            .is_some()
+        {
+            continue;
+        }
+
         let ty = match assignment_expression_for_local(&expressions, index) {
             Some((expression, return_index)) => {
                 let Some(ty) = context
@@ -3470,12 +3483,7 @@ fn table_or_array_type(fields: Vec<(String, TableField)>, array_items: Vec<Type>
 }
 
 fn union_types(types: Vec<Type>) -> Type {
-    let mut unique = Vec::new();
-    for ty in types {
-        if !unique.contains(&ty) {
-            unique.push(ty);
-        }
-    }
+    let unique = deduplicate_inferred_types(types);
 
     match unique.len() {
         0 => Type::Any,
