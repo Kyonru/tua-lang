@@ -29,6 +29,79 @@ pub(super) fn normalize_tua_source_for_luau_parser(
     (parser_source, provenance, native_array_types)
 }
 
+/// Return whether source contains syntax that requires Tua's Luau-backed
+/// parser. This deliberately prefers false positives: ordinary code can always
+/// use the Tua parser, while plain generated data should reach Lua 5.1 without
+/// first attempting and failing another grammar.
+pub(super) fn requires_tua_grammar(source: &str) -> bool {
+    let chars = source.chars().collect::<Vec<_>>();
+    let protected = protected_syntax_characters(&chars);
+
+    for index in 0..chars.len() {
+        if protected[index] {
+            continue;
+        }
+
+        let character = chars[index];
+        if matches!(character, ':' | '?' | '`' | '@' | '&' | '|') {
+            return true;
+        }
+
+        if matches!(character, '+' | '-' | '*' | '/' | '%' | '^')
+            && chars.get(index + 1) == Some(&'=')
+        {
+            return true;
+        }
+
+        if (character == '/' && chars.get(index + 1) == Some(&'/'))
+            || (character == '[' && chars.get(index + 1) == Some(&']'))
+            || (character == '<' && chars.get(index + 1) == Some(&'<'))
+            || (character == '>' && chars.get(index + 1) == Some(&'>'))
+            || (character == '.'
+                && chars.get(index + 1) == Some(&'.')
+                && chars.get(index + 2) == Some(&'='))
+            || (character == '-' && chars.get(index + 1) == Some(&'>'))
+            || (character == '0' && matches!(chars.get(index + 1), Some('b' | 'B')))
+        {
+            return true;
+        }
+
+        // Functions can carry typed parameters, return annotations, and Tua
+        // default arguments. Keeping all function-bearing modules on the Tua
+        // grammar makes this classifier simple and correctness-first; large
+        // generated data modules normally contain no executable declarations.
+        if [
+            "class", "const", "continue", "enum", "export", "final", "function", "if", "is",
+            "open", "type",
+        ]
+        .iter()
+        .any(|keyword| starts_keyword(&chars, index, keyword))
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+pub(super) fn is_generated_lua_module(source: &str) -> bool {
+    source
+        .lines()
+        .take(8)
+        .map(str::trim)
+        .any(|line| line == "--!tua generated")
+}
+
+pub(super) fn contains_unprotected_backtick(source: &str) -> bool {
+    let chars = source.chars().collect::<Vec<_>>();
+    let protected = protected_syntax_characters(&chars);
+
+    chars
+        .iter()
+        .enumerate()
+        .any(|(index, character)| *character == '`' && !protected[index])
+}
+
 pub(super) fn apply_native_array_types(
     ast: full_moon::ast::Ast,
     syntax: &[NativeArrayTypeSyntax],

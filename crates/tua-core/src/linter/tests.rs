@@ -1786,6 +1786,21 @@ return text
 }
 
 #[test]
+fn comment_directive_accepts_the_tua_generated_module_contract() {
+    let diagnostics = check_standard_rules_source(
+        r#"--!tua generated
+return { 1, 2, 3 }
+"#,
+    );
+
+    assert_eq!(
+        count_code(&diagnostics, DiagnosticCode::LINT_COMMENT_DIRECTIVE),
+        0,
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn comment_directive_points_luau_nolint_to_exact_tua_file_suppression() {
     let diagnostics = check_standard_rules_source(
         r#"--!nolint MisleadingAndOr

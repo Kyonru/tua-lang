@@ -12,6 +12,7 @@ use crate::parser::{
     SourceSpan, TuaType, TypedSourceModel,
 };
 use crate::scope::{scope_map_parsed_source, ScopeDeclarationKind, ScopeSymbolId};
+use crate::source_text::SourcePositionIndex;
 use crate::types::{Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode};
 
@@ -337,6 +338,7 @@ fn class_method_declaration_with_visited<'a>(
 fn class_blocks(source: &str) -> Vec<ClassBlock> {
     let mut blocks = Vec::new();
     let mut index = 0usize;
+    let positions = SourcePositionIndex::new(source);
 
     while index < source.len() {
         if source[index..].starts_with("--") {
@@ -349,7 +351,7 @@ fn class_blocks(source: &str) -> Vec<ClassBlock> {
             continue;
         }
 
-        let Some(header) = parse_class_header(source, index) else {
+        let Some(header) = parse_class_header(source, &positions, index) else {
             index += next_char_len(source, index);
             continue;
         };
@@ -375,7 +377,11 @@ fn class_blocks(source: &str) -> Vec<ClassBlock> {
     blocks
 }
 
-fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
+fn parse_class_header(
+    source: &str,
+    positions: &SourcePositionIndex,
+    index: usize,
+) -> Option<ClassHeader> {
     // Position conversion scans from the beginning of the source. Do not do
     // that work at every token boundary in ordinary non-class files: a large
     // generated table used to turn this scanner into an O(n²) pre-pass.
@@ -386,7 +392,7 @@ fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
         return None;
     }
 
-    let span_start = source_position_from_byte(source, index);
+    let span_start = positions.position(index);
     let mut cursor = index;
     let mut is_open = false;
     let mut is_final = false;
@@ -414,8 +420,8 @@ fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
         (
             Some(parent),
             Some(SourceSpan {
-                start: source_position_from_byte(source, parent_start),
-                end: source_position_from_byte(source, parent_end),
+                start: positions.position(parent_start),
+                end: positions.position(parent_end),
             }),
         )
     } else {
@@ -433,8 +439,8 @@ fn parse_class_header(source: &str, index: usize) -> Option<ClassHeader> {
         is_open,
         is_final: is_final || !is_open,
         name_span: SourceSpan {
-            start: source_position_from_byte(source, name_start),
-            end: source_position_from_byte(source, name_end),
+            start: positions.position(name_start),
+            end: positions.position(name_end),
         },
         span_start,
         body_start: cursor + 1,
@@ -2318,6 +2324,9 @@ fn next_char_len(source: &str, index: usize) -> usize {
         .unwrap_or(1)
 }
 
+// Class-body parsing performs a bounded number of these conversions per real
+// declaration. The header scanner uses SourcePositionIndex because it examines
+// every source character and is the performance-sensitive path.
 fn source_position_from_byte(source: &str, byte: usize) -> SourcePosition {
     let mut line = 1usize;
     let mut column = 1usize;

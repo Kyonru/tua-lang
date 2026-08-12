@@ -27,9 +27,9 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
-    build_type_environment_with_domain_registry, deduplicate_inferred_types, widen_inferred_type,
-    AssignabilityFailure, AssignabilityFailureKind, FunctionType, MetatableFacts, TableField, Type,
-    TypeContext, TypeEnvironment, TypedFunction,
+    build_type_environment_with_domain_registry, deduplicate_inferred_types,
+    has_leading_lua_doc_type, widen_inferred_type, AssignabilityFailure, AssignabilityFailureKind,
+    FunctionType, MetatableFacts, TableField, Type, TypeContext, TypeEnvironment, TypedFunction,
 };
 use crate::{asset, love_callback, lua, signal, sprite, state_machine};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity};
@@ -456,6 +456,9 @@ impl<'a> Checker<'a> {
 
     fn check_local_assignment(&mut self, local: &ast::LocalAssignment) {
         let expressions = local.expressions().iter().collect::<Vec<_>>();
+        let lua_doc_contract = local
+            .start_position()
+            .is_some_and(|position| has_leading_lua_doc_type(self.parsed, position.line()));
 
         for (index, (name, specifier)) in local
             .names()
@@ -463,7 +466,7 @@ impl<'a> Checker<'a> {
             .zip(local.type_specifiers())
             .enumerate()
         {
-            if specifier.is_none() {
+            if specifier.is_none() && !(index == 0 && lua_doc_contract) {
                 continue;
             }
 
@@ -482,6 +485,10 @@ impl<'a> Checker<'a> {
                     // `any` is an explicit trust boundary. Avoid materializing
                     // the full structural type of generated data that cannot
                     // fail assignability against it.
+                    continue;
+                }
+                if return_index == 0 && self.check_large_table_against_contract(expression, &target)
+                {
                     continue;
                 }
                 let source = self
@@ -531,6 +538,36 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    /// Validate large array literals one item at a time against an explicit
+    /// native or LuaDoc contract. This keeps peak type size proportional to one
+    /// record instead of constructing and deduplicating a union for the entire
+    /// generated module.
+    fn check_large_table_against_contract(
+        &mut self,
+        expression: &Expression,
+        target: &Type,
+    ) -> bool {
+        let Expression::TableConstructor(table) = expression else {
+            return false;
+        };
+        let resolved = self.environment.resolve_aliases(target);
+        let Type::Array(item_type) = resolved else {
+            return false;
+        };
+
+        for field in table.fields() {
+            let value = match field {
+                Field::NoKey(value) => value,
+                Field::ExpressionKey { key, value, .. } if expression_is_number(key) => value,
+                _ => return false,
+            };
+            let source = self.infer_expression(value).unwrap_or(Type::Any);
+            self.check_inferred_expression_assignable_at(value, &source, &item_type, None);
+        }
+
+        true
     }
 
     fn insert_scoped_local(&mut self, name: String, ty: Type) {

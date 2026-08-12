@@ -25,8 +25,8 @@ use crate::{asset, lua, Diagnostic, DiagnosticCode};
 
 use super::model::{FunctionType, MetatableFacts, TableField, Type, TypeAlias};
 use super::{
-    deduplicate_inferred_types, function_type_from_tua_signature, widen_inferred_type,
-    FunctionParameter, TypeContext,
+    deduplicate_inferred_types, function_type_from_tua_signature, has_leading_lua_doc_type,
+    widen_inferred_type, FunctionParameter, TypeContext,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2559,11 +2559,15 @@ fn infer_local_assignment_types(
         // Native annotations have already been resolved into `locals`. Keep
         // that compact contract instead of replacing it with the complete
         // inferred shape of a potentially enormous generated initializer.
-        if specifiers
+        let has_native_annotation = specifiers
             .get(index)
             .and_then(|specifier| *specifier)
-            .is_some()
-        {
+            .is_some();
+        let has_lua_doc_annotation = index == 0
+            && local
+                .start_position()
+                .is_some_and(|position| has_leading_lua_doc_type(context.parsed, position.line()));
+        if has_native_annotation || has_lua_doc_annotation {
             continue;
         }
 

@@ -48,7 +48,30 @@ pub(crate) fn deduplicate_inferred_types(types: Vec<Type>) -> Vec<Type> {
 }
 
 use crate::parser::{FunctionTypeParameter as ParsedFunctionTypeParameter, TuaType};
+use crate::parser::{LuaDocAnnotationKind, ParsedSource};
 use full_moon::ast;
+
+/// Whether a statement begins immediately after a LuaDoc `---@type` contract.
+/// Blank lines and adjacent LuaDoc lines remain part of the same documentation
+/// group, matching the environment's LuaDoc lowering behavior.
+pub(crate) fn has_leading_lua_doc_type(parsed: &ParsedSource, line: usize) -> bool {
+    let Some(annotation) = parsed.lua_doc_annotations.iter().rev().find(|annotation| {
+        annotation.span.end.line < line && matches!(annotation.kind, LuaDocAnnotationKind::Type(_))
+    }) else {
+        return false;
+    };
+
+    parsed
+        .source
+        .lines()
+        .enumerate()
+        .skip(annotation.span.end.line)
+        .take(line.saturating_sub(annotation.span.end.line + 1))
+        .all(|(_, source)| {
+            let source = source.trim_start();
+            source.is_empty() || source.starts_with("---")
+        })
+}
 
 pub(crate) fn widen_inferred_type(ty: &Type) -> Type {
     match ty {

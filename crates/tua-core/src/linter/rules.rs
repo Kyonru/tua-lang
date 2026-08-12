@@ -708,6 +708,10 @@ fn comment_directive_diagnostics(parsed: &ParsedSource) -> Vec<Diagnostic> {
         let trimmed = line.trim_start();
         if long_bracket_level.is_none() {
             if let Some(directive) = trimmed.strip_prefix("--!") {
+                if directive.trim() == "tua generated" {
+                    update_long_bracket_state(line, &mut long_bracket_level);
+                    continue;
+                }
                 let directive = directive.split_whitespace().next().unwrap_or("");
                 let message = match directive {
                     "" => "empty comment directive".to_owned(),

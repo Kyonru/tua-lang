@@ -47,6 +47,52 @@ local maybe_hp: number | nil = nil
 }
 
 #[test]
+fn validates_generated_lua_doc_array_contracts_without_whole_array_inference() {
+    let records = (0..2_000)
+        .map(|index| format!("  {{ id = {index}, name = \"room-{index}\" }},\n"))
+        .collect::<String>();
+    let source = format!(
+        r#"--!tua generated
+---@class Room
+---@field id number
+---@field name string
+
+---@type Room[]
+local rooms = {{
+{records}}}
+return rooms
+"#
+    );
+
+    check_tua_source("src/generated_rooms.tua", source)
+        .expect("generated records should validate against their compact LuaDoc contract");
+}
+
+#[test]
+fn rejects_a_generated_record_that_violates_its_lua_doc_contract() {
+    let diagnostics = check_tua_source(
+        "src/generated_rooms.tua",
+        r#"--!tua generated
+---@class Room
+---@field id number
+---@field name string
+
+---@type Room[]
+local rooms = {
+  { id = 1, name = "valid" },
+  { id = "wrong", name = "invalid" },
+}
+return rooms
+"#,
+    )
+    .expect_err("generated records must still satisfy their declared schema");
+
+    assert!(diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn accepts_string_concatenation_with_literal_operands() {
     check_tua_source(
         "src/concat.tua",

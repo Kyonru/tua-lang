@@ -56,6 +56,78 @@ fn raw_tua_parse_keeps_large_plain_lua_literals_on_the_lua51_fast_path() {
 }
 
 #[test]
+fn class_scanning_remains_bounded_for_keyword_heavy_generated_data() {
+    let fields = (0..4_000)
+        .map(|index| format!("class = {index}, open = {index}, final = {index}, "))
+        .collect::<String>();
+    let source = format!("--!tua generated\nreturn {{ {fields} }}\n");
+    let raw = parse_raw_tua_source("src/keyword_data.tua", source)
+        .expect("keyword-shaped generated fields should remain plain data");
+
+    extract_tua_source_model(&raw)
+        .expect("class discovery should reject candidate headers without rescanning the source");
+}
+
+#[test]
+fn generated_directive_keeps_plain_lua_functions_on_the_fast_path() {
+    let source = r#"--!tua generated
+local values = { 1, 2, 3 }
+local Module = {}
+function Module.all()
+  return values
+end
+return Module
+"#;
+    let raw = parse_raw_tua_source("src/generated_values.tua", source)
+        .expect("explicit generated Lua modules should parse directly");
+
+    assert_eq!(raw.source, raw.parser_source);
+    assert!(!raw.uses_normalized_parser_source());
+}
+
+#[test]
+fn generated_directive_does_not_admit_tua_syntax_to_the_lua_fast_path() {
+    let diagnostics = parse_raw_tua_source(
+        "src/invalid_generated.tua",
+        "--!tua generated\nfunction make(value = 1) return value end\n",
+    )
+    .expect_err("generated modules are an explicitly Lua-compatible boundary");
+
+    assert!(!diagnostics.is_empty());
+}
+
+#[test]
+fn grammar_classifier_ignores_tua_tokens_inside_generated_data_strings_and_comments() {
+    let source = r#"-- a generator may mention `type`, class, or obj:method here
+return {
+  marker = "type Player = { name?: string }",
+  url = "asset://rooms/final",
+}
+"#;
+
+    assert!(!normalize::requires_tua_grammar(source));
+    let raw = parse_raw_tua_source("src/generated_strings.tua", source)
+        .expect("protected text must remain on the plain Lua fast path");
+    assert!(!raw.uses_normalized_parser_source());
+}
+
+#[test]
+fn grammar_classifier_conservatively_routes_executable_and_typed_syntax() {
+    for source in [
+        "local value: number = 1\n",
+        "local value = if ready then 1 else 0\n",
+        "function make(value = 1) return value end\n",
+        "value += 1\n",
+        "return `value {value}`\n",
+    ] {
+        assert!(
+            normalize::requires_tua_grammar(source),
+            "expected Tua grammar for {source:?}"
+        );
+    }
+}
+
+#[test]
 fn normalized_source_preserves_original_and_exposes_parser_text() {
     let normalized = normalize_tua_source("type Slot = { name?: string }\n");
 

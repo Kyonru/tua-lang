@@ -23,6 +23,47 @@ pub(crate) struct SourceIdentifier {
     pub span: SourceSpan,
 }
 
+/// Immutable byte-to-source-position index. Building it is linear in the
+/// source size; every later lookup is logarithmic even for a single enormous
+/// line containing many candidate declarations.
+pub(crate) struct SourcePositionIndex {
+    char_bytes: Vec<usize>,
+    line_start_chars: Vec<usize>,
+}
+
+impl SourcePositionIndex {
+    pub(crate) fn new(source: &str) -> Self {
+        let mut char_bytes = Vec::with_capacity(source.len().saturating_add(1));
+        let mut line_start_chars = vec![0];
+
+        for (char_index, (byte, character)) in source.char_indices().enumerate() {
+            char_bytes.push(byte);
+            if character == '\n' {
+                line_start_chars.push(char_index + 1);
+            }
+        }
+        char_bytes.push(source.len());
+
+        Self {
+            char_bytes,
+            line_start_chars,
+        }
+    }
+
+    pub(crate) fn position(&self, byte: usize) -> SourcePosition {
+        let char_index = self.char_bytes.partition_point(|offset| *offset < byte);
+        let line_index = self
+            .line_start_chars
+            .partition_point(|start| *start <= char_index)
+            .saturating_sub(1);
+
+        SourcePosition {
+            line: line_index + 1,
+            column: char_index - self.line_start_chars[line_index] + 1,
+        }
+    }
+}
+
 pub(crate) fn source_identifiers(source: &str) -> Vec<SourceIdentifier> {
     let tokens = match Lexer::new(source, LuaVersion::luau()).collect() {
         LexerResult::Ok(tokens) | LexerResult::Recovered(tokens, _) => tokens,
@@ -196,4 +237,28 @@ fn identifier_end(line: &str, start: usize) -> usize {
             (!is_identifier_continue_char(character)).then_some(index)
         })
         .unwrap_or(line.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_position_index_handles_unicode_and_line_boundaries() {
+        let source = "one\nλx\nlast";
+        let positions = SourcePositionIndex::new(source);
+
+        assert_eq!(
+            positions.position(source.find('λ').unwrap()),
+            SourcePosition { line: 2, column: 1 }
+        );
+        assert_eq!(
+            positions.position(source.find('x').unwrap()),
+            SourcePosition { line: 2, column: 2 }
+        );
+        assert_eq!(
+            positions.position(source.len()),
+            SourcePosition { line: 3, column: 5 }
+        );
+    }
 }

@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- `--!tua generated` marks Lua 5.1-compatible generated `.tua` modules for
+  direct parsing, while LuaDoc array contracts validate records incrementally
+  without requiring a plain-Lua data module and handwritten typed facade.
 - Static `spriteSheet({...})` configurations now derive exact animation and
   marker names, ordered multi-row frame ranges, registration origins, and a
   replaceable `SpritePlayer` runtime with named playback and manual seeking.
@@ -19,9 +22,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
-- Large generated table modules now stay on a Lua 5.1 parser fast path when
-  they contain no Tua-only syntax, class discovery avoids a quadratic source
-  position scan, and inferred structural unions use hash-bucketed stable
+- Large generated table modules now use lexical grammar selection instead of
+  speculative parsing and panic recovery, class discovery uses indexed source
+  positions, and inferred structural unions use hash-bucketed stable
   deduplication instead of repeated deep comparisons.
 - Sprite previews now honor static nonuniform duration tables, and API/MCP
   asset metadata refreshes the workspace asset index before answering.

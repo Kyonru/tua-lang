@@ -4,7 +4,6 @@ mod model;
 mod normalize;
 
 use std::collections::BTreeSet;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use full_moon::ast::luau::{TypeArgument, TypeDeclaration, TypeField, TypeFieldKey, TypeInfo};
@@ -91,30 +90,21 @@ pub fn parse_raw_tua_source(
     let source = source.into();
 
     // Large generated modules are commonly plain Lua with a `.tua` extension.
-    // Full Moon's Luau grammar becomes disproportionately expensive for deeply
-    // nested table literals, while its Lua 5.1 grammar handles the same source
-    // in linear time. A successful Lua parse proves that no Luau-only type
-    // syntax needs normalization; keep the file's Tua language identity so
-    // checking, diagnostics, and emission behavior remain unchanged.
-    // Full Moon 2.2's Lua 5.1 lexer panics on Luau interpolated strings, so
-    // bypass the speculative grammar when their backtick delimiter is present.
-    let lua51_attempt = (!source.contains('`')).then(|| {
-        catch_unwind(AssertUnwindSafe(|| {
-            parse_raw_source(
-                path.clone(),
-                source.clone(),
-                source.clone(),
-                source_line_provenance(&source),
-                Vec::new(),
-                LuaVersion::lua51(),
-                ParsedLanguage::Tua,
-            )
-        }))
-    });
-    if let Some(raw) = lua51_attempt
-        .and_then(|attempt| attempt.ok())
-        .and_then(Result::ok)
-    {
+    // Select their linear Lua 5.1 grammar with a syntax-aware lexical pass,
+    // rather than using a failed parse (or a caught parser panic) as feature
+    // detection. Ambiguous executable or typed source stays on the Tua grammar.
+    let generated_lua = normalize::is_generated_lua_module(&source)
+        && !normalize::contains_unprotected_backtick(&source);
+    if generated_lua || !normalize::requires_tua_grammar(&source) {
+        let raw = parse_raw_source(
+            path.clone(),
+            source.clone(),
+            source.clone(),
+            source_line_provenance(&source),
+            Vec::new(),
+            LuaVersion::lua51(),
+            ParsedLanguage::Tua,
+        )?;
         let diagnostics = dialect::validate_tua_dialect(&raw);
 
         if diagnostics.is_empty() {
