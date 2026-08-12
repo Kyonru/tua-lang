@@ -928,7 +928,7 @@ confidence_warning = 0
     )
     .expect("failed to write config");
     let rate = 8000_u32;
-    let frames = rate;
+    let frames = rate * 4;
     let data_bytes = frames * 2;
     let mut wav = Vec::new();
     wav.extend_from_slice(b"RIFF");
@@ -977,6 +977,9 @@ confidence_warning = 0
     assert!(index[0]["energy"]
         .as_array()
         .is_some_and(|values| !values.is_empty()));
+    assert!(index[0]["tempoCandidates"].is_array());
+    assert!(index[0]["tempoAmbiguity"].is_number());
+    assert!(index[0]["boundaryInfluence"].is_number());
     let cached = tua()
         .arg("check")
         .current_dir(temp.path())
@@ -987,6 +990,29 @@ confidence_warning = 0
         "{}",
         String::from_utf8_lossy(&cached.stderr)
     );
+
+    let built = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to build analyzed audio project");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(temp
+        .path()
+        .join("build/generated/audio/catalog.lua")
+        .is_file());
+    assert!(temp
+        .path()
+        .join("build/generated/audio/catalog_data.lua")
+        .is_file());
+    assert!(!temp
+        .path()
+        .join("build/generated/audio/audio-index.json")
+        .exists());
 }
 
 #[test]

@@ -181,6 +181,9 @@ fn build_project_files(
         let output_path = output_path_for_asset(&workspace, &source_path);
 
         if source_file.kind == SourceKind::Asset {
+            if is_pipeline_development_output(cwd, workspace.config(), &source_path) {
+                continue;
+            }
             if let Some(tua_source_path) = tua_output_owners
                 .get(&output_path)
                 .and_then(|owners| owners.first())
@@ -368,6 +371,20 @@ fn build_project_files(
         emitted,
         diagnostics,
     }
+}
+
+fn is_pipeline_development_output(
+    cwd: &Path,
+    config: &tua_core::ProjectConfig,
+    source_path: &Path,
+) -> bool {
+    config.asset_pipelines.iter().any(|pipeline| {
+        pipeline.builtin.as_deref() == Some("audio-analysis")
+            && paths_same_location(
+                source_path,
+                &cwd.join(&pipeline.output).join("audio-index.json"),
+            )
+    })
 }
 
 pub(crate) fn output_path_for(

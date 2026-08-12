@@ -19,6 +19,7 @@ use tua_core::{
 use crate::source::io_diagnostic;
 
 const MANIFEST_VERSION: u32 = 1;
+const AUDIO_ANALYZER_VERSION: &str = "2";
 const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
 
@@ -81,6 +82,9 @@ struct AudioAnalysis {
     peak: f64,
     bpm: Option<f64>,
     confidence: f64,
+    tempo_candidates: Vec<TempoCandidate>,
+    tempo_ambiguity: f64,
+    boundary_influence: f64,
     beat_offset: f64,
     beat_grid: Vec<f64>,
     energy: Vec<f64>,
@@ -88,6 +92,25 @@ struct AudioAnalysis {
     mid: Vec<f64>,
     high: Vec<f64>,
     onset: Vec<f64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TempoCandidate {
+    bpm: f64,
+    score: f64,
+    relative_score: f64,
+    relation: String,
+}
+
+#[derive(Clone, Debug)]
+struct TempoEstimate {
+    bpm: Option<f64>,
+    confidence: f64,
+    beat_offset: f64,
+    candidates: Vec<TempoCandidate>,
+    ambiguity: f64,
+    boundary_influence: f64,
 }
 
 fn option_number(pipeline: &AssetPipelineConfig, name: &str, fallback: f64) -> f64 {
@@ -115,9 +138,23 @@ fn execute_audio_analysis(
         match analyze_audio_file(cwd, input, envelope_hz, tempo_min, tempo_max) {
             Ok(analysis) => {
                 if analysis.bpm.is_none() || analysis.confidence < confidence_warning {
+                    let candidates = analysis
+                        .tempo_candidates
+                        .iter()
+                        .map(|candidate| format!("{:.1}", candidate.bpm))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let detail = if candidates.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            " (ambiguity {:.2}; candidates {candidates} BPM)",
+                            analysis.tempo_ambiguity
+                        )
+                    };
                     diagnostics.push(ImportDiagnostic {
                         severity: "warning".to_owned(),
-                        message: "tempo confidence is low; author BPM and beat offset before using quantized transitions".to_owned(),
+                        message: format!("tempo confidence is low{detail}; author BPM and beat offset before using quantized transitions"),
                         path: analysis.path.clone(), line: 1, column: 1,
                         end_line: None, end_column: None, code: Some(2012),
                     });
@@ -171,7 +208,14 @@ fn execute_audio_analysis(
         .collect::<Vec<_>>()
         .join(".");
     let facade = format!(
-        r#"export type AudioAnalysis = {{
+        r#"export type AudioTempoCandidate = {{
+  bpm: number,
+  score: number,
+  relativeScore: number,
+  relation: string,
+}}
+
+export type AudioAnalysis = {{
   path: string,
   duration: number,
   channels: number,
@@ -181,6 +225,9 @@ fn execute_audio_analysis(
   peak: number,
   bpm: number | nil,
   confidence: number,
+  tempoCandidates: AudioTempoCandidate[],
+  tempoAmbiguity: number,
+  boundaryInfluence: number,
   beatOffset: number,
   beatGrid: number[],
   energy: number[],
@@ -320,12 +367,12 @@ fn analyze_audio_file(
     for pair in energy.windows(2) {
         onset.push((pair[1] - pair[0]).max(0.0));
     }
-    let (bpm, confidence, beat_offset) = estimate_tempo(&onset, envelope_hz, tempo_min, tempo_max);
+    let tempo = estimate_tempo(&onset, envelope_hz, tempo_min, tempo_max);
     let duration = mono.len() as f64 / sample_rate as f64;
     let mut beat_grid = Vec::new();
-    if let Some(bpm) = bpm {
+    if let Some(bpm) = tempo.bpm {
         let interval = 60.0 / bpm;
-        let mut beat = beat_offset;
+        let mut beat = tempo.beat_offset;
         while beat <= duration {
             beat_grid.push(beat);
             beat += interval;
@@ -339,9 +386,12 @@ fn analyze_audio_file(
         envelope_hz,
         rms: (square_sum / mono.len().max(1) as f64).sqrt(),
         peak,
-        bpm,
-        confidence,
-        beat_offset,
+        bpm: tempo.bpm,
+        confidence: tempo.confidence,
+        tempo_candidates: tempo.candidates,
+        tempo_ambiguity: tempo.ambiguity,
+        boundary_influence: tempo.boundary_influence,
+        beat_offset: tempo.beat_offset,
         beat_grid,
         energy,
         low,
@@ -356,54 +406,177 @@ fn estimate_tempo(
     envelope_hz: f64,
     tempo_min: f64,
     tempo_max: f64,
-) -> (Option<f64>, f64, f64) {
+) -> TempoEstimate {
     if onset.len() < 4 || onset.iter().copied().fold(0.0_f64, f64::max) <= 1e-9 {
-        return (None, 0.0, 0.0);
+        return TempoEstimate {
+            bpm: None,
+            confidence: 0.0,
+            beat_offset: 0.0,
+            candidates: Vec::new(),
+            ambiguity: 0.0,
+            boundary_influence: 0.0,
+        };
     }
     let min_lag = ((60.0 * envelope_hz / tempo_max).round() as usize).max(1);
     let max_lag = ((60.0 * envelope_hz / tempo_min).round() as usize).min(onset.len() - 1);
-    let mut best_lag = min_lag;
-    let mut best = 0.0;
-    let mut total = 0.0;
+    let edge = ((envelope_hz * 0.25).round() as usize).min(onset.len() / 10);
+    let mut scores = Vec::new();
     for lag in min_lag..=max_lag {
-        let score = onset
-            .iter()
-            .skip(lag)
-            .zip(onset)
-            .map(|(right, left)| right * left)
-            .sum::<f64>();
-        total += score;
-        if score > best {
-            best = score;
-            best_lag = lag;
-        }
+        let full = normalized_onset_correlation(onset, lag, 0);
+        let inner = normalized_onset_correlation(onset, lag, edge);
+        let boundary = (full - inner).max(0.0);
+        scores.push((lag, (inner * 0.8 + full * 0.2).max(0.0), boundary));
     }
-    let confidence = if total > 0.0 {
-        (best / total * (max_lag - min_lag + 1) as f64).min(1.0)
-    } else {
-        0.0
+    let mut peaks = scores
+        .iter()
+        .enumerate()
+        .filter(|(index, (_, score, _))| {
+            let left = index
+                .checked_sub(1)
+                .map(|value| scores[value].1)
+                .unwrap_or(-1.0);
+            let right = scores.get(index + 1).map(|value| value.1).unwrap_or(-1.0);
+            *score >= left && *score >= right && *score > 0.0
+        })
+        .map(|(index, value)| (index, *value))
+        .collect::<Vec<_>>();
+    peaks.sort_by(|left, right| {
+        right
+            .1
+             .1
+            .total_cmp(&left.1 .1)
+            .then(left.1 .0.cmp(&right.1 .0))
+    });
+    peaks.truncate(5);
+    let Some((best_index, (best_lag, best_score, best_boundary))) = peaks.first().copied() else {
+        return TempoEstimate {
+            bpm: None,
+            confidence: 0.0,
+            beat_offset: 0.0,
+            candidates: Vec::new(),
+            ambiguity: 0.0,
+            boundary_influence: 0.0,
+        };
     };
+    let primary_bpm = refined_bpm(&scores, best_index, envelope_hz);
+    let mut candidates = peaks
+        .iter()
+        .map(|(index, (_, score, _))| {
+            let bpm = refined_bpm(&scores, *index, envelope_hz);
+            TempoCandidate {
+                bpm,
+                score: *score,
+                relative_score: (*score / best_score).clamp(0.0, 1.0),
+                relation: tempo_relation(bpm, primary_bpm).to_owned(),
+            }
+        })
+        .collect::<Vec<_>>();
+    if let Some(primary) = candidates.first_mut() {
+        primary.relation = "primary".to_owned();
+    }
+    let ambiguity = candidates
+        .iter()
+        .skip(1)
+        .map(|candidate| {
+            if candidate.relation == "alternative" {
+                ((candidate.relative_score - 0.8) / 0.2).clamp(0.0, 1.0)
+            } else {
+                candidate.relative_score
+            }
+        })
+        .fold(0.0_f64, f64::max);
+    let boundary_influence = (best_boundary / best_score.max(1e-9)).clamp(0.0, 1.0);
+    let confidence =
+        (best_score * (1.0 - 0.55 * ambiguity) * (1.0 - 0.5 * boundary_influence)).clamp(0.0, 1.0);
     let first = onset
         .iter()
         .enumerate()
         .max_by(|left, right| left.1.total_cmp(right.1))
         .map(|(index, _)| index)
         .unwrap_or(0);
-    (
-        Some(60.0 * envelope_hz / best_lag as f64),
+    TempoEstimate {
+        bpm: Some(primary_bpm),
         confidence,
-        (first % best_lag) as f64 / envelope_hz,
-    )
+        beat_offset: (first % best_lag) as f64 / envelope_hz,
+        candidates,
+        ambiguity,
+        boundary_influence,
+    }
+}
+
+fn normalized_onset_correlation(onset: &[f64], lag: usize, edge: usize) -> f64 {
+    let start = lag.saturating_add(edge);
+    let end = onset.len().saturating_sub(edge);
+    if start >= end {
+        return 0.0;
+    }
+    let mut product = 0.0;
+    let mut left_energy = 0.0;
+    let mut right_energy = 0.0;
+    for index in start..end {
+        let left = onset[index - lag];
+        let right = onset[index];
+        product += left * right;
+        left_energy += left * left;
+        right_energy += right * right;
+    }
+    product / (left_energy * right_energy).sqrt().max(1e-12)
+}
+
+fn refined_bpm(scores: &[(usize, f64, f64)], index: usize, envelope_hz: f64) -> f64 {
+    let (lag, score, _) = scores[index];
+    let refined_lag = if index > 0 && index + 1 < scores.len() {
+        let left = scores[index - 1].1;
+        let right = scores[index + 1].1;
+        let denominator = left - 2.0 * score + right;
+        let delta = if denominator.abs() > 1e-12 {
+            (0.5 * (left - right) / denominator).clamp(-0.5, 0.5)
+        } else {
+            0.0
+        };
+        lag as f64 + delta
+    } else {
+        lag as f64
+    };
+    60.0 * envelope_hz / refined_lag
+}
+
+fn tempo_relation(candidate: f64, primary: f64) -> &'static str {
+    let ratio = candidate / primary;
+    for (target, name) in [
+        (0.5, "half-time"),
+        (2.0 / 3.0, "two-thirds"),
+        (0.75, "three-quarters"),
+        (4.0 / 3.0, "four-thirds"),
+        (1.5, "three-halves"),
+        (2.0, "double-time"),
+    ] {
+        if (ratio / target - 1.0).abs() <= 0.04 {
+            return name;
+        }
+    }
+    "alternative"
 }
 
 fn audio_catalog_lua(analyses: &[AudioAnalysis]) -> String {
     let mut output = String::from("--!tua generated\nreturn {\n");
     for analysis in analyses {
-        output.push_str(&format!("  [{}] = {{ path = {}, duration = {:.9}, channels = {}, sampleRate = {}, envelopeHz = {:.6}, rms = {:.9}, peak = {:.9}, bpm = {}, confidence = {:.9}, beatOffset = {:.9},\n",
+        output.push_str(&format!("  [{}] = {{ path = {}, duration = {:.9}, channels = {}, sampleRate = {}, envelopeHz = {:.6}, rms = {:.9}, peak = {:.9}, bpm = {}, confidence = {:.9}, tempoAmbiguity = {:.9}, boundaryInfluence = {:.9}, beatOffset = {:.9},\n",
             lua_string(&analysis.path), lua_string(&analysis.path), analysis.duration, analysis.channels,
             analysis.sample_rate, analysis.envelope_hz, analysis.rms, analysis.peak,
             analysis.bpm.map(|value| format!("{value:.9}")).unwrap_or_else(|| "nil".to_owned()),
-            analysis.confidence, analysis.beat_offset));
+            analysis.confidence, analysis.tempo_ambiguity, analysis.boundary_influence, analysis.beat_offset));
+        output.push_str("    tempoCandidates = {");
+        for candidate in &analysis.tempo_candidates {
+            output.push_str(&format!(
+                "{{ bpm = {:.9}, score = {:.9}, relativeScore = {:.9}, relation = {} }},",
+                candidate.bpm,
+                candidate.score,
+                candidate.relative_score,
+                lua_string(&candidate.relation)
+            ));
+        }
+        output.push_str("},\n");
         for (name, values) in [
             ("beatGrid", &analysis.beat_grid),
             ("energy", &analysis.energy),
@@ -676,6 +849,10 @@ fn pipeline_cache_key(
     if let Some(builtin) = &pipeline.builtin {
         hash.add(b"\0builtin\0");
         hash.add(builtin.as_bytes());
+        if builtin == "audio-analysis" {
+            hash.add(b"\0analyzer-version\0");
+            hash.add(AUDIO_ANALYZER_VERSION.as_bytes());
+        }
     }
     for (name, value) in &pipeline.options {
         hash.add(b"\0option\0");
@@ -1407,5 +1584,34 @@ mod tests {
         assert!(safe_relative_path("types/game.d.tua").is_ok());
         assert!(safe_relative_path("../main.tua").is_err());
         assert!(safe_relative_path("/tmp/main.tua").is_err());
+    }
+
+    #[test]
+    fn tempo_estimation_reports_metrical_candidates_and_calibrates_confidence() {
+        let mut onset = vec![0.0; 160];
+        for index in (0..160).step_by(10) {
+            onset[index] = 1.0;
+        }
+        let estimate = estimate_tempo(&onset, 20.0, 60.0, 200.0);
+
+        assert_eq!(estimate.bpm.map(f64::round), Some(120.0));
+        assert!(estimate.candidates.len() >= 2);
+        assert!(estimate
+            .candidates
+            .iter()
+            .any(|candidate| candidate.relation == "half-time"));
+        assert!(estimate.ambiguity > 0.8);
+        assert!(estimate.confidence < 0.6);
+    }
+
+    #[test]
+    fn tempo_estimation_penalizes_edge_only_correlations() {
+        let mut onset = vec![0.0; 100];
+        onset[0] = 1.0;
+        onset[10] = 1.0;
+        let estimate = estimate_tempo(&onset, 20.0, 60.0, 200.0);
+
+        assert!(estimate.boundary_influence > 0.5);
+        assert!(estimate.confidence < 0.2);
     }
 }

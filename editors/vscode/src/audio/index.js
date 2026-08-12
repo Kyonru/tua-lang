@@ -14,7 +14,24 @@ function pills(values, empty) {
   return values.map((value) => `<span class="pill">${escapeHtml(value)}</span>`).join("");
 }
 
-function html(graph) {
+function analysisCards(analyses) {
+  if (!analyses.length) return '<p class="empty">Run tua check or tua build to generate analysis metadata.</p>';
+  return analyses.map((analysis) => {
+    const bpm = analysis.bpm == null ? "unresolved" : Number(analysis.bpm).toFixed(2);
+    const confidence = Number(analysis.confidence || 0).toFixed(2);
+    const ambiguity = Number(analysis.tempoAmbiguity || 0).toFixed(2);
+    const candidates = (analysis.tempoCandidates || []).map((candidate) =>
+      `${Number(candidate.bpm).toFixed(1)} (${escapeHtml(candidate.relation)}, ${Number(candidate.relativeScore).toFixed(2)})`
+    );
+    return `<article class="analysis">
+      <header><strong>${escapeHtml(analysis.path)}</strong><button data-uri="${escapeHtml(analysis.assetUri)}" data-line="0">Open asset</button></header>
+      <p>BPM ${bpm} · confidence ${confidence} · ambiguity ${ambiguity} · boundary influence ${Number(analysis.boundaryInfluence || 0).toFixed(2)}</p>
+      <section><h2>Tempo candidates</h2>${pills(candidates, "No reliable candidates")}</section>
+    </article>`;
+  }).join("");
+}
+
+function html(graph, analyses = []) {
   const systems = graph?.systems || [];
   const cards = systems.map((system) => `
     <article>
@@ -30,19 +47,39 @@ function html(graph) {
     nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}article{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:16px;margin-bottom:14px}
     header{display:flex;justify-content:space-between;align-items:center}section{margin-top:14px}h1{font-size:20px;margin:0}h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--vscode-descriptionForeground)}
     .pill{display:inline-block;padding:4px 8px;margin:0 6px 6px 0;border-radius:999px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground)}.empty{color:var(--vscode-descriptionForeground)}button{color:var(--vscode-button-foreground);background:var(--vscode-button-background);border:0;padding:6px 10px;border-radius:3px}</style></head>
-    <body><nav><h1>Audio Explorer</h1><button id="reload">Reload</button></nav>${cards || '<p class="empty">No static audioSystem declarations found.</p>'}
+    <body><nav><h1>Audio Explorer</h1><button id="reload">Reload</button></nav>${cards || '<p class="empty">No static audioSystem declarations found.</p>'}<h1>Generated analysis</h1>${analysisCards(analyses)}
     <script>const vscode=acquireVsCodeApi();document.getElementById('reload').onclick=()=>vscode.postMessage({command:'reload'});document.querySelectorAll('[data-uri]').forEach(button=>button.onclick=()=>vscode.postMessage({command:'open',uri:button.dataset.uri,line:Number(button.dataset.line)}));</script></body></html>`;
 }
 
 function registerAudioDevex({ getClient }) {
   let panel;
+  const loadAnalysis = async () => {
+    if (!vscode.workspace?.findFiles) return [];
+    const files = await vscode.workspace.findFiles("**/audio-index.json", "**/{.git,.tua,node_modules,build}/**");
+    const analyses = [];
+    for (const uri of files) {
+      try {
+        const data = JSON.parse(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8"));
+        const folder = vscode.workspace.getWorkspaceFolder(uri);
+        for (const item of Array.isArray(data) ? data : []) {
+          analyses.push({
+            ...item,
+            assetUri: folder ? vscode.Uri.joinPath(folder.uri, item.path).toString() : uri.toString(),
+          });
+        }
+      } catch (_) {
+        // A partially written index will be picked up by the next refresh.
+      }
+    }
+    return analyses;
+  };
   const render = async () => {
     const client = getClient();
     if (!client || !panel) return;
     panel.webview.html = "<p>Loading audio model…</p>";
     try {
       const response = await client.sendRequest("tua/audioGraph", null);
-      panel.webview.html = html(response?.graph);
+      panel.webview.html = html(response?.graph, await loadAnalysis());
     } catch (error) {
       panel.webview.html = `<p>Audio Explorer failed: ${escapeHtml(error?.message || error)}</p>`;
     }

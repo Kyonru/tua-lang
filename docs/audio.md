@@ -131,6 +131,39 @@ src/generated/audio/catalog_data.lua
 src/generated/audio/audio-index.json
 ```
 
+### Generated Files And Runtime Cost
+
+The three files serve different consumers:
+
+| File | Consumer | Purpose | Included in game build |
+| --- | --- | --- | --- |
+| `catalog.tua` | Tua compiler and game | Small typed facade. It gives catalog entries completion and checking, then emits a Lua module that loads the runtime data. | Yes, as `catalog.lua` |
+| `catalog_data.lua` | Game runtime | Immutable analysis records and numeric envelopes. `require("generated.audio.catalog")` loads this table. | Yes |
+| `audio-index.json` | Diagnostics and VS Code Audio Explorer | Editor-friendly duplicate with paths, warnings, candidates, and preview data. Lua never imports it. | No |
+
+Consequently, the JSON index does not affect Lua startup or runtime memory. It
+is materialized under the source tree so editor tooling can refresh without a
+live game connection, but Tua excludes it when building the game.
+
+`catalog_data.lua` is currently eager: the first `require` parses and creates
+the complete catalog table. At the default `envelope_hz = 20`, each analyzed
+second contributes roughly 100 envelope values across broadband, low, mid,
+high, and onset arrays, in addition to its beat grid. This is small for a few
+tracks but can noticeably increase source size, startup parsing, and memory for
+large sound libraries.
+
+To keep the initial implementation predictable:
+
+- restrict `inputs` to audio that actually needs analysis;
+- lower `envelope_hz` when coarse gameplay energy is sufficient;
+- use separate pipelines/catalogs for independently loaded game areas; or
+- use a command analyzer that emits timing-only records when only `bpm`,
+  `confidence`, and `beatOffset` are needed.
+
+Lazy per-track envelope modules or a compact binary analysis pack would be a
+valuable future optimization. They are not implied by the current facade: the
+built-in `catalog_data.lua` remains intentionally plain, replaceable Lua.
+
 Pass the generated catalog to `audioSystem` and set the scene's `analysis` to
 the exact project-relative key stored in that catalog:
 
@@ -169,8 +202,39 @@ copied runtime asset as `sample.wav`.
 The built-in importer uses bundled pure-Rust codecs and produces `catalog.tua`,
 immutable `catalog_data.lua`, and `audio-index.json`. Results contain duration,
 channel count, sample rate, RMS/peak, broadband and approximate low/mid/high
-envelopes, onset strength, BPM, confidence, beat offset, and a beat grid. The
-pipeline's content hash includes its options and audio bytes.
+envelopes, onset strength, BPM, confidence, ranked tempo candidates, metrical
+ambiguity, boundary influence, beat offset, and a beat grid. The pipeline's
+content hash includes its options and audio bytes. Tua also includes the
+bundled analyzer version, so analyzer upgrades invalidate stale catalogs
+without requiring a manual pipeline `version` bump.
+
+Tempo analysis cannot always distinguish the musical quarter-note pulse from
+half-time, double-time, or another strong subdivision. `tempoCandidates` keeps
+up to five local correlation peaks and labels common relationships to the
+selected tempo. `tempoAmbiguity` rises when a competing metrical candidate is
+nearly as strong. `boundaryInfluence` reports how much the winning correlation
+depends on the beginning or end of the file; edge-dominated candidates are
+penalized before selection. Confidence incorporates all three signals and is
+therefore confidence in the selected interpretation, not merely the presence
+of a periodic pulse.
+
+```tua
+for _, candidate in ipairs(analysis["assets/audio/sample.wav"].tempoCandidates) do
+  print(candidate.bpm, candidate.relativeScore, candidate.relation)
+end
+```
+
+Authored scene timing remains authoritative when musical intent is known:
+
+```tua
+sample = {
+  analysis = "assets/audio/sample.wav",
+  bpm = 90,
+  offset = 0.12,
+  signature = { 4, 4 },
+  layers = { track = { source = music("assets/audio/sample.wav") } },
+}
+```
 
 ### Command Analyzer
 

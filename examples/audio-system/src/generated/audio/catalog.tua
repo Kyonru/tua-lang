@@ -1,0 +1,31 @@
+export type AudioTempoCandidate = {
+  bpm: number,
+  score: number,
+  relativeScore: number,
+  relation: string,
+}
+
+export type AudioAnalysis = {
+  path: string,
+  duration: number,
+  channels: number,
+  sampleRate: number,
+  envelopeHz: number,
+  rms: number,
+  peak: number,
+  bpm: number | nil,
+  confidence: number,
+  tempoCandidates: AudioTempoCandidate[],
+  tempoAmbiguity: number,
+  boundaryInfluence: number,
+  beatOffset: number,
+  beatGrid: number[],
+  energy: number[],
+  low: number[],
+  mid: number[],
+  high: number[],
+  onset: number[],
+}
+
+local catalog: { [string]: AudioAnalysis } = require("generated.audio.catalog_data")
+return catalog

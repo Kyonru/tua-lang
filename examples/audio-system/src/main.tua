@@ -99,5 +99,6 @@ function love.draw()
   love.graphics.print("Sample2 detected BPM: " .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"), 32, 258)
   love.graphics.print("Sample2 effective BPM: 90.00 (authored override)", 32, 286)
   love.graphics.print("Sample2 confidence: " .. string.format("%.2f", detected2.confidence), 32, 314)
-  love.graphics.print("Beat: " .. beat .. "  Bar: " .. bar, 32, 342)
+  love.graphics.print("Tempo ambiguity: " .. string.format("%.2f", detected2.tempoAmbiguity), 32, 342)
+  love.graphics.print("Beat: " .. beat .. "  Bar: " .. bar, 32, 370)
 end
