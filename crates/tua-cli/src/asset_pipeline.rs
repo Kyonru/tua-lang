@@ -1450,7 +1450,7 @@ fn materialize_outputs(
             let same_content = fs::read(&source)
                 .ok()
                 .zip(fs::read(&destination).ok())
-                .is_some_and(|(left, right)| left == right);
+                .is_some_and(|(left, right)| generated_content_matches(&left, &right));
             if !same_content {
                 diagnostics.push(pipeline_error(
                     cwd,
@@ -1494,6 +1494,16 @@ fn materialize_outputs(
     } else {
         Err(diagnostics)
     }
+}
+
+fn generated_content_matches(generated: &[u8], existing: &[u8]) -> bool {
+    generated == existing
+        || std::str::from_utf8(generated)
+            .ok()
+            .zip(std::str::from_utf8(existing).ok())
+            .is_some_and(|(generated, existing)| {
+                generated.replace("\r\n", "\n") == existing.replace("\r\n", "\n")
+            })
 }
 
 fn manifest_diagnostics(
@@ -1823,6 +1833,22 @@ mod tests {
         assert!(safe_relative_path("types/game.d.tua").is_ok());
         assert!(safe_relative_path("../main.tua").is_err());
         assert!(safe_relative_path("/tmp/main.tua").is_err());
+    }
+
+    #[test]
+    fn generated_text_matches_across_checkout_line_endings() {
+        assert!(generated_content_matches(
+            b"first\nsecond\n",
+            b"first\r\nsecond\r\n"
+        ));
+        assert!(!generated_content_matches(
+            b"first\nsecond\n",
+            b"first\r\nchanged\r\n"
+        ));
+        assert!(!generated_content_matches(
+            &[0xff, b'\n'],
+            &[0xff, b'\r', b'\n']
+        ));
     }
 
     #[test]
