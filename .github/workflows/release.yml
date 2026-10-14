@@ -42,9 +42,14 @@ jobs:
             --output "${RUNNER_TEMP}/release-notes.md"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
+  verify:
+    name: Run trusted release gates
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Package ${{ matrix.target }}
-    needs: validate
+    needs: [validate, verify]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:

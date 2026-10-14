@@ -667,9 +667,9 @@ fn find_text_in_lines(
     end: usize,
     text: &str,
 ) -> Option<(usize, usize)> {
-    for line_index in cursor.0..=end {
+    for (line_index, line) in lines.iter().enumerate().take(end + 1).skip(cursor.0) {
         let start = if line_index == cursor.0 { cursor.1 } else { 0 };
-        if let Some(offset) = lines[line_index].get(start..)?.find(text) {
+        if let Some(offset) = line.get(start..)?.find(text) {
             return Some((line_index, start + offset));
         }
     }

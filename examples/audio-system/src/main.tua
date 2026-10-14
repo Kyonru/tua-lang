@@ -92,13 +92,37 @@ function love.draw()
   love.graphics.print("Tua first-class audio", 32, 32)
   love.graphics.print(message, 32, 72)
   love.graphics.print("Active voices: " .. snapshot.activeVoices, 32, 118)
-  love.graphics.print("Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: " .. snapshot.rejected, 32, 146)
-  love.graphics.print("Effective SFX gain: " .. string.format("%.2f", snapshot.buses.sfx.gain), 32, 174)
+  love.graphics.print(
+    "Started: " .. snapshot.started .. "  Stolen: " .. snapshot.stolen .. "  Rejected: " .. snapshot.rejected,
+    32,
+    146
+  )
+  love.graphics.print(
+    "Effective SFX gain: " .. string.format("%.2f", snapshot.buses.sfx.gain),
+    32,
+    174
+  )
   love.graphics.print("Current scene: " .. current, 32, 202)
-  love.graphics.print("Sample1 BPM: " .. (detected.bpm and string.format("%.2f", detected.bpm) or "low confidence"), 32, 230)
-  love.graphics.print("Sample2 detected BPM: " .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"), 32, 258)
+  love.graphics.print(
+    "Sample1 BPM: " .. (detected.bpm and string.format("%.2f", detected.bpm) or "low confidence"),
+    32,
+    230
+  )
+  love.graphics.print(
+    "Sample2 detected BPM: " .. (detected2.bpm and string.format("%.2f", detected2.bpm) or "low confidence"),
+    32,
+    258
+  )
   love.graphics.print("Sample2 effective BPM: 90.00 (authored override)", 32, 286)
-  love.graphics.print("Sample2 confidence: " .. string.format("%.2f", detected2.confidence), 32, 314)
-  love.graphics.print("Tempo ambiguity: " .. string.format("%.2f", detected2.tempoAmbiguity), 32, 342)
+  love.graphics.print(
+    "Sample2 confidence: " .. string.format("%.2f", detected2.confidence),
+    32,
+    314
+  )
+  love.graphics.print(
+    "Tempo ambiguity: " .. string.format("%.2f", detected2.tempoAmbiguity),
+    32,
+    342
+  )
   love.graphics.print("Beat: " .. beat .. "  Bar: " .. bar, 32, 370)
 end

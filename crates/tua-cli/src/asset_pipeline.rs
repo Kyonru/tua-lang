@@ -238,7 +238,7 @@ export type AudioAnalysis = {{
   onset: number[],
 }}
 
-local catalog: {{ [string]: AudioAnalysis }} = require("{module}")
+local catalog: {{[string]: AudioAnalysis }} = require("{module}")
 return catalog
 "#
     );

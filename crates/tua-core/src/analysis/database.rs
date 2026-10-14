@@ -297,10 +297,13 @@ impl AnalysisQueryCache {
                         .filter_map(|name| name.strip_prefix(&prefix).map(str::to_owned)),
                 );
             }
-            used.extend(import.bindings.iter().filter_map(|binding| {
-                (import.reexport || referenced_names.contains(&binding.local))
-                    .then(|| binding.imported.clone())
-            }));
+            used.extend(
+                import
+                    .bindings
+                    .iter()
+                    .filter(|binding| import.reexport || referenced_names.contains(&binding.local))
+                    .map(|binding| binding.imported.clone()),
+            );
         }
 
         self.dependencies.insert(path, dependencies);

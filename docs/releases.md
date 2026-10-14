@@ -91,8 +91,9 @@ the native inlay-hint maximum-length setting used by Tua's compact-hint toggle.
    non-increasing versions, and existing tags.
 4. Inspect the commit and tag, then push both with
    `git push origin HEAD v<version>`. The script never pushes automatically.
-5. The release workflow validates the tag and changelog, builds all platform
-   pairs, verifies checksums, and publishes the GitHub release.
+5. The release workflow validates the tag and changelog, invokes the complete
+   trusted CI workflow, builds all platform pairs only after those gates pass,
+   verifies checksums, and publishes the GitHub release.
 6. After the release workflow completes successfully, the extension publish
    workflow downloads its published VSIX assets and pushes them to Visual
    Studio Marketplace and Open VSX. Failed releases never start publishing.

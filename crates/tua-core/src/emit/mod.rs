@@ -1697,18 +1697,16 @@ fn lower_builtin_call_operations(
                     (position.line, position.column)
                         <= (source_span.start.line, source_span.start.column)
                 });
-                if !binding_is_active {
-                    if output[argument_start..].starts_with('(') {
-                        tuaaudio_span.get_or_insert(source_span);
-                        operations.push(lowering::LoweringOperation::replace(
-                            index..index + identifier_end,
-                            audio::EMITTED_CONSTRUCTOR_LOCAL,
-                            source_span,
-                            LoweringKind::BuiltinCall,
-                        ));
-                        index += identifier_end;
-                        continue;
-                    }
+                if !binding_is_active && output[argument_start..].starts_with('(') {
+                    tuaaudio_span.get_or_insert(source_span);
+                    operations.push(lowering::LoweringOperation::replace(
+                        index..index + identifier_end,
+                        audio::EMITTED_CONSTRUCTOR_LOCAL,
+                        source_span,
+                        LoweringKind::BuiltinCall,
+                    ));
+                    index += identifier_end;
+                    continue;
                 }
             }
 

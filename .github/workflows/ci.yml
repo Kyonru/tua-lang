@@ -2,8 +2,10 @@ name: CI
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -51,7 +53,6 @@ jobs:
         run: make diff-check
 
   platform-tests:
-    if: github.event_name == 'push' && github.ref_type == 'tag'
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40

@@ -109,7 +109,14 @@ const outputPath = path.resolve(
 function profileCliProject(project) {
   const metrics = [];
   const commands = [
-    { label: "check", args: ["check"], trace: true, tempCopy: true },
+    {
+      label: "check",
+      args: ["check"],
+      trace: true,
+      tempCopy: true,
+      acceptedDiagnostics:
+        project.name === "audio-system" ? [{ severity: "warning", code: "TL2012" }] : [],
+    },
     {
       label: "lint",
       args: ["lint"],
@@ -184,10 +191,22 @@ function runCliCommand(project, item) {
     throw result.error;
   }
 
+  const stderr = result.stderr || "";
+  const reportedDiagnostics = parseDiagnosticHeaders(stderr);
+  const acceptedDiagnostics = item.acceptedDiagnostics || [];
+  const acceptedDiagnosticExit =
+    acceptedDiagnostics.length > 0 &&
+    reportedDiagnostics.length > 0 &&
+    reportedDiagnostics.every((reported) =>
+      acceptedDiagnostics.some(
+        (accepted) =>
+          accepted.severity === reported.severity && accepted.code === reported.code,
+      ),
+    );
   const expectedDiagnosticExit =
-    item.acceptDiagnosticExit &&
     result.status === 1 &&
-    parseDiagnosticTrace(result.stderr || "") !== null;
+    parseDiagnosticTrace(stderr) !== null &&
+    (item.acceptDiagnosticExit || acceptedDiagnosticExit);
 
   if (result.status !== 0 && !expectedDiagnosticExit) {
     throw new Error(
@@ -198,8 +217,15 @@ function runCliCommand(project, item) {
 
   return {
     elapsedMs,
-    trace: item.trace ? parseDiagnosticTrace(result.stderr || "") : null,
+    trace: item.trace ? parseDiagnosticTrace(stderr) : null,
   };
+}
+
+function parseDiagnosticHeaders(stderr) {
+  return [...stderr.matchAll(/\b(error|warning|info|hint) (TL\d{4}):/g)].map((match) => ({
+    severity: match[1],
+    code: match[2],
+  }));
 }
 
 function metricsFromTimings(projectName, surface, timings) {

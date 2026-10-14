@@ -273,8 +273,9 @@ create or mutate fixture-local `.tua/completion-stats.json` files. Set it to
 
 ## CI And Reports
 
-Pull requests run `make benchmark-smoke`. CI retains the example and
-representative smoke reports for 14 days.
+Trusted pushes to `main` and release validation run `make benchmark-smoke`.
+CI retains the example and representative smoke reports for 14 days. Open or
+untrusted pull requests do not execute repository code in GitHub Actions.
 
 The performance workflow runs `make profile-all` on `main`, weekly, and on
 demand. It uploads JSON reports under `target/tua-speed/` for 90 days. Use those

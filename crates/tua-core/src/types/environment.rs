@@ -664,18 +664,16 @@ fn collect_alias_names(
         if import.reexport {
             continue;
         }
-        if !import.namespace.is_empty() {
-            if !names.insert(import.namespace.clone()) {
-                diagnostics.push(type_diagnostic(
-                    &parsed.path,
-                    Some(import.namespace_span),
-                    format!(
-                        "type import name `{}` conflicts with a type alias",
-                        import.namespace
-                    ),
-                    DiagnosticCode::TYPE_IMPORT_COLLISION,
-                ));
-            }
+        if !import.namespace.is_empty() && !names.insert(import.namespace.clone()) {
+            diagnostics.push(type_diagnostic(
+                &parsed.path,
+                Some(import.namespace_span),
+                format!(
+                    "type import name `{}` conflicts with a type alias",
+                    import.namespace
+                ),
+                DiagnosticCode::TYPE_IMPORT_COLLISION,
+            ));
         }
         for binding in &import.bindings {
             if names.contains(&binding.local) {
