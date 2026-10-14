@@ -11,6 +11,7 @@ pub(super) enum RequestKind {
     Implementation,
     Diagnostic,
     BuiltinDocument,
+    ProjectLayout,
     CacheStats,
     Health,
     ResetCompletionStats,
@@ -63,6 +64,7 @@ impl RequestKind {
             "textDocument/implementation" => Self::Implementation,
             "textDocument/diagnostic" => Self::Diagnostic,
             "tua/builtinDocument" => Self::BuiltinDocument,
+            "tua/projectLayout" => Self::ProjectLayout,
             "tua/cacheStats" => Self::CacheStats,
             "tua/health" => Self::Health,
             "tua/resetCompletionStats" => Self::ResetCompletionStats,
@@ -157,6 +159,10 @@ mod tests {
         assert_eq!(
             RequestKind::from_method("tua/validateInlineCompletion"),
             Some(RequestKind::ValidateInlineCompletion)
+        );
+        assert_eq!(
+            RequestKind::from_method("tua/projectLayout"),
+            Some(RequestKind::ProjectLayout)
         );
         assert_eq!(RequestKind::from_method("tua/unknown"), None);
         assert_eq!(NotificationKind::from_method("tua/unknown"), None);

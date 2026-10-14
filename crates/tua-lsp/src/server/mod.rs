@@ -719,7 +719,8 @@ fn message_interactive_priority(message: &Value) -> Option<u8> {
         | "textDocument/rename"
         | "textDocument/formatting"
         | "textDocument/rangeFormatting"
-        | "textDocument/onTypeFormatting" => Some(2),
+        | "textDocument/onTypeFormatting"
+        | "tua/projectLayout" => Some(2),
         "textDocument/hover" | "textDocument/documentHighlight" | "textDocument/inlayHint" => {
             Some(3)
         }

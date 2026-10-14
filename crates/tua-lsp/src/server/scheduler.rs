@@ -666,6 +666,7 @@ pub(super) fn request_runs_on_coordinator(method: &str) -> bool {
         "initialize"
             | "shutdown"
             | "tua/builtinDocument"
+            | "tua/projectLayout"
             | "tua/cacheStats"
             | "tua/health"
             | "tua/resetCompletionStats"

@@ -1,188 +1,77 @@
 "use strict";
 
-const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
 
-const CONFIG_FILE_NAME = "tua.toml";
-const DEFAULT_SOURCE_DIRECTORY = "src";
-const DEFAULT_OUTPUT_DIRECTORY = "build";
-const DEFAULT_MAIN_SOURCE = "main.tua";
-
-function generatedLuaPathForUri(uri) {
-  const layout = projectLayoutForUri(uri);
+async function generatedLuaPathForUri(uri, getClient) {
+  const layout = await projectLayoutForUri(uri, getClient);
   if (!layout) {
     return { kind: "missingWorkspace" };
   }
-
-  const sourcePath = path.resolve(uri.fsPath);
-  if (!isPathInside(layout.sourceDirectory, sourcePath)) {
+  if (!layout.generatedPath) {
     return { kind: "outsideSource", sourceDirectory: layout.sourceDirectory };
   }
 
-  const relativeSource = path.relative(layout.sourceDirectory, sourcePath);
-  if (normalizeRelativePath(relativeSource) === normalizeRelativePath(layout.mainSource)) {
-    return {
-      kind: "ok",
-      path: path.join(layout.outputDirectory, "main.lua"),
-      layout,
-    };
-  }
-
-  const relativeLua = replaceExtension(relativeSource, ".lua");
-
-  return {
-    kind: "ok",
-    path: path.join(layout.outputDirectory, relativeLua),
-    layout,
-  };
+  return { kind: "ok", path: layout.generatedPath, layout };
 }
 
-function moduleNameForUri(uri) {
-  const layout = projectLayoutForUri(uri);
+async function moduleNameForUri(uri, getClient) {
+  const layout = await projectLayoutForUri(uri, getClient);
   if (!layout) {
     return { kind: "missingWorkspace" };
   }
-
-  const sourcePath = path.resolve(uri.fsPath);
-  if (!isPathInside(layout.sourceDirectory, sourcePath)) {
+  if (!layout.moduleName) {
     return { kind: "outsideSource", sourceDirectory: layout.sourceDirectory };
   }
 
-  const relativeSource = path.relative(layout.sourceDirectory, sourcePath);
-  const withoutExtension = relativeSource.slice(
-    0,
-    relativeSource.length - path.extname(relativeSource).length,
-  );
-  const moduleName = withoutExtension
-    .split(path.sep)
-    .filter(Boolean)
-    .join(".");
-
-  return {
-    kind: "ok",
-    moduleName,
-    layout,
-  };
+  return { kind: "ok", moduleName: layout.moduleName, layout };
 }
 
-function projectLayoutForUri(uri) {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-  if (!workspaceFolder) {
+async function projectLayoutForUri(uri, getClient) {
+  if (!vscode.workspace.getWorkspaceFolder(uri)) {
     return undefined;
   }
 
-  const sourcePath = path.resolve(uri.fsPath);
-  const workspaceRoot = path.resolve(workspaceFolder.uri.fsPath);
-  const configPath = findNearestConfig(path.dirname(sourcePath), workspaceRoot);
-
-  return projectLayoutForWorkspaceRoot(workspaceRoot, configPath);
+  return requestProjectLayout(uri, getClient);
 }
 
-function projectLayoutForWorkspaceRoot(workspaceRoot, configPath = undefined) {
-  const root = path.resolve(workspaceRoot);
-  const resolvedConfigPath = configPath || defaultWorkspaceConfigPath(root);
-  const configDirectory = resolvedConfigPath ? path.dirname(resolvedConfigPath) : root;
-  const config = resolvedConfigPath ? readProjectConfig(resolvedConfigPath) : {};
+async function projectLayoutForWorkspaceRoot(workspaceRoot, getClient) {
+  return requestProjectLayout(vscode.Uri.file(path.join(workspaceRoot, "tua.toml")), getClient);
+}
+
+async function requestProjectLayout(uri, getClient) {
+  const client = getClient?.();
+  if (!client) {
+    throw new Error("Tua language server is not running.");
+  }
+
+  const response = await client.sendRequest("tua/projectLayout", { uri: uri.toString() });
+  if (!response) {
+    return undefined;
+  }
 
   return {
-    configDirectory,
-    configPath: resolvedConfigPath,
-    mainSource: config.main || DEFAULT_MAIN_SOURCE,
-    outputDirectory: path.resolve(configDirectory, config.out || DEFAULT_OUTPUT_DIRECTORY),
-    sourceDirectory: path.resolve(configDirectory, config.source || DEFAULT_SOURCE_DIRECTORY),
-    workspaceRoot: root,
+    configDirectory: filePath(response.projectUri),
+    configPath: optionalFilePath(response.configUri),
+    generatedPath: optionalFilePath(response.generatedUri),
+    mainSource: response.mainSource,
+    moduleName: response.moduleName,
+    outputDirectory: filePath(response.outputUri),
+    sourceDirectory: filePath(response.sourceUri),
+    workspaceRoot: filePath(response.workspaceUri),
   };
 }
 
-function defaultWorkspaceConfigPath(workspaceRoot) {
-  const candidate = path.join(workspaceRoot, CONFIG_FILE_NAME);
-
-  return fs.existsSync(candidate) ? candidate : undefined;
-}
-
-function findNearestConfig(startDirectory, workspaceRoot) {
-  let current = path.resolve(startDirectory);
-  const root = path.resolve(workspaceRoot);
-
-  while (isPathInside(root, current)) {
-    const candidate = path.join(current, CONFIG_FILE_NAME);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-
-    const parent = path.dirname(current);
-    if (parent === current) {
-      break;
-    }
-    current = parent;
+function filePath(uri) {
+  if (typeof uri !== "string" || !uri) {
+    throw new Error("Tua language server returned an invalid project layout.");
   }
 
-  return undefined;
+  return vscode.Uri.parse(uri).fsPath;
 }
 
-function readProjectConfig(configPath) {
-  const text = fs.readFileSync(configPath, "utf8");
-
-  return {
-    main: topLevelStringSetting(text, "main"),
-    out: topLevelStringSetting(text, "out"),
-    source: topLevelStringSetting(text, "source"),
-  };
-}
-
-function topLevelStringSetting(text, key) {
-  let inTopLevel = true;
-  const name = escapeRegExp(key);
-  const basicStringPattern = new RegExp(
-    `^${name}\\s*=\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"\\s*(?:#.*)?$`,
-  );
-  const literalStringPattern = new RegExp(`^${name}\\s*=\\s*'([^']*)'\\s*(?:#.*)?$`);
-
-  for (const rawLine of text.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-    if (line.startsWith("[")) {
-      inTopLevel = false;
-      continue;
-    }
-    if (!inTopLevel) {
-      continue;
-    }
-
-    const basicStringMatch = line.match(basicStringPattern);
-    if (basicStringMatch) {
-      return unescapeBasicTomlString(basicStringMatch[1]);
-    }
-
-    const literalStringMatch = line.match(literalStringPattern);
-    if (literalStringMatch) {
-      return literalStringMatch[1];
-    }
-  }
-
-  return undefined;
-}
-
-function unescapeBasicTomlString(value) {
-  return value.replace(/\\([btnfr"\\])/gu, (_, escape) => {
-    switch (escape) {
-      case "b":
-        return "\b";
-      case "t":
-        return "\t";
-      case "n":
-        return "\n";
-      case "f":
-        return "\f";
-      case "r":
-        return "\r";
-      default:
-        return escape;
-    }
-  });
+function optionalFilePath(uri) {
+  return typeof uri === "string" && uri ? filePath(uri) : undefined;
 }
 
 function replaceExtension(filePath, extension) {
@@ -209,10 +98,6 @@ function normalizeRelativePath(filePath) {
   const normalized = path.normalize(filePath).replace(/[\\/]+/gu, path.sep);
 
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 module.exports = {

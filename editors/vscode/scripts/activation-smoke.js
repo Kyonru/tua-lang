@@ -285,13 +285,18 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     );
     const projectLayout = require(path.join(extensionRoot, "src", "editor", "project-layout.js"));
     assert.deepStrictEqual(
-      projectLayout.generatedLuaPathForUri(state.vscode.Uri.file(path.join(workspace, "src", "love", "boot.tua"))),
+      await projectLayout.generatedLuaPathForUri(
+        state.vscode.Uri.file(path.join(workspace, "src", "love", "boot.tua")),
+        () => state.clients[0],
+      ),
       {
         kind: "ok",
         layout: {
           configDirectory: workspace,
           configPath: path.join(workspace, "tua.toml"),
+          generatedPath: path.join(workspace, "build", "main.lua"),
           mainSource: "love/boot.tua",
+          moduleName: "love.boot",
           outputDirectory: path.join(workspace, "build"),
           sourceDirectory: path.join(workspace, "src"),
           workspaceRoot: workspace,
@@ -440,6 +445,35 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       true,
       "run LOVE should use a custom task terminal so output stays visible and cancellable",
     );
+
+    state.vscode.workspace.workspaceFolders.push({
+      name: "workspace-two",
+      uri: {
+        fsPath: path.join(path.dirname(workspace), "workspace-two"),
+        scheme: "file",
+      },
+    });
+    state.setActiveDocument(undefined);
+    const taskCountBeforeAmbiguousRun = state.executedTasks.length;
+    assert.strictEqual(
+      await state.commands.get("tua.runLoveProject")(),
+      undefined,
+      "run LOVE should refuse to guess between workspace folders without an active file",
+    );
+    assert.strictEqual(
+      state.executedTasks.length,
+      taskCountBeforeAmbiguousRun,
+      "ambiguous multi-root LOVE routing should not start a task",
+    );
+    assert(
+      state.warningMessages.some((message) =>
+        message.includes("Open a file from the Tua project you want to use"),
+      ),
+      "ambiguous multi-root LOVE routing should ask the developer to identify the project",
+    );
+
+    state.vscode.workspace.workspaceFolders.pop();
+    state.setActiveDocument(loveDocument);
     const loveTerminal = await state.executedTasks[0].task.execution.callback();
     const outputLineCount = state.outputLines.length;
     loveTerminal.writeLine("hello from love");
@@ -521,7 +555,10 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
       "tomblind.local-lua-debugger-vscode",
       "debug LOVE should keep the original debugger as a compatibility fallback",
     );
-    const debugLayout = projectLayout.projectLayoutForWorkspaceRoot(workspace);
+    const debugLayout = await projectLayout.projectLayoutForWorkspaceRoot(
+      workspace,
+      () => state.clients[0],
+    );
     fs.writeFileSync(path.join(sourceMapDirectory, "main.lua"), "return true\n");
     fs.writeFileSync(path.join(sourceMapDirectory, "conf.lua"), "function love.conf(t) end\n");
     fs.writeFileSync(
@@ -2397,6 +2434,10 @@ function createMockState(workspace, options = {}) {
         return Promise.resolve({ parse: { hits: 1, misses: 0 } });
       }
 
+      if (method === "tua/projectLayout") {
+        return Promise.resolve(mockProjectLayout(workspace, params.uri));
+      }
+
       if (method === "tua/health") {
         return Promise.resolve({
           revision: 12,
@@ -2880,6 +2921,36 @@ function mockModuleGraph(document, workspace) {
       ],
       cycles: [{ id: "cycle:0", moduleUris: [playerUri, sharedUri] }],
     },
+  };
+}
+
+function mockProjectLayout(workspace, uri) {
+  const sourcePath = decodeURIComponent(uri.replace(/^file:\/\//u, ""));
+  const configPath = path.join(workspace, "tua.toml");
+  const config = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const setting = (key, fallback) =>
+    new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, "mu").exec(config)?.[1] || fallback;
+  const sourceDirectory = path.join(workspace, setting("source", "src"));
+  const outputDirectory = path.join(workspace, setting("out", "build"));
+  const mainSource = setting("main", "main.tua");
+  const relative = path.relative(sourceDirectory, sourcePath);
+  const insideSource = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const isMain = path.normalize(relative) === path.normalize(mainSource);
+  const generatedPath = insideSource
+    ? path.join(outputDirectory, isMain ? "main.lua" : relative.replace(/\.[^.]+$/u, ".lua"))
+    : undefined;
+
+  return {
+    workspaceUri: `file://${workspace}`,
+    configUri: fs.existsSync(configPath) ? `file://${configPath}` : null,
+    projectUri: `file://${workspace}`,
+    sourceUri: `file://${sourceDirectory}`,
+    outputUri: `file://${outputDirectory}`,
+    mainSource,
+    generatedUri: generatedPath ? `file://${generatedPath}` : null,
+    moduleName: insideSource
+      ? relative.replace(/\.[^.]+$/u, "").split(path.sep).filter(Boolean).join(".")
+      : null,
   };
 }
 

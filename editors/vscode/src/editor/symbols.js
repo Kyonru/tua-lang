@@ -36,10 +36,10 @@ const SYMBOL_ICONS = new Map([
   [SYMBOL_KIND.Constant, "symbol-constant"],
 ]);
 
-function registerSymbolCommands({ isTuaDocument }) {
+function registerSymbolCommands({ getClient, isTuaDocument }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.copyQualifiedName, () =>
-      copyQualifiedName({ isTuaDocument }),
+      copyQualifiedName({ getClient, isTuaDocument }),
     ),
     vscode.commands.registerCommand(COMMANDS.showWorkspaceSymbolsByModule, (options) =>
       showWorkspaceSymbolsByModule(options),
@@ -47,7 +47,7 @@ function registerSymbolCommands({ isTuaDocument }) {
   );
 }
 
-async function copyQualifiedName({ isTuaDocument }) {
+async function copyQualifiedName({ getClient, isTuaDocument }) {
   const editor = vscode.window.activeTextEditor;
   const document = editor?.document;
   if (!document || !isTuaDocument(document) || document.uri.scheme !== "file") {
@@ -56,7 +56,7 @@ async function copyQualifiedName({ isTuaDocument }) {
   }
 
   try {
-    const moduleResolution = moduleNameForUri(document.uri);
+    const moduleResolution = await moduleNameForUri(document.uri, getClient);
     if (moduleResolution.kind === "missingWorkspace") {
       vscode.window.showWarningMessage("Tua source file is not inside an open workspace folder.");
       return undefined;
@@ -211,12 +211,10 @@ function normalizeWorkspaceSymbol(symbol) {
   const containerName = typeof symbol.containerName === "string"
     ? symbol.containerName
     : "";
-  const inferredModuleName = moduleNameFromUri(uri);
-  const moduleSymbol = symbol.kind === SYMBOL_KIND.Module ||
-    (!containerName && name === inferredModuleName);
+  const moduleSymbol = symbol.kind === SYMBOL_KIND.Module;
   const moduleName = moduleSymbol
     ? name
-    : containerName || inferredModuleName;
+    : containerName;
   const qualifiedName = moduleSymbol || !moduleName
     ? name
     : `${moduleName}.${name}`;
@@ -230,12 +228,6 @@ function normalizeWorkspaceSymbol(symbol) {
     qualifiedName,
     uri,
   };
-}
-
-function moduleNameFromUri(uri) {
-  const resolved = moduleNameForUri(uri);
-
-  return resolved.kind === "ok" ? resolved.moduleName : "";
 }
 
 function compareWorkspaceSymbols(left, right) {

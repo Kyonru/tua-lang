@@ -15,14 +15,14 @@ const { formatError } = require("../shared/errors");
 const TASK_TYPE = "tua";
 const TASK_NAME = "Run LOVE Project";
 
-function registerLoveProjectRunner({ appendOutputLine, getServerCommand }) {
+function registerLoveProjectRunner({ appendOutputLine, getClient, getServerCommand }) {
   let activeExecution;
   const disposables = [
     vscode.commands.registerCommand(COMMANDS.runLoveProject, () =>
-      runLoveProject({ getServerCommand }),
+      runLoveProject({ getClient, getServerCommand }),
     ),
     vscode.commands.registerCommand(COMMANDS.restartLoveProject, () =>
-      runLoveProject({ getServerCommand, restart: true }),
+      runLoveProject({ getClient, getServerCommand, restart: true }),
     ),
   ];
 
@@ -57,9 +57,9 @@ function registerLoveProjectRunner({ appendOutputLine, getServerCommand }) {
       return undefined;
     }
 
-    const layout = activeProjectLayout();
+    const layout = await activeProjectLayout(options.getClient);
     if (!layout) {
-      vscode.window.showWarningMessage("Open a Tua project workspace before running LOVE.");
+      vscode.window.showWarningMessage(projectSelectionMessage("running"));
       return undefined;
     }
 
@@ -125,23 +125,33 @@ function createLoveProjectTask({ appendOutputLine, layout, loveCommand, tuaComma
   return task;
 }
 
-function activeProjectLayout() {
+async function activeProjectLayout(getClient) {
   const document = vscode.window.activeTextEditor?.document;
   if (document?.uri?.scheme === "file") {
-    const layout = projectLayoutForUri(document.uri);
+    const layout = await projectLayoutForUri(document.uri, getClient);
     if (layout) {
       return layout;
     }
   }
 
-  const workspaceFolder = (vscode.workspace.workspaceFolders || []).find(
+  const workspaceFolders = (vscode.workspace.workspaceFolders || []).filter(
     (folder) => folder.uri?.scheme === "file",
   );
-  if (!workspaceFolder) {
+  if (workspaceFolders.length !== 1) {
     return undefined;
   }
 
-  return projectLayoutForWorkspaceRoot(workspaceFolder.uri.fsPath);
+  return projectLayoutForWorkspaceRoot(workspaceFolders[0].uri.fsPath, getClient);
+}
+
+function projectSelectionMessage(action) {
+  const workspaceFolders = (vscode.workspace.workspaceFolders || []).filter(
+    (folder) => folder.uri?.scheme === "file",
+  );
+
+  return workspaceFolders.length > 1
+    ? `Open a file from the Tua project you want to use before ${action} LOVE.`
+    : `Open a Tua project workspace before ${action} LOVE.`;
 }
 
 function configuredLoveCommand() {
@@ -444,6 +454,7 @@ module.exports = {
   activeProjectLayout,
   configuredLoveCommand,
   createLoveProjectTask,
+  projectSelectionMessage,
   registerLoveProjectRunner,
   resolveLoveCommand,
 };

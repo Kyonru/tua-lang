@@ -128,6 +128,9 @@ function handleMessage(message) {
     case "tua/inspect":
       inspectDocument(message);
       return;
+    case "tua/projectLayout":
+      projectLayout(message);
+      return;
     case "tua/assetInventory":
       assetInventory(message);
       return;
@@ -556,6 +559,44 @@ function assetInventory(message) {
       assets,
       diagnostics: [],
     },
+  });
+}
+
+function projectLayout(message) {
+  const sourcePath = fileURLToPath(message.params.uri);
+  const folder = workspaceFolders
+    .map((entry) => ({ ...entry, path: fileURLToPath(entry.uri) }))
+    .filter((entry) => sourcePath.startsWith(entry.path))
+    .sort((left, right) => right.path.length - left.path.length)[0];
+  if (!folder) {
+    respond(message.id, null);
+    return;
+  }
+
+  const configPath = path.join(folder.path, "tua.toml");
+  const config = readFile(configPath);
+  const sourceDirectory = path.join(folder.path, topLevelConfigString(config, "source") || "src");
+  const outputDirectory = path.join(folder.path, topLevelConfigString(config, "out") || "build");
+  const mainSource = topLevelConfigString(config, "main") || "main.tua";
+  const relative = path.relative(sourceDirectory, sourcePath);
+  const insideSource = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const isMain = path.normalize(relative) === path.normalize(mainSource);
+  const generatedPath = insideSource
+    ? path.join(outputDirectory, isMain ? "main.lua" : relative.replace(/\.[^.]+$/u, ".lua"))
+    : undefined;
+  const moduleName = insideSource
+    ? relative.replace(/\.[^.]+$/u, "").split(path.sep).filter(Boolean).join(".")
+    : undefined;
+
+  respond(message.id, {
+    workspaceUri: folder.uri,
+    configUri: fs.existsSync(configPath) ? pathToFileURL(configPath).toString() : null,
+    projectUri: folder.uri,
+    sourceUri: pathToFileURL(sourceDirectory).toString(),
+    outputUri: pathToFileURL(outputDirectory).toString(),
+    mainSource,
+    generatedUri: generatedPath ? pathToFileURL(generatedPath).toString() : null,
+    moduleName: moduleName || null,
   });
 }
 

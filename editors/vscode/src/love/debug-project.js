@@ -8,7 +8,11 @@ const { COMMANDS } = require("../constants");
 const { projectLayoutForWorkspaceRoot } = require("../editor/project-layout");
 const { sourceMapPathForGeneratedPath } = require("../editor/source-maps");
 const { formatError } = require("../shared/errors");
-const { activeProjectLayout, configuredLoveCommand } = require("./run-project");
+const {
+  activeProjectLayout,
+  configuredLoveCommand,
+  projectSelectionMessage,
+} = require("./run-project");
 
 const DEBUGGER_EXTENSION_ID = "ismoh-games.second-local-lua-debugger-vscode";
 const LEGACY_DEBUGGER_EXTENSION_ID = "tomblind.local-lua-debugger-vscode";
@@ -18,7 +22,7 @@ const TUA_LAUNCH_PROPERTY = "tuaProject";
 const DEBUG_BOOTSTRAP =
   'if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then require("lldebugger").start(); function love.errorhandler(message) error(message, 2) end end\n';
 
-function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
+function registerLoveProjectDebugger({ appendOutputLine, getClient, getServerCommand }) {
   const preparedOutputs = new Set();
   const terminationDisposable = vscode.debug.onDidTerminateDebugSession((session) => {
     for (const prepared of preparedOutputs) {
@@ -42,7 +46,7 @@ function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
           return undefined;
         }
 
-        const layout = debugProjectLayout(folder);
+        const layout = await debugProjectLayout(folder, getClient);
         if (!layout) {
           vscode.window.showWarningMessage(
             "Open a Tua project workspace before debugging LOVE.",
@@ -81,9 +85,9 @@ function registerLoveProjectDebugger({ appendOutputLine, getServerCommand }) {
       return undefined;
     }
 
-    const layout = activeProjectLayout();
+    const layout = await activeProjectLayout(getClient);
     if (!layout) {
-      vscode.window.showWarningMessage("Open a Tua project workspace before debugging LOVE.");
+      vscode.window.showWarningMessage(projectSelectionMessage("debugging"));
       return undefined;
     }
 
@@ -216,11 +220,11 @@ function findDebuggerExtension(extensions = vscode.extensions) {
   return DEBUGGER_EXTENSION_IDS.map((id) => extensions?.getExtension(id)).find(Boolean);
 }
 
-function debugProjectLayout(folder) {
+async function debugProjectLayout(folder, getClient) {
   if (folder?.uri?.scheme === "file" && folder.uri.fsPath) {
-    return projectLayoutForWorkspaceRoot(folder.uri.fsPath);
+    return projectLayoutForWorkspaceRoot(folder.uri.fsPath, getClient);
   }
-  return activeProjectLayout();
+  return activeProjectLayout(getClient);
 }
 
 function debugSessionTargetsOutput(session, outputDirectory) {

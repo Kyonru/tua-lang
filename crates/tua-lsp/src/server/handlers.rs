@@ -5,7 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 use tua_core::{
     AnalysisCacheStats, AssistKind, ModelCompletionRejectionReason,
-    ModelCompletionValidationRequest, RenameEdit, SourcePosition, SourceSpan,
+    ModelCompletionValidationRequest, ProjectModel, RenameEdit, SourcePosition, SourceSpan,
     DEFAULT_MODEL_CONTEXT_BYTES, MAX_MODEL_CONTEXT_BYTES,
 };
 
@@ -28,7 +28,9 @@ use super::protocol::{
     source_position_from_lsp, workspace_diagnostic_refresh_request, SourceRange,
 };
 use super::request_registry::{NotificationKind, RequestKind};
-use super::uri::{path_from_uri, workspace_folders_from_change, workspace_folders_from_initialize};
+use super::uri::{
+    path_from_uri, uri_from_path, workspace_folders_from_change, workspace_folders_from_initialize,
+};
 use super::{
     capabilities, LogVerbosity, LspServer, PendingDiagnostics, RequestLatencySample,
     ServerTraceLevel, TraceConfig, TraceLogCounts, SLOW_DIAGNOSTICS_DEBOUNCE,
@@ -250,6 +252,7 @@ impl LspServer {
                 self.builtin_document_response(&message)
                     .unwrap_or(Value::Null),
             ),
+            RequestKind::ProjectLayout => response(id, self.project_layout_response(&message)),
             RequestKind::CacheStats => response(id, self.cache_stats_response()),
             RequestKind::Health => response(id, self.health_response()),
             RequestKind::ResetCompletionStats => {
@@ -1398,6 +1401,51 @@ impl LspServer {
         let source = tua_core::builtin_definition_document(uri)?;
 
         Some(Value::String(source))
+    }
+
+    fn project_layout_response(&self, message: &Value) -> Value {
+        let Some(uri) = message
+            .get("params")
+            .and_then(|params| params.get("uri"))
+            .and_then(Value::as_str)
+        else {
+            return Value::Null;
+        };
+        let path = path_from_uri(uri);
+        let Some(workspace_root) = self
+            .workspace_folders
+            .iter()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+        else {
+            return Value::Null;
+        };
+        let Ok(model) = ProjectModel::load_for_path(&path) else {
+            return Value::Null;
+        };
+        let Some(project) = model.primary_workspace() else {
+            return Value::Null;
+        };
+        let generated_path = project
+            .lua_output_paths_for_tua_source(&path)
+            .and_then(|paths| {
+                if path == project.configured_main_source_path() {
+                    paths.last().cloned()
+                } else {
+                    paths.first().cloned()
+                }
+            });
+
+        json!({
+            "workspaceUri": uri_from_path(workspace_root),
+            "configUri": project.config_found().then(|| uri_from_path(project.config_path())),
+            "projectUri": uri_from_path(project.root()),
+            "sourceUri": uri_from_path(project.primary_source_root()),
+            "outputUri": uri_from_path(project.primary_output_root()),
+            "mainSource": project.configured_main().to_string_lossy(),
+            "generatedUri": generated_path.as_deref().map(uri_from_path),
+            "moduleName": project.module_name_for_path(&path),
+        })
     }
 
     fn cache_stats_response(&self) -> Value {

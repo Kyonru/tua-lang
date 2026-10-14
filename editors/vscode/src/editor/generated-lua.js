@@ -17,23 +17,25 @@ const {
   normalizePath,
 } = require("./project-layout");
 
-function registerGeneratedLuaCommand({ appendOutputLine, getServerCommand, isTuaDocument }) {
+function registerGeneratedLuaCommand({ appendOutputLine, getClient, getServerCommand, isTuaDocument }) {
   return vscode.Disposable.from(
     vscode.commands.registerCommand(COMMANDS.openGeneratedLua, () =>
       openGeneratedLuaBesideActiveDocument({
         appendOutputLine,
+        getClient,
         getServerCommand,
         isTuaDocument,
       }),
     ),
     vscode.commands.registerCommand(COMMANDS.jumpBetweenSourceAndGenerated, () =>
-      jumpBetweenSourceAndGenerated({ isTuaDocument }),
+      jumpBetweenSourceAndGenerated({ getClient, isTuaDocument }),
     ),
   );
 }
 
 async function openGeneratedLuaBesideActiveDocument({
   appendOutputLine,
+  getClient,
   getServerCommand,
   isTuaDocument,
 }) {
@@ -54,7 +56,7 @@ async function openGeneratedLuaBesideActiveDocument({
   }
 
   try {
-    const generated = resolveGeneratedLua(document.uri);
+    const generated = await resolveGeneratedLua(document.uri, getClient);
     if (!generated) {
       return undefined;
     }
@@ -109,7 +111,7 @@ async function openGeneratedLuaBesideActiveDocument({
   }
 }
 
-async function jumpBetweenSourceAndGenerated({ isTuaDocument }) {
+async function jumpBetweenSourceAndGenerated({ getClient, isTuaDocument }) {
   const document = vscode.window.activeTextEditor?.document;
   if (!document || document.uri.scheme !== "file") {
     vscode.window.showWarningMessage("Open a saved Tua or generated Lua file to jump positions.");
@@ -118,7 +120,7 @@ async function jumpBetweenSourceAndGenerated({ isTuaDocument }) {
 
   try {
     if (isTuaDocument(document)) {
-      return jumpFromSourceToGenerated(document);
+      return jumpFromSourceToGenerated(document, getClient);
     }
 
     if (path.extname(document.uri.fsPath) === ".lua") {
@@ -135,8 +137,8 @@ async function jumpBetweenSourceAndGenerated({ isTuaDocument }) {
   }
 }
 
-async function jumpFromSourceToGenerated(document) {
-  const generatedPath = resolveGeneratedLuaPath(document.uri);
+async function jumpFromSourceToGenerated(document, getClient) {
+  const generatedPath = await resolveGeneratedLuaPath(document.uri, getClient);
   if (!generatedPath) {
     return undefined;
   }
@@ -189,12 +191,12 @@ async function jumpFromGeneratedToSource(document) {
   return sourcePath;
 }
 
-function resolveGeneratedLuaPath(uri) {
-  return resolveGeneratedLua(uri)?.path;
+async function resolveGeneratedLuaPath(uri, getClient) {
+  return (await resolveGeneratedLua(uri, getClient))?.path;
 }
 
-function resolveGeneratedLua(uri) {
-  const resolved = generatedLuaPathForUri(uri);
+async function resolveGeneratedLua(uri, getClient) {
+  const resolved = await generatedLuaPathForUri(uri, getClient);
   if (resolved.kind === "missingWorkspace") {
     vscode.window.showWarningMessage("Tua source file is not inside an open workspace folder.");
     return undefined;

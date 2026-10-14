@@ -25,6 +25,7 @@ mod model_completion;
 mod module_graph;
 mod navigation;
 mod object_pool_graph;
+mod project_layout;
 mod recovery;
 mod scheduling;
 mod semantic_tokens;
