@@ -525,6 +525,13 @@ fn remove_deleted_outputs(
 ) -> RemovalOutcome {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
     let mut outcome = RemovalOutcome::default();
+    let output_guard = match crate::build::OutputGuard::new(&workspace) {
+        Ok(guard) => guard,
+        Err(diagnostic) => {
+            outcome.diagnostics.push(diagnostic);
+            return outcome;
+        }
+    };
 
     for source_path in deleted {
         let source_kind = SourceKind::for_path(source_path, &workspace.config().extension);
@@ -547,6 +554,10 @@ fn remove_deleted_outputs(
             .collect::<Vec<_>>();
 
         for output_path in output_paths {
+            if let Err(diagnostic) = output_guard.check(&output_path) {
+                outcome.diagnostics.push(diagnostic);
+                continue;
+            }
             match fs::remove_file(&output_path) {
                 Ok(()) => outcome.removed += 1,
                 Err(source) if source.kind() == io::ErrorKind::NotFound => {}

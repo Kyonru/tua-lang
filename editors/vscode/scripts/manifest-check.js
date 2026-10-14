@@ -8,6 +8,19 @@ const extensionRoot = path.dirname(packagePath);
 const manifest = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 const commands = new Set((manifest.contributes?.commands || []).map((command) => command.command));
 
+const untrustedWorkspaces = manifest.capabilities?.untrustedWorkspaces;
+if (untrustedWorkspaces?.supported !== "limited") {
+  console.error("Restricted Mode support must be declared as limited.");
+  process.exit(1);
+}
+const restrictedConfigurations = new Set(untrustedWorkspaces.restrictedConfigurations || []);
+for (const setting of ["tua.server.path", "tua.love.command"]) {
+  if (!restrictedConfigurations.has(setting)) {
+    console.error(`Restricted Mode must restrict executable setting: ${setting}`);
+    process.exit(1);
+  }
+}
+
 if (manifest.publisher !== "SolenodonteLabs") {
   console.error("Extension publisher should be SolenodonteLabs.");
   process.exit(1);

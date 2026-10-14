@@ -151,6 +151,23 @@ async function startLanguageServer() {
 
   const serverCommand = configuredServerPath(extensionContext);
   const cwd = workspaceCwd();
+  if (!serverCommand) {
+    const error = new Error(
+      "Restricted Mode only permits the bundled Tua server. Trust this workspace to use a configured executable.",
+    );
+    showWorkspaceTrustWarning(error);
+    setServerStatus("failed", formatError(error));
+    currentServerInfo = {
+      command: undefined,
+      cwd,
+      version: undefined,
+      state: "failed",
+      error: formatError(error),
+    };
+    starting = false;
+
+    return;
+  }
   const baseDetail = serverDetail(serverCommand, cwd);
   currentServerInfo = {
     command: serverCommand,
@@ -158,17 +175,6 @@ async function startLanguageServer() {
     version: undefined,
     state: "starting",
   };
-
-  if (!vscode.workspace.isTrusted && isWorkspaceLocalPath(serverCommand)) {
-    const error = new Error("Workspace trust is required before running a workspace-local Tua server binary.");
-    showWorkspaceTrustWarning(error);
-    setServerStatus("failed", `${baseDetail}\n${formatError(error)}`);
-    currentServerInfo.state = "failed";
-    currentServerInfo.error = formatError(error);
-    starting = false;
-
-    return;
-  }
 
   setServerStatus("starting", baseDetail);
   outputChannel.appendLine(`Starting tua language server: ${serverCommand}`);
@@ -280,21 +286,19 @@ async function initializeProject() {
     return undefined;
   }
 
+  if (!vscode.workspace.isTrusted) {
+    showWorkspaceTrustWarning(
+      new Error("Workspace trust is required before initializing a Tua project."),
+    );
+    return undefined;
+  }
+
   const workspaceFolder = await pickWorkspaceFolderForInit();
   if (!workspaceFolder) {
     return undefined;
   }
 
   const tuaCommand = configuredServerPath(extensionContext);
-  if (!vscode.workspace.isTrusted && isWorkspaceLocalPath(tuaCommand)) {
-    showWorkspaceTrustWarning(
-      new Error(
-        "Workspace trust is required before initializing a project with a workspace-local Tua executable.",
-      ),
-    );
-    return undefined;
-  }
-
   const cwd = workspaceFolder.uri.fsPath;
   outputChannel?.appendLine(`[tua] Initializing project in ${cwd}`);
   outputChannel?.appendLine(`$ ${tuaCommand} init`);
@@ -878,6 +882,10 @@ async function deactivate() {
 }
 
 function configuredServerPath(context) {
+  if (!vscode.workspace.isTrusted) {
+    return bundledServerPath(context);
+  }
+
   const envOverride = process.env.TUA_SERVER_PATH;
   if (typeof envOverride === "string" && envOverride.trim()) {
     return resolveServerCommand(context, envOverride.trim());
@@ -920,22 +928,6 @@ function workspaceCwd() {
 
 function hasWorkspaceFolders() {
   return Boolean(vscode.workspace.workspaceFolders?.length);
-}
-
-function isWorkspaceLocalPath(command) {
-  if (!command || isBareCommand(command)) {
-    return false;
-  }
-
-  const resolved = path.resolve(command);
-
-  return (vscode.workspace.workspaceFolders || []).some((folder) => {
-    if (folder.uri.scheme !== "file") {
-      return false;
-    }
-
-    return isPathInside(resolved, folder.uri.fsPath);
-  });
 }
 
 function isPathInside(child, parent) {

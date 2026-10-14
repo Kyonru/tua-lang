@@ -42,7 +42,7 @@ async function main() {
     await smokeDebugLspLogging(mockServer, workspace);
     await smokeStartupFailure(path.join(temp, "missing-tua"), workspace);
     await smokeServerSelection(extensionFixture, workspace);
-    await smokeUntrustedWorkspaceGuard(workspace);
+    await smokeUntrustedWorkspaceGuard(extensionFixture, workspace);
     await smokeServerPathChangePrompt(extensionFixture, workspace);
   } finally {
     Module._load = originalLoad;
@@ -1434,8 +1434,9 @@ async function smokeServerSelection(extensionFixture, workspace) {
   await extension.deactivate();
 }
 
-async function smokeUntrustedWorkspaceGuard(workspace) {
+async function smokeUntrustedWorkspaceGuard(extensionFixture, workspace) {
   const workspaceServer = path.join(workspace, "target", "debug", platformExecutableName());
+  const bundledServer = path.join(extensionFixture, "bin", platformExecutableName());
 
   fs.mkdirSync(path.dirname(workspaceServer), { recursive: true });
   writeMockServer(workspaceServer);
@@ -1445,15 +1446,30 @@ async function smokeUntrustedWorkspaceGuard(workspace) {
     serverPath: workspaceServer,
   });
   const extension = loadExtension(state);
-  const context = createContext();
+  const context = createContext(extensionFixture);
 
   await extension.activate(context);
 
-  assert.strictEqual(state.clients.length, 0, "untrusted workspace server should not be executed");
-  assert.match(state.statusItem.text, /failed/, "untrusted workspace server should fail visibly");
-  assert(
-    state.warningMessages.some((message) => message.includes("Workspace trust is required")),
-    "untrusted workspace server should prompt for workspace trust",
+  assert.strictEqual(state.clients.length, 1, "bundled server should remain available in Restricted Mode");
+  assert.strictEqual(
+    state.clients[0].serverOptions.run.command,
+    bundledServer,
+    "untrusted workspace server setting should be ignored in favor of the bundled server",
+  );
+
+  const externalCommand = process.platform === "win32" ? "C:\\Windows\\System32\\cmd.exe" : "/bin/bash";
+  const externalState = createMockState(workspace, {
+    isTrusted: false,
+    serverPath: externalCommand,
+  });
+  const externalExtension = loadExtension(externalState);
+
+  await externalExtension.activate(createContext(extensionFixture));
+
+  assert.strictEqual(
+    externalState.clients[0].serverOptions.run.command,
+    bundledServer,
+    "untrusted workspace must ignore an external configured command",
   );
 
   await state.commands.get("tua.selectServer")();

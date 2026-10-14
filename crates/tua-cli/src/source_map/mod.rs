@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use tua_core::{Diagnostic, LuaLineProvenance};
 
 use crate::error::CliError;
+use crate::path_security::reject_symlink_path;
 use crate::source::io_diagnostic;
 
 const SOURCE_MAP_VERSION: u64 = 1;
@@ -34,6 +35,7 @@ pub(crate) fn debugger_source_map_path_for(output_path: &Path) -> PathBuf {
 }
 
 pub(crate) fn write_source_map(
+    project_root: &Path,
     cwd: &Path,
     source_path: &Path,
     output_path: &Path,
@@ -44,6 +46,10 @@ pub(crate) fn write_source_map(
     let map_path = source_map_path_for(output_path);
     let serialized = serde_json::to_string_pretty(&map)
         .expect("source map JSON should serialize from literal values");
+
+    reject_symlink_path(project_root, &map_path).map_err(|message| {
+        Diagnostic::error(&map_path, 1, 1, message).with_code(tua_core::DiagnosticCode::EMIT_IO)
+    })?;
 
     if let Some(parent) = map_path.parent() {
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
@@ -56,6 +62,11 @@ pub(crate) fn write_source_map(
     let debugger_map_path = debugger_source_map_path_for(output_path);
     let serialized = serde_json::to_string(&debugger_map)
         .expect("debugger source map JSON should serialize from literal values");
+
+    reject_symlink_path(project_root, &debugger_map_path).map_err(|message| {
+        Diagnostic::error(&debugger_map_path, 1, 1, message)
+            .with_code(tua_core::DiagnosticCode::EMIT_IO)
+    })?;
 
     fs::write(&debugger_map_path, format!("{serialized}\n"))
         .map_err(|source| io_diagnostic(&debugger_map_path, source))

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::asset_pipeline::run_asset_pipelines;
 use crate::diagnostics::sorted_diagnostics;
 use crate::error::CliError;
+use crate::path_security::reject_symlink_path;
 use crate::source::{
     discover_build_files, io_diagnostic, load_type_libraries, paths_same_location,
     read_source_file, SourceFile, SourceKind,
@@ -100,6 +101,27 @@ enum SourceUnit {
     },
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct OutputGuard {
+    root: PathBuf,
+}
+
+impl OutputGuard {
+    pub(crate) fn new(workspace: &ProjectWorkspace) -> Result<Self, Diagnostic> {
+        let guard = Self {
+            root: workspace.root().to_path_buf(),
+        };
+        guard.check(workspace.primary_output_root())?;
+        Ok(guard)
+    }
+
+    pub(crate) fn check(&self, path: &Path) -> Result<(), Diagnostic> {
+        reject_symlink_path(&self.root, path).map_err(|message| {
+            Diagnostic::error(path, 1, 1, message).with_code(DiagnosticCode::EMIT_IO)
+        })
+    }
+}
+
 pub(crate) fn run_build(
     cwd: impl AsRef<Path>,
     loaded: LoadedConfig,
@@ -127,8 +149,11 @@ pub(crate) fn build_project(
     emit_on_error: bool,
 ) -> Result<BuildOutcome, CliError> {
     let cwd = cwd.as_ref();
-    let pipeline_outcome = run_asset_pipelines(cwd, &loaded.config);
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded.clone());
+    OutputGuard::new(&workspace).map_err(|diagnostic| {
+        CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
+    })?;
+    let pipeline_outcome = run_asset_pipelines(cwd, &loaded.config);
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
@@ -160,6 +185,15 @@ fn build_project_files(
     initial_diagnostics: Vec<Diagnostic>,
 ) -> BuildOutcome {
     let workspace = ProjectWorkspace::from_loaded(cwd, loaded);
+    let output_guard = match OutputGuard::new(&workspace) {
+        Ok(guard) => guard,
+        Err(diagnostic) => {
+            return BuildOutcome {
+                emitted: 0,
+                diagnostics: vec![diagnostic],
+            };
+        }
+    };
     let source_dir = workspace.primary_source_root().to_path_buf();
     let out_dir = workspace.primary_output_root().to_path_buf();
     let in_place = paths_same_location(&source_dir, &out_dir);
@@ -282,7 +316,7 @@ fn build_project_files(
         }
     }
 
-    remove_colliding_outputs(&tua_output_collisions, &mut diagnostics);
+    remove_colliding_outputs(&output_guard, &tua_output_collisions, &mut diagnostics);
 
     if has_errors(&diagnostics) && !emit_on_error {
         return BuildOutcome {
@@ -305,7 +339,12 @@ fn build_project_files(
                     continue;
                 }
                 if tua_core::is_tua_declaration_path(&source_path, &workspace.config().extension) {
-                    remove_declaration_outputs(&workspace, &source_path, &mut diagnostics);
+                    remove_declaration_outputs(
+                        &output_guard,
+                        &workspace,
+                        &source_path,
+                        &mut diagnostics,
+                    );
                     continue;
                 }
 
@@ -329,12 +368,13 @@ fn build_project_files(
                         continue;
                     }
 
-                    match write_output(&output_path, output.clone()) {
+                    match write_output(&output_guard, &output_path, output.clone()) {
                         Ok(()) => {
                             emitted += 1;
 
                             if workspace.config().emit_maps {
                                 if let Err(diagnostic) = write_source_map(
+                                    output_guard.root(),
                                     cwd,
                                     &source_path,
                                     &output_path,
@@ -343,7 +383,7 @@ fn build_project_files(
                                     diagnostics.push(diagnostic);
                                 }
                             } else {
-                                remove_source_maps(&output_path, &mut diagnostics);
+                                remove_source_maps(&output_guard, &output_path, &mut diagnostics);
                             }
                         }
                         Err(diagnostic) => diagnostics.push(diagnostic),
@@ -353,7 +393,7 @@ fn build_project_files(
             SourceUnit::Asset {
                 source_path,
                 output_path,
-            } => match copy_output(&source_path, &output_path) {
+            } => match copy_output(&output_guard, &source_path, &output_path) {
                 Ok(()) => emitted += 1,
                 Err(diagnostic) => diagnostics.push(diagnostic),
             },
@@ -361,6 +401,7 @@ fn build_project_files(
     }
 
     write_required_bundled_runtimes(
+        &output_guard,
         &out_dir,
         &required_bundled_runtimes,
         &mut emitted,
@@ -418,7 +459,8 @@ pub(crate) fn has_errors(diagnostics: &[Diagnostic]) -> bool {
         .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
 }
 
-fn write_output(output_path: &Path, output: String) -> Result<(), Diagnostic> {
+fn write_output(guard: &OutputGuard, output_path: &Path, output: String) -> Result<(), Diagnostic> {
+    guard.check(output_path)?;
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
     }
@@ -439,6 +481,7 @@ fn collect_required_bundled_runtimes(output: &str, required: &mut BTreeSet<&'sta
 }
 
 fn write_required_bundled_runtimes(
+    guard: &OutputGuard,
     out_dir: &Path,
     required: &BTreeSet<&'static str>,
     emitted: &mut usize,
@@ -446,12 +489,13 @@ fn write_required_bundled_runtimes(
 ) {
     for runtime in BUNDLED_RUNTIMES {
         if required.contains(runtime.file_name) {
-            write_bundled_runtime(runtime, out_dir, emitted, diagnostics);
+            write_bundled_runtime(guard, runtime, out_dir, emitted, diagnostics);
         }
     }
 }
 
 fn write_bundled_runtime(
+    guard: &OutputGuard,
     runtime: &BundledRuntime,
     out_dir: &Path,
     emitted: &mut usize,
@@ -463,13 +507,18 @@ fn write_bundled_runtime(
         return;
     }
 
-    match write_output(&output_path, (runtime.source)().to_owned()) {
+    match write_output(guard, &output_path, (runtime.source)().to_owned()) {
         Ok(()) => *emitted += 1,
         Err(diagnostic) => diagnostics.push(diagnostic),
     }
 }
 
-fn copy_output(source_path: &Path, output_path: &Path) -> Result<(), Diagnostic> {
+fn copy_output(
+    guard: &OutputGuard,
+    source_path: &Path,
+    output_path: &Path,
+) -> Result<(), Diagnostic> {
+    guard.check(output_path)?;
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|source| io_diagnostic(parent, source))?;
     }
@@ -544,6 +593,7 @@ pub(crate) fn output_paths_for_tua_source(
 }
 
 pub(crate) fn remove_declaration_outputs(
+    guard: &OutputGuard,
     workspace: &ProjectWorkspace,
     source_path: &Path,
     diagnostics: &mut Vec<Diagnostic>,
@@ -552,8 +602,8 @@ pub(crate) fn remove_declaration_outputs(
         return;
     };
     let output = mirrored.with_extension("lua");
-    remove_output_if_exists(&output, diagnostics);
-    remove_source_maps(&output, diagnostics);
+    remove_output_if_exists(guard, &output, diagnostics);
+    remove_source_maps(guard, &output, diagnostics);
 }
 
 pub(crate) fn output_path_for_asset(workspace: &ProjectWorkspace, source_path: &Path) -> PathBuf {
@@ -654,27 +704,42 @@ pub(crate) fn push_tua_output_collision_diagnostics(
 }
 
 pub(crate) fn remove_colliding_outputs(
+    guard: &OutputGuard,
     collisions: &BTreeMap<PathBuf, Vec<PathBuf>>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for output_path in collisions.keys() {
-        remove_output_if_exists(output_path, diagnostics);
-        remove_source_maps(output_path, diagnostics);
+        remove_output_if_exists(guard, output_path, diagnostics);
+        remove_source_maps(guard, output_path, diagnostics);
     }
 }
 
-fn remove_source_maps(output_path: &Path, diagnostics: &mut Vec<Diagnostic>) {
-    remove_output_if_exists(&source_map_path_for(output_path), diagnostics);
-    remove_output_if_exists(&debugger_source_map_path_for(output_path), diagnostics);
+fn remove_source_maps(guard: &OutputGuard, output_path: &Path, diagnostics: &mut Vec<Diagnostic>) {
+    remove_output_if_exists(guard, &source_map_path_for(output_path), diagnostics);
+    remove_output_if_exists(
+        guard,
+        &debugger_source_map_path_for(output_path),
+        diagnostics,
+    );
 }
 
-fn remove_output_if_exists(path: &Path, diagnostics: &mut Vec<Diagnostic>) {
+fn remove_output_if_exists(guard: &OutputGuard, path: &Path, diagnostics: &mut Vec<Diagnostic>) {
+    if let Err(diagnostic) = guard.check(path) {
+        diagnostics.push(diagnostic);
+        return;
+    }
     if !path.exists() {
         return;
     }
 
     if let Err(source) = fs::remove_file(path) {
         diagnostics.push(io_diagnostic(path, source));
+    }
+}
+
+impl OutputGuard {
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
     }
 }
 

@@ -105,6 +105,53 @@ fn invalid_flag_exits_with_useful_error() {
 }
 
 #[test]
+fn build_rejects_output_outside_project_root() {
+    let temp = TempDir::new("outside-output");
+    let project = temp.path().join("project");
+    let outside = temp.path().join("outside");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(project.join("src/main.tua"), "local value: number = 1\n").unwrap();
+    fs::write(
+        project.join(CONFIG_FILE),
+        DEFAULT_CONFIG_TEXT.replace("out = \"build\"", "out = \"../outside\""),
+    )
+    .unwrap();
+
+    let output = tua().arg("build").current_dir(&project).output().unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("escaped the project root"));
+    assert!(!outside.join("main.lua").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn build_rejects_symlinked_output_component() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new("symlink-output");
+    let project = temp.path().join("project");
+    let outside = temp.path().join("outside");
+    fs::create_dir_all(project.join("src/pkg")).unwrap();
+    fs::create_dir_all(project.join("build")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(
+        project.join("src/pkg/main.tua"),
+        "local value: number = 1\n",
+    )
+    .unwrap();
+    fs::write(project.join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).unwrap();
+    symlink(&outside, project.join("build/pkg")).unwrap();
+
+    let output = tua().arg("build").current_dir(&project).output().unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("crosses a symbolic link"));
+    assert!(!outside.join("main.lua").exists());
+}
+
+#[test]
 fn init_creates_default_project_files() {
     let temp = TempDir::new("init");
     let output = tua()

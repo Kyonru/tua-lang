@@ -16,6 +16,7 @@ use tua_core::{
     AssetPipelineConfig, Diagnostic, DiagnosticCode, DiagnosticSeverity, ProjectConfig,
 };
 
+use crate::path_security::reject_symlink_path;
 use crate::source::io_diagnostic;
 
 const MANIFEST_VERSION: u32 = 1;
@@ -1474,33 +1475,6 @@ fn safe_relative(value: &str, allow_wildcards: bool) -> Result<PathBuf, String> 
     } else {
         Ok(result)
     }
-}
-
-fn reject_symlink_path(root: &Path, target: &Path) -> Result<(), String> {
-    let relative = target
-        .strip_prefix(root)
-        .map_err(|_| "generated output escaped the project root".to_owned())?;
-    let mut current = root.to_path_buf();
-    for component in relative.components() {
-        current.push(component.as_os_str());
-        match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(format!(
-                    "generated output path `{}` crosses a symbolic link",
-                    display_path(&current)
-                ));
-            }
-            Ok(_) => {}
-            Err(source) if source.kind() == io::ErrorKind::NotFound => {}
-            Err(source) => {
-                return Err(format!(
-                    "cannot inspect generated output path `{}`: {source}",
-                    display_path(&current)
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn hash_file_into(path: &Path, hash: &mut StableHash) -> io::Result<()> {

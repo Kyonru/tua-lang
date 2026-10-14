@@ -18,6 +18,16 @@
   "engines": {
     "vscode": "^1.94.0"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Tua uses only its bundled language server in Restricted Mode. Trust the workspace before using custom executables or running LOVE.",
+      "restrictedConfigurations": [
+        "tua.server.path",
+        "tua.love.command"
+      ]
+    }
+  },
   "categories": [
     "Programming Languages",
     "Snippets"

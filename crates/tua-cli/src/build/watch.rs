@@ -3,6 +3,7 @@ use super::*;
 pub(crate) struct WatchBuildSession {
     cwd: PathBuf,
     workspace: ProjectWorkspace,
+    output_guard: OutputGuard,
     out_dir: PathBuf,
     in_place: bool,
     host: AnalysisHost,
@@ -14,8 +15,11 @@ impl WatchBuildSession {
         loaded: LoadedConfig,
     ) -> Result<(Self, BuildOutcome), CliError> {
         let cwd = cwd.as_ref().to_path_buf();
+        let workspace = ProjectWorkspace::from_loaded(&cwd, loaded.clone());
+        let output_guard = OutputGuard::new(&workspace).map_err(|diagnostic| {
+            CliError::from_diagnostics("unsafe build output path", vec![diagnostic])
+        })?;
         let pipeline_outcome = crate::asset_pipeline::run_asset_pipelines(&cwd, &loaded.config);
-        let workspace = ProjectWorkspace::from_loaded(&cwd, loaded);
         let source_dir = workspace.primary_source_root().to_path_buf();
         let out_dir = workspace.primary_output_root().to_path_buf();
         let in_place = paths_same_location(&source_dir, &out_dir);
@@ -37,6 +41,7 @@ impl WatchBuildSession {
         let mut session = Self {
             cwd,
             workspace,
+            output_guard,
             out_dir,
             in_place,
             host,
@@ -236,7 +241,7 @@ impl WatchBuildSession {
             filter_tua_output_collisions_for_sources(&tua_output_collisions, &tua_paths);
 
         push_tua_output_collision_diagnostics(&mut diagnostics, &relevant_tua_output_collisions);
-        remove_colliding_outputs(&tua_output_collisions, &mut diagnostics);
+        remove_colliding_outputs(&self.output_guard, &tua_output_collisions, &mut diagnostics);
 
         for path in &tua_paths {
             if snapshot.source(path).is_none() {
@@ -267,7 +272,12 @@ impl WatchBuildSession {
                 continue;
             }
             if tua_core::is_tua_declaration_path(&source_path, &self.workspace.config().extension) {
-                remove_declaration_outputs(&self.workspace, &source_path, &mut diagnostics);
+                remove_declaration_outputs(
+                    &self.output_guard,
+                    &self.workspace,
+                    &source_path,
+                    &mut diagnostics,
+                );
                 continue;
             }
             let Some(source) = snapshot.source(&source_path) else {
@@ -297,12 +307,13 @@ impl WatchBuildSession {
                     continue;
                 }
 
-                match write_output(&output_path, output.clone()) {
+                match write_output(&self.output_guard, &output_path, output.clone()) {
                     Ok(()) => {
                         emitted += 1;
 
                         if self.workspace.config().emit_maps {
                             if let Err(diagnostic) = write_source_map(
+                                self.output_guard.root(),
                                 &self.cwd,
                                 &source_path,
                                 &output_path,
@@ -311,7 +322,7 @@ impl WatchBuildSession {
                                 diagnostics.push(diagnostic);
                             }
                         } else {
-                            remove_source_maps(&output_path, &mut diagnostics);
+                            remove_source_maps(&self.output_guard, &output_path, &mut diagnostics);
                         }
                     }
                     Err(diagnostic) => diagnostics.push(diagnostic),
@@ -336,13 +347,14 @@ impl WatchBuildSession {
                 continue;
             }
 
-            match copy_output(&source_path, &output_path) {
+            match copy_output(&self.output_guard, &source_path, &output_path) {
                 Ok(()) => emitted += 1,
                 Err(diagnostic) => diagnostics.push(diagnostic),
             }
         }
 
         write_required_bundled_runtimes(
+            &self.output_guard,
             &self.out_dir,
             &required_bundled_runtimes,
             &mut emitted,
