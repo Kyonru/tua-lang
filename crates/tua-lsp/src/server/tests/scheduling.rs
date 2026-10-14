@@ -56,6 +56,44 @@ fn slow_diagnostics_reserve_capacity_for_client_requests() {
 }
 
 #[test]
+fn slow_diagnostics_do_not_consume_the_last_client_request_slot() {
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let mut server = LspServer::default();
+    let uri = "file:///tmp/diagnostic-follow-up-capacity.tua";
+    let _ = server.handle_message(did_open(uri, "local value = 1\n"));
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("slow diagnostics should be queued")
+        + Duration::from_secs(1);
+
+    for id in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS - 1) {
+        let output = scheduler.dispatch(
+            &mut server,
+            json!({"jsonrpc":"2.0", "id":id, "method":"tua/unknown", "params":{}}),
+            None,
+        );
+        assert!(output.iter().all(|message| message.get("error").is_none()));
+    }
+
+    assert!(
+        !scheduler.dispatch_due_slow_diagnostic(&mut server, due),
+        "internal diagnostics must leave capacity for a follow-up editor request"
+    );
+    let output = scheduler.dispatch(
+        &mut server,
+        json!({
+            "jsonrpc":"2.0",
+            "id":crate::server::scheduler::MAX_IN_FLIGHT_JOBS,
+            "method":"tua/unknown",
+            "params":{}
+        }),
+        None,
+    );
+    assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
 fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
     let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());

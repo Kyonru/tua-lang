@@ -28,6 +28,7 @@ pub(super) const MAX_IN_FLIGHT_JOBS: usize = 16;
 pub(super) const MAX_PENDING_REQUESTS: usize = 256;
 const MAX_NON_INTERACTIVE_JOBS: usize = MAX_IN_FLIGHT_JOBS * 3 / 4;
 const MAX_INTERNAL_BACKGROUND_JOBS: usize = MAX_IN_FLIGHT_JOBS / 2;
+const MAX_JOBS_WHILE_DISPATCHING_INTERNAL_BACKGROUND: usize = MAX_IN_FLIGHT_JOBS - 1;
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -236,7 +237,7 @@ impl RequestScheduler {
         server: &mut LspServer,
         now: std::time::Instant,
     ) -> bool {
-        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS
+        if self.jobs.len() >= MAX_JOBS_WHILE_DISPATCHING_INTERNAL_BACKGROUND
             || self.internal_background_job_count() >= MAX_INTERNAL_BACKGROUND_JOBS
         {
             return false;
