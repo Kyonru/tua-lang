@@ -1194,9 +1194,10 @@ mod tests {
 
         assert!(context.prompt.contains("Tua is Lua first"));
         assert!(context.prompt.contains("LOVE 11.x foundation"));
+        assert!(context.prompt.contains("Baton input,"));
         assert!(context
             .prompt
-            .contains("Baton input, object pools, and ECS"));
+            .contains("object pools, ECS, and `audioSystem`"));
         assert!(context.prompt.ends_with("local image = "));
         assert!(!context.suffix.is_empty());
     }

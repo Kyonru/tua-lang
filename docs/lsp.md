@@ -535,9 +535,9 @@ The bundled VS Code extension also uses version-matched Tua requests:
 
 `tua/setTrace` updates runtime trace configuration. These requests are an
 extension integration surface rather than a general stable external API; keep
-custom clients matched to the server version. The constraints for a future
-versioned tool API are documented in
-[External API Bridge](external-api-bridge.md).
+custom clients matched to the server version. For versioned, read-only tooling
+outside the editor protocol, use the shipped stdio JSON-RPC API or MCP adapter
+documented in [External API And MCP](external-api-bridge.md).
 
 ## Troubleshooting
 

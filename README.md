@@ -89,7 +89,8 @@ extension, documentation site, and bundled example projects.
   validation for both Tua helpers and native LOVE constructors.
 - Opt-in built-in helpers such as `Vec2`, `spriteSheet({...})`, Baton-backed
   typed input, signal buses, state stores, state machines, ECS, and object
-  pools.
+  pools, plus `audioSystem({...})` for typed buses, cues, music scenes, and
+  cached audio analysis.
 - Mixed-source builds where `.tua` files compile to `.lua`, while plain `.lua`
   files and assets are copied into the build output for runnable LOVE folders.
 
@@ -113,8 +114,8 @@ platform, so extension installs do not download a server at activation time.
 
 It provides compiler-backed Tua editing, LOVE-aware completion and diagnostics,
 generated Lua inspection, project commands for running or debugging LOVE, and
-source-linked explorers for assets, modules, signals, state machines, ECS, and
-object pools.
+source-linked explorers for assets, audio, modules, signals, state machines,
+ECS, and object pools.
 
 Experimental local Ollama ghost-text completion is opt-in and compiler
 validated before display. Trusted local tools can also explicitly start the
@@ -130,12 +131,16 @@ service opens a network socket or starts automatically.
 - [Typed state machines](https://kyonru.github.io/tua-lang/state-machines/)
 - [Typed state stores](https://kyonru.github.io/tua-lang/stores/)
 - [Typed input](https://kyonru.github.io/tua-lang/input/)
+- [Audio systems](https://kyonru.github.io/tua-lang/audio/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
 - [External API and MCP](https://kyonru.github.io/tua-lang/external-api-bridge/)
 - [Debugging](https://kyonru.github.io/tua-lang/debugging/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)
 - [Releases and compatibility](https://kyonru.github.io/tua-lang/releases/)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Support](SUPPORT.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## Development
@@ -172,3 +177,7 @@ make docs
 - `examples/love-full` is a larger LÖVE conversion example with Lua interop.
 - `examples/love-tua` is a mixed Tua/Lua bullet-hell showcase combining ECS,
   object pools, stores, state machines, typed input, and vendored Feel feedback.
+- `examples/audio-system` demonstrates typed audio buses, cues, music scenes,
+  cached waveform and tempo analysis, and the VS Code Audio Explorer data.
+- `examples/project-model` demonstrates config-aware source/output roots,
+  module resolution, and mixed `.tua`/`.lua` builds.

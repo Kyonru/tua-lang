@@ -55,7 +55,8 @@ make run-love-minimal
 
 !!! info "LOVE is required only for run targets"
     Build targets work without LOVE. `make run-love-minimal` and
-    `make run-love-full` require a local LOVE installation.
+    `make run-love-full`, `make run-love-tua`, and `make run-audio-system`
+    require a local LOVE installation.
 
 ## `examples/love-full`
 
@@ -85,6 +86,32 @@ declarations without emitting them, copies runtime Lua unchanged, and writes
 the runnable project under the ignored `build/` directory. Because the example
 is self-contained, it participates in the default example build and benchmark
 suites without network setup.
+
+## `examples/audio-system`
+
+A self-contained LOVE audio project demonstrating typed buses, sound-effect
+cues, layered music scenes, beat and bar events, and cached waveform and tempo
+analysis. The checked-in generated catalog lets editor features work from a
+fresh checkout; builds rerun the built-in `audio-analysis` pipeline when its
+inputs or options change.
+
+```bash
+make build-audio-system
+make run-audio-system
+```
+
+The synthetic `sample*.wav` fixtures deliberately include an ambiguous tempo,
+so `TL2012` may report a low-confidence analysis warning. The example authors
+the intended BPM for that scene and remains safe to build and run.
+
+## `examples/project-model`
+
+A focused fixture for configured source/output roots, project-relative module
+resolution, and mixed `.tua` compilation plus `.lua` copying.
+
+```bash
+make build-project-model
+```
 
 ## Syntax Validation
 

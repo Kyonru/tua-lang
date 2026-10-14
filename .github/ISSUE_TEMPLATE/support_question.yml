@@ -1,0 +1,42 @@
+name: Support question
+description: Ask for help using Tua after checking the documentation.
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read [SUPPORT.md](https://github.com/Kyonru/tua-lang/blob/main/SUPPORT.md) and the [documentation](https://kyonru.github.io/tua-lang/) first. Use the bug template for a reproducible defect.
+
+        **Never include vulnerability details or secrets.** Use the private process in [SECURITY.md](https://github.com/Kyonru/tua-lang/blob/main/SECURITY.md).
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to accomplish, and where are you stuck?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tua version and environment
+      description: Include `tua --version`, operating system, installation method, and editor version when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What have you tried?
+      description: Include exact commands, a minimal sanitized example, and complete diagnostics when useful.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked the documentation and searched existing issues.
+          required: true
+        - label: I removed credentials, private paths, and source I cannot share.
+          required: true

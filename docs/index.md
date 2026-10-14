@@ -156,8 +156,12 @@ distributed with the rest of the project.
   request and build flows, and where changes belong.
 - [Completion Benchmarks](completion-benchmarks.md) explains how to run and
   interpret completion performance checks.
-- [External API Bridge](external-api-bridge.md) records the design constraints
-  for a future structured tooling integration.
+- [External API And MCP](external-api-bridge.md) documents the shipped,
+  read-only stdio JSON-RPC API and MCP adapter for trusted local tools.
+- [Contributing](https://github.com/Kyonru/tua-lang/blob/main/CONTRIBUTING.md),
+  [Security](https://github.com/Kyonru/tua-lang/blob/main/SECURITY.md), and
+  [Support](https://github.com/Kyonru/tua-lang/blob/main/SUPPORT.md) document
+  project participation, private vulnerability reporting, and help channels.
 
 Source, issues, and releases are available in the
 [Tua GitHub repository](https://github.com/Kyonru/tua-lang).

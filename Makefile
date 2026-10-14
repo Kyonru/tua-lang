@@ -234,7 +234,7 @@ build-example: ## Build one example project. Override with EXAMPLE=examples/love
 	cd $(EXAMPLE) && $(TUA) build
 
 .PHONY: build-examples
-build-examples: build-love-minimal build-love-full build-love-tua build-features build-project-model ## Compile all bundled examples.
+build-examples: build-love-minimal build-love-full build-love-tua build-audio-system build-features build-project-model ## Compile all bundled examples.
 
 .PHONY: build-love-minimal
 build-love-minimal: ## Compile examples/love-minimal to Lua.
@@ -251,6 +251,10 @@ check-love-tua: ## Check the mixed Tua/Lua bullet-hell example.
 .PHONY: build-love-tua
 build-love-tua: ## Compile the mixed Tua/Lua bullet-hell example.
 	cd examples/love-tua && $(TUA) build
+
+.PHONY: build-audio-system
+build-audio-system: ## Analyze and compile the first-class audio example.
+	cd examples/audio-system && $(TUA) build
 
 .PHONY: build-features
 build-features: ## Compile examples/features to Lua.
@@ -292,6 +296,10 @@ run-love-full: build-love-full ## Build and run the full LOVE example in smoke m
 .PHONY: run-love-tua
 run-love-tua: build-love-tua ## Build and run the bullet-hell LOVE/Tua showcase.
 	$(LOVE) examples/love-tua/build
+
+.PHONY: run-audio-system
+run-audio-system: build-audio-system ## Build and run the first-class audio example.
+	$(LOVE) examples/audio-system/build
 
 .PHONY: smoke-love-tua
 smoke-love-tua: build-love-tua ## Run the bullet-hell showcase for a short smoke pass.

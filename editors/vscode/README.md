@@ -15,9 +15,9 @@ Code without changing the normal Lua and LOVE workflow.
 - LOVE-aware authoring: callback snippets, callback signature checking, LOVE
   API documentation and overloads, colon-call guidance, and config-aware
   `love.conf(t)` completion are built in.
-- Better game-project tooling: sprite sheets, SignalBus events, assets, module
-  dependencies, ECS, and object pools all have editor support instead of living
-  as untyped strings and conventions.
+- Better game-project tooling: sprite sheets, SignalBus events, assets, audio
+  systems, module dependencies, ECS, and object pools all have editor support
+  instead of living as untyped strings and conventions.
 - Generated Lua visibility: inspect emitted Lua beside the current Tua file and
   jump between Tua and generated Lua with source maps.
 - Project-oriented workflow: initialize a project, run LOVE from VS Code tasks,
@@ -129,6 +129,8 @@ From there you can:
   access insights.
 - Object pool explorer showing declarations plus visible `acquire`, `release`,
   `clear`, and `prewarm` lifecycle operations.
+- Audio Explorer showing static buses, cues, effects, music scenes, layers,
+  analysis metadata, and source navigation without running the project.
 - State-machine graph preview for static `stateMachine({...})` definitions,
   with live edit refresh and source-linked states and event routes.
 
@@ -165,6 +167,7 @@ From there you can:
 - `Tua: Show Module Dependency Graph`
 - `Tua: Show ECS Explorer`
 - `Tua: Show Object Pool Explorer`
+- `Tua: Show Audio Explorer`
 - `Tua: Why Is This Module Included?`
 
 ### Server and Support
@@ -215,6 +218,7 @@ executed.
 - [Language server details](https://kyonru.github.io/tua-lang/lsp/)
 - [Configuration reference](https://kyonru.github.io/tua-lang/configuration/)
 - [Language overview](https://kyonru.github.io/tua-lang/language/)
+- [Audio systems](https://kyonru.github.io/tua-lang/audio/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)
 
 ## Privacy and Support

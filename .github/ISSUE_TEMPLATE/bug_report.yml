@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a reproducible problem in Tua or its tooling.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Search existing issues first and use a minimal reproduction when possible.
+
+        **Do not report security vulnerabilities here.** Follow [SECURITY.md](https://github.com/Kyonru/tua-lang/blob/main/SECURITY.md) instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Parser, type checker, or diagnostics
+        - Emitter, build, or watch
+        - CLI
+        - Language server
+        - VS Code extension
+        - LOVE, assets, or audio
+        - Documentation or examples
+        - Installation or release artifacts
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tua version or commit
+      description: Paste `tua --version`, the release version, or the source commit.
+      placeholder: tua 0.2.8 or commit abc1234
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include operating system, architecture, installation method, and editor/extension version when relevant.
+      placeholder: macOS 15 arm64, release VSIX, VS Code 1.xx
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide source/configuration and exact commands or editor actions. Link a small repository if the issue needs multiple files.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and diagnostics
+      description: Include complete diagnostics, exit status, or sanitized Tua output-channel logs.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include regressions, workarounds, or platform-specific details. Remove credentials, private paths, and proprietary source.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the current documentation.
+          required: true
+        - label: This report contains no vulnerability details or secrets.
+          required: true

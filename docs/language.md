@@ -354,9 +354,11 @@ events:emit("player.hit", hero, 4)
 events:emit("game.paused", "menu")
 ```
 
-When generated Lua needs `brinevector`, `tuasignal`, `tuastatemachine`,
-`tuastore`, or `tuaobjectpool`, `tua build` writes the bundled runtime file
-into the output directory unless the project already provides one.
+When generated Lua needs a helper runtime such as `brinevector`, `anim8`,
+`tuasignal`, `tuaecs`, `tuaobjectpool`, `tuastatemachine`, `tuastore`, `baton`,
+or `tuaaudio`, `tua build` writes the bundled runtime file into the output
+directory unless the project already provides one. `tuaaudio` also requires
+the bundled signal and store runtimes.
 
 ### Signals
 

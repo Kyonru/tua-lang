@@ -28,9 +28,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   aliases, shapes, optional fields, arrays, dictionaries, tuples, unions,
   literals, enums, function types, defaults, varargs, multiple returns, and
   runtime `is`; compound assignment; metatable-style classes and inheritance;
-  mixed Lua/Tua modules, static imports, and LuaDoc; the LOVE 11.x catalog,
-  callbacks, objects, and assets; `Vec2`, asset helpers, sprite sheets,
-  Signals, stores, state machines, Baton input, object pools, and ECS.
+  mixed Lua/Tua modules, static imports, type-only modules, generated modules,
+  and LuaDoc; the LOVE 11.x catalog, callbacks, objects, and assets; `Vec2`,
+  asset helpers, sprite sheets, Signals, stores, state machines, Baton input,
+  object pools, ECS, and `audioSystem`.
 
 ## Lua and modules
 
@@ -42,7 +43,19 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   simple Lua module exports, and LuaDoc/LuaCATS annotations interoperate.
 - Static top-level local bindings may use `import("./child")` or
   `import("project.module")`; these lower to `require` and are not JavaScript
-  imports. Tua has no JavaScript-style `export`.
+  imports. Tua has no JavaScript-style runtime `export`.
+- `export type Name = ...` publishes a type alias. Consume exported aliases
+  with `import type Types from "./types"` or
+  `import type { Player, Room as LevelRoom } from "./types"`; type imports and
+  `export type { Player as Hero } from "./types"` re-exports are erased and do
+  not load a runtime module. Only explicitly exported aliases cross modules.
+- Put declaration-only project modules in `.d.tua` files. They accept type
+  aliases, type imports, type exports, and comments, reject runtime statements,
+  and never emit Lua or source maps.
+- Put `--!tua generated` in the first eight lines of a generated `.tua` module
+  when its executable source is Lua 5.1-compatible and its large tables are
+  described by LuaDoc schemas. The directive keeps Tua module identity and
+  checks entries contextually; it does not make tables immutable.
 - LuaDoc support includes `---@class`, `---@field`, `---@alias`, `---@type`,
   `---@param`, `---@return`, `---@overload`, and `---@vararg`, including
   declaration-only external type libraries.
@@ -69,6 +82,19 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   should agree with it.
 - Native loader and helper asset paths receive project-aware completion,
   validation, metadata, definition, and references.
+
+## Projects and generated assets
+
+- A `tua.toml` project normally reads sources below `source`, emits Lua below
+  `out`, and may index declaration-only external `type_libraries`.
+- Opt-in `[[asset_pipelines]]` run before `check`, `build`, and `watch`. Each
+  external `command` or built-in importer owns one generated directory below
+  the source root and declares regular-file outputs through a version-1 JSON
+  manifest. Generated `.tua`, `.d.tua`, Lua, and assets then join the normal
+  project flow.
+- Asset pipeline commands are trusted local code, not compiler plugins or a
+  sandbox. Never invent or enable an importer implicitly. The language server
+  only indexes already-materialized output and does not execute pipelines.
 
 ## Tua types and syntax
 
@@ -127,6 +153,14 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `prewarm`, ownership/count inspection, cleanup, and `clear`.
 - Built-in `ecs` supplies typed components, worlds, systems, and queries
   without an explicit package import.
+- `audioSystem({...})` derives exact bus, cue, music-scene, layer, effect, and
+  event names. It supports bounded polyphonic voices, priorities, fades,
+  snapshots, positional sources, effects, and beat/bar-quantized music; use
+  configured names instead of inventing string identifiers.
+- Cached audio metadata may come from an `audio-analysis` asset pipeline and a
+  generated catalog passed as `analysis`. Authored `bpm`, `offset`, and
+  `signature` remain authoritative; analysis is advisory, and dynamic
+  `requestAnalysis` is explicit rather than automatic.
 - Use native LOVE freely. Use a Tua helper when nearby code uses it or its
   typed configuration fits the task; do not force helpers into ordinary LOVE.
 

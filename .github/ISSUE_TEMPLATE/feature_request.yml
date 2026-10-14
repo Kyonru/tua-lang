@@ -1,0 +1,59 @@
+name: Feature request
+description: Propose a language, tooling, editor, documentation, or workflow improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem before prescribing an implementation. Check the [roadmap](https://github.com/Kyonru/tua-lang/blob/main/ROADMAP.md) and existing issues first.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Language or type system
+        - Compiler or generated Lua
+        - CLI, build, or watch
+        - Language server
+        - VS Code extension
+        - LOVE, assets, or audio
+        - Documentation or examples
+        - Testing, performance, or release engineering
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who needs this, and what cannot be done cleanly today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Show a small source, command, editor interaction, or documentation example when useful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds and important compatibility or maintenance tradeoffs.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Compatibility and scope
+      description: Note effects on Lua 5.1/LuaJIT/LOVE output, existing projects, editor behavior, or public configuration.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the roadmap for this request.
+          required: true
+        - label: This request does not disclose a security vulnerability.
+          required: true

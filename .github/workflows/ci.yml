@@ -96,6 +96,12 @@ jobs:
       - name: Build love-full
         working-directory: examples/love-full
         run: cargo run --quiet --package tua-cli -- build
+      - name: Build love-tua
+        working-directory: examples/love-tua
+        run: cargo run --quiet --package tua-cli -- build
+      - name: Build audio-system
+        working-directory: examples/audio-system
+        run: cargo run --quiet --package tua-cli -- build
       - name: Build feature examples
         working-directory: examples/features
         run: cargo run --quiet --package tua-cli -- build

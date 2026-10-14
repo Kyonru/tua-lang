@@ -179,7 +179,16 @@ checking and editor navigation.
 
 Static `import` syntax is convenience syntax that lowers to `require`; it does
 not introduce a separate module runtime. Tua does not add JavaScript-style
-`export` declarations or type-only runtime modules.
+runtime `export` declarations.
+
+Type-only modules are compile-time project metadata. `export type` publishes
+selected aliases, while namespace and named `import type` declarations consume
+or re-export them without creating a runtime local, module load, or side effect.
+Only explicitly exported aliases cross a module boundary. Declaration-only
+`.d.tua` files may contain type imports, exports, aliases, and comments, but
+reject runtime statements and never emit Lua or source maps. Type-only module
+dependencies participate in checking, editor navigation, file watching, and
+cache invalidation without creating runtime require-cycle warnings.
 
 Configured declaration-only type libraries recursively index local `.lua`
 declarations. A declaration `---@meta` identity is mapped from its configured

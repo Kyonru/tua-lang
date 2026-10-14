@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Kyonru/tua-lang/security/advisories/new
+    about: Report vulnerabilities privately; do not disclose them in a public issue.
+  - name: Tua documentation
+    url: https://kyonru.github.io/tua-lang/
+    about: Read the language, CLI, editor, LOVE, asset, and troubleshooting guides.
