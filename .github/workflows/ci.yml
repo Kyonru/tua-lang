@@ -145,9 +145,10 @@ jobs:
         with:
           node-version: 22
       - name: Exercise benchmark fixtures and harness
+        id: benchmark
         run: make benchmark-smoke
       - name: Upload smoke report
-        if: always()
+        if: steps.benchmark.outcome == 'success'
         uses: actions/upload-artifact@v6
         with:
           name: benchmark-smoke-${{ github.run_id }}
