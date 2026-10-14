@@ -28,6 +28,71 @@ fn scheduler_rejects_requests_beyond_the_in_flight_job_limit() {
 }
 
 #[test]
+fn slow_diagnostics_reserve_capacity_for_client_requests() {
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let mut server = LspServer::default();
+
+    for index in 0..=crate::server::scheduler::MAX_IN_FLIGHT_JOBS {
+        let uri = format!("file:///tmp/diagnostic-capacity-{index}.tua");
+        let _ = server.handle_message(did_open(&uri, "local value = 1\n"));
+    }
+    let due = server
+        .next_slow_diagnostics_due()
+        .expect("slow diagnostics should be queued")
+        + Duration::from_secs(1);
+
+    for _ in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS / 2) {
+        assert!(scheduler.dispatch_due_slow_diagnostic(&mut server, due));
+    }
+    assert!(!scheduler.dispatch_due_slow_diagnostic(&mut server, due));
+
+    let output = scheduler.dispatch(
+        &mut server,
+        document_link_request(1, "file:///tmp/diagnostic-capacity-0.tua"),
+        None,
+    );
+    assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
+fn non_interactive_bursts_reserve_capacity_for_interactive_requests() {
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+    let mut server = LspServer::default();
+    let source = "local profile_primary = { label = \"ready\" }\nprofile_primary.la\n";
+    let uri = "file:///tmp/background-capacity-completion.tua";
+    let _ = server.handle_message(did_open(uri, source));
+
+    for id in 0..(crate::server::scheduler::MAX_IN_FLIGHT_JOBS * 3 / 4) {
+        let output = scheduler.dispatch(
+            &mut server,
+            inlay_hint_request(id as u64, uri, id, 0, id + 1, 0),
+            None,
+        );
+        assert!(output.iter().all(|message| message.get("error").is_none()));
+    }
+
+    let rejected_id = crate::server::scheduler::MAX_IN_FLIGHT_JOBS as u64;
+    let output = scheduler.dispatch(
+        &mut server,
+        inlay_hint_request(rejected_id, uri, rejected_id as usize, 0, 100, 0),
+        None,
+    );
+    assert_eq!(
+        response_with_id(&output, rejected_id)["error"]["code"],
+        -32000
+    );
+
+    let output = scheduler.dispatch(
+        &mut server,
+        invoked_completion_request(rejected_id + 1, uri, source, "profile_primary.la"),
+        None,
+    );
+    assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
 fn cancelling_a_coalesced_waiter_restores_request_capacity() {
     let uri = "file:///tmp/coalesced-capacity.tua";
     let mut server = LspServer::default();

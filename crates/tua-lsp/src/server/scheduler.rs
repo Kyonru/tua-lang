@@ -26,6 +26,8 @@ const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
 const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 pub(super) const MAX_IN_FLIGHT_JOBS: usize = 16;
 pub(super) const MAX_PENDING_REQUESTS: usize = 256;
+const MAX_NON_INTERACTIVE_JOBS: usize = MAX_IN_FLIGHT_JOBS * 3 / 4;
+const MAX_INTERNAL_BACKGROUND_JOBS: usize = MAX_IN_FLIGHT_JOBS / 2;
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -67,6 +69,7 @@ struct WorkerJob {
 }
 
 struct InFlightJob {
+    non_interactive: bool,
     uri: Option<String>,
     generation: Option<u64>,
     cancelled: Arc<AtomicBool>,
@@ -123,6 +126,7 @@ impl RequestScheduler {
                 .and_then(|uri| server.document_versions.get(uri).copied())
         });
         let background = request_runs_in_background(&method);
+        let non_interactive = background || method == "textDocument/inlayHint";
         let coalesce_key = ((background || method == "textDocument/inlayHint") && uri.is_some())
             .then(|| coalesce_key(&method, &message, generation));
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
@@ -164,7 +168,9 @@ impl RequestScheduler {
             }
         }
 
-        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS {
+        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS
+            || non_interactive && self.non_interactive_job_count() >= MAX_NON_INTERACTIVE_JOBS
+        {
             outbound.push(error_response(
                 id,
                 -32000,
@@ -185,6 +191,7 @@ impl RequestScheduler {
             warm_work: None,
         };
         let in_flight = InFlightJob {
+            non_interactive,
             uri,
             generation,
             cancelled,
@@ -229,7 +236,9 @@ impl RequestScheduler {
         server: &mut LspServer,
         now: std::time::Instant,
     ) -> bool {
-        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS {
+        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS
+            || self.internal_background_job_count() >= MAX_INTERNAL_BACKGROUND_JOBS
+        {
             return false;
         }
         let Some((uri, pending)) = server.take_next_due_slow_diagnostic(now) else {
@@ -258,6 +267,7 @@ impl RequestScheduler {
         self.jobs.insert(
             job_id,
             InFlightJob {
+                non_interactive: true,
                 uri: Some(uri.clone()),
                 generation: Some(pending.generation),
                 cancelled,
@@ -299,6 +309,7 @@ impl RequestScheduler {
         self.jobs.insert(
             job_id,
             InFlightJob {
+                non_interactive: true,
                 uri: None,
                 generation: None,
                 cancelled,
@@ -478,6 +489,17 @@ impl RequestScheduler {
 
     pub(super) fn in_flight_count(&self) -> usize {
         self.jobs.len()
+    }
+
+    fn internal_background_job_count(&self) -> usize {
+        self.jobs
+            .values()
+            .filter(|job| job.slow_diagnostics.is_some() || job.warm_work.is_some())
+            .count()
+    }
+
+    fn non_interactive_job_count(&self) -> usize {
+        self.jobs.values().filter(|job| job.non_interactive).count()
     }
 
     fn received_document_version_is_stale(&self, uri: &str, document_version: Option<i64>) -> bool {
