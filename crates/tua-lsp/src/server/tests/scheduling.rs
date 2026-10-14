@@ -656,12 +656,54 @@ fn workspace_warm_queue_prioritizes_an_open_file() {
         .expect("open file should be queued for warming");
 
     match work {
-        WorkspaceWarmWork::File { path, priority, .. } => {
-            assert_eq!(path, temp.path.join("src/main.tua"));
-            assert_eq!(priority, tua_core::AnalysisWarmPriority::High);
+        WorkspaceWarmWork::Files { files, .. } => {
+            assert_eq!(files[0].0, temp.path.join("src/main.tua"));
+            assert_eq!(files[0].1, tua_core::AnalysisWarmPriority::High);
         }
         WorkspaceWarmWork::Snapshot { .. } => panic!("files must warm before the snapshot"),
     }
+}
+
+#[test]
+fn workspace_warm_batches_files_without_starving_open_file_priority() {
+    let temp = TempProject::new("warm-file-batches");
+    let main_source = "local main: number = 1\n";
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", main_source);
+    for index in 0..40 {
+        temp.write(
+            &format!("src/module_{index:02}.tua"),
+            &format!("return {{ value = {index} }}\n"),
+        );
+    }
+
+    let main_uri = temp.uri_for("src/main.tua");
+    let mut server = TestServer::new();
+
+    server.send(initialize_with_root(1, temp.uri()));
+    server.send(did_open(&main_uri, main_source));
+
+    let first = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("the first warm batch should exist");
+    let WorkspaceWarmWork::Files { files, .. } = first else {
+        panic!("files must warm before the snapshot");
+    };
+
+    assert_eq!(files.len(), WORKSPACE_WARM_BATCH_SIZE);
+    assert_eq!(files[0].0, temp.path.join("src/main.tua"));
+    assert_eq!(files[0].1, tua_core::AnalysisWarmPriority::High);
+
+    let second = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("the remaining warm batch should exist");
+    let WorkspaceWarmWork::Files { files, .. } = second else {
+        panic!("remaining files must warm before the snapshot");
+    };
+    assert_eq!(files.len(), 9);
 }
 
 #[test]
@@ -711,9 +753,10 @@ fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
         .take_next_workspace_warm_work()
         .expect("opened file should be queued");
     let warmed = server.server.analysis.clone();
-    let WorkspaceWarmWork::File { path, priority, .. } = &work else {
+    let WorkspaceWarmWork::Files { files, .. } = &work else {
         panic!("opened file should warm before the snapshot");
     };
+    let (path, priority) = &files[0];
 
     assert!(warmed.warm_file(path, *priority));
     server.send_without_drain(did_change(uri, after, 2));
@@ -728,10 +771,8 @@ fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
         .expect("stale file should be requeued");
     assert!(matches!(
         retried,
-        WorkspaceWarmWork::File {
-            priority: tua_core::AnalysisWarmPriority::High,
-            ..
-        }
+        WorkspaceWarmWork::Files { ref files, .. }
+            if files.iter().any(|(_, priority)| *priority == tua_core::AnalysisWarmPriority::High)
     ));
 }
 

@@ -563,8 +563,16 @@ fn spawn_worker_lane(
                         false
                     } else {
                         panic::catch_unwind(AssertUnwindSafe(|| match &work {
-                            WorkspaceWarmWork::File { path, priority, .. } => {
-                                server.analysis.warm_file(path, *priority)
+                            WorkspaceWarmWork::Files { files, .. } => {
+                                let mut completed = true;
+                                for (path, priority) in files {
+                                    if cancelled.load(Ordering::Acquire) {
+                                        completed = false;
+                                        break;
+                                    }
+                                    let _ = server.analysis.warm_file(path, *priority);
+                                }
+                                completed
                             }
                             WorkspaceWarmWork::Snapshot { .. } => {
                                 let _ = server
@@ -576,7 +584,7 @@ fn spawn_worker_lane(
                         .unwrap_or(false)
                     };
                     let analysis =
-                        matches!(work, WorkspaceWarmWork::File { .. }).then_some(server.analysis);
+                        matches!(work, WorkspaceWarmWork::Files { .. }).then_some(server.analysis);
 
                     (
                         Value::Null,

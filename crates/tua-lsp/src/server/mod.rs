@@ -377,9 +377,8 @@ struct RequestLatencySample {
 
 #[derive(Clone, Debug)]
 enum WorkspaceWarmWork {
-    File {
-        path: PathBuf,
-        priority: tua_core::AnalysisWarmPriority,
+    Files {
+        files: Vec<(PathBuf, tua_core::AnalysisWarmPriority)>,
         revision: u64,
     },
     Snapshot {
@@ -390,10 +389,12 @@ enum WorkspaceWarmWork {
 impl WorkspaceWarmWork {
     fn revision(&self) -> u64 {
         match self {
-            Self::File { revision, .. } | Self::Snapshot { revision } => *revision,
+            Self::Files { revision, .. } | Self::Snapshot { revision } => *revision,
         }
     }
 }
+
+const WORKSPACE_WARM_BATCH_SIZE: usize = 32;
 
 #[derive(Clone, Debug, Default)]
 struct WorkspaceWarmState {
@@ -519,12 +520,15 @@ impl LspServer {
         }
 
         let revision = self.analysis.revision();
-        if let Some((path, priority)) = self.workspace_warm.pop_file() {
-            return Some(WorkspaceWarmWork::File {
-                path,
-                priority,
-                revision,
-            });
+        if let Some(first) = self.workspace_warm.pop_file() {
+            let mut files = vec![first];
+            while files.len() < WORKSPACE_WARM_BATCH_SIZE {
+                let Some(next) = self.workspace_warm.pop_file() else {
+                    break;
+                };
+                files.push(next);
+            }
+            return Some(WorkspaceWarmWork::Files { files, revision });
         }
 
         (self.workspace_warm.snapshot_ready_revision != Some(revision)
@@ -540,27 +544,34 @@ impl LspServer {
     ) -> Vec<Value> {
         if work.revision() != self.analysis.revision() {
             self.workspace_warm.stale_results += 1;
-            if let WorkspaceWarmWork::File { path, priority, .. } = work {
-                self.workspace_warm.queue(path.clone(), *priority, false);
+            if let WorkspaceWarmWork::Files { files, .. } = work {
+                for (path, priority) in files {
+                    self.workspace_warm.queue(path.clone(), *priority, false);
+                }
             }
             return Vec::new();
         }
 
         match work {
-            WorkspaceWarmWork::File { path, .. } => {
-                let adopted = succeeded
-                    && warmed_analysis
-                        .is_some_and(|warmed| self.analysis.adopt_warmed_file(warmed, path));
+            WorkspaceWarmWork::Files { files, .. } => {
+                for (path, _) in files {
+                    let adopted = succeeded
+                        && warmed_analysis
+                            .is_some_and(|warmed| self.analysis.adopt_warmed_file(warmed, path));
 
-                if !adopted {
-                    self.workspace_warm.failed.insert(path.clone());
-                    return Vec::new();
-                }
+                    if !adopted {
+                        self.workspace_warm.failed.insert(path.clone());
+                        continue;
+                    }
 
-                self.workspace_warm.warmed.insert(path.clone());
-                for related in self.analysis.warm_related_paths(path) {
-                    self.workspace_warm
-                        .queue(related, tua_core::AnalysisWarmPriority::High, false);
+                    self.workspace_warm.warmed.insert(path.clone());
+                    for related in self.analysis.warm_related_paths(path) {
+                        self.workspace_warm.queue(
+                            related,
+                            tua_core::AnalysisWarmPriority::High,
+                            false,
+                        );
+                    }
                 }
             }
             WorkspaceWarmWork::Snapshot { revision } if succeeded => {
