@@ -8,6 +8,16 @@ const extensionRoot = path.dirname(packagePath);
 const manifest = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 const commands = new Set((manifest.contributes?.commands || []).map((command) => command.command));
 
+if (manifest.main !== "./dist/extension.js") {
+  console.error("The packaged extension entry point should use the bundled runtime.");
+  process.exit(1);
+}
+
+if (!manifest.scripts?.build?.includes("esbuild src/extension.js")) {
+  console.error("The extension build script should bundle the runtime with esbuild.");
+  process.exit(1);
+}
+
 const untrustedWorkspaces = manifest.capabilities?.untrustedWorkspaces;
 if (untrustedWorkspaces?.supported !== "limited") {
   console.error("Restricted Mode support must be declared as limited.");
