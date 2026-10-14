@@ -42,6 +42,7 @@ async function main() {
     await smokeDebugLspLogging(mockServer, workspace);
     await smokeStartupFailure(path.join(temp, "missing-tua"), workspace);
     await smokeServerSelection(extensionFixture, workspace);
+    await smokeMultiRootServerRouting(extensionFixture, workspace);
     await smokeUntrustedWorkspaceGuard(extensionFixture, workspace);
     await smokeServerPathChangePrompt(extensionFixture, workspace);
   } finally {
@@ -1437,6 +1438,66 @@ async function smokeServerSelection(extensionFixture, workspace) {
   );
 
   await extension.deactivate();
+}
+
+async function smokeMultiRootServerRouting(extensionFixture, workspace) {
+  const workspaceTwo = path.join(path.dirname(workspace), "workspace-two-server");
+  const relativeServer = path.join("tools", platformExecutableName());
+  const workspaceTwoServer = path.join(workspaceTwo, relativeServer);
+  const activeSource = path.join(workspaceTwo, "src", "main.tua");
+  fs.mkdirSync(path.dirname(workspaceTwoServer), { recursive: true });
+  fs.mkdirSync(path.dirname(activeSource), { recursive: true });
+  writeMockServer(workspaceTwoServer);
+  fs.writeFileSync(activeSource, "return {}\n");
+
+  const state = createMockState(workspace, { serverPath: relativeServer });
+  state.vscode.workspace.workspaceFolders.push({
+    name: "workspace-two",
+    uri: { fsPath: workspaceTwo, scheme: "file" },
+  });
+  state.setActiveDocument({
+    fileName: activeSource,
+    languageId: "tua",
+    uri: state.vscode.Uri.file(activeSource),
+  });
+  const extension = loadExtension(state);
+
+  await extension.activate(createContext(extensionFixture));
+
+  assert.strictEqual(
+    state.clients[0].serverOptions.run.command,
+    workspaceTwoServer,
+    "a relative server path should resolve from the active file's workspace folder",
+  );
+  assert.strictEqual(
+    state.clients[0].serverOptions.run.options.cwd,
+    workspaceTwo,
+    "the language server cwd should follow the active file's workspace folder",
+  );
+
+  await extension.deactivate();
+
+  const ambiguousState = createMockState(workspace, { serverPath: relativeServer });
+  ambiguousState.vscode.workspace.workspaceFolders.push({
+    name: "workspace-two",
+    uri: { fsPath: workspaceTwo, scheme: "file" },
+  });
+  ambiguousState.setActiveDocument(undefined);
+  const ambiguousExtension = loadExtension(ambiguousState);
+
+  await ambiguousExtension.activate(createContext(extensionFixture));
+
+  assert.strictEqual(
+    ambiguousState.clients.length,
+    0,
+    "an ambiguous relative server path must not silently use the first workspace folder",
+  );
+  assert(
+    ambiguousState.warningMessages.some((message) =>
+      message.includes("workspace folder that owns the relative Tua server path"),
+    ),
+    "ambiguous relative server routing should ask for an active project file",
+  );
 }
 
 async function smokeUntrustedWorkspaceGuard(extensionFixture, workspace) {

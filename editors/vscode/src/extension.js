@@ -153,9 +153,15 @@ async function startLanguageServer() {
   const cwd = workspaceCwd();
   if (!serverCommand) {
     const error = new Error(
-      "Restricted Mode only permits the bundled Tua server. Trust this workspace to use a configured executable.",
+      vscode.workspace.isTrusted
+        ? "Open a file from the workspace folder that owns the relative Tua server path, then restart the language server."
+        : "Restricted Mode only permits the bundled Tua server. Trust this workspace to use a configured executable.",
     );
-    showWorkspaceTrustWarning(error);
+    if (vscode.workspace.isTrusted) {
+      vscode.window.showWarningMessage(error.message);
+    } else {
+      showWorkspaceTrustWarning(error);
+    }
     setServerStatus("failed", formatError(error));
     currentServerInfo = {
       command: undefined,
@@ -937,9 +943,21 @@ function platformExecutableName() {
 }
 
 function workspaceCwd() {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const fileFolders = (vscode.workspace.workspaceFolders || []).filter(
+    (folder) => folder.uri?.scheme === "file",
+  );
+  const activeUri = vscode.window.activeTextEditor?.document?.uri;
 
-  return workspaceFolder?.uri.scheme === "file" ? workspaceFolder.uri.fsPath : undefined;
+  if (activeUri?.scheme === "file") {
+    const activeFolder = fileFolders.find((folder) =>
+      isPathInside(activeUri.fsPath, folder.uri.fsPath),
+    );
+    if (activeFolder) {
+      return activeFolder.uri.fsPath;
+    }
+  }
+
+  return fileFolders.length === 1 ? fileFolders[0].uri.fsPath : undefined;
 }
 
 function hasWorkspaceFolders() {
@@ -957,10 +975,22 @@ function resolveServerCommand(context, command) {
     return command;
   }
 
+  if (hasAmbiguousWorkspaceRoots()) {
+    return undefined;
+  }
+
   const candidates = candidateRelativeServerPaths(context, command);
   const existing = candidates.find((candidate) => fs.existsSync(candidate));
 
   return existing || candidates[0] || command;
+}
+
+function hasAmbiguousWorkspaceRoots() {
+  const fileFolders = (vscode.workspace.workspaceFolders || []).filter(
+    (folder) => folder.uri?.scheme === "file",
+  );
+
+  return fileFolders.length > 1 && !workspaceCwd();
 }
 
 function isBareCommand(command) {
