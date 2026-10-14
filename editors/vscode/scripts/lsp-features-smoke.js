@@ -4,6 +4,7 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
+const { resolveCommand } = require("./lsp-profile-common");
 
 const command = resolveCommand(process.argv[2] || "target/debug/tua");
 const root = path.resolve(process.argv[3] || "examples/features");
@@ -691,14 +692,6 @@ function send(message) {
   const body = JSON.stringify(message);
   const length = Buffer.byteLength(body, "utf8");
   child.stdin.write(`Content-Length: ${length}\r\n\r\n${body}`);
-}
-
-function resolveCommand(command) {
-  if (!command.includes(path.sep) || path.isAbsolute(command)) {
-    return command;
-  }
-
-  return path.resolve(command);
 }
 
 function fail(message) {

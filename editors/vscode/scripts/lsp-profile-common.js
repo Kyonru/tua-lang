@@ -777,7 +777,8 @@ function delay(ms) {
 }
 
 function resolveCommand(command) {
-  if (!command.includes(path.sep) || path.isAbsolute(command)) {
+  const hasPathSeparator = command.includes(path.sep) || (path.sep === "\\" && command.includes("/"));
+  if (!hasPathSeparator || path.isAbsolute(command)) {
     return command;
   }
 
