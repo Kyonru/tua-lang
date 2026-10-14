@@ -1477,6 +1477,42 @@ async function smokeUntrustedWorkspaceGuard(extensionFixture, workspace) {
     "untrusted workspace must ignore an external configured command",
   );
 
+  const developmentRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tua-vscode-untrusted-"));
+  const developmentExtension = path.join(developmentRoot, "editors", "vscode");
+  const developmentServer = path.join(
+    developmentRoot,
+    "target",
+    "debug",
+    platformExecutableName(),
+  );
+  fs.mkdirSync(developmentExtension, { recursive: true });
+  fs.mkdirSync(path.dirname(developmentServer), { recursive: true });
+  writeMockServer(developmentServer);
+
+  try {
+    const developmentState = createMockState(workspace, {
+      isTrusted: false,
+      serverPath: developmentServer,
+    });
+    const developmentHost = loadExtension(developmentState);
+
+    await developmentHost.activate(createContext(developmentExtension));
+
+    assert.strictEqual(
+      developmentState.clients.length,
+      0,
+      "Restricted Mode must not execute the development target/debug fallback",
+    );
+    assert(
+      developmentState.warningMessages.some((message) =>
+        message.includes("only permits the bundled Tua server"),
+      ),
+      "Restricted Mode should explain that a packaged server is required",
+    );
+  } finally {
+    fs.rmSync(developmentRoot, { force: true, recursive: true });
+  }
+
   await state.commands.get("tua.selectServer")();
 
   assert.strictEqual(

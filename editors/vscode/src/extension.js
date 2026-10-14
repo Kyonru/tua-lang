@@ -883,7 +883,7 @@ async function deactivate() {
 
 function configuredServerPath(context) {
   if (!vscode.workspace.isTrusted) {
-    return bundledServerPath(context);
+    return packagedServerPath(context);
   }
 
   const envOverride = process.env.TUA_SERVER_PATH;
@@ -907,13 +907,29 @@ function configuredServerPath(context) {
 }
 
 function bundledServerPath(context) {
-  const executable = platformExecutableName();
-  const candidates = [
-    path.join(context.extensionPath, "bin", executable),
-    path.resolve(context.extensionPath, "..", "..", "target", "debug", executable),
-  ];
+  return packagedServerPath(context) || developmentServerPath(context);
+}
 
-  return candidates.find((candidate) => fs.existsSync(candidate));
+function packagedServerPath(context) {
+  const executable = platformExecutableName();
+
+  const candidate = path.join(context.extensionPath, "bin", executable);
+
+  return fs.existsSync(candidate) ? candidate : undefined;
+}
+
+function developmentServerPath(context) {
+  const executable = platformExecutableName();
+  const candidate = path.resolve(
+    context.extensionPath,
+    "..",
+    "..",
+    "target",
+    "debug",
+    executable,
+  );
+
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 function platformExecutableName() {
