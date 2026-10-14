@@ -2,8 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use symphonia::core::audio::SampleBuffer;
@@ -20,7 +22,15 @@ use crate::path_security::reject_symlink_path;
 use crate::source::io_diagnostic;
 
 const MANIFEST_VERSION: u32 = 1;
-const AUDIO_ANALYZER_VERSION: &str = "2";
+const AUDIO_ANALYZER_VERSION: &str = "3";
+const MAX_IMPORTER_TIMEOUT_MS: u64 = 3_600_000;
+const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_STDERR_BYTES: u64 = 1024 * 1024;
+const MAX_AUDIO_DURATION_SECONDS: u64 = 3_600;
+const MAX_AUDIO_SAMPLE_RATE: u32 = 192_000;
+const MAX_AUDIO_CHANNELS: usize = 8;
+const MAX_AUDIO_ANALYSIS_POINTS: usize = 1_000_000;
+const MAX_AUDIO_PACKET_FRAMES: usize = 1_048_576;
 const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
 
@@ -134,10 +144,20 @@ fn execute_audio_analysis(
     let confidence_warning = option_number(pipeline, "confidence_warning", 0.35).clamp(0.0, 1.0);
     let mut analyses = Vec::new();
     let mut diagnostics = Vec::new();
+    let mut remaining_analysis_points = MAX_AUDIO_ANALYSIS_POINTS;
 
     for input in inputs {
-        match analyze_audio_file(cwd, input, envelope_hz, tempo_min, tempo_max) {
+        match analyze_audio_file(
+            cwd,
+            input,
+            envelope_hz,
+            tempo_min,
+            tempo_max,
+            remaining_analysis_points,
+        ) {
             Ok(analysis) => {
+                remaining_analysis_points =
+                    remaining_analysis_points.saturating_sub(analysis.energy.len());
                 if analysis.bpm.is_none() || analysis.confidence < confidence_warning {
                     let candidates = analysis
                         .tempo_candidates
@@ -269,6 +289,7 @@ fn analyze_audio_file(
     envelope_hz: f64,
     tempo_min: f64,
     tempo_max: f64,
+    max_analysis_points: usize,
 ) -> Result<AudioAnalysis, String> {
     let file = File::open(path).map_err(|error| error.to_string())?;
     let stream = MediaSourceStream::new(Box::new(file), Default::default());
@@ -299,10 +320,27 @@ fn analyze_audio_file(
         .channels
         .map(|channels| channels.count())
         .unwrap_or(1);
+    let max_frames = audio_frame_limit(sample_rate, channels, params.n_frames)?;
     let mut decoder = symphonia::default::get_codecs()
         .make(&params, &DecoderOptions::default())
         .map_err(|error| format!("audio codec is unsupported: {error}"))?;
-    let mut mono = Vec::<f32>::new();
+    let window = ((sample_rate as f64 / envelope_hz).round() as usize).max(1);
+    let mut energy = Vec::new();
+    let mut low = Vec::new();
+    let mut mid = Vec::new();
+    let mut high = Vec::new();
+    let mut peak = 0.0_f64;
+    let mut square_sum = 0.0_f64;
+    let low_alpha = (-2.0 * std::f64::consts::PI * 200.0 / sample_rate as f64).exp();
+    let mid_alpha = (-2.0 * std::f64::consts::PI * 2000.0 / sample_rate as f64).exp();
+    let mut low_pass = 0.0_f64;
+    let mut mid_pass = 0.0_f64;
+    let mut broad_sum = 0.0_f64;
+    let mut low_sum = 0.0_f64;
+    let mut mid_sum = 0.0_f64;
+    let mut high_sum = 0.0_f64;
+    let mut window_len = 0_usize;
+    let mut decoded_frames = 0_u64;
     loop {
         let packet = match format.next_packet() {
             Ok(packet) => packet,
@@ -322,31 +360,27 @@ fn analyze_audio_file(
             Err(error) => return Err(format!("failed to decode audio: {error}")),
         };
         let spec = *decoded.spec();
+        let decoded_channels = spec.channels.count();
+        if spec.rate != sample_rate || decoded_channels != channels {
+            return Err("audio format changes within the stream are unsupported".to_owned());
+        }
+        if decoded.capacity() > MAX_AUDIO_PACKET_FRAMES {
+            return Err(format!(
+                "decoded audio packet exceeds the {MAX_AUDIO_PACKET_FRAMES}-frame memory limit"
+            ));
+        }
         let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
         samples.copy_interleaved_ref(decoded);
         for frame in samples.samples().chunks(channels) {
-            mono.push(frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32);
-        }
-    }
-    let window = ((sample_rate as f64 / envelope_hz).round() as usize).max(1);
-    let mut energy = Vec::new();
-    let mut low = Vec::new();
-    let mut mid = Vec::new();
-    let mut high = Vec::new();
-    let mut onset = Vec::new();
-    let mut peak = 0.0_f64;
-    let mut square_sum = 0.0_f64;
-    let low_alpha = (-2.0 * std::f64::consts::PI * 200.0 / sample_rate as f64).exp();
-    let mid_alpha = (-2.0 * std::f64::consts::PI * 2000.0 / sample_rate as f64).exp();
-    let mut low_pass = 0.0_f64;
-    let mut mid_pass = 0.0_f64;
-    for samples in mono.chunks(window) {
-        let mut broad_sum = 0.0;
-        let mut low_sum = 0.0;
-        let mut mid_sum = 0.0;
-        let mut high_sum = 0.0;
-        for &sample in samples {
-            let sample = sample as f64;
+            decoded_frames = decoded_frames
+                .checked_add(1)
+                .ok_or_else(|| "decoded audio frame count overflowed".to_owned())?;
+            if decoded_frames > max_frames {
+                return Err(format!(
+                    "audio duration exceeds the {MAX_AUDIO_DURATION_SECONDS}-second limit"
+                ));
+            }
+            let sample = frame.iter().copied().sum::<f32>() as f64 / frame.len().max(1) as f64;
             peak = peak.max(sample.abs());
             square_sum += sample * sample;
             broad_sum += sample * sample;
@@ -357,19 +391,49 @@ fn analyze_audio_file(
             mid_sum += middle * middle;
             let upper = sample - mid_pass;
             high_sum += upper * upper;
+            window_len += 1;
+            if window_len == window {
+                push_audio_window(
+                    &mut energy,
+                    &mut low,
+                    &mut mid,
+                    &mut high,
+                    broad_sum,
+                    low_sum,
+                    mid_sum,
+                    high_sum,
+                    window_len,
+                    max_analysis_points,
+                )?;
+                broad_sum = 0.0;
+                low_sum = 0.0;
+                mid_sum = 0.0;
+                high_sum = 0.0;
+                window_len = 0;
+            }
         }
-        let divisor = samples.len().max(1) as f64;
-        energy.push((broad_sum / divisor).sqrt());
-        low.push((low_sum / divisor).sqrt());
-        mid.push((mid_sum / divisor).sqrt());
-        high.push((high_sum / divisor).sqrt());
     }
+    if window_len > 0 {
+        push_audio_window(
+            &mut energy,
+            &mut low,
+            &mut mid,
+            &mut high,
+            broad_sum,
+            low_sum,
+            mid_sum,
+            high_sum,
+            window_len,
+            max_analysis_points,
+        )?;
+    }
+    let mut onset = Vec::new();
     onset.push(0.0);
     for pair in energy.windows(2) {
         onset.push((pair[1] - pair[0]).max(0.0));
     }
     let tempo = estimate_tempo(&onset, envelope_hz, tempo_min, tempo_max);
-    let duration = mono.len() as f64 / sample_rate as f64;
+    let duration = decoded_frames as f64 / sample_rate as f64;
     let mut beat_grid = Vec::new();
     if let Some(bpm) = tempo.bpm {
         let interval = 60.0 / bpm;
@@ -385,7 +449,7 @@ fn analyze_audio_file(
         channels,
         sample_rate,
         envelope_hz,
-        rms: (square_sum / mono.len().max(1) as f64).sqrt(),
+        rms: (square_sum / decoded_frames.max(1) as f64).sqrt(),
         peak,
         bpm: tempo.bpm,
         confidence: tempo.confidence,
@@ -400,6 +464,64 @@ fn analyze_audio_file(
         high,
         onset,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_audio_window(
+    energy: &mut Vec<f64>,
+    low: &mut Vec<f64>,
+    mid: &mut Vec<f64>,
+    high: &mut Vec<f64>,
+    broad_sum: f64,
+    low_sum: f64,
+    mid_sum: f64,
+    high_sum: f64,
+    sample_count: usize,
+    max_analysis_points: usize,
+) -> Result<(), String> {
+    ensure_audio_analysis_capacity(energy.len(), max_analysis_points)?;
+    let divisor = sample_count.max(1) as f64;
+    energy.push((broad_sum / divisor).sqrt());
+    low.push((low_sum / divisor).sqrt());
+    mid.push((mid_sum / divisor).sqrt());
+    high.push((high_sum / divisor).sqrt());
+    Ok(())
+}
+
+fn audio_frame_limit(
+    sample_rate: u32,
+    channels: usize,
+    declared_frames: Option<u64>,
+) -> Result<u64, String> {
+    if sample_rate > MAX_AUDIO_SAMPLE_RATE {
+        return Err(format!(
+            "audio sample rate {sample_rate} Hz exceeds the {MAX_AUDIO_SAMPLE_RATE} Hz limit"
+        ));
+    }
+    if channels > MAX_AUDIO_CHANNELS {
+        return Err(format!(
+            "audio channel count {channels} exceeds the {MAX_AUDIO_CHANNELS}-channel limit"
+        ));
+    }
+    let max_frames = u64::from(sample_rate)
+        .checked_mul(MAX_AUDIO_DURATION_SECONDS)
+        .ok_or_else(|| "audio duration limit overflowed".to_owned())?;
+    if declared_frames.is_some_and(|frames| frames > max_frames) {
+        return Err(format!(
+            "audio duration exceeds the {MAX_AUDIO_DURATION_SECONDS}-second limit"
+        ));
+    }
+    Ok(max_frames)
+}
+
+fn ensure_audio_analysis_capacity(points: usize, max_points: usize) -> Result<(), String> {
+    if points >= max_points {
+        Err(format!(
+            "audio analysis exceeds the {MAX_AUDIO_ANALYSIS_POINTS}-point memory limit"
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn estimate_tempo(
@@ -725,6 +847,12 @@ fn run_one_pipeline(
             .push(pipeline_error(cwd, pipeline, "command must not be empty"));
         return;
     }
+    if let Err(message) = validate_resource_limits(pipeline) {
+        outcome
+            .diagnostics
+            .push(pipeline_error(cwd, pipeline, message));
+        return;
+    }
 
     let input_files = match pipeline_inputs(cwd, pipeline) {
         Ok(files) => files,
@@ -747,7 +875,7 @@ fn run_one_pipeline(
         .join(&pipeline.name);
     let cache_entry = pipeline_cache.join(&cache_key);
 
-    let manifest = match read_valid_cached_manifest(&cache_entry) {
+    let manifest = match read_valid_cached_manifest(&cache_entry, pipeline.max_manifest_bytes) {
         Ok(Some(manifest)) => {
             outcome.cached += 1;
             manifest
@@ -846,6 +974,12 @@ fn pipeline_cache_key(
     hash.add(pipeline.version.as_bytes());
     hash.add(b"\0");
     hash.add(display_path(&pipeline.output).as_bytes());
+    hash.add(b"\0limits\0");
+    hash.add(pipeline.timeout_ms.to_string().as_bytes());
+    hash.add(b"\0");
+    hash.add(pipeline.max_manifest_bytes.to_string().as_bytes());
+    hash.add(b"\0");
+    hash.add(pipeline.max_stderr_bytes.to_string().as_bytes());
 
     if let Some(builtin) = &pipeline.builtin {
         hash.add(b"\0builtin\0");
@@ -965,7 +1099,11 @@ fn execute_importer(
         }
         if cache_entry.exists() {
             let _ = fs::remove_dir_all(&staging);
-            return read_manifest(&cache_entry.join("manifest.json")).map_err(|error| vec![error]);
+            return read_manifest(
+                &cache_entry.join("manifest.json"),
+                pipeline.max_manifest_bytes,
+            )
+            .map_err(|error| vec![error]);
         }
         if let Err(source) = fs::rename(&staging, cache_entry) {
             let diagnostic = io_diagnostic(cache_entry, source);
@@ -982,7 +1120,8 @@ fn execute_importer(
     } else {
         PathBuf::from(configured_program)
     };
-    let command_output = Command::new(&program)
+    let mut command = Command::new(&program);
+    command
         .args(arguments)
         .current_dir(cwd)
         .env("TUA_ASSET_PIPELINE_NAME", &pipeline.name)
@@ -993,12 +1132,14 @@ fn execute_importer(
         .env(
             "TUA_ASSET_PIPELINE_INPUTS",
             serde_json::to_string(&input_strings).unwrap_or_else(|_| "[]".to_owned()),
-        )
-        .output();
-
-    let command_output = match command_output {
+        );
+    let command_output = match run_importer_command(
+        &mut command,
+        Duration::from_millis(pipeline.timeout_ms),
+        pipeline.max_stderr_bytes as usize,
+    ) {
         Ok(output) => output,
-        Err(source) => {
+        Err(ImporterCommandError::Start(source)) => {
             let _ = fs::remove_dir_all(&staging);
             return Err(vec![pipeline_error(
                 cwd,
@@ -1006,17 +1147,28 @@ fn execute_importer(
                 format!("failed to start `{}`: {source}", display_path(&program)),
             )]);
         }
+        Err(ImporterCommandError::TimedOut) => {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(vec![pipeline_error(
+                cwd,
+                pipeline,
+                format!("importer timed out after {} ms", pipeline.timeout_ms),
+            )]);
+        }
     };
 
-    let mut diagnostics = match read_manifest(&manifest_path) {
+    let mut diagnostics = match read_manifest(&manifest_path, pipeline.max_manifest_bytes) {
         Ok(manifest) => manifest_diagnostics(cwd, pipeline, &manifest),
         Err(_) => Vec::new(),
     };
 
     if !command_output.status.success() {
-        let stderr = String::from_utf8_lossy(&command_output.stderr)
+        let mut stderr = String::from_utf8_lossy(&command_output.stderr)
             .trim()
             .to_owned();
+        if command_output.stderr_truncated {
+            stderr.push_str("… [stderr truncated]");
+        }
         let suffix = if stderr.is_empty() {
             String::new()
         } else {
@@ -1031,7 +1183,7 @@ fn execute_importer(
         return Err(diagnostics);
     }
 
-    let manifest = match read_manifest(&manifest_path) {
+    let manifest = match read_manifest(&manifest_path, pipeline.max_manifest_bytes) {
         Ok(manifest) => manifest,
         Err(diagnostic) => {
             let _ = fs::remove_dir_all(&staging);
@@ -1045,7 +1197,11 @@ fn execute_importer(
 
     if cache_entry.exists() {
         let _ = fs::remove_dir_all(&staging);
-        return read_manifest(&cache_entry.join("manifest.json")).map_err(|error| vec![error]);
+        return read_manifest(
+            &cache_entry.join("manifest.json"),
+            pipeline.max_manifest_bytes,
+        )
+        .map_err(|error| vec![error]);
     }
     if let Err(source) = fs::rename(&staging, cache_entry) {
         let diagnostic = io_diagnostic(cache_entry, source);
@@ -1056,11 +1212,88 @@ fn execute_importer(
     Ok(manifest)
 }
 
-fn read_valid_cached_manifest(cache_entry: &Path) -> Result<Option<ImportManifest>, Diagnostic> {
+struct ImporterCommandOutput {
+    status: ExitStatus,
+    stderr: Vec<u8>,
+    stderr_truncated: bool,
+}
+
+enum ImporterCommandError {
+    Start(io::Error),
+    TimedOut,
+}
+
+fn run_importer_command(
+    command: &mut Command,
+    timeout: Duration,
+    max_stderr_bytes: usize,
+) -> Result<ImporterCommandOutput, ImporterCommandError> {
+    let mut child = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(ImporterCommandError::Start)?;
+    let stderr = child
+        .stderr
+        .take()
+        .expect("piped importer stderr should be available");
+    let (stderr_tx, stderr_rx) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let _ = stderr_tx.send(read_bounded(stderr, max_stderr_bytes));
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ImporterCommandError::TimedOut);
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(10)),
+            Err(source) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ImporterCommandError::Start(source));
+            }
+        }
+    };
+    let (stderr, stderr_truncated) = stderr_rx
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap_or_else(|_| (Vec::new(), true));
+    Ok(ImporterCommandOutput {
+        status,
+        stderr,
+        stderr_truncated,
+    })
+}
+
+fn read_bounded(mut reader: impl Read, limit: usize) -> (Vec<u8>, bool) {
+    let mut captured = Vec::with_capacity(limit.min(8 * 1024));
+    let mut truncated = false;
+    let mut buffer = [0_u8; 8 * 1024];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
+        let remaining = limit.saturating_sub(captured.len());
+        let copied = remaining.min(read);
+        captured.extend_from_slice(&buffer[..copied]);
+        truncated |= copied < read;
+    }
+    (captured, truncated)
+}
+
+fn read_valid_cached_manifest(
+    cache_entry: &Path,
+    max_manifest_bytes: u64,
+) -> Result<Option<ImportManifest>, Diagnostic> {
     if !cache_entry.is_dir() {
         return Ok(None);
     }
-    let manifest = read_manifest(&cache_entry.join("manifest.json"))?;
+    let manifest = read_manifest(&cache_entry.join("manifest.json"), max_manifest_bytes)?;
     if manifest.version != MANIFEST_VERSION {
         return Ok(None);
     }
@@ -1092,8 +1325,21 @@ fn clear_cache_entry(cache_entry: &Path) -> Result<(), Diagnostic> {
     }
 }
 
-fn read_manifest(path: &Path) -> Result<ImportManifest, Diagnostic> {
-    let source = fs::read_to_string(path).map_err(|source| io_diagnostic(path, source))?;
+fn read_manifest(path: &Path, max_bytes: u64) -> Result<ImportManifest, Diagnostic> {
+    let file = File::open(path).map_err(|source| io_diagnostic(path, source))?;
+    let mut source = String::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_string(&mut source)
+        .map_err(|source| io_diagnostic(path, source))?;
+    if source.len() as u64 > max_bytes {
+        return Err(Diagnostic::error(
+            path,
+            1,
+            1,
+            format!("asset pipeline manifest exceeds the {max_bytes}-byte limit"),
+        )
+        .with_code(DiagnosticCode::ASSET_PIPELINE));
+    }
     serde_json::from_str(&source).map_err(|source| {
         Diagnostic::error(path, source.line(), source.column(), source.to_string())
             .with_code(DiagnosticCode::ASSET_PIPELINE)
@@ -1523,6 +1769,25 @@ fn valid_pipeline_name(name: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
 }
 
+fn validate_resource_limits(pipeline: &AssetPipelineConfig) -> Result<(), String> {
+    if pipeline.timeout_ms == 0 || pipeline.timeout_ms > MAX_IMPORTER_TIMEOUT_MS {
+        return Err(format!(
+            "timeout_ms must be between 1 and {MAX_IMPORTER_TIMEOUT_MS}"
+        ));
+    }
+    if pipeline.max_manifest_bytes == 0 || pipeline.max_manifest_bytes > MAX_MANIFEST_BYTES {
+        return Err(format!(
+            "max_manifest_bytes must be between 1 and {MAX_MANIFEST_BYTES}"
+        ));
+    }
+    if pipeline.max_stderr_bytes > MAX_STDERR_BYTES {
+        return Err(format!(
+            "max_stderr_bytes must not exceed {MAX_STDERR_BYTES}"
+        ));
+    }
+    Ok(())
+}
+
 fn pipeline_error(
     cwd: &Path,
     pipeline: &AssetPipelineConfig,
@@ -1558,6 +1823,33 @@ mod tests {
         assert!(safe_relative_path("types/game.d.tua").is_ok());
         assert!(safe_relative_path("../main.tua").is_err());
         assert!(safe_relative_path("/tmp/main.tua").is_err());
+    }
+
+    #[test]
+    fn bounded_reads_keep_only_the_configured_prefix() {
+        let (captured, truncated) = read_bounded(io::Cursor::new(b"abcdefgh"), 4);
+        assert_eq!(captured, b"abcd");
+        assert!(truncated);
+    }
+
+    #[test]
+    fn audio_limits_reject_excessive_format_and_analysis_sizes() {
+        assert!(audio_frame_limit(MAX_AUDIO_SAMPLE_RATE + 1, 1, None)
+            .unwrap_err()
+            .contains("sample rate"));
+        assert!(audio_frame_limit(48_000, MAX_AUDIO_CHANNELS + 1, None)
+            .unwrap_err()
+            .contains("channel count"));
+        assert!(
+            audio_frame_limit(48_000, 2, Some(48_000 * (MAX_AUDIO_DURATION_SECONDS + 1)))
+                .unwrap_err()
+                .contains("duration")
+        );
+        assert!(ensure_audio_analysis_capacity(
+            MAX_AUDIO_ANALYSIS_POINTS,
+            MAX_AUDIO_ANALYSIS_POINTS
+        )
+        .is_err());
     }
 
     #[test]

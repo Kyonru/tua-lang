@@ -40,7 +40,7 @@
     "workspaceContains:**/*.tua"
   ],
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "10.1.2"
   },
   "scripts": {
     "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
@@ -1030,8 +1030,13 @@
   "devDependencies": {
     "@vscode/debugadapter-testsupport": "1.68.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "4.0.0",
+    "ovsx": "1.2.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "overrides": {
+    "@vscode/vsce": "$@vscode/vsce",
+    "qs": "6.16.0"
   }
 }

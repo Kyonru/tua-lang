@@ -942,6 +942,144 @@ printf '{"version":1,"outputs":[],"diagnostics":[{"severity":"error","message":"
     assert!(stderr.contains("asset pipeline `world`: unknown room symbol"));
 }
 
+#[cfg(unix)]
+#[test]
+fn asset_pipeline_times_out_and_removes_staging_output() {
+    let temp = TempDir::new("asset-pipeline-timeout");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("src/main.tua"), "return {}\n").expect("failed to write main");
+    fs::write(temp.path().join("assets/world.txt"), "world\n").expect("failed to write input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/world.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+timeout_ms = 20
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(temp.path().join("tools/import.sh"), "sleep 2\n").expect("failed to write importer");
+
+    let started = Instant::now();
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run check");
+    assert!(!output.status.success());
+    assert!(started.elapsed() < Duration::from_millis(1_500));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("importer timed out after 20 ms"),
+        "{stderr}"
+    );
+    let cache = temp.path().join(".tua/cache/asset-pipelines/world");
+    assert!(
+        fs::read_dir(cache)
+            .expect("pipeline cache directory should exist")
+            .next()
+            .is_none(),
+        "timed-out importer staging directory should be removed"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn asset_pipeline_rejects_oversized_manifest_and_removes_staging_output() {
+    let temp = TempDir::new("asset-pipeline-manifest-limit");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("src/main.tua"), "return {}\n").expect("failed to write main");
+    fs::write(temp.path().join("assets/world.txt"), "world\n").expect("failed to write input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/world.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+max_manifest_bytes = 64
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(
+        temp.path().join("tools/import.sh"),
+        "printf '%0128d' 0 > \"$TUA_ASSET_PIPELINE_MANIFEST\"\n",
+    )
+    .expect("failed to write importer");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("manifest exceeds the 64-byte limit"),
+        "{stderr}"
+    );
+    let cache = temp.path().join(".tua/cache/asset-pipelines/world");
+    assert!(
+        fs::read_dir(cache)
+            .expect("pipeline cache directory should exist")
+            .next()
+            .is_none(),
+        "invalid importer staging directory should be removed"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn asset_pipeline_bounds_failed_importer_stderr() {
+    let temp = TempDir::new("asset-pipeline-stderr-limit");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::create_dir_all(temp.path().join("assets")).expect("failed to create assets");
+    fs::create_dir_all(temp.path().join("tools")).expect("failed to create tools");
+    fs::write(temp.path().join("src/main.tua"), "return {}\n").expect("failed to write main");
+    fs::write(temp.path().join("assets/world.txt"), "world\n").expect("failed to write input");
+    fs::write(
+        temp.path().join(CONFIG_FILE),
+        r#"source = "src"
+out = "build"
+
+[[asset_pipelines]]
+name = "world"
+inputs = ["assets/world.txt", "tools/import.sh"]
+command = ["sh", "tools/import.sh"]
+output = "src/generated/world"
+max_stderr_bytes = 8
+"#,
+    )
+    .expect("failed to write config");
+    fs::write(
+        temp.path().join("tools/import.sh"),
+        "printf 'abcdefghSHOULD_NOT_APPEAR' >&2\nexit 7\n",
+    )
+    .expect("failed to write importer");
+
+    let output = tua()
+        .arg("check")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("abcdefgh… [stderr truncated]"), "{stderr}");
+    assert!(!stderr.contains("SHOULD_NOT_APPEAR"), "{stderr}");
+}
+
 #[test]
 fn builtin_audio_analysis_generates_typed_cached_catalog() {
     let temp = TempDir::new("builtin-audio-analysis");

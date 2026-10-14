@@ -232,8 +232,12 @@ fn parse_raw_source(
     lua_version: LuaVersion,
     language: ParsedLanguage,
 ) -> Result<RawParsedSource, Vec<Diagnostic>> {
-    match full_moon::parse_fallible(&parser_source, lua_version).into_result() {
-        Ok(ast) => {
+    let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        full_moon::parse_fallible(&parser_source, lua_version).into_result()
+    }));
+
+    match parsed {
+        Ok(Ok(ast)) => {
             let span = ast
                 .range()
                 .map(|(start, end)| SourceSpan::from_range(start, end));
@@ -249,10 +253,17 @@ fn parse_raw_source(
                 language,
             })
         }
-        Err(errors) => Err(errors
+        Ok(Err(errors)) => Err(errors
             .into_iter()
             .map(|error| parser_error_to_diagnostic(&path, error))
             .collect()),
+        Err(_) => Err(vec![Diagnostic::error(
+            &path,
+            1,
+            1,
+            "parser rejected an unsupported token sequence",
+        )
+        .with_code(DiagnosticCode::SYNTAX_PARSE)]),
     }
 }
 

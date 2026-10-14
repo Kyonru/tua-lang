@@ -21,10 +21,18 @@ jobs:
     permissions:
       contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
-      VSCE_PAT: ${{ secrets.VS_MARKETPLACE_TOKEN }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Install pinned publishing tools
+        run: npm ci --prefix editors/vscode
       - name: Validate publish inputs
         shell: bash
         run: |
@@ -33,26 +41,37 @@ jobs:
             echo "expected release tag like v0.1.0, got '${RELEASE_TAG}'" >&2
             exit 1
           fi
-          if [[ -z "${VSCE_PAT}" ]]; then
-            echo "missing VS_MARKETPLACE_TOKEN secret" >&2
-            exit 1
-          fi
 
-      - name: Download release VSIX assets
+      - name: Download and verify release VSIX assets
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           gh release download "${RELEASE_TAG}" --dir dist --pattern "tua-*.vsix"
-          ls -1 dist/*.vsix
+          gh release download "${RELEASE_TAG}" --dir dist --pattern SHA256SUMS
+          for vsix in dist/*.vsix; do
+            checksum="$(sha256sum "${vsix}" | cut -d ' ' -f 1)  $(basename "${vsix}")"
+            grep -Fqx "${checksum}" dist/SHA256SUMS || {
+              echo "missing or invalid release checksum for ${vsix}" >&2
+              exit 1
+            }
+          done
 
       - name: Publish VSIX packages
+        env:
+          VSCE_PAT: ${{ secrets.VS_MARKETPLACE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "${VSCE_PAT}" ]]; then
+            echo "missing VS_MARKETPLACE_TOKEN secret" >&2
+            exit 1
+          fi
           for vsix in dist/*.vsix; do
             echo "publishing ${vsix}"
-            npx --yes @vscode/vsce publish --packagePath "${vsix}"
+            editors/vscode/node_modules/.bin/vsce publish --packagePath "${vsix}"
           done
 
   publish-open-vsx:
@@ -62,10 +81,18 @@ jobs:
     permissions:
       contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
-      OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Install pinned publishing tools
+        run: npm ci --prefix editors/vscode
       - name: Validate publish inputs
         shell: bash
         run: |
@@ -74,24 +101,35 @@ jobs:
             echo "expected release tag like v0.1.0, got '${RELEASE_TAG}'" >&2
             exit 1
           fi
-          if [[ -z "${OVSX_PAT}" ]]; then
-            echo "missing OPEN_VSX_TOKEN secret" >&2
-            exit 1
-          fi
 
-      - name: Download release VSIX assets
+      - name: Download and verify release VSIX assets
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           gh release download "${RELEASE_TAG}" --dir dist --pattern "tua-*.vsix"
-          ls -1 dist/*.vsix
+          gh release download "${RELEASE_TAG}" --dir dist --pattern SHA256SUMS
+          for vsix in dist/*.vsix; do
+            checksum="$(sha256sum "${vsix}" | cut -d ' ' -f 1)  $(basename "${vsix}")"
+            grep -Fqx "${checksum}" dist/SHA256SUMS || {
+              echo "missing or invalid release checksum for ${vsix}" >&2
+              exit 1
+            }
+          done
 
       - name: Publish VSIX packages
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "${OVSX_PAT}" ]]; then
+            echo "missing OPEN_VSX_TOKEN secret" >&2
+            exit 1
+          fi
           for vsix in dist/*.vsix; do
             echo "publishing ${vsix}"
-            npx --yes ovsx publish --packagePath "${vsix}"
+            editors/vscode/node_modules/.bin/ovsx publish --packagePath "${vsix}"
           done

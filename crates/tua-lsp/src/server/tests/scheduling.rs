@@ -1,6 +1,69 @@
 use super::*;
 
 #[test]
+fn scheduler_rejects_requests_beyond_the_in_flight_job_limit() {
+    let mut server = LspServer::default();
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+
+    for id in 0..crate::server::scheduler::MAX_IN_FLIGHT_JOBS {
+        let output = scheduler.dispatch(
+            &mut server,
+            json!({"jsonrpc":"2.0", "id":id, "method":"tua/unknown", "params":{}}),
+            None,
+        );
+        assert!(output.iter().all(|message| message.get("error").is_none()));
+    }
+
+    let output = scheduler.dispatch(
+        &mut server,
+        json!({"jsonrpc":"2.0", "id":crate::server::scheduler::MAX_IN_FLIGHT_JOBS, "method":"tua/unknown", "params":{}}),
+        None,
+    );
+    assert_eq!(
+        response_with_id(&output, crate::server::scheduler::MAX_IN_FLIGHT_JOBS as u64,)["error"]
+            ["code"],
+        -32000
+    );
+}
+
+#[test]
+fn cancelling_a_coalesced_waiter_restores_request_capacity() {
+    let uri = "file:///tmp/coalesced-capacity.tua";
+    let mut server = LspServer::default();
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+    let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
+
+    for id in 0..crate::server::scheduler::MAX_PENDING_REQUESTS {
+        let output = scheduler.dispatch(
+            &mut server,
+            slow_background_request(id as u64, Some(uri), 1_000),
+            None,
+        );
+        assert!(output.iter().all(|message| message.get("error").is_none()));
+    }
+    let rejected_id = crate::server::scheduler::MAX_PENDING_REQUESTS as u64;
+    let output = scheduler.dispatch(
+        &mut server,
+        slow_background_request(rejected_id, Some(uri), 1_000),
+        None,
+    );
+    assert_eq!(
+        response_with_id(&output, rejected_id)["error"]["code"],
+        -32000
+    );
+
+    assert_eq!(scheduler.cancel(&json!(0))[0]["error"]["code"], -32800);
+    let accepted_id = rejected_id + 1;
+    let output = scheduler.dispatch(
+        &mut server,
+        slow_background_request(accepted_id, Some(uri), 1_000),
+        None,
+    );
+    assert!(output.iter().all(|message| message.get("error").is_none()));
+}
+
+#[test]
 fn input_backlog_prioritizes_typing_and_completion_messages() {
     let uri = "file:///tmp/backlog-priority.tua";
     let before = "local outside_function = 1\nprint()\n";
@@ -230,7 +293,7 @@ fn request_worker_survives_a_large_incomplete_lua_block() {
             server.recent_document_changes.clear();
 
             let received_input = SharedReceivedInputState::default();
-            let (event_tx, event_rx) = std::sync::mpsc::channel();
+            let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
             let mut scheduler = RequestScheduler::new(event_tx, received_input);
             scheduler.dispatch(
                 &mut server,
@@ -611,7 +674,7 @@ fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
 fn shutdown_abandons_internal_workspace_warm_jobs() {
     let uri = "file:///tmp/shutdown-workspace-warm.tua";
     let mut server = LspServer::default();
-    let (event_tx, _event_rx) = std::sync::mpsc::channel();
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, SharedReceivedInputState::default());
 
     server.handle_message(did_open(uri, "local value = 1\n"));
@@ -629,7 +692,7 @@ fn received_document_version_rejects_a_result_before_did_change_is_processed() {
     let uri = "file:///tmp/transport-version-watermark.tua";
     let mut server = LspServer::default();
     let received_input = SharedReceivedInputState::default();
-    let (event_tx, event_rx) = std::sync::mpsc::channel();
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, std::sync::Arc::clone(&received_input));
 
     server.handle_message(did_open(uri, "local value = 1\n"));
@@ -671,7 +734,7 @@ fn did_change_immediately_cancels_stale_foreground_inlay_work() {
     let uri = "file:///tmp/cancel-stale-inlay.tua";
     let mut server = LspServer::default();
     let received_input = SharedReceivedInputState::default();
-    let (event_tx, _event_rx) = std::sync::mpsc::channel();
+    let (event_tx, _event_rx) = std::sync::mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let mut scheduler = RequestScheduler::new(event_tx, received_input);
 
     server.handle_message(did_open(uri, "local value = 1\n"));

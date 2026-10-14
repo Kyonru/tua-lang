@@ -28,6 +28,9 @@ inputs = [
 command = ["python3", "tools/import_maps.py"]
 output = "src/generated/world-maps"
 version = "1"
+timeout_ms = 60000
+max_manifest_bytes = 1048576
+max_stderr_bytes = 65536
 ```
 
 | Field | Meaning |
@@ -38,6 +41,9 @@ version = "1"
 | `builtin` | Built-in importer name. Use `audio-analysis` instead of `command` for cached audio metadata. |
 | `output` | Dedicated generated directory strictly below `source`. Pipeline outputs are materialized here. |
 | `version` | Optional importer/schema version. Change it when behavior changes without a corresponding input-file change. |
+| `timeout_ms` | External importer deadline in milliseconds. Defaults to `60000`; the hard maximum is one hour. |
+| `max_manifest_bytes` | Maximum manifest size. Defaults to 1 MiB; the hard maximum is 16 MiB. |
+| `max_stderr_bytes` | Maximum failed-importer stderr retained in diagnostics. Defaults to 64 KiB; the hard maximum is 1 MiB. Set to `0` to discard stderr. |
 | `options` | Built-in importer scalar options; included in the content cache key. |
 
 Exactly one of `command` and `builtin` is required. See
@@ -121,7 +127,9 @@ Diagnostic fields are:
 
 Importer diagnostics retain their asset path and range in CLI output. A
 non-zero importer exit is always an error; Tua also includes manifest
-diagnostics if the failed importer managed to write a valid manifest.
+diagnostics if the failed importer managed to write a valid, size-bounded
+manifest. Standard output is discarded. Standard error is drained without an
+unbounded memory capture, and diagnostics mark it when only a prefix was kept.
 
 ## Typed Generated Modules
 
@@ -190,7 +198,9 @@ overwrite a different, unowned file already present there.
 
 An asset pipeline command is arbitrary local code with the same permissions as
 Tua. Only enable commands from a project you trust. Tua constrains where declared
-outputs are materialized, but it cannot sandbox the importer process itself.
+outputs are materialized and terminates an external importer at its configured
+deadline, but it cannot sandbox the importer process itself or reliably
+terminate child processes that detach from it.
 
 For deterministic builds:
 

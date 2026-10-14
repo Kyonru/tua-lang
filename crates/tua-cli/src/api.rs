@@ -15,6 +15,7 @@ use crate::source::{discover_build_files, load_type_libraries, read_source_file,
 
 const API_PROTOCOL_VERSION: &str = "1";
 const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
+const MAX_PROTOCOL_LINE_BYTES: usize = 8 * 1024 * 1024;
 
 pub fn run_api_command(workspace: impl AsRef<Path>) -> Result<(), CliError> {
     let stdin = io::stdin();
@@ -44,14 +45,34 @@ fn run_json_lines(
     mut writer: impl Write,
     mut handle: impl FnMut(Value) -> ProtocolOutcome,
 ) -> Result<(), CliError> {
-    let reader = BufReader::new(reader);
-    for line in reader.lines() {
-        let line =
-            line.map_err(|error| CliError::usage(format!("failed to read stdio: {error}")))?;
+    let mut reader = BufReader::new(reader);
+    let mut bytes = Vec::new();
+    loop {
+        bytes.clear();
+        let read = (&mut reader)
+            .take(MAX_PROTOCOL_LINE_BYTES.saturating_add(2) as u64)
+            .read_until(b'\n', &mut bytes)
+            .map_err(|error| CliError::usage(format!("failed to read stdio: {error}")))?;
+        if read == 0 {
+            break;
+        }
+        if bytes.last() == Some(&b'\n') {
+            bytes.pop();
+            if bytes.last() == Some(&b'\r') {
+                bytes.pop();
+            }
+        }
+        if bytes.len() > MAX_PROTOCOL_LINE_BYTES {
+            return Err(CliError::usage(format!(
+                "protocol request exceeds {MAX_PROTOCOL_LINE_BYTES} bytes"
+            )));
+        }
+        let line = std::str::from_utf8(&bytes)
+            .map_err(|error| CliError::usage(format!("failed to read stdio: {error}")))?;
         if line.trim().is_empty() {
             continue;
         }
-        let outcome = match serde_json::from_str::<Value>(&line) {
+        let outcome = match serde_json::from_str::<Value>(line) {
             Ok(message) => handle(message),
             Err(error) => ProtocolOutcome::response(json_rpc_error(
                 Value::Null,
@@ -944,6 +965,30 @@ mod tests {
         assert_eq!(text.lines().count(), 1);
         let response: Value = serde_json::from_str(text.trim()).unwrap();
         assert_eq!(response["error"]["code"], -32700);
+    }
+
+    #[test]
+    fn api_framing_rejects_oversized_lines_before_dispatch() {
+        let input = vec![b' '; MAX_PROTOCOL_LINE_BYTES + 1];
+        let mut output = Vec::new();
+        let error = run_json_lines(input.as_slice(), &mut output, |_| {
+            panic!("oversized input must not reach the handler")
+        })
+        .unwrap_err();
+
+        assert!(error.format_stderr().contains("protocol request exceeds"));
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn api_framing_accepts_crlf_delimited_requests() {
+        let mut output = Vec::new();
+        run_json_lines(b"{}\r\n".as_slice(), &mut output, |_| {
+            ProtocolOutcome::response(json!({"ok": true}))
+        })
+        .unwrap();
+
+        assert_eq!(response_lines(&output), vec![json!({"ok": true})]);
     }
 
     #[test]

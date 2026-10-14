@@ -121,6 +121,8 @@ jobs:
           cache-dependency-path: editors/vscode/package-lock.json
       - name: Install extension dependencies
         run: npm ci --prefix editors/vscode
+      - name: Audit extension dependencies
+        run: npm audit --prefix editors/vscode --audit-level=high
       - name: Check extension
         run: make extension-check
       - name: Test extension host

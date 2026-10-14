@@ -4,7 +4,7 @@ use std::panic::{self, AssertUnwindSafe};
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -24,6 +24,8 @@ const CONTENT_MODIFIED: i64 = -32801;
 const INTERNAL_SLOW_DIAGNOSTICS: &str = "tua/internalSlowDiagnostics";
 const INTERNAL_WORKSPACE_WARM: &str = "tua/internalWorkspaceWarm";
 const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
+pub(super) const MAX_IN_FLIGHT_JOBS: usize = 16;
+pub(super) const MAX_PENDING_REQUESTS: usize = 256;
 
 #[cfg(test)]
 static TEST_SLOW_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -83,7 +85,7 @@ struct RequestWaiter {
 
 impl RequestScheduler {
     pub(super) fn new(
-        event_tx: Sender<ServerEvent>,
+        event_tx: SyncSender<ServerEvent>,
         received_input: SharedReceivedInputState,
     ) -> Self {
         let foreground_tx = spawn_worker_lane("foreground", 2, event_tx.clone());
@@ -125,6 +127,23 @@ impl RequestScheduler {
             .then(|| coalesce_key(&method, &message, generation));
         let (mut outbound, trace) = server.begin_request_trace(&message, &method);
 
+        if self.request_jobs.contains_key(&request_key) {
+            outbound.push(error_response(
+                id,
+                -32600,
+                "request id is already in flight".to_owned(),
+            ));
+            return outbound;
+        }
+        if self.request_jobs.len() >= MAX_PENDING_REQUESTS {
+            outbound.push(error_response(
+                id,
+                -32000,
+                "language server request capacity exceeded".to_owned(),
+            ));
+            return outbound;
+        }
+
         if let Some(job_id) = coalesce_key
             .as_ref()
             .and_then(|key| self.coalesced_jobs.get(key))
@@ -143,6 +162,15 @@ impl RequestScheduler {
                     return outbound;
                 }
             }
+        }
+
+        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS {
+            outbound.push(error_response(
+                id,
+                -32000,
+                "language server request capacity exceeded".to_owned(),
+            ));
+            return outbound;
         }
 
         self.next_job_id = self.next_job_id.saturating_add(1);
@@ -201,6 +229,9 @@ impl RequestScheduler {
         server: &mut LspServer,
         now: std::time::Instant,
     ) -> bool {
+        if self.jobs.len() >= MAX_IN_FLIGHT_JOBS {
+            return false;
+        }
         let Some((uri, pending)) = server.take_next_due_slow_diagnostic(now) else {
             return false;
         };
@@ -295,13 +326,14 @@ impl RequestScheduler {
             return Vec::new();
         };
 
-        for waiter in &mut job.waiters {
-            if waiter.id == *id && !waiter.cancelled {
-                waiter.cancelled = true;
-                break;
-            }
+        if let Some(index) = job
+            .waiters
+            .iter()
+            .position(|waiter| waiter.id == *id && !waiter.cancelled)
+        {
+            job.waiters.remove(index);
         }
-        if job.waiters.iter().all(|waiter| waiter.cancelled) {
+        if job.waiters.is_empty() {
             job.cancelled.store(true, Ordering::Release);
         }
 
@@ -331,24 +363,27 @@ impl RequestScheduler {
             };
             let stale_generation = job.generation != generation;
 
-            for waiter in &mut job.waiters {
+            let mut waiter_index = 0;
+            while waiter_index < job.waiters.len() {
+                let waiter = &job.waiters[waiter_index];
                 let stale_version = match (waiter.document_version, document_version) {
                     (Some(request), Some(current)) => request != current,
                     _ => false,
                 };
                 if waiter.cancelled || (!stale_generation && !stale_version) {
+                    waiter_index += 1;
                     continue;
                 }
-                waiter.cancelled = true;
+                let waiter = job.waiters.remove(waiter_index);
                 self.request_jobs.remove(&request_id_key(&waiter.id));
                 outbound.push(error_response(
-                    waiter.id.clone(),
+                    waiter.id,
                     CONTENT_MODIFIED,
                     "document changed while request was running".to_owned(),
                 ));
             }
 
-            if stale_generation || job.waiters.iter().all(|waiter| waiter.cancelled) {
+            if stale_generation || job.waiters.is_empty() {
                 job.cancelled.store(true, Ordering::Release);
             }
         }
@@ -473,7 +508,7 @@ impl RequestScheduler {
 fn spawn_worker_lane(
     lane: &str,
     worker_count: usize,
-    event_tx: Sender<ServerEvent>,
+    event_tx: SyncSender<ServerEvent>,
 ) -> Sender<WorkerJob> {
     let (tx, rx) = mpsc::channel::<WorkerJob>();
     let rx = Arc::new(Mutex::new(rx));

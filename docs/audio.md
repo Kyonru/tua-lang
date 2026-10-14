@@ -208,6 +208,13 @@ content hash includes its options and audio bytes. Tua also includes the
 bundled analyzer version, so analyzer upgrades invalidate stale catalogs
 without requiring a manual pipeline `version` bump.
 
+Decoding is streamed into envelope windows instead of retaining the complete
+decoded waveform. The analyzer rejects tracks above 192 kHz, more than eight
+channels, longer than one hour, decoded packets above 1,048,576 frames, or
+analysis output above 1,000,000 envelope points. These fixed ceilings bound
+memory and generated-catalog growth even when container metadata is missing or
+incorrect.
+
 Tempo analysis cannot always distinguish the musical quarter-note pulse from
 half-time, double-time, or another strong subdivision. `tempoCandidates` keeps
 up to five local correlation peaks and labels common relationships to the

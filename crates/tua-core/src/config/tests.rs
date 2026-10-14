@@ -106,9 +106,34 @@ version = "3"
             builtin: None,
             output: PathBuf::from("src/generated/world-art"),
             version: "3".to_owned(),
+            timeout_ms: 60_000,
+            max_manifest_bytes: 1_048_576,
+            max_stderr_bytes: 65_536,
             options: std::collections::BTreeMap::new(),
         }]
     );
+}
+
+#[test]
+fn parses_asset_pipeline_resource_limits() {
+    let config = parse_config(
+        r#"
+[[asset_pipelines]]
+name = "world-art"
+inputs = ["maps/world.json"]
+command = ["tools/import"]
+output = "src/generated/world-art"
+timeout_ms = 2500
+max_manifest_bytes = 4096
+max_stderr_bytes = 2048
+"#,
+    )
+    .expect("asset pipeline resource limits should parse");
+
+    let pipeline = &config.asset_pipelines[0];
+    assert_eq!(pipeline.timeout_ms, 2500);
+    assert_eq!(pipeline.max_manifest_bytes, 4096);
+    assert_eq!(pipeline.max_stderr_bytes, 2048);
 }
 
 #[test]

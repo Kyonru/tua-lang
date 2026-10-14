@@ -1,5 +1,6 @@
 use super::*;
 use crate::check_tua_source_with_diagnostics_config;
+use proptest::prelude::*;
 use std::path::PathBuf;
 
 #[test]
@@ -1787,6 +1788,14 @@ fn syntax_errors_produce_tl000x_diagnostics_with_locations() {
     assert!(first.format_cli().contains("error TL0001"));
 }
 
+#[test]
+fn malformed_backtick_after_string_is_a_recoverable_syntax_error() {
+    let source = "\"\"`";
+
+    assert!(parse_raw_tua_source("src/untrusted.tua", source).is_err());
+    assert!(parse_raw_lua_source("src/untrusted.lua", source).is_err());
+}
+
 fn parts(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|part| (*part).to_owned()).collect()
 }
@@ -1802,4 +1811,36 @@ fn assert_compound_lhs_error(source: &str) {
     assert!(diagnostics[0].message.contains("left-hand side"));
     assert!(diagnostics[0].line >= 1);
     assert!(diagnostics[0].column >= 1);
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 128,
+        max_shrink_iters: 1_024,
+        ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn bounded_arbitrary_unicode_never_panics_parser_pipeline(
+        characters in proptest::collection::vec(any::<char>(), 0..=512),
+    ) {
+        let source: String = characters.into_iter().collect();
+        let normalized = normalize_tua_source(source.clone());
+
+        prop_assert_eq!(&normalized.original, &source);
+
+        // Syntax errors are expected for arbitrary input. The property under test is that
+        // untrusted editor and CLI input remains a recoverable parser result.
+        let parsed = parse_raw_tua_source("fuzz/input.tua", source.clone());
+        let _ = parse_raw_lua_source("fuzz/input.lua", source);
+        if parsed.is_ok() {
+            let _ = crate::check_tua_source("fuzz/input.tua", normalized.original.clone());
+            let _ = crate::format_tua_source(
+                "fuzz/input.tua",
+                normalized.original.clone(),
+                &crate::FormatOptions::default(),
+            );
+            let _ = crate::emit_tua_source("fuzz/input.tua", &normalized.original);
+        }
+    }
 }

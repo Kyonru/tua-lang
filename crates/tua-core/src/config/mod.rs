@@ -146,8 +146,26 @@ pub struct AssetPipelineConfig {
     pub output: PathBuf,
     #[serde(default)]
     pub version: String,
+    #[serde(default = "default_asset_pipeline_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_asset_pipeline_max_manifest_bytes")]
+    pub max_manifest_bytes: u64,
+    #[serde(default = "default_asset_pipeline_max_stderr_bytes")]
+    pub max_stderr_bytes: u64,
     #[serde(default)]
     pub options: BTreeMap<String, serde_json::Value>,
+}
+
+const fn default_asset_pipeline_timeout_ms() -> u64 {
+    60_000
+}
+
+const fn default_asset_pipeline_max_manifest_bytes() -> u64 {
+    1_048_576
+}
+
+const fn default_asset_pipeline_max_stderr_bytes() -> u64 {
+    65_536
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

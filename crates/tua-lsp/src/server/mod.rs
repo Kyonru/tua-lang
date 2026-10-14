@@ -28,6 +28,7 @@ use transport::{read_message, write_message};
 
 const SLOW_DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(200);
 const RECENT_REQUEST_LATENCY_LIMIT: usize = 128;
+const EVENT_QUEUE_CAPACITY: usize = 16;
 
 #[derive(Default)]
 struct ReceivedInputState {
@@ -55,7 +56,7 @@ pub fn run_stdio() -> io::Result<()> {
 pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io::Result<()> {
     let mut server = LspServer::default();
     let mut writer = writer;
-    let (event_tx, event_rx) = mpsc::channel();
+    let (event_tx, event_rx) = mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
     let received_input = SharedReceivedInputState::default();
     let mut scheduler = RequestScheduler::new(event_tx.clone(), Arc::clone(&received_input));
     let mut pending_messages = VecDeque::new();
@@ -161,7 +162,8 @@ pub(crate) fn run(reader: impl Read + Send + 'static, writer: impl Write) -> io:
             }
         }
 
-        loop {
+        let event_budget = EVENT_QUEUE_CAPACITY.saturating_sub(pending_messages.len());
+        for _ in 0..event_budget {
             match event_rx.try_recv() {
                 Ok(event) => process_server_event(
                     event,
