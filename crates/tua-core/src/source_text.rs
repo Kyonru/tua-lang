@@ -101,6 +101,21 @@ pub(crate) fn byte_for_column(line: &str, column: usize) -> usize {
         .unwrap_or(line.len())
 }
 
+pub(crate) fn byte_for_position(source: &str, position: SourcePosition) -> Option<usize> {
+    let mut offset = 0usize;
+
+    for (line_index, line) in source.split_inclusive('\n').enumerate() {
+        if line_index + 1 == position.line {
+            let line = line.trim_end_matches(['\n', '\r']);
+            return Some(offset + byte_for_column(line, position.column));
+        }
+
+        offset += line.len();
+    }
+
+    (position.line == source.lines().count() + 1).then_some(source.len())
+}
+
 pub(crate) fn column_for_byte(line: &str, byte: usize) -> usize {
     line[..byte.min(line.len())].chars().count() + 1
 }

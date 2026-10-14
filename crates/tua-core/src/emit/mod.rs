@@ -2,9 +2,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
 use full_moon::ast::span::ContainedSpan;
-use full_moon::ast::{self, Expression, Field, LastStmt, Var};
+use full_moon::ast::{self, Expression, Field, LastStmt, LuaVersion, Var};
 use full_moon::tokenizer::TokenReference;
-use full_moon::visitors::VisitorMut;
+use full_moon::visitors::{Visitor, VisitorMut};
 
 use crate::classes;
 use crate::runtime_type;
@@ -1388,58 +1388,61 @@ fn lower_compound_assignment_operations(
     document: &lowering::LoweringDocument,
 ) -> Vec<lowering::LoweringOperation> {
     let output = document.code();
-    let mut operations = Vec::new();
-    let mut offset = 0usize;
+    let Ok(ast) = full_moon::parse_fallible(&output, LuaVersion::luau()).into_result() else {
+        // The final Lua 5.1 validation reports malformed intermediate output
+        // with source provenance. Avoid turning an internal lowering failure
+        // into a compiler panic here.
+        return Vec::new();
+    };
+    let mut collector = CompoundAssignmentCollector::default();
+    collector.visit_ast(&ast);
 
-    for line in output.split_inclusive('\n') {
-        let body = line.strip_suffix('\n').unwrap_or(line);
-        let replacement = lower_compound_assignment_line(body);
+    collector
+        .assignments
+        .into_iter()
+        .filter_map(|assignment| {
+            let binary_operator = compound_binary_operator(assignment.compound_operator())?;
+            let token = assignment.compound_operator().token();
+            let (start, end) = full_moon::node::Node::range(token)?;
+            let start = crate::source_text::byte_for_position(
+                &output,
+                SourcePosition::from_full_moon(start),
+            )?;
+            let end = crate::source_text::byte_for_position(
+                &output,
+                SourcePosition::from_full_moon(end),
+            )?;
+            let lhs = assignment.lhs().to_string();
 
-        if replacement != body {
-            operations.push(document.operation(
+            Some(document.operation(
                 LoweringKind::CompoundAssignment,
-                offset..offset + body.len(),
-                replacement,
-            ));
-        }
-        offset += line.len();
-    }
-
-    operations
+                start..end,
+                format!("= {} {binary_operator}", lhs.trim()),
+            ))
+        })
+        .collect()
 }
 
-fn lower_compound_assignment_line(line: &str) -> String {
-    let trimmed = line.trim_start_matches(char::is_whitespace);
-    let indent = &line[..line.len() - trimmed.len()];
-    let Some((lhs, rest)) = split_plain_field_chain_prefix(trimmed) else {
-        return line.to_owned();
-    };
-    let rest = rest.trim_start();
-    let Some((binary_operator, rhs)) = split_compound_operator(rest) else {
-        return line.to_owned();
-    };
-
-    format!(
-        "{indent}{lhs} = {lhs} {binary_operator} {}",
-        rhs.trim_start()
-    )
+#[derive(Default)]
+struct CompoundAssignmentCollector {
+    assignments: Vec<ast::CompoundAssignment>,
 }
 
-fn split_plain_field_chain_prefix(input: &str) -> Option<(&str, &str)> {
-    let mut end = consume_identifier(input)?;
-
-    loop {
-        let rest = &input[end..];
-
-        if !rest.starts_with('.') {
-            break;
-        }
-
-        let field_end = consume_identifier(&rest[1..])?;
-        end += 1 + field_end;
+impl Visitor for CompoundAssignmentCollector {
+    fn visit_compound_assignment(&mut self, assignment: &ast::CompoundAssignment) {
+        self.assignments.push(assignment.clone());
     }
+}
 
-    Some((&input[..end], &input[end..]))
+fn compound_binary_operator(operator: &ast::CompoundOp) -> Option<&'static str> {
+    match operator {
+        ast::CompoundOp::PlusEqual(_) => Some("+"),
+        ast::CompoundOp::MinusEqual(_) => Some("-"),
+        ast::CompoundOp::StarEqual(_) => Some("*"),
+        ast::CompoundOp::SlashEqual(_) => Some("/"),
+        ast::CompoundOp::PercentEqual(_) => Some("%"),
+        _ => None,
+    }
 }
 
 fn consume_identifier(input: &str) -> Option<usize> {
@@ -1469,18 +1472,6 @@ fn is_identifier_start(character: char) -> bool {
 
 fn is_identifier_part(character: char) -> bool {
     is_identifier_start(character) || character.is_ascii_digit()
-}
-
-fn split_compound_operator(input: &str) -> Option<(&'static str, &str)> {
-    [
-        ("+=", "+"),
-        ("-=", "-"),
-        ("*=", "*"),
-        ("/=", "/"),
-        ("%=", "%"),
-    ]
-    .into_iter()
-    .find_map(|(sugar, binary)| input.strip_prefix(sugar).map(|rhs| (binary, rhs)))
 }
 
 fn lower_builtin_call_operations(

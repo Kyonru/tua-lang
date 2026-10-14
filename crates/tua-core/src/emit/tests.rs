@@ -854,6 +854,50 @@ player.hp = player.hp - amount
 }
 
 #[test]
+fn lowers_compound_assignments_in_inline_statement_positions() {
+    let emitted = emit_tua_source(
+        "src/inline-compound.tua",
+        r#"local x: number = 1; x += 2; x *= 3
+if ready then x -= 1 end
+do x += -- keep the rhs comment
+  4 end
+return x
+"#,
+    )
+    .expect("inline compound assignments should emit");
+
+    assert_eq!(
+        emitted,
+        r#"local x = 1; x = x + 2; x = x * 3
+if ready then x = x - 1 end
+do x = x + -- keep the rhs comment
+  4 end
+return x
+"#
+    );
+
+    crate::parse_raw_lua_source("build/inline-compound.lua", emitted)
+        .expect("lowered inline assignments must parse as Lua 5.1");
+}
+
+#[test]
+fn inline_compound_assignment_keeps_lowering_provenance() {
+    let emission = emit_tua_source_artifact(
+        "src/inline-compound.tua",
+        "local x: number = 1; x += 2; return x\n",
+    )
+    .expect("inline compound assignment should emit");
+
+    assert_eq!(emission.code, "local x = 1; x = x + 2; return x\n");
+    assert_eq!(emission.provenance.len(), 1);
+    assert_eq!(
+        emission.provenance[0].lowering,
+        LoweringKind::CompoundAssignment
+    );
+    assert_eq!(emission.provenance[0].source_span.start.line, 1);
+}
+
+#[test]
 fn snapshot_lowers_love_asset_loader_calls() {
     let emitted = emit_tua_source(
         "src/assets.tua",

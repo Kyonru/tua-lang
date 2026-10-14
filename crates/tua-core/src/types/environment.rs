@@ -238,7 +238,7 @@ fn resolve_shallow_alias_chain(
     visiting: &mut BTreeSet<String>,
 ) -> Type {
     if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
-        return Type::Any;
+        return ty.clone();
     }
     let Type::Alias(name) = ty else {
         return ty.clone();
@@ -261,7 +261,7 @@ fn type_contains_alias_cycle(
     visiting: &mut BTreeSet<String>,
 ) -> bool {
     if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
-        return true;
+        return false;
     }
 
     match ty {
@@ -316,7 +316,7 @@ struct AliasResolutionContext {
 impl AliasResolutionContext {
     fn resolve(&mut self, environment: &TypeEnvironment, ty: &Type) -> Type {
         if self.depth >= MAX_ALIAS_RESOLUTION_DEPTH {
-            return Type::Any;
+            return ty.clone();
         }
 
         self.depth += 1;
@@ -3582,7 +3582,7 @@ fn resolve_aliases_from_map(aliases: &BTreeMap<String, Type>, ty: &Type, depth: 
         visiting: &mut BTreeSet<String>,
     ) -> Type {
         if depth >= MAX_ALIAS_RESOLUTION_DEPTH {
-            return Type::Any;
+            return ty.clone();
         }
         let Type::Alias(name) = ty else {
             return ty.clone();

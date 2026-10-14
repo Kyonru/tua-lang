@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::model::{is_index_signature_field, FunctionType, TableShape, Type, TypeAlias};
 
-const MAX_ALIAS_DEPTH: usize = 64;
+const MAX_ASSIGNABILITY_DEPTH: usize = 64;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AssignabilityPathSegment {
@@ -149,8 +149,8 @@ impl TypeContext {
             return Ok(());
         }
 
-        if depth >= MAX_ALIAS_DEPTH {
-            return Ok(());
+        if depth >= MAX_ASSIGNABILITY_DEPTH {
+            return Err(AssignabilityFailure::type_mismatch(source, target));
         }
 
         match (source, target) {
@@ -287,7 +287,7 @@ impl TypeContext {
             return true;
         }
 
-        if depth >= MAX_ALIAS_DEPTH {
+        if depth >= MAX_ASSIGNABILITY_DEPTH {
             return false;
         }
 
@@ -305,7 +305,7 @@ impl TypeContext {
             return true;
         }
 
-        if depth >= MAX_ALIAS_DEPTH {
+        if depth >= MAX_ASSIGNABILITY_DEPTH {
             return false;
         }
 

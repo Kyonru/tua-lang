@@ -14,6 +14,38 @@ fn primitive_assignability_requires_matching_primitives() {
 }
 
 #[test]
+fn assignability_depth_budget_fails_closed_for_distinct_deep_types() {
+    let mut source = Type::string();
+    let mut target = Type::number();
+
+    for _ in 0..65 {
+        source = Type::array(source);
+        target = Type::array(target);
+    }
+
+    assert!(!is_assignable(&source, &target));
+    assert!(is_assignable(&source, &source));
+}
+
+#[test]
+fn alias_resolution_depth_budget_preserves_an_unresolved_alias() {
+    let mut source = String::new();
+    for index in 0..65 {
+        source.push_str(&format!("type Alias{index} = Alias{}\n", index + 1));
+    }
+    source.push_str("type Alias65 = number\n");
+
+    let parsed = parse_tua_source("src/deep-aliases.tua", source)
+        .expect("deep acyclic aliases should parse");
+    let environment =
+        build_type_environment(&parsed).expect("deep acyclic aliases should build an environment");
+    let resolved = environment.resolve_aliases(&Type::alias("Alias0"));
+
+    assert_eq!(resolved, Type::alias("Alias64"));
+    assert_ne!(resolved, Type::Any);
+}
+
+#[test]
 fn arrays_parenthesize_union_and_function_item_types() {
     let union = Type::array(Type::union([Type::number(), Type::string()]));
     let function = Type::array(Type::function_returns([Type::number()], [Type::string()]));
