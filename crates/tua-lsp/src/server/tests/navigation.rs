@@ -596,7 +596,7 @@ local copied = <|local_usage|>player
 player.<|local_hp_ref|>hp = 12
 local imported: Types.<|remote_type|>Enemy = { hp = 20 }
 -- file: src/types.tua
-type Enemy = {
+export type Enemy = {
   hp: number,
 }
 

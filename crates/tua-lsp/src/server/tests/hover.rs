@@ -334,7 +334,7 @@ local enemyFromLuaDocModule: LuaDocTypes.Enemy = nil
         "nil\n\n-- Feature",
         "nil\n\nlocal touched = true\n\n-- Feature",
     );
-    let types = r#"type Player = { hp: number }
+    let types = r#"export type Player = { hp: number }
 
 return {}
 "#;

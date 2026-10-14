@@ -1331,7 +1331,7 @@ fn nested_project_type_aliases_resolve_when_outer_workspace_is_open() {
 
 local playerFromTuaModule: Types.Player = nil
 "#;
-    let types = r#"type Player = { hp: number }
+    let types = r#"export type Player = { hp: number }
 
 return {}
 "#;
