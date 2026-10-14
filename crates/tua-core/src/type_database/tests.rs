@@ -145,6 +145,44 @@ export type { Player } from "./a"
 }
 
 #[test]
+fn deeply_nested_type_reexports_resolve_without_using_the_call_stack() {
+    const REEXPORT_COUNT: usize = 512;
+
+    let mut source = String::from(
+        "-- file: src/main.tua\nimport type { Player } from \"./layer_000\"\nlocal _player: Player = { hp = 10 }\n",
+    );
+    for index in 0..REEXPORT_COUNT {
+        source.push_str(&format!("-- file: src/layer_{index:03}.d.tua\n"));
+        if index + 1 == REEXPORT_COUNT {
+            source.push_str("export type Player = { hp: number }\n");
+        } else {
+            source.push_str(&format!(
+                "export type {{ Player }} from \"./layer_{:03}\"\n",
+                index + 1
+            ));
+        }
+    }
+
+    let fixture = Fixture::parse(&source);
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+    let binding = snapshot
+        .type_database()
+        .resolve_type_name(snapshot.module_graph(), "src/main.tua", "Player")
+        .expect("deeply re-exported type should resolve");
+
+    assert_eq!(
+        binding.ty,
+        Type::table([("hp", TableField::required(Type::number()))])
+    );
+    assert!(
+        snapshot.diagnostics("src/main.tua").is_empty(),
+        "unexpected diagnostics: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+}
+
+#[test]
 fn type_import_names_cannot_shadow_runtime_or_local_type_names() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

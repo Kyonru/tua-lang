@@ -567,6 +567,52 @@ return { name = "b" }
 }
 
 #[test]
+fn deeply_nested_require_graphs_do_not_use_the_call_stack() {
+    const MODULE_COUNT: usize = 4_096;
+
+    let paths = (0..MODULE_COUNT)
+        .map(|index| PathBuf::from(format!("src/module_{index:04}.tua")))
+        .collect::<Vec<_>>();
+    let span = SourceSpan {
+        start: crate::SourcePosition { line: 1, column: 1 },
+        end: crate::SourcePosition { line: 1, column: 2 },
+    };
+    let mut graph = ModuleGraph::default();
+
+    for (index, path) in paths.iter().enumerate() {
+        let dependency = paths[(index + 1) % MODULE_COUNT].clone();
+        graph.modules.insert(
+            path.clone(),
+            ModuleGraphModule {
+                path: path.clone(),
+                source_kind: AnalysisSourceKind::Tua,
+                require_edges: vec![RequireGraphEdge {
+                    source: path.clone(),
+                    module: format!("module_{:04}", (index + 1) % MODULE_COUNT),
+                    kind: ModuleSpecifierKind::Require,
+                    type_only: false,
+                    span,
+                    resolution: RequireResolution::Resolved { path: dependency },
+                }],
+                exports: Vec::new(),
+            },
+        );
+    }
+
+    graph.collect_cycle_diagnostics();
+
+    assert_eq!(graph.cycles.len(), 1);
+    assert_eq!(graph.cycles[0].len(), MODULE_COUNT);
+    assert_eq!(graph.cycles[0].first(), paths.first());
+    assert_eq!(graph.cycles[0].last(), paths.last());
+    let diagnostic = graph
+        .diagnostics(&paths[0])
+        .first()
+        .expect("cycle should be reported at its deterministic entry module");
+    assert_eq!(diagnostic.code, Some(DiagnosticCode::LINT_REQUIRE_CYCLE));
+}
+
+#[test]
 fn tracks_lua_doc_export_origins() {
     let (audio, audio_hir, audio_exports) = lua_input(
         "src/audio.lua",

@@ -479,56 +479,70 @@ impl ModuleGraph {
     }
 
     fn collect_cycle_diagnostics(&mut self) {
-        let mut visiting = Vec::new();
         let mut visited = BTreeSet::new();
         let mut reported = BTreeSet::new();
 
         for path in self.modules.keys().cloned().collect::<Vec<_>>() {
-            self.visit_cycles(&path, &mut visiting, &mut visited, &mut reported);
+            let path = normalize_path(path);
+            if !visited.insert(path.clone()) {
+                continue;
+            }
+
+            let mut visiting = vec![path.clone()];
+            let mut active = BTreeMap::from([(path.clone(), 0usize)]);
+            let mut stack = vec![(path.clone(), self.runtime_dependencies(&path), 0usize)];
+
+            while let Some((current_path, dependencies, next_dependency)) = stack.last_mut() {
+                let Some(dependency) = dependencies.get(*next_dependency).cloned() else {
+                    active.remove(current_path);
+                    stack.pop();
+                    visiting.pop();
+                    continue;
+                };
+                *next_dependency += 1;
+
+                if let Some(&index) = active.get(&dependency) {
+                    let cycle = visiting[index..].to_vec();
+                    if reported.insert(cycle.clone()) {
+                        self.cycles.push(cycle.clone());
+                        let display = cycle
+                            .iter()
+                            .chain(std::iter::once(&dependency))
+                            .map(|path| path.to_string_lossy().replace('\\', "/"))
+                            .collect::<Vec<_>>()
+                            .join(" -> ");
+
+                        self.diagnostics
+                            .entry(dependency.clone())
+                            .or_default()
+                            .push(
+                                Diagnostic::new(
+                                    dependency,
+                                    1,
+                                    1,
+                                    DiagnosticSeverity::Warning,
+                                    format!("require cycle detected: {display}"),
+                                )
+                                .with_code(DiagnosticCode::LINT_REQUIRE_CYCLE),
+                            );
+                    }
+                    continue;
+                }
+
+                if !visited.insert(dependency.clone()) {
+                    continue;
+                }
+
+                let child_dependencies = self.runtime_dependencies(&dependency);
+                active.insert(dependency.clone(), visiting.len());
+                visiting.push(dependency.clone());
+                stack.push((dependency, child_dependencies, 0));
+            }
         }
     }
 
-    fn visit_cycles(
-        &mut self,
-        path: &Path,
-        visiting: &mut Vec<PathBuf>,
-        visited: &mut BTreeSet<PathBuf>,
-        reported: &mut BTreeSet<Vec<PathBuf>>,
-    ) {
-        let path = normalize_path(path);
-
-        if let Some(index) = visiting.iter().position(|candidate| candidate == &path) {
-            let cycle = visiting[index..].to_vec();
-            if reported.insert(cycle.clone()) {
-                self.cycles.push(cycle.clone());
-                let display = cycle
-                    .iter()
-                    .chain(std::iter::once(&path))
-                    .map(|path| path.to_string_lossy().replace('\\', "/"))
-                    .collect::<Vec<_>>()
-                    .join(" -> ");
-
-                self.diagnostics.entry(path.clone()).or_default().push(
-                    Diagnostic::new(
-                        path,
-                        1,
-                        1,
-                        DiagnosticSeverity::Warning,
-                        format!("require cycle detected: {display}"),
-                    )
-                    .with_code(DiagnosticCode::LINT_REQUIRE_CYCLE),
-                );
-            }
-            return;
-        }
-
-        if !visited.insert(path.clone()) {
-            return;
-        }
-
-        visiting.push(path.clone());
-        let dependencies = self
-            .module(&path)
+    fn runtime_dependencies(&self, path: &Path) -> Vec<PathBuf> {
+        self.module(path)
             .map(|module| {
                 module
                     .require_edges
@@ -541,15 +555,9 @@ impl ModuleGraph {
                             None
                         }
                     })
-                    .collect::<Vec<_>>()
+                    .collect()
             })
-            .unwrap_or_default();
-
-        for dependency in dependencies {
-            self.visit_cycles(&dependency, visiting, visited, reported);
-        }
-
-        visiting.pop();
+            .unwrap_or_default()
     }
 }
 
