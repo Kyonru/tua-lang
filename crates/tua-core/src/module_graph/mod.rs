@@ -372,19 +372,31 @@ impl ModuleGraph {
                         .unwrap_or_default();
 
                     for target in target_exports {
-                        if self
+                        let existing = self
                             .export(&forward.source_path, &target.public_name)
-                            .is_some()
-                        {
+                            .cloned();
+                        let should_replace = existing
+                            .as_ref()
+                            .is_none_or(|entry| entry.field.ty == crate::Type::Any);
+                        if !should_replace {
                             continue;
                         }
                         let entry = ModuleExportEntry {
                             module_path: forward.source_path.clone(),
                             public_name: target.public_name,
-                            symbol_id: None,
-                            definition_span: forward.span,
-                            export_span: forward.span,
-                            field: target.field,
+                            symbol_id: existing.as_ref().and_then(|entry| entry.symbol_id),
+                            definition_span: existing
+                                .as_ref()
+                                .map(|entry| entry.definition_span)
+                                .unwrap_or(forward.span),
+                            export_span: existing
+                                .as_ref()
+                                .map(|entry| entry.export_span)
+                                .unwrap_or(forward.span),
+                            field: merge_forwarded_field(
+                                existing.as_ref().map(|entry| &entry.field),
+                                target.field,
+                            ),
                             origin: self
                                 .modules
                                 .get(&forward.source_path)

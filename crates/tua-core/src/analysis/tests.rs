@@ -943,6 +943,53 @@ local value: string = Projected.value
 }
 
 #[test]
+fn whole_module_forwarding_replaces_provisional_any_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/leaf.tua
+return { value = 42 }
+-- file: src/z_mapped.tua
+local Leaf = require("leaf")
+return { value = Leaf.value }
+-- file: src/a_whole.tua
+local Mapped = require("z_mapped")
+return Mapped
+-- file: src/main.tua
+local Forwarded = require("a_whole")
+local wrong: string = Forwarded.value
+local value = Forwarded.<|hover|>value
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let path = PathBuf::from("src/main.tua");
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics(&path);
+    let hover = snapshot
+        .hover(&path, fixture.position("hover"))
+        .expect("forwarded number should hover");
+
+    assert_eq!(
+        snapshot
+            .module_graph()
+            .export("src/a_whole.tua", "value")
+            .map(|entry| &entry.field.ty),
+        Some(&Type::number())
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected string, found number")
+        }),
+        "{diagnostics:?}"
+    );
+    assert!(hover.contents.contains("number"), "{hover:?}");
+}
+
+#[test]
 fn nested_builtin_configuration_fields_hover_and_navigate_to_virtual_schemas() {
     let fixture = Fixture::parse(
         r#"local Player = spriteSheet({
