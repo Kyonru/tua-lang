@@ -69,12 +69,36 @@ async function activate(context) {
   context.subscriptions.push(registerObjectPoolDevex({ getClient: () => client }));
   context.subscriptions.push(registerAudioDevex({ getClient: () => client }));
   context.subscriptions.push(registerServerHealthFeature({ getClient: () => client }));
+  context.subscriptions.push(await registerProjectContext());
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(handleConfigurationChange));
   statusItem = createStatusItem();
   context.subscriptions.push(statusItem);
   debugLog(`${DEBUG_LSP_ENV}=1 enabled; verbose extension/LSP trace is active.`);
 
   await startLanguageServer();
+}
+
+async function registerProjectContext() {
+  const projectWatcher = vscode.workspace.createFileSystemWatcher("**/{tua.toml,*.tua}");
+  const refresh = async () => {
+    const config = await vscode.workspace.findFiles("**/tua.toml", undefined, 1);
+    const sources = config.length
+      ? []
+      : await vscode.workspace.findFiles("**/*.tua", undefined, 1);
+    await vscode.commands.executeCommand("setContext", "tua.hasProject", Boolean(config.length || sources.length));
+  };
+  const reveal = () =>
+    vscode.commands.executeCommand("setContext", "tua.hasProject", true);
+  const disposables = [
+    projectWatcher,
+    projectWatcher.onDidCreate(reveal),
+    projectWatcher.onDidDelete(() => void refresh()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => void refresh()),
+  ];
+
+  await refresh();
+
+  return vscode.Disposable.from(...disposables);
 }
 
 function debugLog(message, options) {

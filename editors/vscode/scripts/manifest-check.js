@@ -166,6 +166,37 @@ for (const requiredPath of [tuaLanguage.configuration]) {
   assertExistingJson(requiredPath, "language configuration");
 }
 
+const tomlLanguage = languages.find((language) => language.id === "toml");
+if (!tomlLanguage?.filenames?.includes("tua.toml")) {
+  console.error("tua.toml should be associated with the TOML language.");
+  process.exit(1);
+}
+
+if (!manifest.activationEvents?.includes("workspaceContains:**/tua.toml")) {
+  console.error("A workspace containing tua.toml should activate the extension.");
+  process.exit(1);
+}
+
+const editorTitle = manifest.contributes?.menus?.["editor/title"] || [];
+for (const command of [
+  "tua.runLoveProject",
+  "tua.debugLoveProject",
+  "tua.restartLoveProject",
+]) {
+  if (!editorTitle.some((item) => item.command === command && item.when === "editorLangId == tua")) {
+    console.error(`LOVE editor title command should be scoped to Tua editors: ${command}`);
+    process.exit(1);
+  }
+}
+
+const assetsView = (manifest.contributes?.views?.explorer || []).find(
+  (view) => view.id === "tua.assets",
+);
+if (assetsView?.when !== "tua.hasProject") {
+  console.error("The Tua Assets view should only appear when a Tua project is present.");
+  process.exit(1);
+}
+
 const grammars = manifest.contributes?.grammars || [];
 const tuaGrammar = grammars.find((grammar) => grammar.language === "tua");
 if (!tuaGrammar) {

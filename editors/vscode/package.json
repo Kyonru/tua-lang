@@ -37,6 +37,7 @@
     "onCommand:tua.debugLoveProject",
     "onDebugResolve:lua-local",
     "onLanguage:tua",
+    "workspaceContains:**/tua.toml",
     "workspaceContains:**/*.tua"
   ],
   "dependencies": {
@@ -762,7 +763,7 @@
         {
           "id": "tua.assets",
           "name": "Tua Assets",
-          "when": "workspaceFolderCount > 0"
+          "when": "tua.hasProject"
         }
       ]
     },
@@ -785,17 +786,17 @@
         },
         {
           "command": "tua.runLoveProject",
-          "when": "workspaceFolderCount > 0",
+          "when": "editorLangId == tua",
           "group": "navigation@48"
         },
         {
           "command": "tua.debugLoveProject",
-          "when": "workspaceFolderCount > 0",
+          "when": "editorLangId == tua",
           "group": "navigation@49"
         },
         {
           "command": "tua.restartLoveProject",
-          "when": "workspaceFolderCount > 0",
+          "when": "editorLangId == tua",
           "group": "navigation@50"
         },
         {
@@ -964,6 +965,12 @@
           "light": "./assets/logo.svg",
           "dark": "./assets/logo.svg"
         }
+      },
+      {
+        "id": "toml",
+        "filenames": [
+          "tua.toml"
+        ]
       }
     ],
     "grammars": [

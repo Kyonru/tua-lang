@@ -211,6 +211,15 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assertRegisteredCommands(state);
     assert.strictEqual(state.clients.length, 1, "activation should create one language client");
     assert.strictEqual(state.clients[0].starts, 1, "activation should start the client");
+    assert(
+      state.executedCommands.some(
+        (entry) =>
+          entry.command === "setContext" &&
+          entry.args[0] === "tua.hasProject" &&
+          entry.args[1] === true,
+      ),
+      "activation should expose Tua project context for project-only views",
+    );
     assert.deepStrictEqual(
       state.outputChannelCalls,
       [{ name: "tua", options: { log: true } }],
@@ -2344,6 +2353,16 @@ function createMockState(workspace, options = {}) {
         fileWatchers.push(watcher);
         return watcher;
       },
+      findFiles(glob) {
+        if (glob === "**/tua.toml" && fs.existsSync(path.join(workspace, "tua.toml"))) {
+          return Promise.resolve([vscode.Uri.file(path.join(workspace, "tua.toml"))]);
+        }
+        if (glob === "**/*.tua" && fs.existsSync(path.join(workspace, "private.tua"))) {
+          return Promise.resolve([vscode.Uri.file(path.join(workspace, "private.tua"))]);
+        }
+
+        return Promise.resolve([]);
+      },
       getConfiguration() {
         return {
           get(key, defaultValue) {
@@ -2388,6 +2407,9 @@ function createMockState(workspace, options = {}) {
       },
       onDidChangeConfiguration(listener) {
         configurationListeners.push(listener);
+        return { dispose() {} };
+      },
+      onDidChangeWorkspaceFolders() {
         return { dispose() {} };
       },
       onDidChangeTextDocument(listener) {
