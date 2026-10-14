@@ -1499,7 +1499,8 @@ impl LspServer {
                 "queuedHigh": self.workspace_warm.high.len(),
                 "queuedLow": self.workspace_warm.low.len(),
                 "staleResults": self.workspace_warm.stale_results,
-                "snapshotReadyRevision": self.workspace_warm.snapshot_ready_revision
+                "snapshotReadyRevision": self.workspace_warm.snapshot_ready_revision,
+                "snapshotFailedRevision": self.workspace_warm.snapshot_failed_revision
             },
             "invalidations": stats.invalidations,
             "dependentInvalidations": stats.dependent_invalidations

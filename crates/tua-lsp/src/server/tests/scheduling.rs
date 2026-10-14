@@ -741,6 +741,30 @@ fn idle_workspace_warm_adopts_files_and_prepares_the_project_snapshot() {
 }
 
 #[test]
+fn cache_stats_reports_a_terminal_workspace_snapshot_failure() {
+    let mut server = TestServer::new();
+    server.server.workspace_warm.enabled = true;
+    let revision = server.server.analysis.revision();
+    let work = server
+        .server
+        .take_next_workspace_warm_work()
+        .expect("the workspace snapshot should be queued");
+
+    assert!(matches!(
+        work,
+        WorkspaceWarmWork::Snapshot {
+            revision: work_revision
+        } if work_revision == revision
+    ));
+    server.server.finish_workspace_warm(&work, None, false);
+    server.send(cache_stats_request(100));
+
+    let warm = &response_with_id(server.output(), 100)["result"]["workspaceWarm"];
+    assert_eq!(warm["snapshotReadyRevision"], Value::Null);
+    assert_eq!(warm["snapshotFailedRevision"].as_u64(), Some(revision));
+}
+
+#[test]
 fn edit_rejects_and_requeues_a_stale_workspace_warm_result() {
     let uri = "file:///tmp/stale-workspace-warm.tua";
     let before = "local value = 1\n";
