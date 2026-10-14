@@ -301,11 +301,47 @@ async function openFileAtMappedLine(filePath, lineOneBased) {
   );
   const document = visibleEditor?.document || (await vscode.workspace.openTextDocument(uri));
 
+  const viewColumn = visibleEditor?.viewColumn || vscode.ViewColumn.Beside;
   await vscode.window.showTextDocument(document, {
     preview: true,
+    preserveFocus: false,
     selection,
-    viewColumn: visibleEditor?.viewColumn || vscode.ViewColumn.Beside,
+    viewColumn,
   });
+
+  if (
+    visibleEditor &&
+    normalizePath(vscode.window.activeTextEditor?.document.uri.fsPath || "") !==
+      normalizePath(filePath)
+  ) {
+    const focusCommand = editorGroupFocusCommand(viewColumn);
+    if (focusCommand) {
+      await vscode.commands.executeCommand(focusCommand);
+    }
+    await vscode.window.showTextDocument(document, {
+      preview: true,
+      preserveFocus: false,
+      selection,
+      viewColumn,
+    });
+  }
+}
+
+function editorGroupFocusCommand(viewColumn) {
+  const names = [
+    "First",
+    "Second",
+    "Third",
+    "Fourth",
+    "Fifth",
+    "Sixth",
+    "Seventh",
+    "Eighth",
+    "Ninth",
+  ];
+  const name = names[viewColumn - 1];
+
+  return name ? `workbench.action.focus${name}EditorGroup` : undefined;
 }
 
 function activeLineOneBased() {
