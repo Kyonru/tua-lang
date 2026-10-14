@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write as _;
 
 #[test]
 fn definition_resolves_metatable_method_and_self_field_through_semantic_index() {
@@ -677,6 +678,119 @@ export type <|type_def|>Player<|/type_def|> = {
     );
     assert_eq!(completion_labels(&output, 3), ["health", "name"]);
     assert_definition_text(&output, 4, &types_uri, types, "Player");
+}
+
+#[test]
+fn deep_named_type_reexports_agree_across_editor_surfaces() {
+    const DEPTHS: [usize; 5] = [1, 16, 64, 65, 256];
+    let mut fixture_source =
+        String::from("-- file: tua.toml\nsource = \"src\"\n-- file: src/main.tua\n");
+
+    for depth in DEPTHS {
+        writeln!(
+            fixture_source,
+            "import type {{ Player{depth} }} from \"./chain_{depth:03}/layer_000\""
+        )
+        .unwrap();
+        writeln!(
+            fixture_source,
+            "local player_{depth}: <|type_ref_{depth}|>Player{depth} = {{ health = {depth}, name = \"player\" }}"
+        )
+        .unwrap();
+        writeln!(
+            fixture_source,
+            "local selected_{depth} = player_{depth}.health"
+        )
+        .unwrap();
+        writeln!(fixture_source, "local copied_{depth} = player_{depth}").unwrap();
+    }
+
+    for depth in DEPTHS {
+        for layer in 0..depth {
+            let target = if layer + 1 == depth {
+                "./leaf".to_owned()
+            } else {
+                format!("./layer_{:03}", layer + 1)
+            };
+            writeln!(
+                fixture_source,
+                "-- file: src/chain_{depth:03}/layer_{layer:03}.d.tua"
+            )
+            .unwrap();
+            writeln!(
+                fixture_source,
+                "export type {{ Player{depth} }} from \"{target}\""
+            )
+            .unwrap();
+        }
+        writeln!(fixture_source, "-- file: src/chain_{depth:03}/leaf.d.tua").unwrap();
+        writeln!(
+            fixture_source,
+            "export type Player{depth} = {{ health: number, name: string }}"
+        )
+        .unwrap();
+    }
+
+    let fixture = Fixture::parse(&fixture_source);
+    let temp = fixture
+        .write_to_temp("deep-named-type-reexports-lsp-surfaces")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let mut messages = vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+    ];
+
+    for (index, depth) in DEPTHS.into_iter().enumerate() {
+        let first_id = 2 + index as u64 * 3;
+        messages.push(hover_request(
+            first_id,
+            &main_uri,
+            main,
+            &format!("player_{depth}\n"),
+        ));
+        messages.push(completion_request(
+            first_id + 1,
+            &main_uri,
+            main,
+            &format!("player_{depth}."),
+        ));
+        messages.push(type_definition_request_at(
+            first_id + 2,
+            &main_uri,
+            fixture.position(&format!("type_ref_{depth}")),
+        ));
+    }
+
+    let output = run_messages(messages);
+
+    for publication in diagnostics_publications(&output, &main_uri) {
+        assert!(
+            publication["params"]["diagnostics"]
+                .as_array()
+                .expect("diagnostics should be an array")
+                .iter()
+                .all(|diagnostic| diagnostic["code"] != "TL1001" && diagnostic["code"] != "TL1003"),
+            "deep type re-exports should not lose or mismatch their types: {publication:#?}"
+        );
+    }
+
+    for (index, depth) in DEPTHS.into_iter().enumerate() {
+        let first_id = 2 + index as u64 * 3;
+        assert_hover_contains(&output, first_id, "health: number");
+        assert_eq!(completion_labels(&output, first_id + 1), ["health", "name"]);
+
+        let leaf = fixture.source(format!("src/chain_{depth:03}/leaf.d.tua"));
+        let leaf_uri = path_uri(&temp.join(format!("src/chain_{depth:03}/leaf.d.tua")));
+        assert_definition_text(
+            &output,
+            first_id + 2,
+            &leaf_uri,
+            leaf,
+            &format!("Player{depth}"),
+        );
+    }
 }
 
 #[test]

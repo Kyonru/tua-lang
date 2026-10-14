@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt::Write as _, path::PathBuf};
 
 use crate::{AnalysisHost, AnalysisSourceKind, Fixture, ProjectTypeOrigin, TableField, Type};
 
@@ -22,6 +22,86 @@ fn host_from_fixture(fixture: &Fixture) -> AnalysisHost {
     }
 
     host
+}
+
+const REEXPORT_DEPTHS: [usize; 5] = [1, 16, 64, 65, 256];
+
+fn reexport_depth_fixture() -> Fixture {
+    let mut source = String::from("-- file: src/main.tua\n");
+
+    for depth in REEXPORT_DEPTHS {
+        writeln!(
+            source,
+            "import type {{ Player{depth} }} from \"./chain_{depth:03}/layer_000\""
+        )
+        .unwrap();
+        writeln!(
+            source,
+            "local _player_{depth}: Player{depth} = {{ health = {depth}, name = \"player\" }}"
+        )
+        .unwrap();
+    }
+
+    for depth in REEXPORT_DEPTHS {
+        for layer in 0..depth {
+            let target = if layer + 1 == depth {
+                "./leaf".to_owned()
+            } else {
+                format!("./layer_{:03}", layer + 1)
+            };
+            writeln!(
+                source,
+                "-- file: src/chain_{depth:03}/layer_{layer:03}.d.tua"
+            )
+            .unwrap();
+            writeln!(source, "export type {{ Player{depth} }} from \"{target}\"").unwrap();
+        }
+        writeln!(source, "-- file: src/chain_{depth:03}/leaf.d.tua").unwrap();
+        writeln!(
+            source,
+            "export type Player{depth} = {{ health: number, name: string }}"
+        )
+        .unwrap();
+    }
+
+    Fixture::parse(&source)
+}
+
+#[test]
+fn named_type_reexports_resolve_across_depth_boundaries() {
+    let fixture = reexport_depth_fixture();
+    let host = host_from_fixture(&fixture);
+    let snapshot = host.snapshot();
+
+    assert!(
+        snapshot.diagnostics("src/main.tua").is_empty(),
+        "unexpected diagnostics: {:#?}",
+        snapshot.diagnostics("src/main.tua")
+    );
+
+    for depth in REEXPORT_DEPTHS {
+        let binding = snapshot
+            .type_database()
+            .resolve_type_name(
+                snapshot.module_graph(),
+                "src/main.tua",
+                &format!("Player{depth}"),
+            )
+            .unwrap_or_else(|| panic!("{depth}-hop re-export should resolve"));
+
+        assert_eq!(
+            binding.module_path,
+            PathBuf::from(format!("src/chain_{depth:03}/leaf.d.tua"))
+        );
+        assert_eq!(
+            binding.ty,
+            Type::table([
+                ("health", TableField::required(Type::number())),
+                ("name", TableField::required(Type::string())),
+            ]),
+            "{depth}-hop re-export should preserve its structural type"
+        );
+    }
 }
 
 #[test]
