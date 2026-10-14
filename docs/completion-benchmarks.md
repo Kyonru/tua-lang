@@ -260,6 +260,12 @@ baseline.
 | `TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS` | Warm and contended completion failure budget; defaults to 10,000 ms, while the shared-runner trend workflow uses 30,000 ms. |
 | `TUA_REPRESENTATIVE_PROFILE_OUT` | JSON report path. |
 | `TUA_LSP_REQUEST_TIMEOUT_MS` | Per-request timeout. |
+| `TUA_REPRESENTATIVE_WARM_TIMEOUT_MS` | Maximum wait for every discovered file and the project snapshot to finish warming; defaults to 120 seconds. |
+
+Warm timings begin only after `workspaceWarm` reports that every discovered
+file has either finished or failed and the project snapshot is ready. An
+incomplete or failed warmup fails the profile instead of silently measuring a
+partially indexed workspace.
 
 Profiling scripts set `TUA_COMPLETION_STATS=0` by default so benchmarks do not
 create or mutate fixture-local `.tua/completion-stats.json` files. Set it to

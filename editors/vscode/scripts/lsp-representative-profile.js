@@ -37,6 +37,7 @@ const contentionRepeat = numberEnv("TUA_REPRESENTATIVE_CONTENTION_REPEAT", 3);
 const backgroundBurst = numberEnv("TUA_REPRESENTATIVE_BACKGROUND_BURST", 32);
 const contentionDelayMs = numberEnv("TUA_REPRESENTATIVE_CONTENTION_DELAY_MS", 10);
 const requestTimeoutMs = numberEnv("TUA_LSP_REQUEST_TIMEOUT_MS", 60000);
+const workspaceWarmTimeoutMs = numberEnv("TUA_REPRESENTATIVE_WARM_TIMEOUT_MS", 120000);
 const completionP95BudgetMs = numberEnv(
   "TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS",
   10000,
@@ -72,6 +73,7 @@ const completionP95BudgetMs = numberEnv(
       backgroundBurst,
       contentionDelayMs,
       requestTimeoutMs,
+      workspaceWarmTimeoutMs,
     },
     thresholds: {
       completionP95BudgetMs,
@@ -121,6 +123,7 @@ async function profileFixture(root, fixture) {
   const session = await openSession(root);
   let contention;
   let cacheStats;
+  let workspaceWarm;
 
   try {
     const plan = representativeRequestPlan(session.main);
@@ -130,6 +133,8 @@ async function profileFixture(root, fixture) {
 
       validationFailures[request.label] += Number(!validResult(request.label, sample.result));
     }
+
+    workspaceWarm = await waitForWorkspaceWarm(session.client);
 
     for (let round = 0; round < warmRepeat; round += 1) {
       for (const request of plan) {
@@ -171,6 +176,7 @@ async function profileFixture(root, fixture) {
       hitRates: cacheHitRates(cacheStats),
       raw: cacheStats,
     },
+    workspaceWarm,
     contention: {
       rounds: contentionRepeat,
       backgroundRequests: contention.backgroundRequests,
@@ -189,6 +195,41 @@ async function profileFixture(root, fixture) {
       byRequest: validationFailures,
       total: Object.values(validationFailures).reduce((sum, count) => sum + count, 0),
     },
+  };
+}
+
+async function waitForWorkspaceWarm(client) {
+  const started = process.hrtime.bigint();
+  const deadline = Date.now() + workspaceWarmTimeoutMs;
+  let polls = 0;
+  let stats;
+
+  do {
+    stats = await client.request("tua/cacheStats", null);
+    polls += 1;
+    const warm = stats.workspaceWarm || {};
+    const discovered = Number(warm.discovered || 0);
+    const finished = Number(warm.warmed || 0) + Number(warm.failed || 0);
+    const queued = Number(warm.queuedHigh || 0) + Number(warm.queuedLow || 0);
+    const snapshotFinished =
+      warm.snapshotReadyRevision != null || warm.snapshotFailedRevision != null;
+
+    if (finished >= discovered && queued === 0 && snapshotFinished) {
+      return {
+        completed: warm.snapshotReadyRevision != null && Number(warm.failed || 0) === 0,
+        elapsedMs: elapsedMs(started, process.hrtime.bigint()),
+        polls,
+        state: warm,
+      };
+    }
+    await delay(25);
+  } while (Date.now() < deadline);
+
+  return {
+    completed: false,
+    elapsedMs: elapsedMs(started, process.hrtime.bigint()),
+    polls,
+    state: stats?.workspaceWarm || null,
   };
 }
 
@@ -488,6 +529,13 @@ function regressionFailures(report) {
           `(${JSON.stringify(fixture.validationFailures.byRequest)})`,
       );
     }
+    if (!fixture.workspaceWarm.completed) {
+      failures.push(
+        `${fixture.name}: workspace did not finish warming within ` +
+          `${report.configuration.workspaceWarmTimeoutMs}ms ` +
+          `(${JSON.stringify(fixture.workspaceWarm.state)})`,
+      );
+    }
   }
 
   return failures;
@@ -508,6 +556,10 @@ function printFixture(fixture) {
       `${fixture.requestAge.completionAfterChange.p95Ms.toFixed(2)}ms  ` +
       `cancelled ${fixture.contention.cancelledRequests}/` +
       `${fixture.contention.backgroundRequests}  stale ${fixture.contention.staleResultCount}`,
+  );
+  console.log(
+    `workspace warm ${fixture.workspaceWarm.completed ? "complete" : "incomplete"} in ` +
+      `${fixture.workspaceWarm.elapsedMs.toFixed(2)}ms`,
   );
 }
 
