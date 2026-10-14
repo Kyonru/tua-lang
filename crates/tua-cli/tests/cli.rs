@@ -27,6 +27,15 @@ struct CapturedChildStdout {
 }
 
 impl CapturedChildStdout {
+    fn wait_for_watch_ready(child: &mut process::Child, failure_message: &str) -> Self {
+        let capture = Self::start(child, "initial build:");
+        capture
+            .ready
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap_or_else(|_| panic!("{failure_message}"));
+        capture
+    }
+
     fn start(child: &mut process::Child, readiness_marker: &str) -> Self {
         let stdout = child.stdout.take().expect("child stdout should be piped");
         let readiness_marker = readiness_marker.to_owned();
@@ -59,12 +68,6 @@ impl CapturedChildStdout {
         });
 
         Self { ready, reader }
-    }
-
-    fn wait_until_ready(&self, timeout: Duration, failure_message: &str) {
-        self.ready
-            .recv_timeout(timeout)
-            .unwrap_or_else(|_| panic!("{failure_message}"));
     }
 
     fn finish(self) -> Vec<u8> {
@@ -2917,7 +2920,7 @@ return hp
     )
     .expect("failed to write initial source");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
@@ -2928,12 +2931,12 @@ return hp
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || temp.path().join("build/main.lua").is_file(),
-        Duration::from_secs(3),
-        "watch did not run the initial build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial build",
     );
+
+    assert!(temp.path().join("build/main.lua").is_file());
 
     fs::write(
         temp.path().join("src/main.tua"),
@@ -2945,7 +2948,8 @@ return hp
     )
     .expect("failed to write changed source");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
 
@@ -2979,28 +2983,30 @@ fn watch_polling_fallback_reloads_configuration() {
     )
     .expect("failed to write source");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || temp.path().join("build/main.lua").is_file(),
-        Duration::from_secs(3),
-        "watch did not run the initial build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial build",
     );
+
+    assert!(temp.path().join("build/main.lua").is_file());
 
     let reconfigured = DEFAULT_CONFIG_TEXT.replace("out = \"build\"", "out = \"dist\"");
     fs::write(temp.path().join(CONFIG_FILE), reconfigured).expect("failed to update config");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
     assert!(temp.path().join("dist/main.lua").is_file());
@@ -3027,23 +3033,24 @@ fn watch_keeps_source_changes_when_configuration_reload_fails() {
     )
     .expect("failed to write source");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
         .env("TUA_INTERNAL_WATCH_POLL_MS", "100")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "80")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || temp.path().join("build/main.lua").is_file(),
-        Duration::from_secs(3),
-        "watch did not run the initial build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial build",
     );
+
+    assert!(temp.path().join("build/main.lua").is_file());
 
     fs::write(temp.path().join(CONFIG_FILE), "[build\n").expect("failed to invalidate config");
     fs::write(
@@ -3052,7 +3059,8 @@ fn watch_keeps_source_changes_when_configuration_reload_fails() {
     )
     .expect("failed to update source");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
 
@@ -3098,10 +3106,8 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-    let stdout_capture = CapturedChildStdout::start(&mut child, "initial build:");
-
-    stdout_capture.wait_until_ready(
-        Duration::from_secs(3),
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
         "watch did not finish its initial build",
     );
     assert!(output_assets.join("original.txt").is_file());
@@ -3178,7 +3184,7 @@ return value
     )
     .expect("failed to write unchanged importer");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
@@ -3189,15 +3195,13 @@ return value
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || {
-            temp.path().join("build/main.lua").is_file()
-                && temp.path().join("build/types.lua").is_file()
-        },
-        Duration::from_secs(3),
-        "watch did not run the initial dependency-aware build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial dependency-aware build",
     );
+
+    assert!(temp.path().join("build/main.lua").is_file());
+    assert!(temp.path().join("build/types.lua").is_file());
 
     fs::write(
         temp.path().join("src/types.tua"),
@@ -3211,7 +3215,8 @@ return { accept = accept }
     )
     .expect("failed to change exported type");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
 
@@ -3280,7 +3285,7 @@ printf '{"version":1,"outputs":["types.d.tua"],"diagnostics":[]}\n' > "$TUA_ASSE
     )
     .expect("failed to write importer");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
@@ -3292,21 +3297,20 @@ printf '{"version":1,"outputs":["types.d.tua"],"diagnostics":[]}\n' > "$TUA_ASSE
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || {
-            fs::read_to_string(temp.path().join("runs.txt"))
-                .ok()
-                .as_deref()
-                == Some("1\n")
-                && temp.path().join("build/main.lua").is_file()
-        },
-        Duration::from_secs(3),
-        "watch did not run the initial asset pipeline build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial asset pipeline build",
     );
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("runs.txt")).expect("missing importer count"),
+        "1\n"
+    );
+    assert!(temp.path().join("build/main.lua").is_file());
     fs::write(temp.path().join("assets/world.txt"), "second\n").expect("failed to change input");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -3384,23 +3388,24 @@ return feel
     )
     .expect("failed to write initial declarations");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
-
-    wait_until(
-        || temp.path().join("build/main.lua").is_file(),
-        Duration::from_secs(3),
-        "watch did not run the initial declaration-aware build",
+    let stdout_capture = CapturedChildStdout::wait_for_watch_ready(
+        &mut child,
+        "watch did not finish its initial declaration-aware build",
     );
+
+    assert!(temp.path().join("build/main.lua").is_file());
 
     fs::write(
         declaration_path,
@@ -3414,7 +3419,8 @@ return feel
     )
     .expect("failed to change declarations");
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
 
