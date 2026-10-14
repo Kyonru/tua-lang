@@ -2606,6 +2606,141 @@ end
 }
 
 #[test]
+fn checks_annotated_anonymous_function_bodies_once() {
+    let diagnostics = check_tua_source(
+        "src/callback.tua",
+        r#"
+local callback = function(value: number): number
+  return "wrong"
+end
+
+local parameterCallback = function(value: number): string
+  return value
+end
+
+return callback, parameterCallback
+"#,
+    )
+    .expect_err("anonymous function parameters and returns should be checked");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+
+    assert_eq!(mismatches.len(), 2, "{diagnostics:#?}");
+    assert!(mismatches
+        .iter()
+        .any(|diagnostic| diagnostic.message == "type mismatch: expected string, found number"));
+    assert!(mismatches
+        .iter()
+        .any(|diagnostic| diagnostic.message == "type mismatch: expected number, found string"));
+}
+
+#[test]
+fn rejects_reachable_fallthrough_for_non_nil_return_contracts() {
+    let diagnostics = check_tua_source(
+        "src/fallthrough.tua",
+        r#"
+local function named(flag: boolean): number
+  if flag then
+    return 1
+  end
+end
+
+local anonymous = function(flag: boolean): string
+  if flag then
+    return "ready"
+  end
+end
+
+return named, anonymous
+"#,
+    )
+    .expect_err("non-nil return contracts should reject reachable fallthrough");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+
+    assert_eq!(mismatches.len(), 2, "{diagnostics:#?}");
+    assert_eq!(
+        mismatches
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "type mismatch: expected number, found nil",
+            "type mismatch: expected string, found nil",
+        ]
+    );
+}
+
+#[test]
+fn accepts_function_bodies_without_reachable_non_nil_fallthrough() {
+    check_tua_source(
+        "src/returns.tua",
+        r#"
+local function branches(flag: boolean): number
+  if flag then
+    return 1
+  else
+    return 2
+  end
+end
+
+local function throws(flag: boolean): number
+  if flag then
+    return 1
+  end
+  error("stopped")
+end
+
+local function asserts(flag: boolean): number
+  if flag then
+    return 1
+  end
+  assert(false, "stopped")
+end
+
+local function loops(): number
+  while true do
+  end
+end
+
+local function nullable(): number | nil
+end
+
+local dynamic = function()
+end
+
+return branches, throws, asserts, loops, nullable, dynamic
+"#,
+    )
+    .expect("complete, terminating, nullable, and unannotated functions should be accepted");
+}
+
+#[test]
+fn shadowed_terminating_builtins_do_not_hide_return_fallthrough() {
+    let diagnostics = check_tua_source(
+        "src/shadowed_error.tua",
+        r#"
+local function error(message: string)
+  print(message)
+end
+
+local function load(): number
+  error("not terminating")
+end
+
+return load
+"#,
+    )
+    .expect_err("shadowed error calls must not count as terminating");
+
+    assert_single_mismatch(&diagnostics, "expected number, found nil");
+}
+
+#[test]
 fn calls_through_any_remain_permissive() {
     check_tua_source(
         "src/dynamic.tua",

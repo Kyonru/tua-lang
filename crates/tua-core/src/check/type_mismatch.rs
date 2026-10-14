@@ -4,7 +4,7 @@ use full_moon::ast::{Expression, Field};
 use full_moon::node::Node;
 
 use crate::types::{AssignabilityFailure, AssignabilityFailureKind, AssignabilityPathSegment};
-use crate::{Diagnostic, DiagnosticCode};
+use crate::{Diagnostic, DiagnosticCode, SourcePosition};
 
 use super::{
     expression_is_number, mismatch_found_label, node_position, node_span,
@@ -43,6 +43,26 @@ pub(super) fn mismatch_diagnostic_for_expression(
 ) -> Diagnostic {
     let expression = expression_at_assignability_path(expression, &failure.path);
     mismatch_diagnostic(path, expression, failure, root)
+}
+
+pub(super) fn mismatch_diagnostic_at_position(
+    path: &Path,
+    position: SourcePosition,
+    failure: &AssignabilityFailure,
+) -> Diagnostic {
+    Diagnostic::error(
+        path,
+        position.line,
+        position.column,
+        mismatch_message(failure, None),
+    )
+    .with_range(
+        position.line,
+        position.column,
+        position.line,
+        position.column.saturating_add(1),
+    )
+    .with_code(DiagnosticCode::TYPE_MISMATCH)
 }
 
 fn mismatch_message(failure: &AssignabilityFailure, root: Option<&str>) -> String {

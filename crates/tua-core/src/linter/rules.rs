@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{duplicate_local_diagnostic, DuplicateLocalKind, DuplicateLocalOrigin};
 use crate::ast_utils::field_chain_before_first_call;
+use crate::control_flow::{block_fallthrough_position, call_is_terminating_builtin};
 use crate::scope::{ScopeGlobalKind, ScopeMap, ScopeResolution};
 use crate::semantic::SemanticModel;
 use crate::types::{PrimitiveType, Type, TypeEnvironment};
@@ -235,11 +236,11 @@ impl Visitor for LintRuleVisitor<'_> {
         let Some(value_return) = first_valued_return(body.block()) else {
             return;
         };
-        let Some(fallthrough) = block_fallthrough_position(
-            body.block(),
-            node_end_position(body),
-            &self.terminating_builtin_references,
-        ) else {
+        let Some(fallthrough) =
+            block_fallthrough_position(body.block(), node_end_position(body), &|statement| {
+                statement_termination(statement, &self.terminating_builtin_references).is_some()
+            })
+        else {
             return;
         };
         let name = self.function_names.last().and_then(Option::as_deref);
@@ -953,50 +954,10 @@ fn terminating_builtin_call(
     call: &FunctionCall,
     terminating_builtin_references: &BTreeSet<(usize, usize)>,
 ) -> Option<Termination> {
-    let Prefix::Name(name) = call.prefix() else {
-        return None;
-    };
-    let position = token_position(name);
-    if !terminating_builtin_references.contains(&(position.line, position.column)) {
-        return None;
-    }
-
-    let Some(Suffix::Call(Call::AnonymousCall(arguments))) = call.suffixes().next() else {
-        return None;
-    };
-    let terminates = match token_text(name).as_str() {
-        "error" => true,
-        "assert" => match arguments {
-            FunctionArgs::Parentheses { arguments, .. } => {
-                arguments.iter().next().is_some_and(is_false_literal)
-            }
-            _ => false,
-        },
-        _ => false,
-    };
-
-    terminates.then_some(Termination {
+    call_is_terminating_builtin(call, terminating_builtin_references).then_some(Termination {
         reasons: TerminationReasons::ERRORS,
         silences_trailing_return: true,
     })
-}
-
-fn is_false_literal(expression: &Expression) -> bool {
-    match expression {
-        Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => is_false_literal(expression),
-        Expression::Symbol(token) => token_text(token) == "false",
-        _ => false,
-    }
-}
-
-fn is_true_literal(expression: &Expression) -> bool {
-    match expression {
-        Expression::Parentheses { expression, .. }
-        | Expression::TypeAssertion { expression, .. } => is_true_literal(expression),
-        Expression::Symbol(token) => token_text(token) == "true",
-        _ => false,
-    }
 }
 
 fn unreachable_message(reasons: TerminationReasons) -> String {
@@ -1004,119 +965,6 @@ fn unreachable_message(reasons: TerminationReasons) -> String {
         "unreachable code (previous statement always {})",
         reasons.description()
     )
-}
-
-fn block_fallthrough_position(
-    block: &ast::Block,
-    empty_position: SourcePosition,
-    terminating_builtin_references: &BTreeSet<(usize, usize)>,
-) -> Option<SourcePosition> {
-    block_can_fall_through(block, terminating_builtin_references).then(|| {
-        block
-            .stmts()
-            .last()
-            .map(node_end_position)
-            .unwrap_or(empty_position)
-    })
-}
-
-fn block_can_fall_through(
-    block: &ast::Block,
-    terminating_builtin_references: &BTreeSet<(usize, usize)>,
-) -> bool {
-    for statement in block.stmts() {
-        if !statement_can_fall_through(statement, terminating_builtin_references) {
-            return false;
-        }
-    }
-
-    !matches!(
-        block.last_stmt(),
-        Some(LastStmt::Return(_) | LastStmt::Break(_))
-    )
-}
-
-fn statement_can_fall_through(
-    statement: &Stmt,
-    terminating_builtin_references: &BTreeSet<(usize, usize)>,
-) -> bool {
-    match statement {
-        Stmt::Do(statement) => {
-            block_can_fall_through(statement.block(), terminating_builtin_references)
-        }
-        Stmt::If(statement) => {
-            if block_can_fall_through(statement.block(), terminating_builtin_references)
-                || statement.else_if().is_some_and(|branches| {
-                    branches.iter().any(|branch| {
-                        block_can_fall_through(branch.block(), terminating_builtin_references)
-                    })
-                })
-            {
-                return true;
-            }
-
-            match statement.else_block() {
-                Some(block) => block_can_fall_through(block, terminating_builtin_references),
-                None => true,
-            }
-        }
-        Stmt::While(statement) => {
-            !is_true_literal(statement.condition())
-                || block_has_reachable_break(statement.block(), terminating_builtin_references)
-        }
-        Stmt::Repeat(statement) => {
-            let body_falls_through =
-                block_can_fall_through(statement.block(), terminating_builtin_references);
-            let body_can_break =
-                block_has_reachable_break(statement.block(), terminating_builtin_references);
-
-            if !body_falls_through {
-                body_can_break
-            } else {
-                !is_false_literal(statement.until()) || body_can_break
-            }
-        }
-        _ => statement_termination(statement, terminating_builtin_references).is_none(),
-    }
-}
-
-fn block_has_reachable_break(
-    block: &ast::Block,
-    terminating_builtin_references: &BTreeSet<(usize, usize)>,
-) -> bool {
-    for statement in block.stmts() {
-        if statement_has_reachable_break(statement, terminating_builtin_references) {
-            return true;
-        }
-        if !statement_can_fall_through(statement, terminating_builtin_references) {
-            return false;
-        }
-    }
-
-    matches!(block.last_stmt(), Some(LastStmt::Break(_)))
-}
-
-fn statement_has_reachable_break(
-    statement: &Stmt,
-    terminating_builtin_references: &BTreeSet<(usize, usize)>,
-) -> bool {
-    match statement {
-        Stmt::Do(statement) => {
-            block_has_reachable_break(statement.block(), terminating_builtin_references)
-        }
-        Stmt::If(if_statement) => {
-            block_has_reachable_break(if_statement.block(), terminating_builtin_references)
-                || if_statement.else_if().is_some_and(|branches| {
-                    branches.iter().any(|branch| {
-                        block_has_reachable_break(branch.block(), terminating_builtin_references)
-                    })
-                })
-                || if_statement.else_block().is_some_and(|block| {
-                    block_has_reachable_break(block, terminating_builtin_references)
-                })
-        }
-        _ => false,
-    }
 }
 
 fn first_valued_return(block: &ast::Block) -> Option<&ast::Return> {

@@ -13,6 +13,7 @@ use crate::ast_utils::{
 };
 use crate::classes;
 use crate::config::{DiagnosticsConfig, EcsConfig, JitConfig};
+use crate::control_flow::{block_fallthrough_position, statement_is_terminating_builtin};
 use crate::inline_ignore::apply_inline_ignores;
 use crate::linter::lint_parsed_source;
 use crate::love_conf;
@@ -24,6 +25,7 @@ use crate::narrowing::{directly_assigned_name, narrowed_locals_for_condition};
 use crate::parser::{parse_tua_source, ParsedLanguage, ParsedSource, SourcePosition, SourceSpan};
 use crate::profile::{self, DiagnosticsTraceCategory};
 use crate::runtime_type;
+use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeResolution};
 use crate::semantic::SemanticModel;
 use crate::semantic_domains::{BuiltinConstructor, BuiltinDomain, BuiltinDomainRegistry};
 use crate::types::{
@@ -38,7 +40,9 @@ mod query;
 mod type_mismatch;
 
 use query::{CheckQuery, CheckQueryOptions};
-use type_mismatch::{mismatch_diagnostic, mismatch_diagnostic_for_expression};
+use type_mismatch::{
+    mismatch_diagnostic, mismatch_diagnostic_at_position, mismatch_diagnostic_for_expression,
+};
 
 pub fn check_tua_source(
     path: impl AsRef<Path>,
@@ -187,6 +191,8 @@ struct Checker<'a> {
     asset_index: Option<&'a asset::AssetIndex>,
     reported_asset_diagnostics: BTreeSet<(usize, usize, u16, String)>,
     reported_method_style_diagnostics: BTreeSet<(usize, usize, String)>,
+    checked_function_bodies: BTreeSet<(usize, usize)>,
+    terminating_builtin_references: BTreeSet<(usize, usize)>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -196,7 +202,26 @@ impl<'a> Checker<'a> {
         environment: &'a TypeEnvironment,
         asset_roots: &[PathBuf],
         asset_index: Option<&'a asset::AssetIndex>,
+        diagnostics_config: &DiagnosticsConfig,
     ) -> Self {
+        let scope = scope_map_parsed_source_with_globals(
+            parsed,
+            diagnostics_config.globals.iter().cloned(),
+        );
+        let terminating_builtin_references = scope
+            .references()
+            .iter()
+            .filter_map(|reference| {
+                (matches!(reference.name.as_str(), "error" | "assert")
+                    && matches!(
+                        &reference.resolution,
+                        ScopeResolution::Global(global)
+                            if global.kind == ScopeGlobalKind::LuaBuiltin
+                    ))
+                .then_some((reference.span.start.line, reference.span.start.column))
+            })
+            .collect();
+
         Self {
             parsed,
             environment,
@@ -216,6 +241,8 @@ impl<'a> Checker<'a> {
             asset_index,
             reported_asset_diagnostics: BTreeSet::new(),
             reported_method_style_diagnostics: BTreeSet::new(),
+            checked_function_bodies: BTreeSet::new(),
+            terminating_builtin_references,
             diagnostics: Vec::new(),
         }
     }
@@ -329,13 +356,12 @@ impl<'a> Checker<'a> {
                 let name = token_text(function.name());
                 let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_parameter_locals(&name);
-                let contracts = scoped_locals.clone();
-
-                self.scoped_locals.push(scoped_locals);
-                self.scoped_local_contracts.push(contracts);
-                self.check_block(function.body().block(), return_types.as_deref());
-                self.scoped_locals.pop();
-                self.scoped_local_contracts.pop();
+                self.check_function_body(
+                    function.body(),
+                    return_types.as_deref(),
+                    scoped_locals,
+                    function.body().return_type().is_some(),
+                );
             }
             ast::Stmt::FunctionDeclaration(function) => {
                 self.check_love_callback_declaration(function);
@@ -344,13 +370,12 @@ impl<'a> Checker<'a> {
                 let name = function.name().to_string();
                 let return_types = self.function_return_types(&name);
                 let scoped_locals = self.function_declaration_parameter_locals(function);
-                let contracts = scoped_locals.clone();
-
-                self.scoped_locals.push(scoped_locals);
-                self.scoped_local_contracts.push(contracts);
-                self.check_block(function.body().block(), return_types.as_deref());
-                self.scoped_locals.pop();
-                self.scoped_local_contracts.pop();
+                self.check_function_body(
+                    function.body(),
+                    return_types.as_deref(),
+                    scoped_locals,
+                    function.body().return_type().is_some(),
+                );
             }
             ast::Stmt::NumericFor(for_stmt) => self.check_numeric_for(for_stmt, current_return),
             ast::Stmt::Repeat(repeat) => {
@@ -930,6 +955,68 @@ impl<'a> Checker<'a> {
             .push(mismatch_diagnostic(&self.parsed.path, node, &failure, None));
     }
 
+    fn check_type_assignable_at_position(
+        &mut self,
+        position: SourcePosition,
+        source: &Type,
+        target: &Type,
+    ) {
+        if type_contains_any_alias(target, &self.unresolved_required_module_aliases) {
+            return;
+        }
+
+        let Some(failure) = self.diagnostic_assignability_failure(source, target) else {
+            return;
+        };
+
+        self.diagnostics.push(mismatch_diagnostic_at_position(
+            &self.parsed.path,
+            position,
+            &failure,
+        ));
+    }
+
+    fn check_function_body(
+        &mut self,
+        body: &ast::FunctionBody,
+        return_types: Option<&[Type]>,
+        scoped_locals: BTreeMap<String, Type>,
+        has_explicit_return_contract: bool,
+    ) {
+        let Some(span) = node_span(body) else {
+            return;
+        };
+        if !self
+            .checked_function_bodies
+            .insert((span.start.line, span.start.column))
+        {
+            return;
+        }
+
+        let contracts = scoped_locals.clone();
+        self.scoped_locals.push(scoped_locals);
+        self.scoped_local_contracts.push(contracts);
+        self.check_block(body.block(), return_types);
+        self.scoped_locals.pop();
+        self.scoped_local_contracts.pop();
+
+        if !has_explicit_return_contract {
+            return;
+        }
+        let Some(targets) = return_types else {
+            return;
+        };
+        let Some(position) = block_fallthrough_position(body.block(), span.end, &|statement| {
+            statement_is_terminating_builtin(statement, &self.terminating_builtin_references)
+        }) else {
+            return;
+        };
+
+        for target in targets {
+            self.check_type_assignable_at_position(position, &Type::nil(), target);
+        }
+    }
+
     fn diagnostic_assignability_failure(
         &self,
         source: &Type,
@@ -964,11 +1051,9 @@ impl<'a> Checker<'a> {
         let expressions = return_stmt.returns().iter().collect::<Vec<_>>();
 
         if expressions.is_empty() {
-            self.check_type_assignable(
-                return_stmt,
-                &Type::nil(),
-                target.first().unwrap_or(&Type::nil()),
-            );
+            for target in target {
+                self.check_type_assignable(return_stmt, &Type::nil(), target);
+            }
             return;
         }
 
@@ -1030,7 +1115,29 @@ impl<'a> Checker<'a> {
             Expression::TypeAssertion { expression, .. } => {
                 self.infer_expression_return(expression, return_index)
             }
-            Expression::Function(function) => Some(function_type_from_body(function.body())),
+            Expression::Function(function) => {
+                let ty = function_type_from_body(function.body());
+                let Type::Function(signature) = &ty else {
+                    unreachable!("function bodies always produce function types")
+                };
+                let scoped_locals = signature
+                    .parameters
+                    .iter()
+                    .filter_map(|parameter| {
+                        parameter
+                            .name
+                            .as_ref()
+                            .map(|name| (name.clone(), parameter.ty.clone()))
+                    })
+                    .collect();
+                self.check_function_body(
+                    function.body(),
+                    Some(signature.return_types_or_any()),
+                    scoped_locals,
+                    function.body().return_type().is_some(),
+                );
+                Some(ty)
+            }
             Expression::Var(var) => self.infer_var_value(var),
             _ => None,
         }

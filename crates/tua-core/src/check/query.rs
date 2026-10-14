@@ -63,6 +63,7 @@ impl<'a> CheckQuery<'a> {
             environment,
             self.options.asset_roots,
             self.options.asset_index,
+            self.options.diagnostics_config,
         );
 
         {

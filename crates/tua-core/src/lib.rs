@@ -9,6 +9,7 @@ pub mod code_action;
 pub mod code_lens;
 pub mod completion;
 pub mod config;
+mod control_flow;
 pub mod definition;
 mod deprecation;
 pub mod diagnostic;
