@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::Command;
@@ -18,6 +19,57 @@ fn tua() -> Command {
 
 struct TempDir {
     path: PathBuf,
+}
+
+struct CapturedChildStdout {
+    ready: std::sync::mpsc::Receiver<()>,
+    reader: thread::JoinHandle<Vec<u8>>,
+}
+
+impl CapturedChildStdout {
+    fn start(child: &mut process::Child, readiness_marker: &str) -> Self {
+        let stdout = child.stdout.take().expect("child stdout should be piped");
+        let readiness_marker = readiness_marker.to_owned();
+        let (ready_sender, ready) = std::sync::mpsc::channel();
+        let reader = thread::spawn(move || {
+            let mut stdout = BufReader::new(stdout);
+            let mut captured = Vec::new();
+            let mut ready_sender = Some(ready_sender);
+
+            loop {
+                let mut line = Vec::new();
+                let read = stdout
+                    .read_until(b'\n', &mut line)
+                    .expect("failed to read child stdout");
+                if read == 0 {
+                    break;
+                }
+
+                if ready_sender.is_some()
+                    && String::from_utf8_lossy(&line).contains(&readiness_marker)
+                {
+                    if let Some(sender) = ready_sender.take() {
+                        let _ = sender.send(());
+                    }
+                }
+                captured.extend_from_slice(&line);
+            }
+
+            captured
+        });
+
+        Self { ready, reader }
+    }
+
+    fn wait_until_ready(&self, timeout: Duration, failure_message: &str) {
+        self.ready
+            .recv_timeout(timeout)
+            .unwrap_or_else(|_| panic!("{failure_message}"));
+    }
+
+    fn finish(self) -> Vec<u8> {
+        self.reader.join().expect("child stdout reader panicked")
+    }
 }
 
 impl TempDir {
@@ -3034,7 +3086,7 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
     .expect("failed to write source");
     fs::write(source_assets.join("original.txt"), "original").expect("failed to write asset");
 
-    let child = tua()
+    let mut child = tua()
         .arg("watch")
         .current_dir(temp.path())
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
@@ -3046,12 +3098,13 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to run tua watch");
+    let stdout_capture = CapturedChildStdout::start(&mut child, "initial build:");
 
-    wait_until(
-        || output_assets.join("original.txt").is_file(),
+    stdout_capture.wait_until_ready(
         Duration::from_secs(3),
-        "watch did not copy the initial asset",
+        "watch did not finish its initial build",
     );
+    assert!(output_assets.join("original.txt").is_file());
 
     fs::write(source_assets.join("created.txt"), "created").expect("failed to create asset");
     wait_until(
@@ -3081,7 +3134,8 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
         "watch did not remove the deleted asset output",
     );
 
-    let output = wait_for_child_output(child, Duration::from_secs(5));
+    let mut output = wait_for_child_output(child, Duration::from_secs(5));
+    output.stdout = stdout_capture.finish();
 
     assert!(output.status.success());
 
