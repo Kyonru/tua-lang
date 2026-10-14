@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Test Auditor"
+  short_description: "Audit test strength, gaps, fuzzing, and CI."
+  default_prompt: "Use $tua-test-auditor to evaluate Tua's test strategy and identify high-value coverage gaps."

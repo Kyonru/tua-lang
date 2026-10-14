@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Documentation Auditor"
+  short_description: "Audit docs and examples against real behavior."
+  default_prompt: "Use $tua-doc-auditor to audit Tua documentation and examples for accuracy and discoverability."

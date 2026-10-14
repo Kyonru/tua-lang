@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Audit Lead"
+  short_description: "Coordinate evidence-backed Tua repository audits."
+  default_prompt: "Use $tua-audit-lead to coordinate a multi-agent full audit of Tua and produce a prioritized improvement backlog."

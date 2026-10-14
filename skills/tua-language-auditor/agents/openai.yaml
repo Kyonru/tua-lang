@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Language Auditor"
+  short_description: "Audit compiler and semantic correctness in Tua."
+  default_prompt: "Use $tua-language-auditor to audit Tua language semantics and compiler correctness."

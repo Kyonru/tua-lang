@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tua Security Auditor"
+  short_description: "Threat-model Tua and audit trust boundaries."
+  default_prompt: "Use $tua-security-auditor to perform an adversarial security audit of Tua."
