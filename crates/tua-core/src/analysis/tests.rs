@@ -910,6 +910,39 @@ local value: string = Dynamic.value
 }
 
 #[test]
+fn projected_require_returns_do_not_forward_the_whole_module() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/leaf.tua
+return {
+  value = 42,
+  nested = { label = "ready" },
+}
+-- file: src/projected.tua
+return require("leaf").nested
+-- file: src/main.tua
+local Projected = require("projected")
+local value: string = Projected.value
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot
+        .module_graph()
+        .export("src/projected.tua", "value")
+        .is_none());
+    assert!(!snapshot
+        .diagnostics("src/main.tua")
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn nested_builtin_configuration_fields_hover_and_navigate_to_virtual_schemas() {
     let fixture = Fixture::parse(
         r#"local Player = spriteSheet({

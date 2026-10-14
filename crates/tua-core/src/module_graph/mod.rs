@@ -977,7 +977,11 @@ fn directly_returned_module(
     if token_text(name) != "require" {
         return None;
     }
-    let call = call.suffixes().next()?;
+    let mut suffixes = call.suffixes();
+    let call = suffixes.next()?;
+    if suffixes.next().is_some() {
+        return None;
+    }
     let Suffix::Call(ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = call
     else {
         return None;
