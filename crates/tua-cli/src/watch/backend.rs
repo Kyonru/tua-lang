@@ -137,17 +137,7 @@ impl WatchBackend {
         };
 
         append_event(&mut batch, first.map_err(ReceiveError::Backend)?);
-
-        loop {
-            match self.receiver.recv_timeout(debounce) {
-                Ok(Ok(event)) => append_event(&mut batch, event),
-                Ok(Err(error)) => return Err(ReceiveError::Backend(error)),
-                Err(RecvTimeoutError::Timeout) => break,
-                Err(RecvTimeoutError::Disconnected) => {
-                    return Err(ReceiveError::Disconnected(RecvError));
-                }
-            }
-        }
+        receive_until_debounce_deadline(&self.receiver, &mut batch, Instant::now(), debounce)?;
 
         if batch.rescan_all || self.last_reconcile.elapsed() >= reconcile_interval {
             batch.rescan_all = true;
@@ -195,6 +185,29 @@ impl WatchBackend {
     }
 }
 
+fn receive_until_debounce_deadline(
+    receiver: &Receiver<notify::Result<Event>>,
+    batch: &mut WatchBatch,
+    started: Instant,
+    debounce: Duration,
+) -> Result<(), ReceiveError> {
+    loop {
+        let elapsed = started.elapsed();
+        if elapsed >= debounce {
+            return Ok(());
+        }
+
+        match receiver.recv_timeout(debounce - elapsed) {
+            Ok(Ok(event)) => append_event(batch, event),
+            Ok(Err(error)) => return Err(ReceiveError::Backend(error)),
+            Err(RecvTimeoutError::Timeout) => return Ok(()),
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(ReceiveError::Disconnected(RecvError));
+            }
+        }
+    }
+}
+
 fn receive_first(
     receiver: &Receiver<notify::Result<Event>>,
     last_reconcile: &mut Instant,
@@ -234,5 +247,24 @@ mod tests {
             .expect("reconciliation should not depend on a polling event");
 
         assert!(event.is_none());
+    }
+
+    #[test]
+    fn debounce_deadline_leaves_continuous_events_for_the_next_batch() {
+        let (sender, receiver) = mpsc::channel();
+        for _ in 0..3 {
+            sender
+                .send(Ok(Event::new(notify::EventKind::Any)))
+                .expect("failed to queue event");
+        }
+        let mut batch = WatchBatch {
+            paths: BTreeSet::new(),
+            rescan_all: false,
+        };
+
+        receive_until_debounce_deadline(&receiver, &mut batch, Instant::now(), Duration::ZERO)
+            .expect("expired debounce should return without consuming more events");
+
+        assert_eq!(receiver.try_iter().count(), 3);
     }
 }

@@ -3040,6 +3040,7 @@ fn watch_handles_asset_create_rename_and_remove_in_uniform_batches() {
         .env("TUA_INTERNAL_WATCH_FORCE_POLL", "1")
         .env("TUA_INTERNAL_WATCH_POLL_MS", "20")
         .env("TUA_INTERNAL_WATCH_DEBOUNCE_MS", "40")
+        .env("TUA_INTERNAL_WATCH_RECONCILE_MS", "100")
         .env("TUA_INTERNAL_WATCH_EXIT_AFTER_REBUILDS", "3")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
