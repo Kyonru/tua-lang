@@ -172,7 +172,11 @@ The representative harness generates deterministic fixtures:
 - `single-1000`: one 1,000-line source;
 - `single-5000`: one 5,000-line source;
 - `project-100`: a 100-file project;
-- `project-1000`: a 1,000-file project.
+- `project-1000`: a 1,000-file project;
+- `graph-chain-256`: a 256-edge runtime dependency chain;
+- `graph-diamond-256`: a 16-by-16 diamond with shared-leaf fan-in;
+- `graph-cycles-64`: a 32-node runtime cycle paired with mutually recursive
+  type-only modules.
 
 Generate them without profiling:
 
@@ -212,18 +216,20 @@ finished before cancellation was necessary; it is not itself a failure.
 
 ### Smoke Versus Full Profile
 
-`make representative-benchmark-smoke` uses only `single-1000` and
+`make representative-benchmark-smoke` deliberately uses only `single-1000` and
 `project-100` with reduced repeats and a 3-second completion p95 budget. The
 extra shared-runner allowance keeps this a CI reliability gate designed to
 catch stalls, stale results, and invalid responses without treating its
 two-sample p95 as a microbenchmark.
 
 `make profile-representative` runs every fixture with more samples and a broad
-10-second default budget. Use its report for scale comparisons and diagnosis,
-not as proof that a 9-second completion is acceptable. The performance-trend
-workflow raises only this full-profile ceiling to 30 seconds because shared
-GitHub runners can take roughly four times longer on the generated 5,000-line
-fixture. That runner allowance is not a local target or baseline.
+10-second default budget, including the chain, diamond/fan-in, runtime-cycle,
+and recursive-type graph shapes. Use its report for scale comparisons and
+diagnosis, not as proof that a 9-second completion is acceptable. The
+performance-trend workflow raises only this full-profile ceiling to 30 seconds
+because shared GitHub runners can take roughly four times longer on the
+generated 5,000-line fixture. That runner allowance is not a local target or
+baseline.
 
 ## Useful Environment Variables
 

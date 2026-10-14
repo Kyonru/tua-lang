@@ -37,11 +37,49 @@ test("representative LSP fixtures have exact deterministic sizes and hashes", ()
         { name: "single-5000", sourceFileCount: 1, sourceLineCount: 5000 },
         { name: "project-100", sourceFileCount: 100, sourceLineCount: 1401 },
         { name: "project-1000", sourceFileCount: 1000, sourceLineCount: 14001 },
+        { name: "graph-chain-256", sourceFileCount: 258, sourceLineCount: 783 },
+        { name: "graph-diamond-256", sourceFileCount: 34, sourceLineCount: 368 },
+        { name: "graph-cycles-64", sourceFileCount: 65, sourceLineCount: 205 },
       ],
     );
     assert.match(
       fs.readFileSync(path.join(firstRoot, "single-5000", "src", "main.tua"), "utf8"),
       /profile_completion_probe = profile_primary\.label/,
+    );
+    assert.match(
+      fs.readFileSync(
+        path.join(firstRoot, "graph-chain-256", "src", "graph", "layer_064.tua"),
+        "utf8",
+      ),
+      /require\("graph\.layer_065"\)/,
+    );
+    assert.match(
+      fs.readFileSync(
+        path.join(
+          firstRoot,
+          "graph-diamond-256",
+          "src",
+          "graph",
+          "branches",
+          "branch_00.tua",
+        ),
+        "utf8",
+      ),
+      /leaf_15/,
+    );
+    assert.match(
+      fs.readFileSync(
+        path.join(
+          firstRoot,
+          "graph-cycles-64",
+          "src",
+          "graph",
+          "types",
+          "node_31.d.tua",
+        ),
+        "utf8",
+      ),
+      /import type Next from "\.\/node_00"/,
     );
   } finally {
     fs.rmSync(tempRoot, { force: true, recursive: true });

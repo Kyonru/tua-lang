@@ -150,6 +150,7 @@ async function profileFixture(root, fixture) {
   return {
     name: fixture.name,
     kind: fixture.kind,
+    ...(fixture.graphShape ? { graphShape: fixture.graphShape } : {}),
     sourceFileCount: fixture.sourceFileCount,
     sourceLineCount: fixture.sourceLineCount,
     contentHash: fixture.contentHash,

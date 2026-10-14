@@ -152,8 +152,9 @@ make profile-all
 ```
 
 The examples suite discovers every `examples/*/tua.toml` and times CLI commands
-and LSP editor requests. The representative suite measures generated large-file
-and project-scale fixtures, including request contention. Both write JSON
+and LSP editor requests. The representative suite measures generated large-file,
+project-scale, deep-chain, diamond/fan-in, and cyclic dependency fixtures,
+including request contention. Both write JSON
 reports under `target/tua-speed/`. The lint timing includes intentional warning
 fixtures; their documented diagnostic exit is measured rather than treated as
 a profiler failure. Check, formatting, build, process, and LSP failures still
