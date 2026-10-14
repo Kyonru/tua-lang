@@ -126,22 +126,10 @@ impl WatchBackend {
         debounce: Duration,
         reconcile_interval: Duration,
     ) -> Result<WatchBatch, ReceiveError> {
-        let polling = self.is_polling();
-        let first = if polling {
-            self.receiver.recv().map_err(ReceiveError::Disconnected)?
-        } else {
-            let timeout = reconcile_interval.saturating_sub(self.last_reconcile.elapsed());
-
-            match self.receiver.recv_timeout(timeout) {
-                Ok(event) => event,
-                Err(RecvTimeoutError::Timeout) => {
-                    self.last_reconcile = Instant::now();
-                    return Ok(WatchBatch::rescan_all());
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    return Err(ReceiveError::Disconnected(RecvError));
-                }
-            }
+        let Some(first) =
+            receive_first(&self.receiver, &mut self.last_reconcile, reconcile_interval)?
+        else {
+            return Ok(WatchBatch::rescan_all());
         };
         let mut batch = WatchBatch {
             paths: BTreeSet::new(),
@@ -161,7 +149,7 @@ impl WatchBackend {
             }
         }
 
-        if !polling && (batch.rescan_all || self.last_reconcile.elapsed() >= reconcile_interval) {
+        if batch.rescan_all || self.last_reconcile.elapsed() >= reconcile_interval {
             batch.rescan_all = true;
             self.last_reconcile = Instant::now();
         }
@@ -207,10 +195,44 @@ impl WatchBackend {
     }
 }
 
+fn receive_first(
+    receiver: &Receiver<notify::Result<Event>>,
+    last_reconcile: &mut Instant,
+    reconcile_interval: Duration,
+) -> Result<Option<notify::Result<Event>>, ReceiveError> {
+    // Polling can miss a change made before its first baseline, so every
+    // backend needs a bounded wait followed by snapshot reconciliation.
+    let timeout = reconcile_interval.saturating_sub(last_reconcile.elapsed());
+    match receiver.recv_timeout(timeout) {
+        Ok(event) => Ok(Some(event)),
+        Err(RecvTimeoutError::Timeout) => {
+            *last_reconcile = Instant::now();
+            Ok(None)
+        }
+        Err(RecvTimeoutError::Disconnected) => Err(ReceiveError::Disconnected(RecvError)),
+    }
+}
+
 fn append_event(batch: &mut WatchBatch, event: Event) {
     if event.paths.is_empty() || event.need_rescan() {
         batch.rescan_all = true;
     }
 
     batch.paths.extend(event.paths);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn receive_first_times_out_for_reconciliation_without_backend_events() {
+        let (_sender, receiver) = mpsc::channel();
+        let mut last_reconcile = Instant::now();
+
+        let event = receive_first(&receiver, &mut last_reconcile, Duration::ZERO)
+            .expect("reconciliation should not depend on a polling event");
+
+        assert!(event.is_none());
+    }
 }
