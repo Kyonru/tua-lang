@@ -59,6 +59,22 @@ async function openFixture(name, options = {}) {
   return { document, editor };
 }
 
+async function insertText(document, editor, text) {
+  const position = editor.selection.active;
+  const offset = document.offsetAt(position);
+  const applied = await editor.edit(
+    (edit) => edit.insert(position, text),
+    { undoStopAfter: false, undoStopBefore: false },
+  );
+
+  if (!applied) {
+    throw new Error(`Could not insert text into ${document.uri}`);
+  }
+
+  const nextPosition = document.positionAt(offset + text.length);
+  editor.selection = new vscode.Selection(nextPosition, nextPosition);
+}
+
 async function closeActiveEditor() {
   await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
 }
@@ -131,6 +147,7 @@ module.exports = {
   eventSequence,
   fixtures,
   hoverText,
+  insertText,
   moduleGraphTabs,
   openFixture,
   positionAfter,

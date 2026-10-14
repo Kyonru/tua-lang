@@ -6,6 +6,7 @@ const {
   discardActiveEditor,
   eventSequence,
   hoverText,
+  insertText,
   openFixture,
   positionAfter,
   waitForEvent,
@@ -24,9 +25,7 @@ async function testLiveLanguageFeatures() {
   editor.selection = new vscode.Selection(insertion, insertion);
   const beforeTyping = eventSequence();
 
-  await vscode.commands.executeCommand("type", {
-    text: "local live_probe = target_value",
-  });
+  await insertText(document, editor, "local live_probe = target_value");
   await waitForEvent(
     (event) =>
       event.type === "document.change" &&

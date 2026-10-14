@@ -5,6 +5,7 @@ const vscode = require("vscode");
 const {
   discardActiveEditor,
   eventSequence,
+  insertText,
   openFixture,
   readEvents,
   waitForEvent,
@@ -29,15 +30,16 @@ async function runCompletionTests() {
   editor.selection = new vscode.Selection(insertion, insertion);
   const beforeTyping = eventSequence();
 
-  await vscode.commands.executeCommand("type", { text: "o" });
+  await insertText(document, editor, "o");
+  await vscode.commands.executeCommand("editor.action.triggerSuggest");
   const staleRequest = await waitForEvent(
     (event) => event.type === "completion.request" && event.prefix === "o",
     "an initial completion request for `o`",
     beforeTyping,
   );
 
-  await vscode.commands.executeCommand("type", { text: "u" });
-  await vscode.commands.executeCommand("type", { text: "t" });
+  await insertText(document, editor, "u");
+  await insertText(document, editor, "t");
 
   const currentVersion = document.version;
   const currentPosition = editor.selection.active;

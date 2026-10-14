@@ -71,11 +71,17 @@ async function testOpenGeneratedLuaBesideSource() {
     "local answer = 99\nreturn answer\n",
   );
   assert.equal(vscode.window.activeTextEditor?.viewColumn, vscode.ViewColumn.Two);
+  await closeActiveEditor();
 
   let reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
     preview: false,
     viewColumn: vscode.ViewColumn.One,
   });
+  await vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
+  await waitUntil(
+    () => vscode.window.activeTextEditor?.document.uri.fsPath === sourcePath,
+    "the source editor to regain focus before rebuilding generated Lua",
+  );
   await reopenedSourceEditor.edit((edit) => {
     const answer = sourceDocument.getText().indexOf("99");
     edit.replace(
@@ -92,11 +98,17 @@ async function testOpenGeneratedLuaBesideSource() {
     vscode.window.activeTextEditor?.document.getText(),
     "local answer = 100\nreturn answer\n",
   );
+  await closeActiveEditor();
 
   reopenedSourceEditor = await vscode.window.showTextDocument(sourceDocument, {
     preview: false,
     viewColumn: vscode.ViewColumn.One,
   });
+  await vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
+  await waitUntil(
+    () => vscode.window.activeTextEditor?.document.uri.fsPath === sourcePath,
+    "the source editor to regain focus before jumping to generated Lua",
+  );
   reopenedSourceEditor.selection = new vscode.Selection(1, 0, 1, 0);
   const openedGeneratedPath = await vscode.commands.executeCommand(
     "tua.jumpBetweenSourceAndGenerated",

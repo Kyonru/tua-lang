@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { runTests } = require("@vscode/test-electron");
+const { localVSCodeExecutable } = require("./vscode-executable");
 
 async function main() {
   const extensionDevelopmentPath = path.resolve(__dirname, "..");
@@ -43,6 +44,7 @@ async function main() {
       launchArgs: [
         workspacePath,
         "--disable-extensions",
+        "--disable-workspace-trust",
         `--user-data-dir=${path.join(tempRoot, "user-data")}`,
         `--extensions-dir=${path.join(tempRoot, "extensions")}`,
       ],
@@ -190,21 +192,6 @@ function createServerLauncher(tempRoot, serverFixturePath) {
   );
   fs.chmodSync(launcherPath, 0o755);
   return launcherPath;
-}
-
-function localVSCodeExecutable() {
-  if (process.env.VSCODE_EXECUTABLE_PATH) {
-    return process.env.VSCODE_EXECUTABLE_PATH;
-  }
-
-  if (process.platform === "darwin") {
-    const applicationPath = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
-    if (fs.existsSync(applicationPath)) {
-      return applicationPath;
-    }
-  }
-
-  return undefined;
 }
 
 main().catch((error) => {

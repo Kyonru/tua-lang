@@ -45,6 +45,13 @@ async function run() {
     "the language client should initialize with both workspace folders",
   );
 
+  await vscode.commands.executeCommand("tua.copyDebugInfo");
+  assert.match(
+    await vscode.env.clipboard.readText(),
+    /Server state: running/,
+    "the real language client should remain running after initialization",
+  );
+
   if (selectedSuite === "all" || selectedSuite === "completion") {
     await runCompletionTests();
   }
