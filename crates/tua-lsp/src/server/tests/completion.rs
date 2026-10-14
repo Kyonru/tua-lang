@@ -158,6 +158,37 @@ local field = player.hp
         "field: number"
     );
 }
+
+#[test]
+fn completion_preserves_fields_from_a_thousand_field_table() {
+    const FIELD_COUNT: usize = 1_000;
+
+    let uri = "file:///tmp/wide-table-completion.tua";
+    let mut fields = String::with_capacity(FIELD_COUNT * 24);
+    for index in 0..FIELD_COUNT {
+        fields.push_str(&format!("  field_{index:04}: number,\n"));
+    }
+    let source = format!(
+        "type Wide = {{\n{fields}}}\nlocal wide: Wide = {{}}\nlocal selected = wide.field_0000\n"
+    );
+    let output = run_messages(vec![
+        did_open(uri, &source),
+        completion_request(2, uri, &source, "wide."),
+    ]);
+    let labels = completion_labels(&output, 2);
+
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|label| label.starts_with("field_"))
+            .count(),
+        FIELD_COUNT
+    );
+    assert!(labels.contains(&"field_0000"));
+    assert!(labels.contains(&"field_0500"));
+    assert!(labels.contains(&"field_0999"));
+}
+
 #[test]
 fn completion_uses_persisted_adaptive_stats_and_can_reset_them() {
     let temp = TempProject::new("adaptive-completion-stats");

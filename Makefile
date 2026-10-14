@@ -209,6 +209,11 @@ profile-examples: ## Profile CLI and LSP speed across every bundled example proj
 	$(CARGO) build --release --package tua-cli
 	node scripts/profile-examples.js $(RELEASE_TUA)
 
+.PHONY: profile-large-tables
+profile-large-tables: ## Profile compiler/LSP latency and peak RSS for 1,000/10,000-field and deeply nested tables.
+	$(CARGO) build --release --package tua-cli
+	node scripts/profile-large-tables.js $(RELEASE_TUA)
+
 .PHONY: profile-examples-baseline
 profile-examples-baseline: ## Write a local examples speed baseline for future comparisons.
 	$(CARGO) build --release --package tua-cli

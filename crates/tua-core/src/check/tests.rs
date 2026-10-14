@@ -69,6 +69,44 @@ return rooms
 }
 
 #[test]
+fn validates_a_thousand_field_table_without_collapsing_its_contract() {
+    const FIELD_COUNT: usize = 1_000;
+
+    let mut fields = String::with_capacity(FIELD_COUNT * 24);
+    let mut values = String::with_capacity(FIELD_COUNT * 24);
+    for index in 0..FIELD_COUNT {
+        fields.push_str(&format!("  field_{index:04}: number,\n"));
+        values.push_str(&format!("  field_{index:04} = {index},\n"));
+    }
+    let source =
+        format!("type Wide = {{\n{fields}}}\nlocal wide: Wide = {{\n{values}}}\nreturn wide\n");
+
+    check_tua_source("src/wide_table.tua", source)
+        .expect("a large explicitly typed table should retain every field contract");
+}
+
+#[test]
+fn reports_the_leaf_of_a_deep_table_contract() {
+    const DEPTH: usize = 16;
+
+    let mut ty = String::from("number");
+    let mut value = String::from("\"wrong\"");
+    for index in (0..DEPTH).rev() {
+        ty = format!("{{ level_{index:02}: {ty} }}");
+        value = format!("{{ level_{index:02} = {value} }}");
+    }
+    let source = format!("local nested: {ty} = {value}\n");
+    let diagnostics = check_tua_source("src/deep_table.tua", source)
+        .expect_err("the deepest mismatched value should still be checked");
+
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+            && diagnostic.message.contains("level_15")
+            && diagnostic.message.contains("expected number, found string")
+    }));
+}
+
+#[test]
 fn rejects_a_generated_record_that_violates_its_lua_doc_contract() {
     let diagnostics = check_tua_source(
         "src/generated_rooms.tua",
