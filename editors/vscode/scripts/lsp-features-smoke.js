@@ -41,7 +41,7 @@ const sources = fs
       file,
       path: filename,
       uri: pathToFileURL(filename).href,
-      text: fs.readFileSync(filename, "utf8"),
+      text: readSource(filename),
     };
   });
 
@@ -72,7 +72,7 @@ if (!sprites) {
 const legacy = {
   path: path.join(src, "legacy.lua"),
   uri: pathToFileURL(path.join(src, "legacy.lua")).href,
-  text: fs.readFileSync(path.join(src, "legacy.lua"), "utf8"),
+  text: readSource(path.join(src, "legacy.lua")),
 };
 
 const timeout = setTimeout(() => {
@@ -686,6 +686,10 @@ function sourceTextFromRange(source, range) {
   const line = source.split("\n")[range.start.line];
 
   return line.slice(range.start.character, range.end.character);
+}
+
+function readSource(filename) {
+  return fs.readFileSync(filename, "utf8").replace(/\r\n/g, "\n");
 }
 
 function send(message) {
