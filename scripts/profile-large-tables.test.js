@@ -13,7 +13,15 @@ test("large-table fixtures have deterministic wide and deep boundary probes", ()
   assert.match(fixture.checked, /field_999 = 999/);
   assert.match(fixture.checked, /level_00: \{ level_01:/);
   assert.match(fixture.checked, /level_15: number/);
-  assert.match(fixture.editor, /local completion_probe = wide\.\n$/);
+  assert.match(fixture.editor, /local completion_probe = wide\.field_000/);
+  assert.match(
+    fixture.editor,
+    /return \{ wide = wide, deep = deep, completion_probe = completion_probe \}\n$/,
+  );
+  assert.ok(
+    fixture.editor.indexOf("local completion_probe") < fixture.editor.indexOf("return "),
+    "completion probe must appear before the final return statement",
+  );
 });
 
 test("memory samples retain the available peak", () => {
