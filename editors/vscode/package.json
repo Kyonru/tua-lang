@@ -45,7 +45,8 @@
   "scripts": {
     "check": "node ../../scripts/sync-version.js --check && node ../../scripts/generate-config-schema.js --check && node scripts/check-js.js && node --test test/unit/*.test.js && node scripts/syntax-grammar-check.js && node scripts/manifest-check.js && node scripts/ollama-completion-check.js && node scripts/activation-smoke.js",
     "test:love-debugger": "node scripts/love-debugger-e2e.js",
-    "test:vscode": "node test/run.js"
+    "test:vscode": "node test/run.js",
+    "test:vscode-real": "node test/real-server/run.js"
   },
   "contributes": {
     "breakpoints": [

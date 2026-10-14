@@ -327,6 +327,10 @@ extension-check: ## Syntax-check the VS Code extension activation script.
 extension-test: extension-deps ## Run the VS Code extension-host integration tests.
 	$(NPM) --prefix $(VSCODE_DIR) run test:vscode
 
+.PHONY: extension-real-server-test
+extension-real-server-test: extension-deps extension-server ## Run VS Code integration tests against the staged real tua server.
+	TUA_REAL_SERVER_PATH="$(CURDIR)/$(VSCODE_TUA)" $(NPM) --prefix $(VSCODE_DIR) run test:vscode-real
+
 .PHONY: json-check
 json-check: ## Validate every tracked JSON file.
 	node scripts/check-json.js
