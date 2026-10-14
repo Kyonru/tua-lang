@@ -210,6 +210,11 @@ async function smokeSuccessfulActivation(mockServer, workspace, globalStorage) {
     assertRegisteredCommands(state);
     assert.strictEqual(state.clients.length, 1, "activation should create one language client");
     assert.strictEqual(state.clients[0].starts, 1, "activation should start the client");
+    assert.deepStrictEqual(
+      state.outputChannelCalls,
+      [{ name: "tua", options: { log: true } }],
+      "activation should create the LogOutputChannel required by vscode-languageclient",
+    );
     assert.strictEqual(
       typeof state.clients[0].clientOptions.middleware?.provideInlayHints,
       "function",
@@ -1742,6 +1747,7 @@ function createMockState(workspace, options = {}) {
   const informationMessages = [];
   const openedExternals = [];
   const outputLines = [];
+  const outputChannelCalls = [];
   const outputShows = [];
   const quickPickCalls = [];
   const executedTasks = [];
@@ -2058,15 +2064,21 @@ function createMockState(workspace, options = {}) {
       onDidChangeTextEditorSelection() {
         return { dispose() {} };
       },
-      createOutputChannel() {
+      createOutputChannel(name, channelOptions) {
+        outputChannelCalls.push({ name, options: channelOptions });
         return {
           appendLine(line) {
             outputLines.push(line);
           },
+          debug() {},
           dispose() {},
+          error() {},
+          info() {},
           show(preserveFocus) {
             outputShows.push(preserveFocus);
           },
+          trace() {},
+          warn() {},
         };
       },
       createTreeView(id, viewOptions) {
@@ -2616,6 +2628,7 @@ function createMockState(workspace, options = {}) {
     LanguageClient,
     openedExternals,
     outputLines,
+    outputChannelCalls,
     outputShows,
     quickPickCalls,
     startedDebugSessions,

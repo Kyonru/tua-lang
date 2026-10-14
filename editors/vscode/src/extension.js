@@ -34,7 +34,7 @@ let debugLogger;
 
 async function activate(context) {
   extensionContext = context;
-  outputChannel = vscode.window.createOutputChannel("tua");
+  outputChannel = vscode.window.createOutputChannel("tua", { log: true });
   debugLogger = createDebugLogger(outputChannel);
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(registerBuiltinDocumentProvider(outputChannel));
