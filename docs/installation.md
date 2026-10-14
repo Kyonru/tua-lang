@@ -131,9 +131,10 @@ stable test build.
 
     Install the debugger extension in the standard VS Code extensions folder,
     or set `TUA_DEBUGGER_EXTENSION_PATH` to its unpacked extension directory.
-    Hosted macOS CI does not install the upstream LOVE 11.5 app because that
-    bundle is not signed or notarized. Run this target locally with a LOVE
-    installation that passes your platform's trust checks.
+    Hosted Linux CI runs this test under Xvfb with the distribution-trusted
+    LOVE package. Hosted macOS CI does not install the upstream LOVE 11.5 app
+    because that bundle is not signed or notarized. Run the target locally on
+    macOS with a LOVE installation that passes your platform's trust checks.
     **Run Extension (All Examples)** and **Run Extension (Debug Server)** remain
     useful for interactive debugger testing because those profiles keep
     debugger dependencies enabled.

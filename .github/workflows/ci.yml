@@ -66,13 +66,26 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - name: Install Lua for runtime traceback tests
+      - name: Install Lua and LOVE runtime test dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y lua5.4
+        run: sudo apt-get update && sudo apt-get install -y lua5.4 love xvfb xauth
+      - name: Install LOVE debugger adapter
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          debugger_version="$(cat editors/vscode/scripts/love-debugger-version.txt)"
+          debugger_archive="${RUNNER_TEMP}/second-local-lua-debugger.vsix"
+          debugger_directory="${RUNNER_TEMP}/second-local-lua-debugger"
+          curl --compressed -fsSL \
+            -o "${debugger_archive}" \
+            "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ismoh-games/vsextensions/second-local-lua-debugger-vscode/${debugger_version}/vspackage"
+          echo "$(cat editors/vscode/scripts/love-debugger-sha256.txt)  ${debugger_archive}" | sha256sum --check
+          mkdir -p "${debugger_directory}"
+          unzip -q "${debugger_archive}" -d "${debugger_directory}"
+          echo "TUA_DEBUGGER_EXTENSION_PATH=${debugger_directory}/extension" >> "${GITHUB_ENV}"
       # The upstream LOVE 11.5 macOS bundle is not signed or notarized. Do not
-      # bypass Gatekeeper to install it on a hosted runner. The debugger bridge
-      # remains covered by the extension activation smoke; its real-runtime E2E
-      # target is available locally with a trusted LOVE installation.
+      # bypass Gatekeeper to install it on a hosted runner. Linux exercises the
+      # real debugger/runtime path with the distribution-trusted LOVE package.
       - name: Test workspace
         env:
           # Match the explicit analysis-thread stack used by the CLI and LSP.
@@ -99,6 +112,9 @@ jobs:
         run: cargo run --quiet --package tua-cli -- build
       - name: Exercise editor regression smoke
         run: make editor-regression-smoke
+      - name: Hit a source-mapped Tua breakpoint in LOVE
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum make love-debugger-e2e LOVE=love
 
   extension:
     name: VS Code extension
