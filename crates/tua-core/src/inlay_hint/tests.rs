@@ -50,6 +50,31 @@ fn hints_unannotated_local_types_from_known_expressions() {
 }
 
 #[test]
+fn global_lua_function_lookup_preserves_local_shadowing() {
+    let source = r#"local global_module = require("global")
+local require = function(path: number): string
+  return tostring(path)
+end
+local local_module = require(42)
+"#;
+    let hints = inlay_hints_tua_source("src/require-shadow.tua", source)
+        .expect("shadowed require source should parse");
+    let parameter_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Parameter)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(parameter_hints, vec!["modname:", "v:", "path:"]);
+    assert_eq!(type_hints, vec![": (path: number) -> string", ": string"]);
+}
+
+#[test]
 fn hints_builtin_ecs_world_and_entity_types() {
     let source = r#"local world = ecs.world()
 local entity = world:create()

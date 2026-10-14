@@ -1,4 +1,5 @@
-use std::collections::BTreeMap;
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet};
 
 use full_moon::ast::{
     self, Call, Expression, Field, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix,
@@ -32,6 +33,7 @@ const MAX_SEMANTIC_INFERENCE_DEPTH: usize = 32;
 pub(crate) struct SemanticModel<'a> {
     parsed: &'a ParsedSource,
     environment: &'a TypeEnvironment,
+    shadowed_names: OnceCell<BTreeSet<String>>,
 }
 
 pub(crate) struct LocalInitializerInference {
@@ -44,9 +46,43 @@ struct FunctionBodyCollector {
     bodies: Vec<ast::FunctionBody>,
 }
 
+#[derive(Default)]
+struct ShadowedNameCollector {
+    names: BTreeSet<String>,
+}
+
 impl Visitor for FunctionBodyCollector {
     fn visit_function_body(&mut self, body: &ast::FunctionBody) {
         self.bodies.push(body.clone());
+    }
+}
+
+impl Visitor for ShadowedNameCollector {
+    fn visit_local_assignment(&mut self, local: &ast::LocalAssignment) {
+        self.names.extend(local.names().iter().map(token_text));
+    }
+
+    fn visit_local_function(&mut self, function: &ast::LocalFunction) {
+        self.names.insert(token_text(function.name()));
+    }
+
+    fn visit_function_body(&mut self, body: &ast::FunctionBody) {
+        self.names
+            .extend(body.parameters().iter().filter_map(|parameter| {
+                let ast::Parameter::Name(name) = parameter else {
+                    return None;
+                };
+
+                Some(token_text(name))
+            }));
+    }
+
+    fn visit_numeric_for(&mut self, for_stmt: &ast::NumericFor) {
+        self.names.insert(token_text(for_stmt.index_variable()));
+    }
+
+    fn visit_generic_for(&mut self, for_stmt: &ast::GenericFor) {
+        self.names.extend(for_stmt.names().iter().map(token_text));
     }
 }
 
@@ -55,7 +91,29 @@ impl<'a> SemanticModel<'a> {
         Self {
             parsed,
             environment,
+            shadowed_names: OnceCell::new(),
         }
+    }
+
+    fn unshadowed_lua_function(&self, parts: &[String]) -> Option<LuaItem> {
+        let [root] = parts else {
+            return None;
+        };
+        if self.environment.local(root).is_some()
+            || self.environment.function(root).is_some()
+            || self
+                .shadowed_names
+                .get_or_init(|| {
+                    let mut collector = ShadowedNameCollector::default();
+                    collector.visit_ast(&self.parsed.ast);
+                    collector.names
+                })
+                .contains(root)
+        {
+            return None;
+        }
+
+        lua::hover_item(parts).filter(|item| item.kind == LuaItemKind::Function)
     }
 
     pub(crate) fn type_of_name(&self, name: &str, position: SourcePosition) -> Option<Type> {
@@ -256,6 +314,10 @@ impl<'a> SemanticModel<'a> {
                 return function.return_types_or_any();
             }
 
+            if let Some(item) = self.unshadowed_lua_function(parts) {
+                return return_types_from_function_detail(item.detail);
+            }
+
             if let Some(kind) = asset::loader_kind(root) {
                 return vec![kind.return_type()];
             }
@@ -351,6 +413,10 @@ impl<'a> SemanticModel<'a> {
         if fields.is_empty() {
             if let Some(function) = self.environment.function(root) {
                 return Some(function.clone());
+            }
+
+            if let Some(item) = self.unshadowed_lua_function(parts) {
+                return typed_function_from_lua_item(item);
             }
 
             if let Some(function) = self.typed_function_for_local_export_alias(root, position) {
