@@ -735,6 +735,13 @@ impl AnalysisHost {
             .semantics()
             .expect("parsed file must have semantic facts");
 
+        // Type imports are resolved by the project database. Returning a
+        // current-file `any` here would prevent the caller from falling back
+        // to the authoritative snapshot query.
+        if !parsed.type_imports.is_empty() {
+            return None;
+        }
+
         if !semantics.environment_diagnostics.is_empty() {
             return None;
         }
@@ -834,18 +841,28 @@ impl AnalysisHost {
         };
 
         match &file.parsed {
-            Ok(parsed) => complete_current_file_field_access_with_environment_and_ranking_inputs(
-                &file.source,
-                parsed,
-                position,
-                file.environment()
-                    .expect("parsed file must have a type environment"),
-                ranking(),
-            ),
+            Ok(parsed) => {
+                if !parsed.type_imports.is_empty() {
+                    return None;
+                }
+
+                complete_current_file_field_access_with_environment_and_ranking_inputs(
+                    &file.source,
+                    parsed,
+                    position,
+                    file.environment()
+                        .expect("parsed file must have a type environment"),
+                    ranking(),
+                )
+            }
             Err(_) => file
                 .degraded_semantics
                 .as_ref()
                 .and_then(|degraded| {
+                    if !degraded.parsed.type_imports.is_empty() {
+                        return None;
+                    }
+
                     complete_current_file_field_access_with_environment_and_ranking_inputs(
                         &file.source,
                         &degraded.parsed,

@@ -739,9 +739,31 @@ pub(super) fn fast_diagnostics_for_source(
         .unwrap_or_default(),
     );
 
-    let diagnostics = fast_lane_diagnostics(deduplicate_diagnostics(diagnostics));
+    let diagnostics = fast_lane_diagnostics(deduplicate_diagnostics(diagnostics))
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
+                || unknown_type_name(&diagnostic.message)
+                    .is_none_or(|name| !type_import_may_bind_name(&parsed, name))
+        })
+        .collect();
 
     apply_inline_ignores(path, source, diagnostics, &config.diagnostics)
+}
+
+fn type_import_may_bind_name(parsed: &ParsedSource, name: &str) -> bool {
+    parsed.type_imports.iter().any(|import| {
+        if import.reexport {
+            return false;
+        }
+
+        (!import.namespace.is_empty()
+            && (name == import.namespace
+                || name
+                    .strip_prefix(&import.namespace)
+                    .is_some_and(|suffix| suffix.starts_with('.'))))
+            || import.bindings.iter().any(|binding| binding.local == name)
+    })
 }
 
 pub(super) fn build_analysis_type_environment_with_diagnostics(

@@ -475,7 +475,10 @@ impl AnalysisSnapshot {
         parsed
             .local_annotations
             .iter()
-            .filter(|annotation| tua_type_uses_qualified_name(&annotation.ty))
+            .filter(|annotation| {
+                tua_type_uses_qualified_name(&annotation.ty)
+                    || tua_type_uses_named_import(parsed, &annotation.ty)
+            })
             .filter_map(|annotation| {
                 self.project_type_from_tua_type(parsed, &annotation.ty)
                     .map(|ty| (annotation.name.clone(), ty))
@@ -2085,6 +2088,18 @@ fn collect_tua_type_names(ty: &TuaType, names: &mut BTreeSet<String>) {
             }
         }
     }
+}
+
+fn tua_type_uses_named_import(parsed: &ParsedSource, ty: &TuaType) -> bool {
+    let mut names = BTreeSet::new();
+    collect_tua_type_names(ty, &mut names);
+
+    parsed
+        .type_imports
+        .iter()
+        .filter(|import| !import.reexport)
+        .flat_map(|import| &import.bindings)
+        .any(|binding| names.contains(&binding.local))
 }
 
 fn builtin_type_name(ty: &Type) -> Option<String> {

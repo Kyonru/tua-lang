@@ -626,6 +626,59 @@ return {}
     assert_definition_text(&output, 5, &main_uri, main, "hp");
     assert_definition_text(&output, 6, &types_uri, types, "Enemy");
 }
+
+#[test]
+fn named_type_imports_agree_across_diagnostics_hover_completion_and_navigation() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+import type { Player } from "./types"
+
+local player: <|type_ref|>Player = { health = 100, name = "Ada" }
+local selected = player.health
+local copied = <|hover|>player
+-- file: src/types.tua
+export type <|type_def|>Player<|/type_def|> = {
+  health: number,
+  name: string,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("named-type-import-lsp-surfaces")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let types = fixture.source("src/types.tua");
+    let main_uri = path_uri(&temp.join("src/main.tua"));
+    let types_uri = path_uri(&temp.join("src/types.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&main_uri, main),
+        hover_request(2, &main_uri, main, "player\n"),
+        completion_request(3, &main_uri, main, "local selected = player."),
+        type_definition_request_at(4, &main_uri, fixture.position("type_ref")),
+    ]);
+
+    for publication in diagnostics_publications(&output, &main_uri) {
+        assert!(
+            publication["params"]["diagnostics"]
+                .as_array()
+                .expect("diagnostics should be an array")
+                .iter()
+                .all(|diagnostic| diagnostic["code"] != "TL1001"),
+            "imported type should not produce a transient unknown-type diagnostic: {publication:#?}"
+        );
+    }
+    assert!(
+        hover_contents(&output, 2).contains("local player: { health: number, name: string }"),
+        "hover should use the imported type: {}",
+        hover_contents(&output, 2)
+    );
+    assert_eq!(completion_labels(&output, 3), ["health", "name"]);
+    assert_definition_text(&output, 4, &types_uri, types, "Player");
+}
+
 #[test]
 fn implementation_returns_functions_methods_exports_and_empty_for_dynamic_cases() {
     let fixture = Fixture::parse(

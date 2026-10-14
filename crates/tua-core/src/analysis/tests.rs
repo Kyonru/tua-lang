@@ -2452,6 +2452,35 @@ local sprite = image "missing.png"
 }
 
 #[test]
+fn fast_diagnostics_defer_type_import_names_to_project_analysis() {
+    let path = PathBuf::from("src/main.tua");
+    let mut host = AnalysisHost::new();
+
+    host.set_file(
+        &path,
+        r#"
+import type Shared from "./types"
+import type { Player as NamedPlayer } from "./types"
+
+local first: Shared.Player = { hp = 10 }
+local second: NamedPlayer = first
+local missing: MissingType = second
+"#,
+    );
+
+    let diagnostics = host.fast_diagnostics(&path);
+
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|diagnostic| { diagnostic.code == Some(DiagnosticCode::TYPE_UNKNOWN_NAME) })
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        vec!["unknown type `MissingType`"]
+    );
+}
+
+#[test]
 fn fast_diagnostics_include_inferred_local_reassignment_errors() {
     let path = PathBuf::from("src/main.tua");
     let mut host = AnalysisHost::new();
