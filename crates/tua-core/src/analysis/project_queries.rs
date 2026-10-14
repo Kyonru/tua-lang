@@ -32,9 +32,33 @@ impl AnalysisSnapshot {
         module_path: &Path,
         fields: &[String],
     ) -> Option<ModuleExportField> {
-        let exports = self.module_exports(module_path)?;
+        crate::module_index::exported_field_for_fields(
+            &ModuleExports {
+                path: module_path.to_path_buf(),
+                fields: self.indexed_module_export_fields(module_path)?,
+            },
+            fields,
+        )
+    }
 
-        exported_field_for_fields(exports, fields)
+    pub(super) fn indexed_module_export_fields(
+        &self,
+        module_path: &Path,
+    ) -> Option<BTreeMap<String, ModuleExportField>> {
+        let mut fields = self
+            .module_exports(module_path)
+            .map(|exports| exports.fields.clone())
+            .unwrap_or_default();
+        if let Some(module) = self.module_graph.module(module_path) {
+            fields.extend(
+                module
+                    .exports
+                    .iter()
+                    .map(|entry| (entry.public_name.clone(), entry.field.clone())),
+            );
+        }
+
+        (!fields.is_empty()).then_some(fields)
     }
 
     pub(super) fn project_type_hover(
@@ -407,8 +431,8 @@ impl AnalysisSnapshot {
             .into_iter()
             .filter_map(|binding| {
                 let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
-                let exports = self.module_exports(module_path)?;
-                let ty = Type::table(exports.fields.iter().map(|(name, field)| {
+                let exports = self.indexed_module_export_fields(module_path)?;
+                let ty = Type::table(exports.iter().map(|(name, field)| {
                     (
                         name.clone(),
                         TableField::required(self.type_database.resolve_type(
@@ -453,11 +477,11 @@ impl AnalysisSnapshot {
             else {
                 continue;
             };
-            let Some(exports) = self.module_exports(module_path) else {
+            let Some(exports) = self.indexed_module_export_fields(module_path) else {
                 continue;
             };
 
-            deprecations.extend(exports.fields.iter().filter_map(|(name, field)| {
+            deprecations.extend(exports.iter().filter_map(|(name, field)| {
                 field
                     .deprecation
                     .clone()
@@ -496,12 +520,19 @@ impl AnalysisSnapshot {
                 continue;
             };
             let expressions = local.expressions().iter().collect::<Vec<_>>();
+            let type_specifiers = local.type_specifiers().collect::<Vec<_>>();
             let mut pending_types = Vec::new();
             let mut pending_field_origins = Vec::new();
             let mut pending_function_return_origins = Vec::new();
 
             for (index, local_name) in local.names().iter().enumerate() {
                 let name = token_text(local_name);
+                if type_specifiers
+                    .get(index)
+                    .is_some_and(|specifier| specifier.is_some())
+                {
+                    continue;
+                }
                 let Some((expression, return_index)) =
                     assignment_expression_for_local(&expressions, index)
                 else {

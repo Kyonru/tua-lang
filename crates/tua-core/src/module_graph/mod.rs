@@ -1,6 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use full_moon::ast::{self, Expression, Field, FunctionArgs, LastStmt, Prefix, Suffix};
+use full_moon::node::Node;
+
+use crate::ast_utils::{plain_field_chain_from_var, token_text};
 use crate::hir::{lower_parsed_source, HirExportValue, HirModule, HirSymbolId};
 use crate::module_index::{ModuleExportField, ModuleExports};
 use crate::module_link::{module_specifier_literals, ModuleSpecifierKind};
@@ -109,6 +113,15 @@ pub enum ModuleExportOrigin {
     GeneratedBuiltin,
 }
 
+#[derive(Clone, Debug)]
+struct RuntimeExportForward {
+    source_path: PathBuf,
+    module: String,
+    public_name: Option<String>,
+    fields: Vec<String>,
+    span: SourceSpan,
+}
+
 impl ModuleGraph {
     pub fn build<'a>(
         inputs: impl IntoIterator<Item = ModuleGraphInput<'a>>,
@@ -177,6 +190,17 @@ impl ModuleGraph {
 
             graph.modules.insert(path, module);
         }
+
+        let forwards = inputs
+            .iter()
+            .filter_map(|input| {
+                input.parsed.map(|parsed| {
+                    runtime_export_forwards(&normalize_path(input.path), parsed, input.hir)
+                })
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        graph.propagate_runtime_export_forwards(&forwards);
 
         graph.collect_require_diagnostics();
         graph.collect_cycle_diagnostics();
@@ -289,6 +313,141 @@ impl ModuleGraph {
 
     pub fn cycles(&self) -> &[Vec<PathBuf>] {
         &self.cycles
+    }
+
+    fn propagate_runtime_export_forwards(&mut self, forwards: &[RuntimeExportForward]) {
+        // Every successful pass resolves at least one facade field. Limiting the
+        // passes to the number of forwarding expressions makes require cycles
+        // terminate without turning unresolved dynamic values into guessed types.
+        for _ in 0..forwards.len() {
+            let mut changed = false;
+
+            for forward in forwards {
+                let Some(target_path) =
+                    self.resolved_require_path(&forward.source_path, &forward.module)
+                else {
+                    continue;
+                };
+
+                if let Some(public_name) = &forward.public_name {
+                    let Some(field) = self.forwarded_field(&target_path, &forward.fields) else {
+                        continue;
+                    };
+                    let should_replace = self
+                        .export(&forward.source_path, public_name)
+                        .is_none_or(|entry| entry.field.ty == crate::Type::Any);
+                    if !should_replace {
+                        continue;
+                    }
+
+                    let existing = self.export(&forward.source_path, public_name).cloned();
+                    let entry = ModuleExportEntry {
+                        module_path: forward.source_path.clone(),
+                        public_name: public_name.clone(),
+                        symbol_id: existing.as_ref().and_then(|entry| entry.symbol_id),
+                        definition_span: existing
+                            .as_ref()
+                            .map(|entry| entry.definition_span)
+                            .unwrap_or(forward.span),
+                        export_span: existing
+                            .as_ref()
+                            .map(|entry| entry.export_span)
+                            .unwrap_or(forward.span),
+                        field: merge_forwarded_field(
+                            existing.as_ref().map(|entry| &entry.field),
+                            field,
+                        ),
+                        origin: self
+                            .modules
+                            .get(&forward.source_path)
+                            .map(|module| export_origin(module.source_kind, None))
+                            .unwrap_or(ModuleExportOrigin::Tua),
+                    };
+                    changed |= self.upsert_forwarded_export(entry);
+                } else {
+                    let target_exports = self
+                        .modules
+                        .get(&target_path)
+                        .map(|module| module.exports.clone())
+                        .unwrap_or_default();
+
+                    for target in target_exports {
+                        if self
+                            .export(&forward.source_path, &target.public_name)
+                            .is_some()
+                        {
+                            continue;
+                        }
+                        let entry = ModuleExportEntry {
+                            module_path: forward.source_path.clone(),
+                            public_name: target.public_name,
+                            symbol_id: None,
+                            definition_span: forward.span,
+                            export_span: forward.span,
+                            field: target.field,
+                            origin: self
+                                .modules
+                                .get(&forward.source_path)
+                                .map(|module| export_origin(module.source_kind, None))
+                                .unwrap_or(ModuleExportOrigin::Tua),
+                        };
+                        changed |= self.upsert_forwarded_export(entry);
+                    }
+                }
+            }
+
+            if !changed {
+                break;
+            }
+        }
+    }
+
+    fn resolved_require_path(&self, source_path: &Path, module: &str) -> Option<PathBuf> {
+        match self.resolve_require(source_path, module)? {
+            RequireResolution::Resolved { path }
+            | RequireResolution::Duplicate { selected: path, .. } => Some(path.clone()),
+            RequireResolution::Missing { .. } | RequireResolution::Invalid { .. } => None,
+        }
+    }
+
+    fn forwarded_field(&self, target_path: &Path, fields: &[String]) -> Option<ModuleExportField> {
+        let (first, rest) = fields.split_first()?;
+        let entry = self.export(target_path, first)?;
+        if rest.is_empty() {
+            return Some(entry.field.clone());
+        }
+
+        forwarded_nested_type(&entry.field.ty, rest).map(|ty| ModuleExportField {
+            ty,
+            documentation: None,
+            deprecation: None,
+            parameter_names: Vec::new(),
+            parameter_documentation: Vec::new(),
+        })
+    }
+
+    fn upsert_forwarded_export(&mut self, entry: ModuleExportEntry) -> bool {
+        let key = (entry.module_path.clone(), entry.public_name.clone());
+        if self.export_index.get(&key) == Some(&entry) {
+            return false;
+        }
+
+        self.export_index.insert(key, entry.clone());
+        if let Some(module) = self.modules.get_mut(&entry.module_path) {
+            if let Some(existing) = module
+                .exports
+                .iter_mut()
+                .find(|existing| existing.public_name == entry.public_name)
+            {
+                *existing = entry;
+            } else {
+                module.exports.push(entry);
+                module
+                    .exports
+                    .sort_by(|left, right| left.public_name.cmp(&right.public_name));
+            }
+        }
+        true
     }
 
     fn collect_require_diagnostics(&mut self) {
@@ -716,6 +875,204 @@ fn export_entries_for_module(
             })
         })
         .collect()
+}
+
+fn runtime_export_forwards(
+    path: &Path,
+    parsed: &ParsedSource,
+    hir: Option<&HirModule>,
+) -> Vec<RuntimeExportForward> {
+    let owned_hir;
+    let hir = match hir {
+        Some(hir) => hir,
+        None => {
+            owned_hir = lower_parsed_source(parsed);
+            &owned_hir
+        }
+    };
+    let bindings = hir
+        .require_bindings
+        .iter()
+        .map(|binding| (binding.alias.as_str(), binding.module.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let Some(LastStmt::Return(return_stmt)) = parsed.ast.nodes().last_stmt() else {
+        return Vec::new();
+    };
+    let Some(expression) = return_stmt.returns().iter().next() else {
+        return Vec::new();
+    };
+
+    if let Some(module) = directly_returned_module(expression, &bindings) {
+        return node_span(expression)
+            .map(|span| {
+                vec![RuntimeExportForward {
+                    source_path: path.to_path_buf(),
+                    module,
+                    public_name: None,
+                    fields: Vec::new(),
+                    span,
+                }]
+            })
+            .unwrap_or_default();
+    }
+
+    let Expression::TableConstructor(table) = unparenthesized_expression(expression) else {
+        return Vec::new();
+    };
+
+    table
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let Field::NameKey { key, value, .. } = field else {
+                return None;
+            };
+            let chain = plain_field_chain_from_expression(value)?;
+            let (root, fields) = chain.split_first()?;
+            if fields.is_empty() {
+                return None;
+            }
+            let module = bindings.get(root.as_str())?.to_string();
+
+            Some(RuntimeExportForward {
+                source_path: path.to_path_buf(),
+                module,
+                public_name: Some(token_text(key)),
+                fields: fields.to_vec(),
+                span: node_span(field)?,
+            })
+        })
+        .collect()
+}
+
+fn directly_returned_module(
+    expression: &Expression,
+    bindings: &BTreeMap<&str, &str>,
+) -> Option<String> {
+    let expression = unparenthesized_expression(expression);
+    if let Expression::Var(var) = expression {
+        let chain = plain_field_chain_from_var(var)?;
+        let [name] = chain.as_slice() else {
+            return None;
+        };
+        return bindings
+            .get(name.as_str())
+            .map(|module| (*module).to_owned());
+    }
+
+    let Expression::FunctionCall(call) = expression else {
+        return None;
+    };
+    let Prefix::Name(name) = call.prefix() else {
+        return None;
+    };
+    if token_text(name) != "require" {
+        return None;
+    }
+    let call = call.suffixes().next()?;
+    let Suffix::Call(ast::Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) = call
+    else {
+        return None;
+    };
+    let Expression::String(module) = arguments.iter().next()? else {
+        return None;
+    };
+
+    Some(unquote_string(&module.to_string()))
+}
+
+fn unparenthesized_expression(mut expression: &Expression) -> &Expression {
+    while let Expression::Parentheses {
+        expression: inner, ..
+    }
+    | Expression::TypeAssertion {
+        expression: inner, ..
+    } = expression
+    {
+        expression = inner;
+    }
+    expression
+}
+
+fn plain_field_chain_from_expression(expression: &Expression) -> Option<Vec<String>> {
+    match unparenthesized_expression(expression) {
+        Expression::Var(var) => plain_field_chain_from_var(var),
+        _ => None,
+    }
+}
+
+fn forwarded_nested_type(ty: &crate::Type, fields: &[String]) -> Option<crate::Type> {
+    let mut current = ty.clone();
+    for field in fields {
+        current = match current {
+            crate::Type::Table(table) => table.semantic_field(field)?.ty.clone(),
+            crate::Type::Union(types) => {
+                let mut resolved = types
+                    .iter()
+                    .filter_map(|ty| forwarded_nested_type(ty, std::slice::from_ref(field)))
+                    .collect::<Vec<_>>();
+                match resolved.len() {
+                    0 => return None,
+                    1 => resolved.remove(0),
+                    _ => crate::Type::union(resolved),
+                }
+            }
+            crate::Type::Any
+            | crate::Type::Alias(_)
+            | crate::Type::Function(_)
+            | crate::Type::Primitive(_)
+            | crate::Type::StringLiteral(_)
+            | crate::Type::Array(_)
+            | crate::Type::Tuple(_)
+            | crate::Type::Dictionary { .. } => return None,
+        };
+    }
+    Some(current)
+}
+
+fn merge_forwarded_field(
+    existing: Option<&ModuleExportField>,
+    mut forwarded: ModuleExportField,
+) -> ModuleExportField {
+    let Some(existing) = existing else {
+        return forwarded;
+    };
+    if existing.documentation.is_some() {
+        forwarded.documentation.clone_from(&existing.documentation);
+    }
+    if existing.deprecation.is_some() {
+        forwarded.deprecation.clone_from(&existing.deprecation);
+    }
+    if !existing.parameter_names.is_empty() {
+        forwarded
+            .parameter_names
+            .clone_from(&existing.parameter_names);
+    }
+    if !existing.parameter_documentation.is_empty() {
+        forwarded
+            .parameter_documentation
+            .clone_from(&existing.parameter_documentation);
+    }
+    forwarded
+}
+
+fn node_span(node: &impl Node) -> Option<SourceSpan> {
+    node.range()
+        .map(|(start, end)| SourceSpan::from_range(start, end))
+}
+
+fn unquote_string(value: &str) -> String {
+    let value = value.trim();
+    value
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .or_else(|| {
+            value
+                .strip_prefix('\'')
+                .and_then(|value| value.strip_suffix('\''))
+        })
+        .unwrap_or(value)
+        .to_owned()
 }
 
 fn export_definition_span(hir: Option<&HirModule>, public_name: &str) -> Option<SourceSpan> {

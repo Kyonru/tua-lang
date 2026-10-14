@@ -804,6 +804,112 @@ local typed: Pl<|complete|> = nil
 }
 
 #[test]
+fn runtime_module_facades_preserve_types_across_forwarding_layers() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/leaf.tua
+return {
+  value = 42,
+  nested = { label = "ready" },
+}
+-- file: src/direct.tua
+return require("leaf")
+-- file: src/facade.tua
+local Next = require("direct")
+return {
+  value = Next.value,
+  nested = Next.nested,
+}
+-- file: src/facade_two.tua
+local Next = require("facade")
+return {
+  value = Next.value,
+  nested = Next.nested,
+}
+-- file: src/main.tua
+local Facade = require("facade_two")
+local wrong: string = Facade.value
+local value = Facade.<|hover|>value
+local label = Facade.nested.label
+local picked = Facade.va<|complete|>
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let path = PathBuf::from("src/main.tua");
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics(&path);
+    let hover = snapshot
+        .hover(&path, fixture.position("hover"))
+        .expect("forwarded number should hover");
+    let completions = completion_labels(&snapshot.completion(&path, fixture.position("complete")));
+
+    assert_eq!(
+        snapshot
+            .module_graph()
+            .export("src/facade_two.tua", "value")
+            .map(|entry| &entry.field.ty),
+        Some(&Type::number())
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)
+                && diagnostic.message.contains("expected string, found number")
+        }),
+        "{diagnostics:?}"
+    );
+    assert!(hover.contents.contains("number"), "{hover:?}");
+    assert!(completions.contains(&"value".to_owned()), "{completions:?}");
+
+    assert_eq!(
+        snapshot
+            .module_graph()
+            .export("src/direct.tua", "value")
+            .map(|entry| &entry.field.ty),
+        Some(&Type::number())
+    );
+    assert!(matches!(
+        snapshot
+            .module_graph()
+            .export("src/facade_two.tua", "nested")
+            .map(|entry| &entry.field.ty),
+        Some(Type::Table(_))
+    ));
+}
+
+#[test]
+fn dynamic_runtime_module_facades_remain_conservative() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/dynamic.tua
+local name = "leaf"
+return require(name)
+-- file: src/main.tua
+local Dynamic = require("dynamic")
+local value: string = Dynamic.value
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, &file.source);
+    }
+
+    let snapshot = host.snapshot();
+
+    assert!(snapshot
+        .module_graph()
+        .export("src/dynamic.tua", "value")
+        .is_none());
+    assert!(!snapshot
+        .diagnostics("src/main.tua")
+        .iter()
+        .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn nested_builtin_configuration_fields_hover_and_navigate_to_virtual_schemas() {
     let fixture = Fixture::parse(
         r#"local Player = spriteSheet({
