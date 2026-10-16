@@ -45,6 +45,8 @@ jobs:
         run: make release-tool-test
       - name: Check generated config metadata
         run: make config-schema-drift-check
+      - name: Verify LLM language evaluation corpus
+        run: make llm-language-eval-test
       - name: Build documentation
         env:
           TUA_DOCS_VENV_DIR: ${{ runner.temp }}/tua-docs
