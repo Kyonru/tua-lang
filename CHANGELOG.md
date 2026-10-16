@@ -31,6 +31,35 @@ language or editor behavior, and migration notes call out those changes.
 - `make release-version VERSION=<version>` now synchronizes release metadata,
   runs CI checks, creates the release commit, and adds an annotated local tag
   without pushing it.
+- A provider-neutral, compiler-backed LLM language evaluation suite supplies 40
+  executable tasks, compact prompt cards, reference and must-fail controls,
+  JSONL model interchange, category reports, and an optional loopback-only
+  Ollama lane. Trusted CI verifies the offline corpus without contacting a
+  model.
+- Representative LSP benchmarks now cover large single files, 100- and
+  1,000-file projects, deep dependency chains, diamonds, and cycles. Separate
+  large-table profiles measure compiler/LSP latency and peak memory.
+
+### Changed
+
+- The language server now derives project layout from the shared project model,
+  routes requests to the active workspace in multi-root sessions, batches
+  semantic warming, preserves runtime-module facade types across forwarding
+  layers, and reserves request capacity so client follow-ups are not starved by
+  background work.
+- Restricted Mode launches the bundled server with explicitly contained
+  execution and workspace behavior. Build outputs, generated assets, project
+  loading, and external tool sessions now fail closed when paths escape their
+  configured roots.
+- Trusted CI and tagged release verification are separated from untrusted pull
+  requests. Linux exercises the real LOVE debugger/runtime path, while macOS
+  no longer bypasses Gatekeeper for an unsigned LOVE application bundle.
+- The VS Code extension package is minimized, activates project UI only for Tua
+  workspaces, and resolves bundled server binaries portably across supported
+  platforms and checkout line endings.
+- Performance trend collection now writes and uploads deterministic smoke/full
+  reports, validates report freshness, and uses bounded shared-runner budgets
+  for representative completion workloads.
 
 ### Fixed
 
@@ -42,6 +71,27 @@ language or editor behavior, and migration notes call out those changes.
   asset metadata refreshes the workspace asset index before answering.
 - Repeated version synchronization now preserves Cargo lockfile package
   boundaries before the release helper performs its verification pass.
+- Restricted execution no longer permits unsafe server selection or filesystem
+  traversal through build outputs, generated assets, configuration, API/MCP
+  paths, or project discovery.
+- Anonymous functions and named functions now enforce non-`nil` return paths
+  consistently, while runtime module facades keep projected exports precise
+  instead of forwarding an entire dynamic module surface.
+- Compound assignments now reject unsupported computed/call targets and lower
+  accepted name and field-chain targets structurally with single-evaluation
+  semantics.
+- Deep require graphs, type-only re-export chains, and dependency cycles use
+  stack-safe traversal and retain precise editor behavior at representative
+  project sizes.
+- Polling file watching now bounds debounce batches and synchronizes readiness,
+  preventing missed external asset-pipeline changes and Windows shutdown
+  timeouts.
+- LSP fixtures no longer scan the shared temporary directory, depend on host
+  line endings, or assume Unix executable names, keeping local and hosted tests
+  deterministic across Linux, macOS, and Windows.
+- Parser, generated-table, and analysis paths now apply bounded depth, input,
+  process, stderr, and memory-sensitive behavior; dependency and release
+  automation were hardened alongside the documented security model.
 
 ## [0.2.8] - 2026-07-31
 
