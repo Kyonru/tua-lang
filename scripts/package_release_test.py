@@ -4,10 +4,22 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from package_release import changelog_notes, create_server_archive, sha256
+from package_release import changelog_notes, create_server_archive, sha256, write_checksum
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_checksum_files_use_portable_lf_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            artifact = Path(temp) / "artifact.vsix"
+            artifact.write_bytes(b"extension")
+
+            checksum = write_checksum(artifact)
+
+            self.assertEqual(
+                checksum.read_bytes(),
+                f"{sha256(artifact)}  artifact.vsix\n".encode("utf-8"),
+            )
+
     def test_archives_are_deterministic_and_include_release_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

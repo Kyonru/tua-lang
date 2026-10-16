@@ -51,6 +51,7 @@ jobs:
           mkdir -p dist
           gh release download "${RELEASE_TAG}" --dir dist --pattern "tua-*.vsix"
           gh release download "${RELEASE_TAG}" --dir dist --pattern SHA256SUMS
+          sed -i 's/\r$//' dist/SHA256SUMS
           for vsix in dist/*.vsix; do
             checksum="$(sha256sum "${vsix}" | cut -d ' ' -f 1)  $(basename "${vsix}")"
             grep -Fqx "${checksum}" dist/SHA256SUMS || {
@@ -111,6 +112,7 @@ jobs:
           mkdir -p dist
           gh release download "${RELEASE_TAG}" --dir dist --pattern "tua-*.vsix"
           gh release download "${RELEASE_TAG}" --dir dist --pattern SHA256SUMS
+          sed -i 's/\r$//' dist/SHA256SUMS
           for vsix in dist/*.vsix; do
             checksum="$(sha256sum "${vsix}" | cut -d ' ' -f 1)  $(basename "${vsix}")"
             grep -Fqx "${checksum}" dist/SHA256SUMS || {

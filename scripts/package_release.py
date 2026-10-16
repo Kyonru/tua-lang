@@ -27,7 +27,10 @@ def sha256(path: Path) -> str:
 
 def write_checksum(path: Path) -> Path:
     checksum_path = path.with_name(f"{path.name}.sha256")
-    checksum_path.write_text(f"{sha256(path)}  {path.name}\n", encoding="utf-8")
+    # Checksum manifests are consumed by Unix release jobs even when an entry
+    # was produced on Windows. Write bytes so Windows cannot translate the
+    # line ending to CRLF and break exact manifest matching downstream.
+    checksum_path.write_bytes(f"{sha256(path)}  {path.name}\n".encode("utf-8"))
     return checksum_path
 
 

@@ -142,7 +142,7 @@ jobs:
       - name: Verify release checksums
         shell: bash
         run: |
-          cat dist/*.sha256 | sort > dist/SHA256SUMS
+          sed 's/\r$//' dist/*.sha256 | sort > dist/SHA256SUMS
           cd dist
           sha256sum --check SHA256SUMS
       - name: Build release notes

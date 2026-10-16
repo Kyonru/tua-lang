@@ -6,6 +6,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release checksum manifests now use portable LF line endings, and extension
+  publishing tolerates older CRLF entries produced by Windows builders.
+
 ## [0.2.9] - 2026-10-16
 
 ### Added
