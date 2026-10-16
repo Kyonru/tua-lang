@@ -6,6 +6,8 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-16
+
 ### Added
 
 - Opt-in `[[asset_pipelines]]` run standalone importers through a versioned
@@ -380,7 +382,8 @@ language or editor behavior, and migration notes call out those changes.
 - Project source and `tua.toml` files require no migration for this coordinated
   release.
 
-[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/Kyonru/tua-lang/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/Kyonru/tua-lang/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/Kyonru/tua-lang/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/Kyonru/tua-lang/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/Kyonru/tua-lang/compare/v0.2.5...v0.2.6
