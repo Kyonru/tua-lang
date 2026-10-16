@@ -17,11 +17,15 @@ function parseArgs(argv) {
     if (arg === "--reference") options.provider = "reference";
     else if (arg === "--mutants") options.provider = "mutants";
     else if (arg === "--ollama") options.provider = "ollama";
-    else if (arg === "--responses") options.responses = argv[++index];
-    else if (arg === "--emit-requests") options.emit = argv[++index];
-    else if (arg === "--out") options.out = argv[++index];
-    else if (arg === "--task") options.task = argv[++index];
-    else if (arg === "--tua") options.tua = argv[++index];
+    else if (["--responses", "--emit-requests", "--out", "--task", "--tua"].includes(arg)) {
+      const value = argv[++index];
+      if (!value || value.startsWith("--")) throw new Error(`${arg} expects a value`);
+      if (arg === "--responses") options.responses = value;
+      else if (arg === "--emit-requests") options.emit = value;
+      else if (arg === "--out") options.out = value;
+      else if (arg === "--task") options.task = value;
+      else options.tua = value;
+    }
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (options.responses) options.provider = "responses";
@@ -80,8 +84,12 @@ async function ollamaCandidate(item) {
   if (!model) throw new Error("set TUA_OLLAMA_MODEL to an installed Ollama model");
   const endpoint = process.env.TUA_OLLAMA_ENDPOINT || "http://127.0.0.1:11434";
   const url = new URL("/api/generate", endpoint);
-  if (!(["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))) {
+  if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname)) {
     throw new Error("TUA_OLLAMA_ENDPOINT must be loopback-only");
+  }
+  const timeoutMs = Number(process.env.TUA_OLLAMA_TIMEOUT_MS || 30000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 300000) {
+    throw new Error("TUA_OLLAMA_TIMEOUT_MS must be between 1 and 300000");
   }
   const request = requestFor(item);
   const started = performance.now();
@@ -96,12 +104,21 @@ async function ollamaCandidate(item) {
       keep_alive: "10m",
       options: { temperature: 0.1, top_p: 0.9, num_ctx: 4096, num_predict: 256 },
     }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const body = await response.text();
   if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}: ${body}`);
   const parsed = JSON.parse(body);
   if (typeof parsed.response !== "string") throw new Error("Ollama response is missing response text");
   return { candidate: parsed.response, latencyMs: performance.now() - started, model };
+}
+
+function isLoopbackHostname(hostname) {
+  if (hostname === "localhost" || hostname === "[::1]") return true;
+  const octets = hostname.split(".");
+  return octets.length === 4
+    && octets[0] === "127"
+    && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
 }
 
 function resolveTua(explicit) {
@@ -173,6 +190,11 @@ async function run(options) {
   }
   const tua = resolveTua(options.tua);
   const responses = options.responses ? readResponses(options.responses) : null;
+  if (responses) {
+    const known = new Set(chosen.map((item) => item.id));
+    const unknown = [...responses.keys()].filter((id) => !known.has(id));
+    if (unknown.length > 0) throw new Error(`response file contains unknown task ids: ${unknown.join(", ")}`);
+  }
   const results = [];
   for (const item of chosen) {
     let response;
@@ -208,4 +230,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { evaluateCandidate, parseArgs, requestFor, run, structuralFailure, summarize };
+module.exports = { evaluateCandidate, isLoopbackHostname, parseArgs, requestFor, run, structuralFailure, summarize };

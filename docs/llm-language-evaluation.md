@@ -84,7 +84,9 @@ TUA_OLLAMA_MODEL=qwen2.5-coder:7b make llm-language-eval-ollama
 ```
 
 `TUA_OLLAMA_ENDPOINT` defaults to `http://127.0.0.1:11434` and is restricted to
-loopback hosts. Live model evaluation is intentionally not a required CI or
+unencrypted loopback hosts. Requests time out after 30 seconds by default;
+`TUA_OLLAMA_TIMEOUT_MS` can set a bounded timeout up to five minutes. Live
+model evaluation is intentionally not a required CI or
 release gate: model availability and stochastic output must not decide whether
 the compiler is releasable. The offline references, corpus integrity, and
 must-fail controls are the trusted gate.

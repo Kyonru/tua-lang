@@ -3,7 +3,7 @@
 const assert = require("assert");
 const test = require("node:test");
 const { CURSOR, tasks } = require("../benchmarks/llm-language/tasks.js");
-const { requestFor, structuralFailure } = require("./llm-language-eval.js");
+const { isLoopbackHostname, parseArgs, requestFor, structuralFailure } = require("./llm-language-eval.js");
 
 test("LLM language corpus has forty unique, well-formed tasks", () => {
   assert.strictEqual(tasks.length, 40);
@@ -37,4 +37,19 @@ test("default negative controls reach the compiler oracle", () => {
   for (const item of tasks.filter((entry) => entry.mutant.includes("__benchmark_type_error"))) {
     assert.strictEqual(structuralFailure(item, item.mutant), null, `${item.id} control never reached compilation`);
   }
+});
+
+test("argument parsing rejects missing option values", () => {
+  assert.throws(() => parseArgs(["--out"]), /expects a value/);
+  assert.throws(() => parseArgs(["--task", "--reference"]), /expects a value/);
+});
+
+test("Ollama host policy accepts loopback names only", () => {
+  assert(isLoopbackHostname("localhost"));
+  assert(isLoopbackHostname("127.0.0.1"));
+  assert(isLoopbackHostname("127.12.34.56"));
+  assert(isLoopbackHostname("[::1]"));
+  assert(!isLoopbackHostname("127.999.0.1"));
+  assert(!isLoopbackHostname("example.com"));
+  assert(!isLoopbackHostname("10.0.0.1"));
 });
