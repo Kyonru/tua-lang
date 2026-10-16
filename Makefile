@@ -108,10 +108,10 @@ clippy: ## Run clippy with warnings denied.
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: verify
-verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check extension-check json-check diff-check ## Run the main local verification suite without modifying files.
+verify: fmt-check test clippy version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test extension-check json-check diff-check ## Run the main local verification suite without modifying files.
 
 .PHONY: ci-check
-ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
+ci-check: fmt-check clippy test build-examples editor-regression-smoke version-drift-check release-tool-test config-schema-drift-check llms-drift-check llm-language-eval-test extension-check json-check docs-build benchmark-smoke diff-check ## Run required CI checks that do not need an external catalog checkout or VS Code host.
 
 .PHONY: diff-check
 diff-check: ## Check the git diff for whitespace errors.
@@ -179,6 +179,18 @@ completion-ranking-smoke: ## Check fixture-driven completion ranking order.
 .PHONY: ollama-completion-smoke
 ollama-completion-smoke: ## Exercise an installed local Ollama model; set TUA_OLLAMA_MODEL.
 	node scripts/ollama-completion-smoke.js
+
+.PHONY: llm-language-eval-test
+llm-language-eval-test: ## Verify the 40-task LLM corpus, references, and negative controls offline.
+	$(CARGO) build --package tua-cli
+	node --test scripts/llm-language-eval.test.js
+	node scripts/llm-language-eval.js --reference --out target/llm-language/reference-report.json
+	node scripts/llm-language-eval.js --mutants --out target/llm-language/mutant-report.json
+
+.PHONY: llm-language-eval-ollama
+llm-language-eval-ollama: ## Evaluate an installed local Ollama model across the language corpus.
+	$(CARGO) build --package tua-cli
+	node scripts/llm-language-eval.js --ollama --out target/llm-language/ollama-report.json
 
 .PHONY: generate-lsp-benchmarks
 generate-lsp-benchmarks: ## Generate deterministic representative LSP benchmark fixtures under target/.

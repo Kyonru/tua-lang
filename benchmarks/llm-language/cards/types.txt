@@ -1,0 +1,1 @@
+Type card: structural records use `type Name = { field: Type }`. Optional fields use `field?: Type`; optional values can also use `T | nil`. Arrays use `T[]`, literal choices use unions such as `"static" | "stream"`, and dynamic values use `any` only at an explicit untyped boundary. Narrow a union with ordinary control flow before consuming the narrowed value.

@@ -1,0 +1,1 @@
+Module card: runtime modules use `require("path")` and export ordinary tables with `return { name = value }`. Project module names are source-relative and omit the `.tua` extension. `export type Name = ...` makes a Tua type available to other Tua modules without changing the runtime table. Do not invent JavaScript import/export syntax.

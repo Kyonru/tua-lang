@@ -1,0 +1,1 @@
+LOVE card: use real LOVE callbacks and APIs. Call object methods with colon syntax, such as `source:play()`, and namespace functions with dots, such as `love.graphics.print(...)` or `love.graphics.rectangle(...)`. Tua also provides typed helpers such as `vec2(x, y)`. Do not invent browser, JavaScript, or convenience APIs that were not supplied.

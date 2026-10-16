@@ -1,0 +1,1 @@
+Class card: instantiate with `Name.new(...)`. Fields and methods live inside `class Name { ... }`; initializers are `init(...) { ... }`. A subclass may extend an `open class`, call its initializer with `super(...)`, and mark a matching override as `override final`. Methods can return `Self`. Keep the class brace syntax rather than translating it to a hand-written metatable.

@@ -1,0 +1,1 @@
+Function card: annotate parameters after their names and the return type after the parameter list. Keep Lua `function ... end` syntax. Defaults and optional parameters must be trailing. Multiple return types are parenthesized. A function declaring a non-nil result must return that result on every reachable path; recursive calls use the local function name normally.
