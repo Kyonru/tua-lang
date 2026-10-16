@@ -526,25 +526,23 @@ fn did_change_republishes_empty_diagnostics_for_clean_document() {
 }
 #[test]
 fn text_document_diagnostic_returns_same_codes_as_push_diagnostics() {
-    let uri = "file:///tmp/pull-diagnostics.tua";
+    let temp = TempProject::new("pull-diagnostics-parity");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let uri = temp.uri_for("src/main.tua");
     let source = "local hp: number = \"full\"\n";
-    let push_output = run_messages(vec![did_open(uri, source)]);
-    let push_codes = diagnostic_codes(&last_published_diagnostics(&push_output, uri));
+    let push_output = run_messages(vec![did_open(&uri, source)]);
+    let push_codes = diagnostic_codes(&last_published_diagnostics(&push_output, &uri));
     let mut server = TestServer::new();
 
-    server.send(initialize_with_pull_diagnostics(
-        1,
-        "file:///tmp".to_owned(),
-        true,
-    ));
-    server.send(did_open(uri, source));
+    server.send(initialize_with_pull_diagnostics(1, temp.uri(), true));
+    server.send(did_open(&uri, source));
 
     assert!(
-        diagnostics_publications(server.output(), uri).is_empty(),
+        diagnostics_publications(server.output(), &uri).is_empty(),
         "pull-capable clients should not receive push diagnostics"
     );
 
-    server.send(text_document_diagnostic_request(2, uri));
+    server.send(text_document_diagnostic_request(2, &uri));
 
     assert_eq!(
         diagnostic_codes(&document_diagnostic_items(server.output(), 2)),

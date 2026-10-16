@@ -216,11 +216,9 @@ fn initialize_advertises_completion_label_details_when_supported() {
 }
 #[test]
 fn initialize_advertises_pull_diagnostics_when_supported() {
-    let output = run_messages(vec![initialize_with_pull_diagnostics(
-        1,
-        "file:///tmp".to_owned(),
-        true,
-    )]);
+    let temp = TempProject::new("pull-diagnostics-capability");
+    temp.write("tua.toml", "source = \"src\"\n");
+    let output = run_messages(vec![initialize_with_pull_diagnostics(1, temp.uri(), true)]);
     let provider = &output[0]["result"]["capabilities"]["diagnosticProvider"];
 
     assert_eq!(provider["interFileDependencies"], true);
