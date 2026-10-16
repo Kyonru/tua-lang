@@ -134,6 +134,7 @@ service opens a network socket or starts automatically.
 - [Audio systems](https://kyonru.github.io/tua-lang/audio/)
 - [CLI reference](https://kyonru.github.io/tua-lang/cli/)
 - [Language server](https://kyonru.github.io/tua-lang/lsp/)
+- [LLM language evaluation](https://kyonru.github.io/tua-lang/llm-language-evaluation/)
 - [External API and MCP](https://kyonru.github.io/tua-lang/external-api-bridge/)
 - [Debugging](https://kyonru.github.io/tua-lang/debugging/)
 - [Examples](https://kyonru.github.io/tua-lang/examples/)

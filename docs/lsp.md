@@ -213,6 +213,12 @@ considered for a different default until local dogfooding records at least 100
 shown suggestions, at least 15% acceptance, and no regression in ordinary
 completion latency.
 
+To measure language knowledge separately from editor acceptance telemetry, run
+the provider-neutral [LLM Language Evaluation](llm-language-evaluation.md).
+Its offline gate proves the 40 reference tasks pass checking and lowering and
+that every negative control fails; an optional Ollama lane scores a local model
+with the same compiler-backed oracle.
+
 The custom semantic requests are `tua/inlineCompletionContext` and
 `tua/validateInlineCompletion`. Responses bind the document version, analysis
 revision, UTF-16 position, context ID, and source fingerprint.
