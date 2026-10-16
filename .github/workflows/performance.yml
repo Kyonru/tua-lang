@@ -29,9 +29,12 @@ jobs:
         run: make profile-all
         env:
           # The full representative profile is a trend artifact, and GitHub's
-          # shared runners are substantially slower on the generated 5k file.
-          # PR freshness gating remains at 3s in benchmark-smoke.
-          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 30000
+          # shared runners are substantially slower and noisier on the 1k-file
+          # workspace. Give trend requests time to finish and retain a broad
+          # runaway ceiling; PR freshness gating remains at 3s in
+          # benchmark-smoke.
+          TUA_LSP_REQUEST_TIMEOUT_MS: 180000
+          TUA_REPRESENTATIVE_COMPLETION_P95_BUDGET_MS: 60000
       - name: Upload profile reports
         if: always()
         uses: actions/upload-artifact@v6
