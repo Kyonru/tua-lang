@@ -118,7 +118,8 @@ impl AnalysisQueryCache {
             return DependencyInvalidation::all();
         };
 
-        let new_surface = DependencySurface::from_parsed(&parsed, config, new_require_targets);
+        let new_surface =
+            DependencySurface::from_parsed(&parsed, kind, config, new_require_targets);
 
         new_surface.invalidation_from(&old_surface)
     }

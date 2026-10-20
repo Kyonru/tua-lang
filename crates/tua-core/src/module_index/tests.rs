@@ -41,6 +41,195 @@ return {
 }
 
 #[test]
+fn infers_root_function_modules_and_anonymous_function_returns() {
+    let function_module = parse_lua_source(
+        "src/logger.lua",
+        r#"
+return function(message)
+  return message, true
+end
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&function_module).expect("function module should infer");
+
+    assert_eq!(
+        exports.value_type,
+        Type::function_returns([Type::Any], [Type::Any, Type::boolean()])
+    );
+    assert!(exports.fields.is_empty());
+
+    let table_module = parse_lua_source(
+        "src/factory.lua",
+        r#"
+return {
+  create = function(name)
+    return { name = name, active = true, score = 0 }
+  end,
+}
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&table_module).expect("table module should infer");
+    let Type::Function(create) = exports.field("create").expect("create should be exported") else {
+        panic!("create should be a function");
+    };
+    let Type::Table(created) = create.return_type.as_ref() else {
+        panic!("create should return a table");
+    };
+
+    assert_eq!(
+        created.field("name").map(|field| &field.ty),
+        Some(&Type::Any)
+    );
+    assert_eq!(
+        created.field("active").map(|field| &field.ty),
+        Some(&Type::boolean())
+    );
+    assert_eq!(
+        created.field("score").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+}
+
+#[test]
+fn follows_safe_module_aliases_and_nested_field_assignments() {
+    let parsed = parse_lua_source(
+        "src/settings.lua",
+        r#"
+local Module = {}
+local Public = Module
+Public.settings = {}
+Public.settings.video = {}
+Public.settings.video.fullscreen = false
+Public.settings.video.scale = 2
+return Module
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&parsed).expect("aliased module should infer");
+    let Type::Table(settings) = exports
+        .field("settings")
+        .expect("settings should be exported")
+    else {
+        panic!("settings should be a table");
+    };
+    let Some(Type::Table(video)) = settings.field("video").map(|field| &field.ty) else {
+        panic!("video should be a table");
+    };
+
+    assert_eq!(
+        video.field("fullscreen").map(|field| &field.ty),
+        Some(&Type::boolean())
+    );
+    assert_eq!(
+        video.field("scale").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+}
+
+#[test]
+fn stops_following_an_alias_after_its_target_is_reassigned() {
+    let parsed = parse_lua_source(
+        "src/reassigned.lua",
+        r#"
+local Module = {}
+local OldModule = Module
+Module = {}
+OldModule.oldField = true
+Module.newField = 1
+return Module
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&parsed).expect("reassigned module should infer");
+
+    assert_eq!(exports.field("newField"), Some(&Type::number()));
+    assert_eq!(exports.field("oldField"), None);
+}
+
+#[test]
+fn preserves_common_lua_metatable_constructor_shapes() {
+    let parsed = parse_lua_source(
+        "src/player.lua",
+        r#"
+local Player = {}
+Player.__index = Player
+
+function Player.new(name)
+  return setmetatable({ name = name, x = 0, active = true }, Player)
+end
+
+function Player:update(dt)
+  self.x = self.x + dt
+end
+
+function Player.serialize(value)
+  return tostring(value.x)
+end
+
+return Player
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&parsed).expect("metatable module should infer");
+    let Type::Function(constructor) = exports.field("new").expect("new should be exported") else {
+        panic!("new should be a function");
+    };
+    let Type::Table(instance) = constructor.return_type.as_ref() else {
+        panic!("new should return the instance shape: {constructor:#?}");
+    };
+    let fields = instance.semantic_fields();
+
+    assert_eq!(fields.get("name").map(|field| &field.ty), Some(&Type::Any));
+    assert_eq!(
+        fields.get("x").map(|field| &field.ty),
+        Some(&Type::number())
+    );
+    assert_eq!(
+        fields.get("active").map(|field| &field.ty),
+        Some(&Type::boolean())
+    );
+    assert!(
+        matches!(
+            fields.get("update").map(|field| &field.ty),
+            Some(Type::Function(_))
+        ),
+        "exports: {exports:#?}, instance fields: {fields:#?}"
+    );
+    assert!(!fields.contains_key("serialize"));
+    assert!(matches!(
+        exports.field("serialize"),
+        Some(Type::Function(_))
+    ));
+}
+
+#[test]
+fn merges_conditional_lua_exports_without_claiming_missing_fields() {
+    let parsed = parse_lua_source(
+        "src/platform.lua",
+        r#"
+local Module = {}
+if isWindows then
+  Module.separator = "\\"
+  Module.debugName = "windows"
+else
+  Module.separator = "/"
+end
+return Module
+"#,
+    )
+    .expect("Lua source should parse");
+    let exports = infer_module_exports(&parsed).expect("conditional module should infer");
+
+    assert_eq!(exports.field("separator"), Some(&Type::string()));
+    assert_eq!(
+        exports.field("debugName"),
+        Some(&Type::union([Type::string(), Type::nil()]))
+    );
+}
+
+#[test]
 fn infers_exports_from_returned_local_tables_with_string_literal_keys() {
     let parsed = parse_lua_source(
         "src/scale.lua",

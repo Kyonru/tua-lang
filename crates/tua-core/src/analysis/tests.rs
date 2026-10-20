@@ -3058,6 +3058,41 @@ return M
 }
 
 #[test]
+fn changing_inferred_lua_module_body_without_surface_change_keeps_importers_cached() {
+    let temp = TempProject::new("lua-module-body-dependency");
+    let main = temp.write(
+        "src/main.tua",
+        "local Player = require(\"player\")\nlocal player = Player.new()\nreturn player.x\n",
+    );
+    let player = temp.write(
+        "src/player.lua",
+        "local M = {}\nfunction M.new()\n  return { x = 0 }\nend\nreturn M\n",
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([temp.path().join("src")]);
+    host.set_file(&main, fs::read_to_string(&main).expect("main should read"));
+    host.set_file_with_kind(
+        &player,
+        fs::read_to_string(&player).expect("player should read"),
+        AnalysisSourceKind::Lua,
+    );
+    host.snapshot();
+
+    host.set_file_with_kind(
+        &player,
+        "local M = {}\nfunction M.new()\n  local initial = 0\n  return { x = initial }\nend\nreturn M\n",
+        AnalysisSourceKind::Lua,
+    );
+
+    let stats = host.cache_stats();
+    assert_eq!(stats.invalidations, 1);
+    assert_eq!(stats.dependent_invalidations, 0);
+    assert_eq!(stats.export_surface_invalidations, 0);
+    assert_eq!(stats.type_surface_invalidations, 0);
+}
+
+#[test]
 fn changing_require_targets_records_a_require_surface_invalidation() {
     let temp = TempProject::new("module-require-surface");
     let main = temp.write("src/main.tua", "return require(\"player\")\n");
@@ -3710,6 +3745,63 @@ return {
         hover.documentation,
         Some("audio source\nsuccess flag".to_owned())
     );
+}
+
+#[test]
+fn snapshot_infers_richer_unannotated_lua_module_surfaces() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local Factory = require("factory")
+local logger = require("logger")
+local player = Factory.create("Ada")
+local score: number = <|player_hover|>player.score
+local message, ok = logger("ready")
+local checked: boolean = <|ok_hover|>ok
+-- file: src/factory.lua
+local Module = {}
+local Public = Module
+Public.settings = {}
+Public.settings.video = {}
+Public.settings.video.fullscreen = false
+Public.create = function(name)
+  return { name = name, score = 0, active = true }
+end
+return Module
+-- file: src/logger.lua
+return function(message)
+  return message, true
+end
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        let kind = if file.path.extension().and_then(|value| value.to_str()) == Some("lua") {
+            AnalysisSourceKind::Lua
+        } else {
+            AnalysisSourceKind::Tua
+        };
+        host.set_file_with_kind(&file.path, file.source.clone(), kind);
+    }
+
+    let snapshot = host.snapshot();
+    let player = snapshot
+        .hover("src/main.tua", fixture.position("player_hover"))
+        .expect("factory result should hover");
+    let ok = snapshot
+        .hover("src/main.tua", fixture.position("ok_hover"))
+        .expect("second module return should hover");
+
+    assert_eq!(
+        player.contents,
+        "local player: { active: boolean, name: any, score: number }"
+    );
+    assert_eq!(ok.contents, "local ok: boolean");
+    assert!(snapshot
+        .diagnostics("src/main.tua")
+        .iter()
+        .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)));
 }
 
 #[test]

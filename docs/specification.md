@@ -100,7 +100,10 @@ By default:
   entrypoint loading while retaining its normal mirrored output path;
 - non-Tua files are copied as assets when source and output roots differ;
 - `.lua` files participate in project analysis when their LuaDoc or inferred
-  exports provide stable facts;
+  exports provide stable facts; inferred module surfaces preserve primitive
+  and nested table fields, function and multiple-return types, safe table
+  aliases, conservative conditional fields, and common `setmetatable`
+  constructor instances;
 - source/output collisions produce diagnostics rather than silently selecting
   ambiguous inputs;
 - watch mode updates a long-lived project analysis session and rechecks affected
@@ -207,6 +210,10 @@ continues to require a real project module.
 LuaDoc/LuaCATS annotations support practical aliases, classes, fields,
 functions, overloads, typed varargs, and module exports. Unsupported annotations
 degrade conservatively, and semantic analysis does not execute project code.
+Unannotated Lua module inference uses the same cached semantic facts as Tua
+editor queries. Unknown parameters, computed keys, data-dependent mutation,
+and unresolved external calls remain `any`; importers are invalidated only when
+the inferred public module surface changes.
 Explicit `---@deprecated` metadata follows resolved local functions, fields, and
 module exports into diagnostics and editor presentation; Tua does not guess
 deprecation from API documentation prose.

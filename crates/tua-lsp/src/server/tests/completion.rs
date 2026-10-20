@@ -1429,3 +1429,41 @@ return {
 
     assert_completion_labels(&output, 2, ["x", "y"]);
 }
+
+#[test]
+fn completion_uses_inferred_unannotated_lua_factory_returns() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+-- file: src/main.tua
+local Player = require("player")
+local player = Player.new("Ada")
+local value = player.
+-- file: src/player.lua
+local Player = {}
+Player.__index = Player
+
+function Player.new(name)
+  return setmetatable({ name = name, x = 0, active = true }, Player)
+end
+
+function Player:update(dt)
+  self.x = self.x + dt
+end
+
+return Player
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("inferred-lua-factory-completion")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let uri = path_uri(&temp.join("src/main.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&uri, main),
+        completion_request(2, &uri, main, "player."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["active", "name", "update", "x"]);
+}

@@ -1913,12 +1913,7 @@ pub(crate) fn resolve_aliases(environment: &TypeEnvironment, ty: &Type, depth: u
 }
 
 fn module_exports_table_type(exports: ModuleExports) -> Type {
-    Type::table(
-        exports
-            .fields
-            .into_iter()
-            .map(|(name, field)| (name, TableField::required(field.ty))),
-    )
+    exports.value_type
 }
 
 fn local_assignment_value_in_block<'a>(

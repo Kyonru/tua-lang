@@ -2206,6 +2206,48 @@ fn infer_function_return_types(
     returns
 }
 
+pub(crate) fn inferred_function_type_from_body(
+    parsed: &ParsedSource,
+    environment: &TypeEnvironment,
+    body: &ast::FunctionBody,
+) -> Type {
+    let Type::Function(mut function) = super::function_type_from_body(body) else {
+        return Type::Any;
+    };
+
+    if body.return_type().is_some() {
+        return Type::Function(function);
+    }
+
+    let aliases = environment
+        .aliases()
+        .map(|(name, ty)| (name.to_owned(), ty.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let function_types = environment
+        .functions()
+        .iter()
+        .filter_map(|candidate| Some((candidate.name.clone()?, candidate.as_type()?)))
+        .collect::<BTreeMap<_, _>>();
+    let mut locals = environment
+        .locals()
+        .map(|(name, ty)| (name.to_owned(), ty.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    for parameter in &function.parameters {
+        if let Some(name) = &parameter.name {
+            locals.insert(name.clone(), parameter.ty.clone());
+        }
+    }
+
+    let context = InferenceQueryContext::new(parsed, &aliases, &function_types, "");
+    if let Some(return_types) = infer_block_return_types(body.block(), context, &locals) {
+        *function.return_type = return_types.first().cloned().unwrap_or(Type::Any);
+        function.return_types = return_types;
+    }
+
+    Type::Function(function)
+}
+
 fn function_parameters_by_name(
     functions: &[TypedFunction],
 ) -> BTreeMap<String, Vec<TypedParameter>> {
@@ -3069,7 +3111,9 @@ fn setmetatable_return_type(
         return Some(class_type);
     }
     let base = query.type_of(target)?;
-    let meta = query.type_of(meta)?;
+    let Some(meta) = query.type_of(meta) else {
+        return Some(base);
+    };
 
     Some(merge_static_metatable(base, meta))
 }

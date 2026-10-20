@@ -307,11 +307,7 @@ impl AnalysisSnapshot {
 
     fn indexed_module_binding_type(&self, parsed: &ParsedSource, receiver: &str) -> Option<Type> {
         let path = self.indexed_required_module_path(parsed, receiver)?;
-        let exports = self.indexed_module_export_fields(path)?;
-
-        Some(Type::table(exports.iter().map(|(name, field)| {
-            (name.clone(), TableField::required(field.ty.clone()))
-        })))
+        self.indexed_module_value_type(path)
     }
 
     fn push_module_explanation(

@@ -51,6 +51,58 @@ diagnostic if compiler lowering or emission violates that invariant. Plain
 Tua can infer simple Lua module exports, but LuaDoc annotations provide stable
 types and documentation at the boundary.
 
+Inference follows the module's statically visible returned value rather than
+requiring a separate declaration file. It understands primitive values, nested
+tables, named and anonymous function returns, multiple returns, staged table
+assignments, direct local aliases, conservative conditional fields, and the
+common `setmetatable` constructor pattern:
+
+```lua title="src/player.lua"
+local Player = {}
+Player.__index = Player
+
+function Player.new(name)
+  return setmetatable({
+    name = name,
+    x = 0,
+    active = true,
+  }, Player)
+end
+
+function Player:update(dt)
+  self.x = self.x + 100 * dt
+end
+
+return Player
+```
+
+```tua title="src/main.tua"
+local Player = require("player")
+local player = Player.new("Ada")
+
+player.x += 10        -- number
+player.active = false -- boolean
+player:update(0.016)  -- method retained from Player.__index
+```
+
+Lua modules may also return a function directly. Its inferred return values
+flow through the require binding:
+
+```lua title="src/status.lua"
+return function(message)
+  return message, true
+end
+```
+
+```tua title="src/main.tua"
+local status = require("status")
+local message, ok = status("ready") -- any, boolean
+```
+
+These module surfaces are cached with the parsed Lua file. Importers are
+invalidated only when the inferred public surface changes, so hovering or
+completing a required module does not recursively analyze files.
+
 ```lua title="src/legacy.lua"
 ---@alias EnemyKind "friendly" | "hostile"
 
@@ -92,6 +144,12 @@ and `enemy.kind`.
     literal, when you want Tua to understand a Lua module's fields. Runtime
     mutation, computed export names, and complex metatable construction remain
     dynamic and may produce `any`.
+
+Unannotated function parameters remain `any`: Tua does not guess contracts from
+parameter names or a handful of call sites. Add LuaDoc when callers need a
+checked parameter contract, documentation, overloads, or a stable name for a
+recursive shape. Computed keys, data-dependent module assembly, and unknown
+external calls also stay permissive.
 
 ### Large Generated Modules
 

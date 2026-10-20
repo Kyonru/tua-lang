@@ -63,6 +63,20 @@ async function testLiveLanguageFeatures() {
   });
   assert.equal(implementationCount, 1);
 
+  const nativeReferenceCount = await vscode.commands.executeCommand("tua.hover.references", {
+    uri: document.uri,
+    position: targetPosition,
+  });
+  assert(nativeReferenceCount >= 2);
+  const nativeImplementationCount = await vscode.commands.executeCommand(
+    "tua.hover.implementations",
+    {
+      uri: document.uri,
+      position: targetPosition,
+    },
+  );
+  assert.equal(nativeImplementationCount, 1);
+
   const definitions = await vscode.commands.executeCommand(
     "vscode.executeDefinitionProvider",
     document.uri,

@@ -8,6 +8,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Unannotated Lua modules now retain richer inferred runtime surfaces through
+  `require`, including root function modules, anonymous factory return shapes,
+  multiple returns, nested table assignments, safe table aliases, conditional
+  fields, and common `setmetatable` constructor instances.
 - Opt-in `math` and `love.math` game helpers provide `tau`, interpolation,
   clamping, remapping, rounding, smoothing, sign, and byte-to-LOVE `rgb` and
   `rgba` color tables, with typed editor support and per-file emission only
@@ -15,6 +19,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hover reference and implementation actions now normalize VS Code and
+  protocol-shaped locations before opening the references view, avoiding
+  extension-host argument constraint failures.
+- Editing a Lua module now compares its dependency surface using Lua source
+  semantics, so implementation-only changes keep unchanged importers cached.
 - Static ECS component schemas now flow through `world:get`, `world:add`, and
   `world:remove` across module exports, providing payload hover, completion,
   inlay hints, and field checking without repeated local annotations.

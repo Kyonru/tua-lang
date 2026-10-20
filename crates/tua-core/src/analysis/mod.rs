@@ -429,6 +429,7 @@ impl DependencySurface {
 
     fn from_parsed(
         parsed: &ParsedSource,
+        source_kind: AnalysisSourceKind,
         config: &ProjectConfig,
         require_targets: BTreeSet<PathBuf>,
     ) -> Self {
@@ -439,7 +440,7 @@ impl DependencySurface {
             exports,
             Some(&environment),
             Some(parsed),
-            AnalysisSourceKind::Tua,
+            source_kind,
             require_targets,
         )
     }

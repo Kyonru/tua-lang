@@ -32,10 +32,16 @@ impl AnalysisSnapshot {
         module_path: &Path,
         fields: &[String],
     ) -> Option<ModuleExportField> {
+        let module_fields = self.indexed_module_export_fields(module_path)?;
         crate::module_index::exported_field_for_fields(
             &ModuleExports {
                 path: module_path.to_path_buf(),
-                fields: self.indexed_module_export_fields(module_path)?,
+                value_type: Type::table(
+                    module_fields.iter().map(|(name, field)| {
+                        (name.clone(), TableField::required(field.ty.clone()))
+                    }),
+                ),
+                fields: module_fields,
             },
             fields,
         )
@@ -59,6 +65,29 @@ impl AnalysisSnapshot {
         }
 
         (!fields.is_empty()).then_some(fields)
+    }
+
+    pub(super) fn indexed_module_value_type(&self, module_path: &Path) -> Option<Type> {
+        let direct = self
+            .module_exports(module_path)
+            .map(|exports| exports.value_type.clone());
+        let fields = self.indexed_module_export_fields(module_path);
+
+        match (direct, fields) {
+            (Some(Type::Table(mut table)), Some(fields)) => {
+                for (name, field) in fields {
+                    table.insert(name, TableField::required(field.ty));
+                }
+                Some(Type::Table(table))
+            }
+            (Some(ty), _) => Some(ty),
+            (None, Some(fields)) => Some(Type::table(
+                fields
+                    .into_iter()
+                    .map(|(name, field)| (name, TableField::required(field.ty))),
+            )),
+            (None, None) => None,
+        }
     }
 
     pub(super) fn project_type_hover(
@@ -431,17 +460,10 @@ impl AnalysisSnapshot {
             .into_iter()
             .filter_map(|binding| {
                 let module_path = self.indexed_required_module_path(parsed, &binding.alias)?;
-                let exports = self.indexed_module_export_fields(module_path)?;
-                let ty = Type::table(exports.iter().map(|(name, field)| {
-                    (
-                        name.clone(),
-                        TableField::required(self.type_database.resolve_type(
-                            &self.module_graph,
-                            module_path,
-                            &field.ty,
-                        )),
-                    )
-                }));
+                let module_type = self.indexed_module_value_type(module_path)?;
+                let ty =
+                    self.type_database
+                        .resolve_type(&self.module_graph, module_path, &module_type);
 
                 Some((binding.alias, ty))
             })

@@ -197,8 +197,13 @@ function normalizeTarget(target) {
     return undefined;
   }
 
+  const uri = vscodeUri(candidate.uri);
+  if (!uri) {
+    return undefined;
+  }
+
   return {
-    uri: vscode.Uri.parse(candidate.uri),
+    uri,
     position: new vscode.Position(
       Number(candidate.position.line) || 0,
       Number(candidate.position.character) || 0,
@@ -219,10 +224,10 @@ function normalizeLocations(rawLocations) {
   return (Array.isArray(rawLocations) ? rawLocations : [])
     .map((location) => {
       if (location?.uri && location.range) {
-        return location;
+        return vscodeLocation(location.uri, location.range);
       }
       if (location?.targetUri && location.targetRange) {
-        return new vscode.Location(
+        return vscodeLocation(
           location.targetUri,
           location.targetSelectionRange || location.targetRange,
         );
@@ -230,6 +235,25 @@ function normalizeLocations(rawLocations) {
       return undefined;
     })
     .filter(Boolean);
+}
+
+function vscodeLocation(uriValue, rangeValue) {
+  const uri = vscodeUri(uriValue);
+  const range = lspRangeToVscode(rangeValue);
+
+  return uri && range ? new vscode.Location(uri, range) : undefined;
+}
+
+function vscodeUri(value) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return vscode.Uri.parse(typeof value === "string" ? value : value.toString());
+  } catch {
+    return undefined;
+  }
 }
 
 async function assetAtStringLiteral({ document, getClient, position, stringLiteral }) {

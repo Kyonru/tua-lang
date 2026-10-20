@@ -16,9 +16,11 @@ use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::SemanticModel;
 use crate::semantic_domains::BuiltinDomainRegistry;
+use crate::source_text::function_name_table_field;
 use crate::types::{
     build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
-    FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
+    inferred_function_type_from_body, FunctionParameter, FunctionType, TableField, Type,
+    TypeEnvironment, TypedFunction,
 };
 use crate::{parse_lua_source, parse_tua_source, ParsedSource, SourceSpan};
 
@@ -37,6 +39,7 @@ struct CachedRequiredModuleExports {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModuleExports {
     pub path: PathBuf,
+    pub value_type: Type,
     pub fields: BTreeMap<String, ModuleExportField>,
 }
 
@@ -368,6 +371,7 @@ fn has_parent_path_component(module: &str) -> bool {
         .any(|component| matches!(component, std::path::Component::ParentDir))
 }
 
+#[derive(Clone)]
 struct ExportInferer<'a> {
     parsed: &'a ParsedSource,
     environment: Option<&'a TypeEnvironment>,
@@ -378,6 +382,8 @@ struct ExportInferer<'a> {
     function_parameter_names: BTreeMap<String, Vec<String>>,
     function_parameter_docs: BTreeMap<String, Vec<Option<String>>>,
     table_members: BTreeMap<String, BTreeMap<String, ModuleExportField>>,
+    method_members: BTreeMap<String, std::collections::BTreeSet<String>>,
+    local_aliases: BTreeMap<String, String>,
     return_expr: Option<&'a Expression>,
 }
 
@@ -404,6 +410,8 @@ impl<'a> ExportInferer<'a> {
             function_parameter_names: BTreeMap::new(),
             function_parameter_docs: BTreeMap::new(),
             table_members: BTreeMap::new(),
+            method_members: BTreeMap::new(),
+            local_aliases: BTreeMap::new(),
             return_expr: None,
         }
     }
@@ -465,37 +473,58 @@ impl<'a> ExportInferer<'a> {
                     let Some(parts) = plain_field_chain_from_var(var) else {
                         continue;
                     };
+                    if let [name] = parts.as_slice() {
+                        self.update_local_alias(name, expression);
+                        continue;
+                    }
                     self.collect_table_member_assignment(&parts, expression);
                 }
             }
             ast::Stmt::FunctionDeclaration(function) => {
-                let parts = function
-                    .name()
-                    .to_string()
-                    .split('.')
-                    .map(|part| part.trim().to_owned())
-                    .collect::<Vec<_>>();
-
-                if let [table, field] = parts.as_slice() {
-                    self.table_members
+                let function_name = function.name().to_string();
+                if let Some((table, field, is_method)) = function_name_table_field(&function_name) {
+                    if is_method {
+                        self.method_members
+                            .entry(table.clone())
+                            .or_default()
+                            .insert(field.clone());
+                    }
+                    let inferred = self
+                        .environment
+                        .map(|environment| {
+                            inferred_function_type_from_body(
+                                self.parsed,
+                                environment,
+                                function.body(),
+                            )
+                        })
+                        .unwrap_or_else(|| function_type_from_body(function.body()));
+                    let entry = self
+                        .table_members
                         .entry(table.clone())
                         .or_default()
                         .entry(field.clone())
                         .or_insert_with(|| ModuleExportField {
-                            ty: function_type_from_body(function.body()),
+                            ty: inferred.clone(),
                             documentation: None,
                             deprecation: self
                                 .deprecations
-                                .get(&function.name().to_string().replace(':', "."))
+                                .get(&function_name.replace(':', "."))
                                 .cloned(),
                             parameter_names: parameter_names_from_body(function.body()),
                             parameter_documentation: Vec::new(),
                         });
+
+                    if function_returns_only_any(&entry.ty) && !function_returns_only_any(&inferred)
+                    {
+                        entry.ty = inferred;
+                    }
                 }
             }
             ast::Stmt::LocalAssignment(local) => {
                 for (name, expression) in local.names().iter().zip(local.expressions()) {
                     let name = token_text(name);
+                    self.update_local_alias(&name, expression);
                     if self
                         .environment
                         .is_some_and(|environment| environment.local(&name).is_some())
@@ -513,45 +542,116 @@ impl<'a> ExportInferer<'a> {
                     .entry(token_text(function.name()))
                     .or_insert_with(|| function_type_from_body(function.body()));
             }
+            ast::Stmt::If(if_stmt) => self.collect_conditional_members(if_stmt),
             _ => {}
         }
     }
 
+    fn collect_conditional_members(&mut self, if_stmt: &'a ast::If) {
+        let baseline = self.table_members.clone();
+        let mut branches = vec![self.members_after_block(if_stmt.block())];
+
+        if let Some(else_ifs) = if_stmt.else_if() {
+            branches.extend(
+                else_ifs
+                    .iter()
+                    .map(|else_if| self.members_after_block(else_if.block())),
+            );
+        }
+
+        if let Some(else_block) = if_stmt.else_block() {
+            branches.push(self.members_after_block(else_block));
+        } else {
+            branches.push(baseline);
+        }
+
+        self.table_members = merge_conditional_members(branches);
+    }
+
+    fn members_after_block(
+        &self,
+        block: &'a ast::Block,
+    ) -> BTreeMap<String, BTreeMap<String, ModuleExportField>> {
+        let mut branch = self.clone();
+        for stmt in block.stmts() {
+            branch.collect_stmt(stmt);
+        }
+        branch.table_members
+    }
+
     fn collect_table_member_assignment(&mut self, parts: &[String], expression: &Expression) {
-        let [table, field] = parts else {
+        let Some((table, fields)) = parts.split_first() else {
             return;
         };
+        let Some((field, nested)) = fields.split_first() else {
+            return;
+        };
+        let table = self.canonical_local(table);
         let ty = self.infer_expression(expression);
-
-        self.table_members.entry(table.clone()).or_default().insert(
-            field.clone(),
-            ModuleExportField {
-                ty,
+        let members = self.table_members.entry(table).or_default();
+        let entry = members
+            .entry(field.clone())
+            .or_insert_with(|| ModuleExportField {
+                ty: Type::empty_table(),
                 documentation: None,
-                deprecation: self.deprecations.get(&parts.join(".")).cloned(),
+                deprecation: None,
                 parameter_names: Vec::new(),
                 parameter_documentation: Vec::new(),
-            },
-        );
+            });
+
+        if nested.is_empty() {
+            entry.ty = ty;
+            entry.deprecation = self.deprecations.get(&parts.join(".")).cloned();
+        } else {
+            insert_nested_field(&mut entry.ty, nested, ty);
+        }
     }
 
     fn exports(&mut self) -> Option<ModuleExports> {
         let expression = self.return_expr?;
-        let fields = match expression {
-            Expression::TableConstructor(table) => self.infer_table_fields(table),
-            Expression::Var(Var::Name(name)) => self.fields_for_returned_local(&token_text(name)),
+        let (value_type, fields) = match expression {
+            Expression::TableConstructor(table) => {
+                let fields = self.infer_table_fields(table);
+                (table_type_from_export_fields(&fields), fields)
+            }
+            Expression::Var(Var::Name(name)) => {
+                let name = self.canonical_local(&token_text(name));
+                let mut fields = self.fields_for_returned_local(&name);
+                enrich_self_index_constructor_returns(&mut fields, self.method_members.get(&name));
+                let value_type = if fields.is_empty() {
+                    self.local_type(&name).unwrap_or(Type::Any)
+                } else {
+                    table_type_from_export_fields(&fields)
+                };
+                (value_type, fields)
+            }
             Expression::Parentheses { expression, .. } => match expression.as_ref() {
-                Expression::TableConstructor(table) => self.infer_table_fields(table),
-                Expression::Var(Var::Name(name)) => {
-                    self.fields_for_returned_local(&token_text(name))
+                Expression::TableConstructor(table) => {
+                    let fields = self.infer_table_fields(table);
+                    (table_type_from_export_fields(&fields), fields)
                 }
-                _ => BTreeMap::new(),
+                Expression::Var(Var::Name(name)) => {
+                    let name = self.canonical_local(&token_text(name));
+                    let mut fields = self.fields_for_returned_local(&name);
+                    enrich_self_index_constructor_returns(
+                        &mut fields,
+                        self.method_members.get(&name),
+                    );
+                    let value_type = if fields.is_empty() {
+                        self.local_type(&name).unwrap_or(Type::Any)
+                    } else {
+                        table_type_from_export_fields(&fields)
+                    };
+                    (value_type, fields)
+                }
+                _ => (self.infer_expression(expression), BTreeMap::new()),
             },
-            _ => BTreeMap::new(),
+            _ => (self.infer_expression(expression), BTreeMap::new()),
         };
 
-        (!fields.is_empty()).then(|| ModuleExports {
+        (!fields.is_empty() || module_value_is_informative(&value_type)).then(|| ModuleExports {
             path: self.parsed.path.clone(),
+            value_type,
             fields,
         })
     }
@@ -656,7 +756,12 @@ impl<'a> ExportInferer<'a> {
                 _ => Type::Any,
             },
             Expression::TableConstructor(table) => self.infer_table_type(table),
-            Expression::Function(function) => function_type_from_body(function.body()),
+            Expression::Function(function) => self
+                .environment
+                .map(|environment| {
+                    inferred_function_type_from_body(self.parsed, environment, function.body())
+                })
+                .unwrap_or_else(|| function_type_from_body(function.body())),
             Expression::FunctionCall(_) => self
                 .environment
                 .and_then(|environment| {
@@ -706,39 +811,89 @@ impl<'a> ExportInferer<'a> {
     }
 
     fn local_type(&mut self, name: &str) -> Option<Type> {
+        let name = self.canonical_local(name);
         if let Some(ty) = self
             .environment
-            .and_then(|environment| environment.class_value_type(name))
+            .and_then(|environment| environment.class_value_type(&name))
         {
             let ty = self.resolve_export_type(&ty);
-            self.locals.insert(name.to_owned(), ty.clone());
+            self.locals.insert(name.clone(), ty.clone());
 
             return Some(ty);
         }
 
         if let Some(function) = self
             .environment
-            .and_then(|environment| environment.function(name))
+            .and_then(|environment| environment.function(&name))
         {
             let ty = self.resolve_export_type(&typed_function_type(function));
 
-            self.locals.insert(name.to_owned(), ty.clone());
+            self.locals.insert(name.clone(), ty.clone());
 
             return Some(ty);
         }
 
-        if let Some(ty) = self.locals.get(name).cloned() {
+        if let Some(ty) = self.locals.get(&name).cloned() {
             return Some(ty);
         }
 
         let ty = self
             .environment
-            .and_then(|environment| environment.local(name))
+            .and_then(|environment| environment.local(&name))
             .map(|ty| self.resolve_export_type(ty))?;
 
-        self.locals.insert(name.to_owned(), ty.clone());
+        self.locals.insert(name, ty.clone());
 
         Some(ty)
+    }
+
+    fn update_local_alias(&mut self, name: &str, expression: &Expression) {
+        self.invalidate_aliases_to(name);
+        let target = match expression {
+            Expression::Var(Var::Name(target)) => Some(token_text(target)),
+            Expression::Parentheses { expression, .. } => match expression.as_ref() {
+                Expression::Var(Var::Name(target)) => Some(token_text(target)),
+                _ => None,
+            },
+            _ => None,
+        };
+
+        if let Some(target) = target {
+            let target = self.canonical_local(&target);
+            if target != name {
+                self.local_aliases.insert(name.to_owned(), target);
+                return;
+            }
+        }
+
+        self.local_aliases.remove(name);
+    }
+
+    fn invalidate_aliases_to(&mut self, name: &str) {
+        let aliases = self
+            .local_aliases
+            .keys()
+            .filter(|alias| self.canonical_local(alias) == name)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for alias in aliases {
+            self.local_aliases.remove(&alias);
+        }
+    }
+
+    fn canonical_local(&self, name: &str) -> String {
+        let mut current = name;
+        for _ in 0..16 {
+            let Some(next) = self.local_aliases.get(current) else {
+                break;
+            };
+            if next == current {
+                break;
+            }
+            current = next;
+        }
+        current.to_owned()
     }
 
     fn lua_doc_function_export_for_field(&self, field: &Field) -> Option<ModuleExportField> {
@@ -893,6 +1048,142 @@ fn collect_table_fields(ty: &Type, fields: &mut BTreeMap<String, ModuleExportFie
         | Type::Tuple(_)
         | Type::Dictionary { .. } => {}
     }
+}
+
+fn module_value_is_informative(ty: &Type) -> bool {
+    match ty {
+        Type::Any => false,
+        Type::Table(table) => !table.is_plain_empty(),
+        _ => true,
+    }
+}
+
+fn function_returns_only_any(ty: &Type) -> bool {
+    let Type::Function(function) = ty else {
+        return false;
+    };
+
+    function
+        .return_types_or_any()
+        .iter()
+        .all(|ty| *ty == Type::Any)
+}
+
+fn enrich_self_index_constructor_returns(
+    fields: &mut BTreeMap<String, ModuleExportField>,
+    method_names: Option<&std::collections::BTreeSet<String>>,
+) {
+    if !fields.contains_key("__index") {
+        return;
+    }
+
+    let instance_fields = method_names
+        .into_iter()
+        .flatten()
+        .filter_map(|name| {
+            let field = fields.get(name)?;
+            matches!(field.ty, Type::Function(_))
+                .then(|| (name.clone(), TableField::required(field.ty.clone())))
+        })
+        .collect::<Vec<_>>();
+    let Some(constructor) = fields.get_mut("new") else {
+        return;
+    };
+    let Type::Function(function) = &mut constructor.ty else {
+        return;
+    };
+
+    for return_type in &mut function.return_types {
+        let Type::Table(table) = return_type else {
+            continue;
+        };
+        for (name, field) in &instance_fields {
+            table.insert(name.clone(), field.clone());
+        }
+    }
+
+    if let Some(first) = function.return_types.first().cloned() {
+        *function.return_type = first;
+    }
+}
+
+fn merge_conditional_members(
+    branches: Vec<BTreeMap<String, BTreeMap<String, ModuleExportField>>>,
+) -> BTreeMap<String, BTreeMap<String, ModuleExportField>> {
+    let mut roots = BTreeMap::<String, BTreeMap<String, ModuleExportField>>::new();
+    let root_names = branches
+        .iter()
+        .flat_map(|branch| branch.keys().cloned())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for root in root_names {
+        let field_names = branches
+            .iter()
+            .filter_map(|branch| branch.get(&root))
+            .flat_map(|fields| fields.keys().cloned())
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut merged_fields = BTreeMap::new();
+
+        for field in field_names {
+            let template = branches
+                .iter()
+                .find_map(|branch| branch.get(&root)?.get(&field))
+                .cloned()
+                .expect("conditional field should have a source branch");
+            let types = branches
+                .iter()
+                .map(|branch| {
+                    branch
+                        .get(&root)
+                        .and_then(|fields| fields.get(&field))
+                        .map(|field| field.ty.clone())
+                        .unwrap_or_else(Type::nil)
+                })
+                .collect::<Vec<_>>();
+            let mut merged = template;
+            merged.ty = union_types(types);
+            merged_fields.insert(field, merged);
+        }
+
+        roots.insert(root, merged_fields);
+    }
+
+    roots
+}
+
+fn table_type_from_export_fields(fields: &BTreeMap<String, ModuleExportField>) -> Type {
+    Type::table(
+        fields
+            .iter()
+            .map(|(name, field)| (name.clone(), TableField::required(field.ty.clone()))),
+    )
+}
+
+fn insert_nested_field(ty: &mut Type, path: &[String], value: Type) {
+    let Some((field, rest)) = path.split_first() else {
+        *ty = value;
+        return;
+    };
+
+    if !matches!(ty, Type::Table(_)) {
+        *ty = Type::empty_table();
+    }
+
+    let Type::Table(table) = ty else {
+        return;
+    };
+
+    if rest.is_empty() {
+        table.insert(field.clone(), TableField::required(value));
+        return;
+    }
+
+    let mut nested = table
+        .field(field)
+        .map(|field| field.ty.clone())
+        .unwrap_or_else(Type::empty_table);
+    insert_nested_field(&mut nested, rest, value);
+    table.insert(field.clone(), TableField::required(nested));
 }
 
 fn resolve_export_aliases(environment: &TypeEnvironment, ty: &Type) -> Type {

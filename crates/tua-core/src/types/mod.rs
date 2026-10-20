@@ -15,6 +15,7 @@ pub use environment::{
 };
 pub(crate) use environment::{
     build_type_environment_with_diagnostics, build_type_environment_with_domain_registry,
+    inferred_function_type_from_body,
 };
 pub(crate) use format::{format_named_function_pretty, format_type_with_prefix};
 pub use model::{
