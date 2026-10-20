@@ -248,7 +248,7 @@ local made = Player.makePlayer("Ada")
 
     let resolved = &response_with_id(server.output(), 3)["result"];
     let references = &response_with_id(server.output(), 4)["result"];
-    let locations = &resolved["command"]["arguments"][2];
+    let locations = &resolved["command"]["arguments"][1];
     let reference_count = references
         .as_array()
         .expect("references result should be an array")
@@ -258,10 +258,8 @@ local made = Player.makePlayer("Ada")
         resolved["command"]["title"],
         format!("{reference_count} references")
     );
-    assert_eq!(
-        resolved["command"]["command"],
-        "editor.action.showReferences"
-    );
+    assert_eq!(resolved["command"]["command"], "tua.hover.references");
+    assert_eq!(resolved["command"]["arguments"][0]["uri"], player_uri);
     assert_eq!(locations, references);
 }
 #[test]

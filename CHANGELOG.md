@@ -19,9 +19,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
-- Hover reference and implementation actions now normalize VS Code and
-  protocol-shaped locations before opening the references view, avoiding
-  extension-host argument constraint failures.
+- Hover reference and implementation actions, including reference CodeLens
+  clicks, now normalize VS Code and protocol-shaped locations before opening
+  the references view, avoiding extension-host argument constraint failures.
 - Editing a Lua module now compares its dependency surface using Lua source
   semantics, so implementation-only changes keep unchanged importers cached.
 - Static ECS component schemas now flow through `world:get`, `world:add`, and

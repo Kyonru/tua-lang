@@ -1056,10 +1056,12 @@ pub(super) fn lsp_resolved_reference_code_lens(
 
     lens["command"] = json!({
         "title": title,
-        "command": "editor.action.showReferences",
+        "command": "tua.hover.references",
         "arguments": [
-            uri_from_path(&target.path),
-            lsp_position(target.position),
+            {
+                "uri": uri_from_path(&target.path),
+                "position": lsp_position(target.position)
+            },
             locations
         ]
     });

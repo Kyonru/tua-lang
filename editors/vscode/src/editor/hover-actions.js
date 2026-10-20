@@ -34,8 +34,9 @@ const INSPECTION_PREVIEWS = {
 
 function registerHoverActions({ getClient, isTuaDocument }) {
   return vscode.Disposable.from(
-    vscode.commands.registerCommand(COMMANDS.showHoverReferences, (target) =>
+    vscode.commands.registerCommand(COMMANDS.showHoverReferences, (target, locations) =>
       showProviderLocations({
+        locations,
         providerCommand: "vscode.executeReferenceProvider",
         title: "references",
         target,
@@ -158,7 +159,7 @@ async function inspectionPreviewAtPosition({ document, getClient, position }) {
   return undefined;
 }
 
-async function showProviderLocations({ providerCommand, target, title }) {
+async function showProviderLocations({ locations: providedLocations, providerCommand, target, title }) {
   const normalized = normalizeTarget(target);
   if (!normalized) {
     vscode.window.showWarningMessage(`Open a Tua document to show ${title}.`);
@@ -166,11 +167,13 @@ async function showProviderLocations({ providerCommand, target, title }) {
   }
 
   try {
-    const rawLocations = await vscode.commands.executeCommand(
-      providerCommand,
-      normalized.uri,
-      normalized.position,
-    );
+    const rawLocations =
+      providedLocations ||
+      (await vscode.commands.executeCommand(
+        providerCommand,
+        normalized.uri,
+        normalized.position,
+      ));
     const locations = normalizeLocations(rawLocations);
 
     if (locations.length === 0) {
