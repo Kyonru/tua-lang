@@ -32,6 +32,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- ECS query mutation now remains deterministic when `world:clear()` is called
+  from a callback, and `world:add` rejects `nil` component values before they
+  can corrupt component-store counts.
 - ECS diagnostics now understand multiline calls, components exported from
   other modules, and inferred or annotated component-value variables. Typed
   pooled payloads no longer receive false missing-field or unknown-component

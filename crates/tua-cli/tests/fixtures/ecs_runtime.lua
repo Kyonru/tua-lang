@@ -184,6 +184,8 @@ do
   check(world:add(id, A, value) == value, "add returns the value")
   check(world:get(id, A) == value and world:has(id, A), "get and has")
   check(world:remove(id, A) == value and not world:has(id, A), "remove returns the value")
+  check(not pcall(function() world:add(id, A, nil) end), "nil component values are rejected")
+  check(world:query({ A }):count() == 0, "rejected nil values do not change component counts")
   world:add(id, A, value)
   world:clear()
   check(world:query({ A }):count() == 0, "clear empties the world")

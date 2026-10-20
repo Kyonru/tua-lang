@@ -175,6 +175,14 @@ print(visible:count())
 
 Use `world:clear()` when leaving a scene and discarding every entity.
 
+Query and system callbacks may update their component values, remove
+components, destroy entities, or clear the world. Clearing stops the active
+iteration. Queue new entities and newly matching components until after the
+callback returns: inserting keys while Lua is traversing a component table has
+no portable visitation order, so a query does not promise whether those new
+matches run in the same iteration. Component values cannot be `nil`; removing a
+component is expressed explicitly with `world:remove`.
+
 ## Runtime Overrides
 
 The built-in runtime is the default profile:

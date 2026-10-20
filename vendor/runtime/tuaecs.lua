@@ -81,6 +81,10 @@ end
 function World:add(entity, component, value)
   self:_assertAlive(entity, 2)
 
+  if value == nil then
+    error("ECS component value cannot be nil", 2)
+  end
+
   local store = self:_store(component, true)
 
   if store.values[entity] == nil then

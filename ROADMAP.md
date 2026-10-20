@@ -23,8 +23,7 @@ language, tooling, and workflow pages under `docs/`. Completed work belongs in
 
 - Harden asset path navigation and diagnostics across realistic project roots.
 - Refine sprite-sheet preview and SignalBus graph workflows from user feedback.
-- Benchmark the built-in ECS and object-pool runtimes on representative LOVE
-  populations.
+- Benchmark the object-pool runtime on representative LOVE populations.
 - Maintain one generated LOVE source for signatures, enums, callbacks,
   inheritance, and documentation.
 

@@ -128,6 +128,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 
 ## Tua LOVE and game helpers
 
+- `math` and `love.math` provide opt-in `tau`, `clamp`, `lerp`, `inverseLerp`,
+  `remap`, `sign`, `round`, `smoothstep`, `rgb`, and `rgba` helpers. `rgb` and
+  `rgba` convert 0-255 components into array-like 0-1 color tables. Each helper
+  is emitted only in files that reference it.
 - Typed asset helpers lower to native LOVE: `image "path"`, `sound "path"`,
   `music "path"`, `font(path, size)`, `shader "path"`, `imageData "path"`,
   `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and
