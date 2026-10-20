@@ -1023,6 +1023,47 @@ local offset = __tua_vec2(player.x + 4, math.max(0, player.y))
 }
 
 #[test]
+fn snapshot_emits_only_used_game_math_helpers() {
+    let emitted = emit_tua_source(
+        "src/game_math.tua",
+        r#"
+local angle = math.tau
+local value = math.clamp(12, 0, 10) + math.clamp(4, 0, 10)
+local color = love.math.rgba(255, 128, 0, 255)
+"#,
+    )
+    .expect("game math helpers should emit");
+
+    assert_eq!(
+        emitted,
+        r#"math.clamp = math.clamp or function(value, minimum, maximum) return math.max(minimum, math.min(maximum, value)) end
+math.tau = math.tau or math.pi * 2
+love.math.rgba = love.math.rgba or function(red, green, blue, alpha) return { red / 255, green / 255, blue / 255, alpha / 255 } end
+local angle = math.tau
+local value = math.clamp(12, 0, 10) + math.clamp(4, 0, 10)
+local color = love.math.rgba(255, 128, 0, 255)
+"#
+    );
+}
+
+#[test]
+fn ordinary_and_shadowed_math_emit_without_game_math_preludes() {
+    let ordinary = emit_tua_source("src/ordinary.tua", "return math.sin(1)\n")
+        .expect("ordinary math should emit");
+    let shadowed = emit_tua_source(
+        "src/shadowed.tua",
+        "local math = { clamp = function(value) return value end }\nreturn math.clamp(1)\n",
+    )
+    .expect("shadowed math should emit");
+
+    assert_eq!(ordinary, "return math.sin(1)\n");
+    assert_eq!(
+        shadowed,
+        "local math = { clamp = function(value) return value end }\nreturn math.clamp(1)\n"
+    );
+}
+
+#[test]
 fn snapshot_lowers_builtin_signal_constructor_calls_to_tuasignal() {
     let emitted = emit_tua_source(
         "src/signals.tua",

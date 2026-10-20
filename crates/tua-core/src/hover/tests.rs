@@ -995,6 +995,19 @@ fn hovers_lua_standard_library_items() {
 }
 
 #[test]
+fn hovers_game_math_helpers() {
+    let source = "local color = love.math.rgb(255, 128, 0)\n";
+    let hover = hover_tua_source("src/main.tua", source, position_at(source, "rgb"))
+        .expect("hover should not fail")
+        .expect("love.math.rgb should hover");
+
+    assert_eq!(
+        hover.contents,
+        "function love.math.rgb(red: number, green: number, blue: number): table"
+    );
+}
+
+#[test]
 fn hovers_extended_lua_globals() {
     let source = "_ENV.raw = rawlen({})\nwarn(\"careful\")\n";
     let environment = hover_tua_source("src/main.tua", source, position_at(source, "_ENV"))

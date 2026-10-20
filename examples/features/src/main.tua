@@ -6,6 +6,7 @@ local Modules = require("modules")
 local Imports = import("./imports")
 local Navigation = require("navigation")
 local Assets = require("assets")
+local GameMath = require("game_math")
 local Vectors = require("vectors")
 local RequireGraph = require("require_graph")
 local Scopes = require("scopes")
@@ -34,6 +35,7 @@ return {
   imports = Imports,
   navigation = Navigation,
   assets = Assets,
+  game_math = GameMath,
   vectors = Vectors,
   require_graph = RequireGraph,
   scopes = Scopes,

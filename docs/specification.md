@@ -52,6 +52,8 @@ Tua's type syntax is erased. Straightforward Tua code requires no Tua runtime.
 Some source-used built-ins lower to ordinary Lua APIs backed by vendored
 modules:
 
+- `math` and `love.math` game helpers emit individual guarded definitions only
+  when referenced;
 - `vec2(...)` emits a `brinevector` require when used;
 - `signal()` emits a `tuasignal` require when used;
 - `spriteSheet({...})` emits an `anim8` require when used;
@@ -61,6 +63,11 @@ modules:
 - `store({...})` emits a `tuastore` require when used;
 - `input({...})` emits a `baton` require when used.
 - `audioSystem({...})` emits a `tuaaudio` require plus its signal and store runtime dependencies when used.
+
+The game-math set is `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`,
+`round`, `smoothstep`, `rgb`, and `rgba`. `rgb` and `rgba` accept 0-255 color
+components and return array-like tables divided into LOVE's 0-1 range. The
+generated definitions preserve an existing field with the same name.
 
 The build writes a required bundled module only when emitted code uses that
 feature, and it does not overwrite a project-provided module with the same

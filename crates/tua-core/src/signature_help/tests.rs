@@ -229,6 +229,18 @@ fn returns_lua_and_love_builtin_signatures() {
 }
 
 #[test]
+fn returns_game_math_helper_signatures() {
+    let help = signature_at("local value = math.lerp(0, 10, \n", "math.lerp(0, 10, ")
+        .expect("math.lerp should have signature help");
+
+    assert_eq!(
+        help.signatures[0].label,
+        "function math.lerp(from: number, to: number, amount: number): number"
+    );
+    assert_eq!(help.active_parameter, 2);
+}
+
+#[test]
 fn returns_love_official_overloads_and_parameter_docs() {
     let draw = signature_at("love.graphics.draw(sprite, quad, \n", "quad, ")
         .expect("love.graphics.draw should have overload signatures");

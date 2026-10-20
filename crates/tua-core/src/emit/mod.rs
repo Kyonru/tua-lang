@@ -11,9 +11,9 @@ use crate::runtime_type;
 use crate::semantic::SemanticModel;
 use crate::types::{build_type_environment_with_diagnostics, TypeEnvironment};
 use crate::{
-    asset, audio, ecs, infer_module_exports, input, object_pool, parse_tua_source, signal,
-    state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode, ParameterDefault,
-    ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
+    asset, audio, ecs, game_math, infer_module_exports, input, object_pool, parse_tua_source,
+    signal, state_machine, store, vector, AnnotationMode, Diagnostic, DiagnosticCode,
+    ParameterDefault, ParsedSource, ProjectWorkspace, SourcePosition, SourceSpan, TuaType, Type,
 };
 
 pub(crate) mod lowering;
@@ -1490,6 +1490,7 @@ fn lower_builtin_call_operations(
     let mut tuaaudio_span = None;
     let mut baton_span = None;
     let mut tuaecs_span = None;
+    let game_math_helpers = game_math::used_helpers(parsed);
     let explicit_ecs_binding = explicit_binding_position(parsed, ecs::MODULE_NAME);
     let explicit_object_pool_binding =
         explicit_binding_position(parsed, object_pool::CONSTRUCTOR_NAME);
@@ -1737,6 +1738,7 @@ fn lower_builtin_call_operations(
         || baton_span.is_some()
         || tuaaudio_span.is_some()
         || tuaecs_span.is_some()
+        || !game_math_helpers.is_empty()
     {
         let leading_whitespace =
             output.len() - output.trim_start_matches(char::is_whitespace).len();
@@ -1842,6 +1844,14 @@ fn lower_builtin_call_operations(
                 ecs::RUNTIME_MODULE
             ),
             source_span,
+            LoweringKind::BuiltinCall,
+        ));
+    }
+    for used in game_math_helpers {
+        operations.push(lowering::LoweringOperation::insert(
+            0,
+            used.helper.definition(used.namespace),
+            used.source_span,
             LoweringKind::BuiltinCall,
         ));
     }

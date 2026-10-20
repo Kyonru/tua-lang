@@ -1,0 +1,26 @@
+-- Feature: opt-in game-math helpers extend both `math` and `love.math`.
+local fullTurn: number = math.tau
+local health: number = math.clamp(125, 0, 100)
+local halfway: number = math.lerp(10, 20, 0.5)
+local progress: number = math.inverseLerp(10, 20, halfway)
+local screenX: number = math.remap(progress, 0, 1, 32, 288)
+local direction: number = math.sign(-12)
+local frame: number = math.round(4.6)
+local eased: number = math.smoothstep(0, 1, progress)
+
+-- Feature: RGB/RGBA helpers accept byte components and return LOVE-ready
+-- color tables whose component values are divided by 255.
+local orange = love.math.rgb(255, 128, 0)
+local translucentBlue = love.math.rgba(20, 80, 255, 128)
+
+-- Only helpers referenced by this file receive a small generated definition.
+return {
+  fullTurn = fullTurn,
+  health = health,
+  screenX = screenX,
+  direction = direction,
+  frame = frame,
+  eased = eased,
+  orange = orange,
+  translucentBlue = translucentBlue,
+}

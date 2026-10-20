@@ -6,6 +6,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `math` and `love.math` game helpers provide `tau`, interpolation,
+  clamping, remapping, rounding, smoothing, sign, and byte-to-LOVE `rgb` and
+  `rgba` color tables, with typed editor support and per-file emission only
+  when referenced.
+
 ### Fixed
 
 - Release checksum manifests now use portable LF line endings, and extension

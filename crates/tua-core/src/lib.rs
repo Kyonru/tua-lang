@@ -21,6 +21,7 @@ pub mod emit;
 pub mod fixture;
 pub mod folding_range;
 pub mod formatter;
+mod game_math;
 pub mod hir;
 pub mod hover;
 pub mod ide_db;

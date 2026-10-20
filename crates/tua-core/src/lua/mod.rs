@@ -1,6 +1,6 @@
 use crate::{
-    asset, audio, input, love_api, love_api_extra, love_api_signatures, object_pool, signal,
-    sprite, state_machine, store, vector, Type,
+    asset, audio, game_math, input, love_api, love_api_extra, love_api_signatures, object_pool,
+    signal, sprite, state_machine, store, vector, Type,
 };
 
 pub(crate) const BUILTIN_DEFINITION_URI_PREFIX: &str = "tua:/builtins/";
@@ -75,23 +75,39 @@ pub(crate) fn is_protected_global(name: &str) -> bool {
 }
 
 pub(crate) fn field_items(receiver_parts: &[String], prefix: &str) -> Vec<LuaItem> {
-    if receiver_is_love(receiver_parts) {
-        let love_items = love_api::field_items(receiver_parts, prefix);
-
-        if !love_items.is_empty() {
-            return love_items;
+    let game_math_namespace = match receiver_parts {
+        [root] if root == "math" => Some(game_math::MathNamespace::Math),
+        [root, child] if root == "love" && child == "math" => {
+            Some(game_math::MathNamespace::LoveMath)
         }
+        _ => None,
+    };
+
+    if receiver_is_love(receiver_parts) {
+        let mut love_items = love_api::field_items(receiver_parts, prefix);
+        if let Some(namespace) = game_math_namespace {
+            for item in game_math::items(namespace, prefix) {
+                push_unique_lua_item(&mut love_items, item);
+            }
+        }
+        return love_items;
     }
 
     let Some(items) = items_for_receiver(receiver_parts) else {
         return Vec::new();
     };
 
-    items
+    let mut results = items
         .iter()
         .copied()
         .filter(|item| item.label.starts_with(prefix))
-        .collect()
+        .collect::<Vec<_>>();
+    if let Some(namespace) = game_math_namespace {
+        for item in game_math::items(namespace, prefix) {
+            push_unique_lua_item(&mut results, item);
+        }
+    }
+    results
 }
 
 pub(crate) fn type_field_items(type_name: &str, prefix: &str) -> Vec<LuaItem> {
@@ -191,6 +207,19 @@ pub(crate) fn hover_item(parts: &[String]) -> Option<LuaItem> {
     if receiver_is_love(parts) {
         if let Some(item) = love_api::hover_item(parts) {
             return Some(item);
+        }
+    }
+
+    if let [root, label] = parts {
+        if root == "math" {
+            if let Some(item) = game_math::item(game_math::MathNamespace::Math, label) {
+                return Some(item);
+            }
+        }
+    }
+    if let [root, child, label] = parts {
+        if root == "love" && child == "math" {
+            return game_math::item(game_math::MathNamespace::LoveMath, label);
         }
     }
 
@@ -349,6 +378,7 @@ fn all_builtin_items() -> Vec<LuaItem> {
         .collect::<Vec<_>>();
 
     items.extend(love_api_extra::all_items());
+    items.extend(game_math::all_items());
 
     items
 }

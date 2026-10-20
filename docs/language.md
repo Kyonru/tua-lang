@@ -272,6 +272,23 @@ Tua is designed around LOVE projects, so the language server includes built-in
 Lua and LOVE catalogs. Those catalogs power completions, hover, signature help,
 simple call diagnostics, virtual definitions, and object method knowledge.
 
+Both `math` and `love.math` also expose a small opt-in game-math set:
+
+```tua
+local angle: number = math.tau
+local health: number = math.clamp(rawHealth, 0, 100)
+local x: number = love.math.lerp(startX, targetX, amount)
+local orange = love.math.rgb(255, 128, 0)
+local faded = love.math.rgba(40, 80, 255, 128)
+```
+
+The complete set is `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`,
+`round`, `smoothstep`, `rgb`, and `rgba`. The color helpers divide each 0-255
+component by 255 and return an array-like table ready to unpack into LOVE color
+APIs. Each helper receives a guarded Lua definition only in a generated file
+that references it, so ordinary `math` usage adds no output and an existing
+field with the same name is preserved.
+
 ### Helper Overview
 
 Tua also includes small source-level helpers for common asset loading:

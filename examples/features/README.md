@@ -96,6 +96,10 @@ make build-features
   metadata, and edit inside the strings to try helper-specific asset-path
   completion. LOVE code actions can also rewrite obvious raw constructors into
   helper calls.
+- `src/game_math.tua` covers the opt-in `math` and `love.math` game helpers:
+  `tau`, `clamp`, `lerp`, `inverseLerp`, `remap`, `sign`, `round`,
+  `smoothstep`, `rgb`, and `rgba`, including byte-to-LOVE color tables and
+  per-file emission only for referenced helpers.
 - `src/vectors.tua` covers the built-in LOVE-friendly `Vec2` type, the
   `vec2(x, y)` constructor, `x`/`y` field completion and hover, conservative
   BrineVector properties/operators, and bundled BrineVector Lua emission.

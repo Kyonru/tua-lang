@@ -1680,7 +1680,10 @@ fn completes_lua_standard_library_fields() {
     let completions = complete_tua_source("src/main.tua", source, position)
         .expect("Lua field completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["sin".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["sin".to_owned(), "sign".to_owned()]
+    );
     assert_eq!(completions[0].kind, CompletionKind::Function);
     assert_eq!(
         completions[0].detail.as_deref(),
@@ -1693,13 +1696,38 @@ fn completes_lua_standard_library_fields() {
 }
 
 #[test]
+fn completes_game_math_helpers_in_math_and_love_math() {
+    let math_source = "local value = math.cl\n";
+    let math_position = position_after(math_source, "math.cl");
+    let math_completions = complete_tua_source("src/main.tua", math_source, math_position)
+        .expect("math helper completion should succeed");
+    let love_source = "local color = love.math.rg\n";
+    let love_position = position_after(love_source, "love.math.rg");
+    let love_completions = complete_tua_source("src/main.tua", love_source, love_position)
+        .expect("LOVE math helper completion should succeed");
+
+    assert_eq!(labels(&math_completions), vec!["clamp".to_owned()]);
+    assert_eq!(
+        math_completions[0].detail.as_deref(),
+        Some("function math.clamp(value: number, minimum: number, maximum: number): number")
+    );
+    assert_eq!(
+        labels(&love_completions),
+        vec!["rgb".to_owned(), "rgba".to_owned()]
+    );
+}
+
+#[test]
 fn completes_lua_fields_when_source_is_temporarily_invalid() {
     let source = "local broken =\nlocal value = math.si\n";
     let position = position_after(source, "math.si");
     let completions = complete_tua_source("src/main.tua", source, position)
         .expect("lossy Lua completion should succeed");
 
-    assert_eq!(labels(&completions), vec!["sin".to_owned()]);
+    assert_eq!(
+        labels(&completions),
+        vec!["sin".to_owned(), "sign".to_owned()]
+    );
 }
 
 #[test]
