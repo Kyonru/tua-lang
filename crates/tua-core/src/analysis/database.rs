@@ -267,7 +267,7 @@ impl AnalysisQueryCache {
             .parsed
             .as_ref()
             .ok()
-            .map(referenced_type_names_for_dependencies)
+            .map(referenced_type_names)
             .unwrap_or_default();
         for edge in &file.require_edges {
             let target = normalize_path(&edge.target);
@@ -640,7 +640,7 @@ fn type_import_collision_diagnostics(parsed: &ParsedSource, scope: &ScopeMap) ->
         .collect()
 }
 
-fn referenced_type_names_for_dependencies(parsed: &ParsedSource) -> BTreeSet<String> {
+pub(super) fn referenced_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
     fn collect(ty: &TuaType, names: &mut BTreeSet<String>) {
         match ty {
             TuaType::Named(name) => {
@@ -697,7 +697,60 @@ fn referenced_type_names_for_dependencies(parsed: &ParsedSource) -> BTreeSet<Str
     {
         collect(ty, &mut names);
     }
+
+    let mut collector = ReferencedAnonymousFunctionCollector::default();
+    collector.visit_ast(&parsed.ast);
+    for body in collector.bodies {
+        collect_runtime_type_names(&crate::types::function_type_from_body(&body), &mut names);
+    }
+
     names
+}
+
+#[derive(Default)]
+struct ReferencedAnonymousFunctionCollector {
+    bodies: Vec<ast::FunctionBody>,
+}
+
+impl Visitor for ReferencedAnonymousFunctionCollector {
+    fn visit_anonymous_function(&mut self, function: &ast::AnonymousFunction) {
+        self.bodies.push(function.body().clone());
+    }
+}
+
+fn collect_runtime_type_names(ty: &Type, names: &mut BTreeSet<String>) {
+    match ty {
+        Type::Alias(name) => {
+            names.insert(name.clone());
+        }
+        Type::Union(types) | Type::Tuple(types) => {
+            for ty in types {
+                collect_runtime_type_names(ty, names);
+            }
+        }
+        Type::Function(function) => {
+            for parameter in &function.parameters {
+                collect_runtime_type_names(&parameter.ty, names);
+            }
+            if let Some(vararg_type) = function.vararg_type.as_deref() {
+                collect_runtime_type_names(vararg_type, names);
+            }
+            for ty in function.return_types_or_any() {
+                collect_runtime_type_names(ty, names);
+            }
+        }
+        Type::Table(table) => {
+            for (_, field) in table.fields() {
+                collect_runtime_type_names(&field.ty, names);
+            }
+        }
+        Type::Array(item) => collect_runtime_type_names(item, names),
+        Type::Dictionary { key, value } => {
+            collect_runtime_type_names(key, names);
+            collect_runtime_type_names(value, names);
+        }
+        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => {}
+    }
 }
 
 pub(super) fn parse_analysis_source(

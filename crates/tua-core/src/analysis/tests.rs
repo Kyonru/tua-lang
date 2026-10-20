@@ -4133,6 +4133,71 @@ type PlayerPrivate = { hp: number }
 }
 
 #[test]
+fn type_only_imports_resolve_inside_anonymous_function_contracts() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+
+local bullets = objectPool({
+  create = function(): Shared.Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0, active = false }
+  end,
+  reset = function(bullet: Shared.Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.dx = 0
+    bullet.dy = 0
+    bullet.active = false
+  end,
+})
+
+local bullet = bullets:acquire()
+bullet.<|complete|>
+bullets:release(bullet)
+-- file: src/types.tua
+export type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  active: boolean,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+
+    assert!(
+        !diagnostics.iter().any(|diagnostic| {
+            matches!(
+                diagnostic.code,
+                Some(DiagnosticCode::TYPE_MISMATCH | DiagnosticCode::TYPE_UNKNOWN_NAME)
+            )
+        }),
+        "anonymous callback contracts should resolve imported aliases: {diagnostics:#?}"
+    );
+    let mut labels =
+        completion_labels(&snapshot.completion("src/main.tua", fixture.position("complete")));
+    labels.sort();
+    assert_eq!(
+        labels,
+        vec![
+            "active".to_owned(),
+            "dx".to_owned(),
+            "dy".to_owned(),
+            "x".to_owned(),
+            "y".to_owned(),
+        ]
+    );
+}
+
+#[test]
 fn snapshot_implementation_resolves_functions_and_stays_conservative() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

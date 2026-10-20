@@ -449,7 +449,7 @@ impl AnalysisSnapshot {
     }
 
     fn project_imported_alias_types(&self, parsed: &ParsedSource) -> Vec<(String, Type)> {
-        referenced_tua_type_names(parsed)
+        referenced_type_names(parsed)
             .into_iter()
             .filter_map(|name| {
                 self.type_database
@@ -1979,19 +1979,7 @@ impl AnalysisSnapshot {
         path: &Path,
         file: &AnalysisFile,
     ) -> Vec<Diagnostic> {
-        if (file.hir().is_none_or(|hir| hir.require_bindings.is_empty())
-            && file
-                .parsed
-                .as_ref()
-                .is_ok_and(|parsed| parsed.type_imports.is_empty()))
-            || file
-                .semantics()
-                .is_some_and(|semantics| !semantics.environment_diagnostics.is_empty())
-                && file
-                    .parsed
-                    .as_ref()
-                    .is_ok_and(|parsed| parsed.type_imports.is_empty())
-        {
+        if !self.project_type_check_required(file) {
             return Vec::new();
         }
 
@@ -2047,6 +2035,22 @@ impl AnalysisSnapshot {
         diagnostics
     }
 
+    pub(super) fn project_type_check_required(&self, file: &AnalysisFile) -> bool {
+        let has_type_imports = file
+            .parsed
+            .as_ref()
+            .is_ok_and(|parsed| !parsed.type_imports.is_empty());
+        let has_runtime_imports = file
+            .hir()
+            .is_some_and(|hir| !hir.require_bindings.is_empty());
+
+        (has_type_imports || has_runtime_imports)
+            && (has_type_imports
+                || file
+                    .semantics()
+                    .is_none_or(|semantics| semantics.environment_diagnostics.is_empty()))
+    }
+
     pub(super) fn project_diagnostic_enabled(&self, diagnostic: &Diagnostic) -> bool {
         match diagnostic.code {
             Some(crate::DiagnosticCode::LINT_MISSING_REQUIRE) => {
@@ -2059,31 +2063,6 @@ impl AnalysisSnapshot {
             _ => true,
         }
     }
-}
-
-fn referenced_tua_type_names(parsed: &ParsedSource) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
-    for ty in parsed
-        .type_aliases
-        .iter()
-        .map(|alias| &alias.ty)
-        .chain(
-            parsed
-                .local_annotations
-                .iter()
-                .map(|annotation| &annotation.ty),
-        )
-        .chain(parsed.function_annotations.iter().flat_map(|function| {
-            function
-                .parameters
-                .iter()
-                .map(|parameter| &parameter.ty)
-                .chain(function.return_type.iter())
-        }))
-    {
-        collect_tua_type_names(ty, &mut names);
-    }
-    names
 }
 
 fn collect_tua_type_names(ty: &TuaType, names: &mut BTreeSet<String>) {

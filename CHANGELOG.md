@@ -15,6 +15,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Type-only imports referenced from anonymous function parameters and return
+  annotations now resolve through project checking without leaving stale type
+  mismatch diagnostics, while preserving imported table-field completion.
 - Release checksum manifests now use portable LF line endings, and extension
   publishing tolerates older CRLF entries produced by Windows builders.
 
