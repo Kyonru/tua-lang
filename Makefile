@@ -15,6 +15,8 @@ TUA := $(CARGO) run -q -p tua-cli --
 VSCODE_DIR := editors/vscode
 VSIX := $(VSCODE_DIR)/tua-$(PROJECT_VERSION).vsix
 EXAMPLE ?= examples/love-minimal
+ECS_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
+ECS_LOVE_FLAGS ?=
 UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
 DEBUG_TUA := target/debug/tua$(EXE_SUFFIX)
@@ -225,6 +227,13 @@ profile-examples: ## Profile CLI and LSP speed across every bundled example proj
 profile-large-tables: ## Profile compiler/LSP latency and peak RSS for 1,000/10,000-field and deeply nested tables.
 	$(CARGO) build --release --package tua-cli
 	node scripts/profile-large-tables.js $(RELEASE_TUA)
+
+.PHONY: profile-ecs-love
+profile-ecs-love: ## Compare ECS against ECS_BASE_REF (default latest tag) under LOVE; ECS_LOVE_FLAGS=--jit forces JIT on.
+	@test -n "$(ECS_BASE_REF)" || (echo "set ECS_BASE_REF to a git tag or commit"; exit 2)
+	@mkdir -p target/tua-speed
+	git show $(ECS_BASE_REF):vendor/runtime/tuaecs.lua > target/tua-speed/tuaecs.base.lua
+	$(LOVE) benchmarks/ecs-love $(ECS_LOVE_FLAGS) $(CURDIR)/target/tua-speed/tuaecs.base.lua $(CURDIR)/vendor/runtime/tuaecs.lua
 
 .PHONY: profile-examples-baseline
 profile-examples-baseline: ## Write a local examples speed baseline for future comparisons.

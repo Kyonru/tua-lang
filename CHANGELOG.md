@@ -17,6 +17,19 @@ language or editor behavior, and migration notes call out those changes.
   `rgba` color tables, with typed editor support and per-file emission only
   when referenced.
 
+### Changed
+
+- The bundled ECS runtime iterates queries and systems without redundant
+  per-entity liveness checks, wrapper closures, or temporary argument tables.
+  Common query widths use specialized allocation-free loops, while wider
+  queries reuse one argument buffer per iteration. In the included benchmark
+  on macOS arm64 with LOVE 11.5.0 and LuaJIT 2.1, every measured workload ran
+  at least 2.5× faster. The 10,000-entity four-component system improved about
+  5.4× with JIT disabled and 20× with JIT forced on because it no longer
+  creates roughly 2.3 MB of temporary tables per update. These figures are
+  platform- and workload-specific. `make profile-ecs-love` compares against
+  the latest release tag by default, or a selected `ECS_BASE_REF`.
+
 ### Fixed
 
 - ECS diagnostics now understand multiline calls, components exported from

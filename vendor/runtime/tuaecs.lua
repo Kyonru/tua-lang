@@ -122,6 +122,16 @@ function World:remove(entity, component)
 end
 
 function World:clear()
+  -- Empty the existing value tables before detaching them. An active query
+  -- holds those tables directly, so this also stops an iteration whose
+  -- callback clears the world instead of visiting stale component values.
+  for _, store in pairs(self._stores) do
+    for entity in pairs(store.values) do
+      store.values[entity] = nil
+    end
+    store.count = 0
+  end
+
   self._alive = {}
   self._stores = {}
 end
@@ -129,35 +139,132 @@ end
 local Query = {}
 Query.__index = Query
 
-local function queryStores(query)
-  local smallest = nil
-  local stores = {}
+-- Returns each component's value table, in query order, plus the smallest one,
+-- which drives iteration. Returns nil when a component was never added.
+local function queryValues(query)
+  local components = query.components
+  local world = query.world
+  local values = {}
+  local driver = nil
+  local driverCount = nil
 
-  for index = 1, #query.components do
-    local store = query.world:_store(query.components[index], false)
+  for index = 1, #components do
+    local store = world:_store(components[index], false)
 
     if store == nil then
       return nil, nil
     end
 
-    stores[index] = store
+    values[index] = store.values
 
-    if smallest == nil or store.count < smallest.count then
-      smallest = store
+    if driverCount == nil or store.count < driverCount then
+      driver = store.values
+      driverCount = store.count
     end
   end
 
-  return smallest, stores
+  return values, driver
 end
 
-local function matches(stores, entity)
-  for index = 1, #stores do
-    if stores[index].values[entity] == nil then
-      return false
-    end
+-- Visits every entity that has all of the query's components. Values are read
+-- directly from their component tables, and a nil read means the entity does
+-- not match. No liveness check is needed: destroy and clear remove every value,
+-- and add requires a live entity.
+--
+-- Systems pass `hasDt` so `dt` is appended as the last argument. The width
+-- branches keep the per-entity path free of closures and table allocations.
+local function iterate(query, visit, hasDt, dt)
+  local values, driver = queryValues(query)
+
+  if values == nil then
+    return
   end
 
-  return true
+  local count = #values
+
+  if count == 1 then
+    if hasDt then
+      for entity, a in pairs(driver) do
+        visit(entity, a, dt)
+      end
+    else
+      for entity, a in pairs(driver) do
+        visit(entity, a)
+      end
+    end
+  elseif count == 2 then
+    local va, vb = values[1], values[2]
+
+    for entity in pairs(driver) do
+      local a, b = va[entity], vb[entity]
+
+      if a ~= nil and b ~= nil then
+        if hasDt then
+          visit(entity, a, b, dt)
+        else
+          visit(entity, a, b)
+        end
+      end
+    end
+  elseif count == 3 then
+    local va, vb, vc = values[1], values[2], values[3]
+
+    for entity in pairs(driver) do
+      local a, b, c = va[entity], vb[entity], vc[entity]
+
+      if a ~= nil and b ~= nil and c ~= nil then
+        if hasDt then
+          visit(entity, a, b, c, dt)
+        else
+          visit(entity, a, b, c)
+        end
+      end
+    end
+  elseif count == 4 then
+    local va, vb, vc, vd = values[1], values[2], values[3], values[4]
+
+    for entity in pairs(driver) do
+      local a, b, c, d = va[entity], vb[entity], vc[entity], vd[entity]
+
+      if a ~= nil and b ~= nil and c ~= nil and d ~= nil then
+        if hasDt then
+          visit(entity, a, b, c, d, dt)
+        else
+          visit(entity, a, b, c, d)
+        end
+      end
+    end
+  else
+    -- One argument buffer per iteration, never per entity. unpack copies the
+    -- values onto the stack before `visit` runs, so nested iterations and
+    -- callbacks can't observe the buffer being reused.
+    local args = {}
+    local last = count
+
+    if hasDt then
+      last = count + 1
+      args[last] = dt
+    end
+
+    for entity in pairs(driver) do
+      local matched = true
+
+      for index = 1, count do
+        local value = values[index][entity]
+
+        if value == nil then
+          matched = false
+          break
+        end
+
+        args[index] = value
+      end
+
+      if matched then
+        visit(entity, unpackValues(args, 1, last))
+      end
+    end
+  end
 end
 
 function World:query(components)
@@ -176,42 +283,7 @@ function World:query(components)
 end
 
 function Query:each(visit)
-  local driver, stores = queryStores(self)
-
-  if driver == nil then
-    return
-  end
-
-  local componentCount = #self.components
-
-  for entity in pairs(driver.values) do
-    if self.world._alive[entity] and matches(stores, entity) then
-      if componentCount == 1 then
-        visit(entity, stores[1].values[entity])
-      elseif componentCount == 2 then
-        visit(
-          entity,
-          stores[1].values[entity],
-          stores[2].values[entity]
-        )
-      elseif componentCount == 3 then
-        visit(
-          entity,
-          stores[1].values[entity],
-          stores[2].values[entity],
-          stores[3].values[entity]
-        )
-      else
-        local values = {}
-
-        for index = 1, componentCount do
-          values[index] = stores[index].values[entity]
-        end
-
-        visit(entity, unpackValues(values, 1, componentCount))
-      end
-    end
-  end
+  iterate(self, visit, false, nil)
 end
 
 function Query:count()
@@ -234,32 +306,14 @@ function ecs.system(world, components, update)
     query = world:query(components),
   }
 
+  -- Calls `update` directly, with no wrapper closure per frame or extra
+  -- function call per entity.
   function system:update(dt)
     if not self.enabled then
       return
     end
 
-    local componentCount = #self.query.components
-
-    if componentCount == 1 then
-      self.query:each(function(entity, first)
-        update(entity, first, dt)
-      end)
-    elseif componentCount == 2 then
-      self.query:each(function(entity, first, second)
-        update(entity, first, second, dt)
-      end)
-    elseif componentCount == 3 then
-      self.query:each(function(entity, first, second, third)
-        update(entity, first, second, third, dt)
-      end)
-    else
-      self.query:each(function(entity, ...)
-        local values = { ... }
-        values[#values + 1] = dt
-        update(entity, unpackValues(values, 1, #values))
-      end)
-    end
+    iterate(self.query, update, true, dt)
   end
 
   return system

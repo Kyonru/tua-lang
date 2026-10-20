@@ -1276,6 +1276,28 @@ fn audio_runtime_priority_fades_pooling_and_snapshots() {
 }
 
 #[test]
+fn ecs_runtime_iteration_semantics_and_allocations() {
+    let Ok(lua) = Command::new("lua").arg("-v").output() else {
+        return;
+    };
+    if !lua.status.success() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/ecs_runtime.lua"))
+        .arg(&root)
+        .output()
+        .expect("failed to run ECS runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn build_emits_audio_runtime_and_transitive_helpers_on_demand() {
     let temp = TempDir::new("audio-runtime-build");
     fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
