@@ -1,4 +1,4 @@
-use full_moon::ast::FunctionCall;
+use full_moon::ast::{Expression, FunctionCall};
 
 use crate::types::{FunctionType, Type, TypeEnvironment, TypedFunction};
 use crate::{
@@ -108,11 +108,21 @@ impl BuiltinDomainRegistry {
             .find_map(|domain| domain.typed_member(environment, receiver_type, member))
     }
 
-    pub(crate) fn method_return_types_from_direct_type(
+    pub(crate) fn method_return_types_from_call(
         self,
         receiver_type: &Type,
         call: &FunctionCall,
+        mut type_of_expression: impl FnMut(&Expression) -> Option<Type>,
     ) -> Option<Vec<Type>> {
+        if self.ecs_enabled {
+            let component_type = ecs::component_argument(call).and_then(&mut type_of_expression);
+            if let Some(returns) =
+                ecs::inferred_method_return_types(receiver_type, call, component_type.as_ref())
+            {
+                return Some(returns);
+            }
+        }
+
         self.domains()
             .find_map(|domain| domain.method_return_types_from_direct_type(receiver_type, call))
     }

@@ -1391,3 +1391,41 @@ return {
     completion_with_label(&output, 2, "hp");
     completion_with_label(&output, 2, "name");
 }
+
+#[test]
+fn completion_uses_exported_ecs_component_payloads_for_world_get() {
+    let fixture = Fixture::parse(
+        r#"-- file: tua.toml
+source = "src"
+
+[ecs]
+enabled = true
+-- file: src/main.tua
+local ECS = require("ecs_state")
+local velocity = ECS.world:get(ECS.player, ECS.VelocityComponent)
+local speed = velocity.
+-- file: src/ecs_state.tua
+local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
+local world = ecs.world()
+local player = world:create()
+
+return {
+  world = world,
+  player = player,
+  VelocityComponent = VelocityComponent,
+}
+"#,
+    );
+    let temp = fixture
+        .write_to_temp("exported-ecs-component-payload-completion")
+        .expect("fixture should write");
+    let main = fixture.source("src/main.tua");
+    let uri = path_uri(&temp.join("src/main.tua"));
+    let output = run_messages(vec![
+        initialize_with_root(1, path_uri(temp.path())),
+        did_open(&uri, main),
+        completion_request(2, &uri, main, "velocity."),
+    ]);
+
+    assert_completion_labels(&output, 2, ["x", "y"]);
+}

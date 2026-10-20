@@ -334,6 +334,11 @@ When enabled, Tua recognizes:
 - world methods such as `world:create()`, `world:add(...)`, and
   `world:query(...)`.
 
+For static component declarations, the schema is retained in the component's
+semantic type. `world:get`, `world:add`, and `world:remove` therefore return the
+matching payload shape, even when the component is imported from another Tua
+module. Dynamic component construction continues to return `any`.
+
 The initial diagnostics cover clear, static patterns:
 
 - mismatched or missing fields in one-line `world:add(entity, Component, { ... })`

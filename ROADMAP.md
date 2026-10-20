@@ -25,7 +25,6 @@ language, tooling, and workflow pages under `docs/`. Completed work belongs in
 - Refine sprite-sheet preview and SignalBus graph workflows from user feedback.
 - Benchmark the built-in ECS and object-pool runtimes on representative LOVE
   populations.
-- Deepen component payload inference without making dynamic patterns rigid.
 - Maintain one generated LOVE source for signatures, enums, callbacks,
   inheritance, and documentation.
 

@@ -19,6 +19,7 @@ use crate::module_index::{
     required_module_exports_for_receiver, ModuleExportField, ModuleExports,
 };
 use crate::narrowing::{directly_assigned_name, narrowed_type_at_position};
+use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::types::{
     deduplicate_inferred_types, type_from_tua_type, FunctionType, MetatableFacts, PrimitiveType,
     TableField, Type, TypeEnvironment, TypedFunction,
@@ -294,6 +295,19 @@ impl<'a> SemanticModel<'a> {
                 ) {
                     return returns;
                 }
+
+                let domains = BuiltinDomainRegistry::with_ecs(
+                    self.environment.alias(ecs::WORLD_TYPE).is_some(),
+                );
+                if let Some(returns) = domains.method_return_types_from_call(
+                    &receiver_type,
+                    function_call,
+                    |expression| {
+                        self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                    },
+                ) {
+                    return returns;
+                }
             }
         }
 
@@ -394,8 +408,28 @@ impl<'a> SemanticModel<'a> {
         position: SourcePosition,
     ) -> Option<TypedFunction> {
         let parts = field_chain_before_first_call(function_call)?;
+        let mut function = self.typed_function_for_call_parts(&parts, position)?;
 
-        self.typed_function_for_call_parts(&parts, position)
+        if self.environment.alias(ecs::WORLD_TYPE).is_some() {
+            if let Some((_, receiver_parts)) = parts.split_last() {
+                if let Some(receiver_type) = self.type_of_field_chain(receiver_parts, position) {
+                    let component_type =
+                        ecs::component_argument(function_call).and_then(|expression| {
+                            self.type_of_expression_return_at_depth(expression, position, 0, 1)
+                        });
+                    if let Some(returns) = ecs::inferred_method_return_types(
+                        &receiver_type,
+                        function_call,
+                        component_type.as_ref(),
+                    ) {
+                        function.return_type = Some(returns.first().cloned().unwrap_or(Type::Any));
+                        function.return_types = returns;
+                    }
+                }
+            }
+        }
+
+        Some(function)
     }
 
     pub(crate) fn typed_function_for_call_parts(

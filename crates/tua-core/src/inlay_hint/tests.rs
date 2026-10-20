@@ -90,6 +90,35 @@ local entity = world:create()
 }
 
 #[test]
+fn hints_ecs_component_payloads_for_world_value_methods() {
+    let source = r#"local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local entity = world:create()
+local added = world:add(entity, Position, { x = 1, y = 2 })
+local position = world:get(entity, Position)
+local removed = world:remove(entity, Position)
+"#;
+    let hints = inlay_hints_tua_source("src/ecs.tua", source).expect("ECS source should parse");
+    let type_hints = hints
+        .iter()
+        .filter(|hint| hint.kind == InlayHintKind::Type)
+        .map(|hint| hint.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        type_hints,
+        vec![
+            ": EcsComponent",
+            ": EcsWorld",
+            ": EcsEntityId",
+            ": { x: number, y: number }",
+            ": { x: number, y: number }",
+            ": { x: number, y: number }",
+        ]
+    );
+}
+
+#[test]
 fn hints_builtin_object_pool_and_acquired_item_types() {
     let source = r#"type Bullet = { active: boolean }
 local bullets = objectPool({

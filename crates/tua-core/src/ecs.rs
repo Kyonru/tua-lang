@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use full_moon::ast::{
+    Call, Expression, Field, FunctionArgs, FunctionCall, Suffix, TableConstructor,
+};
+
+use crate::ast_utils::{field_chain_before_first_call, token_text};
 use crate::types::{TableField, TableShape, Type, TypeEnvironment};
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, TypedFunction, TypedParameter};
 
@@ -21,6 +26,8 @@ pub(crate) const COMPONENT_TYPE: &str = "EcsComponent";
 pub(crate) const SYSTEM_TYPE: &str = "EcsSystem";
 pub(crate) const QUERY_TYPE: &str = "EcsQuery";
 
+const COMPONENT_VALUE_FIELD: &str = "__tua_ecs_component_value";
+
 const BUILTIN_TYPE_NAMES: &[&str] = &[
     WORLD_TYPE,
     ENTITY_ID_TYPE,
@@ -37,7 +44,7 @@ pub(crate) fn builtin_aliases() -> Vec<(String, Type)> {
     [
         (WORLD_TYPE.to_owned(), world_type()),
         (ENTITY_ID_TYPE.to_owned(), Type::number()),
-        (COMPONENT_TYPE.to_owned(), component_type()),
+        (COMPONENT_TYPE.to_owned(), component_type(Type::Any)),
         (SYSTEM_TYPE.to_owned(), system_type()),
         (QUERY_TYPE.to_owned(), query_type()),
     ]
@@ -138,11 +145,120 @@ fn world_type() -> Type {
     ]))
 }
 
-fn component_type() -> Type {
-    Type::table([
+fn component_type(value_type: Type) -> Type {
+    let mut table = TableShape::from_fields([
         ("name", TableField::required(Type::string())),
         ("schema", TableField::required(Type::empty_table())),
-    ])
+        (COMPONENT_VALUE_FIELD, TableField::required(value_type)),
+    ]);
+    table.mark_nominal(COMPONENT_TYPE, COMPONENT_TYPE, []);
+
+    Type::Table(table)
+}
+
+pub(crate) fn inferred_method_return_types(
+    receiver_type: &Type,
+    call: &FunctionCall,
+    component_argument_type: Option<&Type>,
+) -> Option<Vec<Type>> {
+    let parts = field_chain_before_first_call(call)?;
+    let method = parts.last()?.as_str();
+
+    if is_module_type_direct(receiver_type) && method == "component" {
+        return Some(vec![
+            component_type_from_call(call).unwrap_or_else(|| Type::alias(COMPONENT_TYPE))
+        ]);
+    }
+
+    if !is_world_type_direct(receiver_type) || !matches!(method, "add" | "get" | "remove") {
+        return None;
+    }
+
+    Some(vec![component_argument_type
+        .and_then(component_value_type)
+        .unwrap_or(Type::Any)])
+}
+
+pub(crate) fn component_argument(call: &FunctionCall) -> Option<&Expression> {
+    call_argument(call, 1)
+}
+
+fn component_type_from_call(call: &FunctionCall) -> Option<Type> {
+    let Expression::TableConstructor(schema) = call_argument(call, 1)? else {
+        return None;
+    };
+    let value_type = component_value_type_from_schema(schema)?;
+
+    Some(component_type(value_type))
+}
+
+fn component_value_type_from_schema(schema: &TableConstructor) -> Option<Type> {
+    let mut fields = Vec::new();
+
+    for field in schema.fields().iter() {
+        let Field::NameKey { key, value, .. } = field else {
+            return None;
+        };
+        let Expression::String(type_name) = value else {
+            return None;
+        };
+        let type_name = token_text(type_name).trim_matches(['\'', '"']).to_owned();
+
+        fields.push((
+            token_text(key),
+            TableField::required(Type::named(type_name)),
+        ));
+    }
+
+    Some(Type::table(fields))
+}
+
+fn component_value_type(candidate: &Type) -> Option<Type> {
+    match candidate {
+        Type::Alias(name) if name == COMPONENT_TYPE => Some(Type::Any),
+        Type::Union(types) => {
+            let values = types
+                .iter()
+                .filter_map(component_value_type)
+                .collect::<Vec<_>>();
+
+            match values.len() {
+                0 => None,
+                1 => values.into_iter().next(),
+                _ => Some(Type::union(values)),
+            }
+        }
+        Type::Table(table) if table.nominal_identity() == Some(COMPONENT_TYPE) => table
+            .field(COMPONENT_VALUE_FIELD)
+            .map(|field| field.ty.clone()),
+        _ => None,
+    }
+}
+
+fn is_module_type_direct(candidate: &Type) -> bool {
+    candidate == &ecs_module_type()
+}
+
+fn is_world_type_direct(candidate: &Type) -> bool {
+    match candidate {
+        Type::Alias(name) => name == WORLD_TYPE,
+        Type::Table(_) => candidate == &world_type(),
+        Type::Union(types) => types.iter().any(is_world_type_direct),
+        _ => false,
+    }
+}
+
+fn call_argument(call: &FunctionCall, index: usize) -> Option<&Expression> {
+    call.suffixes().find_map(|suffix| match suffix {
+        Suffix::Call(Call::AnonymousCall(FunctionArgs::Parentheses { arguments, .. })) => {
+            arguments.iter().nth(index)
+        }
+        Suffix::Call(Call::MethodCall(method)) => match method.args() {
+            FunctionArgs::Parentheses { arguments, .. } => arguments.iter().nth(index),
+            _ => None,
+        },
+        _ => None,
+    })
 }
 
 fn system_type() -> Type {

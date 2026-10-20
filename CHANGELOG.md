@@ -15,6 +15,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Static ECS component schemas now flow through `world:get`, `world:add`, and
+  `world:remove` across module exports, providing payload hover, completion,
+  inlay hints, and field checking without repeated local annotations.
 - Undefined-variable `TL4004` diagnostics are now errors in Tua sources, giving
   misspelled or undeclared names red editor and file decorations, while plain
   Lua sources retain warning severity for runtime-provided global compatibility.

@@ -3720,6 +3720,8 @@ local ECS = require("ecs_state")
 local entity = ECS.<|player_hover|>player
 local world = ECS.<|world_hover|>world
 local component = ECS.<|component_hover|>Position
+local position = world:get(ECS.player, ECS.Position)
+local x: number = <|position_hover|>position.x
 world:destroy(ECS.player)
 -- file: src/ecs_state.tua
 local Position = ecs.component("Position", { x = "number", y = "number" })
@@ -3750,12 +3752,19 @@ return {
     let component_hover = snapshot
         .hover("src/main.tua", fixture.position("component_hover"))
         .expect("exported ECS component should hover");
+    let position_hover = snapshot
+        .hover("src/main.tua", fixture.position("position_hover"))
+        .expect("ECS component payload should hover");
 
     assert_eq!(hover.contents, "(field) ECS.player: EcsEntityId");
     assert_eq!(world_hover.contents, "(field) ECS.world: EcsWorld");
     assert_eq!(
         component_hover.contents,
         "(field) ECS.Position: EcsComponent"
+    );
+    assert_eq!(
+        position_hover.contents,
+        "local position: { x: number, y: number }"
     );
     let hint_labels = snapshot
         .inlay_hints("src/main.tua")
@@ -3772,6 +3781,10 @@ return {
     );
     assert!(
         hint_labels.contains(&": EcsComponent".to_owned()),
+        "{hint_labels:?}"
+    );
+    assert!(
+        hint_labels.contains(&": { x: number, y: number }".to_owned()),
         "{hint_labels:?}"
     );
     let diagnostics = snapshot.diagnostics("src/main.tua");

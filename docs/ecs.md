@@ -72,8 +72,10 @@ is also the callback data order. The callback receives the entity ID first and
 
 Tua completes the built-in module and its methods, shows named signatures and
 short API documentation, checks static component values, and reports unknown
-components in queries. Typing `ecs component` also offers a complete starter
-snippet.
+components in queries. Static component schemas also flow through `world:get`,
+`world:add`, and `world:remove`, including components exported by another Tua
+module, so returned values expose their fields without local annotations.
+Typing `ecs component` also offers a complete starter snippet.
 
 ## ECS Explorer
 
@@ -147,6 +149,10 @@ local isPositioned = world:has(enemy, Position)
 world:remove(enemy, Position)
 world:destroy(enemy)
 ```
+
+Here `position` is inferred as `{ x: number, y: number }` from `Position`.
+When a component or schema is assembled dynamically, Tua keeps the operation
+permissive and falls back to `any` instead of guessing a payload shape.
 
 A query can be reused without defining a system:
 

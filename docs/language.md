@@ -450,7 +450,8 @@ joysticks, and dynamic boundaries.
 The built-in `ecs` module provides typed components, worlds, systems, and
 queries without a package install or explicit `require`. Builds that use it
 write the bundled `tuaecs.lua` runtime, and **Tua: Show ECS Explorer** exposes
-the compiler's component and system model. See
+the compiler's component and system model. Static component schemas determine
+the payload returned by `world:get`, including across module exports. See
 [Entity Component Systems](ecs.md) for the full API and workflow.
 
 ## Primitive Types

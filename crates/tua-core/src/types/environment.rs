@@ -2991,11 +2991,11 @@ fn infer_function_call_return_types(
                 query.locals,
                 receiver_parts,
             ) {
-                if let Some(returns) = query
-                    .context
-                    .domains
-                    .method_return_types_from_direct_type(&receiver_type, function_call)
-                {
+                if let Some(returns) = query.context.domains.method_return_types_from_call(
+                    &receiver_type,
+                    function_call,
+                    |expression| query.type_of(expression),
+                ) {
                     return returns;
                 }
 
