@@ -742,6 +742,22 @@ impl AnalysisHost {
             return None;
         }
 
+        // Required-module fields need the project module graph and its
+        // environment-aware export types. The source-only hover fallback may
+        // read the module from disk and infer domain-derived exports as `any`,
+        // which would prevent the caller from reaching the authoritative
+        // snapshot query.
+        if dotted_chain_at_position(&parsed.source, position)
+            .and_then(|chain| chain.parts.first().map(|part| part.text.clone()))
+            .is_some_and(|root| {
+                require_bindings_for_parsed_source(parsed)
+                    .iter()
+                    .any(|binding| binding.alias == root)
+            })
+        {
+            return None;
+        }
+
         if !semantics.environment_diagnostics.is_empty() {
             return None;
         }

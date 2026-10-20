@@ -282,6 +282,40 @@ return {
         "function Legacy.describe(label: any, value: any): any",
     );
 }
+
+#[test]
+fn hover_preserves_inferred_ecs_types_from_required_module_exports() {
+    let temp = TempProject::new("required-ecs-module-hover");
+    let source = r#"local ECS = require("ecs_state")
+local world = ECS.world
+local velocity = world:get(ECS.player, ECS.VelocityComponent)
+"#;
+    let ecs_state = r#"local VelocityComponent = ecs.component("Velocity", { x = "number", y = "number" })
+local world = ecs.world()
+local player = world:create()
+
+return {
+  player = player,
+  VelocityComponent = VelocityComponent,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n[ecs]\nenabled = true\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/ecs_state.tua", ecs_state);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "player,"),
+        hover_request(3, &uri, source, "VelocityComponent)"),
+    ]);
+
+    assert_hover_contains(&output, 2, "(field) ECS.player: EcsEntityId");
+    assert_hover_contains(&output, 3, "(field) ECS.VelocityComponent: EcsComponent");
+}
+
 #[test]
 fn hover_renders_module_export_docs_and_module_path() {
     let temp = TempProject::new("documented-module-hover");

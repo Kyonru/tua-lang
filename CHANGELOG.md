@@ -15,6 +15,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Undefined-variable `TL4004` diagnostics are now errors in Tua sources, giving
+  misspelled or undeclared names red editor and file decorations, while plain
+  Lua sources retain warning severity for runtime-provided global compatibility.
+- Required-module exports now preserve inferred built-in domain aliases such as
+  `EcsEntityId`, `EcsWorld`, and `EcsComponent` in hover and inlay hints instead
+  of degrading them to `any` or expanded structural types.
 - Type-only imports referenced from anonymous function parameters and return
   annotations now resolve through project checking without leaving stale type
   mismatch diagnostics, while preserving imported table-field completion.

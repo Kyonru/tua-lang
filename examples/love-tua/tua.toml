@@ -16,6 +16,7 @@ backend = "tua"
 
 [diagnostics]
 rules = true
+undefined_variables = true
 missing_requires = true
 doc_annotations = true
 

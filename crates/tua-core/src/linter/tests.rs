@@ -1,7 +1,8 @@
 use crate::{
-    check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config, check_tua_source,
-    check_tua_source_with_diagnostics_config, parse_tua_source, DiagnosticCode, DiagnosticSeverity,
-    DiagnosticsConfig, EcsConfig, JitConfig,
+    check::check_parsed_source_with_asset_roots_diagnostics_jit_and_ecs_config,
+    check_parsed_source_with_diagnostics_config, check_tua_source,
+    check_tua_source_with_diagnostics_config, parse_lua_source, parse_tua_source, DiagnosticCode,
+    DiagnosticSeverity, DiagnosticsConfig, EcsConfig, JitConfig,
 };
 
 #[test]
@@ -2806,9 +2807,31 @@ ConfiguredGlobal()
         diagnostics[0].code,
         Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
     );
+    assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Error);
     assert!(diagnostics[0]
         .message
         .contains("undefined variable `missing`"));
+}
+
+#[test]
+fn undefined_variables_remain_warnings_in_lua_sources() {
+    let parsed = parse_lua_source("src/main.script", "return missing\n".to_owned())
+        .expect("Lua source should parse");
+    let diagnostics = check_parsed_source_with_diagnostics_config(
+        &parsed,
+        &DiagnosticsConfig {
+            undefined_variables: true,
+            ..diagnostics_without_standard_rules()
+        },
+    )
+    .expect_err("undefined Lua variable should report a diagnostic");
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(DiagnosticCode::LINT_UNDEFINED_VARIABLE)
+    );
+    assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Warning);
 }
 
 #[test]

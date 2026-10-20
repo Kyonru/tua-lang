@@ -118,7 +118,7 @@ enforced separately with `tua fmt --check`.
 | `TL4001` | A table constructor repeats a runtime-equivalent literal key, or a table type repeats a named field. | `duplicate_keys` |
 | `TL4002` | A static `require` or `import` target cannot be resolved. | `missing_requires` |
 | `TL4003` | An assignment writes a value back to the same variable or field. | `self_assignments` |
-| `TL4004` | A variable read has no known declaration or allowed global. | `undefined_variables` |
+| `TL4004` | A variable read has no known declaration or allowed global. Error in Tua; warning in Lua. | `undefined_variables` |
 | `TL4005` | A non-function local is declared but never used. | `unused_locals` |
 | `TL4006` | A function parameter is never used. | `unused_parameters` |
 | `TL4007` | A local is read before its declaration. | `use_before_definition` |

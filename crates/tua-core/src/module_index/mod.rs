@@ -15,6 +15,7 @@ use crate::module_link::ModuleSpecifierKind;
 use crate::parser::{LuaDocAnnotation, LuaDocAnnotationKind};
 use crate::project_model::ProjectModel;
 use crate::semantic::SemanticModel;
+use crate::semantic_domains::BuiltinDomainRegistry;
 use crate::types::{
     build_type_environment, deduplicate_inferred_types, function_type_from_tua_signature,
     FunctionParameter, FunctionType, TableField, Type, TypeEnvironment, TypedFunction,
@@ -911,6 +912,11 @@ fn resolve_export_aliases_inner(
 ) -> Type {
     match ty {
         Type::Alias(name) => {
+            if environment.alias(name).is_some_and(|resolved| {
+                BuiltinDomainRegistry::with_ecs(true).defines_alias(name, resolved)
+            }) {
+                return ty.clone();
+            }
             if !environment.is_class(name) && !expand_non_class_alias {
                 return ty.clone();
             }

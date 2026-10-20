@@ -3713,6 +3713,77 @@ return {
 }
 
 #[test]
+fn snapshot_hover_preserves_inferred_ecs_types_through_module_exports() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+local ECS = require("ecs_state")
+local entity = ECS.<|player_hover|>player
+local world = ECS.<|world_hover|>world
+local component = ECS.<|component_hover|>Position
+world:destroy(ECS.player)
+-- file: src/ecs_state.tua
+local Position = ecs.component("Position", { x = "number", y = "number" })
+local world = ecs.world()
+local player = world:create()
+
+return {
+  Position = Position,
+  world = world,
+  player = player,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let snapshot = host.snapshot();
+    let hover = snapshot
+        .hover("src/main.tua", fixture.position("player_hover"))
+        .expect("ECS-derived module export should hover");
+    let world_hover = snapshot
+        .hover("src/main.tua", fixture.position("world_hover"))
+        .expect("exported ECS world should hover");
+    let component_hover = snapshot
+        .hover("src/main.tua", fixture.position("component_hover"))
+        .expect("exported ECS component should hover");
+
+    assert_eq!(hover.contents, "(field) ECS.player: EcsEntityId");
+    assert_eq!(world_hover.contents, "(field) ECS.world: EcsWorld");
+    assert_eq!(
+        component_hover.contents,
+        "(field) ECS.Position: EcsComponent"
+    );
+    let hint_labels = snapshot
+        .inlay_hints("src/main.tua")
+        .into_iter()
+        .map(|hint| hint.label)
+        .collect::<Vec<_>>();
+    assert!(
+        hint_labels.contains(&": EcsEntityId".to_owned()),
+        "{hint_labels:?}"
+    );
+    assert!(
+        hint_labels.contains(&": EcsWorld".to_owned()),
+        "{hint_labels:?}"
+    );
+    assert!(
+        hint_labels.contains(&": EcsComponent".to_owned()),
+        "{hint_labels:?}"
+    );
+    let diagnostics = snapshot.diagnostics("src/main.tua");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != Some(DiagnosticCode::TYPE_MISMATCH)),
+        "exported ECS entity type should satisfy world methods: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn snapshot_diagnostics_follow_deprecated_lua_module_exports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

@@ -22,8 +22,8 @@ use crate::scope::{scope_map_parsed_source_with_globals, ScopeGlobalKind, ScopeR
 use crate::semantic::SemanticModel;
 use crate::types::{Type, TypeContext, TypeEnvironment};
 use crate::{
-    ecs, lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedSource, SourcePosition,
-    SourceSpan, TuaType,
+    ecs, lua, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedLanguage, ParsedSource,
+    SourcePosition, SourceSpan, TuaType,
 };
 
 mod class_rules;
@@ -1718,6 +1718,7 @@ impl<'a> SymbolAnalyzer<'a> {
             let diagnostic_index = self.diagnostics.len();
             self.diagnostics.push(undefined_variable_diagnostic(
                 &self.parsed.path,
+                self.parsed.raw.language,
                 position,
                 name,
             ));
@@ -2849,12 +2850,22 @@ fn self_assignment_diagnostic(path: &Path, variable: &Var, name: &str) -> Diagno
     .with_code(DiagnosticCode::LINT_SELF_ASSIGNMENT)
 }
 
-fn undefined_variable_diagnostic(path: &Path, position: SourcePosition, name: &str) -> Diagnostic {
+fn undefined_variable_diagnostic(
+    path: &Path,
+    language: ParsedLanguage,
+    position: SourcePosition,
+    name: &str,
+) -> Diagnostic {
+    let severity = match language {
+        ParsedLanguage::Lua => DiagnosticSeverity::Warning,
+        ParsedLanguage::Tua => DiagnosticSeverity::Error,
+    };
+
     Diagnostic::new(
         path,
         position.line,
         position.column,
-        DiagnosticSeverity::Warning,
+        severity,
         format!("undefined variable `{name}`"),
     )
     .with_code(DiagnosticCode::LINT_UNDEFINED_VARIABLE)

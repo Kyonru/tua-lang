@@ -74,6 +74,12 @@ impl BuiltinDomainRegistry {
             .collect()
     }
 
+    pub(crate) fn defines_alias(self, name: &str, ty: &Type) -> bool {
+        self.builtin_aliases()
+            .into_iter()
+            .any(|(alias, builtin_ty)| alias == name && &builtin_ty == ty)
+    }
+
     pub(crate) fn builtin_locals(self) -> Vec<(String, Type)> {
         if self.ecs_enabled {
             ecs::builtin_locals()

@@ -592,7 +592,7 @@ player:setFilter("")
         completion_request(4, uri, source, "setFilter(\""),
     ]);
 
-    assert_completion_labels(&output, 2, ["sin", "asin"]);
+    assert_completion_labels(&output, 2, ["sin", "sign", "asin"]);
     assert_completion_labels(&output, 3, ["print", "printf", "present", "newSpriteBatch"]);
     assert_completion_labels(&output, 4, ["linear", "nearest"]);
     assert_eq!(

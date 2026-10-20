@@ -52,6 +52,10 @@ retain concise declared names such as `Player`.
 
 Standard lint rules are published by default. Set `diagnostics.rules = false`
 (or use the `tua.diagnostics.rules` override) to disable them.
+Undefined-variable `TL4004` diagnostics are errors in Tua sources, so editors
+show misspelled or undeclared names as red file problems. They remain warnings
+in plain Lua sources, where runtime-provided globals are common; projects can
+declare accepted globals through `diagnostics.globals`.
 Formatting differences are not diagnostics; editor formatting and
 `tua fmt --check` use the separate formatter.
 

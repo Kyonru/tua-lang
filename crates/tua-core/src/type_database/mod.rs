@@ -274,6 +274,9 @@ impl ProjectTypeDatabase {
                 else {
                     return ty.clone();
                 };
+                if binding.origin == ProjectTypeOrigin::Builtin {
+                    return ty.clone();
+                }
                 let key = (binding.module_path.clone(), binding.name.clone());
 
                 if resolving.contains(&key) {

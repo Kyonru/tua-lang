@@ -348,7 +348,9 @@ inheritance, lexical bindings, and constructor-flow facts rather than emitted
 Lua.
 The unknown-global lint recognizes explicit global assignments and simple
 global function declarations anywhere in the current Tua file; runtime-provided
-and cross-file globals remain explicit project configuration.
+and cross-file globals remain explicit project configuration. An unresolved
+read is an error in Tua sources and a warning in plain Lua sources, preserving
+Lua interoperability without hiding Tua name typos from editor error markers.
 Builtin-global-write guidance resolves lexical bindings and protects direct
 writes to the Lua 5.1/LuaJIT, LOVE, and Tua helper globals modeled by the target.
 The exact `_` binding is a write-only placeholder: writes are accepted without

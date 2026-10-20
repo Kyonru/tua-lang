@@ -469,7 +469,7 @@ undefined_variables = true
                 == "table key `hp` is a duplicate; previously defined at column 18"
     }));
     assert!(diagnostics.iter().any(|diagnostic| {
-        diagnostic["severity"] == 2
+        diagnostic["severity"] == 1
             && diagnostic["code"] == "TL4004"
             && diagnostic["message"]
                 .as_str()
@@ -477,6 +477,92 @@ undefined_variables = true
                 .contains("undefined variable `missing`")
     }));
 }
+
+#[test]
+fn did_open_standard_rules_report_and_preserve_undefined_callback_variables() {
+    let temp = TempProject::new("standard-rules-undefined-callback-variable");
+
+    temp.write(
+        "tua.toml",
+        r#"
+source = "src"
+
+[diagnostics]
+rules = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let source = r#"local controller = input({ controls = {} })
+
+function love.update(dt)
+  controller:update()
+  local moveX, moveY = controls:get("move")
+end
+"#;
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+    ]);
+    let publications = diagnostics_publications(&output, &uri);
+    assert!(!publications.is_empty());
+    for publication in [publications[0], publications[publications.len() - 1]] {
+        let diagnostics = publication["params"]["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array");
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic["severity"] == 1
+                && diagnostic["code"] == "TL4004"
+                && diagnostic["message"] == "undefined variable `controls`"
+        }));
+    }
+}
+
+#[test]
+fn did_change_standard_rules_report_and_preserve_undefined_callback_variables() {
+    let temp = TempProject::new("standard-rules-edited-undefined-callback-variable");
+
+    temp.write(
+        "tua.toml",
+        r#"
+source = "src"
+
+[diagnostics]
+rules = true
+"#,
+    );
+
+    let uri = temp.uri_for("src/main.tua");
+    let original = r#"local controller = input({ controls = {} })
+
+function love.update(dt)
+  controller:update()
+  local moveX, moveY = controller:get("move")
+end
+"#;
+    let edited = original.replace("controller:get", "controls:get");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, original),
+        did_change(&uri, &edited, 2),
+    ]);
+    let publications = diagnostics_publications(&output, &uri);
+
+    assert!(publications.len() >= 3);
+    for publication in &publications[publications.len() - 2..] {
+        let diagnostics = publication["params"]["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array");
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic["severity"] == 1
+                && diagnostic["code"] == "TL4004"
+                && diagnostic["message"] == "undefined variable `controls`"
+        }));
+    }
+}
+
 #[test]
 fn did_change_republishes_empty_diagnostics_for_clean_document() {
     let uri = "file:///tmp/player.tua";
