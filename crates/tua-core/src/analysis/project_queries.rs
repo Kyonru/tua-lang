@@ -2044,6 +2044,9 @@ impl AnalysisSnapshot {
                     diagnostic.code != Some(crate::DiagnosticCode::TYPE_UNKNOWN_NAME)
                 });
                 diagnostics.extend(self.type_import_binding_diagnostics(parsed));
+                if self.config.ecs.enabled {
+                    diagnostics.extend(crate::ecs::diagnostics(parsed, &facts.environment));
+                }
 
                 diagnostics
             })

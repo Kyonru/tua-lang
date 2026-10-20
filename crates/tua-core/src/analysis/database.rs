@@ -500,7 +500,9 @@ fn build_analysis_file(
     if context.config.ecs.enabled {
         let _profile = profile::span_for_path("analysis.ecs.diagnostics", path);
 
-        diagnostics.extend(crate::ecs::diagnostics(path, &source));
+        if let (Ok(parsed), Some(semantics)) = (&parsed, &semantics) {
+            diagnostics.extend(crate::ecs::diagnostics(parsed, &semantics.environment));
+        }
     }
     let object_pool_index = {
         let _profile = profile::span_for_path("analysis.index.object_pool.file", path);

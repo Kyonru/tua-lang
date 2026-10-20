@@ -19,6 +19,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- ECS diagnostics now understand multiline calls, components exported from
+  other modules, and inferred or annotated component-value variables. Typed
+  pooled payloads no longer receive false missing-field or unknown-component
+  errors, while incompatible values still report `TL5002`.
 - Hover reference and implementation actions, including reference CodeLens
   clicks, now normalize VS Code and protocol-shaped locations before opening
   the references view, avoiding extension-host argument constraint failures.

@@ -72,10 +72,13 @@ is also the callback data order. The callback receives the entity ID first and
 
 Tua completes the built-in module and its methods, shows named signatures and
 short API documentation, checks static component values, and reports unknown
-components in queries. Static component schemas also flow through `world:get`,
-`world:add`, and `world:remove`, including components exported by another Tua
-module, so returned values expose their fields without local annotations.
-Typing `ecs component` also offers a complete starter snippet.
+components in queries. These checks use the parsed program and project type
+information, so declarations and calls may span lines, imported components are
+resolved through their module exports, and an inferred or annotated variable
+can be passed to `world:add`. Values whose type is genuinely dynamic remain
+permissive. Static component schemas also flow through `world:get`, `world:add`,
+and `world:remove`, so returned values expose their fields without local
+annotations. Typing `ecs component` also offers a complete starter snippet.
 
 ## ECS Explorer
 

@@ -3889,6 +3889,75 @@ return {
 }
 
 #[test]
+fn project_ecs_diagnostics_accept_imported_components_and_pooled_payloads() {
+    let fixture = Fixture::parse(
+        r#"-- file: src/main.tua
+import type Shared from "./types"
+local ECS = require("ecs_state")
+
+local payloads = objectPool({
+  create = function(): Shared.Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0 }
+  end,
+})
+local payload = payloads:acquire()
+
+ECS.world:add(
+  ECS.player,
+  ECS.Bullet,
+  payload
+)
+
+local movement = ecs.system(
+  ECS.world,
+  {
+    ECS.Bullet,
+  },
+  function(_, bullet: Shared.Bullet, dt: number)
+    bullet.x += bullet.dx * dt
+  end
+)
+-- file: src/ecs_state.tua
+local Bullet = ecs.component(
+  "Bullet",
+  { x = "number", y = "number", dx = "number", dy = "number" }
+)
+local world = ecs.world()
+local player = world:create()
+
+return {
+  Bullet = Bullet,
+  world = world,
+  player = player,
+}
+-- file: src/types.tua
+export type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+}
+"#,
+    );
+    let mut host = AnalysisHost::new();
+
+    host.set_source_roots([PathBuf::from("src")]);
+    for file in fixture.files() {
+        host.set_file(&file.path, file.source.clone());
+    }
+
+    let diagnostics = host.snapshot().pipeline_diagnostics("src/main.tua");
+
+    assert!(
+        diagnostics.iter().all(|diagnostic| !matches!(
+            diagnostic.code,
+            Some(DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE | DiagnosticCode::DOMAIN_ECS_QUERY)
+        )),
+        "imported components and typed pooled payloads should be accepted: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn snapshot_diagnostics_follow_deprecated_lua_module_exports() {
     let fixture = Fixture::parse(
         r#"-- file: src/main.tua

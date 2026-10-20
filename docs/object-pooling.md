@@ -145,7 +145,10 @@ ECS and pooling solve different problems:
     Do not use a pool as a second list of active entities. Let ECS queries own
     population iteration and use a pool only for values whose allocation cost
     is measurable, such as complex component payloads or external LOVE objects.
-    The built-in ECS already reuses destroyed numeric entity IDs.
+    The built-in ECS clears destroyed entities from component storage, but
+    allocates numeric entity IDs monotonically rather than recycling them.
+    Pool payloads only when their measured allocation cost justifies it; entity
+    IDs themselves do not need an object pool.
 
 The pool tracks object identity, active state, and ownership. Duplicate and
 foreign releases return `false`, making lifecycle mistakes observable without

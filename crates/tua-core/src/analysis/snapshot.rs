@@ -72,8 +72,16 @@ impl AnalysisSnapshot {
 
         let project_type_diagnostics = self.project_type_diagnostics(path.as_ref(), file);
         if self.project_type_check_required(file) {
-            diagnostics
-                .retain(|diagnostic| diagnostic.code != Some(crate::DiagnosticCode::TYPE_MISMATCH));
+            diagnostics.retain(|diagnostic| {
+                !matches!(
+                    diagnostic.code,
+                    Some(
+                        crate::DiagnosticCode::TYPE_MISMATCH
+                            | crate::DiagnosticCode::DOMAIN_ECS_COMPONENT_VALUE
+                            | crate::DiagnosticCode::DOMAIN_ECS_QUERY
+                    )
+                )
+            });
         }
         diagnostics.extend(project_type_diagnostics);
         diagnostics.extend(self.usage_index.signal_event_diagnostics(path.as_ref()));
