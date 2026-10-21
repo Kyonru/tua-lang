@@ -30,32 +30,79 @@ local ASYNC = "async"
 -- Compatibility for Lua 5.1 vs 5.2+.
 local unpack = unpack or table.unpack
 
-local function call_handler(handler, params)
+-- Callback names depend only on the state, so build each one once.
+local function name_cache(prefix)
+  return setmetatable({}, {
+    __index = function(cache, state)
+      local name = prefix .. state
+      cache[state] = name
+      return name
+    end,
+  })
+end
+
+local LEAVE = name_cache("onleave")
+local ENTER = name_cache("onenter")
+local ON = name_cache("on")
+
+-- Transitions without extra arguments call handlers directly; only extra
+-- arguments are kept in a table, so asynchronous resumption still sees them.
+local function call_handler(handler, self, name, from, to, extra)
   if handler then
-    return handler(unpack(params))
+    if extra == nil then
+      return handler(self, name, from, to)
+    end
+    return handler(self, name, from, to, unpack(extra, 1, extra.n))
   end
 end
 
 local function create_transition(name)
-  local can, to, from, params
+  local can, to, from, extra
   local beforeCallback = "onbefore" .. name
   local afterCallback = "onafter" .. name
   local eventCallback = "on" .. name
   local waitingOnLeave = name .. "WaitingOnLeave"
   local waitingOnEnter = name .. "WaitingOnEnter"
 
+  local step
+
+  -- Starting a transition checks `can` and records extra arguments here, so
+  -- the recursive steps below are not vararg calls. An asynchronous
+  -- resumption (`fsm:transition(name)`) keeps the original arguments.
   local function transition(self, ...)
-    if self.asyncState == NONE then
-      can, to = self:can(name)
-      if not can then
+    local state = self.asyncState
+    if state == waitingOnLeave or state == waitingOnEnter then
+      return step(self)
+    end
+    local interrupted = false
+    if state ~= NONE then
+      if not (string.find(state, "WaitingOnLeave") or string.find(state, "WaitingOnEnter")) then
+        self.currentTransitioningEvent = nil
         return false
       end
+      self.asyncState = NONE
+      interrupted = true
+    end
+    can, to = self:can(name)
+    if not can then
+      return interrupted
+    end
+    if select("#", ...) == 0 then
+      extra = nil
+    else
+      extra = { n = select("#", ...), ... }
+    end
+    local result = step(self)
+    return interrupted or result
+  end
+
+  function step(self)
+    if self.asyncState == NONE then
       from = self.current
-      params = { self, name, from, to, ... }
       self.currentTransitioningEvent = name
 
-      local beforeReturn = call_handler(self[beforeCallback], params)
-      local leaveReturn = call_handler(self["onleave" .. from], params)
+      local beforeReturn = call_handler(self[beforeCallback], self, name, from, to, extra)
+      local leaveReturn = call_handler(self[LEAVE[from]], self, name, from, to, extra)
 
       if beforeReturn == false or leaveReturn == false then
         self.currentTransitioningEvent = nil
@@ -65,37 +112,29 @@ local function create_transition(name)
       self.asyncState = waitingOnLeave
 
       if leaveReturn ~= ASYNC then
-        transition(self, ...)
+        step(self)
       end
 
       return true
     elseif self.asyncState == waitingOnLeave then
       self.current = to
 
-      local enterReturn = call_handler(self["onenter" .. to] or self["on" .. to], params)
+      local enterReturn = call_handler(self[ENTER[to]] or self[ON[to]], self, name, from, to, extra)
 
       self.asyncState = waitingOnEnter
 
       if enterReturn ~= ASYNC then
-        transition(self, ...)
+        step(self)
       end
 
       return true
-    elseif self.asyncState == waitingOnEnter then
-      call_handler(self[afterCallback] or self[eventCallback], params)
-      call_handler(self.onstatechange, params)
-      self.asyncState = NONE
-      self.currentTransitioningEvent = nil
-      return true
-    elseif string.find(self.asyncState, "WaitingOnLeave")
-        or string.find(self.asyncState, "WaitingOnEnter") then
-      self.asyncState = NONE
-      transition(self, ...)
-      return true
     end
 
+    call_handler(self[afterCallback] or self[eventCallback], self, name, from, to, extra)
+    call_handler(self.onstatechange, self, name, from, to, extra)
+    self.asyncState = NONE
     self.currentTransitioningEvent = nil
-    return false
+    return true
   end
 
   return transition

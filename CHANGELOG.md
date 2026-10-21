@@ -23,9 +23,17 @@ language or editor behavior, and migration notes call out those changes.
 ### Changed
 
 - The bundled state-machine runtime now rejects unavailable events before
-  building callback arguments and precomputes event-specific callback and async
-  state keys once per transition closure. Valid synchronous, deferred, resumed,
-  and cancelled transition behavior remains unchanged.
+  building callback arguments, precomputes event-specific callback and async
+  state keys once per transition closure, and caches per-state callback names.
+  Handlers receive their arguments directly instead of through a packed table,
+  and the transition phases recurse through a fixed-arity step, so LuaJIT can
+  compile them. Transitions without extra arguments no longer allocate. In the
+  included macOS arm64 LOVE 11.5.0 microbenchmark, a transition dropped from
+  about 265 ns to 6.5 ns with the JIT on and from about 320 ns to 280 ns with
+  it off. Extra arguments are now forwarded by count, so trailing `nil` values
+  reach every callback, including after a deferred transition resumes. Valid
+  synchronous, deferred, resumed, interrupted, and cancelled transition
+  behavior is otherwise unchanged.
 - Generated sprite sheets now share their precomputed marker-frame index across
   players, while child traversal uses an ordered instance array instead of
   repeating sheet-name lookups. Their normalized animations also clone frames,

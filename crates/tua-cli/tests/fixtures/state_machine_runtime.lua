@@ -118,3 +118,88 @@ do
   assert(machine:start("second") and machine.current == "running")
   assert(table.concat(payloads, ",") == "first,second")
 end
+
+-- Successful transitions without extra arguments call handlers directly, so a
+-- warmed loop of valid transitions is effectively allocation-free too.
+do
+  local entered = 0
+  local machine = stateMachine.create({
+    initial = "playing",
+    events = {
+      { name = "pause", from = "playing", to = "paused" },
+      { name = "resume", from = "paused", to = "playing" },
+    },
+    callbacks = { onenterpaused = function() entered = entered + 1 end },
+  })
+  assert(machine:pause() and machine:resume())
+
+  collectgarbage("collect")
+  collectgarbage("stop")
+  local before = collectgarbage("count")
+  for _ = 1, 10000 do
+    machine:pause()
+    machine:resume()
+  end
+  local allocatedKb = collectgarbage("count") - before
+  collectgarbage("restart")
+
+  assert(entered == 10001 and machine.current == "playing")
+  assert(allocatedKb < 32, string.format(
+    "10,000 valid transition pairs should allocate under 32 KB (got %.1f KB)", allocatedKb))
+end
+
+-- Extra arguments are forwarded by count, so nil holes and trailing values
+-- survive both synchronous calls and deferred resumption.
+do
+  local seen = {}
+  local pending = true
+  local machine = stateMachine.create({
+    initial = "idle",
+    events = { { name = "start", from = "idle", to = "running" } },
+    callbacks = {
+      onleaveidle = function(self, _, _, _, first, second, third)
+        seen[#seen + 1] = tostring(first) .. ":" .. tostring(second) .. ":" .. tostring(third)
+        if pending then pending = false; return self.ASYNC end
+      end,
+      onenterrunning = function(_, _, _, _, ...)
+        seen[#seen + 1] = "enter:" .. select("#", ...)
+      end,
+    },
+  })
+
+  assert(machine:start(nil, "b", nil))
+  assert(machine:transition("start"))
+  assert(machine.current == "running")
+  assert(table.concat(seen, ",") == "nil:b:nil,enter:3")
+end
+
+-- Starting another event while one is deferred abandons the deferred one and
+-- reports success, whether or not the new event can run.
+do
+  local machine = stateMachine.create({
+    initial = "idle",
+    events = {
+      { name = "start", from = "idle", to = "running" },
+      { name = "abort", from = "idle", to = "stopped" },
+      { name = "finish", from = "running", to = "done" },
+    },
+    callbacks = { onleaveidle = function(self, event) if event == "start" then return self.ASYNC end end },
+  })
+
+  assert(machine:start())
+  assert(machine.asyncState == "startWaitingOnLeave")
+  assert(machine:abort("why"))
+  assert(machine.current == "stopped" and machine.asyncState == machine.NONE)
+
+  local blocked = stateMachine.create({
+    initial = "idle",
+    events = {
+      { name = "start", from = "idle", to = "running" },
+      { name = "finish", from = "running", to = "done" },
+    },
+    callbacks = { onleaveidle = function(self) return self.ASYNC end },
+  })
+  assert(blocked:start())
+  assert(blocked:finish())
+  assert(blocked.current == "idle" and blocked.asyncState == blocked.NONE)
+end
