@@ -609,6 +609,9 @@ impl AnalysisHost {
 
     pub(crate) fn detached_clone_for_ephemeral_analysis(&self) -> Self {
         let mut detached = self.clone();
+        // Keep the VFS clone intact: its source-version allocator is shared by
+        // one VFS lineage, so coordinator and ephemeral edits cannot assign
+        // the same version to different effective sources.
         detached.completion_cache = Arc::new(Mutex::new(BTreeMap::new()));
         detached.completion_cache_stats = Arc::new(Mutex::new(CompletionCacheStats::default()));
         detached.definition_cache = Arc::new(Mutex::new(BTreeMap::new()));

@@ -11,10 +11,16 @@ use std::time::{Duration, Instant};
 
 use crate::{AnalysisSourceKind, SourcePosition, SourceSpan};
 
+#[cfg(any(test, feature = "test-fixture"))]
+#[doc(hidden)]
+pub mod corpus;
 pub mod eligibility;
 #[cfg(any(test, feature = "test-fixture"))]
 pub mod eval;
 mod recall;
+#[cfg(any(test, feature = "test-fixture"))]
+#[doc(hidden)]
+pub mod retrieval;
 mod semantic;
 mod validate;
 

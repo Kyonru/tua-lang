@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::module_index::resolve_module_specifier;
-use crate::module_index::resolve_type_module_specifier;
+use crate::project_model::ProjectModel;
 use crate::source_text::{byte_for_column, column_for_byte};
 use crate::{SourcePosition, SourceSpan};
 
@@ -17,18 +16,39 @@ pub fn module_links_tua_source(
 ) -> Vec<ModuleLink> {
     let path = path.as_ref();
     let source = source.into();
-    let (type_imports, _) = crate::parser::scan_type_imports(path, &source);
+    let Ok(project_model) = ProjectModel::load_for_path(path) else {
+        return Vec::new();
+    };
+    let literals = module_specifier_literals(&source);
 
-    module_specifier_literals(&source)
-        .into_iter()
+    resolve_module_specifier_literals(path, &literals, &project_model).links
+}
+
+/// Resolves already-extracted literals against a caller-owned project model.
+///
+/// Unlike [`module_links_tua_source`], this never discovers or loads project
+/// configuration. Resolution through the supplied model may still probe the
+/// filesystem, so background callers should store this result and request-time
+/// code should consume that stored value rather than call this function.
+pub(crate) fn resolve_module_specifier_literals(
+    path: &Path,
+    literals: &[ModuleSpecifierLiteral],
+    project_model: &ProjectModel,
+) -> ResolvedModuleSpecifiers {
+    let links = literals
+        .iter()
         .filter_map(|literal| {
-            let type_only = type_imports.iter().any(|import| {
-                import.module == literal.module && import.module_span == literal.span
-            });
-            let target = if type_only {
-                resolve_type_module_specifier(path, &literal.module)
+            let target = if literal.type_only {
+                project_model.resolve_type_imported_module(path, &literal.module)
             } else {
-                resolve_module_specifier(path, &literal.module, literal.kind)
+                match literal.kind {
+                    ModuleSpecifierKind::Require => {
+                        project_model.resolve_required_module(path, &literal.module)
+                    }
+                    ModuleSpecifierKind::Import => {
+                        project_model.resolve_imported_module(path, &literal.module)
+                    }
+                }
             }?;
 
             Some(ModuleLink {
@@ -36,7 +56,24 @@ pub fn module_links_tua_source(
                 target,
             })
         })
-        .collect()
+        .collect();
+    let mut identities = literals
+        .iter()
+        .map(ModuleSpecifierLiteral::identity)
+        .collect::<Vec<_>>();
+    identities.sort();
+    identities.dedup();
+
+    ResolvedModuleSpecifiers { links, identities }
+}
+
+pub(crate) struct ResolvedModuleSpecifiers {
+    pub links: Vec<ModuleLink>,
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "consumed by Phase 2 corpus adoption")
+    )]
+    pub identities: Vec<ModuleSpecifierIdentity>,
 }
 
 #[cfg(test)]
@@ -55,7 +92,7 @@ pub(crate) fn module_specifier_at_position(
         .find(|literal| contains_position(literal.span, position))
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ModuleSpecifierKind {
     Require,
     Import,
@@ -78,7 +115,36 @@ impl ModuleSpecifierKind {
 pub(crate) struct ModuleSpecifierLiteral {
     pub module: String,
     pub kind: ModuleSpecifierKind,
+    pub type_only: bool,
     pub span: SourceSpan,
+}
+
+impl ModuleSpecifierLiteral {
+    fn identity(&self) -> ModuleSpecifierIdentity {
+        ModuleSpecifierIdentity {
+            module: self.module.clone(),
+            kind: self.kind,
+            type_only: self.type_only,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct ModuleSpecifierIdentity {
+    pub module: String,
+    pub kind: ModuleSpecifierKind,
+    pub type_only: bool,
+}
+
+#[cfg(test)]
+fn module_specifier_identities(source: &str) -> Vec<ModuleSpecifierIdentity> {
+    let mut identities = module_specifier_literals(source)
+        .into_iter()
+        .map(|literal| literal.identity())
+        .collect::<Vec<_>>();
+    identities.sort();
+    identities.dedup();
+    identities
 }
 
 pub(crate) fn module_specifier_literals(source: &str) -> Vec<ModuleSpecifierLiteral> {
@@ -100,11 +166,14 @@ pub(crate) fn module_specifier_literals(source: &str) -> Vec<ModuleSpecifierLite
             .map(|import| ModuleSpecifierLiteral {
                 module: import.module,
                 kind: ModuleSpecifierKind::Import,
+                type_only: true,
                 span: import.module_span,
             }),
     );
     literals.sort_by_key(|literal| (literal.span.start.line, literal.span.start.column));
-    literals.dedup_by(|left, right| left.span == right.span && left.kind == right.kind);
+    literals.dedup_by(|left, right| {
+        left.span == right.span && left.kind == right.kind && left.type_only == right.type_only
+    });
     literals
 }
 
@@ -233,6 +302,7 @@ fn module_specifier_literal_after(
     Some(ModuleSpecifierLiteral {
         module: line[module_start..quote_end].to_owned(),
         kind,
+        type_only: false,
         span: SourceSpan {
             start: SourcePosition {
                 line: line_number,
@@ -395,7 +465,9 @@ fn position_key(position: SourcePosition) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::project_model::ProjectModelOptions;
     use crate::source_text::position_at;
+    use crate::vfs::ModulePathSeparator;
     use std::fs;
     use std::path::PathBuf;
     use std::process;
@@ -507,6 +579,149 @@ local Missing = import("./missing")
         assert_eq!(links.len(), 2);
         assert_eq!(links[0].target, temp.path.join("src/player.tua"));
         assert_eq!(links[1].target, temp.path.join("src/shared/init.lua"));
+    }
+
+    #[test]
+    fn supplied_project_model_matches_compatibility_module_resolution() {
+        let temp = TempProject::new("shared-module-resolution");
+        let source = r#"local Player = require("player")
+local Shared = import("./shared")
+import type Types from "./types"
+local Missing = require("missing")
+"#;
+        let main = temp.path.join("src/main.tua");
+
+        temp.write("tua.toml", "source = \"src\"\n");
+        temp.write("src/main.tua", source);
+        temp.write("src/player.tua", "return {}\n");
+        temp.write("src/enemy.tua", "return {}\n");
+        temp.write("src/shared/init.lua", "return {}\n");
+        temp.write("src/types.d.tua", "export type Id = number\n");
+
+        let project_model = ProjectModel::load([temp.path.clone()]).expect("project model");
+        let literals = module_specifier_literals(source);
+        let supplied = resolve_module_specifier_literals(&main, &literals, &project_model);
+        let compatibility = module_links_tua_source(&main, source);
+
+        assert_eq!(supplied.links, compatibility);
+        assert_eq!(
+            supplied
+                .links
+                .iter()
+                .map(|link| link.target.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                temp.path.join("src/player.tua"),
+                temp.path.join("src/shared/init.lua"),
+                temp.path.join("src/types.d.tua"),
+            ]
+        );
+        assert!(literals[2].type_only);
+
+        let changed_source = source.replace("require(\"player\")", "require(\"enemy\")");
+        let changed = resolve_module_specifier_literals(
+            &main,
+            &module_specifier_literals(&changed_source),
+            &project_model,
+        );
+        assert_eq!(changed.links[0].target, temp.path.join("src/enemy.tua"));
+        assert_eq!(supplied.links[0].target, temp.path.join("src/player.tua"));
+        assert_ne!(supplied.identities, changed.identities);
+    }
+
+    #[test]
+    fn supplied_model_honors_project_roots_separator_and_declaration_only_imports() {
+        let temp = TempProject::new("configured-shared-module-resolution");
+        let source = r#"local Player = require("entities/player")
+local WrongSeparator = require("entities.player")
+local RuntimeContract = import("./contract")
+import type Contract from "./contract"
+import type Missing from "./missing"
+"#;
+        let main = temp.path.join("game/systems/main.tua");
+
+        temp.write("tua.toml", "source = \"game\"\n");
+        temp.write("game/systems/main.tua", source);
+        temp.write("game/entities/player.tua", "return {}\n");
+        temp.write(
+            "game/systems/contract.d.tua",
+            "export type Contract = { id: number }\n",
+        );
+
+        let project_model = ProjectModel::load_with_options(ProjectModelOptions {
+            workspace_folders: vec![temp.path.clone()],
+            require_path_separator: ModulePathSeparator::Slash,
+            ..ProjectModelOptions::default()
+        })
+        .expect("configured project model");
+        let resolved = resolve_module_specifier_literals(
+            &main,
+            &module_specifier_literals(source),
+            &project_model,
+        );
+
+        assert_eq!(
+            resolved
+                .links
+                .iter()
+                .map(|link| link.target.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                temp.path.join("game/entities/player.tua"),
+                temp.path.join("game/systems/contract.d.tua"),
+            ]
+        );
+        assert_eq!(
+            resolved
+                .identities
+                .iter()
+                .map(|identity| { (identity.module.as_str(), identity.kind, identity.type_only,) })
+                .collect::<Vec<_>>(),
+            vec![
+                ("./contract", ModuleSpecifierKind::Import, false),
+                ("./contract", ModuleSpecifierKind::Import, true),
+                ("./missing", ModuleSpecifierKind::Import, true),
+                ("entities.player", ModuleSpecifierKind::Require, false),
+                ("entities/player", ModuleSpecifierKind::Require, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn specifier_identity_changes_only_with_module_semantics() {
+        let original = r#"local Player = require("player")
+import type Types from "./types"
+"#;
+        let shifted_and_reordered = r#"-- an unrelated edit moves both literals
+import type Types from "./types"
+
+local Player = require("player")
+"#;
+        let duplicated = r#"local Player = require("player")
+local SamePlayer = require("player")
+import type Types from "./types"
+"#;
+        let changed_target = original.replace("player", "enemy");
+        let changed_import_kind = r#"local Player = require("player")
+local Types = import("./types")
+"#;
+
+        assert_eq!(
+            module_specifier_identities(original),
+            module_specifier_identities(shifted_and_reordered)
+        );
+        assert_eq!(
+            module_specifier_identities(original),
+            module_specifier_identities(duplicated)
+        );
+        assert_ne!(
+            module_specifier_identities(original),
+            module_specifier_identities(&changed_target)
+        );
+        assert_ne!(
+            module_specifier_identities(original),
+            module_specifier_identities(changed_import_kind)
+        );
     }
 
     struct TempProject {

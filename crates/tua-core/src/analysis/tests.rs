@@ -18,6 +18,46 @@ fn analysis_snapshots_are_send_and_sync() {
     assert_send_and_sync::<AnalysisSnapshot>();
 }
 
+#[test]
+fn detached_ephemeral_clone_keeps_vfs_allocator_while_resetting_caches() {
+    let path = PathBuf::from("src/main.tua");
+    let mut coordinator = AnalysisHost::new();
+    coordinator.set_file(&path, "return 1\n");
+    let _ = coordinator.snapshot();
+    assert!(coordinator.cached_snapshot().is_some());
+
+    let mut detached = coordinator.detached_clone_for_ephemeral_analysis();
+    assert!(detached.cached_snapshot().is_none());
+    assert!(!Arc::ptr_eq(
+        &coordinator.completion_cache,
+        &detached.completion_cache
+    ));
+    assert!(!Arc::ptr_eq(
+        &coordinator.completion_cache_stats,
+        &detached.completion_cache_stats
+    ));
+    assert!(!Arc::ptr_eq(
+        &coordinator.definition_cache,
+        &detached.definition_cache
+    ));
+    assert!(!Arc::ptr_eq(
+        &coordinator.module_path_index_cache,
+        &detached.module_path_index_cache
+    ));
+    assert!(!Arc::ptr_eq(
+        &coordinator.snapshot_cache,
+        &detached.snapshot_cache
+    ));
+
+    coordinator.set_file(&path, "return 2\n");
+    let coordinator_version = coordinator.vfs.source_version(&path).unwrap();
+    detached.open_document(&path, "return 3\n");
+    let detached_version = detached.vfs.source_version(&path).unwrap();
+
+    assert_ne!(coordinator_version, detached_version);
+    assert!(detached_version > coordinator_version);
+}
+
 impl TempProject {
     fn new(name: &str) -> Self {
         let unique = SystemTime::now()

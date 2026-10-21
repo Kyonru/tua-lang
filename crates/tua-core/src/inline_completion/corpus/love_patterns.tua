@@ -1,0 +1,39 @@
+local image = love.graphics.newImage("assets/player.png")
+local position = vec2(0, 0)
+local velocity = vec2(0, 0)
+
+function love.load()
+end
+
+function love.update(dt: number)
+  position.x += velocity.x * dt
+  position.y += velocity.y * dt
+end
+
+function love.draw()
+  love.graphics.push()
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.draw(image, position.x, position.y)
+  love.graphics.pop()
+end
+
+function love.keypressed(key: string)
+end
+
+final class Player {
+  x: number = 0
+  y: number = 0
+}
+
+local flow = stateMachine({
+  initial = "playing",
+  events = {
+    { name = "pause", from = "playing", to = "paused" },
+    { name = "resume", from = "paused", to = "playing" },
+  },
+})
+
+return {
+  Player = Player,
+  flow = flow,
+}

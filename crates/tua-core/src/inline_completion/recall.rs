@@ -167,7 +167,7 @@ fn continuations<'a>(
     Some(ranked)
 }
 
-fn normalize(text: &str) -> (String, Vec<usize>) {
+pub(super) fn normalize(text: &str) -> (String, Vec<usize>) {
     let mut normalized = String::with_capacity(text.len());
     let mut origins = Vec::with_capacity(text.len());
     let mut in_space = false;
@@ -188,7 +188,7 @@ fn normalize(text: &str) -> (String, Vec<usize>) {
     (normalized, origins)
 }
 
-fn continuation_after<'line>(line: &'line str, prefix: &str) -> Option<&'line str> {
+pub(super) fn continuation_after<'line>(line: &'line str, prefix: &str) -> Option<&'line str> {
     let indent = line.len() - line.trim_start().len();
     let body = &line[indent..];
     let (normalized, origins) = normalize(body);

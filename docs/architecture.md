@@ -86,6 +86,12 @@ corresponding analysis files. An open document overlay takes precedence over
 the disk copy until the document closes, so editor requests always analyze the
 text the user can see.
 
+Each path's effective visible source and source kind has a monotonic VFS
+version. A VFS lineage shares its allocator across worker and ephemeral host
+clones, while snapshots freeze the version they observed. Identical updates
+retain the version; changing the visible overlay or disk value receives a new
+one. Do not detach this allocator when resetting clone-local analysis caches.
+
 Paths are normalized before they become analysis identities. Module, symbol,
 asset, and reverse-reference indexes should use those normalized identities
 instead of retaining ad hoc path strings.

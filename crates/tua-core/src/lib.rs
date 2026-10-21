@@ -258,7 +258,7 @@ pub use types::{
 pub use vfs::{
     file_uri_from_path, module_name_for_path, normalize_path, path_from_file_uri,
     ModulePathSeparator, VfsFile, VfsFileId, VfsOptions, VfsSnapshot, VfsSourceKind,
-    VirtualFileSystem,
+    VfsSourceVersion, VirtualFileSystem,
 };
 pub use workspace_symbol::{
     workspace_symbols_from_dir, workspace_symbols_from_files, WorkspaceSymbol, WorkspaceSymbolKind,

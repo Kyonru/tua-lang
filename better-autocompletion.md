@@ -836,7 +836,12 @@ replay, cache-hit, or parse-distribution prerequisites above.
 
 ## Phase 2: Immutable project retrieval
 
-Add project-wide exact line/example retrieval only after Phase 1 passes.
+Project-wide exact retrieval may be implemented and measured as experimental
+gate-development when Phase 1 evidence shows that current-file-only recall is
+the limiting source. It must remain disabled and must not consume the frozen
+held-out sets or be described as an accepted phase until the aggregate Phase 1
+gate passes. This exception lets the tuning set test whether project evidence
+actually closes the known Tua coverage gap without weakening any release gate.
 
 ### Prerequisite: per-file VFS versions
 

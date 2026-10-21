@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VfsSourceKind {
@@ -26,6 +28,8 @@ pub struct VirtualFileSystem {
     options: VfsOptions,
     disk_files: BTreeMap<PathBuf, VfsFileSource>,
     open_files: BTreeMap<PathBuf, VfsFileSource>,
+    effective_versions: BTreeMap<PathBuf, VfsSourceVersion>,
+    version_allocator: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Debug)]
@@ -43,10 +47,22 @@ pub struct VfsFile {
     path: PathBuf,
     source: String,
     kind: VfsSourceKind,
+    version: VfsSourceVersion,
     open: bool,
 }
 
-#[derive(Clone, Debug)]
+/// A monotonic identity for one path's effective source and kind inside a VFS
+/// lineage. Versions from independent VFS instances are not comparable.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VfsSourceVersion(u64);
+
+impl VfsSourceVersion {
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct VfsFileSource {
     source: String,
     kind: VfsSourceKind,
@@ -83,20 +99,24 @@ impl VirtualFileSystem {
         kind: VfsSourceKind,
     ) -> Option<VfsFileId> {
         let path = normalize_path(path);
+        let source = VfsFileSource {
+            source: source.into(),
+            kind,
+        };
 
         if self.is_excluded(&path) {
             self.disk_files.remove(&path);
             self.open_files.remove(&path);
+            self.effective_versions.remove(&path);
             return None;
         }
 
-        self.disk_files.insert(
-            path.clone(),
-            VfsFileSource {
-                source: source.into(),
-                kind,
-            },
-        );
+        let effective_changed =
+            !self.open_files.contains_key(&path) && self.disk_files.get(&path) != Some(&source);
+        self.disk_files.insert(path.clone(), source);
+        if effective_changed {
+            self.assign_effective_version(&path);
+        }
 
         Some(VfsFileId(path))
     }
@@ -123,19 +143,24 @@ impl VirtualFileSystem {
         kind: VfsSourceKind,
     ) -> Option<VfsFileId> {
         let path = normalize_path(path);
+        let source = VfsFileSource {
+            source: source.into(),
+            kind,
+        };
 
         if self.is_excluded(&path) {
             self.open_files.remove(&path);
+            if !self.disk_files.contains_key(&path) {
+                self.effective_versions.remove(&path);
+            }
             return None;
         }
 
-        self.open_files.insert(
-            path.clone(),
-            VfsFileSource {
-                source: source.into(),
-                kind,
-            },
-        );
+        let effective_changed = self.effective_source(&path) != Some(&source);
+        self.open_files.insert(path.clone(), source);
+        if effective_changed {
+            self.assign_effective_version(&path);
+        }
 
         Some(VfsFileId(path))
     }
@@ -156,7 +181,19 @@ impl VirtualFileSystem {
     }
 
     pub fn close_file(&mut self, path: impl AsRef<Path>) {
-        self.open_files.remove(&normalize_path(path));
+        let path = normalize_path(path);
+        let effective_changed = self
+            .open_files
+            .get(&path)
+            .is_some_and(|open| self.disk_files.get(&path).is_none_or(|disk| disk != open));
+        self.open_files.remove(&path);
+        if effective_changed {
+            if self.disk_files.contains_key(&path) {
+                self.assign_effective_version(&path);
+            } else {
+                self.effective_versions.remove(&path);
+            }
+        }
     }
 
     pub fn remove_file(&mut self, path: impl AsRef<Path>) {
@@ -164,6 +201,7 @@ impl VirtualFileSystem {
 
         self.disk_files.remove(&path);
         self.open_files.remove(&path);
+        self.effective_versions.remove(&path);
     }
 
     pub fn file_id(&self, path: impl AsRef<Path>) -> Option<VfsFileId> {
@@ -191,6 +229,11 @@ impl VirtualFileSystem {
             .map(|file| file.kind)
     }
 
+    /// Version of the effective open-overlay-or-disk source and kind.
+    pub fn source_version(&self, path: impl AsRef<Path>) -> Option<VfsSourceVersion> {
+        self.effective_versions.get(&normalize_path(path)).copied()
+    }
+
     pub fn paths(&self) -> BTreeSet<PathBuf> {
         let mut paths = self
             .disk_files
@@ -213,15 +256,27 @@ impl VirtualFileSystem {
         let mut files = BTreeMap::new();
 
         for (path, source) in &self.disk_files {
-            if !self.is_excluded(path) {
-                files.insert(path.clone(), vfs_file(path, source, false));
+            if self.is_excluded(path) || self.open_files.contains_key(path) {
+                continue;
             }
+            let version = self
+                .effective_versions
+                .get(path)
+                .copied()
+                .expect("visible VFS path should have an effective source version");
+            files.insert(path.clone(), vfs_file(path, source, version, false));
         }
 
         for (path, source) in &self.open_files {
-            if !self.is_excluded(path) {
-                files.insert(path.clone(), vfs_file(path, source, true));
+            if self.is_excluded(path) {
+                continue;
             }
+            let version = self
+                .effective_versions
+                .get(path)
+                .copied()
+                .expect("visible VFS path should have an effective source version");
+            files.insert(path.clone(), vfs_file(path, source, version, true));
         }
 
         VfsSnapshot {
@@ -237,10 +292,31 @@ impl VirtualFileSystem {
             .retain(|path, _| !is_excluded_with_options(path, &options));
         self.open_files
             .retain(|path, _| !is_excluded_with_options(path, &options));
+        let disk_files = &self.disk_files;
+        let open_files = &self.open_files;
+        self.effective_versions
+            .retain(|path, _| disk_files.contains_key(path) || open_files.contains_key(path));
     }
 
     fn is_excluded(&self, path: &Path) -> bool {
         is_excluded_with_options(path, &self.options)
+    }
+
+    fn effective_source(&self, path: &Path) -> Option<&VfsFileSource> {
+        self.open_files
+            .get(path)
+            .or_else(|| self.disk_files.get(path))
+    }
+
+    fn assign_effective_version(&mut self, path: &Path) {
+        let previous = self
+            .version_allocator
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |version| {
+                version.checked_add(1)
+            })
+            .expect("VFS source version allocator exhausted");
+        self.effective_versions
+            .insert(path.to_owned(), VfsSourceVersion(previous + 1));
     }
 }
 
@@ -263,6 +339,11 @@ impl VfsSnapshot {
 
     pub fn source(&self, path: impl AsRef<Path>) -> Option<&str> {
         self.file(path).map(VfsFile::source)
+    }
+
+    /// Frozen effective-source version captured by this snapshot.
+    pub fn source_version(&self, path: impl AsRef<Path>) -> Option<VfsSourceVersion> {
+        self.file(path).map(VfsFile::version)
     }
 
     pub fn is_open(&self, path: impl AsRef<Path>) -> bool {
@@ -293,6 +374,11 @@ impl VfsFile {
 
     pub fn kind(&self) -> VfsSourceKind {
         self.kind
+    }
+
+    /// Frozen effective-source version captured for this file.
+    pub fn version(&self) -> VfsSourceVersion {
+        self.version
     }
 
     pub fn is_open(&self) -> bool {
@@ -397,7 +483,7 @@ pub fn module_name_for_path(
     })
 }
 
-fn vfs_file(path: &Path, source: &VfsFileSource, open: bool) -> VfsFile {
+fn vfs_file(path: &Path, source: &VfsFileSource, version: VfsSourceVersion, open: bool) -> VfsFile {
     let path = normalize_path(path);
 
     VfsFile {
@@ -405,6 +491,7 @@ fn vfs_file(path: &Path, source: &VfsFileSource, open: bool) -> VfsFile {
         path,
         source: source.source.clone(),
         kind: source.kind,
+        version,
         open,
     }
 }

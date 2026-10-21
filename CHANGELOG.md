@@ -8,6 +8,13 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Added the disabled-by-design Phase 2 inline-retrieval foundation: monotonic
+  effective-source versions shared across VFS clones, a background-only module
+  resolver that accepts an already-loaded project model, collision-safe
+  immutable exact-prefix tables with explicit byte caps, and a small
+  parseable Lua/LÖVE corpus. These primitives are currently exposed only to
+  tests and the offline evaluator; no project-wide completion source is
+  enabled yet.
 - Experimental deterministic inline completion can now suggest one locally
   validated ghost-text item from Tua's existing statement snippets or repeated
   lines in the current file. It is opt-in through
