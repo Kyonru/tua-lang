@@ -134,6 +134,11 @@ and can hide ownership mistakes. Ordinary tables are usually clearer for
 infrequent allocations, long-lived objects, configuration, scenes, and UI.
 Measure the real game before and after introducing a pool.
 
+The bundled pool keeps an explicit free-stack count and one identity-state map,
+so a warmed `acquire`/`release` pair creates no garbage and does not rely on
+Lua's table-length search. This only becomes important at thousands of pool
+operations per frame; object construction and reset cost usually dominate.
+
 ## Pooling And ECS
 
 ECS and pooling solve different problems:

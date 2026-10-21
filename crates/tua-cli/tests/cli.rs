@@ -1301,6 +1301,26 @@ fn signal_runtime_uses_copy_on_write_listener_versions() {
 }
 
 #[test]
+fn object_pool_runtime_uses_explicit_counts_and_one_state_map() {
+    let lua = Command::new("lua").arg("-v").output();
+    if lua.is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/object_pool_runtime.lua"))
+        .arg(&root)
+        .output()
+        .expect("failed to run object pool runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn fused_vec2_arithmetic_matches_brinevector_results() {
     let temp = TempDir::new("vec2-fusion-runtime");
 

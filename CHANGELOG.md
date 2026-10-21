@@ -19,6 +19,11 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The bundled object-pool runtime now uses an explicit free-stack count and one
+  identity-state table instead of Lua's table-length search plus separate
+  ownership and activity maps. Warmed acquire/release cycles remain
+  allocation-free while retaining foreign-object, duplicate-release, reset,
+  prewarm, disposal, and capacity behavior.
 - The bundled signal runtime now emits directly from a stable listener version
   instead of copying the listener list for every event. Subscribing or
   unsubscribing during an emit uses copy-on-write, so the active emit keeps its

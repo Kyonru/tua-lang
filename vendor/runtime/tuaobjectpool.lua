@@ -8,17 +8,17 @@ local function objectPool(options)
   local reset = options.reset
   local dispose = options.dispose
   local available = {}
-  local active = {}
-  local owned = {}
+  -- A missing entry is foreign, true is active, and false is available.
+  local state = {}
+  local availableCount = 0
   local activeCount = 0
   local capacity = 0
 
   local function createObject()
     local object = create()
     assert(object ~= nil, "objectPool options.create returned nil")
-    assert(not owned[object], "objectPool options.create returned an object already owned by this pool")
+    assert(state[object] == nil, "objectPool options.create returned an object already owned by this pool")
 
-    owned[object] = true
     capacity = capacity + 1
     return object
   end
@@ -26,23 +26,23 @@ local function objectPool(options)
   local pool = {}
 
   function pool:acquire()
-    local last = #available
     local object
 
-    if last > 0 then
-      object = available[last]
-      available[last] = nil
+    if availableCount > 0 then
+      object = available[availableCount]
+      available[availableCount] = nil
+      availableCount = availableCount - 1
     else
       object = createObject()
     end
 
-    active[object] = true
+    state[object] = true
     activeCount = activeCount + 1
     return object
   end
 
   function pool:release(object)
-    if not owned[object] or not active[object] then
+    if state[object] ~= true then
       return false
     end
 
@@ -50,9 +50,10 @@ local function objectPool(options)
       reset(object)
     end
 
-    active[object] = nil
+    state[object] = false
     activeCount = activeCount - 1
-    available[#available + 1] = object
+    availableCount = availableCount + 1
+    available[availableCount] = object
     return true
   end
 
@@ -60,8 +61,11 @@ local function objectPool(options)
     assert(type(count) == "number" and count >= 0 and count == math.floor(count), "objectPool prewarm count must be a non-negative integer")
 
     local created = 0
-    while #available < count do
-      available[#available + 1] = createObject()
+    while availableCount < count do
+      local object = createObject()
+      state[object] = false
+      availableCount = availableCount + 1
+      available[availableCount] = object
       created = created + 1
     end
 
@@ -70,20 +74,20 @@ local function objectPool(options)
 
   function pool:clear()
     if dispose then
-      for object in pairs(owned) do
+      for object in pairs(state) do
         dispose(object)
       end
     end
 
     available = {}
-    active = {}
-    owned = {}
+    state = {}
+    availableCount = 0
     activeCount = 0
     capacity = 0
   end
 
   function pool:owns(object)
-    return owned[object] == true
+    return state[object] ~= nil
   end
 
   function pool:activeCount()
@@ -91,7 +95,7 @@ local function objectPool(options)
   end
 
   function pool:availableCount()
-    return #available
+    return availableCount
   end
 
   function pool:capacity()
