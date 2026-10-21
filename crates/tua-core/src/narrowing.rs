@@ -285,6 +285,20 @@ fn condition_narrowings(condition: &Expression) -> Vec<TypeNarrowing> {
                 .chain(equality_narrowing(rhs, binop, lhs))
                 .collect()
         }
+        // Both operands of `and` hold when the whole condition does.
+        Expression::BinaryOperator {
+            lhs,
+            binop: ast::BinOp::And(_),
+            rhs,
+        } => condition_narrowings(lhs)
+            .into_iter()
+            .chain(condition_narrowings(rhs))
+            .collect(),
+        // A truthy value is not nil. It may still be `true`, so booleans stay.
+        Expression::Var(Var::Name(name)) => vec![TypeNarrowing {
+            name: token_text(name),
+            kind: TypeNarrowingKind::NonNil,
+        }],
         Expression::FunctionCall(function_call) => runtime_type_check_narrowing(function_call)
             .into_iter()
             .collect(),

@@ -234,6 +234,23 @@ local function playerName(player: Player | nil): string
 end
 ```
 
+A plain truthiness check narrows the same way, and both sides of `and` are
+narrowed together:
+
+```tua
+local voice = audio:play("engine")
+if voice then
+  voice:fadeTo(0.8, 0.5)
+end
+
+if player and target then
+  aim(player.position, target.position)
+end
+```
+
+A truthy value can still be `true`, so truthiness removes `nil` but keeps
+`boolean`. The `else` branch keeps the original type.
+
 Use `value is Type` when Tua can emit an equivalent runtime identity check:
 
 ```tua

@@ -119,6 +119,22 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Declared sprite sheets and players are now assignable to the built-in
+  `SpriteSheet` and `SpritePlayer` types. Nested clips such as
+  `children = { hat = { sheet = Hat } }`, `local sheet: SpriteSheet = Hat`, and
+  functions taking a `SpriteSheet` or `SpritePlayer` previously reported
+  `TL1003: expected string, found string`, because the generic types required
+  every name parameter to accept any string. Declared sheets still check their
+  exact animation, marker, and child names.
+- Audio voice handles and analysis jobs now type-check their own methods.
+  `voice:fadeTo(...)`, `voice:stop()`, `job:status()`, and the other handle
+  methods were typed as if called on the audio system and reported
+  `self.off: required field is missing`. `audio:subscribe` callbacks also
+  receive the documented `previous` control state as a second parameter.
+- `if value then` and `if a and b then` now narrow nilable values in the
+  guarded branch, as `if value ~= nil then` already did. Calling a method on a
+  nilable value inside such a branch previously reported
+  `TL1003: expected Counter, found nil`.
 - Names followed by a comment on the same line, or preceded by a comment on
   the line above, now keep their types. Several analysis helpers read a token
   together with its surrounding comments, so `local sum = price + tax -- note`

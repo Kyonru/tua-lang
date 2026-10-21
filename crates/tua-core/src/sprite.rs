@@ -469,8 +469,8 @@ pub(crate) fn sprite_sheet_type() -> Type {
 }
 
 fn sprite_sheet_type_for_spec(spec: &SpriteSpec) -> Type {
-    let animation_names = literal_union_or_string(&spec.animations);
-    let child_names = literal_union_or_string(&spec.children);
+    let animation_names = spec_name_type(spec, &spec.animations);
+    let child_names = spec_name_type(spec, &spec.children);
     let animations = if spec.exact {
         Type::table(spec.animations.iter().map(|name| {
             (
@@ -589,9 +589,9 @@ fn sprite_animation_type() -> Type {
 }
 
 fn sprite_player_type(spec: &SpriteSpec) -> Type {
-    let animation_name = literal_union_or_string(&spec.animations);
-    let marker_name = literal_union_or_string(&spec.markers);
-    let child_name = literal_union_or_string(&spec.children);
+    let animation_name = spec_name_type(spec, &spec.animations);
+    let marker_name = spec_name_type(spec, &spec.markers);
+    let child_name = spec_name_type(spec, &spec.children);
     let optional_animation_name = Type::union([animation_name.clone(), Type::nil()]);
     let marker_callback = Type::Function(FunctionType::new_signature(
         [
@@ -784,6 +784,20 @@ fn method_field(
         None,
         returns,
     )))
+}
+
+/// Name parameters for one declared sheet are its exact names. The built-in
+/// `SpriteSheet` and `SpritePlayer` aliases have no exact spec: they are the
+/// types every declared sheet and player must be assignable to, as with a
+/// nested clip's `sheet` or a `SpritePlayer` parameter. Function parameters are
+/// contravariant, so `play(name: string)` would reject a player whose `play`
+/// accepts only `"idle"`; those aliases accept any name instead.
+fn spec_name_type(spec: &SpriteSpec, values: &[String]) -> Type {
+    if spec.exact {
+        literal_union_or_string(values)
+    } else {
+        Type::Any
+    }
 }
 
 fn literal_union_or_string(values: &[String]) -> Type {

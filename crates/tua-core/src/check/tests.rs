@@ -472,6 +472,82 @@ return Player
 }
 
 #[test]
+fn declared_sprite_sheets_and_players_satisfy_the_generic_sprite_types() {
+    check_tua_source(
+        "src/sprites.tua",
+        r#"local Hat = spriteSheet({
+  image = "assets/hat.png",
+  frame = { width = 16, height = 16 },
+  animations = { idle = { column = 0, fps = 1 } },
+})
+
+local Body = spriteSheet({
+  image = "assets/body.png",
+  frame = { width = 32, height = 32 },
+  animations = { idle = { column = 0, fps = 1 } },
+  children = {
+    hat = { sheet = Hat, initial = "idle", x = 4, y = -8 },
+  },
+})
+
+local sheet: SpriteSheet = Hat
+local player: SpritePlayer = Hat:player("idle")
+
+local function spawn(from: SpriteSheet): SpritePlayer
+  return from:player()
+end
+
+local body = Body:player("idle")
+body:child("hat"):gotoAndPlay("idle", 1)
+
+return { sheet = sheet, player = player, spawned = spawn(Body), body = body }
+"#,
+    )
+    .expect("declared sheets and players should be assignable to SpriteSheet and SpritePlayer");
+}
+
+#[test]
+fn declared_sprite_sheets_keep_exact_names_and_child_sheet_checks() {
+    let diagnostics = check_tua_source(
+        "src/sprites.tua",
+        r#"local Hat = spriteSheet({
+  image = "assets/hat.png",
+  frame = { width = 16, height = 16 },
+  animations = { idle = { column = 0, fps = 1 } },
+})
+local hat = Hat:player("idle")
+hat:play("jump")
+
+local Body = spriteSheet({
+  image = "assets/body.png",
+  frame = { width = 32, height = 32 },
+  animations = { idle = { column = 0, fps = 1 } },
+  children = { hat = { sheet = 5 } },
+})
+
+return Body
+"#,
+    )
+    .expect_err("unknown animations and non-sheet children should fail checking");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|item| item.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert!(
+        mismatches
+            .iter()
+            .any(|item| item.message.contains("\"jump\"")),
+        "missing unknown-animation diagnostic: {diagnostics:#?}"
+    );
+    assert!(
+        mismatches
+            .iter()
+            .any(|item| item.message.contains("children.hat.sheet")),
+        "missing child-sheet diagnostic: {diagnostics:#?}"
+    );
+}
+
+#[test]
 fn rejects_unknown_typed_state_machine_states_and_events() {
     let state_diagnostics = check_tua_source(
         "src/state_machine.tua",
@@ -3780,6 +3856,65 @@ audio:setMusicLayer("drums", 1)
 }
 
 #[test]
+fn audio_voice_and_analysis_job_methods_use_their_own_receivers() {
+    check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  buses = { master = {}, sfx = { parent = "master" } },
+  cues = { engine = { source = nil, bus = "sfx" } },
+})
+
+local engine = audio:play("engine", { looping = true, volume = 0 })
+if engine then
+  engine:fadeTo(0.8, 0.5)
+  engine:setVolume(0.2)
+  engine:setPitch(1.1)
+  engine:setPosition(1, 2, 0)
+  local playing: boolean = engine:isPlaying()
+  local status: string = engine:status()
+  engine:pause(0.1)
+  engine:resume()
+  engine:stop({ duration = 0.25, curve = "smoothstep" })
+  print(playing, status)
+end
+
+local job = audio:requestAnalysis("music.ogg")
+local jobStatus: string = job:status()
+local cancelled: boolean = job:cancel()
+print(jobStatus, cancelled)
+
+local unsubscribe = audio:subscribe(function(state, previous)
+  local now: number = state.activeVoices
+  local before: number = previous.activeVoices
+  print(now, before)
+end)
+unsubscribe()
+"#,
+    )
+    .expect("voice and analysis-job methods should accept their own handles");
+}
+
+#[test]
+fn audio_voice_methods_still_check_their_arguments() {
+    let diagnostics = check_tua_source(
+        "src/audio.tua",
+        r#"local audio = audioSystem({
+  cues = { engine = { source = nil } },
+})
+
+local engine = audio:play("engine")
+if engine then
+  engine:setVolume("loud")
+end
+"#,
+    )
+    .expect_err("a string volume should fail checking");
+    assert!(diagnostics
+        .iter()
+        .any(|item| item.code == Some(DiagnosticCode::TYPE_MISMATCH)));
+}
+
+#[test]
 fn audio_system_reports_unknown_bus_references_and_cycles() {
     let diagnostics = check_tua_source(
         "src/audio.tua",
@@ -3799,4 +3934,63 @@ fn audio_system_reports_unknown_bus_references_and_cycles() {
     assert!(diagnostics
         .iter()
         .any(|item| item.message.contains("unknown bus")));
+}
+
+#[test]
+fn truthiness_conditions_narrow_nilable_method_receivers() {
+    check_tua_source(
+        "src/narrowing.tua",
+        r#"type Counter = { count: number, bump: (self: Counter, by: number) -> boolean }
+
+local function make(): Counter | nil
+  return nil
+end
+
+local first = make()
+local second = make()
+
+if first then
+  first:bump(1)
+  first.bump(first, 2)
+end
+
+if first and second then
+  first:bump(3)
+  second:bump(4)
+end
+
+while first do
+  first:bump(5)
+  first = nil
+end
+"#,
+    )
+    .expect("truthy conditions should remove nil from the guarded names");
+}
+
+#[test]
+fn truthiness_narrowing_does_not_reach_the_else_branch() {
+    let diagnostics = check_tua_source(
+        "src/narrowing.tua",
+        r#"type Counter = { count: number, bump: (self: Counter, by: number) -> boolean }
+
+local function make(): Counter | nil
+  return nil
+end
+
+local counter = make()
+if counter then
+  counter:bump(1)
+else
+  counter:bump(2)
+end
+"#,
+    )
+    .expect_err("the else branch keeps the nilable type");
+    let mismatches = diagnostics
+        .iter()
+        .filter(|item| item.code == Some(DiagnosticCode::TYPE_MISMATCH))
+        .collect::<Vec<_>>();
+    assert_eq!(mismatches.len(), 1, "{diagnostics:#?}");
+    assert_eq!(mismatches[0].line, 11);
 }

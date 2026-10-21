@@ -234,8 +234,12 @@ fn system_type(spec: &AudioSpec, exact: bool) -> Type {
         [Type::alias(EVENT_PAYLOAD_TYPE)],
         Type::nil(),
     ));
+    // The control store passes the current and previous control state.
     let control_listener = Type::Function(FunctionType::new(
-        [Type::alias(CONTROL_STATE_TYPE)],
+        [
+            Type::alias(CONTROL_STATE_TYPE),
+            Type::alias(CONTROL_STATE_TYPE),
+        ],
         Type::nil(),
     ));
     let transition_status = if exact {
@@ -372,28 +376,38 @@ fn voice_type() -> Type {
     Type::table([
         (
             "pause",
-            method_optional([fade_type()], 0, [Type::boolean()]),
+            method_optional_on(VOICE_TYPE, [fade_type()], 0, [Type::boolean()]),
         ),
         (
             "resume",
-            method_optional([fade_type()], 0, [Type::boolean()]),
+            method_optional_on(VOICE_TYPE, [fade_type()], 0, [Type::boolean()]),
         ),
-        ("stop", method_optional([fade_type()], 0, [Type::boolean()])),
+        (
+            "stop",
+            method_optional_on(VOICE_TYPE, [fade_type()], 0, [Type::boolean()]),
+        ),
         (
             "fadeTo",
-            method([Type::number(), fade_type()], [Type::boolean()]),
+            method_on(VOICE_TYPE, [Type::number(), fade_type()], [Type::boolean()]),
         ),
-        ("setVolume", method([Type::number()], [Type::boolean()])),
-        ("setPitch", method([Type::number()], [Type::boolean()])),
+        (
+            "setVolume",
+            method_on(VOICE_TYPE, [Type::number()], [Type::boolean()]),
+        ),
+        (
+            "setPitch",
+            method_on(VOICE_TYPE, [Type::number()], [Type::boolean()]),
+        ),
         (
             "setPosition",
-            method(
+            method_on(
+                VOICE_TYPE,
                 [Type::number(), Type::number(), Type::number()],
                 [Type::boolean()],
             ),
         ),
-        ("isPlaying", method([], [Type::boolean()])),
-        ("status", method([], [Type::string()])),
+        ("isPlaying", method_on(VOICE_TYPE, [], [Type::boolean()])),
+        ("status", method_on(VOICE_TYPE, [], [Type::string()])),
     ])
 }
 
@@ -412,9 +426,15 @@ fn snapshot_type() -> Type {
 
 fn analysis_job_type() -> Type {
     Type::table([
-        ("status", method([], [Type::string()])),
-        ("cancel", method([], [Type::boolean()])),
-        ("onComplete", method([Type::Any], [Type::Any])),
+        ("status", method_on(ANALYSIS_JOB_TYPE, [], [Type::string()])),
+        (
+            "cancel",
+            method_on(ANALYSIS_JOB_TYPE, [], [Type::boolean()]),
+        ),
+        (
+            "onComplete",
+            method_on(ANALYSIS_JOB_TYPE, [Type::Any], [Type::Any]),
+        ),
     ])
 }
 
@@ -487,8 +507,7 @@ fn method(
     arguments: impl IntoIterator<Item = Type>,
     returns: impl IntoIterator<Item = Type>,
 ) -> TableField {
-    let arguments = arguments.into_iter().collect::<Vec<_>>();
-    method_optional(arguments.clone(), arguments.len(), returns)
+    method_on(TYPE_NAME, arguments, returns)
 }
 
 fn method_optional(
@@ -496,7 +515,27 @@ fn method_optional(
     required: usize,
     returns: impl IntoIterator<Item = Type>,
 ) -> TableField {
-    let mut parameters = vec![FunctionParameter::named("self", Type::alias(TYPE_NAME))];
+    method_optional_on(TYPE_NAME, arguments, required, returns)
+}
+
+/// A method whose `self` is `owner`, such as a voice handle's methods, which
+/// are called on the `AudioVoice` returned by `play`, not on the system.
+fn method_on(
+    owner: &str,
+    arguments: impl IntoIterator<Item = Type>,
+    returns: impl IntoIterator<Item = Type>,
+) -> TableField {
+    let arguments = arguments.into_iter().collect::<Vec<_>>();
+    method_optional_on(owner, arguments.clone(), arguments.len(), returns)
+}
+
+fn method_optional_on(
+    owner: &str,
+    arguments: impl IntoIterator<Item = Type>,
+    required: usize,
+    returns: impl IntoIterator<Item = Type>,
+) -> TableField {
+    let mut parameters = vec![FunctionParameter::named("self", Type::alias(owner))];
     parameters.extend(
         arguments
             .into_iter()
