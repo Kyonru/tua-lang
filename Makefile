@@ -19,6 +19,8 @@ EXAMPLE ?= examples/love-minimal
 ECS_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
 ECS_LOVE_FLAGS ?=
 STORE_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
+SPRITE_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
+SPRITE_LOVE_FLAGS ?=
 UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
 DEBUG_TUA := target/debug/tua$(EXE_SUFFIX)
@@ -243,6 +245,14 @@ profile-store: ## Compare the store runtime against STORE_BASE_REF (default late
 	@mkdir -p target/tua-speed
 	git show $(STORE_BASE_REF):vendor/runtime/tuastore.lua > target/tua-speed/tuastore.base.lua
 	$(LUA) benchmarks/store-runtime.lua target/tua-speed/tuastore.base.lua vendor/runtime/tuastore.lua
+
+.PHONY: profile-sprite-love
+profile-sprite-love: ## Compare sprite runtimes against SPRITE_BASE_REF under LOVE; SPRITE_LOVE_FLAGS=--jit forces JIT on.
+	@test -n "$(SPRITE_BASE_REF)" || (echo "set SPRITE_BASE_REF to a git tag or commit"; exit 2)
+	@mkdir -p target/tua-speed
+	git show $(SPRITE_BASE_REF):vendor/runtime/anim8.lua > target/tua-speed/anim8.base.lua
+	git show $(SPRITE_BASE_REF):vendor/runtime/tuasprite.lua > target/tua-speed/tuasprite.base.lua
+	$(LOVE) benchmarks/sprite-love $(SPRITE_LOVE_FLAGS) $(CURDIR)/target/tua-speed/anim8.base.lua $(CURDIR)/target/tua-speed/tuasprite.base.lua $(CURDIR)/vendor/runtime/anim8.lua $(CURDIR)/vendor/runtime/tuasprite.lua
 
 .PHONY: profile-examples-baseline
 profile-examples-baseline: ## Write a local examples speed baseline for future comparisons.

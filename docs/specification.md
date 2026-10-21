@@ -284,6 +284,9 @@ supplies these facts to diagnostics, completion, inspection, preview, and Lua
 emission.
 Optional named child sheets form a declarative nested display tree with local
 translation, rotation, scale, recursive update/draw, and typed child lookup.
+Leaf controllers may add their current frame and transform to a caller-owned
+LOVE `SpriteBatch`; nested display trees continue through the ordinary draw
+path so image choice and ordering remain explicit.
 
 ## CLI
 

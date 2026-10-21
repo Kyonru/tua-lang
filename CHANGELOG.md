@@ -8,6 +8,9 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Added
 
+- Leaf sprite players can add their current frame and complete transform to a
+  caller-owned `SpriteBatch` with `addToBatch`, enabling explicit bulk drawing
+  without changing normal draw order or nested-sprite behavior.
 - Unannotated Lua modules now retain richer inferred runtime surfaces through
   `require`, including root function modules, anonymous factory return shapes,
   multiple returns, nested table assignments, safe table aliases, conditional
@@ -19,6 +22,18 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- Generated sprite sheets now share their precomputed marker-frame index across
+  players, while child traversal uses an ordered instance array instead of
+  repeating sheet-name lookups. Their normalized animations also clone frames,
+  durations, and rebuilt intervals in one pass. Animation state and all public
+  arrays remain independent between players, while custom sheets and replacement
+  anim8 runtimes retain the public clone path. In the included macOS arm64 LOVE
+  11.5 benchmark over 2,000 players, construction memory fell about 18%. With the
+  JIT disabled, construction, nested updates, and leaf draws improved about 26%,
+  13%, and 25%; with the JIT enabled, construction was about 1.5x faster,
+  updates stayed near parity, and leaf draws improved about 40%. These figures
+  are platform- and workload-specific; `make profile-sprite-love` compares
+  another revision locally.
 - Leaf sprites now pass their transform directly to anim8, avoiding redundant
   graphics push, translate, rotate, scale, shear, and pop calls. Nested sprites
   retain the graphics-stack path so children continue to inherit their parent

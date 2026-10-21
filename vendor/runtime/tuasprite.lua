@@ -31,18 +31,22 @@ local function syncAnimation(self)
 end
 
 local function markerIndex(sheet)
+  if sheet.__tuaMarkerFrames ~= nil then return sheet.__tuaMarkerFrames end
+
   local index = {}
   for animationName, markers in pairs(sheet.markers or {}) do
-    local frames = {}
-    for _, marker in ipairs(markers) do
-      local names = frames[marker.frame]
-      if names == nil then
-        names = {}
-        frames[marker.frame] = names
+    if markers[1] ~= nil then
+      local frames = {}
+      for _, marker in ipairs(markers) do
+        local names = frames[marker.frame]
+        if names == nil then
+          names = {}
+          frames[marker.frame] = names
+        end
+        names[#names + 1] = marker.name
       end
-      names[#names + 1] = marker.name
+      index[animationName] = frames
     end
-    index[animationName] = frames
   end
   return index
 end
@@ -120,8 +124,11 @@ function SpritePlayer:seek(progress, emitMarkers)
 end
 
 function SpritePlayer:update(dt)
-  for _, name in ipairs(self.sheet.childOrder or EMPTY_CHILD_ORDER) do
-    self.children[name].player:update(dt)
+  local orderedChildren = self.orderedChildren
+  if orderedChildren ~= nil then
+    for index = 1, #orderedChildren do
+      orderedChildren[index].player:update(dt)
+    end
   end
   local animation = self.animation
   if not self.playing or animation == nil or dt == 0 or self.speed == 0 then return end
@@ -201,8 +208,8 @@ function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, she
   end
   scaleX = scaleX or 1
   scaleY = scaleY or scaleX
-  local childOrder = self.sheet.childOrder or EMPTY_CHILD_ORDER
-  if childOrder[1] == nil then
+  local orderedChildren = self.orderedChildren
+  if orderedChildren == nil then
     self.animation:draw(
       self.sheet.image,
       x or 0,
@@ -224,8 +231,8 @@ function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, she
   love.graphics.scale(scaleX, scaleY)
   love.graphics.shear(shearX or 0, shearY or 0)
   self.animation:draw(self.sheet.image, 0, 0, 0, 1, 1, originX, originY)
-  for _, name in ipairs(childOrder) do
-    local child = self.children[name]
+  for index = 1, #orderedChildren do
+    local child = orderedChildren[index]
     child.player:draw(
       child.x,
       child.y,
@@ -235,6 +242,51 @@ function SpritePlayer:draw(x, y, rotation, scaleX, scaleY, originX, originY, she
     )
   end
   love.graphics.pop()
+end
+
+function SpritePlayer:addToBatch(batch, x, y, rotation, scaleX, scaleY, originX, originY, shearX, shearY)
+  if self.animation == nil then return nil end
+  if self.orderedChildren ~= nil then
+    error("sprite players with nested children cannot be added to a SpriteBatch", 2)
+  end
+
+  local origin = self.sheet.origins[self.name] or self.sheet.origin or ZERO_ORIGIN
+  local animationMetadata = self.sheet.frameMetadata and self.sheet.frameMetadata[self.name]
+  local frameMetadata = animationMetadata and animationMetadata[self.animation.position]
+  if frameMetadata then
+    if originX == nil then originX = frameMetadata.originX end
+    if originY == nil then originY = frameMetadata.originY end
+    originX = originX - frameMetadata.trimX
+    originY = originY - frameMetadata.trimY
+  else
+    if originX == nil then originX = origin.x end
+    if originY == nil then originY = origin.y end
+  end
+
+  local frame, drawX, drawY, drawRotation, drawScaleX, drawScaleY, drawOriginX, drawOriginY, drawShearX, drawShearY =
+    self.animation:getFrameInfo(
+      x or 0,
+      y or 0,
+      rotation or 0,
+      scaleX or 1,
+      scaleY or scaleX or 1,
+      originX,
+      originY,
+      shearX or 0,
+      shearY or 0
+    )
+  return batch:add(
+    frame,
+    drawX,
+    drawY,
+    drawRotation,
+    drawScaleX,
+    drawScaleY,
+    drawOriginX,
+    drawOriginY,
+    drawShearX,
+    drawShearY
+  )
 end
 
 function SpritePlayer:on(marker, callback)
@@ -263,8 +315,17 @@ local function new(sheet, initial)
   assert(type(sheet) == "table", "sprite player requires a sprite sheet")
   local animations = {}
   for name, animation in pairs(sheet.animations or {}) do
-    animations[name] = animation:clone()
+    if sheet.__tuaStaticAnimations and animation._cloneTuaPlayer then
+      animations[name] = animation:_cloneTuaPlayer()
+    else
+      animations[name] = animation:clone()
+    end
   end
+
+  local childOrder = sheet.childOrder or EMPTY_CHILD_ORDER
+  local childCount = #childOrder
+  local orderedChildren
+  if childCount ~= 0 then orderedChildren = {} end
 
   local self = setmetatable({
     sheet = sheet,
@@ -276,11 +337,13 @@ local function new(sheet, initial)
     listeners = {},
     markerFrames = markerIndex(sheet),
     children = {},
+    orderedChildren = orderedChildren,
   }, SpritePlayer)
 
-  for _, name in ipairs(sheet.childOrder or EMPTY_CHILD_ORDER) do
+  for index = 1, childCount do
+    local name = childOrder[index]
     local child = sheet.children[name]
-    self.children[name] = {
+    local instance = {
       player = new(child.sheet, child.initial),
       x = child.x or 0,
       y = child.y or 0,
@@ -288,6 +351,8 @@ local function new(sheet, initial)
       scaleX = child.scaleX or 1,
       scaleY = child.scaleY or child.scaleX or 1,
     }
+    self.children[name] = instance
+    self.orderedChildren[index] = instance
   end
 
   initial = initial or (sheet.animationOrder and sheet.animationOrder[1])

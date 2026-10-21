@@ -717,6 +717,26 @@ fn sprite_player_type(spec: &SpriteSpec) -> Type {
             ),
         ),
         (
+            "addToBatch",
+            method_field(
+                [
+                    crate::FunctionParameter::named("self", Type::Any),
+                    crate::FunctionParameter::named("batch", Type::alias("SpriteBatch")),
+                    crate::FunctionParameter::named("x", Type::number()),
+                    crate::FunctionParameter::named("y", Type::number()),
+                    crate::FunctionParameter::named("rotation", Type::number()),
+                    crate::FunctionParameter::named("scaleX", Type::number()),
+                    crate::FunctionParameter::named("scaleY", Type::number()),
+                    crate::FunctionParameter::named("originX", Type::number()),
+                    crate::FunctionParameter::named("originY", Type::number()),
+                    crate::FunctionParameter::named("shearX", Type::number()),
+                    crate::FunctionParameter::named("shearY", Type::number()),
+                ],
+                4,
+                [Type::union([Type::number(), Type::nil()])],
+            ),
+        ),
+        (
             "on",
             method_field(
                 [
@@ -1076,6 +1096,7 @@ fn player_method_documentation(member: &str) -> &'static str {
         "seek" => "Seek by normalized animation progress.",
         "update" => "Advance the player using elapsed time and its signed speed.",
         "draw" => "Draw the current frame using its configured registration point.",
+        "addToBatch" => "Add the current leaf frame and transform to a caller-owned SpriteBatch.",
         "on" => "Subscribe to a configured frame-marker event.",
         "off" => "Remove callbacks for a configured frame-marker event.",
         "child" => "Return a configured nested sprite player's controller.",
@@ -2614,6 +2635,7 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
         ));
     }
     output.push_str(&format!("local {} = {{\n", declaration.name));
+    output.push_str("  __tuaStaticAnimations = true,\n");
     output.push_str(&format!("  image = {image_local},\n"));
     output.push_str(&format!("  grid = {grid_local},\n"));
     output.push_str(&format!(
@@ -2662,6 +2684,29 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
                 marker.frame + 1,
                 lua_string_literal(&marker.name)
             ));
+        }
+        output.push_str("    },\n");
+    }
+    output.push_str("  },\n");
+    output.push_str("  __tuaMarkerFrames = {\n");
+    for animation in &declaration.animations {
+        if animation.markers.is_empty() {
+            continue;
+        }
+        output.push_str(&format!("    {} = {{\n", animation.name));
+        let mut marker_index = std::collections::BTreeMap::<u32, Vec<&str>>::new();
+        for marker in &animation.markers {
+            marker_index
+                .entry(marker.frame + 1)
+                .or_default()
+                .push(&marker.name);
+        }
+        for (frame, names) in marker_index {
+            output.push_str(&format!("      [{frame}] = {{"));
+            for name in names {
+                output.push_str(&format!(" {},", lua_string_literal(name)));
+            }
+            output.push_str(" },\n");
         }
         output.push_str("    },\n");
     }
@@ -3031,6 +3076,7 @@ mod tests {
         assert!(lowered.contains("PlayerGrid(\"1-2\", 1, 1, 2)"));
         assert!(lowered.contains("origin = { x = 90, y = 140 }"));
         assert!(lowered.contains("{ frame = 2, name = \"step\" }"));
+        assert!(lowered.contains("[2] = { \"step\","));
         assert!(lowered.contains(
             "{ originX = 92, originY = 138, trimX = 2, trimY = 4, sourceWidth = 184, sourceHeight = 144 }"
         ));
@@ -3084,6 +3130,7 @@ mod tests {
         let crate::Type::Table(player) = &factory.return_types_or_any()[0] else {
             unreachable!()
         };
+        assert!(player.field("addToBatch").is_some());
         let crate::Type::Function(play) = &player.field("play").expect("play field").ty else {
             unreachable!()
         };

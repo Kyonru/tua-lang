@@ -1868,6 +1868,8 @@ fn checks_derived_sprite_player_animation_and_marker_names() {
   },
 })
 local player = Player:player("idle")
+local batch = spriteBatch(Player.image, 128)
+local batchIndex: number | nil = player:addToBatch(batch, 0, 0)
 Player:player("missing-initial")
 player:play("missing")
 player:on("missing-marker", function(player, marker, animation, frame) end)

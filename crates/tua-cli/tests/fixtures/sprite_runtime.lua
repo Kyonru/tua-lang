@@ -30,6 +30,9 @@ local function animation(name, drawCalls)
   function value:draw(...)
     if drawCalls then drawCalls[#drawCalls + 1] = { self.name, ... } end
   end
+  function value:getFrameInfo(...)
+    return self.frames[self.position], ...
+  end
   return value
 end
 
@@ -42,9 +45,25 @@ local function sheet(name, drawCalls)
     origins = { idle = { x = 0, y = 0 } },
     looping = {},
     markers = {},
+    __tuaMarkerFrames = {},
     childOrder = {},
     children = {},
   }
+end
+
+-- Generated sheets precompute marker lookup once, and every player reuses it.
+do
+  local marked = sheet("marked")
+  marked.__tuaMarkerFrames = { idle = { [1] = { "step" } } }
+  local first = sprite.new(marked)
+  local second = sprite.new(marked)
+  assert(first.markerFrames == marked.__tuaMarkerFrames)
+  assert(second.markerFrames == marked.__tuaMarkerFrames)
+
+  local calls = 0
+  first:on("step", function() calls = calls + 1 end)
+  first:_emitFrame(1)
+  assert(calls == 1)
 end
 
 -- A generated-shape leaf delegates its complete transform to anim8 and does
@@ -64,6 +83,30 @@ do
   assert(call[10] == 0.4 and call[11] == 0.5)
 end
 
+-- SpriteBatch insertion uses the same resolved frame transform as direct draw
+-- and rejects display trees that cannot be represented by one batch entry.
+do
+  local leaf = sheet("batch")
+  local player = sprite.new(leaf)
+  local added
+  local batch = {
+    add = function(_, ...)
+      added = { ... }
+      return 17
+    end,
+  }
+  assert(player:addToBatch(batch, 10, 20, 0.3, 2, 3, 4, 5, 0.6, 0.7) == 17)
+  assert(added[1] == true and added[2] == 10 and added[3] == 20)
+  assert(added[4] == 0.3 and added[5] == 2 and added[6] == 3)
+  assert(added[7] == 4 and added[8] == 5 and added[9] == 0.6 and added[10] == 0.7)
+
+  local parent = sheet("batch-parent")
+  parent.childOrder = { "child" }
+  parent.children.child = { sheet = sheet("batch-child") }
+  local ok, message = pcall(function() sprite.new(parent):addToBatch(batch, 0, 0) end)
+  assert(not ok and tostring(message):find("nested children", 1, true))
+end
+
 -- Trimmed-frame origins are preserved on the direct path.
 do
   local drawCalls = {}
@@ -75,6 +118,36 @@ do
   player:draw()
   local call = assert(drawCalls[1])
   assert(call[8] == 6 and call[9] == 6)
+end
+
+-- The generated-sheet clone path rebuilds independent public arrays and
+-- playback state in one pass; sprite optimizations must not couple players.
+do
+  local anim8 = assert(loadfile(root .. "/vendor/runtime/anim8.lua"))()
+  local source = anim8.newAnimation({ "one", "two" }, { 0.1, 0.2 })
+  source.timer = 0.15
+  source.position = 2
+  source.status = "paused"
+  source:flipH()
+  local clone = source:_cloneTuaPlayer()
+
+  assert(clone ~= source)
+  assert(clone.frames ~= source.frames and clone.durations ~= source.durations)
+  assert(clone.intervals ~= source.intervals)
+  assert(clone.frames[1] == "one" and clone.durations[2] == 0.2)
+  assert(clone.totalDuration == source.totalDuration and clone.onLoop == source.onLoop)
+  assert(clone.timer == 0 and clone.position == 1 and clone.status == "playing")
+  assert(clone.flippedH and not clone.flippedV)
+  clone.frames[1] = "changed"
+  clone.durations[1] = 9
+  clone.intervals[1] = 9
+  assert(source.frames[1] == "one" and source.durations[1] == 0.1 and source.intervals[1] == 0)
+
+  -- Numeric prototype edits are reflected exactly as they are by public clone.
+  source.durations[1] = 0.4
+  local edited = source:_cloneTuaPlayer()
+  assert(edited.durations[1] == 0.4 and edited.intervals[2] == 0.4)
+  assert(math.abs(edited.totalDuration - 0.6) < 1e-12)
 end
 
 -- A parent retains the graphics stack, while its leaf child uses the direct

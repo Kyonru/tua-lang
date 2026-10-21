@@ -958,6 +958,7 @@ local tuasprite = require("tuasprite")
 local PlayerImage = love.graphics.newImage("assets/player.png")
 local PlayerGrid = anim8.newGrid(16, 16, PlayerImage:getWidth(), PlayerImage:getHeight())
 local Player = {
+  __tuaStaticAnimations = true,
   image = PlayerImage,
   grid = PlayerGrid,
   frame = { width = 16, height = 16, left = 0, top = 0, border = 0 },
@@ -979,6 +980,8 @@ local Player = {
     },
     run = {
     },
+  },
+  __tuaMarkerFrames = {
   },
   frameMetadata = {
     idle = {

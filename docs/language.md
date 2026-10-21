@@ -1013,6 +1013,30 @@ draw through parent-local translation, rotation, and scale. This is a small
 declarative display tree. Game-state logic and arbitrary animation behavior
 remain ordinary Tua/Lua code.
 
+For large groups of leaf sprites that share one sheet image, add their current
+frames to a `SpriteBatch` explicitly. This preserves normal draw ordering by
+leaving batching under the caller's control:
+
+```tua
+type EnemyDraw = { player: SpritePlayer, x: number, y: number }
+local enemies: { EnemyDraw } = {}
+local enemyBatch = spriteBatch(Enemy.image, 1000)
+
+function love.draw()
+  enemyBatch:clear()
+  for _, enemy in ipairs(enemies) do
+    enemy.player:addToBatch(enemyBatch, enemy.x, enemy.y)
+  end
+  love.graphics.draw(enemyBatch)
+end
+```
+
+`addToBatch` uses the player's current frame, registration point, trim metadata,
+flip state, and transform, and returns the batch entry index. It returns `nil`
+when no animation is selected. Players with nested children cannot be batched
+as one entry because a child may use another image; draw those normally or
+batch each leaf separately.
+
 ### Vectors
 
 `Vec2` is a built-in table-shaped type for common position and velocity code.
