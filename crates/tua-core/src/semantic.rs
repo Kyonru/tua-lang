@@ -10,7 +10,8 @@ use full_moon::visitors::Visitor;
 
 use crate::asset::{self, AssetLoaderKind};
 use crate::ast_utils::{
-    assignment_expression_for_local, field_chain_before_first_call, plain_field_chain_from_var,
+    assignment_expression_for_local, field_chain_before_first_call,
+    plain_field_chain_from_expression, plain_field_chain_from_var,
 };
 use crate::love_conf;
 use crate::lua::{self, LuaItem, LuaItemKind};
@@ -165,6 +166,16 @@ impl<'a> SemanticModel<'a> {
             ty,
             expression_span,
         })
+    }
+
+    pub(crate) fn local_initializer_field_chain(
+        &self,
+        name: &str,
+        position: SourcePosition,
+    ) -> Option<Vec<String>> {
+        let expression = self.local_assignment_value(name, position)?.expression?;
+
+        plain_field_chain_from_expression(expression)
     }
 
     pub(crate) fn type_of_expression_return(

@@ -317,6 +317,79 @@ return {
 }
 
 #[test]
+fn hover_preserves_project_inference_for_locals_copied_from_module_exports() {
+    let temp = TempProject::new("required-state-machine-local-hover");
+    let source = r#"local Globals = require("global")
+local flow = Globals.flow
+flow:pause()
+"#;
+    let global = r#"import type Shared from "./types"
+
+local bullets = objectPool({
+  create = function(): Shared.Bullet
+    return { x = 0, y = 0, dx = 0, dy = 0, active = false }
+  end,
+  reset = function(bullet: Shared.Bullet)
+    bullet.x = 0
+    bullet.y = 0
+    bullet.dx = 0
+    bullet.dy = 0
+    bullet.active = false
+  end,
+  initial = 48,
+})
+local activeBullets: Shared.Bullet[] = {}
+local game = store({ score = 0, shots = 0, wave = 1 })
+local flow = stateMachine({
+  initial = "playing",
+  events = {
+    { name = "pause", from = "playing", to = "paused" },
+    { name = "resume", from = "paused", to = "playing" },
+    { name = "finish", from = { "playing", "paused" }, to = "gameover" },
+    { name = "restart", from = "gameover", to = "playing" },
+  },
+})
+
+return {
+  game = game,
+  flow = flow,
+  bullets = bullets,
+  activeBullets = activeBullets,
+}
+"#;
+    let types = r#"export type Bullet = {
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  active: boolean,
+}
+"#;
+
+    temp.write("tua.toml", "source = \"src\"\n");
+    temp.write("src/main.tua", source);
+    temp.write("src/global.tua", global);
+    temp.write("src/types.tua", types);
+
+    let uri = temp.uri_for("src/main.tua");
+    let output = run_messages(vec![
+        initialize_with_root(1, temp.uri()),
+        did_open(&uri, source),
+        hover_request(2, &uri, source, "flow ="),
+        hover_request(3, &uri, source, "flow\nflow:pause"),
+    ]);
+
+    assert_hover_contains(&output, 3, "(field) Globals.flow: {");
+    assert_hover_contains(&output, 2, "local flow:");
+    assert_hover_contains(
+        &output,
+        2,
+        "Events: `\"finish\" | \"pause\" | \"restart\" | \"resume\"`",
+    );
+    assert!(!hover_contents(&output, 2).contains("local flow: any"));
+}
+
+#[test]
 fn hover_renders_module_export_docs_and_module_path() {
     let temp = TempProject::new("documented-module-hover");
     let source = r#"local Audio = require("audio")

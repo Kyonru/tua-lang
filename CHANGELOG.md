@@ -123,6 +123,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Fixed
 
+- Hover now preserves project-inferred types for locals copied from required
+  module fields. For example, `local flow = Globals.flow` now shows the same
+  derived `StateMachine` type used by completion instead of the fast
+  current-file path prematurely reporting `any`.
 - Declared sprite sheets and players are now assignable to the built-in
   `SpriteSheet` and `SpritePlayer` types. Nested clips such as
   `children = { hat = { sheet = Hat } }`, `local sheet: SpriteSheet = Hat`, and
