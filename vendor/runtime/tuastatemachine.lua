@@ -38,19 +38,23 @@ end
 
 local function create_transition(name)
   local can, to, from, params
+  local beforeCallback = "onbefore" .. name
+  local afterCallback = "onafter" .. name
+  local eventCallback = "on" .. name
+  local waitingOnLeave = name .. "WaitingOnLeave"
+  local waitingOnEnter = name .. "WaitingOnEnter"
 
   local function transition(self, ...)
     if self.asyncState == NONE then
       can, to = self:can(name)
-      from = self.current
-      params = { self, name, from, to, ... }
-
       if not can then
         return false
       end
+      from = self.current
+      params = { self, name, from, to, ... }
       self.currentTransitioningEvent = name
 
-      local beforeReturn = call_handler(self["onbefore" .. name], params)
+      local beforeReturn = call_handler(self[beforeCallback], params)
       local leaveReturn = call_handler(self["onleave" .. from], params)
 
       if beforeReturn == false or leaveReturn == false then
@@ -58,27 +62,27 @@ local function create_transition(name)
         return false
       end
 
-      self.asyncState = name .. "WaitingOnLeave"
+      self.asyncState = waitingOnLeave
 
       if leaveReturn ~= ASYNC then
         transition(self, ...)
       end
 
       return true
-    elseif self.asyncState == name .. "WaitingOnLeave" then
+    elseif self.asyncState == waitingOnLeave then
       self.current = to
 
       local enterReturn = call_handler(self["onenter" .. to] or self["on" .. to], params)
 
-      self.asyncState = name .. "WaitingOnEnter"
+      self.asyncState = waitingOnEnter
 
       if enterReturn ~= ASYNC then
         transition(self, ...)
       end
 
       return true
-    elseif self.asyncState == name .. "WaitingOnEnter" then
-      call_handler(self["onafter" .. name] or self["on" .. name], params)
+    elseif self.asyncState == waitingOnEnter then
+      call_handler(self[afterCallback] or self[eventCallback], params)
       call_handler(self.onstatechange, params)
       self.asyncState = NONE
       self.currentTransitioningEvent = nil

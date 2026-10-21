@@ -22,6 +22,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The bundled state-machine runtime now rejects unavailable events before
+  building callback arguments and precomputes event-specific callback and async
+  state keys once per transition closure. Valid synchronous, deferred, resumed,
+  and cancelled transition behavior remains unchanged.
 - Generated sprite sheets now share their precomputed marker-frame index across
   players, while child traversal uses an ordered instance array instead of
   repeating sheet-name lookups. Their normalized animations also clone frames,

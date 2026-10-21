@@ -2239,6 +2239,26 @@ return light
 }
 
 #[test]
+fn state_machine_runtime_preserves_sync_async_and_cancel_semantics() {
+    let lua = Command::new("lua").arg("-v").output();
+    if lua.is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/state_machine_runtime.lua"))
+        .arg(&root)
+        .output()
+        .expect("failed to run state machine runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn build_does_not_overwrite_project_state_machine_runtime() {
     let temp = TempDir::new("build-custom-state-machine-runtime");
 
