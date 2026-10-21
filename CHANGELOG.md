@@ -19,6 +19,10 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The bundled signal runtime now emits directly from a stable listener version
+  instead of copying the listener list for every event. Subscribing or
+  unsubscribing during an emit uses copy-on-write, so the active emit keeps its
+  original listeners while nested and later emits see the updated version.
 - The bundled audio runtime now caches each effective bus gain across an
   update, tracks the active voice count without building temporary lists, and
   publishes its control store only when the active count or music state

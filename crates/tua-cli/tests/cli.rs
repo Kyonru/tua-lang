@@ -1281,6 +1281,26 @@ fn audio_runtime_priority_fades_pooling_and_snapshots() {
 }
 
 #[test]
+fn signal_runtime_uses_copy_on_write_listener_versions() {
+    let lua = Command::new("lua").arg("-v").output();
+    if lua.is_err() {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("lua")
+        .arg(root.join("crates/tua-cli/tests/fixtures/signal_runtime.lua"))
+        .arg(&root)
+        .output()
+        .expect("failed to run signal runtime fixture");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn fused_vec2_arithmetic_matches_brinevector_results() {
     let temp = TempDir::new("vec2-fusion-runtime");
 

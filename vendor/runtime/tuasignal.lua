@@ -13,11 +13,20 @@ local function assert_handler(handler)
   assert(type(handler) == "function", "signal handler must be a function")
 end
 
+local function copy_list(list)
+  local copy = {}
+  for index = 1, #list do copy[index] = list[index] end
+  return copy
+end
+
 local function signal_list(self, name)
   local list = self._signals[name]
 
   if list == nil then
     list = {}
+    self._signals[name] = list
+  elseif list._emitting then
+    list = copy_list(list)
     self._signals[name] = list
   end
 
@@ -75,15 +84,15 @@ function SignalBus:emit(name, ...)
     return
   end
 
-  local snapshot = {}
-
+  -- Mutations detach from this exact list, so this loop needs no snapshot.
+  -- If a handler raises, leaving the private marker set is safe: the next
+  -- mutation copies the abandoned version before changing it.
+  list._emitting = (list._emitting or 0) + 1
   for index = 1, #list do
-    snapshot[index] = list[index]
+    list[index](...)
   end
-
-  for index = 1, #snapshot do
-    snapshot[index](...)
-  end
+  list._emitting = list._emitting - 1
+  if list._emitting == 0 then list._emitting = nil end
 end
 
 function SignalBus:off(name, handler)
@@ -98,6 +107,20 @@ function SignalBus:off(name, handler)
 
   if list == nil then
     return
+  end
+
+  local found = false
+  for index = #list, 1, -1 do
+    if list[index] == handler then
+      found = true
+      break
+    end
+  end
+  if not found then return end
+
+  if list._emitting then
+    list = copy_list(list)
+    self._signals[name] = list
   end
 
   for index = #list, 1, -1 do
@@ -133,17 +156,12 @@ function SignalBus:listeners(name)
   assert_name(name)
 
   local list = self._signals[name]
-  local copy = {}
 
   if list == nil then
-    return copy
+    return {}
   end
 
-  for index = 1, #list do
-    copy[index] = list[index]
-  end
-
-  return copy
+  return copy_list(list)
 end
 
 function SignalBus:onPattern(pattern, handler)
