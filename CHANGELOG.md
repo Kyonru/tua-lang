@@ -19,6 +19,12 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The bundled audio runtime now caches each effective bus gain across an
+  update, tracks the active voice count without building temporary lists, and
+  publishes its control store only when the active count or music state
+  changes. Idle `audio:update(dt)` calls no longer allocate per-frame bus
+  cycle tables, active-voice lists, or mutator closures, and audio subscribers
+  are no longer awakened every frame when their observable state is unchanged.
 - The bundled store runtime no longer copies an entire state table for
   unobserved or watcher-only updates. Unobserved updates allocate no snapshots,
   watcher-only updates retain just the watched top-level values, and listener

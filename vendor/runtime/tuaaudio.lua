@@ -201,15 +201,31 @@ function Audio:subscribe(listener)
   return self._control:subscribe(listener)
 end
 
-function Audio:_busGain(name, seen)
+local function computeBusGain(self, name)
   if not name then return 1 end
   local bus = self._buses[name]
   if not bus then return 1 end
-  seen = seen or {}
-  if seen[name] then return 0 end
-  seen[name] = true
+  local state = self._busGainState[name]
+  if state == 2 then return self._busGains[name] end
+  if state == 1 then return 0 end
+  self._busGainState[name] = 1
   local gain = bus.muted and 0 or (bus._gain or bus.volume or 1)
-  return gain * self:_busGain(bus.parent, seen)
+  gain = gain * computeBusGain(self, bus.parent)
+  self._busGains[name] = gain
+  self._busGainState[name] = 2
+  return gain
+end
+
+function Audio:_refreshBusGains()
+  for name in pairs(self._busGainState) do self._busGainState[name] = nil end
+  for name in pairs(self._buses) do computeBusGain(self, name) end
+  self._busGainsDirty = false
+end
+
+function Audio:_busGain(name)
+  if self._busGainsDirty then self:_refreshBusGains() end
+  if not name or not self._buses[name] then return 1 end
+  return self._busGains[name]
 end
 
 function Audio:_busContains(candidate, ancestor)
@@ -231,15 +247,25 @@ function Audio:_activeFor(cueName, busName)
   return result
 end
 
+function Audio:_activeCount(cueName, busName)
+  local result = 0
+  for _, record in ipairs(self._voices) do
+    if record.active and (not cueName or record.cueName == cueName) and (not busName or self:_busContains(record.bus, busName)) then
+      result = result + 1
+    end
+  end
+  return result
+end
+
 function Audio:_limitVictims(cueName, cue, bus)
   local candidates = {}
   local constrained = false
   local function append(records)
     for _, record in ipairs(records) do candidates[record] = true end
   end
-  if self.maxVoices and #self:_activeFor() >= self.maxVoices then constrained = true append(self:_activeFor()) end
-  if cue.maxVoices and #self:_activeFor(cueName) >= cue.maxVoices then constrained = true append(self:_activeFor(cueName)) end
-  if bus and bus.maxVoices and #self:_activeFor(nil, cue.bus) >= bus.maxVoices then constrained = true append(self:_activeFor(nil, cue.bus)) end
+  if self.maxVoices and self._activeVoiceCount >= self.maxVoices then constrained = true append(self:_activeFor()) end
+  if cue.maxVoices and self:_activeCount(cueName) >= cue.maxVoices then constrained = true append(self:_activeFor(cueName)) end
+  if bus and bus.maxVoices and self:_activeCount(nil, cue.bus) >= bus.maxVoices then constrained = true append(self:_activeFor(nil, cue.bus)) end
   if not constrained then return nil end
   local list = {}
   for record in pairs(candidates) do list[#list + 1] = record end
@@ -265,6 +291,7 @@ function Audio:_record()
   if not record then record = { generation = 0 } end
   record.generation = record.generation + 1
   record.active = true
+  self._activeVoiceCount = self._activeVoiceCount + 1
   if not record.registered then
     record.registered = true
     self._voices[#self._voices + 1] = record
@@ -275,6 +302,7 @@ end
 function Audio:_release(record, reason)
   if not record.active then return end
   record.active = false
+  self._activeVoiceCount = self._activeVoiceCount - 1
   record.stopping = false
   sourceCall(record.source, "stop")
   local handle = record.handle
@@ -363,6 +391,7 @@ function Audio:setBusVolume(name, volume, fade)
   if not bus then return false end
   bus.volume = clamp(volume, 0, 1)
   beginFade(bus, bus.volume, fade, function() self:_emit("fadeComplete", { bus = name }) end)
+  self._busGainsDirty = true
   self:_emit("busChanged", { bus = name, volume = bus.volume, muted = bus.muted })
   return true
 end
@@ -371,6 +400,7 @@ function Audio:setBusMuted(name, muted)
   local bus = self._buses[name]
   if not bus then return false end
   bus.muted = muted
+  self._busGainsDirty = true
   self:_emit("busChanged", { bus = name, volume = bus.volume, muted = muted })
   return true
 end
@@ -498,7 +528,11 @@ end
 
 function Audio:update(dt)
   self._clock = self._clock + dt
-  for _, bus in pairs(self._buses) do updateFade(bus, dt) end
+  for _, bus in pairs(self._buses) do
+    if bus._fade then self._busGainsDirty = true end
+    updateFade(bus, dt)
+  end
+  if self._busGainsDirty then self:_refreshBusGains() end
   for _, record in ipairs(self._voices) do
     if record.active then
       local finishedFade = updateFade(record, dt)
@@ -542,20 +576,22 @@ function Audio:update(dt)
       table.remove(self._analysisJobs, index)
     end
   end
-  self._control:update(function(state)
-    state.activeVoices = #self:_activeFor()
-    state.musicState = self._musicRuntime and self._musicRuntime.name or nil
-  end)
+  local control = self._control:get()
+  local musicState = self._musicRuntime and self._musicRuntime.name or nil
+  if control.activeVoices ~= self._activeVoiceCount or control.musicState ~= musicState then
+    self._control:update(self._updateControl)
+  end
 end
 
 function Audio:snapshot()
+  if self._busGainsDirty then self:_refreshBusGains() end
   local buses = {}
-  for name, bus in pairs(self._buses) do buses[name] = { gain = self:_busGain(name), volume = bus.volume, muted = bus.muted, activeVoices = #self:_activeFor(nil, name), fading = bus._fade ~= nil } end
+  for name, bus in pairs(self._buses) do buses[name] = { gain = self:_busGain(name), volume = bus.volume, muted = bus.muted, activeVoices = self:_activeCount(nil, name), fading = bus._fade ~= nil } end
   local music = { state = self._musicRuntime and self._musicRuntime.name or nil, pending = self._pendingMusic and self._pendingMusic.name or nil,
     position = self._musicRuntime and self._musicRuntime.position or nil, layerDrift = self._musicRuntime and self._musicRuntime.drift or 0,
     energy = self._musicRuntime and self._musicRuntime.energy or 0 }
   return {
-    activeVoices = #self:_activeFor(), pooledVoices = #self._pool,
+    activeVoices = self._activeVoiceCount, pooledVoices = #self._pool,
     started = self._stats.started, stolen = self._stats.stolen, rejected = self._stats.rejected,
     buses = buses, music = music, analysis = self._analysisStatus,
   }
@@ -664,10 +700,16 @@ local function create(options)
     _control = store({ activeVoices = 0, musicState = nil }),
     _buses = buses, _cues = copy(options.cues), _effects = copy(options.effects),
     _music = copy(options.music), _analysis = options.analysis or {}, _analysisStatus = {},
-    _voices = {}, _pool = {}, _stats = { started = 0, stolen = 0, rejected = 0 },
+    _voices = {}, _pool = {}, _activeVoiceCount = 0,
+    _stats = { started = 0, stolen = 0, rejected = 0 },
+    _busGains = {}, _busGainState = {}, _busGainsDirty = true,
     _effectNames = {},
     _analysisJobs = {},
   }, Audio)
+  self._updateControl = function(state)
+    state.activeVoices = self._activeVoiceCount
+    state.musicState = self._musicRuntime and self._musicRuntime.name or nil
+  end
   for name in pairs(self._effects) do self._effectNames[name] = "tua_audio_" .. self._id .. "_" .. name end
   return self
 end

@@ -25,6 +25,54 @@ love = {
 
 local audioSystem = require("tuaaudio")
 local source = setmetatable({}, Source)
+
+-- Idle updates reuse their bus cache, do not build active-voice lists, and do
+-- not wake control subscribers until the public control state changes.
+do
+  local tracked = audioSystem({
+    buses = { master = { volume = 1 } },
+    cues = { tone = { source = source, bus = "master" } },
+  })
+  local notifications = 0
+  tracked:subscribe(function() notifications = notifications + 1 end)
+  tracked:update(0)
+
+  collectgarbage("collect")
+  collectgarbage("stop")
+  local before = collectgarbage("count")
+  for _ = 1, 500 do tracked:update(1 / 60) end
+  local allocatedKb = collectgarbage("count") - before
+  collectgarbage("restart")
+
+  assert(notifications == 0, "idle updates must not notify control subscribers")
+  assert(allocatedKb < 32, string.format(
+    "500 idle audio updates should allocate under 32 KB (got %.1f KB)", allocatedKb))
+
+  local voice = assert(tracked:play("tone"))
+  tracked:update(0)
+  assert(notifications == 1 and tracked:snapshot().activeVoices == 1,
+    "starting a voice must publish the new active count once")
+  tracked:update(0)
+  assert(notifications == 1, "unchanged active voices must stay silent")
+  assert(voice:stop(0))
+  tracked:update(0)
+  assert(notifications == 2 and tracked:snapshot().activeVoices == 0,
+    "stopping a voice must publish the new active count once")
+end
+
+-- Cyclic bus graphs keep the previous fail-closed gain of zero without
+-- allocating a cycle-detection table for every voice.
+do
+  local cyclic = audioSystem({
+    buses = {
+      master = { parent = "loop", volume = 1 },
+      loop = { parent = "master", volume = 1 },
+    },
+  })
+  assert(cyclic:snapshot().buses.master.gain == 0)
+  assert(cyclic:snapshot().buses.loop.gain == 0)
+end
+
 local audio = audioSystem({
   maxVoices = 2,
   buses = { master = { volume = 0.5 }, sfx = { parent = "master", volume = 0.5 } },

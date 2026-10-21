@@ -66,8 +66,9 @@ handle cannot mutate a pooled record after that record has been reused.
 Use `pauseBus`, `resumeBus`, `stopBus`, `setBusVolume`, and `setBusMuted` for
 groups. `snapshot()` returns detached counts, effective bus gains, fades,
 music state, analysis state, and started/stolen/rejected counters. `subscribe`
-observes control-state changes. Typed `on` and `once` cover voice lifecycle,
-bus changes, fades, music transitions, beats, bars, effects, and analysis.
+observes active-voice and music-state changes; an update with unchanged control
+state does not notify it. Typed `on` and `once` cover voice lifecycle, bus
+changes, fades, music transitions, beats, bars, effects, and analysis.
 
 ## Music Scenes
 
