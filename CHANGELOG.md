@@ -36,16 +36,20 @@ language or editor behavior, and migration notes call out those changes.
   behavior is otherwise unchanged.
 - Generated sprite sheets now share their precomputed marker-frame index across
   players, while child traversal uses an ordered instance array instead of
-  repeating sheet-name lookups. Their normalized animations also clone frames,
-  durations, and rebuilt intervals in one pass. Animation state and all public
-  arrays remain independent between players, while custom sheets and replacement
-  anim8 runtimes retain the public clone path. In the included macOS arm64 LOVE
-  11.5 benchmark over 2,000 players, construction memory fell about 18%. With the
-  JIT disabled, construction, nested updates, and leaf draws improved about 26%,
-  13%, and 25%; with the JIT enabled, construction was about 1.5x faster,
-  updates stayed near parity, and leaf draws improved about 40%. These figures
-  are platform- and workload-specific; `make profile-sprite-love` compares
-  another revision locally.
+  repeating sheet-name lookups. Players created from animations of the bundled
+  anim8 runtime, in generated and hand-written sheets alike, now share the
+  source animation's read-only frame, duration, and interval arrays instead of
+  copying them; each player still owns its timer, frame position, status, and
+  flips. Code that edited a player's `frames`, `durations`, or `intervals` in
+  place should replace the animation instead. Animations from replacement
+  anim8 runtimes retain the public clone path. In the included macOS arm64
+  LOVE 11.5.0 benchmark over 2,000 players, compared with the runtime before
+  these sprite changes, construction memory fell from about 4.7 KB to 2.5 KB
+  per player. With the JIT disabled, construction was about 6.3x faster, nested
+  updates 1.16x, and leaf draws 1.6x; with the JIT enabled, they were about
+  5.9x, 2.4x, and 2.3x faster. These figures are platform- and
+  workload-specific; `make profile-sprite-love` compares another revision
+  locally.
 - Leaf sprites now pass their transform directly to anim8, avoiding redundant
   graphics push, translate, rotate, scale, shear, and pop calls. Nested sprites
   retain the graphics-stack path so children continue to inherit their parent

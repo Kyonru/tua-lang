@@ -309,7 +309,7 @@ local function new(sheet, initial)
   assert(type(sheet) == "table", "sprite player requires a sprite sheet")
   local animations = {}
   for name, animation in pairs(sheet.animations or {}) do
-    if sheet.__tuaStaticAnimations and animation._cloneTuaPlayer then
+    if animation._cloneTuaPlayer then
       animations[name] = animation:_cloneTuaPlayer()
     else
       animations[name] = animation:clone()

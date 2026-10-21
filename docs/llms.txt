@@ -144,7 +144,10 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
 - `sheet:player(name)` returns a replaceable-runtime `SpritePlayer` with checked
   `play`, `gotoAndPlay`, `gotoAndStop`, marker subscriptions, time updates,
   manual seeking, origin-aware drawing, and explicit leaf insertion into a
-  caller-owned `SpriteBatch` through `addToBatch`.
+  caller-owned `SpriteBatch` through `addToBatch`. Players share the sheet's
+  read-only frame, duration, and interval arrays; use `player.speed` for
+  per-player timing, or `player.animations.run = player.animations.run:clone()`
+  followed by `player:play("run", true)` for private arrays.
 - Sprite sheets may contain optional named child sheets; `player:child(name)`
   checks the child name and returns its recursively updated/drawn controller.
 - `signal()` provides typed event names/payloads through `on`, `once`,

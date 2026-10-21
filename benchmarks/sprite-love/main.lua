@@ -60,7 +60,6 @@ local function makeSheet(runtime, image, frames, preindexed, child)
     childOrder[1] = "child"
   end
   return {
-    __tuaStaticAnimations = preindexed,
     image = image,
     animations = animations,
     animationOrder = animationOrder,

@@ -120,8 +120,8 @@ do
   assert(call[8] == 6 and call[9] == 6)
 end
 
--- The generated-sheet clone path rebuilds independent public arrays and
--- playback state in one pass; sprite optimizations must not couple players.
+-- The sprite-player clone path shares the read-only playback arrays and gives
+-- each player its own playback state; advancing one player must not move another.
 do
   local anim8 = assert(loadfile(root .. "/vendor/runtime/anim8.lua"))()
   local source = anim8.newAnimation({ "one", "two" }, { 0.1, 0.2 })
@@ -130,24 +130,42 @@ do
   source.status = "paused"
   source:flipH()
   local clone = source:_cloneTuaPlayer()
+  local other = source:_cloneTuaPlayer()
 
-  assert(clone ~= source)
-  assert(clone.frames ~= source.frames and clone.durations ~= source.durations)
-  assert(clone.intervals ~= source.intervals)
-  assert(clone.frames[1] == "one" and clone.durations[2] == 0.2)
+  assert(clone ~= source and clone ~= other)
+  assert(clone.frames == source.frames and clone.durations == source.durations)
+  assert(clone.intervals == source.intervals)
   assert(clone.totalDuration == source.totalDuration and clone.onLoop == source.onLoop)
   assert(clone.timer == 0 and clone.position == 1 and clone.status == "playing")
   assert(clone.flippedH and not clone.flippedV)
-  clone.frames[1] = "changed"
-  clone.durations[1] = 9
-  clone.intervals[1] = 9
-  assert(source.frames[1] == "one" and source.durations[1] == 0.1 and source.intervals[1] == 0)
 
-  -- Numeric prototype edits are reflected exactly as they are by public clone.
-  source.durations[1] = 0.4
-  local edited = source:_cloneTuaPlayer()
-  assert(edited.durations[1] == 0.4 and edited.intervals[2] == 0.4)
-  assert(math.abs(edited.totalDuration - 0.6) < 1e-12)
+  clone:update(0.15)
+  clone:flipV()
+  clone:pause()
+  assert(clone.position == 2 and clone.flippedV and clone.status == "paused")
+  assert(other.position == 1 and other.timer == 0 and not other.flippedV and other.status == "playing")
+  assert(source.position == 2 and source.timer == 0.15 and not source.flippedV)
+end
+
+-- Hand-written sheets holding bundled anim8 animations take the same clone
+-- path as generated sheets.
+do
+  local anim8 = assert(loadfile(root .. "/vendor/runtime/anim8.lua"))()
+  local source = anim8.newAnimation({ "one", "two" }, 0.1)
+  local fastClone = getmetatable(source).__index._cloneTuaPlayer
+  local fastClones = 0
+  source._cloneTuaPlayer = function(self)
+    fastClones = fastClones + 1
+    return fastClone(self)
+  end
+  local handWritten = sheet("hand-written")
+  handWritten.animations = { idle = source }
+  local first = sprite.new(handWritten)
+  local second = sprite.new(handWritten)
+
+  assert(fastClones == 2, "hand-written anim8 animations use the sprite-player clone")
+  assert(first.animation ~= source and first.animation ~= second.animation)
+  assert(first.animation.frames == source.frames and second.animation.intervals == source.intervals)
 end
 
 -- Batching resolves trimmed-frame origins exactly as direct draw does.

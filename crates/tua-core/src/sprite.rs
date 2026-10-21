@@ -2635,7 +2635,6 @@ fn lower_sprite_declaration(declaration: &SpriteDeclaration) -> String {
         ));
     }
     output.push_str(&format!("local {} = {{\n", declaration.name));
-    output.push_str("  __tuaStaticAnimations = true,\n");
     output.push_str(&format!("  image = {image_local},\n"));
     output.push_str(&format!("  grid = {grid_local},\n"));
     output.push_str(&format!(

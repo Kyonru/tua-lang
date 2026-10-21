@@ -198,29 +198,17 @@ function Animation:clone()
   return newAnim
 end
 
--- Tua-generated sprite sheets contain normalized numeric duration arrays. This
--- private path preserves clone independence while rebuilding durations and
--- intervals together instead of parsing an already-normalized table again.
+-- Sprite players share the source animation's frames, durations, intervals,
+-- and total duration: anim8 never writes to them after construction, so they
+-- are read-only playback tables. Only playback state (timer, position, status,
+-- and flips) belongs to each player. Replace a player's animation rather than
+-- editing those shared arrays in place.
 function Animation:_cloneTuaPlayer()
-  local frames = cloneArray(self.frames)
-  local durations = {}
-  local intervals = {0}
-  local totalDuration = 0
-  for index = 1, #self.durations do
-    local duration = self.durations[index]
-    assert(type(duration) == 'number', "The value [" .. tostring(duration) .. "] should be a number")
-    durations[index] = duration
-    totalDuration = totalDuration + duration
-    intervals[index + 1] = totalDuration
-  end
-  if #durations < #frames then
-    error("The durations table has length of " .. tostring(#durations) .. ", but it should be >= " .. tostring(#frames))
-  end
   return setmetatable({
-      frames         = frames,
-      durations      = durations,
-      intervals      = intervals,
-      totalDuration  = totalDuration,
+      frames         = self.frames,
+      durations      = self.durations,
+      intervals      = self.intervals,
+      totalDuration  = self.totalDuration,
       onLoop         = self.onLoop,
       timer          = 0,
       position       = 1,

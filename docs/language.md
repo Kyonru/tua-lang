@@ -961,8 +961,23 @@ values such as `{ 0.1, 0.5, 0.1 }` and ranges such as
 "pauseAtEnd"`, but it cannot be combined with `onLoop`.
 
 Static animation keys derive the exact runtime animation map and animation-name
-union. Create an independent controller with `sheet:player("idle")`. The
-controller checks and completes names for `play`, `gotoAndPlay`, and
+union. Create an independent controller with `sheet:player("idle")`. Each
+controller owns its playback state (timer, frame, status, and flips) but shares
+the sheet's read-only frame, duration, and interval arrays with every other
+player, so creating players stays cheap; don't edit those arrays in place.
+Use `player.speed` to change one player's timing (negative values play
+backward), and rebuild an animation with `anim8.newAnimation` rather than
+editing its `durations`, since its intervals are computed only on
+construction. When one player genuinely needs its own arrays, give it a private
+copy and restart that animation so the player switches to the copy (a player
+keeps its current animation until it selects one again):
+
+```lua
+player.animations.run = player.animations.run:clone()
+player:play("run", true)
+```
+
+The controller checks and completes names for `play`, `gotoAndPlay`, and
 `gotoAndStop`; supports `stop`, `resume`, `update`, `seek`, and `seekFrame`;
 and draws with the configured registration point. Manual seeking lets movement
 code drive a run or roll pose from distance instead of elapsed time.
