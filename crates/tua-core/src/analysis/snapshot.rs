@@ -117,6 +117,37 @@ impl AnalysisSnapshot {
         self.file(path.as_ref())?.environment()
     }
 
+    /// Returns the project-aware environment used by semantic queries. Unlike
+    /// `type_environment`, this includes imported aliases, required-module
+    /// values, and project-local inference, so compiler lowering can make the
+    /// same type-driven decisions as diagnostics and editor features.
+    pub fn project_type_environment(&self, path: impl AsRef<Path>) -> Option<TypeEnvironment> {
+        let file = self.file(path.as_ref())?;
+        let parsed = file.parsed.as_ref().ok()?;
+
+        // Reuse facts an editor query already built, but don't build a whole
+        // semantic index just to read the environment: for a large file that
+        // costs far more than the environment itself.
+        if let Some(facts) = self
+            .semantic_facts
+            .lock()
+            .expect("semantic facts lock poisoned")
+            .get(&normalize_path(&parsed.path))
+        {
+            return Some(facts.environment.clone());
+        }
+        let Some(semantics) = file.semantics() else {
+            return Some(self.semantic_environment(parsed));
+        };
+        let inference = self.project_local_inference(parsed);
+
+        Some(self.project_type_environment_for_parsed(
+            parsed,
+            semantics.environment.clone(),
+            &inference,
+        ))
+    }
+
     pub fn semantic_index(&self, path: impl AsRef<Path>) -> Option<SemanticIndex> {
         let file = self.file(path.as_ref())?;
         let parsed = file.parsed.as_ref().ok()?;

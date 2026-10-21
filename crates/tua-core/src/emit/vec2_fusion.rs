@@ -65,9 +65,20 @@ pub(super) fn fuse_vec2_arithmetic(
     environment: &TypeEnvironment,
     ast: ast::Ast,
 ) -> ast::Ast {
+    // Planning queries the type of every arithmetic expression, so skip files
+    // that cannot hold a Vec2. A file qualifies if it names `vec2` or `Vec2`,
+    // or if its environment carries a Vec2 in some binding: values from
+    // required modules and project inference arrive that way even when the
+    // consuming file never spells the type. Every `--` comment contains `-`,
+    // so an arithmetic-token check alone would let nearly every file through.
     if parsed.raw.language != ParsedLanguage::Tua
+        || !parsed
+            .source
+            .bytes()
+            .any(|byte| matches!(byte, b'+' | b'-' | b'*' | b'/'))
         || !(parsed.source.contains(vector::CONSTRUCTOR_NAME)
-            || parsed.source.contains(vector::TYPE_NAME))
+            || parsed.source.contains(vector::TYPE_NAME)
+            || environment_mentions_vec2(environment))
     {
         return ast;
     }
@@ -110,6 +121,66 @@ pub(super) fn fuse_vec2_arithmetic(
 }
 
 type ByteRange = (usize, usize);
+
+/// Whether any local or function in the environment has a type that mentions
+/// the built-in `Vec2`. Aliases are followed only when a binding refers to
+/// them, so the large built-in catalogs are not scanned for every file.
+fn environment_mentions_vec2(environment: &TypeEnvironment) -> bool {
+    let vec2 = vector::vec2_type();
+    let mut visited = BTreeSet::new();
+
+    environment
+        .locals()
+        .any(|(_, ty)| type_mentions_vec2(environment, ty, &vec2, &mut visited))
+        || environment.functions().iter().any(|function| {
+            function
+                .parameters
+                .iter()
+                .map(|parameter| &parameter.ty)
+                .chain(function.return_types.iter())
+                .chain(function.return_type.iter())
+                .any(|ty| type_mentions_vec2(environment, ty, &vec2, &mut visited))
+        })
+}
+
+fn type_mentions_vec2(
+    environment: &TypeEnvironment,
+    ty: &Type,
+    vec2: &Type,
+    visited: &mut BTreeSet<String>,
+) -> bool {
+    if ty == vec2 {
+        return true;
+    }
+    match ty {
+        Type::Alias(name) => {
+            name == vector::TYPE_NAME
+                || (visited.insert(name.clone())
+                    && environment
+                        .alias(name)
+                        .is_some_and(|alias| type_mentions_vec2(environment, alias, vec2, visited)))
+        }
+        Type::Union(types) | Type::Tuple(types) => types
+            .iter()
+            .any(|ty| type_mentions_vec2(environment, ty, vec2, visited)),
+        Type::Function(function) => function
+            .parameters
+            .iter()
+            .map(|parameter| &parameter.ty)
+            .chain(function.return_types.iter())
+            .chain(function.vararg_type.as_deref())
+            .any(|ty| type_mentions_vec2(environment, ty, vec2, visited)),
+        Type::Table(table) => table
+            .fields()
+            .any(|(_, field)| type_mentions_vec2(environment, &field.ty, vec2, visited)),
+        Type::Array(item) => type_mentions_vec2(environment, item, vec2, visited),
+        Type::Dictionary { key, value } => {
+            type_mentions_vec2(environment, key, vec2, visited)
+                || type_mentions_vec2(environment, value, vec2, visited)
+        }
+        Type::Primitive(_) | Type::Any | Type::StringLiteral(_) => false,
+    }
+}
 
 /// A field or index read bound to a local before a fused statement.
 #[derive(Clone, Debug)]

@@ -136,7 +136,8 @@ Never answer with TypeScript, JavaScript, Luau, Python, or Markdown.
   `music "path"`, `font(path, size)`, `shader "path"`, `imageData "path"`,
   `canvas(width, height)`, `quad(...)`, `spriteBatch(image, count)`, and
   `particles(image, count)`.
-- `Vec2`/`vec2(x, y)` provide typed BrineVector operations.
+- `Vec2`/`vec2(x, y)` provide typed BrineVector operations; typed arithmetic
+  fuses temporary vectors, including values inferred from required modules.
 - `spriteSheet({...})` derives exact animation keys and typed `SpriteAnimation`
   values, supports ordered multi-row ranges, registration origins,
   durations/fps, per-animation frames, markers, and loop callbacks.

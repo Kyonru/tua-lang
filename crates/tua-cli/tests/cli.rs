@@ -572,7 +572,12 @@ return {
         .output()
         .expect("failed to run tua build");
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be valid UTF-8");
 
@@ -1352,6 +1357,74 @@ return { cases = cases }
 }
 
 #[test]
+fn vec2_fusion_uses_types_inferred_from_required_modules() {
+    let temp = TempDir::new("vec2-fusion-required-module");
+
+    fs::write(temp.path().join(CONFIG_FILE), DEFAULT_CONFIG_TEXT).expect("failed to write config");
+    fs::create_dir_all(temp.path().join("src")).expect("failed to create source");
+    fs::write(
+        temp.path().join("src/points.tua"),
+        r#"local function origin(): Vec2
+  return vec2(10, 20)
+end
+
+return { origin = origin }
+"#,
+    )
+    .expect("failed to write typed module");
+    fs::write(
+        temp.path().join("src/lua_points.lua"),
+        r#"local Vector = require("brinevector")
+
+---@return Vec2
+local function origin()
+  return Vector(30, 40)
+end
+
+return { origin = origin }
+"#,
+    )
+    .expect("failed to write annotated Lua module");
+    fs::write(
+        temp.path().join("src/main.tua"),
+        r#"local points = require("points")
+local luaPoints = require("lua_points")
+local position = points.origin()
+local other = luaPoints.origin()
+local doubled = position + position
+local mixed = doubled + other
+return mixed
+"#,
+    )
+    .expect("failed to write consumer");
+
+    let output = tua()
+        .arg("build")
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to run tua build");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let consumer =
+        fs::read_to_string(temp.path().join("build/main.lua")).expect("failed to read consumer");
+    assert!(
+        consumer.contains(
+            "local doubled = __tua_vec2(position.x + position.x, position.y + position.y)"
+        ),
+        "required-module Vec2 should fuse without spelling vec2 or Vec2 in the consumer:\n{consumer}"
+    );
+    assert!(
+        consumer.contains("local mixed = __tua_vec2(doubled.x + other.x, doubled.y + other.y)"),
+        "annotated Lua Vec2 should feed the same project-aware fusion:\n{consumer}"
+    );
+}
+
+#[test]
 fn hoisted_vec2_reads_happen_once_and_match_brinevector() {
     let temp = TempDir::new("vec2-hoisting-runtime");
 
@@ -1382,7 +1455,17 @@ local function offset(body: Body, extra: Vec2): Vec2
   return -body.pos + extra * 2
 end
 
-return { integrate = integrate, advance = advance, predict = predict, offset = offset }
+local function failAfterReads(body: Body): Vec2
+  return body.pos + body.vel
+end
+
+return {
+  integrate = integrate,
+  advance = advance,
+  predict = predict,
+  offset = offset,
+  failAfterReads = failAfterReads,
+}
 "#,
     )
     .expect("failed to write source");

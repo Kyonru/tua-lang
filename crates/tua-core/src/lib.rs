@@ -133,8 +133,9 @@ pub use ecs::{
 pub use emit::{
     emit_lua, emit_lua_artifact, emit_lua_artifact_with_mode, emit_lua_with_mode, emit_tua_source,
     emit_tua_source_artifact, emit_tua_source_artifact_with_mode, emit_tua_source_with_mode,
-    emit_tua_source_with_workspace, emit_tua_source_with_workspace_artifact, LoweringKind,
-    LuaEmission, LuaLineProvenance,
+    emit_tua_source_with_workspace, emit_tua_source_with_workspace_artifact,
+    emit_tua_source_with_workspace_environment_artifact, LoweringKind, LuaEmission,
+    LuaLineProvenance,
 };
 #[cfg(any(test, feature = "test-fixture"))]
 pub use fixture::{Fixture, FixtureExpectation, FixtureFile, FixtureMarker, FixtureTempDir};

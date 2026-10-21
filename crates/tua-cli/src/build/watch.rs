@@ -287,12 +287,23 @@ impl WatchBuildSession {
                 push_sibling_collision_warning(&mut diagnostics, &source_path, self.in_place);
             }
 
-            let emission = match emit_tua_source_with_workspace_artifact(
-                &source_path,
-                source,
-                annotation_mode,
-                &self.workspace,
-            ) {
+            let environment = snapshot.project_type_environment(&source_path);
+            let emission = match environment.as_ref() {
+                Some(environment) => emit_tua_source_with_workspace_environment_artifact(
+                    &source_path,
+                    source,
+                    annotation_mode,
+                    &self.workspace,
+                    environment,
+                ),
+                None => emit_tua_source_with_workspace_artifact(
+                    &source_path,
+                    source,
+                    annotation_mode,
+                    &self.workspace,
+                ),
+            };
+            let emission = match emission {
                 Ok(output) => output,
                 Err(mut source_diagnostics) => {
                     diagnostics.append(&mut source_diagnostics);

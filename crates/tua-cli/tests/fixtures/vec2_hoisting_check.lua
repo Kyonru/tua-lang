@@ -77,6 +77,23 @@ for case = 1, 200 do
   check(same(offset, -pos + extra * 2), "offset matches BrineVector (case " .. case .. ")")
 end
 
+-- Hoisting deliberately reads every operand before component arithmetic. This
+-- makes failures name the generated local and means a later getter runs before
+-- an earlier nil vector fails at `.x`.
+do
+  local body, reads = counted({ pos = nil, vel = Vector(1, 2) })
+  local ok, message = pcall(hoisted.failAfterReads, body)
+  check(not ok, "nil vector should fail")
+  check(
+    type(message) == "string" and message:find("__tua_body_pos", 1, true) ~= nil,
+    "error names the hoisted field local"
+  )
+  check(
+    reads.pos == 1 and reads.vel == 1,
+    "all hoisted reads happen before component arithmetic"
+  )
+end
+
 if failures > 0 then
   io.stderr:write(failures .. " hoisted Vec2 check(s) failed\n")
   os.exit(1)

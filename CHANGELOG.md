@@ -55,8 +55,12 @@ language or editor behavior, and migration notes call out those changes.
   vectors ran about 2.6× faster with half the garbage,
   `body.pos += body.vel * dt` about 2.3× faster, and a projectile step with
   three operators about 3.8× faster. With the JIT enabled, LuaJIT already
-  removes the temporary vectors, and timings were unchanged. These figures are
-  platform- and workload-specific.
+  removes the temporary vectors, and timings were unchanged. Project builds
+  also fuse vector values inferred from required modules even when the
+  consuming file never spells `vec2` or `Vec2`. Generated locals can appear in
+  runtime error messages, and all hoisted reads occur before component
+  arithmetic, so later side-effecting `__index` reads may run before an earlier
+  invalid operand raises. These figures are platform- and workload-specific.
 
 ### Fixed
 

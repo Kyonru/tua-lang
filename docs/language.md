@@ -1063,6 +1063,16 @@ The assignment target must be a name, or a name with one field or key, such as
 whose right-hand side mentions its own name, and a `Vec2` expression nested
 inside a larger one, such as a call argument, keep BrineVector's operators.
 
+Two observable trade-offs come with these generated locals:
+
+- Runtime errors name the generated local. If `self.pos` is unexpectedly `nil`,
+  for example, Lua reports an attempt to index local `__tua_self_pos`; the name
+  identifies the source field that supplied the invalid value.
+- Every field and index operand is read before component arithmetic begins. If
+  an earlier BrineVector operation would have failed, getters for later
+  operands have already run. This is observable only when those reads execute
+  side effects through `__index`.
+
 Expressions with a comment inside them, function calls, or division by a
 variable are also left unchanged. Comments before or after the expression are
 fine.
@@ -1071,6 +1081,11 @@ The built-in `Vec2` is nominal at assignment boundaries: create one with
 `vec2(x, y)` rather than assigning an ordinary `{ x, y }` table. This keeps its
 static operator semantics aligned with the BrineVector value used at runtime. A
 project that declares its own `type Vec2` keeps that alias structural.
+
+Fusion uses the project-aware type environment during project builds. A file
+does not need to spell `vec2` or `Vec2` itself: values inferred from a required
+Tua or annotated Lua module are optimized when their resolved type is the
+built-in vector type.
 
 ### LOVE Methods And Callbacks
 

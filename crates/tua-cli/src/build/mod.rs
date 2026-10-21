@@ -13,11 +13,12 @@ use crate::source::{
 use crate::source_map::{debugger_source_map_path_for, source_map_path_for, write_source_map};
 use tua_core::{
     anim8_runtime_source, baton_runtime_source, brinevector_runtime_source,
-    emit_tua_source_with_workspace_artifact, format_diagnostics_for_cli, tuaaudio_runtime_source,
-    tuaecs_runtime_source, tuaobjectpool_runtime_source, tuasignal_runtime_source,
-    tuasprite_runtime_source, tuastatemachine_runtime_source, tuastore_runtime_source,
-    AnalysisHost, AnalysisSourceKind, AnnotationMode, Diagnostic, DiagnosticCategory,
-    DiagnosticCode, DiagnosticSeverity, LoadedConfig, ProjectWorkspace,
+    emit_tua_source_with_workspace_artifact, emit_tua_source_with_workspace_environment_artifact,
+    format_diagnostics_for_cli, tuaaudio_runtime_source, tuaecs_runtime_source,
+    tuaobjectpool_runtime_source, tuasignal_runtime_source, tuasprite_runtime_source,
+    tuastatemachine_runtime_source, tuastore_runtime_source, AnalysisHost, AnalysisSourceKind,
+    AnnotationMode, Diagnostic, DiagnosticCategory, DiagnosticCode, DiagnosticSeverity,
+    LoadedConfig, ProjectWorkspace,
 };
 
 struct BundledRuntime {
@@ -348,12 +349,23 @@ fn build_project_files(
                     continue;
                 }
 
-                let emission = match emit_tua_source_with_workspace_artifact(
-                    &source_path,
-                    source.as_str(),
-                    annotation_mode,
-                    &workspace,
-                ) {
+                let environment = snapshot.project_type_environment(&source_path);
+                let emission = match environment.as_ref() {
+                    Some(environment) => emit_tua_source_with_workspace_environment_artifact(
+                        &source_path,
+                        source.as_str(),
+                        annotation_mode,
+                        &workspace,
+                        environment,
+                    ),
+                    None => emit_tua_source_with_workspace_artifact(
+                        &source_path,
+                        source.as_str(),
+                        annotation_mode,
+                        &workspace,
+                    ),
+                };
+                let emission = match emission {
                     Ok(output) => output,
                     Err(mut source_diagnostics) => {
                         diagnostics.append(&mut source_diagnostics);

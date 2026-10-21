@@ -85,6 +85,30 @@ pub fn emit_tua_source_with_workspace_artifact(
     )
 }
 
+/// Emits one project source with semantic facts supplied by an analysis
+/// snapshot. Build frontends should prefer this over rebuilding a file-local
+/// environment, because imported module values may carry types that affect
+/// lowering decisions such as Vec2 fusion.
+pub fn emit_tua_source_with_workspace_environment_artifact(
+    path: impl AsRef<Path>,
+    source: impl Into<String>,
+    annotation_mode: AnnotationMode,
+    workspace: &ProjectWorkspace,
+    environment: &TypeEnvironment,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
+    let parsed =
+        parse_tua_source(path, source).map_err(reclassify_compound_assignment_diagnostics)?;
+    let resolver = |specifier: &str| workspace.module_name_for_import(&parsed.path, specifier);
+
+    emit_lua_artifact_with_mode_import_resolver_and_environment(
+        &parsed,
+        annotation_mode,
+        Some(&resolver),
+        workspace.config().ecs.enabled,
+        Some(environment),
+    )
+}
+
 pub fn emit_lua(parsed: &ParsedSource) -> Result<String, Vec<Diagnostic>> {
     emit_lua_artifact(parsed).map(|emission| emission.code)
 }
@@ -132,12 +156,33 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
     import_resolver: ImportResolver<'_>,
     ecs_enabled: bool,
 ) -> Result<LuaEmission, Vec<Diagnostic>> {
+    emit_lua_artifact_with_mode_import_resolver_and_environment(
+        parsed,
+        annotation_mode,
+        import_resolver,
+        ecs_enabled,
+        None,
+    )
+}
+
+fn emit_lua_artifact_with_mode_import_resolver_and_environment(
+    parsed: &ParsedSource,
+    annotation_mode: AnnotationMode,
+    import_resolver: ImportResolver<'_>,
+    ecs_enabled: bool,
+    environment: Option<&TypeEnvironment>,
+) -> Result<LuaEmission, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     // Emission features that need semantic facts share one environment build.
     // In particular, Vec2 fusion must not add another whole-file analysis pass
     // before runtime `is` lowering performs the same work.
-    let (environment, _) = build_type_environment_with_diagnostics(parsed);
-    let ast = vec2_fusion::fuse_vec2_arithmetic(parsed, &environment, parsed.ast.clone());
+    let built_environment = environment
+        .is_none()
+        .then(|| build_type_environment_with_diagnostics(parsed).0);
+    let environment = environment
+        .or(built_environment.as_ref())
+        .expect("an environment is supplied or built locally");
+    let ast = vec2_fusion::fuse_vec2_arithmetic(parsed, environment, parsed.ast.clone());
     let ast = erase_ast(&parsed.path, ast, &mut diagnostics);
 
     if diagnostics.is_empty() {
@@ -152,7 +197,7 @@ fn emit_lua_artifact_with_mode_and_import_resolver(
         let operations = lower_import_call_operations(&document, parsed, import_resolver)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
-        let operations = lower_runtime_type_check_operations(&document, parsed, &environment)?;
+        let operations = lower_runtime_type_check_operations(&document, parsed, environment)?;
         apply_lowering_operations(&mut document, operations, parsed)?;
 
         let operations = lower_class_method_call_operations(&document, parsed);
