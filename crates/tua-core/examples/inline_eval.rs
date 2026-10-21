@@ -62,13 +62,14 @@ fn allocated_bytes() -> usize {
 const USAGE: &str =
     "usage: inline_eval [paths...] [--manifest FILE] [--set NAME]... [--json] [--out FILE]
   [--records] [--max-positions N] [--no-menu] [--no-warmup] [--thresholds FILE]
-  [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--dominance R]
+  [--check-expected FILE] [--write-expected FILE] [--min-prefix N] [--min-support N]
+  [--min-full-prefix-support N] [--dominance R]
   [--recall-variant unique|common-prefix] [--contexts LABEL,LABEL,...]
 
---min-prefix, --dominance, --recall-variant, and --contexts configure the
-candidate `phase1` backend; --min-prefix and --dominance also apply to the
-standalone recall backends. A thresholds file with a [phase1] table pins that
-configuration for gate runs instead.";
+--min-prefix, --min-support, --min-full-prefix-support, --dominance,
+--recall-variant, and --contexts configure the candidate `phase1` backend; the
+recall options also apply to standalone recall backends. A thresholds file with
+a [phase1] table pins that configuration for gate runs instead.";
 
 struct Arguments {
     paths: Vec<PathBuf>,
@@ -129,6 +130,17 @@ fn parse_arguments() -> Result<Arguments, String> {
                 arguments.options.recall.dominance_ratio = value("--dominance")?
                     .parse()
                     .map_err(|_| "--dominance needs a number".to_owned())?;
+            }
+            "--min-support" => {
+                arguments.options.recall.min_support = value("--min-support")?
+                    .parse()
+                    .map_err(|_| "--min-support needs a number".to_owned())?;
+            }
+            "--min-full-prefix-support" => {
+                arguments.options.recall.min_full_prefix_support =
+                    value("--min-full-prefix-support")?
+                        .parse()
+                        .map_err(|_| "--min-full-prefix-support needs a number".to_owned())?;
             }
             "--recall-variant" => {
                 arguments.options.phase1.recall_variant = match value("--recall-variant")?.as_str()

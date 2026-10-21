@@ -17,7 +17,9 @@ language or editor behavior, and migration notes call out those changes.
   committed fixtures, and `make inline-eval-holdout` and
   `make inline-eval-external` check held-out and pinned third-party projects
   against committed, dataset-specific language thresholds and an exact pinned
-  Phase 1 source configuration.
+  Phase 1 source configuration. The evaluator can require repeated support for
+  full line-recall continuations while limiting one-off matches to a single
+  token, allowing precision and coverage to be tuned independently.
 - A `VectorLength` standard lint rule (`TL4060`) warns when `#` is applied to a
   built-in `Vec2`. With LuaJIT's JIT off, as in LÖVE on Apple Silicon by
   default, vectors are plain tables and `#v` is `0`; the warning names the

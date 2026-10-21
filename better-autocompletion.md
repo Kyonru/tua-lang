@@ -403,7 +403,8 @@ Rules:
 - Stop at the end of the line.
 - Prefer unique continuations.
 - Suppress ambiguous matches unless one continuation clearly dominates.
-- Tune the dominance ratio on the tuning set.
+- Tune the dominance ratio and minimum supporting-line count on the tuning
+  set.
 - Skip files exceeding the Phase 0 byte or line cap.
 
 #### Caching
@@ -679,6 +680,16 @@ the tuning-set wrong-to-saved ratio from 3.53 to 2.17 and correct-prefix
 precision from 0.28 to 0.53. It still misses the provisional 1.0 and 0.60
 limits, so this is evidence to improve or narrow the backend—not permission to
 weaken the gates or inspect held-out results.
+
+Requiring two supporting lines made long recall precise but left the Tua slice
+below its coverage floor. The selected tuning candidate therefore keeps full
+common-prefix continuations at support two or higher and limits a one-line
+match to its first token. On the tuning set this reaches 0.80 correct-prefix
+precision overall, with 0.21 wrong characters per character saved. Split by
+language, Lua reaches 0.82 precision, 0.19 wrong/saved, and 0.38 characters
+saved per eligible position; Tua reaches 0.73, 0.35, and 0.15 respectively.
+Both produce more than 100 suggestions. These measurements select the frozen
+candidate but do not predict held-out performance.
 
 ### Phase 1 gate
 

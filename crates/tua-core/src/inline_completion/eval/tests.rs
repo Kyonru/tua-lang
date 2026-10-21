@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use super::backends::{Backend, Candidate, CurrentFileRecall, RecallOptions, Request, Semantic};
+use super::backends::{
+    Backend, Candidate, CurrentFileCommonPrefix, CurrentFileRecall, RecallOptions, Request,
+    Semantic,
+};
 use super::dataset::{self, ManifestSet, SetRole};
 use super::metrics::{precision_coverage_curve, score, snippet_literal_prefix, tokens};
 use super::*;
@@ -155,6 +158,45 @@ fn recall_never_reads_the_active_line() {
 fn recall_needs_a_meaningful_prefix() {
     let document = "foo(1)\nfoo(|";
     assert!(recall().suggest(&request(document, None)).is_none());
+}
+
+#[test]
+fn recall_can_require_multiple_supporting_lines() {
+    let document = "spawn(enemy, 1)\nspawn(enemy, |";
+    let strict = CurrentFileRecall {
+        options: RecallOptions {
+            min_support: 2,
+            ..RecallOptions::default()
+        },
+    };
+    assert!(strict.suggest(&request(document, None)).is_none());
+
+    let repeated = "spawn(enemy, 1)\nspawn(enemy, 1)\nspawn(enemy, |";
+    assert!(strict.suggest(&request(repeated, None)).is_some());
+}
+
+#[test]
+fn common_prefix_recall_limits_low_support_to_one_token() {
+    let document = "local result = player.position.x\nlocal result = |";
+    let cautious = CurrentFileCommonPrefix {
+        recall: CurrentFileRecall {
+            options: RecallOptions {
+                min_full_prefix_support: 2,
+                ..RecallOptions::default()
+            },
+        },
+    };
+    let candidate = cautious
+        .suggest(&request(document, None))
+        .expect("one matching line still offers a token");
+    assert_eq!(candidate.text, "player");
+
+    let repeated =
+        "local result = player.position.x\nlocal result = player.position.x\nlocal result = |";
+    let candidate = cautious
+        .suggest(&request(repeated, None))
+        .expect("repeated lines support the full prefix");
+    assert_eq!(candidate.text, "player.position.x");
 }
 
 #[test]

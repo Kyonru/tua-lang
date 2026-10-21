@@ -17,11 +17,13 @@ cargo run -p tua-core --features test-fixture --example inline_eval -- examples/
 ```
 
 `--records` keeps every suggestion in the JSON report. `--min-prefix`,
-`--dominance`, `--recall-variant unique|common-prefix`, and
-`--contexts open-paren,comma,...` configure the candidate `phase1` backend
-while tuning. `--no-menu` and `--no-warmup` skip the analysis-backed
-measurements for a faster run, and `--max-positions 0` evaluates every
-position.
+`--min-support`, `--min-full-prefix-support`, `--dominance`,
+`--recall-variant unique|common-prefix`, and `--contexts open-paren,comma,...`
+configure the candidate `phase1` backend while tuning. The full-prefix support
+threshold lets a single matching line offer only its first token while repeated
+patterns can offer their whole common continuation. `--no-menu` and
+`--no-warmup` skip the analysis-backed measurements for a faster run, and
+`--max-positions 0` evaluates every position.
 
 ## Datasets
 

@@ -135,6 +135,12 @@ pub struct RecallOptions {
     /// How many times more often the most common continuation must occur than
     /// the next one, when several continuations match.
     pub dominance_ratio: f64,
+    /// Minimum number of matching source lines required before recall may
+    /// offer their continuation.
+    pub min_support: usize,
+    /// Minimum support required to offer more than the first token in the
+    /// common continuation. Low-support recall stays useful but conservative.
+    pub min_full_prefix_support: usize,
     /// Documents larger than this are not scanned.
     pub max_document_bytes: usize,
 }
@@ -144,6 +150,8 @@ impl Default for RecallOptions {
         Self {
             min_prefix_chars: 6,
             dominance_ratio: 2.0,
+            min_support: 1,
+            min_full_prefix_support: 1,
             max_document_bytes: 256 * 1024,
         }
     }
@@ -169,6 +177,9 @@ impl Backend for CurrentFileRecall {
             return None;
         }
         let total = continuations.iter().map(|(_, count)| count).sum::<usize>();
+        if total < self.options.min_support {
+            return None;
+        }
 
         Some(Candidate {
             text: best.to_owned(),
@@ -215,11 +226,19 @@ impl Backend for CurrentFileCommonPrefix {
         if continues_word {
             prefix = prefix.trim_end_matches(super::super::eligibility::is_identifier_char);
         }
-        let prefix = prefix.trim_end();
+        let mut prefix = prefix.trim_end();
         if prefix.is_empty() {
             return None;
         }
         let support = continuations.iter().map(|(_, count)| count).sum::<usize>();
+        if support < self.recall.options.min_support {
+            return None;
+        }
+        if support < self.recall.options.min_full_prefix_support {
+            let token = super::metrics::tokens(prefix).into_iter().next()?;
+            let end = prefix.find(token)? + token.len();
+            prefix = &prefix[..end];
+        }
 
         Some(Candidate {
             text: prefix.to_owned(),

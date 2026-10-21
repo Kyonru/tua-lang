@@ -2,8 +2,12 @@
 # or external evaluation, then run each gate once. Changing it after seeing
 # gate results spends the held-out data.
 #
-# PROVISIONAL: these are starting values chosen without held-out data. Set
-# them on the tuning set (`make inline-eval`), record why here, and commit.
+# FROZEN CANDIDATE: the limits were chosen before held-out data, and the Phase
+# 1 configuration below was selected on the tuning set. On that set, both
+# languages exceed 0.72 correct-prefix precision, stay below 0.35 wrong/saved,
+# save at least 0.14 characters per eligible position, and produce at least
+# 136 suggestions. Commit this file before running either quality gate; do not
+# change it after seeing gate results.
 #
 # Each gate set names the languages that dataset is intended to measure. A
 # missing set, backend, configured language, eligible request, minimum number
@@ -19,6 +23,8 @@ backend = "phase1"
 recall_variant = "common-prefix"
 contexts = ["open-paren", "comma", "operator", "whitespace", "statement-prefix", "identifier", "other"]
 min_prefix_chars = 6
+min_support = 1
+min_full_prefix_support = 2
 dominance_ratio = 2.0
 love_callbacks = false
 statement_snippets = true

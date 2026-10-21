@@ -1063,6 +1063,10 @@ pub struct Phase1Thresholds {
     pub min_prefix_chars: Option<usize>,
     #[serde(default)]
     pub dominance_ratio: Option<f64>,
+    #[serde(default)]
+    pub min_support: Option<usize>,
+    #[serde(default)]
+    pub min_full_prefix_support: Option<usize>,
     pub love_callbacks: bool,
     pub statement_snippets: bool,
     pub snippet_min_prefix_chars: usize,
@@ -1076,6 +1080,12 @@ impl Phase1Thresholds {
         }
         if let Some(ratio) = self.dominance_ratio {
             recall.dominance_ratio = ratio;
+        }
+        if let Some(support) = self.min_support {
+            recall.min_support = support;
+        }
+        if let Some(support) = self.min_full_prefix_support {
+            recall.min_full_prefix_support = support;
         }
         let contexts = self
             .contexts
