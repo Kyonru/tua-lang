@@ -166,6 +166,46 @@ do
   check(calls == 1, "listener collections recover after an error")
 end
 
+-- Watcher-only updates reuse their previous-value scratch table, so a warmed
+-- loop is allocation-free, while a nested update from the mutator or a watcher
+-- keeps its own previous values instead of clobbering the outer update's.
+do
+  local store = runtime({ score = 0 })
+  local seen = {}
+  store:watch("score", function(value, previous)
+    seen[#seen + 1] = previous .. ">" .. value
+    if value == 10 then
+      store:update(function(current) current.score = 11 end)
+    end
+  end)
+
+  store:update(function(current)
+    store:update(function(inner) inner.score = 1 end)
+    current.score = 5
+  end)
+  check(table.concat(seen, ",") == "0>1,0>5", "a nested mutator update keeps the outer previous value")
+
+  seen = {}
+  store:update(function(current) current.score = 10 end)
+  check(table.concat(seen, ",") == "5>10,10>11", "a nested watcher update reports its own previous value")
+
+  local quiet = runtime({ score = 0, lives = 3 })
+  local calls = 0
+  quiet:watch("score", function() calls = calls + 1 end)
+  quiet:watch("lives", function() calls = calls + 1 end)
+  local function bump(current) current.score = current.score + 1 end
+  quiet:update(bump)
+  collectgarbage("collect")
+  collectgarbage("stop")
+  local before = collectgarbage("count")
+  for _ = 1, 10000 do quiet:update(bump) end
+  local allocatedKb = collectgarbage("count") - before
+  collectgarbage("restart")
+  check(calls == 10001, "warmed watcher-only updates still notify")
+  check(allocatedKb < 64, string.format(
+    "10,000 watcher-only updates allocate under 64 KB (got %.1f KB)", allocatedKb))
+end
+
 if failures > 0 then
   os.exit(1)
 end

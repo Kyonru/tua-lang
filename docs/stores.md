@@ -100,6 +100,10 @@ notification keeps its original listener list, and the change takes effect on
 the next notification. The runtime implements this with copy-on-write listener
 collections, so ordinary notification does not copy every callback list.
 
+The same applies to a mutator: `update` decides which values to snapshot
+before the mutator runs, so a subscription added from inside a mutator is
+first notified by the next `set` or `update`, not by the one that added it.
+
 ## Share A Store Through A Module
 
 Lua caches successful `require` results, so a normal module is enough to share

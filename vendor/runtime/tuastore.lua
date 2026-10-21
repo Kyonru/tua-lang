@@ -46,8 +46,8 @@ local function notifyListeners(listeners, ...)
   end
 end
 
-local function snapshotWatchedValues(watchers, state)
-  local previous = {}
+local function snapshotWatchedValues(watchers, state, previous)
+  previous = previous or {}
   for key in pairs(watchers) do
     previous[key] = state[key]
   end
@@ -74,10 +74,19 @@ local function updateSubscribers(store, mutator, listeners, watchers)
   return store._state
 end
 
+-- Watchers receive individual previous values, never the table itself, so a
+-- watcher-only update reuses one per-store scratch table. A nested update (from
+-- the mutator or a watcher) finds it taken and allocates its own, and an error
+-- simply drops it.
 local function updateWatchers(store, mutator, watchers)
-  local previous = snapshotWatchedValues(watchers, store._state)
+  local previous = snapshotWatchedValues(watchers, store._state, store._watchedScratch)
+  store._watchedScratch = nil
   mutator(store._state)
   notifyStore(store, previous, EMPTY_LIST, watchers)
+  for key in pairs(previous) do
+    previous[key] = nil
+  end
+  store._watchedScratch = previous
   return store._state
 end
 
