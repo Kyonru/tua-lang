@@ -85,11 +85,20 @@ key returns to `score` in the initial table. The returned unsubscribe function
 is idempotent.
 
 !!! warning "Updates are shallow"
-    `update` takes a shallow snapshot before running the mutator. Whole-store
-    subscribers always run. A keyed watcher runs when its top-level value
-    changes according to Lua's `~=` comparison. Mutating inside the same nested
-    table does not change that nested table's identity; replace the top-level
-    field or use a whole-store subscription when that distinction matters.
+    When whole-store subscribers exist, `update` takes a shallow snapshot
+    before running the mutator so every subscriber receives the complete
+    previous state. With only keyed watchers, it retains only the watched
+    top-level values; with no observers, it does not create a snapshot.
+    Whole-store subscribers always run, including after a no-op update. A keyed
+    watcher runs only when its value changes according to Lua's `~=`
+    comparison. Mutating inside the same nested table does not change that
+    nested table's identity; replace the top-level field or use a whole-store
+    subscription when that distinction matters.
+
+Subscriptions may be added or removed from inside a listener. The active
+notification keeps its original listener list, and the change takes effect on
+the next notification. The runtime implements this with copy-on-write listener
+collections, so ordinary notification does not copy every callback list.
 
 ## Share A Store Through A Module
 
@@ -159,3 +168,13 @@ local game = store(saved or defaults)
 `tuastore.lua` beside generated Lua only when the helper is used. A
 project-provided `tuastore.lua` is never overwritten, so compatible custom
 implementations can replace the bundled runtime.
+
+To compare the bundled runtime with a released version on the current Lua
+interpreter, run:
+
+```console
+make profile-store
+```
+
+Set `STORE_BASE_REF` to choose the comparison commit and `LUA` to select an
+interpreter, such as `make profile-store LUA=luajit`.

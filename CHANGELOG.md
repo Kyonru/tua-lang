@@ -19,6 +19,16 @@ language or editor behavior, and migration notes call out those changes.
 
 ### Changed
 
+- The bundled store runtime no longer copies an entire state table for
+  unobserved or watcher-only updates. Unobserved updates allocate no snapshots,
+  watcher-only updates retain just the watched top-level values, and listener
+  lists and watcher maps use immutable versions copied only when subscriptions
+  change, including safely from inside a notification. In
+  the included macOS arm64 Lua 5.4 microbenchmark, updates to a 2,000-field
+  store were about 800x faster without observers and 110x faster with one
+  watcher, while the required full-state snapshot kept the whole-store
+  subscriber case near parity. These figures are platform- and
+  workload-specific; `make profile-store` compares another revision locally.
 - The bundled ECS runtime iterates queries and systems without redundant
   per-entity liveness checks, wrapper closures, or temporary argument tables.
   Common query widths use specialized allocation-free loops, while wider

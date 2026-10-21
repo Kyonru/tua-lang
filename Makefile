@@ -5,6 +5,7 @@ NPM ?= npm
 NPX ?= npx
 CODE ?= code
 LOVE ?= love
+LUA ?= lua
 VSCE ?= $(NPX) --no-install vsce
 RSVG_CONVERT ?= rsvg-convert
 LOVE_API_ROOT ?=
@@ -17,6 +18,7 @@ VSIX := $(VSCODE_DIR)/tua-$(PROJECT_VERSION).vsix
 EXAMPLE ?= examples/love-minimal
 ECS_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
 ECS_LOVE_FLAGS ?=
+STORE_BASE_REF ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
 UNAME_S := $(shell uname -s 2>/dev/null)
 EXE_SUFFIX := $(if $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)),.exe,)
 DEBUG_TUA := target/debug/tua$(EXE_SUFFIX)
@@ -234,6 +236,13 @@ profile-ecs-love: ## Compare ECS against ECS_BASE_REF (default latest tag) under
 	@mkdir -p target/tua-speed
 	git show $(ECS_BASE_REF):vendor/runtime/tuaecs.lua > target/tua-speed/tuaecs.base.lua
 	$(LOVE) benchmarks/ecs-love $(ECS_LOVE_FLAGS) $(CURDIR)/target/tua-speed/tuaecs.base.lua $(CURDIR)/vendor/runtime/tuaecs.lua
+
+.PHONY: profile-store
+profile-store: ## Compare the store runtime against STORE_BASE_REF (default latest tag) using LUA (default lua).
+	@test -n "$(STORE_BASE_REF)" || (echo "set STORE_BASE_REF to a git tag or commit"; exit 2)
+	@mkdir -p target/tua-speed
+	git show $(STORE_BASE_REF):vendor/runtime/tuastore.lua > target/tua-speed/tuastore.base.lua
+	$(LUA) benchmarks/store-runtime.lua target/tua-speed/tuastore.base.lua vendor/runtime/tuastore.lua
 
 .PHONY: profile-examples-baseline
 profile-examples-baseline: ## Write a local examples speed baseline for future comparisons.
